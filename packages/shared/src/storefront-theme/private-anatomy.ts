@@ -70,7 +70,7 @@ export interface PrivatePartSpec {
   readonly variants?: readonly [string, ...string[]];
   /** Its `data-part` hooks, its own name first. */
   readonly hooks: readonly string[];
-  /** Hooks the theme's stylesheet may never hide (the visibility guard checks them). */
+  /** Selectors of what the theme's stylesheet may never hide (the visibility guard checks each match). */
   readonly guard?: readonly string[];
 }
 
@@ -95,6 +95,8 @@ export interface PrivatePageSpec extends PrivateUnitSpec {
   readonly root: string;
   /** The page frame's closed variants, the first the default. */
   readonly frames?: readonly [string, ...string[]];
+  /** The hooks a host layout draws inside itself (the fold's bar and body). */
+  readonly layoutHooks?: Partial<Record<PrivateLayoutKind, readonly string[]>>;
   /** Repeated units, by name. */
   readonly items: Readonly<Record<string, PrivateUnitSpec>>;
   /** Host labels the theme may reword (plain text, per language). */
@@ -116,9 +118,9 @@ const CART_LINE_PARTS = {
   details: part(true, ["line-details"]),
   // The apps' line inputs drawn by the host (a decision the buyer must make).
   inputs: part(true, ["line-inputs"]),
-  quantity: part(true, ["line-quantity"]),
-  price: part(true, ["line-price"]),
-  remove: part(true, ["line-remove"]),
+  quantity: part(true, ["line-quantity"], { guard: ['[data-part="line-quantity"]'] }),
+  price: part(true, ["line-price"], { guard: ['[data-part="line-price"]'] }),
+  remove: part(true, ["line-remove"], { guard: ['[data-part="line-remove"]'] }),
   limit: part(true, ["line-limit"]),
   issue: part(true, ["line-issue"]),
   rule: part(true, ["line-rule"]),
@@ -131,13 +133,15 @@ export const PRIVATE_LINE_HOOK = "line";
 const CART_PAGE: PrivatePageSpec = {
   root: "cart",
   frames: ["standard", "narrow"],
+  layoutHooks: { fold: ["fold-toggle", "fold-body"] },
   parts: {
     progress: part(false, ["progress"]),
     notices: part(true, ["notice"]),
     lines: part(true, ["lines", "lines-heading", "lines-continue", "lines-loading", "lines-list", "lines-clear", "lines-undo", "cart-empty"]),
-    summary: part(true, ["summary", "summary-row", "summary-total", "summary-validation"], { guard: ["summary-total"] }),
+    // Its money rows carry `data-summary-row` (subtotal, add-on, delivery, discount, tax, total), as on every surface.
+    summary: part(true, ["summary", "summary-validation"], { guard: ['[data-summary-row="total"]'] }),
     discount: part(false, ["discount"]),
-    details: part(true, ["details", "details-sign-in", "details-form", "contact", "delivery", "details-errors", "details-submit", "legal"], { guard: ["details-submit", "contact"] }),
+    details: part(true, ["details", "details-sign-in", "details-form", "contact", "delivery", "details-errors", "details-submit", "legal"], { guard: ['[data-part="details-submit"]', '[data-part="contact"]', '[data-part="delivery"]'] }),
     empty: part(false, ["empty-extras"]),
   },
   targets: ["cart.page.summary", "cart.page.below"],
@@ -189,6 +193,7 @@ const CART_PAGE: PrivatePageSpec = {
 const CART_DRAWER: PrivatePageSpec = {
   root: "cart-drawer",
   frames: ["standard", "wide"],
+  layoutHooks: { scroll: ["drawer-scroll"] },
   parts: {
     header: part(true, ["drawer-header", "drawer-title", "drawer-count", "drawer-close"]),
     added: part(false, ["drawer-added"]),
@@ -196,8 +201,8 @@ const CART_DRAWER: PrivatePageSpec = {
     recommendations: part(false, ["drawer-recommendations"]),
     undo: part(true, ["drawer-undo"]),
     offers: part(false, ["drawer-offers"]),
-    summary: part(true, ["drawer-summary", "summary-row", "summary-total", "drawer-blocked"], { guard: ["summary-total"] }),
-    actions: part(true, ["drawer-actions", "drawer-checkout", "drawer-view-cart", "drawer-continue"], { guard: ["drawer-checkout"] }),
+    summary: part(true, ["drawer-summary", "drawer-blocked"], { guard: ['[data-summary-row="total"]'] }),
+    actions: part(true, ["drawer-actions", "drawer-checkout", "drawer-view-cart", "drawer-continue"], { guard: ['[data-part="drawer-checkout"]'] }),
   },
   targets: ["cart_drawer.footer"],
   layouts: ["stack", "columns", "grid", "group", "scroll"],
@@ -266,6 +271,13 @@ export function privateLabelKeys(): Array<{ page: PrivatePageKey; key: string; m
   return PRIVATE_PAGE_KEYS.flatMap((page) => Object.entries(PRIVATE_PAGES[page].labels).map(([key, spec]) => ({ page, key, max: spec.max })));
 }
 
+/** Every selector the visibility guard checks on a page: its parts' and its repeated units'. */
+export function privateGuardSelectors(page: PrivatePageKey): string[] {
+  const spec: PrivatePageSpec = PRIVATE_PAGES[page];
+  const units: PrivateUnitSpec[] = [spec, ...Object.values(spec.items)];
+  return [...new Set(units.flatMap((unit) => Object.values(unit.parts).flatMap((entry) => entry.guard ?? [])))];
+}
+
 /** Every icon key of every page. */
 export function privateIconKeys(): string[] {
   return PRIVATE_PAGE_KEYS.flatMap((page) => [...PRIVATE_PAGES[page].icons]);
@@ -288,6 +300,7 @@ export function privatePageAnatomy(): string[] {
     const spec: PrivatePageSpec = PRIVATE_PAGES[page];
     lines.push(`${page} root ${PRIVATE_SCOPE_ATTRIBUTE}=${spec.root}${spec.frames ? ` frames=${spec.frames.join("|")}` : ""}`);
     unit(page, spec);
+    for (const [kind, hooks] of Object.entries(spec.layoutHooks ?? {})) lines.push(`${page} layout ${kind} hooks=${hooks.join(",")}`);
     for (const [name, item] of Object.entries(spec.items)) {
       lines.push(`${page}.${name} root ${PRIVATE_PART_ATTRIBUTE}=${PRIVATE_LINE_HOOK}`);
       unit(`${page}.${name}`, item);

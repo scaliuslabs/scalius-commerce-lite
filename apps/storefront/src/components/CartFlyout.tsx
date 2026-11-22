@@ -57,7 +57,7 @@ import { currentPresence, pagePath } from "@/lib/presence-url";
 import { readBuyerAttributes } from "@/lib/buyer-ui/state";
 import { browserBuyerUiLocaleHeaders } from "@/lib/buyer-ui/browser-locale";
 import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
-import { readCartDrawerLook } from "@/lib/cart/drawer-look";
+import { readCartDrawerPlan, type CartDrawerNode } from "@/lib/cart/drawer-plan";
 import { cartLineInputFacts, NO_LINE_INPUTS, type CartLineInputFacts } from "@/lib/cart/line-inputs";
 import { cartEstimate, cartHasMixedFulfilment, cartLineDiscountsOf, cartLineEntries, cartLineIssues, cartLineView, cartPreviewLines, type CartLineDiscount } from "@/lib/cart/line-view";
 
@@ -372,6 +372,39 @@ function CartLineImage({ url, alt }: { url: string | undefined; alt: string }) {
   );
 }
 
+/** The drawer's plain layouts (a theme shapes them further through their `data-hook`). */
+const DRAWER_LAYOUTS: Record<string, string> = {
+  stack: "flex min-w-0 flex-col gap-2",
+  columns: "grid min-w-0 gap-2 sm:grid-flow-col sm:auto-cols-fr",
+  grid: "grid min-w-0 gap-2",
+  group: "min-w-0",
+};
+
+function drawerHas(nodes: readonly CartDrawerNode[], part: string): boolean {
+  return nodes.some((node) => (node.type === "part" && node.part === part) || (node.type === "layout" && drawerHas(node.children, part)));
+}
+
+/**
+ * A theme's arrangement of the drawer or of its line: its parts where it put
+ * them, its content (drawn on the server as escaped HTML) and the host's
+ * layouts. `target` draws an extension target (a line's is its `target` part);
+ * `scroll` the drawer's scrolling region.
+ */
+function drawerNodes(
+  nodes: readonly CartDrawerNode[],
+  parts: Record<string, React.ReactNode>,
+  hosts: { target?: (name: string) => React.ReactNode; scroll?: (children: React.ReactNode, key: number) => React.ReactNode } = {},
+): React.ReactNode {
+  return nodes.map((node, index) => {
+    if (node.type === "part") return <React.Fragment key={index}>{parts[node.part]}</React.Fragment>;
+    if (node.type === "target") return <React.Fragment key={index}>{hosts.target ? hosts.target(node.target) : parts.target}</React.Fragment>;
+    if (node.type === "html") return <div key={index} className="contents" dangerouslySetInnerHTML={{ __html: node.html }} />;
+    const children = drawerNodes(node.children, parts, hosts);
+    if (node.layout === "scroll" && hosts.scroll) return hosts.scroll(children, index);
+    return <div key={index} data-layout={node.layout} data-hook={node.hook} className={DRAWER_LAYOUTS[node.layout] ?? "min-w-0"}>{children}</div>;
+  });
+}
+
 /** An offer's saving in the page's digits: "20% off", "২০% ছাড়", or "free". */
 function offerSaving(percentOff: number, copy: CartDrawerCopy): string {
   if (percentOff >= 100) return copy.offerFree;
@@ -398,9 +431,12 @@ export default function CartFlyout({ onReady }: Props) {
   const mixedFulfilment = cartHasMixedFulfilment(cart.items);
   const linesRef = useRef<HTMLDivElement>(null);
   useDrawerLineInputs(linesRef, lineInputs, cart);
-  // The theme's drawer: its width, and whether it suggests products (none fetched when it does not).
-  const look = readCartDrawerLook();
-  const recommendations = useCartRecommendations(cart, isOpen && look.recommendations === "shown");
+  // The theme's drawer (lib/cart/drawer-plan.ts): its frame, its arrangement and its words. It
+  // suggests products only where its arrangement keeps them (none are fetched otherwise).
+  const plan = readCartDrawerPlan();
+  const look = { width: plan.frame === "wide" ? "wide" : "standard", recommendations: !plan.layout || drawerHas(plan.layout, "recommendations") };
+  const label = (key: string, fallback: string) => plan.labels[key] ?? fallback;
+  const recommendations = useCartRecommendations(cart, isOpen && look.recommendations);
   // A line that can't be bought as is blocks Checkout here, like on the cart page,
   // and so does a store app's rule (on its line, or about the whole cart).
   const lineIssues = Object.entries(issues).filter(([key]) => cart.items[key]);
@@ -574,6 +610,541 @@ export default function CartFlyout({ onReady }: Props) {
   // The cart page's order (`cartLineEntries`); the line an add just touched is marked, not moved.
   const lineEntries = cartLineEntries(cart.items);
 
+  // ── The drawer's parts (private-anatomy.ts, page `cartDrawer`) ──────────
+  // Each is drawn the same way in the host's own drawer and in a theme's
+  // arrangement; only where it sits differs.
+  const dragZone = {
+    onTouchStart: handleDragStart,
+    onTouchMove: handleDragMove,
+    onTouchEnd: handleDragEnd,
+  };
+  const header = (
+    <div
+      className="flex items-center justify-between px-4 pb-2 pt-0 sm:pt-4 sm:px-5 sm:pb-4 border-b border-border bg-card shrink-0 z-20 h-auto shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
+      {...dragZone}
+      data-part="drawer-header"
+    >
+      <div className="flex items-center gap-2">
+        <Dialog.Title className="text-[15px] sm:text-lg font-bold text-foreground tracking-tight flex items-center gap-2" data-part="drawer-title">
+          {label("drawer.title", copy.title)}
+          <span aria-hidden="true" className="bg-primary text-primary-foreground text-sm font-bold px-2 py-0.5 rounded-full leading-none min-w-[18px] text-center" data-part="drawer-count">
+            {formatCount(cart.totalItems)}
+          </span>
+          <span className="sr-only">{itemsText}</span>
+        </Dialog.Title>
+      </div>
+
+      <Dialog.Close
+        aria-label={copy.close}
+        className="group -me-2 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90 focus:outline-none sm:-me-2 sm:h-9 sm:w-9 cursor-pointer"
+        data-part="drawer-close"
+      >
+        <X className="h-4 w-4 sm:h-5 sm:w-5 transition-transform duration-300 group-hover:rotate-90" />
+      </Dialog.Close>
+    </div>
+  );
+  // Confirmation of an add, like Shopify's cart notification. A fixed strip in the sheet, never in the page.
+  const added = addedItem && (
+    <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-4 py-2 text-sm font-medium text-foreground sm:px-5" data-cart-added data-part="drawer-added">
+      <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+        <Check className="h-3 w-3" strokeWidth={3} />
+      </span>
+      <span aria-hidden="true" data-cart-added-text>{addedText}</span>
+      <p role="status" className="sr-only">
+        {announced
+          ? addedCount > 1
+            ? copy.announceAddedMany(formatCount(addedCount), itemsText)
+            : outcome
+              ? copy.announceOutcome(addedItem.name, addedText, itemsText)
+              : copy.announceAdded(addedItem.name, itemsText)
+          : ""}
+      </p>
+    </div>
+  );
+  const emptyState = (
+    <div className="flex flex-col items-center justify-center h-full py-8 sm:py-12 text-center space-y-3" data-part="drawer-empty">
+      <div className="h-12 w-12 sm:h-16 sm:w-16 bg-card rounded-full flex items-center justify-center border border-border shadow-sm">
+        {plan.icons["drawer.empty"]
+          ? <img src={plan.icons["drawer.empty"]} alt="" width={24} height={24} className="h-5 w-5 object-contain sm:h-6 sm:w-6" data-part="drawer-empty-icon" />
+          : <ShoppingBag className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" data-part="drawer-empty-icon" />}
+      </div>
+      <div className="space-y-0.5">
+        <h3 className="text-sm font-bold text-foreground">
+          {label("drawer.empty", copy.empty)}
+        </h3>
+      </div>
+      <button
+        type="button"
+        onClick={() => setCartOpen(false)}
+        data-theme-component="button"
+        data-theme-variant="default"
+        data-theme-size="sm"
+        className={`${DRAWER_BUTTON} inline-flex items-center justify-center gap-2 mt-1 h-11 rounded-full px-5 text-xs hover:bg-primary/90 sm:h-9 cursor-pointer`}
+      >
+        {label("drawer.startShopping", copy.startShopping)}
+      </button>
+    </div>
+  );
+  const recommendationsPart = recommendations && (
+    <section aria-labelledby="cart-recommendations-title" className="pt-2" data-part="drawer-recommendations">
+      <h3 id="cart-recommendations-title" className="mb-2 text-xs font-bold text-foreground sm:text-sm">
+        {recommendationTitle(recommendations.reason)}
+      </h3>
+      {/* Padding inside the scroller gives the focus outline room: overflow clips it. */}
+      <ul data-h-rail className="-mx-1 flex gap-2 overflow-x-auto px-1 py-1">
+        {recommendations.products.map((product) => (
+          <li key={product.id} className="w-28 shrink-0">
+            <a
+              href={pagePath(`/products/${encodeURIComponent(product.slug)}`)}
+              className="flex h-full flex-col rounded-lg border border-border bg-card p-1.5 transition-colors hover:border-foreground/30"
+            >
+              <img
+                {...productImageProps(product.imageUrl, CART_RECOMMENDATION_IMAGE)}
+                alt={product.imageAlt || product.name}
+                width={100}
+                height={100}
+                loading="lazy"
+                decoding="async"
+                className="aspect-square w-full rounded-md bg-muted object-cover"
+              />
+              <span className="mt-1 line-clamp-2 text-xs font-medium leading-tight text-foreground">
+                {product.name}
+              </span>
+              <span className="mt-auto pt-0.5 text-xs font-semibold tabular-nums text-foreground">
+                {product.priceVaries
+                  ? priceCopy.from(formatMoney(product.discountedPrice))
+                  : formatMoney(product.discountedPrice)}
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+  /** One line: its sub-parts, in the host's own card or the theme's arrangement of them. */
+  const line = ([key, item]: (typeof lineEntries)[number], index: number) => {
+    const view = cartLineView(key, item, {
+      discount: lineDiscounts.get(key),
+      quantityLimit: limits[key] ?? null,
+      mixedFulfilment,
+      words: lineWords,
+      surchargeText: "+{price}",
+      issues: issueLists[key],
+    });
+    // A stock issue in the words the cart page uses; any other issue as the check said it.
+    const stockText = cartLineStockText(view);
+    const describedBy = inputsId(index, item);
+    const remove = () => removeWithUndo(copy.removed(view.lineName), () => removeCartItemByKey(key));
+    const parts: Record<string, React.ReactNode> = {
+      image: (
+        <div className="h-12 w-12 sm:h-18 sm:w-18 shrink-0 overflow-hidden rounded-lg border border-border bg-muted" data-part="line-image">
+          <CartLineImage url={view.image} alt={view.name} />
+        </div>
+      ),
+      title: (
+        <h3 className="line-clamp-2 pe-1 text-[12px] font-bold leading-tight text-foreground sm:text-[13.5px]" data-part="line-title">
+          <a
+            href={view.productHref}
+            className="hover:text-muted-foreground transition-colors"
+            data-cart-line-name
+          >
+            {view.name}
+          </a>
+        </h3>
+      ),
+      details: (
+        <>
+          {view.options.length > 0 && (
+            <div className="text-xs text-muted-foreground" data-part="line-details">
+              {view.options.map((option) => (
+                <span key={`${option.name}:${option.label}`} className="block" data-cart-line-option>
+                  {option.name}: {option.label}
+                </span>
+              ))}
+            </div>
+          )}
+          {view.purchaseOptions.map((option) => (
+            <p key={option.id} className="text-xs font-medium text-foreground" data-cart-line-purchase-option data-part="line-details">
+              {option.title}
+            </p>
+          ))}
+          {(view.inputs.length > 0 || view.components.length > 0) && (
+            <div className="text-xs text-muted-foreground" data-cart-line-properties data-part="line-details">
+              <ul id={describedBy}>
+                {view.inputs.map((input) => (
+                  <li key={input.key} className="break-words" data-property-key={input.key}>
+                    {/* A long answer folds to three lines, as on the cart page (lib/long-answer.ts). */}
+                    {isLongAnswer(input.text) ? (
+                      <span className="long-answer block" data-long-answer>
+                        <span className="long-answer-text" data-answer-text>{input.text}</span>
+                        <details className="long-answer-toggle">
+                          <summary><span className="long-answer-more">{lineCopy.answerMore}</span><span className="long-answer-less">{lineCopy.answerLess}</span></summary>
+                        </details>
+                      </span>
+                    ) : input.text}
+                  </li>
+                ))}
+                {view.components.map((component, position) => (
+                  <li key={`component:${position}`} className="break-words" data-cart-line-component>
+                    {component}
+                  </li>
+                ))}
+              </ul>
+              {view.editHref && (
+                <a
+                  data-cart-line-edit=""
+                  href={view.editHref}
+                  className="inline-flex min-h-9 items-center font-medium text-foreground underline underline-offset-2"
+                  aria-label={copy.editItem(view.lineName)}
+                  aria-describedby={describedBy}
+                  onClick={() => {
+                    // Session storage, not the URL: the inputs are buyer content.
+                    writeCartLineEdit({
+                      lineKey: key,
+                      productId: item.id,
+                      variantId: item.variantId,
+                      quantity: item.quantity,
+                      properties: cartLinePropertyInputs(item),
+                      ...purchaseOptionsField(item),
+                    });
+                  }}
+                >
+                  {copy.edit}
+                </a>
+              )}
+            </div>
+          )}
+          {view.fulfilment && (
+            <p
+              className={view.fulfilment === "ships-free" ? "text-xs font-medium text-foreground" : "text-xs text-muted-foreground"}
+              data-cart-line-fulfilment={view.fulfilment}
+              data-part="line-details"
+            >
+              {view.fulfilment === "ships-free" ? lineCopy.shipsFree : view.fulfilment === "digital" ? lineCopy.digital : lineCopy.service}
+            </p>
+          )}
+        </>
+      ),
+      inputs: <div className="mt-1.5 grid gap-2" data-cart-line-inputs data-line-key={key} hidden data-part="line-inputs" />,
+      // The apps' block for this line (`cart.line.after`), drawn by DrawerBuyerUi.
+      target: <div className="mt-1.5 grid gap-2 text-sm" data-buyer-ui-target="cart.line.after" data-buyer-ui-line={key} data-buyer-ui-line-name={view.lineName} hidden />,
+      issue: issues[key] && (
+        <div className="space-y-1" role="alert" data-part="line-issue">
+          <p className="text-sm font-medium text-destructive" data-cart-line-stock={view.stock && view.stock.state !== "at-limit" ? view.stock.state : undefined}>
+            {view.stock && view.stock.state !== "at-limit" ? stockText : buyerApiErrorTextNow(issues[key]) ?? copy.fixToCheckout}
+          </p>
+          {issues[key].action === "reduce_quantity" && (issues[key].availableQuantity ?? 0) >= 1 ? (
+            <button
+              type="button"
+              className="min-h-9 rounded-md border border-border px-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer"
+              aria-label={lineCopy.updateQuantityFor(formatCount(Math.floor(issues[key].availableQuantity!)), view.lineName)}
+              aria-describedby={describedBy}
+              onClick={() => {
+                updateCartItemByKey(key, { quantity: Math.floor(issues[key]!.availableQuantity!) });
+              }}
+            >
+              {lineCopy.updateQuantity(formatCount(Math.floor(issues[key].availableQuantity!)))}
+            </button>
+          ) : issues[key].action === "remove" || issues[key].action === "reduce_quantity" ? (
+            <button
+              type="button"
+              className="min-h-9 rounded-md border border-border px-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer"
+              aria-label={lineCopy.removeFor(view.lineName)}
+              aria-describedby={describedBy}
+              onClick={remove}
+            >
+              {lineCopy.remove}
+            </button>
+          ) : null}
+        </div>
+      ),
+      rule: (rules.lines[key] ?? []).map((rule, position) => (
+        <p key={`${rule.code}:${position}`} className="text-sm font-medium text-destructive" role="alert" data-part="line-rule">
+          {rule.message}
+        </p>
+      )),
+      // Price: a free line struck then zero, as the cart page and the receipt draw it.
+      price: (
+        <div className="text-[12px] sm:text-sm font-bold text-foreground tabular-nums text-end shrink-0" data-part="line-price">
+          <div data-cart-line-price data-cart-line-free={view.free ? "" : undefined}>
+            {view.compareAt ? (
+              <>
+                <span className="sr-only">{lineCopy.freeLine(view.compareAt)}</span>
+                <span aria-hidden="true">
+                  <s className="me-1 font-normal text-muted-foreground" data-cart-line-compare-at>{view.compareAt}</s>
+                  <span data-cart-line-amount>{view.linePrice}</span>
+                </span>
+              </>
+            ) : <span data-cart-line-amount>{view.linePrice}</span>}
+          </div>
+          {view.unitPrice && (
+            <div className="text-xs font-normal text-muted-foreground" data-cart-line-unit-price>
+              {view.unitPrice} {lineCopy.each}
+            </div>
+          )}
+        </div>
+      ),
+      quantity: (
+        <div className="flex h-11 items-center overflow-hidden rounded-md bg-muted/50 ring-1 ring-inset ring-input sm:h-8" data-part="line-quantity">
+          <button
+            aria-label={copy.decrease(view.lineName)}
+            aria-describedby={describedBy}
+            onClick={() => {
+              if (view.decreaseTo === 0) remove();
+              else updateCartItemByKey(key, { quantity: view.decreaseTo });
+            }}
+            className="flex h-full w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-background hover:text-foreground active:bg-muted sm:w-8 cursor-pointer"
+          >
+            <Minus className="h-3 w-3" />
+          </button>
+          <span className="flex h-full w-8 items-center justify-center text-center text-sm font-bold leading-none text-foreground tabular-nums" data-cart-line-quantity>
+            {view.quantityText}
+          </span>
+          <button
+            aria-label={copy.increase(view.lineName)}
+            aria-describedby={describedBy}
+            disabled={view.increaseBlocked !== null}
+            onClick={() => {
+              updateCartItemByKey(key, { quantity: view.increaseTo });
+            }}
+            className="flex h-full w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-background hover:text-foreground active:bg-muted sm:w-8 cursor-pointer"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        </div>
+      ),
+      remove: (
+        <button
+          aria-label={lineCopy.removeFor(view.lineName)}
+          aria-describedby={describedBy}
+          onClick={remove}
+          className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90 sm:h-8 sm:w-8 cursor-pointer"
+          data-part="line-remove"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      ),
+      limit: view.stock?.state === "at-limit" && (
+        <p className="mt-1 text-xs text-muted-foreground" data-cart-line-limit data-part="line-limit">{stockText}</p>
+      ),
+    };
+    const ring = key === addedKey ? "border-primary ring-1 ring-primary" : "border-border";
+    if (plan.line) {
+      return (
+        <div key={key} data-line-key={key} aria-current={key === addedKey ? "true" : undefined} className={`relative min-w-0 bg-card p-2 sm:p-2.5 rounded-xl border shadow-sm ${ring}`} data-part="line">
+          {drawerNodes(plan.line, parts)}
+        </div>
+      );
+    }
+    return (
+    <div
+      key={key}
+      data-line-key={key}
+      aria-current={key === addedKey ? "true" : undefined}
+      className={`group relative flex gap-2.5 sm:gap-3 bg-card p-2 sm:p-2.5 rounded-xl border shadow-sm ${ring}`}
+      data-part="line"
+    >
+      {/* Compact Image */}
+      {parts.image}
+
+      <div className="flex flex-1 flex-col min-w-0 justify-between py-0">
+        <div className="flex justify-between items-start gap-1.5">
+          <div className="space-y-0.5 min-w-0 flex-1">
+            {parts.title}
+            {parts.details}
+            {parts.inputs}
+            {parts.target}
+            {parts.issue}
+            {parts.rule}
+          </div>
+
+          {parts.price}
+        </div>
+
+        {/* Controls Row */}
+        <div className="flex items-end justify-between mt-1">
+          {parts.quantity}
+
+          {parts.remove}
+        </div>
+        {parts.limit}
+      </div>
+    </div>
+    );
+  };
+  const lineList = (withRecommendations: boolean) => (
+    // Mobile: gap-2 (tighter), Desktop: gap-3
+    <div ref={linesRef} className="space-y-2 sm:space-y-3 pb-4" data-part="drawer-lines">
+      {/* The apps' bulk actions on their line inputs, drawn by the line-input controls (only once a line takes one). */}
+      {lineInputs.inputs.size > 0 && <div className="flex flex-wrap gap-2" data-cart-line-input-bulk hidden />}
+      {lineInputs.inputs.size > 0 && <p className="sr-only" role="status" data-cart-line-input-status />}
+      {lineEntries.map(line)}
+      {withRecommendations && recommendationsPart}
+    </div>
+  );
+  const undoPart = undo && (
+    <p className="shrink-0 border-t border-border bg-card px-4 py-2 text-sm text-muted-foreground" role="status" data-part="drawer-undo">
+      {undo.message} ·{" "}
+      <button type="button" onClick={undoRemoval} className="font-medium text-foreground underline underline-offset-2 cursor-pointer">
+        {copy.undo}
+      </button>
+    </p>
+  );
+  // Savings and offers the cart already qualifies for.
+  const offers = cart.totalItems > 0 && discounts && discounts.offers.length > 0 && (
+    <div className="shrink-0 space-y-1 border-t border-border bg-card px-3 py-2 text-sm sm:px-5" data-part="drawer-offers">
+      {discounts.offers.map((offer) => (
+        <div key={offer.promotionId} className="flex items-center justify-between gap-2 text-foreground">
+          <span className="line-clamp-2 min-w-0 break-words">
+            <span className="font-medium">{offer.title}:</span>{" "}
+            {offer.products.map(({ name }) => name).join(" / ")} {offerSaving(offer.percentOff, copy)}
+          </span>
+          {offer.products[0]?.variantId && offer.products[0].price !== null ? (
+            <button
+              type="button"
+              className="shrink-0 rounded-md border border-border px-2 py-1 text-sm font-medium hover:bg-muted cursor-pointer"
+              onClick={() => {
+                const product = offer.products[0]!;
+                void addToCart({
+                  id: product.id,
+                  slug: product.slug,
+                  name: product.name,
+                  price: product.price!,
+                  variantId: product.variantId!,
+                  quantity: Math.max(1, offer.quantity),
+                });
+              }}
+            >
+              {copy.add}
+            </button>
+          ) : offer.products[0] ? (
+            <a href={pagePath(`/products/${encodeURIComponent(offer.products[0].slug)}`)} className="shrink-0 text-sm font-medium underline underline-offset-2">
+              {copy.view}
+            </a>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+  const summary = cart.totalItems > 0 && (
+    <>
+      {/* The one order of money rows on every surface (lib/money-summary-order.ts): subtotal, the apps' add-ons, discounts, total. */}
+      {(discountTotal > 0 || addOns.rows.length > 0) && (
+        <div className="space-y-1 text-sm" data-part="drawer-summary">
+          <div className="flex items-center justify-between gap-3 text-muted-foreground" data-cart-subtotal-row data-summary-row="subtotal">
+            <span>{copy.subtotal}</span>
+            <span className="tabular-nums" data-cart-subtotal>{formatMoney(fromMinor(addOns.itemsSubtotalMinor, moneyPlaces))}</span>
+          </div>
+          {addOns.rows.map((row) => (
+            <div key={`${row.appId ?? ""}:${row.title}`} className="flex items-center justify-between gap-3 text-muted-foreground" data-summary-row="add-on">
+              <span className="min-w-0">{row.title}</span>
+              <span className="shrink-0 tabular-nums">{formatMoney(fromMinor(row.amountMinor, moneyPlaces))}</span>
+            </div>
+          ))}
+          {discounts?.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
+            <div key={key} className="flex justify-between gap-3 text-primary" data-discount-line={key} data-summary-row="discount">
+              <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>
+              <span className="shrink-0 tabular-nums" aria-busy={discountsPending || undefined}>{discountsPending ? copy.updating : `-${formatMoney(line.amount)}`}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex items-end justify-between gap-3" data-summary-row="total" data-part="drawer-total">
+        <div className="text-sm text-muted-foreground">
+          {/* Subtotal is the items alone wherever add-on rows show: the sum below them is the total. */}
+          {discountTotal > 0 || addOns.rows.length > 0 ? copy.estimatedTotal : copy.subtotal}
+        </div>
+        <div className="text-lg font-semibold text-foreground tabular-nums sm:text-xl" data-cart-total aria-busy={discountsPending || undefined}>
+          {discountsPending ? copy.updating : formatMoney(estimate.total)}
+        </div>
+      </div>
+      {checkoutBlocked && (
+        <p id="drawerCheckoutBlocked" className="text-sm text-destructive" role="status" data-part="drawer-blocked">{blockedText}</p>
+      )}
+    </>
+  );
+  const footerTarget = cart.totalItems > 0 && <DrawerBuyerUi blocks={buyerUi} onChange={recheck} lines={cart.items} lineInputs={lineInputs} />;
+  const actions = cart.totalItems > 0 && (
+    <>
+      {/* One primary action (Shopify): Check out. The cart page is a link beside Continue shopping; Clear cart lives there. */}
+      {checkoutBlocked ? (
+        <button
+          type="button"
+          disabled
+          aria-describedby="drawerCheckoutBlocked"
+          data-theme-component="button"
+          data-theme-variant="default"
+          data-theme-size="default"
+          className={`${DRAWER_BUTTON} ${DRAWER_CHECKOUT}`}
+          data-part="drawer-checkout"
+        >
+          <span>{label("drawer.checkout", copy.checkout)}</span>
+          <ArrowRight className="h-4 w-4" />
+        </button>
+      ) : (
+        <a
+          href={checkoutHref}
+          onClick={() => setCartOpen(false)}
+          data-theme-component="button"
+          data-theme-variant="default"
+          data-theme-size="default"
+          className={`${DRAWER_BUTTON} ${DRAWER_CHECKOUT} hover:bg-primary/90 cursor-pointer`}
+          data-part="drawer-checkout"
+        >
+          <span>{label("drawer.checkout", copy.checkout)}</span>
+          <ArrowRight className="h-4 w-4" />
+        </a>
+      )}
+      <div className="flex items-center justify-between gap-3 px-1" data-part="drawer-actions">
+        <a
+          href={cartHref}
+          onClick={() => setCartOpen(false)}
+          className="inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary sm:min-h-9"
+          data-part="drawer-view-cart"
+        >
+          {label("drawer.viewCart", copy.viewCart)}
+        </a>
+        <button
+          type="button"
+          onClick={() => setCartOpen(false)}
+          className="min-h-11 text-sm text-muted-foreground hover:text-foreground underline decoration-border underline-offset-2 cursor-pointer sm:min-h-9"
+          data-part="drawer-continue"
+        >
+          {label("drawer.continue", copy.continueShopping)}
+        </button>
+      </div>
+    </>
+  );
+  /** The scrolling region between the drawer's fixed parts, with its fade when more lies below. */
+  const scrollRegion = (children: React.ReactNode, key?: number) => (
+    <div key={key} className="flex-1 relative overflow-hidden flex flex-col bg-muted/50" data-layout="scroll" data-part="drawer-scroll">
+      <div
+        ref={scrollRef}
+        onScroll={checkScroll}
+        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-2 sm:px-5 sm:py-4"
+      >
+        {children}
+      </div>
+
+      {/* More below: a soft fade only, so nothing covers a price or a button. */}
+      <div
+        aria-hidden="true"
+        className={`absolute bottom-0 inset-s-0 inset-e-0 h-6 bg-linear-to-t from-card to-transparent pointer-events-none transition-opacity duration-300 ${canScrollMore ? "opacity-100" : "opacity-0"}`}
+      />
+    </div>
+  );
+  const pageParts: Record<string, React.ReactNode> = {
+    header,
+    added,
+    // The theme placed the suggestions on their own: the lines draw without them.
+    lines: cart.totalItems === 0 ? emptyState : lineList(false),
+    recommendations: cart.totalItems > 0 && recommendationsPart,
+    undo: undoPart,
+    offers,
+    summary,
+    actions,
+  };
+
   return (
     <Dialog.Root
       open={isOpen}
@@ -594,6 +1165,7 @@ export default function CartFlyout({ onReady }: Props) {
           });
         }}
         className={`${DRAWER_SHEET} ${look.width === "wide" ? "sm:max-w-[440px]" : "sm:max-w-[380px]"}`}
+        data-private="cart-drawer"
       >
         <Dialog.Description className="text-sm text-muted-foreground sr-only">
           {addedItem ? copy.describeAdded(addedItem.name, addedCount > 1 ? formatCount(addedCount) : undefined) : copy.describe}
@@ -604,481 +1176,37 @@ export default function CartFlyout({ onReady }: Props) {
         */}
         <div
           className="w-full flex flex-col items-center justify-center pt-2 pb-0 sm:hidden cursor-grab active:cursor-grabbing touch-none z-30 bg-card rounded-t-[20px]"
-          onTouchStart={handleDragStart}
-          onTouchMove={handleDragMove}
-          onTouchEnd={handleDragEnd}
+          {...dragZone}
         >
           <div className="w-8 h-1 rounded-full bg-muted-foreground/30" />
           <ChevronDown className="w-3 h-3 text-muted-foreground animate-bounce mt-0.5 opacity-60" />
         </div>
 
+        {plan.layout ? drawerNodes(plan.layout, pageParts, { target: (name) => (name === "cart_drawer.footer" ? footerTarget : null), scroll: scrollRegion }) : (
+        <>
         {/* 1. HEADER */}
-        <div
-          className="flex items-center justify-between px-4 pb-2 pt-0 sm:pt-4 sm:px-5 sm:pb-4 border-b border-border bg-card shrink-0 z-20 h-auto shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
-          onTouchStart={handleDragStart}
-          onTouchMove={handleDragMove}
-          onTouchEnd={handleDragEnd}
-        >
-          <div className="flex items-center gap-2">
-            <Dialog.Title className="text-[15px] sm:text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
-              {copy.title}
-              <span aria-hidden="true" className="bg-primary text-primary-foreground text-sm font-bold px-2 py-0.5 rounded-full leading-none min-w-[18px] text-center">
-                {formatCount(cart.totalItems)}
-              </span>
-              <span className="sr-only">{itemsText}</span>
-            </Dialog.Title>
-          </div>
+        {header}
 
-          <Dialog.Close
-            aria-label={copy.close}
-            className="group -me-2 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90 focus:outline-none sm:-me-2 sm:h-9 sm:w-9 cursor-pointer"
-          >
-            <X className="h-4 w-4 sm:h-5 sm:w-5 transition-transform duration-300 group-hover:rotate-90" />
-          </Dialog.Close>
-        </div>
-
-        {/* Confirmation of an add, like Shopify's cart notification. A fixed strip in the sheet, never in the page. */}
-        {addedItem && (
-          <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-4 py-2 text-sm font-medium text-foreground sm:px-5" data-cart-added>
-            <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <Check className="h-3 w-3" strokeWidth={3} />
-            </span>
-            <span aria-hidden="true" data-cart-added-text>{addedText}</span>
-            <p role="status" className="sr-only">
-              {announced
-                ? addedCount > 1
-                  ? copy.announceAddedMany(formatCount(addedCount), itemsText)
-                  : outcome
-                    ? copy.announceOutcome(addedItem.name, addedText, itemsText)
-                    : copy.announceAdded(addedItem.name, itemsText)
-                : ""}
-            </p>
-          </div>
-        )}
+        {added}
 
         {/* 2. CONTENT */}
-        <div className="flex-1 relative overflow-hidden flex flex-col bg-muted/50">
-          <div
-            ref={scrollRef}
-            onScroll={checkScroll}
-            className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-2 sm:px-5 sm:py-4"
-          >
-            {cart.totalItems === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full py-8 sm:py-12 text-center space-y-3">
-                <div className="h-12 w-12 sm:h-16 sm:w-16 bg-card rounded-full flex items-center justify-center border border-border shadow-sm">
-                  <ShoppingBag className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />
-                </div>
-                <div className="space-y-0.5">
-                  <h3 className="text-sm font-bold text-foreground">
-                    {copy.empty}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCartOpen(false)}
-                  data-theme-component="button"
-                  data-theme-variant="default"
-                  data-theme-size="sm"
-                  className={`${DRAWER_BUTTON} inline-flex items-center justify-center gap-2 mt-1 h-11 rounded-full px-5 text-xs hover:bg-primary/90 sm:h-9 cursor-pointer`}
-                >
-                  {copy.startShopping}
-                </button>
-              </div>
-            ) : (
-              // Mobile: gap-2 (tighter), Desktop: gap-3
-              <div ref={linesRef} className="space-y-2 sm:space-y-3 pb-4">
-                {/* The apps' bulk actions on their line inputs, drawn by the line-input controls (only once a line takes one). */}
-                {lineInputs.inputs.size > 0 && <div className="flex flex-wrap gap-2" data-cart-line-input-bulk hidden />}
-                {lineInputs.inputs.size > 0 && <p className="sr-only" role="status" data-cart-line-input-status />}
-                {lineEntries.map(([key, item], index) => {
-                  const view = cartLineView(key, item, {
-                    discount: lineDiscounts.get(key),
-                    quantityLimit: limits[key] ?? null,
-                    mixedFulfilment,
-                    words: lineWords,
-                    surchargeText: "+{price}",
-                    issues: issueLists[key],
-                  });
-                  // A stock issue in the words the cart page uses; any other issue as the check said it.
-                  const stockText = cartLineStockText(view);
-                  const describedBy = inputsId(index, item);
-                  const remove = () => removeWithUndo(copy.removed(view.lineName), () => removeCartItemByKey(key));
-                  return (
-                  <div
-                    key={key}
-                    data-line-key={key}
-                    aria-current={key === addedKey ? "true" : undefined}
-                    className={`group relative flex gap-2.5 sm:gap-3 bg-card p-2 sm:p-2.5 rounded-xl border shadow-sm ${key === addedKey ? "border-primary ring-1 ring-primary" : "border-border"}`}
-                  >
-                    {/* Compact Image */}
-                    <div className="h-12 w-12 sm:h-18 sm:w-18 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
-                      <CartLineImage url={view.image} alt={view.name} />
-                    </div>
+        {scrollRegion(cart.totalItems === 0 ? emptyState : lineList(true))}
 
-                    <div className="flex flex-1 flex-col min-w-0 justify-between py-0">
-                      <div className="flex justify-between items-start gap-1.5">
-                        <div className="space-y-0.5 min-w-0 flex-1">
-                          <h3 className="line-clamp-2 pe-1 text-[12px] font-bold leading-tight text-foreground sm:text-[13.5px]">
-                            <a
-                              href={view.productHref}
-                              className="hover:text-muted-foreground transition-colors"
-                              data-cart-line-name
-                            >
-                              {view.name}
-                            </a>
-                          </h3>
+        {undoPart}
 
-                          {view.options.length > 0 && (
-                            <div className="text-xs text-muted-foreground">
-                              {view.options.map((option) => (
-                                <span key={`${option.name}:${option.label}`} className="block" data-cart-line-option>
-                                  {option.name}: {option.label}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {view.purchaseOptions.map((option) => (
-                            <p key={option.id} className="text-xs font-medium text-foreground" data-cart-line-purchase-option>
-                              {option.title}
-                            </p>
-                          ))}
-                          {(view.inputs.length > 0 || view.components.length > 0) && (
-                            <div className="text-xs text-muted-foreground" data-cart-line-properties>
-                              <ul id={describedBy}>
-                                {view.inputs.map((input) => (
-                                  <li key={input.key} className="break-words" data-property-key={input.key}>
-                                    {/* A long answer folds to three lines, as on the cart page (lib/long-answer.ts). */}
-                                    {isLongAnswer(input.text) ? (
-                                      <span className="long-answer block" data-long-answer>
-                                        <span className="long-answer-text" data-answer-text>{input.text}</span>
-                                        <details className="long-answer-toggle">
-                                          <summary><span className="long-answer-more">{lineCopy.answerMore}</span><span className="long-answer-less">{lineCopy.answerLess}</span></summary>
-                                        </details>
-                                      </span>
-                                    ) : input.text}
-                                  </li>
-                                ))}
-                                {view.components.map((component, position) => (
-                                  <li key={`component:${position}`} className="break-words" data-cart-line-component>
-                                    {component}
-                                  </li>
-                                ))}
-                              </ul>
-                              {view.editHref && (
-                                <a
-                                  data-cart-line-edit=""
-                                  href={view.editHref}
-                                  className="inline-flex min-h-9 items-center font-medium text-foreground underline underline-offset-2"
-                                  aria-label={copy.editItem(view.lineName)}
-                                  aria-describedby={describedBy}
-                                  onClick={() => {
-                                    // Session storage, not the URL: the inputs are buyer content.
-                                    writeCartLineEdit({
-                                      lineKey: key,
-                                      productId: item.id,
-                                      variantId: item.variantId,
-                                      quantity: item.quantity,
-                                      properties: cartLinePropertyInputs(item),
-                                      ...purchaseOptionsField(item),
-                                    });
-                                  }}
-                                >
-                                  {copy.edit}
-                                </a>
-                              )}
-                            </div>
-                          )}
-                          {view.fulfilment && (
-                            <p
-                              className={view.fulfilment === "ships-free" ? "text-xs font-medium text-foreground" : "text-xs text-muted-foreground"}
-                              data-cart-line-fulfilment={view.fulfilment}
-                            >
-                              {view.fulfilment === "ships-free" ? lineCopy.shipsFree : view.fulfilment === "digital" ? lineCopy.digital : lineCopy.service}
-                            </p>
-                          )}
-                          <div className="mt-1.5 grid gap-2" data-cart-line-inputs data-line-key={key} hidden />
-                          {/* The apps' block for this line (`cart.line.after`), drawn by DrawerBuyerUi. */}
-                          <div className="mt-1.5 grid gap-2 text-sm" data-buyer-ui-target="cart.line.after" data-buyer-ui-line={key} data-buyer-ui-line-name={view.lineName} hidden />
-                          {issues[key] && (
-                            <div className="space-y-1" role="alert">
-                              <p className="text-sm font-medium text-destructive" data-cart-line-stock={view.stock && view.stock.state !== "at-limit" ? view.stock.state : undefined}>
-                                {view.stock && view.stock.state !== "at-limit" ? stockText : buyerApiErrorTextNow(issues[key]) ?? copy.fixToCheckout}
-                              </p>
-                              {issues[key].action === "reduce_quantity" && (issues[key].availableQuantity ?? 0) >= 1 ? (
-                                <button
-                                  type="button"
-                                  className="min-h-9 rounded-md border border-border px-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer"
-                                  aria-label={lineCopy.updateQuantityFor(formatCount(Math.floor(issues[key].availableQuantity!)), view.lineName)}
-                                  aria-describedby={describedBy}
-                                  onClick={() => {
-                                    updateCartItemByKey(key, { quantity: Math.floor(issues[key]!.availableQuantity!) });
-                                  }}
-                                >
-                                  {lineCopy.updateQuantity(formatCount(Math.floor(issues[key].availableQuantity!)))}
-                                </button>
-                              ) : issues[key].action === "remove" || issues[key].action === "reduce_quantity" ? (
-                                <button
-                                  type="button"
-                                  className="min-h-9 rounded-md border border-border px-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer"
-                                  aria-label={lineCopy.removeFor(view.lineName)}
-                                  aria-describedby={describedBy}
-                                  onClick={remove}
-                                >
-                                  {lineCopy.remove}
-                                </button>
-                              ) : null}
-                            </div>
-                          )}
-                          {(rules.lines[key] ?? []).map((rule, position) => (
-                            <p key={`${rule.code}:${position}`} className="text-sm font-medium text-destructive" role="alert">
-                              {rule.message}
-                            </p>
-                          ))}
-                        </div>
-
-                        {/* Price: a free line struck then zero, as the cart page and the receipt draw it. */}
-                        <div className="text-[12px] sm:text-sm font-bold text-foreground tabular-nums text-end shrink-0">
-                          <div data-cart-line-price data-cart-line-free={view.free ? "" : undefined}>
-                            {view.compareAt ? (
-                              <>
-                                <span className="sr-only">{lineCopy.freeLine(view.compareAt)}</span>
-                                <span aria-hidden="true">
-                                  <s className="me-1 font-normal text-muted-foreground" data-cart-line-compare-at>{view.compareAt}</s>
-                                  <span data-cart-line-amount>{view.linePrice}</span>
-                                </span>
-                              </>
-                            ) : <span data-cart-line-amount>{view.linePrice}</span>}
-                          </div>
-                          {view.unitPrice && (
-                            <div className="text-xs font-normal text-muted-foreground" data-cart-line-unit-price>
-                              {view.unitPrice} {lineCopy.each}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Controls Row */}
-                      <div className="flex items-end justify-between mt-1">
-                        <div className="flex h-11 items-center overflow-hidden rounded-md bg-muted/50 ring-1 ring-inset ring-input sm:h-8">
-                          <button
-                            aria-label={copy.decrease(view.lineName)}
-                            aria-describedby={describedBy}
-                            onClick={() => {
-                              if (view.decreaseTo === 0) remove();
-                              else updateCartItemByKey(key, { quantity: view.decreaseTo });
-                            }}
-                            className="flex h-full w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-background hover:text-foreground active:bg-muted sm:w-8 cursor-pointer"
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                          <span className="flex h-full w-8 items-center justify-center text-center text-sm font-bold leading-none text-foreground tabular-nums" data-cart-line-quantity>
-                            {view.quantityText}
-                          </span>
-                          <button
-                            aria-label={copy.increase(view.lineName)}
-                            aria-describedby={describedBy}
-                            disabled={view.increaseBlocked !== null}
-                            onClick={() => {
-                              updateCartItemByKey(key, { quantity: view.increaseTo });
-                            }}
-                            className="flex h-full w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-background hover:text-foreground active:bg-muted sm:w-8 cursor-pointer"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                        </div>
-
-                        <button
-                          aria-label={lineCopy.removeFor(view.lineName)}
-                          aria-describedby={describedBy}
-                          onClick={remove}
-                          className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90 sm:h-8 sm:w-8 cursor-pointer"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      {view.stock?.state === "at-limit" && (
-                        <p className="mt-1 text-xs text-muted-foreground" data-cart-line-limit>{stockText}</p>
-                      )}
-                    </div>
-                  </div>
-                  );
-                })}
-                {recommendations && (
-                  <section aria-labelledby="cart-recommendations-title" className="pt-2">
-                    <h3 id="cart-recommendations-title" className="mb-2 text-xs font-bold text-foreground sm:text-sm">
-                      {recommendationTitle(recommendations.reason)}
-                    </h3>
-                    {/* Padding inside the scroller gives the focus outline room: overflow clips it. */}
-                    <ul data-h-rail className="-mx-1 flex gap-2 overflow-x-auto px-1 py-1">
-                      {recommendations.products.map((product) => (
-                        <li key={product.id} className="w-28 shrink-0">
-                          <a
-                            href={pagePath(`/products/${encodeURIComponent(product.slug)}`)}
-                            className="flex h-full flex-col rounded-lg border border-border bg-card p-1.5 transition-colors hover:border-foreground/30"
-                          >
-                            <img
-                              {...productImageProps(product.imageUrl, CART_RECOMMENDATION_IMAGE)}
-                              alt={product.imageAlt || product.name}
-                              width={100}
-                              height={100}
-                              loading="lazy"
-                              decoding="async"
-                              className="aspect-square w-full rounded-md bg-muted object-cover"
-                            />
-                            <span className="mt-1 line-clamp-2 text-xs font-medium leading-tight text-foreground">
-                              {product.name}
-                            </span>
-                            <span className="mt-auto pt-0.5 text-xs font-semibold tabular-nums text-foreground">
-                              {product.priceVaries
-                                ? priceCopy.from(formatMoney(product.discountedPrice))
-                                : formatMoney(product.discountedPrice)}
-                            </span>
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* More below: a soft fade only, so nothing covers a price or a button. */}
-          <div
-            aria-hidden="true"
-            className={`absolute bottom-0 inset-s-0 inset-e-0 h-6 bg-linear-to-t from-card to-transparent pointer-events-none transition-opacity duration-300 ${canScrollMore ? "opacity-100" : "opacity-0"}`}
-          />
-        </div>
-
-        {undo && (
-          <p className="shrink-0 border-t border-border bg-card px-4 py-2 text-sm text-muted-foreground" role="status">
-            {undo.message} ·{" "}
-            <button type="button" onClick={undoRemoval} className="font-medium text-foreground underline underline-offset-2 cursor-pointer">
-              {copy.undo}
-            </button>
-          </p>
-        )}
-
-        {/* Savings and offers the cart already qualifies for */}
-        {cart.totalItems > 0 && discounts && discounts.offers.length > 0 && (
-          <div className="shrink-0 space-y-1 border-t border-border bg-card px-3 py-2 text-sm sm:px-5">
-            {discounts.offers.map((offer) => (
-              <div key={offer.promotionId} className="flex items-center justify-between gap-2 text-foreground">
-                <span className="line-clamp-2 min-w-0 break-words">
-                  <span className="font-medium">{offer.title}:</span>{" "}
-                  {offer.products.map(({ name }) => name).join(" / ")} {offerSaving(offer.percentOff, copy)}
-                </span>
-                {offer.products[0]?.variantId && offer.products[0].price !== null ? (
-                  <button
-                    type="button"
-                    className="shrink-0 rounded-md border border-border px-2 py-1 text-sm font-medium hover:bg-muted cursor-pointer"
-                    onClick={() => {
-                      const product = offer.products[0]!;
-                      void addToCart({
-                        id: product.id,
-                        slug: product.slug,
-                        name: product.name,
-                        price: product.price!,
-                        variantId: product.variantId!,
-                        quantity: Math.max(1, offer.quantity),
-                      });
-                    }}
-                  >
-                    {copy.add}
-                  </button>
-                ) : offer.products[0] ? (
-                  <a href={pagePath(`/products/${encodeURIComponent(offer.products[0].slug)}`)} className="shrink-0 text-sm font-medium underline underline-offset-2">
-                    {copy.view}
-                  </a>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        )}
+        {offers}
 
         {/* 3. FOOTER */}
         {cart.totalItems > 0 && (
-          <div className="border-t border-border bg-card p-3 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb">
+          <div className="border-t border-border bg-card p-3 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb" data-layout="group">
             <div className="space-y-3 sm:space-y-4">
-              {/* The one order of money rows on every surface (lib/money-summary-order.ts): subtotal, the apps' add-ons, discounts, total. */}
-              {(discountTotal > 0 || addOns.rows.length > 0) && (
-                <div className="space-y-1 text-sm">
-                  <div className="flex items-center justify-between gap-3 text-muted-foreground" data-cart-subtotal-row data-summary-row="subtotal">
-                    <span>{copy.subtotal}</span>
-                    <span className="tabular-nums" data-cart-subtotal>{formatMoney(fromMinor(addOns.itemsSubtotalMinor, moneyPlaces))}</span>
-                  </div>
-                  {addOns.rows.map((row) => (
-                    <div key={`${row.appId ?? ""}:${row.title}`} className="flex items-center justify-between gap-3 text-muted-foreground" data-summary-row="add-on">
-                      <span className="min-w-0">{row.title}</span>
-                      <span className="shrink-0 tabular-nums">{formatMoney(fromMinor(row.amountMinor, moneyPlaces))}</span>
-                    </div>
-                  ))}
-                  {discounts?.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
-                    <div key={key} className="flex justify-between gap-3 text-primary" data-discount-line={key} data-summary-row="discount">
-                      <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>
-                      <span className="shrink-0 tabular-nums" aria-busy={discountsPending || undefined}>{discountsPending ? copy.updating : `-${formatMoney(line.amount)}`}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="flex items-end justify-between gap-3" data-summary-row="total">
-                <div className="text-sm text-muted-foreground">
-                  {/* Subtotal is the items alone wherever add-on rows show: the sum below them is the total. */}
-                  {discountTotal > 0 || addOns.rows.length > 0 ? copy.estimatedTotal : copy.subtotal}
-                </div>
-                <div className="text-lg font-semibold text-foreground tabular-nums sm:text-xl" data-cart-total aria-busy={discountsPending || undefined}>
-                  {discountsPending ? copy.updating : formatMoney(estimate.total)}
-                </div>
-              </div>
-              {checkoutBlocked && (
-                <p id="drawerCheckoutBlocked" className="text-sm text-destructive" role="status">{blockedText}</p>
-              )}
-              <DrawerBuyerUi blocks={buyerUi} onChange={recheck} lines={cart.items} lineInputs={lineInputs} />
-              {/* One primary action (Shopify): Check out. The cart page is a link beside Continue shopping; Clear cart lives there. */}
-              {checkoutBlocked ? (
-                <button
-                  type="button"
-                  disabled
-                  aria-describedby="drawerCheckoutBlocked"
-                  data-theme-component="button"
-                  data-theme-variant="default"
-                  data-theme-size="default"
-                  className={`${DRAWER_BUTTON} ${DRAWER_CHECKOUT}`}
-                >
-                  <span>{copy.checkout}</span>
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              ) : (
-                <a
-                  href={checkoutHref}
-                  onClick={() => setCartOpen(false)}
-                  data-theme-component="button"
-                  data-theme-variant="default"
-                  data-theme-size="default"
-                  className={`${DRAWER_BUTTON} ${DRAWER_CHECKOUT} hover:bg-primary/90 cursor-pointer`}
-                >
-                  <span>{copy.checkout}</span>
-                  <ArrowRight className="h-4 w-4" />
-                </a>
-              )}
-              <div className="flex items-center justify-between gap-3 px-1">
-                <a
-                  href={cartHref}
-                  onClick={() => setCartOpen(false)}
-                  className="inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary sm:min-h-9"
-                >
-                  {copy.viewCart}
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setCartOpen(false)}
-                  className="min-h-11 text-sm text-muted-foreground hover:text-foreground underline decoration-border underline-offset-2 cursor-pointer sm:min-h-9"
-                >
-                  {copy.continueShopping}
-                </button>
-              </div>
+              {summary}
+              {footerTarget}
+              {actions}
             </div>
           </div>
+        )}
+        </>
         )}
       </Dialog.Content>
       </Dialog.Portal>

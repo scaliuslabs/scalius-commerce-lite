@@ -89,32 +89,68 @@ function priceHtml(view: CartLineView, words: CartLineHtmlWords): string {
   const unit = view.unitPrice
     ? `<div class="text-sm tabular-nums text-muted-foreground" data-cart-line-unit-price>${escapeHtml(view.unitPrice)} ${escapeHtml(words.each)}</div>`
     : "";
-  return `<div class="text-end"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base" data-cart-line-price${view.free ? " data-cart-line-free" : ""}>${amount}</div>${unit}</div>`;
+  return `<div class="text-end" data-part="line-price"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base" data-cart-line-price${view.free ? " data-cart-line-free" : ""}>${amount}</div>${unit}</div>`;
 }
 
-export function cartLineHtml(view: CartLineView, slots: CartLineHtmlSlots): string {
+/** A line's sub-parts by their anatomy names (private-anatomy.ts), each "" when the line has none. */
+export function cartLineParts(view: CartLineView, slots: CartLineHtmlSlots): Record<string, string> {
   const { words, cartKey, describedBy } = slots;
   const key = escapeHtml(view.key);
-  // The quantity and the price stay on every line, an issue or not: the issue says what is wrong under them.
-  const quantityRow = `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
-              <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9">
+  return {
+    image: `<div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20" data-part="line-image"><img src="${escapeHtml(getProductImageUrl(view.image, 96))}" alt="" width="80" height="80" loading="lazy" decoding="async" class="h-full w-full object-contain object-center" /></div>`,
+    title: `<h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base" data-part="line-title"><a href="${escapeHtml(view.productHref)}" class="hover:text-muted-foreground" data-cart-line-name>${escapeHtml(view.name)}</a></h3>`,
+    details: `<div class="mt-0.5 text-sm text-muted-foreground" data-part="line-details">${detailsHtml(view, slots)}</div>`,
+    inputs: `<div class="mt-1.5 grid max-w-sm gap-2" data-cart-line-inputs data-line-key="${key}" data-part="line-inputs" hidden></div>`,
+    target: `<div class="mt-2 grid gap-2" data-buyer-ui-target="cart.line.after" data-buyer-ui-line="${key}" data-buyer-ui-line-name="${escapeHtml(view.lineName)}" hidden></div>`,
+    remove: `<button type="button" aria-label="${escapeHtml(words.remove)}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" ${cartCallAttributes("removeFromCart", cartKey)} data-part="line-remove"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`,
+    quantity: `<div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9" data-part="line-quantity">
                 <button type="button" aria-label="${escapeHtml(words.decrease)}"${describedBy} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.decreaseTo)}>−</button>
                 <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite" data-cart-line-quantity>${escapeHtml(view.quantityText)}</span>
                 <button type="button" aria-label="${escapeHtml(words.increase)}"${describedBy} ${view.increaseBlocked ? "disabled" : ""} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.increaseTo)}>+</button>
-              </div>
-              ${priceHtml(view, words)}
-            </div>${view.stock?.state === "at-limit" && words.stock ? `
-            <p class="mt-1 text-xs text-muted-foreground" data-cart-line-limit>${escapeHtml(words.stock)}</p>` : ""}${slots.issueBlock}`;
+              </div>`,
+    price: priceHtml(view, words),
+    limit: view.stock?.state === "at-limit" && words.stock ? `<p class="mt-1 text-xs text-muted-foreground" data-cart-line-limit data-part="line-limit">${escapeHtml(words.stock)}</p>` : "",
+    issue: slots.issueBlock,
+    rule: slots.ruleBlock,
+  };
+}
+
+/**
+ * The theme's line (`<template data-cart-line-template>`, drawn by the page
+ * from the theme's arrangement): its sub-parts are `<!--line:name-->` marks,
+ * and its root's `data-line-key` is empty. Null on a page that draws the
+ * host's own line. Read once.
+ */
+let lineTemplate: string | null | undefined;
+function themeLineTemplate(): string | null {
+  if (lineTemplate === undefined) lineTemplate = typeof document === "undefined" ? null : document.querySelector<HTMLTemplateElement>("template[data-cart-line-template]")?.innerHTML ?? null;
+  return lineTemplate;
+}
+
+export function cartLineHtml(view: CartLineView, slots: CartLineHtmlSlots): string {
+  const parts = cartLineParts(view, slots);
+  const template = themeLineTemplate();
+  if (template) {
+    return template
+      .replace('data-line-key=""', `data-line-key="${escapeHtml(view.key)}"`)
+      .replace(/<!--line:([a-z-]+)-->/g, (_mark, name: string) => parts[name] ?? "");
+  }
+  // The quantity and the price stay on every line, an issue or not: the issue says what is wrong under them.
+  const quantityRow = `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
+              ${parts.quantity}
+              ${parts.price}
+            </div>${parts.limit ? `
+            ${parts.limit}` : ""}${parts.issue}`;
   return `
-      <li class="py-3 first:pt-0" data-line-key="${key}"><div class="flex gap-3">
-          <div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20"><img src="${escapeHtml(getProductImageUrl(view.image, 96))}" alt="" width="80" height="80" loading="lazy" decoding="async" class="h-full w-full object-contain object-center" /></div>
+      <li class="py-3 first:pt-0" data-line-key="${escapeHtml(view.key)}" data-part="line"><div class="flex gap-3">
+          ${parts.image}
           <div class="min-w-0 flex-1">
             <div class="flex justify-between gap-2">
-              <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base"><a href="${escapeHtml(view.productHref)}" class="hover:text-muted-foreground" data-cart-line-name>${escapeHtml(view.name)}</a></h3><div class="mt-0.5 text-sm text-muted-foreground">${detailsHtml(view, slots)}</div><div class="mt-1.5 grid max-w-sm gap-2" data-cart-line-inputs data-line-key="${key}" hidden></div><div class="mt-2 grid gap-2" data-buyer-ui-target="cart.line.after" data-buyer-ui-line="${key}" data-buyer-ui-line-name="${escapeHtml(view.lineName)}" hidden></div></div>
-              <button type="button" aria-label="${escapeHtml(words.remove)}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" ${cartCallAttributes("removeFromCart", cartKey)}><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="min-w-0">${parts.title}${parts.details}${parts.inputs}${parts.target}</div>
+              ${parts.remove}
             </div>
             ${quantityRow}
-            ${slots.ruleBlock}
+            ${parts.rule}
           </div>
         </div></li>`;
 }

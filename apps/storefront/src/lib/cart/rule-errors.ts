@@ -105,7 +105,7 @@ export function cartLineRuleErrorsId(position: number): string {
 export function renderCartLineRuleErrors(errors: readonly CartRuleError[], id: string): string {
   const messages = errors.map(({ message }) => message).filter(Boolean);
   if (messages.length === 0) return "";
-  return `<ul id="${escapeHtml(id)}" class="mt-1 space-y-0.5 text-xs font-medium text-destructive" data-cart-line-rule-errors>${messages
+  return `<ul id="${escapeHtml(id)}" class="mt-1 space-y-0.5 text-xs font-medium text-destructive" data-cart-line-rule-errors data-part="line-rule">${messages
     .map((message) => `<li>${escapeHtml(message)}</li>`)
     .join("")}</ul>`;
 }

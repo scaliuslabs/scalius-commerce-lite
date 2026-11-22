@@ -1,0 +1,127 @@
+---
+// The cart page's parts in the theme's arrangement (private-anatomy.ts, page
+// `cart`). The page hands its parts in as slots; this draws them either as
+// the host always has (no arrangement, or the default one: the cart column
+// beside the form, its order moved after the form on wide screens by the
+// page's placing script) or in the theme's layout tree, where reading order
+// is the arrangement's order at every width. A part the arrangement leaves
+// out (only optional ones may go) is never rendered. The theme's line, when
+// it has one, is a `<template>` the cart script fills per line.
+import {
+  layoutBox,
+  privateContentHtml,
+  renderPrivateNodes,
+  type PrivateAssetUrl,
+} from "@/lib/private-pages/html";
+import type { PrivatePagePlan } from "@/lib/private-pages/plan";
+
+interface Props {
+  plan: PrivatePagePlan;
+  language: string;
+  asset: PrivateAssetUrl;
+}
+
+const { plan, language, asset } = Astro.props;
+const custom = plan.layout !== null;
+const slot = async (name: string) => (Astro.slots.has(name) ? await Astro.slots.render(name) : "");
+
+let html = "";
+if (custom) {
+  // Rendered once each, only when the arrangement names it.
+  const parts: Record<string, () => Promise<string>> = {
+    progress: () => slot("progress"),
+    notices: () => slot("notices"),
+    lines: async () => `<section aria-labelledby="cartHeading" class="overflow-hidden rounded-xl border border-border bg-card" data-part="lines">${await slot("lines")}</section>`,
+    summary: async () => `<div id="cartSummary" class="hidden space-y-2 rounded-xl border border-border bg-card p-4" data-part="summary">${await slot("summary")}${await slot("summaryEnd")}</div>`,
+    discount: async () => `<div class="hidden group-data-[cart-state=items]:block">${await slot("discount")}</div>`,
+    empty: async () => `<div class="hidden space-y-8 group-data-[cart-state=empty]:block" data-cart-empty-extras data-part="empty-extras">${await slot("empty")}</div>`,
+    details: async () => `<div id="checkoutPanel" class="hidden min-w-0" data-part="details">${await slot("details")}</div>`,
+  };
+  const targets: Record<string, string> = {
+    "cart.page.summary": `<div data-buyer-ui-target="cart.page.summary"></div>`,
+    "cart.page.below": `<div data-buyer-ui-target="cart.page.below" class="space-y-3" hidden></div>`,
+  };
+  const rendered = new Map<string, string>();
+  const names = new Set<string>();
+  const collect = (nodes: NonNullable<PrivatePagePlan["layout"]>) => {
+    for (const node of nodes) {
+      if (node.type === "part") names.add(node.part);
+      else if (node.type === "layout") collect(node.children);
+    }
+  };
+  collect(plan.layout!);
+  for (const name of names) if (parts[name]) rendered.set(name, await parts[name]!());
+  const foldBar = await slot("foldBar");
+  html = renderPrivateNodes(plan.layout!, {
+    part: (name) => rendered.get(name) ?? "",
+    target: (name) => targets[name] ?? "",
+    content: (block, hook) => privateContentHtml(block, hook, language, asset),
+    // The phone fold: its bar states the total; its body folds below 64rem until opened.
+    layout: (kind, inner, hook) => kind === "fold"
+      ? layoutBox("fold", `${foldBar}<div id="orderSummaryBody" data-summary-body data-part="fold-body" class="flex min-w-0 flex-col gap-4">${inner}</div>`, hook)
+      : null,
+  });
+}
+
+// The theme's line: the arrangement with its sub-parts as marks the cart script fills.
+const lineTemplate = plan.items.line
+  ? `<li class="py-3 first:pt-0" data-part="line" data-line-key="">${renderPrivateNodes(plan.items.line, {
+    part: (name) => `<!--line:${name}-->`,
+    target: () => "<!--line:target-->",
+    content: (block, hook) => privateContentHtml(block, hook, language, asset),
+  })}</li>`
+  : null;
+---
+
+{lineTemplate && <template data-cart-line-template set:html={lineTemplate}></template>}
+{custom ? (
+  <div class="grid min-h-[100svh] content-start gap-4 lg:gap-6" data-cart-grid data-layout="page"><Fragment set:html={html} /></div>
+) : (
+  <Fragment>
+    <slot name="progress" />
+    <slot name="notices" />
+    {/* Reading and keyboard order follow what is on screen (WCAG 1.3.2, 2.4.3):
+        on phones the order summary bar and cart come first, then the form; on
+        wide screens the form is on the start side and the cart beside it, so
+        the script after the grid moves the cart column after the form there. */}
+    {/* The grid holds a screen of space from first paint, so the footer stays
+        below the fold and does not move when the lines render (CLS). */}
+    <div class="grid min-h-[100svh] content-start gap-4 lg:grid-cols-12 lg:gap-8" data-cart-grid>
+      <div
+        id="cartColumn"
+        class="min-w-0 lg:col-span-5 lg:sticky lg:self-start group-data-[cart-state=empty]:lg:col-span-12"
+        style="top: calc(var(--header-height, 64px) + 1rem);"
+      >
+        <slot name="foldBar" />
+        <div id="orderSummaryBody" data-summary-body data-part="fold-body">
+        <section
+          aria-labelledby="cartHeading"
+          class="overflow-hidden rounded-xl border border-border bg-card group-data-[cart-state=empty]:mx-auto group-data-[cart-state=empty]:max-w-lg"
+          data-part="lines"
+        >
+          <slot name="lines" />
+          <div
+            id="cartSummary"
+            class="hidden space-y-2 border-t border-border bg-muted/40 p-4"
+            data-part="summary"
+          >
+            <slot name="summary" />
+            <slot name="discount" />
+            <slot name="summaryEnd" />
+          </div>
+        </section>
+        <div data-buyer-ui-target="cart.page.summary" class="mt-4"></div>
+        </div>
+        {/* Store apps' blocks below the lines and summary (shown on phones even with the summary folded); hidden until one lands. */}
+        <div data-buyer-ui-target="cart.page.below" class="mt-4 space-y-3" hidden></div>
+        {/* An empty cart still leads somewhere: the store's categories and popular products, shown while the cart is empty. */}
+        <div class="mx-auto mt-8 hidden max-w-3xl space-y-8 group-data-[cart-state=empty]:block" data-cart-empty-extras data-part="empty-extras">
+          <slot name="empty" />
+        </div>
+      </div>
+      <div id="checkoutPanel" class="hidden min-w-0 lg:col-span-7" data-part="details">
+        <slot name="details" />
+      </div>
+    </div>
+  </Fragment>
+)}

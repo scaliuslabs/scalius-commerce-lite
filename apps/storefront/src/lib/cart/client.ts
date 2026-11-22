@@ -1326,7 +1326,7 @@ function renderCartItemIssues(cartKey: string, describedBy: string, view: CartLi
   if (!issue) return "";
   const stock = view.stock && view.stock.state !== "at-limit" ? cartLineStockText(view) : null;
   const message = stock ?? [...new Set(issues.map((entry) => entry.message))].join(" ");
-  return `<div class="mt-1 flex flex-wrap items-center justify-between gap-x-3" role="alert" data-cart-line-issue>
+  return `<div class="mt-1 flex flex-wrap items-center justify-between gap-x-3" role="alert" data-cart-line-issue data-part="line-issue">
         <p class="min-w-0 flex-1 basis-40 break-words text-xs font-medium text-destructive"${stock ? ` data-cart-line-stock="${view.stock!.state}"` : ""}>${escapeHtml(message)}</p>
         <div class="shrink-0">${renderIssueAction(cartKey, issue, describedBy)}</div>
       </div>`;

@@ -16,6 +16,11 @@ import ForeignAddressFields from "@/components/checkout/ForeignAddressFields.ast
 import BillingAddressFields from "@/components/checkout/BillingAddressFields.astro";
 import BuyerField from "@/components/apps/BuyerField.astro";
 import EmptyCartPopular from "@/components/checkout/EmptyCartPopular.astro";
+import CartPageLayout from "@/components/cart/CartPageLayout.astro";
+import { privateAssetUrls } from "@/lib/private-pages/html";
+import { privatePagePlan, privateStyle } from "@/lib/private-pages/plan";
+import { withCartLabels } from "@/lib/private-pages/labels";
+import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
 import {
   LOCATION_COUNTRY,
   defaultShippingCountry,
@@ -138,7 +143,11 @@ const codPlaceable = !checkoutUnavailable && canPlaceCashHere(checkoutConfig);
 const contactFields = checkoutContactFields(checkoutConfig.customerIdentity ?? DEFAULT_CUSTOMER_IDENTITY);
 const phoneOptionalForDigital = checkoutConfig.customerIdentity?.phoneOptionalForDigital === true;
 const allowedCountriesMode = checkoutConfig?.allowedCountriesMode || "include";
-const lang: CheckoutLanguageData = checkoutLanguageResponse || {
+// The theme the page draws with (the draft in a preview): the cart template's
+// sections around the cart, and the theme's arrangement, words and stylesheet
+// for the cart page (lib/private-pages). Read from the layout read: no query of its own.
+const cartRequestTheme = await resolveRequestTheme(Astro, layoutData);
+const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse || {
   id: "fallback",
   name: "English (Fallback)",
   code: "en",
@@ -150,6 +159,11 @@ const lang: CheckoutLanguageData = checkoutLanguageResponse || {
   isActive: true,
   isDefault: true,
 };
+const pageLanguageCode = checkoutLanguageBaseCode(checkoutLanguage.code);
+const privateAsset = privateAssetUrls(readStorefrontExtensions(layoutData?.appExtensions));
+const cartPlan = privatePagePlan(cartRequestTheme.theme, "cart", pageLanguageCode, privateAsset);
+// The theme's words for the cart's labels, on the page and in the cart script alike.
+const lang: CheckoutLanguageData = { ...checkoutLanguage, languageData: withCartLabels(checkoutLanguage.languageData, cartPlan.labels) };
 const copy = lang.languageData;
 const giftCopy = giftCardCheckoutCopy(copy);
 const policyPath = (kind: "terms" | "privacy") =>
@@ -353,15 +367,14 @@ const fieldClass =
 const errorClass = "mt-1 hidden text-sm font-medium text-destructive";
 // Settings → Customers: the marketing consent box (unchecked, never required).
 const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
-// The cart template's own sections (Online store, theme editor), around the cart.
-const cartRequestTheme = await resolveRequestTheme(Astro, layoutData);
 // The cart page's own words: Clear cart, the phone summary bar, and the empty cart's categories and popular products.
 const cartWords = shopCopy(checkoutLanguageBaseCode(lang.code)).cart;
 const emptyCartCategories = (layoutData?.categoryTree?.nodes ?? []).filter((node) => node.parentId === null).slice(0, 8);
 const cartTemplate = cartRequestTheme.resolved.pages.templates.cart;
-// The theme's cart block: `top` keeps the cart (lines and totals) above the
-// form in one column at every width; `side` puts it beside the form on wide screens.
-const cartOnTop = cartRequestTheme.resolved.blocks.cart.summary === "top";
+// The phone summary bar's words (the theme may reword them).
+const foldWords = { show: cartPlan.labels["cart.showSummary"] ?? cartWords.showSummary, hide: cartPlan.labels["cart.hideSummary"] ?? cartWords.hideSummary };
+// The theme's stylesheet for these pages, compiled when it was saved, and what its guard checks.
+const cartStyle = privateStyle(cartRequestTheme.theme, ["cart"]);
 const templateData = await templateSectionData("cart", cartRequestTheme);
 ---
 
@@ -372,6 +385,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   noindex
   hideHeader
   hideFooter
+  privateStyle={cartStyle}
 >
   <CheckoutHeader layoutData={layoutData} copy={copy} />
   {
@@ -422,8 +436,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     data-mode-switch={deliveryModeSwitch ? "true" : "false"}
     data-physical-delivery={physicalDelivery ? undefined : "none"}
     data-summary="closed"
-    data-cart-summary={cartOnTop ? "top" : undefined}
-    class={cartOnTop ? "group container mx-auto max-w-3xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7" : "group container mx-auto max-w-6xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7"}
+    class={cartPlan.frame === "narrow" ? "group container mx-auto max-w-3xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7" : "group container mx-auto max-w-6xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7"}
+    data-private="cart"
   >
     {/* Before first paint: with nothing saved, the server-rendered empty state
         shows at once instead of after the page scripts load (PERF-01). */}
@@ -443,14 +457,19 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         {copy.noScriptText}
       </div>
     </noscript>
-    <div class="group-data-[cart-state=empty]:hidden">
+    <CartPageLayout plan={cartPlan} language={pageLanguageCode} asset={privateAsset}>
+      <Fragment slot="progress">
+    <div class="group-data-[cart-state=empty]:hidden" data-part="progress">
       <CheckoutProgress current="information" paymentRequired={!codOnly} paymentStepMayHide={codPlaceable && !codOnly} copy={copy} />
     </div>
+      </Fragment>
+      <Fragment slot="notices">
     {
       checkoutUnavailable && (
         <div
           class="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
           role="alert"
+          data-part="notice"
         >
           <strong class="font-semibold">{copy.checkoutUnavailableText}: </strong>
           <span>{checkoutUnavailableMessage}</span>
@@ -463,6 +482,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         <div
           class="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
           role="alert"
+          data-part="notice"
         >
           {errorMessage}
         </div>
@@ -476,6 +496,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       class="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
       role="alert"
       hidden
+      data-part="notice"
     >
       {copy.quickBuyStorageBlockedText}
     </div>
@@ -486,6 +507,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       class="hidden mb-3 rounded-xl border border-border bg-muted px-4 py-3 text-foreground"
       role="status"
       aria-hidden="true"
+      data-part="notice"
     >
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -504,18 +526,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       </div>
     </aside>
 
-    {/* Reading and keyboard order follow what is on screen (WCAG 1.3.2, 2.4.3):
-        on phones the order summary bar and cart come first, then the form; on
-        wide screens the form is on the start side and the cart beside it, so
-        the script after the grid moves the cart column after the form there. */}
-    {/* The grid holds a screen of space from first paint, so the footer stays
-        below the fold and does not move when the lines render (CLS). */}
-    <div class={cartOnTop ? "grid min-h-[100svh] content-start gap-4 lg:gap-6" : "grid min-h-[100svh] content-start gap-4 lg:grid-cols-12 lg:gap-8"} data-cart-grid>
-      <div
-        id="cartColumn"
-        class={cartOnTop ? "min-w-0" : "min-w-0 lg:col-span-5 lg:sticky lg:self-start group-data-[cart-state=empty]:lg:col-span-12"}
-        style={cartOnTop ? undefined : "top: calc(var(--header-height, 64px) + 1rem);"}
-      >
+      </Fragment>
+      <Fragment slot="foldBar">
         {/* Phones (Shopify): the summary folds into one bar with the total, so
             the form starts near the top. Works before the page scripts load. */}
         <button
@@ -523,11 +535,12 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           id="orderSummaryToggle"
           aria-controls="orderSummaryBody"
           aria-expanded="false"
+          data-part="fold-toggle"
           class="mb-3 flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-start text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:hidden group-data-[cart-state=empty]:hidden"
         >
           <span class="flex items-center gap-1.5">
-            <span class="group-data-[summary=open]:hidden">{cartWords.showSummary}</span>
-            <span class="hidden group-data-[summary=open]:inline">{cartWords.hideSummary}</span>
+            <span class="group-data-[summary=open]:hidden">{foldWords.show}</span>
+            <span class="hidden group-data-[summary=open]:inline">{foldWords.hide}</span>
             <svg class="size-4 shrink-0 transition-transform group-data-[summary=open]:rotate-180" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
             </svg>
@@ -537,18 +550,16 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         {/* Phones: the lines that need the buyer's choice (an app input that needs a decision, a refused
             answer), drawn by the line-input controls above the folded summary, editable without unfolding it. */}
         <div class="mb-3 lg:hidden group-data-[summary=open]:hidden group-data-[cart-state=empty]:hidden" data-cart-line-decisions hidden></div>
-        <div id="orderSummaryBody" data-summary-body>
-        <section
-          aria-labelledby="cartHeading"
-          class="overflow-hidden rounded-xl border border-border bg-card group-data-[cart-state=empty]:mx-auto group-data-[cart-state=empty]:max-w-lg"
-        >
+      </Fragment>
+      <Fragment slot="lines">
           <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-            <h1 id="cartHeading" class="text-lg font-semibold text-foreground">
+            <h1 id="cartHeading" class="text-lg font-semibold text-foreground" data-part="lines-heading">
               {copy.cartSectionTitle}
             </h1>
             <a
               href="/"
               class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring group-data-[cart-state=empty]:hidden sm:min-h-9"
+              data-part="lines-continue"
             >
               <span aria-hidden="true">←</span>
               {copy.continueShoppingText}
@@ -557,7 +568,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
           {/* Loading skeleton at a cart line's size; the real lines render
               hidden underneath and appear together with the summary. */}
-          <div class="hidden p-4 group-data-[cart-state=loading]:block" data-cart-loading>
+          <div class="hidden p-4 group-data-[cart-state=loading]:block" data-part="lines-loading" data-cart-loading>
             <p class="sr-only" role="status">{copy.cartLoadingText}</p>
             <div class="flex gap-3 py-2" aria-hidden="true" data-cart-loading-line>
               <div class="theme-skeleton size-20 shrink-0"></div>
@@ -576,13 +587,18 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             class="min-h-24 p-4 group-data-[cart-state=loading]:hidden"
             id="cartItems"
             aria-busy="true"
+            data-part="lines-list"
           >
             {/* The empty state as HTML, for the first paint; the cart script
                 replaces it with the lines (renderEmptyCartState keeps it in step). */}
-            <div class="text-center py-8 px-4" data-cart-empty>
-              <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <div class="text-center py-8 px-4" data-cart-empty data-part="cart-empty">
+              {cartPlan.icons["cart.empty"] ? (
+                <img src={cartPlan.icons["cart.empty"]} alt="" width="48" height="48" class="mx-auto h-12 w-12 object-contain" data-part="cart-empty-icon" />
+              ) : (
+              <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true" data-part="cart-empty-icon">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
+              )}
               <h2 class="mt-2 text-lg font-medium text-foreground">{copy.emptyCartText}</h2>
               <p class="mt-1 text-sm text-muted-foreground">{copy.emptyCartDescriptionText}</p>
               <div class="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
@@ -599,7 +615,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             </div>
           </div>
           {/* Clear cart is here, not in the drawer (one action there); lib/cart/client.ts offers Undo. */}
-          <div class="hidden px-4 pb-3 text-end group-data-[cart-state=items]:block">
+          <div class="hidden px-4 pb-3 text-end group-data-[cart-state=items]:block" data-part="lines-clear">
             <button
               type="button"
               id="clearCartButton"
@@ -608,12 +624,10 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               {cartWords.clearCart}
             </button>
           </div>
-          <p id="cartUndo" class="mx-4 mb-3 text-sm text-muted-foreground" role="status" hidden></p>
+          <p id="cartUndo" class="mx-4 mb-3 text-sm text-muted-foreground" role="status" hidden data-part="lines-undo"></p>
 
-          <div
-            id="cartSummary"
-            class="hidden space-y-2 border-t border-border bg-muted/40 p-4"
-          >
+      </Fragment>
+      <Fragment slot="summary">
             <div class="flex justify-between text-sm text-muted-foreground" data-summary-row="subtotal">
               <span>{copy.subtotalText}</span>
               <span id="subtotal" class="font-medium tabular-nums text-foreground">—</span>
@@ -647,7 +661,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               <p id="estimateNote" class="mt-1 hidden text-sm text-muted-foreground" role="status"></p>
             </div>
 
-            <form id="discountForm" method="post" action="/cart" class="pt-3" novalidate>
+      </Fragment>
+      <Fragment slot="discount">
+            <form id="discountForm" method="post" action="/cart" class="pt-3" novalidate data-part="discount">
               <label for="discountCodeInput" class="sr-only">{copy.discountCodePlaceholder}</label>
               <div class="flex gap-2">
                 <input
@@ -674,22 +690,19 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             </form>
             <ul id="appliedCodes" class="hidden flex flex-wrap gap-2 pt-1"></ul>
             <ul id="discountOffers" class="hidden space-y-2" role="status"></ul>
+      </Fragment>
+      <Fragment slot="summaryEnd">
             {/* Cart-level availability answer: below the totals, never above
                 painted lines, so it lands without moving them. */}
             <div
               id="cartValidationMessage"
               class="hidden mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
               role="alert"
+              data-part="summary-validation"
             >
             </div>
-          </div>
-        </section>
-        <div data-buyer-ui-target="cart.page.summary" class="mt-4"></div>
-        </div>
-        {/* Store apps' blocks below the lines and summary (shown on phones even with the summary folded); hidden until one lands. */}
-        <div data-buyer-ui-target="cart.page.below" class="mt-4 space-y-3" hidden></div>
-        {/* An empty cart still leads somewhere: the store's categories and popular products, shown while the cart is empty. */}
-        <div class="mx-auto mt-8 hidden max-w-3xl space-y-8 group-data-[cart-state=empty]:block" data-cart-empty-extras>
+      </Fragment>
+      <Fragment slot="empty">
           {emptyCartCategories.length > 0 && (
             <nav aria-labelledby="cartEmptyCategoriesTitle">
               <h2 id="cartEmptyCategoriesTitle" class="mb-3 text-base font-semibold text-foreground">{cartWords.shopByCategory}</h2>
@@ -711,10 +724,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             currencySymbol={layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol}
             currencyCode={layoutData?.currency?.code ?? DEFAULT_CURRENCY.code}
           />
-        </div>
-      </div>
-      <div id="checkoutPanel" class={cartOnTop ? "hidden min-w-0" : "hidden min-w-0 lg:col-span-7"}>
-        <div id="checkoutSignInPrompt" class="mb-3" data-account-required={checkoutConfig.guestCheckoutEnabled === false ? "true" : "false"}>
+      </Fragment>
+      <Fragment slot="details">
+        <div id="checkoutSignInPrompt" class="mb-3" data-part="details-sign-in" data-account-required={checkoutConfig.guestCheckoutEnabled === false ? "true" : "false"}>
           <button
             type="button"
             data-open-auth="sign_in"
@@ -731,6 +743,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
         <div
           id="checkoutFormCard"
+          data-part="details-form"
           class:list={[
             "rounded-xl border border-border bg-card p-4 sm:p-5",
             { hidden: checkoutConfig.guestCheckoutEnabled === false },
@@ -760,7 +773,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               id="discountCodesInput"
             />
 
-            <section aria-labelledby="contactHeading" class="space-y-3">
+            <section aria-labelledby="contactHeading" class="space-y-3" data-part="contact">
               <h2 id="contactHeading" class="text-base font-semibold text-foreground">{copy.contactHeadingText}</h2>
               <div class="grid gap-3 sm:grid-cols-2">
                 <div>
@@ -883,7 +896,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 )}
               </p>
             )}
-            <section aria-labelledby="deliveryHeading" class="space-y-3 group-data-[delivery-need=none]:hidden" data-delivery-section>
+            <section aria-labelledby="deliveryHeading" class="space-y-3 group-data-[delivery-need=none]:hidden" data-delivery-section data-part="delivery">
               <h2 id="deliveryHeading" class="text-base font-semibold text-foreground">{copy.deliveryHeadingText}</h2>
               {
                 deliveryModeSwitch && (
@@ -1039,6 +1052,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               {/* A store app's rule that blocks the order (lib/cart/client.ts fills it, as text). */}
               <div
                 id="cartRuleErrors"
+                data-part="details-errors"
                 class="mb-3 hidden rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
                 role="alert"
                 tabindex="-1"
@@ -1046,6 +1060,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               </div>
               <p
                 id="checkoutFormMessage"
+                data-part="details-errors"
                 class="mb-3 hidden rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
                 role="alert"
                 tabindex="-1"
@@ -1055,6 +1070,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 type="submit"
                 class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
                 id="submitButton"
+                data-part="details-submit"
                 aria-describedby={checkoutUnavailable ? "submitButtonReason" : undefined}
                 disabled
               >
@@ -1086,7 +1102,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               {
                 // Buyers are only asked to agree to policies the store has published.
                 codPlaceable && hasAgreementPolicies && (
-                  <p id={codOnly ? undefined : "cashAgreement"} class="mt-3 text-center text-sm text-muted-foreground" hidden={!codOnly}>
+                  <p id={codOnly ? undefined : "cashAgreement"} class="mt-3 text-center text-sm text-muted-foreground" hidden={!codOnly} data-part="legal">
                     {agreement.map((segment) =>
                       segment.href ? (
                         <a href={segment.href} target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-foreground">{segment.text}</a>
@@ -1100,13 +1116,14 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             </div>
           </form>
         </div>
-      </div>
-    </div>
+      </Fragment>
+    </CartPageLayout>
     {/* Before first paint: the cart column sits where it shows (after the form
         on wide screens). On a phone the summary starts folded behind its
         "Show order summary" bar (Dawn's checkout), so the first screen is the
-        form; the bar states the total and opens the lines. */}
-    {!cartOnTop ? (
+        form; the bar states the total and opens the lines. A theme's
+        arrangement is read in its own order at every width: only the fold. */}
+    {cartPlan.layout === null ? (
     <script is:inline set:html={CART_COLUMN_PLACE_SCRIPT} />
     ) : (
     <script is:inline set:html={CART_SUMMARY_FOLD_SCRIPT} />
