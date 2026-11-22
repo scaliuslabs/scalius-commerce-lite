@@ -63,23 +63,61 @@ function conflictCurrent(details: unknown): Record<string, unknown> | null {
   return Object.keys(current).length > 0 ? current : null;
 }
 
+/**
+ * The operations a refusal could name for the agent to call next: a state
+ * refusal's open commands as sibling operations, or the operations that
+ * record a status the editor does not set. The caller keeps those its grant
+ * can run (`runnable`).
+ */
+export function refusalOperationCandidates(operationId: string | undefined, details: unknown): string[] {
+  if (!isRecord(details)) return [];
+  if (details.reason === "status_set_elsewhere" && Array.isArray(details.operations)) {
+    return details.operations.filter((id): id is string => typeof id === "string" && AGENT_OPERATIONS_BY_ID[id] !== undefined);
+  }
+  if (details.reason !== "state_conflict" || !Array.isArray(details.allowed)) return [];
+  const stem = commandStem(operationId, details.move);
+  if (stem === null) return [];
+  return details.allowed
+    .filter((command): command is string => typeof command === "string")
+    .map((command) => `${stem}${command}`)
+    .filter((id) => AGENT_OPERATIONS_BY_ID[id] !== undefined);
+}
+
+/** A record's commands are named by their operation's last word (`dashboard.purchase_orders.cancel`, `dashboard.orders.return_cancel`). */
+function commandStem(operationId: string | undefined, move: unknown): string | null {
+  if (!operationId || typeof move !== "string" || move.length === 0 || !operationId.endsWith(move)) return null;
+  const stem = operationId.slice(0, -move.length);
+  return /[._]$/.test(stem) ? stem : null;
+}
+
 /** A refused state move (`@scalius/shared/machine` machineRefusal), if the body carries one. */
-function stateRefusal(details: unknown, operationId: string | undefined): { current: string; allowed: string[] } | null {
+function stateRefusal(details: unknown, operationId: string | undefined, runnable?: ReadonlySet<string>): { current: string; allowed: string[] } | null {
   if (!isRecord(details) || details.reason !== "state_conflict" || typeof details.current !== "string" || !Array.isArray(details.allowed)) return null;
   const allowed = details.allowed.filter((move): move is string => typeof move === "string").slice(0, 12);
-  return { current: details.current, allowed: siblingCommands(operationId, details.move, allowed) };
+  return { current: details.current, allowed: siblingCommands(operationId, details.move, allowed, runnable) };
 }
 
 /**
- * A record's commands are named by their operation's last word
- * (`dashboard.purchase_orders.cancel`, `dashboard.orders.return_cancel`):
- * when the refused one is, the open ones are named as the operations to call.
+ * Each open command named as the operation that makes it when there is one
+ * the grant can run (every one that exists, when the grant is not known);
+ * any other stays the command's word.
  */
-function siblingCommands(operationId: string | undefined, move: unknown, allowed: string[]): string[] {
-  if (!operationId || typeof move !== "string" || move.length === 0 || !operationId.endsWith(move)) return allowed;
-  const stem = operationId.slice(0, -move.length);
-  if (!/[._]$/.test(stem) || !allowed.every((command) => AGENT_OPERATIONS_BY_ID[`${stem}${command}`])) return allowed;
-  return allowed.map((command) => `${stem}${command}`);
+function siblingCommands(operationId: string | undefined, move: unknown, allowed: string[], runnable?: ReadonlySet<string>): string[] {
+  const stem = commandStem(operationId, move);
+  if (stem === null) return allowed;
+  return allowed.map((command) => {
+    const id = `${stem}${command}`;
+    const usable = AGENT_OPERATIONS_BY_ID[id] !== undefined && (runnable === undefined || runnable.has(id));
+    return usable ? id : command;
+  });
+}
+
+/** A status another operation records: the operations the grant can run that record it. */
+function statusSetElsewhere(details: unknown, runnable?: ReadonlySet<string>): { status: string; operations: string[] } | null {
+  if (!isRecord(details) || details.reason !== "status_set_elsewhere" || typeof details.status !== "string" || !Array.isArray(details.operations)) return null;
+  const operations = details.operations.filter((id): id is string =>
+    typeof id === "string" && AGENT_OPERATIONS_BY_ID[id] !== undefined && (runnable === undefined || runnable.has(id)));
+  return { status: details.status, operations };
 }
 
 interface ValidationIssue {
@@ -138,6 +176,8 @@ export function recoveryFor(input: {
   operationId?: string;
   details?: unknown;
   retryAfterMs?: number;
+  /** The operations a refusal may name that the calling grant can run; absent: not known. */
+  runnable?: ReadonlySet<string>;
 }): Pick<AgentToolError, "retryable" | "hint" | "current" | "field" | "retryAfterMs"> {
   const { status, operationId } = input;
   // Codes are one lower_snake vocabulary; a revision conflict ends in `revision_conflict` or `version_conflict`.
@@ -207,7 +247,17 @@ export function recoveryFor(input: {
   if (code === "idempotency_key_reused") {
     return { retryable: false, field: "idempotencyKey", hint: "This key was used for a different request. Omit idempotencyKey (one is generated) or use a new one." };
   }
-  const refusal = stateRefusal(input.details, operationId);
+  const elsewhere = statusSetElsewhere(input.details, input.runnable);
+  if (elsewhere) {
+    return {
+      retryable: false,
+      field: "body.status",
+      hint: elsewhere.operations.length > 0
+        ? `This editor does not set ${elsewhere.status}: ${elsewhere.operations.join(" or ")} records it.`
+        : `This editor does not set ${elsewhere.status}, and this grant cannot run the operations that record it. Ask the merchant.`,
+    };
+  }
+  const refusal = stateRefusal(input.details, operationId, input.runnable);
   if (refusal) {
     // A move the record's state does not allow: say where it is and what is open from there.
     return {
@@ -302,6 +352,7 @@ export function buildAgentToolError(input: {
   details?: unknown;
   field?: string | null;
   retryAfterMs?: number;
+  runnable?: ReadonlySet<string>;
 }): AgentToolError {
   const recovery = recoveryFor(input);
   const error: AgentToolError = {
@@ -342,7 +393,7 @@ export function errorFromDispatch(error: AgentDispatchError, operationId?: strin
 }
 
 /** A failed route response (`ok:false`): the route's own code and details mapped to the envelope. */
-export function errorFromOperationResult(result: AgentOperationResult): AgentToolError {
+export function errorFromOperationResult(result: AgentOperationResult, runnable?: ReadonlySet<string>): AgentToolError {
   const body = isRecord(result.data) ? result.data : null;
   const routeError = body && isRecord(body.error) ? body.error : null;
   const code = routeError && typeof routeError.code === "string"
@@ -365,6 +416,7 @@ export function errorFromOperationResult(result: AgentOperationResult): AgentToo
     details: routeError?.details,
     field: issue?.field ?? null,
     retryAfterMs: result.retryAfterMs,
+    runnable,
   });
 }
 

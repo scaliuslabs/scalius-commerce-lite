@@ -159,7 +159,7 @@ const updateStatusRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         status: z.enum(GENERIC_ADMIN_ORDER_STATUS_TARGETS).openapi({
-                            description: "The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; a refusal names them.",
+                            description: "The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; asking for one here is refused with those operations in `details.operations` (agents) and `details.appOperations` (apps).",
                         }),
                         /** Why an order is cancelled; recorded on the timeline. */
                         reason: z.enum(["customer_changed_mind", "unreachable", "fake_order", "out_of_stock", "other"]).optional(),
@@ -192,6 +192,38 @@ async function sendCommittedNotifications(c: Parameters<typeof notificationSende
     if (outboxIds && outboxIds.length > 0) await notificationSender(c)(outboxIds);
 }
 
+/**
+ * Where each status the editor does not set is recorded, with the goods or
+ * money that move with it: the operations for agents and dashboard callers,
+ * and the app API's names for them.
+ */
+export const STATUS_SET_ELSEWHERE: Readonly<Record<"shipped" | "delivered" | "returned" | "refunded", { operations: readonly string[]; appOperations: readonly string[] }>> = {
+    shipped: { operations: ["dashboard.orders.fulfillment_create", "dashboard.orders.create_shipment"], appOperations: ["fulfillments.create", "shipments.create"] },
+    delivered: { operations: ["dashboard.orders.cod_update", "dashboard.orders.mark_delivered"], appOperations: ["orders.mark_delivered"] },
+    returned: { operations: ["dashboard.orders.cod_update", "dashboard.orders.return_create"], appOperations: ["returns.create"] },
+    refunded: { operations: ["dashboard.orders.refund"], appOperations: ["refunds.create"] },
+};
+
+/** A request for a status another operation records is refused naming that operation, not with the bare enum. */
+async function refuseStatusSetElsewhere(result: { success: boolean; target: string }, c: Context) {
+    if (result.success || result.target !== "json") return;
+    const body: unknown = await c.req.json().catch(() => null);
+    const status = typeof body === "object" && body !== null && typeof (body as { status?: unknown }).status === "string"
+        ? (body as { status: string }).status
+        : null;
+    const elsewhere = status !== null && Object.hasOwn(STATUS_SET_ELSEWHERE, status)
+        ? STATUS_SET_ELSEWHERE[status as keyof typeof STATUS_SET_ELSEWHERE]
+        : null;
+    if (!elsewhere) return;
+    throw new ValidationError(`The order is not marked ${status} here: use ${elsewhere.operations.join(" or ")} (apps: ${elsewhere.appOperations.join(" or ")}).`, {
+        reason: "status_set_elsewhere",
+        field: "status",
+        status,
+        operations: elsewhere.operations,
+        appOperations: elsewhere.appOperations,
+    });
+}
+
 app.openapi(updateStatusRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
@@ -207,7 +239,7 @@ app.openapi(updateStatusRoute, async (c) => {
     await sendCommittedNotifications(c, result.outboxIds);
 
     return ok(c, { order: await readOrderResource(db, orderId) });
-});
+}, refuseStatusSetElsewhere);
 
 // ─── POST /:id/refund-kept ───────────────────────────────────────────────────
 

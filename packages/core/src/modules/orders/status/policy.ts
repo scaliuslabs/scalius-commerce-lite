@@ -17,20 +17,12 @@ import { ConflictError } from "@scalius/core/errors";
  */
 export { GENERIC_ADMIN_ORDER_STATUS_TARGETS };
 
-/** Where each fulfilment or money status really comes from: the operations that record it with its stock and money. */
-const FULFILMENT_STATUS_OPERATIONS: Readonly<Partial<Record<OrderStatusValue, string>>> = {
-  shipped: "dashboard.orders.fulfillment_create (your own rider) or dashboard.orders.create_shipment (a courier)",
-  delivered: "dashboard.orders.cod_update with action collected, or dashboard.orders.mark_delivered once everything is sent",
-  returned: "dashboard.orders.cod_update with action returned, or dashboard.orders.return_create",
-  refunded: "dashboard.orders.refund",
-};
-
 export { isGenericAdminOrderStatusTransitionAllowed };
 
 /**
  * Refuses a status the generic editor does not set from `current` (409),
- * with where the order is and the statuses it may set from there; a
- * fulfilment or money status names the operation that records it.
+ * with where the order is and the statuses it may set from there. (Its
+ * route refuses a status recorded by another operation before this, naming it.)
  */
 export function assertGenericAdminOrderStatusTransition(current: string, next: string): void {
   if (isGenericAdminOrderStatusTransitionAllowed(current, next)) return;
@@ -41,13 +33,10 @@ export function assertGenericAdminOrderStatusTransition(current: string, next: s
     move: next,
     allowed: [...(GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS[current as OrderStatusValue] ?? [])],
   };
-  const elsewhere = FULFILMENT_STATUS_OPERATIONS[next as OrderStatusValue];
-  // The dashboard only offers allowed moves, so any other refusal means the
-  // order changed since it was loaded: the page reloads it.
+  // The dashboard only offers allowed moves, so a refusal means the order
+  // changed since it was loaded: the page reloads it.
   throw new ConflictError(
-    elsewhere
-      ? `The order is not marked ${statusWords(next)} here: use ${elsewhere}.`
-      : `This order is now ${statusWords(current)}, so it can't be marked ${statusWords(next)}. Reload to see the latest.`,
+    `This order is now ${statusWords(current)}, so it can't be marked ${statusWords(next)}. Reload to see the latest.`,
     refusal,
   );
 }
