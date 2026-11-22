@@ -497,7 +497,7 @@ export type MarketPresence = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 14;
+    version: 15;
     template: 'department-mall' | 'boutique' | 'marketplace' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: StorefrontThemeColors;
@@ -787,13 +787,6 @@ export type StorefrontThemeDocument = {
             };
             bindings?: StorefrontSettingBindings;
         };
-        cart: {
-            summary: 'side' | 'top';
-        };
-        cartDrawer: {
-            width: 'standard' | 'wide';
-            recommendations: 'shown' | 'hidden';
-        };
         checkout: {
             summary: 'side' | 'top';
             paymentChoices: 'list' | 'tiles';
@@ -848,6 +841,7 @@ export type StorefrontThemeDocument = {
             [key: string]: string;
         };
     }>;
+    privatePages: StorefrontPrivatePages;
 };
 
 export type StorefrontThemeColors = {
@@ -1334,6 +1328,154 @@ export type StorefrontLandingPage = {
 export type StorefrontPageTemplate = {
     sections: StorefrontSectionList;
     main: number;
+};
+
+export type StorefrontPrivatePages = {
+    chrome: 'core' | 'theme';
+    pages: {
+        cart?: {
+            frame?: string;
+            layout?: Array<StorefrontPrivateNode>;
+            items?: {
+                [key: string]: Array<StorefrontPrivateNode>;
+            };
+        };
+        cartDrawer?: {
+            frame?: string;
+            layout?: Array<StorefrontPrivateNode>;
+            items?: {
+                [key: string]: Array<StorefrontPrivateNode>;
+            };
+        };
+    };
+    css: string;
+    labels: {
+        'cart.heading'?: {
+            [key: string]: string;
+        };
+        'cart.continue'?: {
+            [key: string]: string;
+        };
+        'cart.empty'?: {
+            [key: string]: string;
+        };
+        'cart.emptyText'?: {
+            [key: string]: string;
+        };
+        'cart.subtotal'?: {
+            [key: string]: string;
+        };
+        'cart.showSummary'?: {
+            [key: string]: string;
+        };
+        'cart.hideSummary'?: {
+            [key: string]: string;
+        };
+        'dialog.goBack'?: {
+            [key: string]: string;
+        };
+        'dialog.confirm'?: {
+            [key: string]: string;
+        };
+        'drawer.title'?: {
+            [key: string]: string;
+        };
+        'drawer.checkout'?: {
+            [key: string]: string;
+        };
+        'drawer.viewCart'?: {
+            [key: string]: string;
+        };
+        'drawer.continue'?: {
+            [key: string]: string;
+        };
+        'drawer.empty'?: {
+            [key: string]: string;
+        };
+        'drawer.startShopping'?: {
+            [key: string]: string;
+        };
+    };
+    icons: {
+        'cart.empty'?: {
+            app: string;
+            file: string;
+        };
+        'drawer.empty'?: {
+            app: string;
+            file: string;
+        };
+    };
+    compiled: {
+        anatomy: number;
+        css: string;
+    };
+};
+
+export type StorefrontPrivateNode = {
+    type: 'layout';
+    layout: 'stack' | 'columns' | 'grid' | 'group' | 'fold' | 'scroll';
+    hook?: string;
+    children: Array<StorefrontPrivateNode>;
+} | {
+    type: 'part';
+    part: string;
+    variant?: string;
+} | {
+    type: 'target';
+    target: string;
+} | {
+    type: 'content';
+    content: {
+        kind: 'heading';
+        text: {
+            [key: string]: string;
+        };
+        level?: 2 | 3;
+    } | {
+        kind: 'text';
+        text: {
+            [key: string]: string;
+        };
+        tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+    } | {
+        kind: 'link';
+        text: {
+            [key: string]: string;
+        };
+        href: string;
+    } | {
+        kind: 'image';
+        image: {
+            app: string;
+            file: string;
+        };
+        alt: {
+            [key: string]: string;
+        };
+        width: number;
+        height: number;
+    } | {
+        kind: 'banner';
+        tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+        title?: {
+            [key: string]: string;
+        };
+        text?: {
+            [key: string]: string;
+        };
+    } | {
+        kind: 'disclosure';
+        summary: {
+            [key: string]: string;
+        };
+        text: {
+            [key: string]: string;
+        };
+    } | {
+        kind: 'divider';
+    };
+    hook?: string;
 };
 
 export type StorefrontBrandImage = {
