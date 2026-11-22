@@ -46,6 +46,7 @@ import {
   type PrivateCssContext,
   type PrivateCssReason,
 } from "./private-css";
+import { withoutHiddenCharacters } from "./private-css-syntax";
 
 export const STOREFRONT_PRIVATE_CHROME = ["core", "theme"] as const;
 export type StorefrontPrivateChrome = (typeof STOREFRONT_PRIVATE_CHROME)[number];
@@ -156,12 +157,9 @@ export interface PrivatePagesIssue {
 
 /** Text that reads as markup (`<b>`, `</p>`, `<!--`): words here are plain text. */
 const MARKUP = /<[A-Za-z!/?]/;
-/** Direction overrides and invisible characters: they can reorder or hide what a label says. */
-const INVISIBLE = /[\u0000-\u0008\u000b-\u001f\u007f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g;
-
 /** Words without direction overrides or invisible characters. */
 export function plainPrivateWords(words: PrivateWords): PrivateWords {
-  return Object.fromEntries(Object.entries(words).map(([lang, text]) => [lang, text.replace(INVISIBLE, "")]));
+  return Object.fromEntries(Object.entries(words).map(([lang, text]) => [lang, withoutHiddenCharacters(text)]));
 }
 
 function plainContent(nodes: readonly PrivateNode[]): PrivateNode[] {

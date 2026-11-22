@@ -317,9 +317,22 @@ export function parseStylesheet(source: string): CssRule[] {
 
 // ─── Serializing ──────────────────────────────────────────────────────────
 
-/** A string the serializer can write as it is: no quote, backslash, line break, control or direction mark. */
+/**
+ * Characters that can hide or reorder what a reader sees: controls (but tab and
+ * line feed), direction marks, overrides and isolates, and invisible ones. The
+ * joiners (U+200C, U+200D) and variation selectors stay: Bangla conjuncts and
+ * emoji need them.
+ */
+const HIDDEN = /(?![\t\n\u200c\u200d\p{Variation_Selector}])[\p{Cc}\p{Default_Ignorable_Code_Point}]/u;
+
+/** Text without the characters that can hide or reorder it (HIDDEN). */
+export function withoutHiddenCharacters(text: string): string {
+  return text.replace(new RegExp(HIDDEN.source, "gu"), "");
+}
+
+/** A string the serializer can write as it is: no quote, backslash, tab, line break or hidden character. */
 export function safeCssString(value: string): boolean {
-  return !/["\\\n\u0000-\u001f\u007f​-‏‪-‮⁦-⁩﻿]/.test(value);
+  return !/["\\\t\n]/.test(value) && !HIDDEN.test(value);
 }
 
 type Flat = { kind: string; text: string };
