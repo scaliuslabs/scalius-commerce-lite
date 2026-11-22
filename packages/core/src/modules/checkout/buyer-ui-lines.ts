@@ -16,7 +16,7 @@
 // path (`runOffers`: never blocking, its own backoff, its own budget); a
 // failed or refused run prices no offer and never changes a price.
 import { addOnShareMinor } from "@scalius/shared/money";
-import { aggregateLineAddOns, lineAddOnsOf } from "@scalius/shared/add-on-totals";
+import { aggregateLineAddOns, LINE_ADD_ONS_MAX, lineAddOnsOf } from "@scalius/shared/add-on-totals";
 import { MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { CUSTOMIZATION_LIMITS } from "@scalius/shared/line-properties";
 import type { AppLineInputs } from "@scalius/shared/line-properties";
@@ -63,7 +63,7 @@ export async function buyerUiCartLines(options: {
       quantity: item.quantity,
       unitPriceMinor: item.unitPriceMinor,
       bundle: componentsOf(item.index).some((component) => component.bundle?.kind === "expand"),
-      addOns: aggregateLineAddOns(lineAddOnsOf(item.adjustments)).map((addOn) => ({ appId: addOn.appId ?? "", title: addOn.title, amountMinor: addOn.amountMinor })),
+      addOns: aggregateLineAddOns(lineAddOnsOf(item.adjustments)).slice(0, LINE_ADD_ONS_MAX).map((addOn) => ({ appId: addOn.appId ?? "", title: addOn.title, amountMinor: addOn.amountMinor })),
       inputs: lineInputs.flatMap((app) => app.inputs.map((input) => {
         const key = `${app.appId}.${input.key}`;
         const eligible = applies.has(key);

@@ -73,7 +73,7 @@ export function orderReceiptView({ order, copy, languageCode, configuredCurrency
         total: order.totalAmount,
       };
   // The apps' add-ons as their own rows, from what the order's lines froze (never an app's answer now).
-  const receiptAddOns = savedMoneySummary ? frozenAddOnTotals(order.items ?? [], savedMoneySummary.subtotalMinor) : null;
+  const receiptAddOns = savedMoneySummary ? frozenAddOnTotals(order.items ?? [], savedMoneySummary.subtotalMinor, languageCode) : null;
   const receiptAddOnRows = (receiptAddOns?.rows ?? []).map((row) => ({ title: row.title, amount: toMajor(row.amountMinor) }));
   const receiptItemsSubtotal = receiptAddOns && receiptAddOnRows.length > 0 ? toMajor(receiptAddOns.itemsSubtotalMinor) : receiptMoney.subtotal;
   const receiptDiscounts = summarizeOrderDiscounts({

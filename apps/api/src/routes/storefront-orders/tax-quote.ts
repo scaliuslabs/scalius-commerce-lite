@@ -46,7 +46,7 @@ import {
     presentAddOnTotals,
     buyerUiCartLines,
 } from "@scalius/core/modules/checkout";
-import { addOnTotals, lineAddOnsOf } from "@scalius/shared/add-on-totals";
+import { addOnFoldLabel, addOnTotals, lineAddOnsOf } from "@scalius/shared/add-on-totals";
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
@@ -452,8 +452,10 @@ app.openapi(taxQuoteRoute, async (c) => {
     subtotalMinor: quote.subtotalMinor,
     subtotalAmount: toAmount(quote.subtotalMinor),
     // The apps' add-ons as their own rows, from the lines this quote charges (a bundle's once per bundle unit).
-    addOns: presentAddOnTotals(addOnTotals(cartValidation.items.map((item) => ({ quantity: item.quantity, addOns: lineAddOnsOf(item.adjustments) })), quote.subtotalMinor,
-      (appId) => registrations.find((entry) => entry.installation.pluginId === appId)?.installation.manifest.name), quote.decimalPlaces),
+    addOns: presentAddOnTotals(addOnTotals(cartValidation.items.map((item) => ({ quantity: item.quantity, addOns: lineAddOnsOf(item.adjustments) })), quote.subtotalMinor, {
+      appName: (appId) => registrations.find((entry) => entry.installation.pluginId === appId)?.installation.manifest.name,
+      foldLabel: addOnFoldLabel(apps.language),
+    }), quote.decimalPlaces),
     shippingMinor: quote.shippingMinor,
     shippingAmount: toAmount(quote.shippingMinor),
     discountMinor: quote.discountMinor,

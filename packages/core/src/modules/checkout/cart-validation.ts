@@ -4,7 +4,7 @@ import { BACKUP_MARKET_ID, DEFAULT_SHIPPING_PROFILE_ID, products, productVariant
 import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { addOnShareMinor, discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
-import { addOnTotals, lineAddOnsOf, type AddOnTotals } from "@scalius/shared/add-on-totals";
+import { addOnFoldLabel, addOnTotals, lineAddOnsOf, type AddOnFolding, type AddOnTotals } from "@scalius/shared/add-on-totals";
 import { isLineAmountInRange } from "@scalius/shared/order-limits";
 import { lineAdjustmentProperty, mapCustomizationPrices, NO_PROPERTIES_HASH } from "@scalius/shared/line-properties";
 import { isForeignPresentment, shopPresentment, type PresentmentMoney } from "@scalius/shared/presentment";
@@ -1303,8 +1303,8 @@ export function presentStorefrontCartValidation(
     decimalPlaces: number,
     fulfilment: StorefrontCartFulfilmentSummary = summarizeStorefrontCartFulfilment(result, null),
     propertiesHashes: readonly string[] = [],
-    /** An app's name, for the row its add-ons fold into past `ADD_ON_ROWS_MAX`. */
-    appName?: (appId: string | null) => string | null | undefined,
+    /** How rows folded past `ADD_ON_ROWS_MAX` are named: an app's name, else the neutral label in the buyer's language. */
+    folding: AddOnFolding = { foldLabel: addOnFoldLabel(null) },
 ) {
     // Bundle savings are checkout discounts: the tax quote shows them.
     const { subtotalMinor, items, bundles: _bundles, money, marketContext: _marketContext, marketAuthority: _marketAuthority, transform: _transform, pricingSegmentIds: _pricingSegmentIds, ...rest } = result;
@@ -1345,7 +1345,7 @@ export function presentStorefrontCartValidation(
             fulfillmentType: fulfilment.lineTypes[position] ?? null,
         })),
         subtotal: fromMinor(subtotalMinor, decimalPlaces),
-        addOns: presentAddOnTotals(addOnTotals(items.map((item) => ({ quantity: item.quantity, addOns: lineAddOnsOf(item.adjustments) })), subtotalMinor, appName), decimalPlaces),
+        addOns: presentAddOnTotals(addOnTotals(items.map((item) => ({ quantity: item.quantity, addOns: lineAddOnsOf(item.adjustments) })), subtotalMinor, folding), decimalPlaces),
     };
 }
 

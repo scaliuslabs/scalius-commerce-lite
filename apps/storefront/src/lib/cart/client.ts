@@ -49,7 +49,7 @@ import {
 } from "./browser-api";
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
-import { addOnRowsOver, type AddOnTotals } from "@scalius/shared/add-on-totals";
+import { addOnRowsOver, readAddOnRows, type AddOnTotalRow, type AddOnTotals } from "@scalius/shared/add-on-totals";
 
 import { numberLocale } from "@scalius/shared/locale-format";
 import { formatList } from "@scalius/shared/locale-words";
@@ -211,6 +211,8 @@ let latestAllowedPaymentMethods: string[] | null = null;
 let latestLineInputs: CartLineInputFacts = NO_LINE_INPUTS;
 /** The apps' blocks from the last cart check: its per-line blocks are drawn again whenever the lines are. */
 let latestCartBuyerUi: unknown[] = [];
+/** The apps' add-on rows as the last cart check folded them (the page never folds its own). */
+let latestAddOnRows: AddOnTotalRow[] = [];
 const LINE_SLOTS = storefrontUiSlotsOn("cart");
 /** The quote answers checkout's slots only: the lines keep the cart check's blocks. */
 const QUOTE_SLOTS = storefrontUiSlotsOn("checkout");
@@ -1150,6 +1152,7 @@ export async function validateCartSnapshot(
 
   if (payloadItems.length === 0) {
     latestCartBuyerUi = [];
+    latestAddOnRows = [];
     void renderBuyerUiWhenNeeded([]);
     cartValidationRetryable = false;
     cartValidationIssues = {};
@@ -1232,6 +1235,7 @@ export async function validateCartSnapshot(
       latestLineInputs = cartLineInputFacts(json.data, issues);
       updateCartQuantityLimits(json.data, issues, cartStore.get().items);
       latestCartBuyerUi = Array.isArray(json.data.buyerUi) ? json.data.buyerUi : [];
+      latestAddOnRows = readAddOnRows((json.data as { addOns?: unknown }).addOns);
       void renderBuyerUiWhenNeeded(json.data.buyerUi, { onChange: refreshBuyerUi, lineInputs: () => latestLineInputs });
     }
     setCartValidationIssues(issues, cartStore.get().items, summaryMessage);
@@ -1401,7 +1405,8 @@ async function refreshTotals() {
     taxRow: document.getElementById("taxRow"),
   };
 
-  renderAddOnRows(subtotalEl, estimable.addOns, getDecimalPlaces(getCurrencyCode()));
+  const places = getDecimalPlaces(getCurrencyCode());
+  renderAddOnRows(subtotalEl, addOnRowsOver(toMinor(totalAmount, places), latestAddOnRows), places);
   renderEstimateNote(estimable.leftOut);
   // Before a delivery option applies to the address, shipping isn't known yet.
   const estimateShipping = (discounts: CheckoutDiscountFacts["discounts"]) =>

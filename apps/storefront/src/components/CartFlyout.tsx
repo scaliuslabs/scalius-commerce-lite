@@ -29,7 +29,8 @@ import {
 } from "lucide-react";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
-import { fromMinor } from "@scalius/shared/money";
+import { fromMinor, toMinor } from "@scalius/shared/money";
+import { addOnRowsOver, readAddOnRows, type AddOnTotalRow } from "@scalius/shared/add-on-totals";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
 import { cartLineCopy, isLongAnswer } from "@/lib/cart-line-copy";
@@ -201,6 +202,8 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   const [limits, setLimits] = useState<Record<string, number | null>>({});
   /** Store app rules that block checkout, in the app's own words. */
   const [ruleErrors, setRuleErrors] = useState<CartRuleError[]>([]);
+  /** The apps' add-on rows as the check folded them (the server's rows; the drawer never folds its own). */
+  const [addOnRows, setAddOnRows] = useState<AddOnTotalRow[]>([]);
   /** The apps' buyer UI blocks, as the check answered them (parsed where they are drawn). */
   const [buyerUi, setBuyerUi] = useState<unknown[]>(NO_BLOCKS);
   /** The apps' line inputs each line takes (the check's), drawn by line-input-controls.ts. */
@@ -263,6 +266,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
             return key ? [[key, typeof line.availableQuantity === "number" ? Math.max(0, Math.floor(line.availableQuantity)) : null]] : [];
           })));
           setRuleErrors(parseCartRuleErrors(json?.data?.ruleErrors));
+          setAddOnRows(readAddOnRows((json?.data as { addOns?: unknown } | undefined)?.addOns));
           // A refused check keeps no blocks: they belong to a cart the store read.
           const blocks = json?.data?.buyerUi;
           setBuyerUi(Array.isArray(blocks) && blocks.length > 0 ? blocks : NO_BLOCKS);
@@ -287,7 +291,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   const current = useMemo(() => Object.fromEntries(Object.entries(currentIssueLists).map(([key, list]) => [key, list[0]!])), [currentIssueLists]);
   // Discounts priced for other lines than these are being priced again: shown as pending, never as final.
   const discountsPending = hasItems && pricedFor !== cartPricingKey(cart) && (discounts?.totalDiscount ?? 0) > 0;
-  return { discounts: hasItems ? discounts : null, discountsPending, lineDiscounts, issues: current, issueLists: currentIssueLists, limits, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, recheck };
+  return { discounts: hasItems ? discounts : null, discountsPending, lineDiscounts, issues: current, issueLists: currentIssueLists, limits, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, addOnRows: hasItems ? addOnRows : [], recheck };
 }
 
 /**
@@ -387,7 +391,7 @@ export default function CartFlyout({ onReady }: Props) {
   const priceCopy = storefrontPriceCopy(pageLanguage());
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
-  const { discounts, discountsPending, lineDiscounts, issues, issueLists, limits, ruleErrors, buyerUi, lineInputs, recheck } = useDrawerCartFacts(cart, isOpen);
+  const { discounts, discountsPending, lineDiscounts, issues, issueLists, limits, ruleErrors, buyerUi, lineInputs, addOnRows, recheck } = useDrawerCartFacts(cart, isOpen);
   // Any other issue in the catalogue's words (never the API's English), which load with the first one.
   useRefusalWords(Object.keys(issues).length > 0);
   // Some lines ship and some don't: the ones that don't say so, as on the cart page.
@@ -412,6 +416,8 @@ export default function CartFlyout({ onReady }: Props) {
   const discountTotal = discounts?.totalDiscount ?? 0;
   const estimate = cartEstimate(cart.items, issueLists, discountTotal);
   const moneyPlaces = getDecimalPlaces(getCurrencyCode());
+  // The check's add-on rows over the estimate's subtotal: Subtotal is what they leave of it.
+  const addOns = addOnRowsOver(toMinor(estimate.subtotal, moneyPlaces), addOnRows);
   const [undo, setUndo] = useState<{ message: string; snapshot: CartStore } | null>(null);
   const undoTimer = useRef<number | null>(null);
   /** Removals are undoable for 10 seconds instead of silent. */
@@ -995,13 +1001,13 @@ export default function CartFlyout({ onReady }: Props) {
           <div className="border-t border-border bg-card p-3 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb">
             <div className="space-y-3 sm:space-y-4">
               {/* The one order of money rows on every surface (lib/money-summary-order.ts): subtotal, the apps' add-ons, discounts, total. */}
-              {(discountTotal > 0 || estimate.addOns.rows.length > 0) && (
+              {(discountTotal > 0 || addOns.rows.length > 0) && (
                 <div className="space-y-1 text-sm">
                   <div className="flex items-center justify-between gap-3 text-muted-foreground" data-cart-subtotal-row data-summary-row="subtotal">
                     <span>{copy.subtotal}</span>
-                    <span className="tabular-nums" data-cart-subtotal>{formatMoney(fromMinor(estimate.addOns.itemsSubtotalMinor, moneyPlaces))}</span>
+                    <span className="tabular-nums" data-cart-subtotal>{formatMoney(fromMinor(addOns.itemsSubtotalMinor, moneyPlaces))}</span>
                   </div>
-                  {estimate.addOns.rows.map((row) => (
+                  {addOns.rows.map((row) => (
                     <div key={`${row.appId ?? ""}:${row.title}`} className="flex items-center justify-between gap-3 text-muted-foreground" data-summary-row="add-on">
                       <span className="min-w-0">{row.title}</span>
                       <span className="shrink-0 tabular-nums">{formatMoney(fromMinor(row.amountMinor, moneyPlaces))}</span>
@@ -1018,7 +1024,7 @@ export default function CartFlyout({ onReady }: Props) {
               <div className="flex items-end justify-between gap-3" data-summary-row="total">
                 <div className="text-sm text-muted-foreground">
                   {/* Subtotal is the items alone wherever add-on rows show: the sum below them is the total. */}
-                  {discountTotal > 0 || estimate.addOns.rows.length > 0 ? copy.estimatedTotal : copy.subtotal}
+                  {discountTotal > 0 || addOns.rows.length > 0 ? copy.estimatedTotal : copy.subtotal}
                 </div>
                 <div className="text-lg font-semibold text-foreground tabular-nums sm:text-xl" data-cart-total aria-busy={discountsPending || undefined}>
                   {discountsPending ? copy.updating : formatMoney(estimate.total)}

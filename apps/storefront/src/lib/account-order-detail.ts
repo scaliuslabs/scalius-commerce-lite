@@ -641,10 +641,10 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
     const showsDeliveryRow = !(deliveryMode === "none" && !order.shippingMethodName && delivery.charged === 0 && delivery.fee === 0);
     const deliveryRow = orderDeliveryRow({ mode: deliveryMode, methodName: order.shippingMethodName, ...delivery }, copy, money);
     // The apps' add-ons as their own rows, from what the order's lines froze: Subtotal is the items alone, as on the receipt.
-    const addOns = frozenAddOnTotals(detail.items, order.subtotalAmountMinor ?? 0);
+    const addOns = frozenAddOnTotals(detail.items, order.subtotalAmountMinor ?? 0, document.documentElement.lang);
     summary.innerHTML = [
-      row(words.subtotal, cell(minor(addOns && addOns.rows.length > 0 ? addOns.itemsSubtotalMinor : order.subtotalAmountMinor ?? 0)), "subtotal"),
-      ...(addOns?.rows ?? []).map((addOn) => row(addOn.title, cell(minor(addOn.amountMinor)), "add-on")),
+      row(words.subtotal, cell(minor(addOns.itemsSubtotalMinor)), "subtotal"),
+      ...addOns.rows.map((addOn) => row(addOn.title, cell(minor(addOn.amountMinor)), "add-on")),
       !showsDeliveryRow ? "" : row(
         deliveryRow.label,
         [
