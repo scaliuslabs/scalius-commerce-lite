@@ -3,6 +3,8 @@
 // when scripts are off; every step is a POST that answers with the next thing
 // the order needs, then the API's reviewed total, then a cash-on-delivery
 // order (lib/checkout/quick-checkout.ts). Private and never cached.
+import { fromMinor } from "@scalius/shared/money";
+import { addOnRowsOver } from "@scalius/shared/add-on-totals";
 import { markPaymentPage } from "@/lib/analytics-csp";
 import { checkoutText } from "@/lib/checkout-text";
 import { cartLinePropertyText } from "@/lib/cart/line-properties-view";
@@ -220,6 +222,8 @@ if (quoteResult && !quoteResult.ok && quoteResult.reason === "rate" && quoteResu
   quoteResult = quoteInput ? await fetchQuickCheckoutQuote(quoteInput, customerSessionToken) : null;
 }
 const quote = quoteResult?.ok ? quoteResult.quote : null;
+// The apps' add-on rows the quote answered, over its subtotal.
+const quoteAddOns = addOnRowsOver(quote?.subtotalMinor ?? 0, quote?.addOns);
 // The quote lists the methods the order may use where it is handed over: a
 // pickup or an order that ships nothing in the store's own country (cash on
 // delivery serves Bangladesh), and cash only when every line is handed over
@@ -754,7 +758,11 @@ markPaymentPage(Astro.locals);
           <div class="space-y-2 border-t border-border bg-muted/40 p-4 text-sm">
             {quote ? (
               <>
-                <div class="flex justify-between text-muted-foreground" data-summary-row="subtotal"><span>{copy.subtotalText}</span><span class="font-medium tabular-nums text-foreground">{quoteMoney(quote.subtotalAmount)}</span></div>
+                {/* Subtotal is the items alone and each app's add-on its own row, as on the cart page for the same order. */}
+                <div class="flex justify-between text-muted-foreground" data-summary-row="subtotal"><span>{copy.subtotalText}</span><span class="font-medium tabular-nums text-foreground">{quoteMoney(fromMinor(quoteAddOns.itemsSubtotalMinor, quote.decimalPlaces))}</span></div>
+                {quoteAddOns.rows.map((row) => (
+                  <div class="flex justify-between gap-3 text-muted-foreground" data-summary-row="add-on"><span>{row.title}</span><span class="shrink-0 font-medium tabular-nums text-foreground">{quoteMoney(fromMinor(row.amountMinor, quote.decimalPlaces))}</span></div>
+                ))}
                 {quote.shippingMethod && (
                   <div class="flex justify-between gap-3 text-muted-foreground" data-summary-row="delivery">
                     <span>{copy.shippingText}</span>

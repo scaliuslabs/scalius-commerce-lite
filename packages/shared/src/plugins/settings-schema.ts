@@ -109,7 +109,27 @@ const numberField = z.object({
 }).strict();
 const booleanField = z.object({ ...base, type: z.literal("boolean"), default: z.boolean().default(false) }).strict();
 const selectField = z.object({ ...base, type: z.literal("select"), options: z.array(choice).min(1).max(50), default: z.string().optional() }).strict();
-const urlField = z.object({ ...base, type: z.literal("url"), default: z.string().url().optional() }).strict();
+/**
+ * An address: an https link, or with `store: true` a page on this store (a
+ * path such as `/pages/protection`, the only link buyer UI draws). A value of
+ * the other kind is refused on save with a message that says which is wanted,
+ * and one stored before is reported as invalid (`pluginSettingIssues`) rather than dropped.
+ */
+const urlField = z.object({ ...base, type: z.literal("url"), store: z.boolean().optional(), default: z.string().max(2048).optional() }).strict()
+  .superRefine((field, ctx) => {
+    if (field.default !== undefined && !urlValue(field.store === true).safeParse(field.default).success) {
+      ctx.addIssue({ code: "custom", path: ["default"], message: field.store ? STORE_PAGE_RULE : "Use an https:// address." });
+    }
+  });
+/** What a store-page setting takes, in the merchant's words. */
+export const STORE_PAGE_RULE = "Use a page on this store, a path such as /pages/protection, not another site's address.";
+function urlValue(store: boolean): z.ZodType<string> {
+  if (store) {
+    return z.string().max(2048).regex(/^\/(?!\/)[^\\\s?#]*$/u, STORE_PAGE_RULE)
+      .refine((path) => !path.split("/").some((part) => part === "." || part === "..") && !/%(?:2f|5c|2e)/iu.test(path), STORE_PAGE_RULE);
+  }
+  return z.string().url().max(2048).refine((value) => value.startsWith("https://"), "Use an https:// address.");
+}
 const colorField = z.object({ ...base, type: z.literal("color"), default: z.string().regex(/^#[0-9a-f]{6}$/).optional() }).strict();
 /** A media library image; the component gets its URLs, size and alt text. */
 const imageField = z.object({ ...base, type: z.literal("image") }).strict();
@@ -247,7 +267,7 @@ function valueSchema(field: PluginSettingField | PluginSettingItemField): z.ZodT
     case "multiselect":
       return z.array(z.enum(field.options.map((option) => option.value) as [string, ...string[]])).max(field.options.length);
     case "url":
-      return z.string().url().max(2048).refine((value) => value.startsWith("https://"), "Use an https:// address.");
+      return urlValue("store" in field && field.store === true);
     case "email":
       return z.string().email().max(254);
     case "color":
@@ -294,6 +314,24 @@ export function validatePluginSettingValues(
     else errors.push({ key: field.key, message: parsed.error.issues[0]?.message ?? "Invalid value." });
   }
   return errors.length > 0 ? { ok: false, errors } : { ok: true, values: result };
+}
+
+/**
+ * The stored values the schema no longer takes (a setting whose kind changed,
+ * an https address where a store page is wanted), by key, with the message a
+ * save would give: the settings screen shows them as invalid instead of
+ * dropping them. Secrets and empty values are never reported.
+ */
+export function pluginSettingIssues(schema: PluginSettingsSchema, stored: unknown): Record<string, string> {
+  const values = typeof stored === "object" && stored !== null && !Array.isArray(stored) ? stored as Record<string, unknown> : {};
+  const issues: Record<string, string> = {};
+  for (const field of schema) {
+    const raw = values[field.key];
+    if (field.type === "secret" || raw === undefined || raw === null || raw === "") continue;
+    const parsed = valueSchema(field).safeParse(raw);
+    if (!parsed.success) issues[field.key] = parsed.error.issues[0]?.message ?? "Invalid value.";
+  }
+  return issues;
 }
 
 /**

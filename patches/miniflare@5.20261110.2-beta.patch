@@ -1,0 +1,25 @@
+diff --git a/dist/src/index.js b/dist/src/index.js
+index 0129be9340197be738dfd08b6f4077f6a42c91a0..8c6a0e432b0f77394357e9a2adf21753b2d9d5f2 100644
+--- a/dist/src/index.js
++++ b/dist/src/index.js
+@@ -87093,7 +87093,19 @@ var DevRegistry = class {
+           }
+           const currentDefinition = readDefinition(definitionPath);
+           if (currentDefinition?.instanceId === this.instanceId) {
+-            (0, import_node_fs3.utimesSync)(definitionPath, /* @__PURE__ */ new Date(), /* @__PURE__ */ new Date());
++            // Scalius patch: another process can delete the entry between the read above and this
++            // touch (a same-named Worker pruning it as stale after a sleep). Unguarded, that ENOENT
++            // is an uncaught exception in this timer and exits the dev server; register again, as
++            // the missing-entry branch above does.
++            try {
++              (0, import_node_fs3.utimesSync)(definitionPath, /* @__PURE__ */ new Date(), /* @__PURE__ */ new Date());
++            } catch {
++              try {
++                this.writeWorkerDefinition(definitionPath, definition);
++              } catch (e) {
++                this.log.debug(`Failed to re-register Worker "${name}": ${e}`);
++              }
++            }
+           } else {
+             const heartbeat = this.heartbeats.get(name);
+             if (heartbeat !== void 0) {

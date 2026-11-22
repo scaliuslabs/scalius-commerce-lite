@@ -834,6 +834,17 @@
           }
          },
          "additionalProperties": false
+        },
+        "surfaces": {
+         "maxItems": 2,
+         "type": "array",
+         "items": {
+          "type": "string",
+          "enum": [
+           "product",
+           "cart"
+          ]
+         }
         }
        },
        "required": [
@@ -2997,9 +3008,12 @@
          "type": "string",
          "const": "url"
         },
+        "store": {
+         "type": "boolean"
+        },
         "default": {
          "type": "string",
-         "format": "uri"
+         "maxLength": 2048
         }
        },
        "required": [
@@ -3615,9 +3629,12 @@
               "type": "string",
               "const": "url"
              },
+             "store": {
+              "type": "boolean"
+             },
              "default": {
               "type": "string",
-              "format": "uri"
+              "maxLength": 2048
              }
             },
             "required": [
@@ -4036,7 +4053,7 @@
         },
         "extensions": {
          "default": [],
-         "maxItems": 12,
+         "maxItems": 13,
          "type": "array",
          "items": {
           "type": "string",
@@ -4049,6 +4066,7 @@
            "checkout.actions.before",
            "checkout.summary.after",
            "cart_drawer.footer",
+           "cart.line.after",
            "order.confirmation",
            "account.order",
            "account.overview",
@@ -4893,9 +4911,12 @@
               "type": "string",
               "const": "url"
              },
+             "store": {
+              "type": "boolean"
+             },
              "default": {
               "type": "string",
-              "format": "uri"
+              "maxLength": 2048
              }
             },
             "required": [
@@ -5511,9 +5532,12 @@
                    "type": "string",
                    "const": "url"
                   },
+                  "store": {
+                   "type": "boolean"
+                  },
                   "default": {
                    "type": "string",
-                   "format": "uri"
+                   "maxLength": 2048
                   }
                  },
                  "required": [
@@ -5876,7 +5900,7 @@
      },
      "extensions": {
       "default": [],
-      "maxItems": 12,
+      "maxItems": 13,
       "type": "array",
       "items": {
        "type": "object",
@@ -5892,6 +5916,7 @@
           "checkout.actions.before",
           "checkout.summary.after",
           "cart_drawer.footer",
+          "cart.line.after",
           "order.confirmation",
           "account.order",
           "account.overview",
@@ -6591,9 +6616,12 @@
               "type": "string",
               "const": "url"
              },
+             "store": {
+              "type": "boolean"
+             },
              "default": {
               "type": "string",
-              "format": "uri"
+              "maxLength": 2048
              }
             },
             "required": [
@@ -7209,9 +7237,12 @@
                    "type": "string",
                    "const": "url"
                   },
+                  "store": {
+                   "type": "boolean"
+                  },
                   "default": {
                    "type": "string",
-                   "format": "uri"
+                   "maxLength": 2048
                   }
                  },
                  "required": [
@@ -7920,9 +7951,12 @@
               "type": "string",
               "const": "url"
              },
+             "store": {
+              "type": "boolean"
+             },
              "default": {
               "type": "string",
-              "format": "uri"
+              "maxLength": 2048
              }
             },
             "required": [
@@ -8538,9 +8572,12 @@
                    "type": "string",
                    "const": "url"
                   },
+                  "store": {
+                   "type": "boolean"
+                  },
                   "default": {
                    "type": "string",
-                   "format": "uri"
+                   "maxLength": 2048
                   }
                  },
                  "required": [

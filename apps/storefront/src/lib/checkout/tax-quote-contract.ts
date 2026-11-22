@@ -5,6 +5,7 @@ import {
   type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import { parseCheckoutAttributeValues } from "@/lib/buyer-ui/checkout-attributes";
+import { ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX, LINE_ADD_ONS_MAX, type AddOnTotalRow, type AddOnTotals } from "@scalius/shared/add-on-totals";
 import { LINE_PROPERTY_INPUT_LIMITS, linePropertyInputOf, normalizeLinePurchaseOptions, type LinePropertyInput } from "@scalius/shared/line-identity";
 import { APP_SCOPED_KEY_MAX_LENGTH, isAppScopedKey } from "@scalius/shared/plugins/ids";
 import { normalizeCartLinePurchaseOptions, type CartLinePurchaseOption } from "../cart/purchase-option";
@@ -212,6 +213,8 @@ export interface CheckoutTaxQuote extends CheckoutDiscountFacts, CheckoutGiftCar
   settingsVersion: number;
   subtotalMinor: number;
   subtotalAmount: number;
+  /** The apps' add-ons as their own summary rows (`addOnRowsOver` gives the items' subtotal they leave): absent, none. */
+  addOns?: AddOnTotalRow[];
   shippingMinor: number;
   shippingAmount: number;
   discountMinor: number;
@@ -410,10 +413,10 @@ export function parseRequestGiftCards(value: unknown): Array<{ handle: string }>
   return handles.length > 0 ? handles.map((handle) => ({ handle })) : undefined;
 }
 
-/** The apps' add-ons of a quote line (at most five, display only). */
+/** The apps' add-ons of a quote line (at most `LINE_ADD_ONS_MAX`, the bound the server keeps; display only). */
 function parseQuoteAdjustments(value: unknown): TaxQuoteItemProperty[] {
   if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > 5) fail();
+  if (!Array.isArray(value) || value.length > LINE_ADD_ONS_MAX) fail();
   return value.map((entry) => {
     if (!isRecord(entry)) fail();
     return {
@@ -602,6 +605,7 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     return sum + lineSubtotalMinor;
   }, 0);
   if (itemSubtotalMinor !== subtotalMinor) fail();
+  const addOns = parseAddOnTotals(data.addOns, subtotalMinor).rows;
   const buyerUi = uncheckedBuyerUi(data.buyerUi);
 
   return {
@@ -616,6 +620,7 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     settingsVersion,
     subtotalMinor,
     subtotalAmount,
+    ...(addOns.length > 0 ? { addOns } : {}),
     shippingMinor,
     shippingAmount,
     discountMinor,
@@ -769,3 +774,20 @@ function parseBundleDiscountLine(
   return bundleDiscountLine(data.bundles, amount);
 }
 
+/**
+ * The apps' add-on rows of a quote: absent (an older API) is none; rows that
+ * do not add up to the subtotal with the items' own refuse the quote, so the
+ * summary never shows rows that disagree with the total.
+ */
+export function parseAddOnTotals(value: unknown, subtotalMinor: number): AddOnTotals {
+  if (value === undefined || value === null) return { itemsSubtotalMinor: subtotalMinor, rows: [] };
+  if (!isRecord(value) || !Array.isArray(value.rows) || value.rows.length > ADD_ON_ROWS_MAX) fail();
+  const rows = value.rows.map((row) => {
+    if (!isRecord(row)) fail();
+    const appId = row.appId === null ? null : requiredString(row.appId, MAX_ID_LENGTH);
+    return { appId, title: requiredString(row.title, ADD_ON_TITLE_MAX), amountMinor: nonNegativeSafeInteger(row.amountMinor) };
+  });
+  const itemsSubtotalMinor = nonNegativeSafeInteger(value.itemsSubtotalMinor);
+  if (itemsSubtotalMinor + rows.reduce((sum, row) => sum + row.amountMinor, 0) !== subtotalMinor) fail();
+  return { itemsSubtotalMinor, rows };
+}

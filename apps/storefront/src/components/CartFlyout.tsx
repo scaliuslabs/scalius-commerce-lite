@@ -9,6 +9,8 @@ import {
   cartLineKeyFor,
   restoreCart,
   cartLinePropertyInputs,
+  adoptCheckedLinePrices,
+  cartLineCheckPrice,
   type CartStore,
 } from "@/store/cart";
 import { writeCartLineEdit } from "@/lib/cart/line-edit";
@@ -26,7 +28,9 @@ import {
   ChevronDown,
 } from "lucide-react";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { formatMoney } from "@/lib/currency";
+import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
+import { fromMinor, toMinor } from "@scalius/shared/money";
+import { addOnRowsOver, readAddOnRows, type AddOnTotalRow } from "@scalius/shared/add-on-totals";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
 import { cartLineCopy, isLongAnswer } from "@/lib/cart-line-copy";
@@ -198,6 +202,8 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   const [limits, setLimits] = useState<Record<string, number | null>>({});
   /** Store app rules that block checkout, in the app's own words. */
   const [ruleErrors, setRuleErrors] = useState<CartRuleError[]>([]);
+  /** The apps' add-on rows as the check folded them (the server's rows; the drawer never folds its own). */
+  const [addOnRows, setAddOnRows] = useState<AddOnTotalRow[]>([]);
   /** The apps' buyer UI blocks, as the check answered them (parsed where they are drawn). */
   const [buyerUi, setBuyerUi] = useState<unknown[]>(NO_BLOCKS);
   /** The apps' line inputs each line takes (the check's), drawn by line-input-controls.ts. */
@@ -205,15 +211,19 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   /** Bumped when a block changed what the check reads (an answer it set). */
   const [revision, setRevision] = useState(0);
   const recheck = useCallback(() => setRevision((value) => value + 1), []);
+  // What a check reads: the lines and their quantities. A line taking the store's price from the
+  // check (`adoptCheckedLinePrices`) changes neither, so it never asks for a second check.
+  const checkKey = useMemo(() => JSON.stringify(Object.entries(cart.items).map(([key, item]) => [key, item.quantity])), [cart.items]);
   useEffect(() => {
     const items = Object.entries(cart.items);
     if (!isOpen || items.length === 0) return;
     let current = true;
     // The cart page's discounts: the preview prices the lines its estimate counts
-    // (`cartPreviewLines`: a sold-out line left out), so it waits for the check.
-    const priced = cartPricingKey(cart);
+    // (`cartPreviewLines`: a sold-out line left out), so it waits for the check (and its prices).
     const preview = (issues: Record<string, CartValidationIssue[]>) => {
-      const lines = cartPreviewLines(cart.items, issues);
+      const fresh = cartStore.get();
+      const priced = cartPricingKey(fresh);
+      const lines = cartPreviewLines(fresh.items, issues);
       return previewCartDiscounts(cart.discountCodes, lines.map(([, item]) => item)).then((answer) => {
         if (!current) return;
         setDiscounts(answer.ok ? answer : null);
@@ -232,7 +242,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
             productId: item.id,
             variantId: item.variantId,
             quantity: item.quantity,
-            price: item.price,
+            ...cartLineCheckPrice(item),
             productName: item.name,
             variantLabel: cartItemVariantLabel(item.options),
             ...(item.properties?.length ? { properties: cartLinePropertyInputs(item) } : {}),
@@ -247,6 +257,8 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
         .then((response) => response.json())
         .then((json: { data?: CartValidationResult; details?: { itemIssues?: CartValidationIssue[] } }) => {
           if (!current) return;
+          // An edited line takes the store's price from this check.
+          if (json?.data?.items) adoptCheckedLinePrices(json.data.items);
           const found = json?.data?.issues ?? json?.details?.itemIssues ?? [];
           setLineInputs(json?.data ? cartLineInputFacts(json.data, found) : NO_LINE_INPUTS);
           setLimits(Object.fromEntries((json?.data?.items ?? []).flatMap((line) => {
@@ -254,6 +266,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
             return key ? [[key, typeof line.availableQuantity === "number" ? Math.max(0, Math.floor(line.availableQuantity)) : null]] : [];
           })));
           setRuleErrors(parseCartRuleErrors(json?.data?.ruleErrors));
+          setAddOnRows(readAddOnRows((json?.data as { addOns?: unknown } | undefined)?.addOns));
           // A refused check keeps no blocks: they belong to a cart the store read.
           const blocks = json?.data?.buyerUi;
           setBuyerUi(Array.isArray(blocks) && blocks.length > 0 ? blocks : NO_BLOCKS);
@@ -270,7 +283,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
       current = false;
       window.clearTimeout(timer);
     };
-  }, [cart.items, cart.discountCodes, isOpen, revision]);
+  }, [checkKey, cart.discountCodes, isOpen, revision]);
   const hasItems = Object.keys(cart.items).length > 0;
   // The lines the cart still holds, regrouped against them: an "only N left" the line already follows
   // (capped after the add) is not shown again. A line's first issue is the one it shows.
@@ -278,7 +291,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   const current = useMemo(() => Object.fromEntries(Object.entries(currentIssueLists).map(([key, list]) => [key, list[0]!])), [currentIssueLists]);
   // Discounts priced for other lines than these are being priced again: shown as pending, never as final.
   const discountsPending = hasItems && pricedFor !== cartPricingKey(cart) && (discounts?.totalDiscount ?? 0) > 0;
-  return { discounts: hasItems ? discounts : null, discountsPending, lineDiscounts, issues: current, issueLists: currentIssueLists, limits, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, recheck };
+  return { discounts: hasItems ? discounts : null, discountsPending, lineDiscounts, issues: current, issueLists: currentIssueLists, limits, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, addOnRows: hasItems ? addOnRows : [], recheck };
 }
 
 /**
@@ -300,17 +313,19 @@ function useDrawerLineInputs(root: React.RefObject<HTMLElement | null>, facts: C
 
 /**
  * The drawer's own buyer UI mount (`cart_drawer.footer`): hidden until a
- * block lands, so a drawer without one never shifts. It is its own scope, so
- * the page's renders (the cart page's) never clear it, nor it theirs. The
- * renderer loads only once there is something to draw.
+ * block lands, so a drawer without one never shifts. The drawer is its own
+ * scope, so the page's renders (the cart page's) never clear its mounts, nor
+ * it theirs; one render draws the footer and the blocks under each line
+ * (`cart.line.after`), again whenever the lines change. The renderer loads
+ * only once there is something to draw.
  */
-function DrawerBuyerUi({ blocks, onChange }: { blocks: unknown[]; onChange: () => void }) {
+function DrawerBuyerUi({ blocks, onChange, lines, lineInputs }: { blocks: unknown[]; onChange: () => void; lines: unknown; lineInputs: CartLineInputFacts }) {
   const mount = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const element = mount.current;
-    if (element) void renderBuyerUiWhenNeeded(blocks, { root: element, onChange });
-  }, [blocks, onChange]);
-  return <div ref={mount} data-buyer-ui-scope="" data-buyer-ui-target="cart_drawer.footer" className="space-y-2 text-sm" hidden />;
+    const element = mount.current?.closest<HTMLElement>("[data-buyer-ui-scope]") ?? mount.current;
+    if (element) void renderBuyerUiWhenNeeded(blocks, { root: element, onChange, lineInputs: () => lineInputs });
+  }, [blocks, onChange, lines, lineInputs]);
+  return <div ref={mount} data-buyer-ui-target="cart_drawer.footer" className="space-y-2 text-sm" hidden />;
 }
 
 /**
@@ -376,7 +391,7 @@ export default function CartFlyout({ onReady }: Props) {
   const priceCopy = storefrontPriceCopy(pageLanguage());
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
-  const { discounts, discountsPending, lineDiscounts, issues, issueLists, limits, ruleErrors, buyerUi, lineInputs, recheck } = useDrawerCartFacts(cart, isOpen);
+  const { discounts, discountsPending, lineDiscounts, issues, issueLists, limits, ruleErrors, buyerUi, lineInputs, addOnRows, recheck } = useDrawerCartFacts(cart, isOpen);
   // Any other issue in the catalogue's words (never the API's English), which load with the first one.
   useRefusalWords(Object.keys(issues).length > 0);
   // Some lines ship and some don't: the ones that don't say so, as on the cart page.
@@ -400,6 +415,9 @@ export default function CartFlyout({ onReady }: Props) {
   // the discounts listed above, and the total net of them.
   const discountTotal = discounts?.totalDiscount ?? 0;
   const estimate = cartEstimate(cart.items, issueLists, discountTotal);
+  const moneyPlaces = getDecimalPlaces(getCurrencyCode());
+  // The check's add-on rows over the estimate's subtotal: Subtotal is what they leave of it.
+  const addOns = addOnRowsOver(toMinor(estimate.subtotal, moneyPlaces), addOnRows);
   const [undo, setUndo] = useState<{ message: string; snapshot: CartStore } | null>(null);
   const undoTimer = useRef<number | null>(null);
   /** Removals are undoable for 10 seconds instead of silent. */
@@ -564,6 +582,7 @@ export default function CartFlyout({ onReady }: Props) {
       <Dialog.Portal>
       <Dialog.Overlay className={DRAWER_OVERLAY} />
       <Dialog.Content
+        data-buyer-ui-scope=""
         role="dialog"
         aria-modal="true"
         onCloseAutoFocus={(event) => {
@@ -778,6 +797,8 @@ export default function CartFlyout({ onReady }: Props) {
                             </p>
                           )}
                           <div className="mt-1.5 grid gap-2" data-cart-line-inputs data-line-key={key} hidden />
+                          {/* The apps' block for this line (`cart.line.after`), drawn by DrawerBuyerUi. */}
+                          <div className="mt-1.5 grid gap-2 text-sm" data-buyer-ui-target="cart.line.after" data-buyer-ui-line={key} data-buyer-ui-line-name={view.lineName} hidden />
                           {issues[key] && (
                             <div className="space-y-1" role="alert">
                               <p className="text-sm font-medium text-destructive" data-cart-line-stock={view.stock && view.stock.state !== "at-limit" ? view.stock.state : undefined}>
@@ -979,13 +1000,19 @@ export default function CartFlyout({ onReady }: Props) {
         {cart.totalItems > 0 && (
           <div className="border-t border-border bg-card p-3 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb">
             <div className="space-y-3 sm:space-y-4">
-              {/* The one order of money rows on every surface (lib/money-summary-order.ts): subtotal, discounts, total. */}
-              {discountTotal > 0 && (
+              {/* The one order of money rows on every surface (lib/money-summary-order.ts): subtotal, the apps' add-ons, discounts, total. */}
+              {(discountTotal > 0 || addOns.rows.length > 0) && (
                 <div className="space-y-1 text-sm">
                   <div className="flex items-center justify-between gap-3 text-muted-foreground" data-cart-subtotal-row data-summary-row="subtotal">
                     <span>{copy.subtotal}</span>
-                    <span className="tabular-nums" data-cart-subtotal>{formatMoney(estimate.subtotal)}</span>
+                    <span className="tabular-nums" data-cart-subtotal>{formatMoney(fromMinor(addOns.itemsSubtotalMinor, moneyPlaces))}</span>
                   </div>
+                  {addOns.rows.map((row) => (
+                    <div key={`${row.appId ?? ""}:${row.title}`} className="flex items-center justify-between gap-3 text-muted-foreground" data-summary-row="add-on">
+                      <span className="min-w-0">{row.title}</span>
+                      <span className="shrink-0 tabular-nums">{formatMoney(fromMinor(row.amountMinor, moneyPlaces))}</span>
+                    </div>
+                  ))}
                   {discounts?.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
                     <div key={key} className="flex justify-between gap-3 text-primary" data-discount-line={key} data-summary-row="discount">
                       <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>
@@ -996,7 +1023,8 @@ export default function CartFlyout({ onReady }: Props) {
               )}
               <div className="flex items-end justify-between gap-3" data-summary-row="total">
                 <div className="text-sm text-muted-foreground">
-                  {discountTotal > 0 ? copy.estimatedTotal : copy.subtotal}
+                  {/* Subtotal is the items alone wherever add-on rows show: the sum below them is the total. */}
+                  {discountTotal > 0 || addOns.rows.length > 0 ? copy.estimatedTotal : copy.subtotal}
                 </div>
                 <div className="text-lg font-semibold text-foreground tabular-nums sm:text-xl" data-cart-total aria-busy={discountsPending || undefined}>
                   {discountsPending ? copy.updating : formatMoney(estimate.total)}
@@ -1005,7 +1033,7 @@ export default function CartFlyout({ onReady }: Props) {
               {checkoutBlocked && (
                 <p id="drawerCheckoutBlocked" className="text-sm text-destructive" role="status">{blockedText}</p>
               )}
-              <DrawerBuyerUi blocks={buyerUi} onChange={recheck} />
+              <DrawerBuyerUi blocks={buyerUi} onChange={recheck} lines={cart.items} lineInputs={lineInputs} />
               {/* One primary action (Shopify): Check out. The cart page is a link beside Continue shopping; Clear cart lives there. */}
               {checkoutBlocked ? (
                 <button

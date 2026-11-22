@@ -83,6 +83,13 @@ patchedDependencies:
   # (by another client, or by its own client more than 30 s after the rotation): revoke the whole grant
   # and call refreshTokenReuseCallback, until the provider ships an equivalent fix.
   '@cloudflare/workers-oauth-provider@1.2.3': patches/@cloudflare__workers-oauth-provider@1.2.3.patch
+  # Miniflare's dev registry heartbeat touches the Worker's entry with an unguarded utimesSync. A
+  # same-named Worker that prunes the entry as stale after a sleep makes it throw ENOENT inside a
+  # timer, which exits `pnpm dev` and `wrangler dev`. The patch registers the Worker again instead
+  # (rules/platform/dev-registry-heartbeat-survives-vanished-entry.md). The key names one version:
+  # drop it, with the patch file, once Wrangler's Miniflare guards the touch (checked unfixed in
+  # 5.20261119.0-beta and 4.20260730.0); on a Miniflare move, re-make it with `pnpm patch`.
+  miniflare@5.20261110.2-beta: patches/miniflare@5.20261110.2-beta.patch
 
 # pnpm adds a release younger than the one-day minimumReleaseAge here when it
 # resolves one. Wrangler 4.161.0 and its Miniflare were published on

@@ -12,17 +12,21 @@ import type { BuyerUiOptions } from "./index";
  */
 export function renderBuyerUiWhenNeeded(value: unknown, options: BuyerUiOptions = {}): Promise<void> {
   const root = options.root ?? document;
-  const ticket = (latest.get(root) ?? 0) + 1;
-  latest.set(root, ticket);
+  // Renders of other slots (the quote's checkout slots beside the cart check's lines) never cancel each other.
+  const scope = options.targets?.join(",") ?? "*";
+  const tickets = latest.get(root) ?? new Map<string, number>();
+  latest.set(root, tickets);
+  const ticket = (tickets.get(scope) ?? 0) + 1;
+  tickets.set(scope, ticket);
   const blocks = Array.isArray(value) ? value : [];
   if (blocks.length === 0 && !hasDrawnBlocks(root)) return Promise.resolve();
   // Without its file the page shows no app blocks; the next render tries again.
   return track(loadLazyScript(() => import("./index")).then(({ renderBuyerUi }) => {
-    if (latest.get(root) === ticket) renderBuyerUi(value, options);
+    if (tickets.get(scope) === ticket) renderBuyerUi(value, options);
   }, () => undefined));
 }
 
-const latest = new WeakMap<ParentNode, number>();
+const latest = new WeakMap<ParentNode, Map<string, number>>();
 const pending = new Set<Promise<void>>();
 
 function track(render: Promise<void>): Promise<void> {
