@@ -191,6 +191,10 @@ export async function importLicenceKeys(
     } catch (error) {
         const again = await replay();
         if (again) return again;
+        // The racing import won but its keys are not readable yet: a clean conflict, never the guard's raw error.
+        if (isBatchGuardError(error, "licence_import_raced")) {
+            throw new ConflictError("Another import under this request is still finishing. Try again.");
+        }
         const message = error instanceof Error ? error.message : "";
         if (message.includes("digital_licence_keys")) {
             throw new ConflictError("Some of these keys were imported at the same moment. Try again.");
