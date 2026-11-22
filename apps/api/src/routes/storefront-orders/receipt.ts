@@ -13,7 +13,26 @@ import {
 } from "@scalius/core/modules/customers";
 import { buyerOrderShippingAddress, issueAccountOwnerReceipt, orderReferenceKey, orderShippingAddressSelection } from "@scalius/core/modules/orders";
 import { buyerOrderShippingAddressShape } from "../../schemas/entities";
-import { getBuyerOrderTracking, getCustomerVisibleBalanceDueMinor, presentBuyerPaymentTerms } from "@scalius/core/modules/orders";
+import {
+  buyerOrderView,
+} from "@scalius/shared/buyer-order-view";
+import {
+  buyerOrderFacts,
+  buyerOrderViewSelection,
+  getBuyerOrderTracking,
+  getCustomerPaymentSessionOrderForDetail,
+  getCustomerVisibleBalanceDueMinor,
+  orderLineTypesSql,
+  presentBuyerPaymentTerms,
+} from "@scalius/core/modules/orders";
+import { checkoutHoldExpiredSql } from "@scalius/core/modules/payments";
+import { resolvePaymentSessionRecovery } from "../payment/payment-session-create";
+import {
+  buyerOrderDetailViewSchema,
+  buyerOrderViewSchema,
+  buyerPaymentRecoverySchema,
+  presentBuyerOrderDetailView,
+} from "../shared/buyer-order-view";
 import { buyerOrderTrackingSchema } from "../../schemas/order-tracking";
 import {
   findOrderByReferenceAndContact,
@@ -168,6 +187,10 @@ const orderReceiptSchema = z.object({
   supportRequests: z.array(receiptSupportRequestSchema),
   supportRequestActions: z.array(receiptSupportRequestActionSchema),
   supportRequestIntro: z.string(),
+  /** What the buyer is shown of the order, decided here: the account order page sends the same. */
+  buyerView: buyerOrderDetailViewSchema,
+  /** The payment a retry would start (gateway, type, amount), or why none would be accepted. */
+  paymentRecovery: buyerPaymentRecoverySchema,
 });
 
 // ─── Track your order (public lookup) ──────────────────────────────────────
@@ -219,6 +242,8 @@ const orderLookupStatusSchema = z.object({
   tracking: buyerOrderTrackingSchema,
   /** Where a code to open the full order can go: the store's chosen channels that reach this order. */
   codeOptions: z.array(orderCodeOptionSchema),
+  /** The order's status and payment words, as the receipt and the account say them. */
+  buyerView: buyerOrderViewSchema,
 });
 
 async function enforceOrderLookupRateLimit(env: Env, reference: string): Promise<void> {
@@ -283,7 +308,10 @@ app.openapi(orderLookupStatusRoute, async (c) => {
       currencyCode: orders.currencyCode,
       subtotalAmountMinor: orders.subtotalAmountMinor,
       taxAmountMinor: orders.taxAmountMinor,
+      paymentTermsDays: orders.paymentTermsDays,
       ...orderMoneySelection(orders),
+      ...buyerOrderViewSelection(),
+      holdExpired: checkoutHoldExpiredSql(),
       createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
     })
     .from(orders)
@@ -291,7 +319,7 @@ app.openapi(orderLookupStatusRoute, async (c) => {
     .get();
   if (!order) throw new NotFoundError(ORDER_LOOKUP_NOT_FOUND_MESSAGE);
 
-  const [items, tracking, identity] = await Promise.all([
+  const [items, { tracking }, identity] = await Promise.all([
     db
       .select({
         productName: orderItems.productName,
@@ -344,6 +372,7 @@ app.openapi(orderLookupStatusRoute, async (c) => {
         timeline: tracking.timeline.map((entry, index) => ({ ...entry, id: `t${index}`, details: null })),
       },
       codeOptions: listOrderCodeOptions(identity, found),
+      buyerView: buyerOrderView(buyerOrderFacts(order)),
     },
   });
 });
@@ -494,6 +523,8 @@ app.openapi(getOrderReceiptRoute, async (c) => {
   c.header("Expires", "0");
 
   await validateReceiptToken(db, id, token);
+  // Proven above: the payment session route accepts the same proof.
+  const receiptToken = token as string;
 
   const order = await db
     .select({
@@ -529,6 +560,16 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       paymentTermsDays: orders.paymentTermsDays,
       paymentDueAt: orders.paymentDueAt,
       fulfillmentStatus: orders.fulfillmentStatus,
+      // What the payment session route reads, so the receipt offers a retry exactly when it would accept one.
+      shopCurrency: orders.shopCurrency,
+      fxLockedUntil: orders.fxLockedUntil,
+      version: orders.version,
+      deletedAt: orders.deletedAt,
+      shipmentClaimId: orders.shipmentClaimId,
+      shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+      holdExpired: checkoutHoldExpiredSql(),
+      lineTypes: orderLineTypesSql(),
+      ...buyerOrderViewSelection(),
       createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
       updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`
     })
@@ -540,7 +581,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     throw new NotFoundError("Order receipt not found");
   }
 
-  const [items, supportState, discountLines, tracking] = await Promise.all([
+  const [items, supportState, discountLines, { tracking, refundInFlight }] = await Promise.all([
     db
       .select({
         id: orderItems.id,
@@ -571,10 +612,15 @@ app.openapi(getOrderReceiptRoute, async (c) => {
   ]);
   // Ledger and thread reads come after the first wave: at most six D1
   // connections per invocation.
-  const [fulfillments, conversationId, registrations] = await Promise.all([
+  const [fulfillments, conversationId, registrations, paymentRecovery] = await Promise.all([
     listBuyerOrderFulfilments(db, id),
     findOrderConversationId(db, id),
     listActiveCheckoutRegistrations(db),
+    resolvePaymentSessionRecovery(c, {
+      orderId: id,
+      proof: { kind: "receipt", receiptToken },
+      order: getCustomerPaymentSessionOrderForDetail(order),
+    }),
   ]);
   const lineExtras = await composeOrderLineExtras(db, {
     orderId: id,
@@ -692,6 +738,8 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       supportRequests: supportState.supportRequests,
       supportRequestActions: supportState.supportRequestActions,
       supportRequestIntro: supportState.supportRequestIntro,
+      buyerView: presentBuyerOrderDetailView(order, paymentRecovery, refundInFlight),
+      paymentRecovery,
     },
   });
 });

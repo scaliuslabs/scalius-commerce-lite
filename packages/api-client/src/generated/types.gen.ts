@@ -1463,6 +1463,18 @@ export type GiftCardBalance = {
     status: 'active' | 'disabled' | 'expired';
 };
 
+export type BuyerOrderView = {
+    kind: 'order_placed' | 'order_updated' | 'payment_pending' | 'payment_issue';
+    /**
+     * The order's one status word key, by where it is.
+     */
+    status: 'awaiting_payment' | 'placed' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'returned' | 'refunded';
+    /**
+     * The shared payment word key (`orderPaymentWord`); null for a payment status the platform does not write.
+     */
+    payment: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed' | 'dueOnDelivery' | 'dueAtPickup' | 'dueOnService' | 'nothingDue' | 'disputeOpen' | 'lostToDispute' | 'partlyLostToDispute' | 'partlyLostRestRefunded' | null;
+};
+
 export type NullableTimestamp = string | number | null;
 
 export type PluginUiJson = string | number | boolean | unknown | Array<PluginUiJson & unknown> | {
@@ -2139,6 +2151,30 @@ export type OrderLineWarrantyExtra = {
         status: 'open' | 'in_progress' | 'resolved' | 'rejected';
         resolution: 'repair' | 'replacement' | 'refund' | 'other' | null;
     } | null;
+};
+
+export type BuyerPaymentRecovery = {
+    eligible: boolean;
+    gateway: string | null;
+    paymentType: 'full' | 'deposit' | 'balance' | null;
+    amountDue: number;
+    label: string | null;
+    reason: string | null;
+    code: 'checkout_expired' | 'payment_attempts_exhausted' | null;
+    blockType?: 'validation' | 'unavailable';
+    requiresCardForm: boolean;
+    hostedRedirect: boolean;
+};
+
+export type BuyerOrderDetailView = BuyerOrderView & {
+    /**
+     * A refund to the buyer is in flight, one its provider accepted and is completing included.
+     */
+    refundOnItsWay: boolean;
+    /**
+     * A payment session would be accepted now: `paymentRecovery.eligible` with no refund in flight.
+     */
+    canRetryPayment: boolean;
 };
 
 export type OrderGiftCardTender = {
@@ -14433,6 +14469,7 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 invoiceNumber?: number | null;
                 status: string;
                 statusLabel: string;
+                buyerView: BuyerOrderView;
                 openSupportRequestType: string | null;
                 currencyCode: string;
                 totalAmount: number;
@@ -15696,17 +15733,8 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                  */
                 kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
             }>;
-            paymentRecovery: {
-                eligible: boolean;
-                gateway: string | null;
-                paymentType: 'full' | 'deposit' | 'balance' | null;
-                amountDue: number;
-                label: string | null;
-                reason: string | null;
-                blockType?: 'validation' | 'unavailable';
-                requiresCardForm: boolean;
-                hostedRedirect: boolean;
-            };
+            paymentRecovery: BuyerPaymentRecovery;
+            buyerView: BuyerOrderDetailView;
             giftCardTenders: Array<OrderGiftCardTender>;
         };
     };
@@ -23400,6 +23428,7 @@ export type PostApiV1OrdersLookupStatusResponses = {
                      */
                     destination: string;
                 }>;
+                buyerView: BuyerOrderView;
             };
         };
     };
@@ -24392,6 +24421,8 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     }>;
                 }>;
                 supportRequestIntro: string;
+                buyerView: BuyerOrderDetailView;
+                paymentRecovery: BuyerPaymentRecovery;
             };
         };
     };

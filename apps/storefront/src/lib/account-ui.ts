@@ -1,3 +1,4 @@
+import type { BuyerOrderStatusWord } from "@scalius/shared/buyer-order-view";
 // The account pages' one visual vocabulary. Every class reads the active
 // theme's tokens (colours, radius, fonts), so the pages look native in every
 // template: nothing here names a colour or a font.
@@ -41,8 +42,9 @@ export function accountPill(tone: AccountTone): string {
 }
 
 /** An order status in buyer tones: delivered green, cancelled red, the rest neutral. */
-export function orderStatusTone(status: string): AccountTone {
-  if (status === "cancelled" || status === "returned") return "danger";
-  if (status === "delivered" || status === "completed") return "success";
+/** An order's pill tone, by the status word the API decided (`buyerView.status`). */
+export function orderStatusTone(word: BuyerOrderStatusWord): AccountTone {
+  if (word === "cancelled" || word === "returned") return "danger";
+  if (word === "delivered") return "success";
   return "neutral";
 }

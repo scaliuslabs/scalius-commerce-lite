@@ -36,8 +36,9 @@ import {
   type OrderCodeChannel,
   type OrderLookupStatus,
 } from "@/lib/order-lookup-api";
-import { formatOrderReceiptDate, formatOrderSuccessLabel } from "@/lib/order-success-localization";
-import { getOrderPaymentPresentation } from "@/lib/order-success-state";
+import { formatOrderReceiptDate } from "@/lib/order-success-localization";
+import { buyerOrderStatusText, buyerPaymentText } from "@/lib/buyer-order-words";
+import { orderCompletionWording } from "@/lib/order-line-groups";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -154,19 +155,11 @@ const channelName: Record<OrderCodeChannel, string> = {
   whatsapp: copy.trackOrderChannelWhatsappText,
 };
 const placedAt = status ? formatOrderReceiptDate(status.createdAt, languageCode) : null;
-// The receipt's own words for the payment ("Due on delivery" for cash on delivery, not "Unpaid").
-const paymentStatusLabel = status
-  ? getOrderPaymentPresentation({
-      status: status.status,
-      paymentMethod: status.paymentMethod ?? "",
-      paymentStatus: status.paymentStatus,
-      totalAmount: status.total,
-      paidAmount: status.paid,
-      balanceDue: status.balanceDue,
-      requiresShipping: status.requiresShipping,
-      shippingMethodKind: status.shippingMethodKind,
-    }, copy).statusLabel
+// The receipt's and the account's words for the order, from the API's view of it.
+const statusLabel = status && deliveryView
+  ? orderCompletionWording(deliveryView, copy)?.statusLabel ?? buyerOrderStatusText(status.buyerView.status, copy)
   : "";
+const paymentStatusLabel = status ? buyerPaymentText(status.buyerView.payment, copy) : "";
 const deliveryLabel = status?.shippingMethodName
   ? checkoutText(copy.orderReceiptDeliveryWithMethodText, { method: status.shippingMethodName })
   : copy.orderReceiptDeliveryText;
@@ -207,7 +200,7 @@ const invalid = (field: "reference" | "contact" | "code", errorId: string) => fi
             )}
             <div>
               <dt class="text-muted-foreground">{copy.orderReceiptStatusText}</dt>
-              <dd class="font-medium text-foreground">{formatOrderSuccessLabel(status.status, copy)}</dd>
+              <dd class="font-medium text-foreground">{statusLabel}</dd>
             </div>
             <div>
               <dt class="text-muted-foreground">{copy.orderReceiptPaymentStatusText}</dt>

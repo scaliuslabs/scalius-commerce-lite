@@ -22,6 +22,7 @@ import { currencyDocument } from "@scalius/core/modules/settings";
 import {
   getPaymentMethodPreferences,
   getGatewayAmountIssue,
+  getUnpayableOrderReason,
   isOnlinePaymentMethod,
   buildPaymentSessionAttemptIdentity,
   claimPaymentSessionAttempt,
@@ -80,7 +81,7 @@ type WaitUntilExecutionContext = {
   waitUntil(promise: Promise<unknown>): void;
 };
 
-type PaymentSessionProof =
+export type PaymentSessionProof =
   | { kind: "receipt"; receiptToken: string }
   | { kind: "customer_account"; customerId: string }
   | { kind: "agent_context"; contextId: string };
@@ -114,6 +115,9 @@ export interface CreateAgentContextPaymentSessionInput {
   customerId?: string | null;
 }
 
+/** A refusal the buyer pages word themselves (the session route answers with the same code). */
+export type PaymentRecoveryRefusal = "checkout_expired" | "payment_attempts_exhausted";
+
 export interface CustomerPaymentSessionRecovery {
   eligible: boolean;
   gateway: string | null;
@@ -121,6 +125,8 @@ export interface CustomerPaymentSessionRecovery {
   amountDue: number;
   label: string | null;
   reason: string | null;
+  /** Why not, when the session route would refuse with a code of its own. */
+  code: PaymentRecoveryRefusal | null;
   blockType?: "validation" | "unavailable";
   requiresCardForm: boolean;
   hostedRedirect: boolean;
@@ -350,7 +356,7 @@ async function createPaymentSessionForOrder(
   const attemptIdentity = await paymentSessionIdentity(db, order, gateway.id, policy, input, urls);
   // A new session past the order's session budget is refused (a replay or retry of one never is).
   if (await paymentSessionsExhausted(db, order.id, attemptIdentity.attemptKey)) {
-    throw new AppError(409, "payment_attempts_exhausted", "This order has had too many payment attempts. Place the order again to pay.");
+    throw new AppError(409, "payment_attempts_exhausted", PAYMENT_ATTEMPTS_EXHAUSTED_MESSAGE);
   }
   const correlationId = buildPaymentCorrelationId(input.orderId, policy.paymentType, attemptIdentity.transactionSuffix);
   const attemptClaim = await claimPaymentSessionAttempt<CardSessionResponse | HostedSessionResponse>(db, {
@@ -496,11 +502,20 @@ export async function createAgentContextPaymentSession(
   return createPaymentSessionForOrder(c, providers, providers.require(gateway), sessionInput, order);
 }
 
-export async function resolveCustomerPaymentSessionRecovery(
+/**
+ * Whether a payment session for the order would be accepted now, and for
+ * which gateway and payment type: the session route's own checks (the hold
+ * cap, the attempt budget, the currency and its rate window, the gateway's
+ * readiness) without starting one. The receipt and the account order both
+ * offer a retry exactly when this says eligible.
+ */
+export async function resolvePaymentSessionRecovery(
   c: PaymentRouteContext,
   input: {
     orderId: string;
-    expectedCustomerId: string;
+    proof: PaymentSessionProof;
+    /** The account owner the order must belong to (an account read). */
+    expectedCustomerId?: string;
     order?: CustomerPaymentSessionRecoveryOrder;
   },
 ): Promise<CustomerPaymentSessionRecovery> {
@@ -514,8 +529,11 @@ export async function resolveCustomerPaymentSessionRecovery(
     return inactiveRecovery("This order does not use an online payment gateway.");
   }
 
+  // Paid, closed or deleted: no gateway would take it, so none is read.
+  const unpayable = getUnpayableOrderReason(order);
+  if (unpayable) return inactiveRecovery(unpayable, gateway);
   const expired = checkoutExpiredReason(order);
-  if (expired) return inactiveRecovery(expired);
+  if (expired) return inactiveRecovery(expired, gateway, "validation", "checkout_expired");
   const isBalancePayment = shouldRequestBalancePayment(order);
   const candidateGateways: string[] = isBalancePayment
     ? [gateway]
@@ -552,18 +570,20 @@ export async function resolveCustomerPaymentSessionRecovery(
         currentCurrency.getCode,
       );
       await loadCheckoutGatewaySettings(db, encryptionKey, candidate);
-      if (isOrderPaymentRateExpired(order)) {
-        const sessionInput: CreatePaymentSessionInput = {
-          orderId: order.id,
-          paymentType: isBalancePayment ? "balance" : undefined,
-          proof: { kind: "customer_account", customerId: input.expectedCustomerId },
-          returnTarget: { kind: "customer_account" },
-        };
-        const identity = await paymentSessionIdentity(db, order, candidate.id, policy, sessionInput,
-          buildGatewayUrls(c, candidate.id, sessionInput, policy));
-        if (!await hasStartedPaymentSession(db, identity.attemptKey)) {
-          throw new ValidationError("The payment window for this exchange rate has ended. Place a new order to pay.");
-        }
+      const sessionInput: CreatePaymentSessionInput = {
+        orderId: order.id,
+        paymentType: isBalancePayment ? "balance" : undefined,
+        proof: input.proof,
+        returnTarget: input.proof.kind === "customer_account" ? { kind: "customer_account" } : { kind: "receipt" },
+      };
+      const identity = await paymentSessionIdentity(db, order, candidate.id, policy, sessionInput,
+        buildGatewayUrls(c, candidate.id, sessionInput, policy));
+      if (isOrderPaymentRateExpired(order) && !await hasStartedPaymentSession(db, identity.attemptKey)) {
+        throw new ValidationError("The payment window for this exchange rate has ended. Place a new order to pay.");
+      }
+      // The order's session budget is per order: no other gateway would be accepted either.
+      if (await paymentSessionsExhausted(db, order.id, identity.attemptKey)) {
+        return inactiveRecovery(PAYMENT_ATTEMPTS_EXHAUSTED_MESSAGE, candidate.id, "validation", "payment_attempts_exhausted");
       }
 
       return activeRecovery(candidate, policy);
@@ -906,10 +926,13 @@ function checkoutExpiredReason(order: Pick<PaymentSessionOrderRow, "holdExpired"
   return order.holdExpired === 1 ? "This checkout has expired. Place the order again to pay." : null;
 }
 
+const PAYMENT_ATTEMPTS_EXHAUSTED_MESSAGE = "This order has had too many payment attempts. Place the order again to pay.";
+
 function inactiveRecovery(
   reason: string,
   gateway: string | null = null,
   blockType: "validation" | "unavailable" = "validation",
+  code: PaymentRecoveryRefusal | null = null,
 ): CustomerPaymentSessionRecovery {
   return {
     eligible: false,
@@ -918,6 +941,7 @@ function inactiveRecovery(
     amountDue: 0,
     label: null,
     reason,
+    code,
     blockType,
     requiresCardForm: false,
     hostedRedirect: false,
@@ -935,6 +959,7 @@ function activeRecovery(
     amountDue: policy.chargeAmount,
     label: policy.paymentType === "balance" ? "Pay balance" : "Retry payment",
     reason: null,
+    code: null,
     requiresCardForm: gateway.flow === "card",
     hostedRedirect: gateway.flow === "hosted",
   };

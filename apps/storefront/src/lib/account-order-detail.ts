@@ -22,7 +22,6 @@ import {
 import {
   accountMoney,
   accountOfflineMessage,
-  accountOrderStatusText,
   accountShipmentStatusText,
   formatAccountDate,
   formatOrderPlaces,
@@ -73,6 +72,7 @@ import { longAnswerHtml, longAnswerWords } from "@/lib/long-answer";
 import type { MoneySummaryRow } from "@/lib/money-summary-order";
 import { getOrderReceiptSupportActionLabel } from "@/lib/order-success-localization";
 import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
+import { buyerOrderStatusText } from "@/lib/buyer-order-words";
 
 /** The customer order-detail payload, including the buyer tracking fields. */
 export type AccountOrderDetail = CustomerOrderDetail;
@@ -82,7 +82,7 @@ export type AccountOrderDetail = CustomerOrderDetail;
  * read defensively until every client carries it).
  */
 function paymentFacts(detail: AccountOrderDetail) {
-  return { ...detail.order, giftCardTenders: (detail as { giftCardTenders?: unknown }).giftCardTenders };
+  return { ...detail.order, buyerView: detail.buyerView, giftCardTenders: (detail as { giftCardTenders?: unknown }).giftCardTenders };
 }
 
 interface StripeCardElement {
@@ -267,8 +267,7 @@ function renderPaymentRecovery(detail: AccountOrderDetail): void {
   const container = byId("orderPaymentRecovery");
   const methods = byId("orderPaymentRecoveryMethods");
   if (!container) return;
-  const refunded = ["refunded", "partially_refunded"].includes(detail.order.paymentStatus);
-  recoveryAction = detail.activeRefundOperation || refunded ? null : getAccountPaymentRecoveryAction(detail.paymentRecovery);
+  recoveryAction = detail.buyerView.canRetryPayment ? getAccountPaymentRecoveryAction(detail.paymentRecovery) : null;
   const gateways = availableGateways();
   if (!recoveryAction || gateways.length === 0) return hideRecovery();
   if (!selectedGateway || !gateways.includes(selectedGateway)) {
@@ -806,9 +805,9 @@ export function renderOrderDetail(detail: AccountOrderDetail, checkoutConfig: Ch
   const status = byId("orderStatus");
   // A finished pickup order reads "Picked up"; a service/digital-only one "Completed", never "Delivered".
   if (status) {
-    status.className = accountPill(orderStatusTone(order.status));
+    status.className = accountPill(orderStatusTone(detail.buyerView.status));
     status.textContent = orderCompletionWording(order, copy)?.statusLabel
-      ?? accountOrderStatusText(order.status);
+      ?? buyerOrderStatusText(detail.buyerView.status, copy);
   }
   renderReturnNotice();
   renderProgress(detail);

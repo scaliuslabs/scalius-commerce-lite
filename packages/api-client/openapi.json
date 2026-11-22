@@ -6799,6 +6799,61 @@
           "status"
         ]
       },
+      "BuyerOrderView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "order_placed",
+              "order_updated",
+              "payment_pending",
+              "payment_issue"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "awaiting_payment",
+              "placed",
+              "confirmed",
+              "shipped",
+              "delivered",
+              "cancelled",
+              "returned",
+              "refunded"
+            ],
+            "description": "The order's one status word key, by where it is."
+          },
+          "payment": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "unpaid",
+              "partial",
+              "paid",
+              "partially_refunded",
+              "refunded",
+              "failed",
+              "dueOnDelivery",
+              "dueAtPickup",
+              "dueOnService",
+              "nothingDue",
+              "disputeOpen",
+              "lostToDispute",
+              "partlyLostToDispute",
+              "partlyLostRestRefunded",
+              null
+            ],
+            "description": "The shared payment word key (`orderPaymentWord`); null for a payment status the platform does not write."
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "payment"
+        ]
+      },
       "NullableTimestamp": {
         "type": "string",
         "nullable": true,
@@ -10557,6 +10612,96 @@
           "voided",
           "openClaimId",
           "claim"
+        ]
+      },
+      "BuyerPaymentRecovery": {
+        "type": "object",
+        "properties": {
+          "eligible": {
+            "type": "boolean"
+          },
+          "gateway": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentType": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "full",
+              "deposit",
+              "balance",
+              null
+            ]
+          },
+          "amountDue": {
+            "type": "number"
+          },
+          "label": {
+            "type": "string",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "code": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "checkout_expired",
+              "payment_attempts_exhausted",
+              null
+            ]
+          },
+          "blockType": {
+            "type": "string",
+            "enum": [
+              "validation",
+              "unavailable"
+            ]
+          },
+          "requiresCardForm": {
+            "type": "boolean"
+          },
+          "hostedRedirect": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "eligible",
+          "gateway",
+          "paymentType",
+          "amountDue",
+          "label",
+          "reason",
+          "code",
+          "requiresCardForm",
+          "hostedRedirect"
+        ]
+      },
+      "BuyerOrderDetailView": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BuyerOrderView"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "refundOnItsWay": {
+                "type": "boolean",
+                "description": "A refund to the buyer is in flight, one its provider accepted and is completing included."
+              },
+              "canRetryPayment": {
+                "type": "boolean",
+                "description": "A payment session would be accepted now: `paymentRecovery.eligible` with no refund in flight."
+              }
+            },
+            "required": [
+              "refundOnItsWay",
+              "canRetryPayment"
+            ]
+          }
         ]
       },
       "OrderGiftCardTender": {
@@ -54807,6 +54952,9 @@
                               "statusLabel": {
                                 "type": "string"
                               },
+                              "buyerView": {
+                                "$ref": "#/components/schemas/BuyerOrderView"
+                              },
                               "openSupportRequestType": {
                                 "type": "string",
                                 "nullable": true
@@ -55068,6 +55216,7 @@
                               "orderNumber",
                               "status",
                               "statusLabel",
+                              "buyerView",
                               "openSupportRequestType",
                               "currencyCode",
                               "totalAmount",
@@ -60767,60 +60916,10 @@
                           }
                         },
                         "paymentRecovery": {
-                          "type": "object",
-                          "properties": {
-                            "eligible": {
-                              "type": "boolean"
-                            },
-                            "gateway": {
-                              "type": "string",
-                              "nullable": true
-                            },
-                            "paymentType": {
-                              "type": "string",
-                              "nullable": true,
-                              "enum": [
-                                "full",
-                                "deposit",
-                                "balance",
-                                null
-                              ]
-                            },
-                            "amountDue": {
-                              "type": "number"
-                            },
-                            "label": {
-                              "type": "string",
-                              "nullable": true
-                            },
-                            "reason": {
-                              "type": "string",
-                              "nullable": true
-                            },
-                            "blockType": {
-                              "type": "string",
-                              "enum": [
-                                "validation",
-                                "unavailable"
-                              ]
-                            },
-                            "requiresCardForm": {
-                              "type": "boolean"
-                            },
-                            "hostedRedirect": {
-                              "type": "boolean"
-                            }
-                          },
-                          "required": [
-                            "eligible",
-                            "gateway",
-                            "paymentType",
-                            "amountDue",
-                            "label",
-                            "reason",
-                            "requiresCardForm",
-                            "hostedRedirect"
-                          ]
+                          "$ref": "#/components/schemas/BuyerPaymentRecovery"
+                        },
+                        "buyerView": {
+                          "$ref": "#/components/schemas/BuyerOrderDetailView"
                         },
                         "giftCardTenders": {
                           "type": "array",
@@ -60849,6 +60948,7 @@
                         "timeline",
                         "discounts",
                         "paymentRecovery",
+                        "buyerView",
                         "giftCardTenders"
                       ]
                     }
@@ -86721,6 +86821,9 @@
                                   "destination"
                                 ]
                               }
+                            },
+                            "buyerView": {
+                              "$ref": "#/components/schemas/BuyerOrderView"
                             }
                           },
                           "required": [
@@ -86744,7 +86847,8 @@
                             "balanceDue",
                             "items",
                             "tracking",
-                            "codeOptions"
+                            "codeOptions",
+                            "buyerView"
                           ]
                         }
                       },
@@ -91710,6 +91814,12 @@
                             },
                             "supportRequestIntro": {
                               "type": "string"
+                            },
+                            "buyerView": {
+                              "$ref": "#/components/schemas/BuyerOrderDetailView"
+                            },
+                            "paymentRecovery": {
+                              "$ref": "#/components/schemas/BuyerPaymentRecovery"
                             }
                           },
                           "required": [
@@ -91775,7 +91885,9 @@
                             "items",
                             "supportRequests",
                             "supportRequestActions",
-                            "supportRequestIntro"
+                            "supportRequestIntro",
+                            "buyerView",
+                            "paymentRecovery"
                           ]
                         }
                       },

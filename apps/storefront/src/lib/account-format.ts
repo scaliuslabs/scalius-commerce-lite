@@ -18,7 +18,8 @@ type PaymentFacts = Parameters<typeof getOrderPaymentPresentation>[0] & { curren
 
 /**
  * How an order is paid and what, if anything, the buyer still owes, in the
- * checkout language's words (`copy`: the page's checkout language).
+ * checkout language's words (`copy`: the page's checkout language), from the
+ * server's payment word: the receipt says the same.
  */
 export function orderPaymentLine(order: PaymentFacts, copy: CheckoutLanguageData = ENGLISH_CHECKOUT_LANGUAGE_DATA): {
   method: string;
@@ -27,7 +28,7 @@ export function orderPaymentLine(order: PaymentFacts, copy: CheckoutLanguageData
   balanceLabel: string;
 } {
   const payment = getOrderPaymentPresentation(order, copy);
-  const state = !payment.isCod && !payment.isClosed && order.paymentStatus === "failed"
+  const state = payment.word === "failed"
     ? accountCopy().format.paymentNeedsAttention
     : payment.balanceDue > 0
       ? `${accountMoney(payment.balanceDue, order.currencyCode)} ${payment.balanceLabel.toLowerCase()}`
@@ -120,30 +121,8 @@ export function accountOfflineMessage(): string {
 
 type Milestone = keyof ReturnType<typeof accountCopy>["tracking"]["milestones"];
 
-/** The order status → where the order is, as the API maps it (core account-orders). */
-const ORDER_STATUS_MILESTONE: Record<string, Milestone> = {
-  pending: "placed",
-  incomplete: "placed",
-  confirmed: "confirmed",
-  processing: "confirmed",
-  shipped: "shipped",
-  delivered: "delivered",
-  completed: "delivered",
-  cancelled: "cancelled",
-  returned: "returned",
-  refunded: "refunded",
-  partially_refunded: "partially_refunded",
-};
-
 function isMilestone(value: unknown): value is Milestone {
   return typeof value === "string" && value in accountCopy("en").tracking.milestones;
-}
-
-/** An order's one status word in the page's language ("On its way", "পথে আছে"). */
-export function accountOrderStatusText(status: string): string {
-  const words = accountCopy().tracking;
-  if (status === "incomplete") return words.awaitingPayment;
-  return words.milestones[ORDER_STATUS_MILESTONE[status] ?? "placed"];
 }
 
 /** A courier status in the page's language; booking and sync states read "Booked with courier". */

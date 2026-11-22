@@ -1,3 +1,4 @@
+import type { BuyerOrderDetailView, BuyerOrderView } from "@scalius/shared/buyer-order-view";
 import { buyerApiErrorText } from "../buyer-api-errors";
 import { currentPresence } from "../presence-url";
 import { STOREFRONT_PRESENCE_HEADER } from "@scalius/shared/markets";
@@ -465,6 +466,8 @@ export interface CustomerOrder {
   orderNumber?: number | null;
   status: string;
   statusLabel: string;
+  /** What the buyer is shown of the order, decided by the API (lib/buyer-order-words.ts words it). */
+  buyerView: BuyerOrderView;
   currencyCode: string;
   openSupportRequestType: string | null;
   totalAmount: number;
@@ -593,6 +596,7 @@ export interface CustomerActiveRefundOperation {
   providerStatus: null;
 }
 
+/** The payment a retry would start, or why the payment session route would refuse one (the receipt sends the same). */
 export interface CustomerPaymentRecovery {
   eligible: boolean;
   gateway: string | null;
@@ -600,6 +604,8 @@ export interface CustomerPaymentRecovery {
   amountDue: number;
   label: string | null;
   reason: string | null;
+  /** The session route's own refusal code, worded by the page (lib/buyer-api-errors.ts). */
+  code: "checkout_expired" | "payment_attempts_exhausted" | null;
   requiresCardForm: boolean;
   hostedRedirect: boolean;
 }
@@ -743,6 +749,8 @@ export interface CustomerOrderDetail {
   cod: CustomerOrderDetailCod | null;
   progress: CustomerOrderProgress;
   paymentRecovery: CustomerPaymentRecovery;
+  /** What the buyer is shown of the order, decided by the API: the receipt sends the same. */
+  buyerView: BuyerOrderDetailView;
   timeline: CustomerOrderTimelineEvent[];
   /** Each discount used, as on the receipt: `amount` off the items, `shippingAmount` off delivery. */
   discounts?: OrderReceiptDiscount[];

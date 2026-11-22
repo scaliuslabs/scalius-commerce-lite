@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { apiFetch } from "@/lib/api/transport";
 import type { OrderReceipt } from "@/lib/api/types";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
-import { getOrderSuccessStateKind, isDigitalLinePreparing } from "@/lib/order-success-state";
+import { isDigitalLinePreparing } from "@/lib/order-success-state";
 
 const RECEIPT_STATUS_TIMEOUT_MS = 5_000;
 const ORDER_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
@@ -32,7 +32,8 @@ function readReceipt(payload: unknown): OrderReceipt | null {
     typeof candidate.id !== "string" ||
     typeof candidate.status !== "string" ||
     typeof candidate.paymentMethod !== "string" ||
-    typeof candidate.paymentStatus !== "string"
+    typeof candidate.paymentStatus !== "string" ||
+    typeof candidate.buyerView?.kind !== "string"
   ) {
     return null;
   }
@@ -76,8 +77,14 @@ export const GET: APIRoute = async ({ request, url }) => {
     return jsonResponse({
       success: true,
       data: {
-        state: getOrderSuccessStateKind(order),
+        // The kind the API decided, as the receipt page drew it.
+        state: order.buyerView.kind,
         updatedAt: order.updatedAt ?? null,
+        // Whether a retry is still offered, and the session route's own code when it is not.
+        retry: {
+          canRetryPayment: order.buyerView.canRetryPayment,
+          refusal: order.paymentRecovery?.code ?? null,
+        },
         // The receipt checks back until its paid downloads are delivered.
         downloadsPreparing: (order.items ?? []).some((line) => isDigitalLinePreparing(line, order)),
       },
