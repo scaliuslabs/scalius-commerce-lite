@@ -3008,9 +3008,12 @@
          "type": "string",
          "const": "url"
         },
+        "store": {
+         "type": "boolean"
+        },
         "default": {
          "type": "string",
-         "format": "uri"
+         "maxLength": 2048
         }
        },
        "required": [
@@ -3626,9 +3629,12 @@
               "type": "string",
               "const": "url"
              },
+             "store": {
+              "type": "boolean"
+             },
              "default": {
               "type": "string",
-              "format": "uri"
+              "maxLength": 2048
              }
             },
             "required": [
@@ -4905,9 +4911,12 @@
               "type": "string",
               "const": "url"
              },
+             "store": {
+              "type": "boolean"
+             },
              "default": {
               "type": "string",
-              "format": "uri"
+              "maxLength": 2048
              }
             },
             "required": [
@@ -5523,9 +5532,12 @@
                    "type": "string",
                    "const": "url"
                   },
+                  "store": {
+                   "type": "boolean"
+                  },
                   "default": {
                    "type": "string",
-                   "format": "uri"
+                   "maxLength": 2048
                   }
                  },
                  "required": [
@@ -6604,9 +6616,12 @@
               "type": "string",
               "const": "url"
              },
+             "store": {
+              "type": "boolean"
+             },
              "default": {
               "type": "string",
-              "format": "uri"
+              "maxLength": 2048
              }
             },
             "required": [
@@ -7222,9 +7237,12 @@
                    "type": "string",
                    "const": "url"
                   },
+                  "store": {
+                   "type": "boolean"
+                  },
                   "default": {
                    "type": "string",
-                   "format": "uri"
+                   "maxLength": 2048
                   }
                  },
                  "required": [
@@ -7933,9 +7951,12 @@
               "type": "string",
               "const": "url"
              },
+             "store": {
+              "type": "boolean"
+             },
              "default": {
               "type": "string",
-              "format": "uri"
+              "maxLength": 2048
              }
             },
             "required": [
@@ -8551,9 +8572,12 @@
                    "type": "string",
                    "const": "url"
                   },
+                  "store": {
+                   "type": "boolean"
+                  },
                   "default": {
                    "type": "string",
-                   "format": "uri"
+                   "maxLength": 2048
                   }
                  },
                  "required": [
