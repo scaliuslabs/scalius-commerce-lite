@@ -379,7 +379,7 @@ function parseSelectorList(nodes: readonly CssNode[], relative: boolean, inHas: 
   return splitTop(nodes).map((part) => parseComplex(trim(part), relative, inHas));
 }
 
-const isCombinator = (node: CssNode | undefined): node is Extract<CssNode, { type: "delim" }> =>
+const isCombinator = (node: CssNode | undefined): boolean =>
   node?.type === "delim" && (node.value === ">" || node.value === "+" || node.value === "~");
 
 function parseComplex(nodes: readonly CssNode[], relative: boolean, inHas: boolean): Complex {
