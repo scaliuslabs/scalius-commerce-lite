@@ -13,7 +13,7 @@ import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database
 import { customers, giftCards, giftCardTransactions, orders, user } from "@scalius/database/schema";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../errors";
 import type { GiftCardSource, GiftCardStatus, GiftCardTransactionKind } from "./browser";
-import { GIFT_CARD_MAX_AMOUNT_MINOR, giftCardWriteActor } from "./issue";
+import { GIFT_CARD_MAX_AMOUNT_MINOR, giftCardKeyReused, giftCardWriteActor } from "./issue";
 import { giftCardIdFromRequestKey, giftCardBase64Url } from "./crypto";
 import { buildGiftCardTransactionInsert, isGiftCardIdempotencyConflict, isGiftCardLedgerError } from "./ledger";
 import { maskGiftCardRecipient } from "./mask";
@@ -354,16 +354,20 @@ export async function adjustGiftCardBalance(
     const idempotencyKey = `adjust:${(await giftCardIdFromRequestKey("adjust", requestKey)).slice(3)}`;
     const actor = giftCardWriteActor(input);
     if (!actor.id) throw new ValidationError("Sign in again to manage gift cards.");
-    const readLanded = () => db.select({ giftCardId: giftCardTransactions.giftCardId, actorType: giftCardTransactions.actorType, actorId: giftCardTransactions.actorId })
+    const readLanded = () => db.select({
+        giftCardId: giftCardTransactions.giftCardId, actorType: giftCardTransactions.actorType, actorId: giftCardTransactions.actorId,
+        amountMinor: giftCardTransactions.amountMinor, reason: giftCardTransactions.reason,
+    })
         .from(giftCardTransactions).where(eq(giftCardTransactions.idempotencyKey, idempotencyKey)).get();
     /**
      * A retry of an adjustment that already landed moves nothing again; the
      * key belongs to who adjusted under it and to that card, so another
      * caller's or another card's adjustment under the same key is refused.
      */
-    const replayLanded = (landed: { giftCardId: string; actorType: string; actorId: string | null }) => {
-        if (landed.giftCardId !== input.giftCardId || landed.actorType !== actor.type || landed.actorId !== actor.id) {
-            throw new ValidationError("This request was already used. Start a new adjustment.");
+    const replayLanded = (landed: { giftCardId: string; actorType: string; actorId: string | null; amountMinor: number; reason: string | null }) => {
+        if (landed.giftCardId !== input.giftCardId || landed.actorType !== actor.type || landed.actorId !== actor.id
+            || landed.amountMinor !== input.amountMinor || landed.reason !== reason) {
+            throw giftCardKeyReused("adjustment");
         }
         return getStaffGiftCardSummary(db, landed.giftCardId);
     };

@@ -313677,7 +313677,7 @@
           "Admin - Gift cards"
         ],
         "summary": "Issue a gift card",
-        "description": "Issues a manual gift card. Idempotent by `requestKey` (or the Idempotency-Key header); one is required. The response carries the full code once; afterwards staff see the last 4 characters only.",
+        "description": "Issues a manual gift card. Idempotent by `requestKey` (or the Idempotency-Key header); one is required: the same request again answers the same card, and another request under the key is refused (422 `idempotency_key_reused`): the key's card was issued. The response carries the full code once; afterwards staff see the last 4 characters only.",
         "parameters": [
           {
             "schema": {
@@ -313884,6 +313884,16 @@
                       }
                     }
                   }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Another request under a used key (`idempotency_key_reused`): the key's request was recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -314920,7 +314930,7 @@
           "Admin - Gift cards"
         ],
         "summary": "Adjust a gift card balance",
-        "description": "Adds (positive) or removes (negative) balance with a required reason, as one ledger transaction. Idempotent by `requestKey` (or the Idempotency-Key header); one is required.",
+        "description": "Adds (positive) or removes (negative) balance with a required reason, as one ledger transaction. Idempotent by `requestKey` (or the Idempotency-Key header); one is required: the same adjustment again answers the card, and another adjustment under the key is refused (422 `idempotency_key_reused`): the key's adjustment was applied.",
         "parameters": [
           {
             "schema": {
@@ -315099,6 +315109,16 @@
                       }
                     }
                   }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Another request under a used key (`idempotency_key_reused`): the key's request was recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
