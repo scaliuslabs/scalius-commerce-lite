@@ -8,7 +8,7 @@
       "frame": "wide"
      }
     },
-    "css": "[data-part=\"drawer-header\"] { border: 0 }",
+    "css": "[data-free=\"header\"] nav { border: 0 }",
     "labels": {
      "drawer.title": {
       "en": "Bag",

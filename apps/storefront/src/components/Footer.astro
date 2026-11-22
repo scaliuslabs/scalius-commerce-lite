@@ -37,7 +37,7 @@ const privateMarkup = privatePage ? await privateChromeMarkup(Astro.locals, Astr
 
 {privatePage ? (
 <div class="contents" data-storefront-footer data-private="footer">
-  {privateMarkup ? <PrivateMarkup markup={privateMarkup} embeds={embeds} /> : <CoreFooter {...props} />}
+  {privateMarkup ? <div data-free="footer"><PrivateMarkup markup={privateMarkup} embeds={embeds} /></div> : <CoreFooter {...props} />}
 </div>
 ) : (
 <div class="contents" data-storefront-footer>

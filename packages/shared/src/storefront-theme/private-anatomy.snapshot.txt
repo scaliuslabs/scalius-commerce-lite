@@ -1,17 +1,40 @@
 cart root data-private=cart frames=standard|narrow
 cart part progress hooks=progress
 cart part notices mandatory hooks=notice
-cart part lines mandatory hooks=lines,lines-heading,lines-continue,lines-loading,lines-list,lines-clear,lines-undo,cart-empty,cart-empty-icon free=lines-continue,lines-loading,lines-clear,cart-empty-icon
+cart part lines mandatory hooks=lines,lines-heading,lines-continue,lines-loading,lines-list,lines-clear,lines-undo,cart-empty,cart-empty-icon
 cart part summary mandatory hooks=summary,summary-validation
 cart part discount hooks=discount
-cart part details mandatory hooks=details,details-sign-in,details-form,contact,delivery,details-errors,details-submit,legal free=details-sign-in
+cart part details mandatory hooks=details,details-sign-in,details-form,contact,delivery,details-errors,details-submit,legal
 cart part empty hooks=empty-extras
 cart target cart.page.summary
 cart target cart.page.below
 cart layouts stack,columns,grid,group,fold
 cart layout fold hooks=fold-toggle,fold-body
 cart layout fold holds=lines,summary,discount,cart.page.summary
-cart protect [data-summary-row],[data-buyer-ui-target],[data-part="fold-toggle"],[data-part="line"]
+cart style page body[data-private-body] tokens=background,gradient
+cart style frame <root> <root> tokens=max-width
+cart style notice <root> [data-part="notice"] tokens=background,text,border,border-width,radius
+cart style lines <root> [data-part="lines"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+cart style lines-heading <root> [data-part="lines-heading"] tokens=text,font,weight,size,case,tracking
+cart style cart-empty <root> [data-part="cart-empty"] tokens=text,muted
+cart style line <root> [data-part="line"] tokens=background,border,border-width,border-style,radius,padding
+cart style line-image <root> [data-part="line-image"] tokens=width,height,width-wide,height-wide,radius,background,border,border-width,border-style,fit
+cart style line-title <root> [data-part="line-title"] tokens=text,font,weight,size,case,tracking,clamp
+cart style line-details <root> [data-part="line-details"] tokens=text,size
+cart style line-price <root> [data-part="line-price"] tokens=text,muted,font,weight,size,align
+cart style line-quantity <root> [data-part="line-quantity"] tokens=background,text,border,border-width,border-style,radius
+cart style line-remove <root> [data-part="line-remove"] tokens=text,radius
+cart style fold-toggle <root> [data-part="fold-toggle"] tokens=background,text,border,border-width,radius,shadow
+cart style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap
+cart style summary-rows <root> [data-summary-row]:not([data-summary-row="total"]) tokens=text,muted,size
+cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,case,tracking
+cart style input <root> :is(input:not([type="checkbox"],[type="radio"]),select,textarea) tokens=background,text,border,border-width,radius
+cart style details-form <root> [data-part="details-form"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+cart style section-heading <root> :is([data-part="contact"],[data-part="delivery"]) h2 tokens=text,font,weight,size,case,tracking
+cart style submit <root> [data-part="details-submit"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,font,weight,size,case,tracking
+cart style legal <root> [data-part="legal"] tokens=text,size,align
+cart style dialog [data-private="dialog"] tokens=background,text,muted,border,border-width,radius,shadow
+cart style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,font,weight,size,case,tracking
 cart.line root data-part=line
 cart.line part image hooks=line-image
 cart.line part title mandatory hooks=line-title
@@ -70,3 +93,5 @@ cartDrawer icon drawer.empty
 dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-agree,dialog-actions,dialog-back,dialog-confirm
 buyer-ui attributes=data-buyer-ui-target,data-buyer-ui-app,data-ui
 chrome roots data-private=header|footer
+layout tokens=background,gradient,border,border-width,border-style,radius,shadow,padding,gap,columns,columns-wide
+free regions data-free=block|header|footer|app

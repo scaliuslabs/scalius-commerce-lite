@@ -7,6 +7,9 @@
 // `/en-in/account`), and browser code goes through `pagePath()`, so the same
 // paths are right under every presence.
 
+/** The search page's query parameter (`/search?q=…`). */
+export const STOREFRONT_SEARCH_QUERY = "q";
+
 export const STOREFRONT_CORE_ROUTES = Object.freeze({
   home: "/",
   search: "/search",

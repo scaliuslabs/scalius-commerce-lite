@@ -13,6 +13,7 @@ import { STOREFRONT_THEME_DOCUMENT_VERSION, storefrontThemeDocumentSchema, type 
 import { STOREFRONT_SECTION_REGISTRY, type StorefrontSectionSettingsUpgrade } from "./sections";
 import { storefrontPrivatePageDefaults } from "./private-pages";
 import { privateCartPresetArrangement, privateDrawerWith, type PrivatePageArrangement } from "./private-arrangement";
+import { PRIVATE_CSS_SANITIZER_VERSION } from "./private-css";
 
 /**
  * The oldest stored version that still reads. Migration 0155 reset every
@@ -156,9 +157,13 @@ function privatePageBlocks(document: Json): Json {
   return { ...document, blocks: { ...blocks, ...added } };
 }
 
-/** The anatomy and stylesheet checker versions the 14 → 15 step writes against (it writes no stylesheet). */
+/**
+ * The anatomy the 14 → 15 step checks against. It writes no stylesheet and
+ * no tokens, and nothing compiles to nothing under any checker, so its
+ * empty output is this build's checker's.
+ */
 const V15_ANATOMY = 1;
-const V15_SANITIZER = 2;
+const V15_SANITIZER = PRIVATE_CSS_SANITIZER_VERSION;
 
 /**
  * Version 14 → 15: the cart page and the drawer are arranged from their
@@ -188,7 +193,7 @@ function privatePageLayouts(document: Json): Json {
     return {
       ...document,
       blocks: rest,
-      privatePages: { chrome: "core", pages: stored, css: "", labels: {}, icons: {}, assets: {}, compiled: { anatomy: V15_ANATOMY, sanitizer: V15_SANITIZER, css: "" } },
+      privatePages: { chrome: "core", pages: stored, tokens: {}, css: "", labels: {}, icons: {}, assets: {}, compiled: { anatomy: V15_ANATOMY, sanitizer: V15_SANITIZER, css: "" } },
     };
   }
   if (!("cart" in blocks) && !("cartDrawer" in blocks)) return document;

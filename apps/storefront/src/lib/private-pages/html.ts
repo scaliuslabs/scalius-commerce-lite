@@ -81,17 +81,24 @@ export function privateAssetUrls(extensions: ReadonlyArray<{ pluginId: string; r
 }
 
 /**
- * A theme content block as HTML in the page's language. Each carries its
- * kind on `data-ui` (the buyer UI's names), so one stylesheet styles the
- * theme's blocks and the apps' alike. A block whose words or image this
- * language and store cannot fill draws nothing.
+ * A theme content block as HTML in the page's language, inside its free
+ * region (`data-free="block"` with the block's `data-hook`): the theme's
+ * stylesheet styles what is inside, the host seals the box. Each block
+ * carries its kind on `data-ui` (the buyer UI's names), so one stylesheet
+ * styles the theme's blocks and the apps' alike. A block whose words or
+ * image this language and store cannot fill draws nothing.
  */
 export function privateContentHtml(block: PrivateContentBlock, hook: string | undefined, language: string, asset: PrivateAssetUrl): string {
+  const html = contentHtml(block, language, asset);
+  return html ? `<div data-free="block"${hookAttribute(hook)}>${html}</div>` : "";
+}
+
+function contentHtml(block: PrivateContentBlock, language: string, asset: PrivateAssetUrl): string {
   const words = (value: Parameters<typeof privateWords>[0]) => {
     const text = privateWords(value, language);
     return text === null ? "" : escapeHtml(text);
   };
-  const attributes = (kind: string) => ` data-ui="${kind}"${hookAttribute(hook)}`;
+  const attributes = (kind: string) => ` data-ui="${kind}"`;
   switch (block.kind) {
     case "heading": {
       const tag = block.level === 3 ? "h3" : "h2";

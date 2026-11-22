@@ -30,7 +30,8 @@ import { getLayoutData } from "@/lib/api/storefront";
 import { getRuntime, getRuntimePresence, getRuntimePrivateImageOrigins, getRuntimeStorefrontUrl, getWorkerEnv } from "@/lib/api/runtime";
 import { inertChromeHtml } from "@scalius/shared/plugins/inert-html";
 import { cspSourcesAllowImage } from "@scalius/shared/security-csp";
-import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
+import { STOREFRONT_CORE_ROUTES, STOREFRONT_SEARCH_QUERY } from "@scalius/shared/storefront-routes";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import { layoutPageLanguage } from "@/lib/market-selector";
 import { resolveStoreDisplayName } from "@/lib/store-identity";
 import { getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
@@ -255,18 +256,22 @@ export async function privateChromeMarkup(locals: object, url: URL, target: "hea
   const settings = resolveSkinSettings(declaration.settings, values, (id) => storefrontImageOf(theme.skinMedia.get(id)));
   const html = await host.render(extension, { kind: "skin", target, component: declaration.id, settings, data: await data() } as never, { jsonLd: false });
   const markup = appMarkup(extension, target, html);
-  return markup ? { ...markup, parts: markup.parts.map((part) => (part.kind === "html" ? { ...part, html: inertHtml(part.html) } : part)) } : null;
+  const searchLabel = storefrontCopy(theme.language).chrome.header.search;
+  return markup ? { ...markup, parts: markup.parts.map((part) => (part.kind === "html" ? { ...part, html: inertHtml(part.html, searchLabel) } : part)) } : null;
 }
 
 /**
- * Checked app markup made inert for a private page (`inertChromeHtml`, an allow-list): no
- * island, script, style, frame or form but one GET search to the store's search path, links
- * only to store paths and images only from the page's allowed origins.
+ * Checked app markup rebuilt for a private page (`inertChromeHtml`, an allow-list): no
+ * island, script, style, frame or form but the one search form the host builds (GET to the
+ * store's search path, its query field in the store's words), class names and ids the
+ * region's own, links only to store paths and images only from the page's allowed origins.
  */
-export function inertHtml(html: string): string {
+export function inertHtml(html: string, searchLabel = "Search"): string {
   const allowed = getRuntimePrivateImageOrigins() ?? [];
   return inertChromeHtml(html, {
     searchAction: STOREFRONT_CORE_ROUTES.search,
+    searchParam: STOREFRONT_SEARCH_QUERY,
+    searchLabel,
     imageAllowed: (src) => cspSourcesAllowImage(src, allowed, getRuntimeStorefrontUrl()),
   });
 }

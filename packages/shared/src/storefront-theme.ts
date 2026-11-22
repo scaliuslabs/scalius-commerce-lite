@@ -16,6 +16,7 @@ export * from "./storefront-theme/private-anatomy";
 export * from "./storefront-theme/private-arrangement";
 export * from "./storefront-theme/private-css";
 export * from "./storefront-theme/private-layout";
+export * from "./storefront-theme/private-tokens";
 export * from "./storefront-theme/sections";
 export * from "./storefront-theme/skins";
 export * from "./storefront-theme/home-data";

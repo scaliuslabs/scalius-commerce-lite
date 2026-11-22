@@ -188,9 +188,10 @@ function keyValueText(value: string | number | boolean | null): string {
 }
 
 /**
- * One node, its kind on `data-ui` (`banner`, `text`, `button`, …): with the block's
- * `data-buyer-ui-app` and its mount's `data-buyer-ui-target`, the stable hooks a
- * theme's private stylesheet styles an app's blocks by (private-anatomy.ts).
+ * One node, its kind on `data-ui` (`banner`, `text`, `button`, …): inside the block's
+ * free region (`data-free="app"` with `data-buyer-ui-app`) in its mount's
+ * `data-buyer-ui-target`, the stable hooks a theme's private stylesheet styles an
+ * app's blocks by (private-anatomy.ts).
  */
 function renderNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement | null {
   const rendered = drawNode(node, block, options);
@@ -289,7 +290,13 @@ export function renderBuyerUi(value: unknown, options: BuyerUiOptions = {}): voi
       // A per-line block is drawn under its own line only (the mount's `data-buyer-ui-line`).
       if (block.target !== mount.dataset.buyerUiTarget || (block.lineKey ?? null) !== (mount.dataset.buyerUiLine ?? null)) continue;
       const node = renderNode(block.ui, block, options);
-      if (node) { node.dataset.buyerUiApp = block.appId; nodes.push(node); }
+      if (!node) continue;
+      // Each block in its free region: the theme's stylesheet may style inside it, the host seals the box.
+      const region = element("div", "");
+      region.dataset.free = "app";
+      region.dataset.buyerUiApp = block.appId;
+      region.append(node);
+      nodes.push(region);
     }
     // A line's blocks name their line to assistive technology: each button is described by the line's name.
     const lineName = mount.dataset.buyerUiLineName;

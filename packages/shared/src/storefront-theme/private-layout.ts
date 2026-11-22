@@ -6,15 +6,22 @@
 //   `theme` draws the theme's header and footer, script-free and from the
 //   same store projections the public pages use (never a buyer's data).
 // - `pages`: each page's arrangement; an absent page draws as the host does.
-// - `css`: the theme's stylesheet for these pages, as written.
+// - `tokens`: the look of the host parts, as typed values per style target
+//   (private-tokens.ts); the host writes the CSS.
+// - `css`: the theme's stylesheet for its free regions, as written.
 // - `labels`, `icons`: host words the theme rewords per language, host icons
 //   it replaces with its own files.
 // - `compiled`: written by the store on every save and publish, never by
-//   hand: the checked, scoped stylesheet and the anatomy version the
-//   arrangements were checked against. A page reads it as it is, so a custom
-//   arrangement costs no query and no parse beyond the document's.
+//   hand: the token CSS and the checked stylesheet, the checker's version
+//   and the anatomy version the arrangements were checked against. A page
+//   reads it as it is, so a custom look costs no query and no parse beyond
+//   the document's; one an older checker wrote serves nothing until the
+//   store compiles it again (a save, or maintenance after a deploy).
 import { z } from "zod";
 import { PLUGIN_ID_PATTERN } from "../plugins/ids";
+import { parsePluginSurfaceKey } from "../plugins/storefront";
+import type { StorefrontThemeColors } from "./contrast";
+import { storefrontDarkPalette, type StorefrontThemeTokens } from "./tokens";
 import {
   PRIVATE_ANATOMY_VERSION,
   PRIVATE_CONTENT_TONES,
@@ -22,13 +29,13 @@ import {
   PRIVATE_LAYOUT_KINDS,
   PRIVATE_PAGES,
   PRIVATE_PAGE_KEYS,
-  privateFreeParts,
   privateIconKeys,
   privateLabelKeys,
   type PrivateAssetRef,
   type PrivateContentBlock,
   type PrivateNode,
   type PrivatePageKey,
+  type PrivatePageSpec,
   type PrivateWords,
 } from "./private-anatomy";
 import {
@@ -47,6 +54,14 @@ import {
   type PrivateCssReason,
 } from "./private-css";
 import { withoutHiddenCharacters } from "./private-css-syntax";
+import {
+  privateTokenCss,
+  privateTokenIssues,
+  privatePalettes,
+  privateTokensSchema,
+  type PrivateTokenReason,
+  type PrivateTokens,
+} from "./private-tokens";
 
 export const STOREFRONT_PRIVATE_CHROME = ["core", "theme"] as const;
 export type StorefrontPrivateChrome = (typeof STOREFRONT_PRIVATE_CHROME)[number];
@@ -58,7 +73,7 @@ const language = z.string().regex(/^[a-z]{2,3}$/, "A base language code: en, bn.
 const wordsSchema = z.record(language, z.string().trim().min(1).max(PRIVATE_WORDS_LIMITS.text))
   .refine((words) => Object.keys(words).length >= 1 && Object.keys(words).length <= PRIVATE_WORDS_LIMITS.languages, `Words in 1 to ${PRIVATE_WORDS_LIMITS.languages} languages.`);
 
-/** A file of the theme's app (`public/<file>`). */
+/** A file of the theme's own app (`public/<file>`): the app whose template the theme is. */
 export const privateAssetRefSchema = z.object({
   app: z.string().regex(PLUGIN_ID_PATTERN),
   file: z.string().regex(/^[A-Za-z0-9_-][A-Za-z0-9._/-]{0,200}$/).refine((file) => !file.split("/").includes(".."), "A file inside public/."),
@@ -103,6 +118,7 @@ const pagesShape = Object.fromEntries(PRIVATE_PAGE_KEYS.map((page) => [page, pri
 const privatePagesFields = {
   chrome: z.enum(STOREFRONT_PRIVATE_CHROME),
   pages: z.object(pagesShape).strict(),
+  tokens: privateTokensSchema,
   css: z.string().max(PRIVATE_CSS_MAX_BYTES),
   labels: z.partialRecord(z.enum(labelKeys), wordsSchema),
   icons: z.partialRecord(z.enum(iconKeys), privateAssetRefSchema),
@@ -116,8 +132,8 @@ export const storefrontPrivatePagesSchema = z.object({
   ...privatePagesFields,
   compiled: z.object({
     anatomy: z.number().int().min(1),
-    /** The stylesheet checker's version: a page never serves one an older checker compiled. */
-    sanitizer: z.number().int().min(1),
+    /** The checker's version (0: never compiled): a page never serves what an older checker compiled. */
+    sanitizer: z.number().int().min(0),
     css: z.string().max(PRIVATE_COMPILED_CSS_MAX_BYTES),
   }).strict(),
 }).strict();
@@ -128,6 +144,7 @@ export const storefrontPrivatePagesTemplateSchema = z.object(privatePagesFields)
 export interface StorefrontPrivatePages {
   chrome: StorefrontPrivateChrome;
   pages: Partial<Record<PrivatePageKey, PrivatePageArrangement>>;
+  tokens: PrivateTokens;
   css: string;
   labels: Partial<Record<string, PrivateWords>>;
   icons: Partial<Record<string, PrivateAssetRef>>;
@@ -138,7 +155,7 @@ export type StorefrontPrivatePagesTemplate = Partial<Omit<StorefrontPrivatePages
 
 /** The private pages as the host draws them with no theme of its own. */
 export function storefrontPrivatePagesDefault(): StorefrontPrivatePages {
-  return { chrome: "core", pages: {}, css: "", labels: {}, icons: {}, assets: {}, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CSS_SANITIZER_VERSION, css: "" } };
+  return { chrome: "core", pages: {}, tokens: {}, css: "", labels: {}, icons: {}, assets: {}, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CSS_SANITIZER_VERSION, css: "" } };
 }
 
 // ─── Compiling on save ────────────────────────────────────────────────────
@@ -147,7 +164,8 @@ export function storefrontPrivatePagesDefault(): StorefrontPrivatePages {
 export type PrivatePagesReason =
   | ReturnType<typeof privateArrangementIssues>[number]["reason"]
   | PrivateCssReason
-  | "label_too_long" | "markup";
+  | PrivateTokenReason
+  | "label_too_long" | "markup" | "foreign_asset";
 
 export interface PrivatePagesIssue {
   path: Array<string | number>;
@@ -172,26 +190,9 @@ function plainContent(nodes: readonly PrivateNode[]): PrivateNode[] {
   });
 }
 
-/** What the stylesheet is checked against: the theme's assets, its content blocks' hooks (never a layout's) and the anatomy's free parts. */
-export function privateCssContext(value: Pick<StorefrontPrivatePages, "pages" | "assets">): PrivateCssContext {
-  const content = new Set<string>();
-  const layout = new Set<string>();
-  const walk = (nodes: readonly PrivateNode[]) => {
-    for (const node of nodes) {
-      if (node.type === "layout") { if (node.hook) layout.add(node.hook); walk(node.children); }
-      else if (node.type === "content" && node.hook) content.add(node.hook);
-    }
-  };
-  for (const arrangement of Object.values(value.pages)) {
-    if (!arrangement) continue;
-    walk(arrangement.layout ?? []);
-    for (const nodes of Object.values(arrangement.items ?? {})) walk(nodes);
-  }
-  return {
-    assets: new Set(Object.keys(value.assets)),
-    freeHooks: new Set([...content].filter((hook) => !layout.has(hook))),
-    freeParts: new Set(privateFreeParts()),
-  };
+/** What the stylesheet is checked against: the theme's listed assets. */
+export function privateCssContext(value: Pick<StorefrontPrivatePages, "assets">): PrivateCssContext {
+  return { assets: new Set(Object.keys(value.assets)) };
 }
 
 function wordsIssues(words: PrivateWords | undefined, path: Array<string | number>, max: number): PrivatePagesIssue[] {
@@ -214,13 +215,34 @@ function contentIssues(nodes: readonly PrivateNode[], path: Array<string | numbe
   });
 }
 
+/** What the private pages are checked against besides themselves: the palettes buyers see, and the theme's own app. */
+export interface PrivatePagesCompileContext {
+  palettes: readonly StorefrontThemeColors[];
+  /** The app the theme is a template of: its files are the only ones an asset or icon may name (null: no files). */
+  themeApp: string | null;
+}
+
+/** The compile context of a theme document: its palettes and the app its look came from. */
+export function privatePagesContextOf(theme: {
+  tokens: Pick<StorefrontThemeTokens, "colors" | "darkColors" | "colorScheme" | "colorSchemeToggle">;
+  apps?: { template?: string } | undefined;
+}): PrivatePagesCompileContext {
+  return {
+    palettes: privatePalettes(theme.tokens, storefrontDarkPalette),
+    themeApp: theme.apps?.template ? parsePluginSurfaceKey(theme.apps.template)?.pluginId ?? null : null,
+  };
+}
+
 /**
  * Checks and compiles `privatePages` as a save or a publish does: every
- * arrangement against its page's anatomy, every label against its bound,
- * plain text everywhere, and the stylesheet (checked and scoped). Defaults
- * are dropped from the arrangements, so a default page stores nothing.
+ * arrangement against its page's anatomy, every token by type and against
+ * the contrast floor, every label against its bound, plain text everywhere,
+ * files from the theme's own app only, and the stylesheet (checked and
+ * scoped to its free regions). Defaults are dropped from the arrangements,
+ * so a default page stores nothing. The compiled CSS is the host's token
+ * rules, then the stylesheet.
  */
-export function compileStorefrontPrivatePages(value: StorefrontPrivatePages): { ok: true; value: StorefrontPrivatePages } | { ok: false; issues: PrivatePagesIssue[] } {
+export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, context: PrivatePagesCompileContext): { ok: true; value: StorefrontPrivatePages } | { ok: false; issues: PrivatePagesIssue[] } {
   const issues: PrivatePagesIssue[] = [];
   const pages: StorefrontPrivatePages["pages"] = {};
   for (const page of PRIVATE_PAGE_KEYS) {
@@ -239,13 +261,54 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages): { 
       };
     }
   }
+  const files: Array<[Array<string | number>, PrivateAssetRef]> = [
+    ...Object.entries(value.assets).map(([key, ref]): [Array<string | number>, PrivateAssetRef] => [["privatePages", "assets", key], ref]),
+    ...Object.entries(value.icons).flatMap(([key, ref]): Array<[Array<string | number>, PrivateAssetRef]> => ref ? [[["privatePages", "icons", key], ref]] : []),
+    ...Object.entries(value.pages).flatMap(([page, arrangement]) => [
+      ...imageRefs(arrangement?.layout ?? [], ["privatePages", "pages", page, "layout"]),
+      ...Object.entries(arrangement?.items ?? {}).flatMap(([item, nodes]) => imageRefs(nodes, ["privatePages", "pages", page, "items", item])),
+    ]),
+  ];
+  for (const [path, ref] of files) {
+    if (ref.app !== context.themeApp) issues.push({ path, reason: "foreign_asset", message: `${ref.app}/${ref.file}: a private page names only the theme's own files${context.themeApp ? ` (${context.themeApp})` : ""}.` });
+  }
+  const tokenCss: string[] = [];
+  for (const page of PRIVATE_PAGE_KEYS) {
+    const tokens = value.tokens[page];
+    if (!tokens) continue;
+    const arrangement = privatePageArrangement({ ...value, pages, compiled: { ...value.compiled, anatomy: PRIVATE_ANATOMY_VERSION } }, page);
+    const spec: PrivatePageSpec = PRIVATE_PAGES[page];
+    const found = privateTokenIssues(page, tokens, {
+      layout: arrangement?.layout ?? spec.layout,
+      items: Object.fromEntries(Object.keys(spec.items).map((item) => [item, arrangement?.items?.[item] ?? spec.items[item]!.layout])),
+      palettes: context.palettes,
+    });
+    issues.push(...found);
+    if (found.length === 0) tokenCss.push(privateTokenCss(page, tokens));
+  }
   const bounds = new Map(privateLabelKeys().map((entry) => [entry.key, entry.max]));
   const labels = Object.fromEntries(Object.entries(value.labels).flatMap(([key, words]) => words ? [[key, plainPrivateWords(words)]] : []));
   for (const [key, words] of Object.entries(labels)) issues.push(...wordsIssues(words, ["privatePages", "labels", key], bounds.get(key) ?? 0));
-  const css = compilePrivateCss(value.css, privateCssContext({ pages, assets: value.assets }));
+  const css = compilePrivateCss(value.css, privateCssContext(value));
   issues.push(...css.issues.map((issue) => ({ path: ["privatePages", "css"], reason: issue.reason, message: issue.message })));
   if (issues.length > 0) return { ok: false, issues };
-  return { ok: true, value: { ...value, pages, labels, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CSS_SANITIZER_VERSION, css: css.css } } };
+  const compiled = `${tokenCss.join("")}${css.css}`;
+  if (new TextEncoder().encode(compiled).byteLength > PRIVATE_COMPILED_CSS_MAX_BYTES) {
+    return { ok: false, issues: [{ path: ["privatePages", "css"], reason: "too_large", message: `The compiled look is over ${PRIVATE_COMPILED_CSS_MAX_BYTES / 1024} KiB; shorten the stylesheet.` }] };
+  }
+  return { ok: true, value: { ...value, pages, labels, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CSS_SANITIZER_VERSION, css: compiled } } };
+}
+
+function imageRefs(nodes: readonly PrivateNode[], path: Array<string | number>): Array<[Array<string | number>, PrivateAssetRef]> {
+  return nodes.flatMap((node, index): Array<[Array<string | number>, PrivateAssetRef]> => {
+    if (node.type === "layout") return imageRefs(node.children, [...path, index, "children"]);
+    return node.type === "content" && node.content.kind === "image" ? [[[...path, index, "content", "image"], node.content.image]] : [];
+  });
+}
+
+/** Whether `compiled` was written by this build's checker and anatomy (else maintenance compiles it again). */
+export function privatePagesCompiledCurrent(privatePages: Pick<StorefrontPrivatePages, "compiled">): boolean {
+  return privatePages.compiled.sanitizer === PRIVATE_CSS_SANITIZER_VERSION;
 }
 
 // ─── Reading on the page ──────────────────────────────────────────────────
@@ -257,26 +320,13 @@ export function privatePageArrangement(privatePages: StorefrontPrivatePages, pag
   return privatePages.compiled.anatomy === PRIVATE_ANATOMY_VERSION ? arrangement : fillPrivateArrangement(page, arrangement);
 }
 
-/** Compiled stylesheets of an older checker, compiled again in this isolate (bounded). */
-const recompiled = new Map<string, string>();
-
 /**
- * The stylesheet a page may serve: the stored one when this checker compiled
- * it, else the source compiled again now (once per isolate per source), or
- * none when it no longer passes. CSS an older checker approved is never served.
+ * The look a page may serve (token rules and the stylesheet): the stored
+ * one when this build's checker compiled it, else none (the default look)
+ * until the store compiles it again. A buyer's request never compiles.
  */
-export function privatePagesCss(privatePages: StorefrontPrivatePages): string {
-  if (privatePages.compiled.sanitizer === PRIVATE_CSS_SANITIZER_VERSION) return privatePages.compiled.css;
-  if (!privatePages.css) return "";
-  const context = privateCssContext(privatePages);
-  const key = JSON.stringify([privatePages.css, [...context.assets], [...context.freeHooks]]);
-  const known = recompiled.get(key);
-  if (known !== undefined) return known;
-  const result = compilePrivateCss(privatePages.css, context);
-  const css = result.issues.length > 0 ? "" : result.css;
-  if (recompiled.size >= 16) recompiled.delete(recompiled.keys().next().value!);
-  recompiled.set(key, css);
-  return css;
+export function privatePagesCss(privatePages: Pick<StorefrontPrivatePages, "compiled">): string {
+  return privatePagesCompiledCurrent(privatePages) ? privatePages.compiled.css : "";
 }
 
 /** Words in the page's language: its base language, else English, else the first the theme wrote. */

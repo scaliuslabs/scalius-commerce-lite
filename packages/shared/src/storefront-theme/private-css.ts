@@ -1,43 +1,40 @@
 // The theme's stylesheet for the buyer's private pages, checked and compiled
-// once when the theme is saved or published (never per request).
+// once when the theme is saved or published (never on a buyer's request).
+//
+// It reaches only free regions (private-anatomy.ts `PRIVATE_FREE_REGIONS`):
+// every selector starts at one region's wrapper (`[data-free]`, a region
+// kind, a content block's `[data-hook]` or an app block's
+// `[data-buyer-ui-app]`) and selects strictly inside it, never the wrapper,
+// so no rule can match a host part, a layout node, the page or the body.
+// The host seals each wrapper (nothing inside paints, lays out or acts
+// outside it), and gives host parts their look through typed tokens
+// (private-tokens.ts), never through this stylesheet.
 //
 // It is parsed by a CSS Syntax 3 tokenizer and parser (private-css-syntax.ts)
-// and only what the parser positively understands and the allow-lists below
-// accept is kept. The output is written from the checked tokens, never from
-// the source text, then parsed again and compared with what was approved,
-// and scanned for any loading function or escape: anything that disagrees
-// fails closed (no stylesheet).
+// and only what the parser understands and the allow-lists below accept is
+// kept. The output is written from the checked tokens, never from the
+// source text, then parsed again and compared with what was approved, and
+// scanned for any loading function or escape: anything that disagrees
+// fails closed (no stylesheet). The compiler never throws: limits on size,
+// tokens and nesting are refusals, and the work is linear in the input.
 //
-// What a stylesheet may do:
-// - style rules, `@media`, `@supports`, `@container` and `@keyframes` (its
-//   names are prefixed `t-` so they never meet the store's own);
-// - selectors of type, class, id, attribute, the allowed pseudo-classes
-//   (`:is`, `:where`, `:not`, `:has`, `:nth-*` …) and `::before`, `::after`,
-//   `::marker`, `::first-line`, `::first-letter`, `::selection`;
-// - values made of words, numbers, colours, strings and the allowed
-//   functions (colour, maths, gradients, `var`, `env`, timing, grid tracks,
-//   filters, shapes, counters); `url(<asset>)` names one of the theme's own
-//   listed assets and is written as `var(--private-asset-<asset>)`, which the
-//   page defines from the store's own origin;
-// - its own custom properties, named `--t-*`.
-// What it may not, each with its `reason`:
-// - reach any file or host (`import`, `foreign_url`, `forbidden_function`);
-// - read what a buyer types (`form_value_selector`, `state_selector`);
-// - leave the private surfaces (`unscoped_selector`): every selector is
-//   scoped under `[data-private]`, a rule for `:root`, `html` or `body` alone
-//   is the page's own rule (`body[data-private-body]`), a root state stays in
-//   front, and nothing may follow a surface root with a sibling combinator;
-// - position anything over anything (`positioning`): no `top`/`left`/`inset`,
-//   `z-index`, transforms, `position` other than `static` or `relative`,
-//   grid placement or negative margins;
-// - hide, cover or fake what a buyer must see (`protected_property`,
-//   `protected_value`, `protected_pseudo`): a rule that can reach a protected
-//   part, or anything inside one, may set only presentational properties
-//   (`PROTECTED_PROPERTIES`). Only a rule anchored on the theme's own content
-//   block (`[data-hook]` of a content node) or on a part the anatomy marks
-//   free (`[data-part]` of an optional part, or a free hook) is free of it;
-// - use escapes, nesting, other at-rules or more than 24 KiB.
+// What a stylesheet may do inside a region: style rules, `@media`,
+// `@supports`, `@container` and `@keyframes` (named `t-<name>`; an
+// animation names only the theme's own); type, class, id, attribute and
+// the allowed pseudo-class and pseudo-element selectors (a class `.x` and an
+// id `#x` are the region's own, written `.tc-x` and `#tc-x`, as its markup
+// is, so they never meet a host or utility class); values of words,
+// numbers, colours, strings and the allowed functions; `url(<asset>)` for
+// one of the theme's listed assets; its own custom properties `--t-*`.
+// What it may not, each with its `reason`: reach any file or host
+// (`import`, `foreign_url`, `forbidden_function`); read what a buyer types
+// (`form_value_selector`, `state_selector`); select outside a region or its
+// wrapper (`unscoped_selector`); leave a sealed box (`positioning`: fixed or
+// sticky position, anchor positioning); run the store's animations
+// (`animation_name`); use escapes, nesting, other at-rules, more than 24 KiB,
+// 12000 tokens or 24 levels of nesting.
 
+import { CHROME_NAME_PREFIX } from "../plugins/inert-html";
 import {
   CssSyntaxError,
   parseDeclarations,
@@ -59,13 +56,13 @@ export const PRIVATE_COMPILED_CSS_MAX_BYTES = 40 * 1024;
  * The checker's version. A stylesheet compiled by an older one is never
  * served: the page compiles it again or draws without it.
  */
-export const PRIVATE_CSS_SANITIZER_VERSION = 2 as const;
+export const PRIVATE_CSS_SANITIZER_VERSION = 3 as const;
 
 export const PRIVATE_CSS_REASONS = [
   "too_large", "syntax", "null_byte", "bad_string", "bad_url", "comment", "unbalanced", "escape", "nested_rule",
-  "import", "unsupported_at_rule", "foreign_url", "forbidden_function", "custom_property",
+  "too_deep", "import", "unsupported_at_rule", "foreign_url", "forbidden_function", "custom_property",
   "form_value_selector", "state_selector", "unsupported_selector", "unscoped_selector",
-  "positioning", "protected_property", "protected_value", "protected_pseudo", "unsafe_output",
+  "positioning", "animation_name", "unsafe_output",
 ] as const;
 export type PrivateCssReason = (typeof PRIVATE_CSS_REASONS)[number];
 
@@ -80,22 +77,21 @@ export interface PrivateCssResult {
   issues: PrivateCssIssue[];
 }
 
-/** What a stylesheet is checked against: the theme's assets and what it may restyle freely. */
+/** What a stylesheet is checked against: the theme's assets. */
 export interface PrivateCssContext {
   /** The theme's listed assets (`privatePages.assets`), by key. */
   assets: ReadonlySet<string>;
-  /** `data-hook` values of the theme's own content blocks (never of a layout node, which holds parts). */
-  freeHooks: ReadonlySet<string>;
-  /** `data-part` values a theme may restyle freely: optional parts, and hooks the anatomy marks free. */
-  freeParts: ReadonlySet<string>;
 }
 
-const EMPTY_CONTEXT: PrivateCssContext = { assets: new Set(), freeHooks: new Set(), freeParts: new Set() };
+const EMPTY_CONTEXT: PrivateCssContext = { assets: new Set() };
 
-/** The scope every private surface's root carries. */
-export const PRIVATE_CSS_SCOPE = "[data-private]";
-/** The page's own rule (`:root`, `html` or `body` alone). */
+/** Every rule's scope: the body of a private page that carries a theme stylesheet. */
 export const PRIVATE_CSS_PAGE = "body[data-private-body]";
+/** A region's own class and id names, in its markup (plugins/inert-html.ts) and in the stylesheet. */
+export const PRIVATE_CHROME_NAME_PREFIX = CHROME_NAME_PREFIX;
+/** The most tokens and the deepest nesting a stylesheet may have. */
+export const PRIVATE_CSS_MAX_TOKENS = 12_000;
+export const PRIVATE_CSS_MAX_DEPTH = 24;
 /** An asset's custom property, which the page defines from the store's own origin. */
 export const privateAssetProperty = (key: string) => `--private-asset-${key}`;
 export const PRIVATE_ASSET_KEY = /^[a-z][a-z0-9-]{0,31}$/;
@@ -120,6 +116,9 @@ const FUNCTIONS = new Set([
   "blur", "brightness", "contrast", "drop-shadow", "grayscale", "hue-rotate", "invert", "opacity", "saturate", "sepia",
   "inset", "circle", "ellipse", "polygon",
   "counter", "counters",
+  // Transforms: a region is sealed, so they move nothing out of it.
+  "translate", "translatex", "translatey", "translatez", "translate3d", "scale", "scalex", "scaley", "scalez", "scale3d",
+  "rotate", "rotatex", "rotatey", "rotatez", "rotate3d", "skew", "skewx", "skewy", "matrix", "matrix3d", "perspective",
 ]);
 const VALUE_DELIMS = new Set(["/", "+", "-", "*", ","]);
 const IDENT = /^-?(?:[A-Za-z_\u0080-￿]|-)[A-Za-z0-9_\u0080-￿-]*$/;
@@ -194,143 +193,45 @@ function assetReference(key: string, context: ValueContext): CssNode {
 
 // ─── Properties ───────────────────────────────────────────────────────────
 
-/** Properties no rule may set: each can move one thing over another. */
-const POSITIONING = new Set([
-  "top", "right", "bottom", "left", "inset", "inset-block", "inset-inline", "inset-block-start", "inset-block-end", "inset-inline-start", "inset-inline-end",
-  "z-index", "transform", "translate", "rotate", "scale", "transform-origin", "offset", "offset-path", "offset-distance", "offset-position", "offset-anchor", "offset-rotate",
-  "grid-area", "grid-row", "grid-row-start", "grid-row-end", "grid-column", "grid-column-start", "grid-column-end", "anchor-name", "position-anchor", "position-area", "position-try",
-]);
+/** Properties no rule may set: each places a box against something outside its region. */
+const ANCHORING = new Set(["anchor-name", "anchor-scope", "position-anchor", "position-area", "position-try", "position-try-fallbacks", "position-try-order", "position-visibility", "view-transition-name", "view-transition-class", "overlay"]);
 /** Never: script-era or non-standard properties. */
 const FORBIDDEN = new Set(["behavior", "-moz-binding", "zoom"]);
-
-type Check = (value: readonly CssNode[]) => string | null;
+/** Words `animation` may hold besides the theme's own keyframes. */
+const ANIMATION_WORDS = new Set([
+  "none", "infinite", "normal", "reverse", "alternate", "alternate-reverse", "forwards", "backwards", "both", "running", "paused",
+  "ease", "ease-in", "ease-out", "ease-in-out", "linear", "step-start", "step-end", "jump-start", "jump-end", "jump-none", "jump-both", "start", "end",
+  "auto", "replace", "add", "accumulate",
+]);
 
 const words = (value: readonly CssNode[]) => value.filter((node) => node.type !== "whitespace");
-const hasFunction = (value: readonly CssNode[]): boolean => value.some((node) => node.type === "fn" || (node.type === "block" && hasFunction(node.values)));
-const length = (node: CssNode, floors: Record<string, number>): boolean | null => {
-  if (node.type === "number") return node.value === 0 ? false : null;
-  if (node.type === "percentage") return node.value >= (floors["%"] ?? 0);
-  if (node.type === "dimension") {
-    const floor = floors[node.unit.toLowerCase()];
-    return floor === undefined ? false : node.value >= floor;
-  }
-  return null;
-};
-
-const anyValue: Check = () => null;
-const noFunctions = (check: Check): Check => (value) => hasFunction(value) ? "a fixed value (no var(), calc() or other function) where it can reach a part a buyer must see" : check(value);
-const keywords = (allowed: readonly string[]): Check => (value) => {
-  const items = words(value);
-  return items.every((node) => node.type === "ident" && allowed.includes(node.value.toLowerCase())) ? null : `one of ${allowed.join(", ")}`;
-};
-const nonNegative: Check = noFunctions((value) => words(value).some((node) => (node.type === "number" || node.type === "dimension" || node.type === "percentage") && node.value < 0) ? "no negative length" : null);
-const SIZE_FLOORS = { px: 16, rem: 1, em: 1, vw: 1, vh: 1, vmin: 1, vmax: 1, svh: 1, dvh: 1, lvh: 1, ch: 1, "%": 10 };
-const sizeFloor: Check = noFunctions((value) => {
-  for (const node of words(value)) {
-    if (node.type === "ident" && ["auto", "none", "fit-content", "min-content", "max-content", "stretch"].includes(node.value.toLowerCase())) continue;
-    if (length(node, SIZE_FLOORS) !== true) return "a size of at least 16px, 1rem or 10%, or auto";
-  }
-  return null;
-});
-const fontSize: Check = noFunctions((value) => {
-  const items = words(value);
-  if (items.length === 1 && items[0]!.type === "ident" && ["small", "medium", "large", "x-large", "xx-large", "xxx-large", "larger"].includes(items[0].value.toLowerCase())) return null;
-  return items.length === 1 && length(items[0]!, { px: 11, rem: 0.7, em: 0.7, pt: 8.5, "%": 70 }) === true ? null : "a size of at least 11px, 0.7rem or 70%";
-});
-const lineHeight: Check = noFunctions((value) => {
-  const items = words(value);
-  const [only] = items;
-  return items.length === 1 && ((only?.type === "ident" && only.value.toLowerCase() === "normal") || (only?.type === "number" && only.value >= 1)) ? null : "normal or a number of at least 1";
-});
-const spacing: Check = noFunctions((value) => {
-  const items = words(value);
-  const [only] = items;
-  return items.length === 1 && ((only?.type === "ident" && only.value.toLowerCase() === "normal") || (only?.type === "number" && only.value === 0) || (only?.type === "dimension" && only.value >= 0)) ? null : "normal or a length of at least 0";
-});
-const DISPLAY = ["block", "inline", "inline-block", "flex", "inline-flex", "grid", "inline-grid", "flow-root", "contents", "list-item", "table", "table-row", "table-cell"];
-/** A visible colour: no `transparent`, no alpha of 0, nothing that cannot be read here. */
-const visibleColor: Check = (value) => {
-  const items = words(value);
-  if (items.length !== 1) return "one visible colour";
-  const [only] = items;
-  if (only!.type === "ident") return ["transparent"].includes(only!.value.toLowerCase()) ? "a visible colour (not transparent)" : null;
-  if (only!.type === "hash") {
-    const hex = only!.value;
-    if (hex.length === 4) return hex[3] === "0" ? "a visible colour (alpha above 0)" : null;
-    if (hex.length === 8) return hex.slice(6) === "00" ? "a visible colour (alpha above 0)" : null;
-    return null;
-  }
-  if (only!.type === "fn" && ["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch"].includes(only!.name)) {
-    if (hasFunction(only!.values)) return "a colour of fixed numbers";
-    const parts = words(only!.values).filter((node) => node.type !== "comma");
-    const slash = parts.findIndex((node) => node.type === "delim" && node.value === "/");
-    const alpha = slash >= 0 ? parts[slash + 1] : only!.name.endsWith("a") && parts.length === 4 ? parts[3] : undefined;
-    if (alpha && (alpha.type === "number" || alpha.type === "percentage") && alpha.value === 0) return "a visible colour (alpha above 0)";
-    return null;
-  }
-  return "a colour by name, hex or rgb()/hsl()/oklch() of fixed numbers";
-};
-const gridTracks: Check = (value) => {
-  const zero = (nodes: readonly CssNode[], inMinmax = false): boolean => nodes.some((node, index) => {
-    if (node.type === "fn") {
-      if (node.name === "minmax") return zero(trim(node.values).filter((_item, position) => position > 0), true);
-      return zero(node.values, inMinmax);
-    }
-    if (inMinmax && index === 0) return false;
-    return (node.type === "number" || node.type === "dimension" || node.type === "percentage") && node.value <= 0;
-  });
-  return zero(value) ? "no track of size 0" : null;
-};
-const notText: Check = (value) => words(value).some((node) => node.type === "ident" && node.value.toLowerCase() === "text") ? "not text (the text would take the background's colour)" : null;
-const listStyle: Check = (value) => hasFunction(value) ? "no image" : null;
-
-/**
- * The properties a rule that can reach a protected part may set, and what
- * each may hold. Everything else (display none, visibility, opacity,
- * content, overflow, clipping, filters, masks, text-indent, animations,
- * pointer events, …) is refused there.
- */
-export const PROTECTED_PROPERTIES: Readonly<Record<string, Check>> = {
-  color: visibleColor,
-  background: anyValue, "background-color": anyValue, "background-image": anyValue, "background-position": anyValue,
-  "background-size": anyValue, "background-repeat": anyValue, "background-origin": anyValue, "background-clip": notText, "background-attachment": anyValue,
-  "font-family": anyValue, "font-weight": anyValue, "font-style": anyValue, "font-stretch": anyValue, "font-variant": anyValue,
-  "font-variant-numeric": anyValue, "font-variant-caps": anyValue, "font-feature-settings": anyValue, "font-kerning": anyValue,
-  "font-size": fontSize, "line-height": lineHeight, "letter-spacing": spacing, "word-spacing": spacing,
-  "text-transform": anyValue, "text-decoration": anyValue, "text-decoration-line": anyValue, "text-decoration-color": anyValue,
-  "text-decoration-style": anyValue, "text-decoration-thickness": anyValue, "text-underline-offset": anyValue, "text-align": anyValue,
-  "text-wrap": anyValue, "white-space": keywords(["normal", "nowrap", "pre-wrap", "pre-line", "break-spaces"]), "word-break": anyValue, "overflow-wrap": anyValue, "hyphens": anyValue,
-  "text-shadow": anyValue, "box-shadow": anyValue,
-  margin: nonNegative, "margin-top": nonNegative, "margin-right": nonNegative, "margin-bottom": nonNegative, "margin-left": nonNegative,
-  "margin-block": nonNegative, "margin-inline": nonNegative, "margin-block-start": nonNegative, "margin-block-end": nonNegative, "margin-inline-start": nonNegative, "margin-inline-end": nonNegative,
-  padding: anyValue, "padding-top": anyValue, "padding-right": anyValue, "padding-bottom": anyValue, "padding-left": anyValue,
-  "padding-block": anyValue, "padding-inline": anyValue, "padding-block-start": anyValue, "padding-block-end": anyValue, "padding-inline-start": anyValue, "padding-inline-end": anyValue,
-  gap: anyValue, "row-gap": anyValue, "column-gap": anyValue,
-  border: anyValue, "border-width": anyValue, "border-style": anyValue, "border-color": anyValue,
-  "border-top": anyValue, "border-right": anyValue, "border-bottom": anyValue, "border-left": anyValue,
-  "border-block": anyValue, "border-inline": anyValue, "border-block-start": anyValue, "border-block-end": anyValue, "border-inline-start": anyValue, "border-inline-end": anyValue,
-  "border-radius": anyValue, "border-start-start-radius": anyValue, "border-start-end-radius": anyValue, "border-end-start-radius": anyValue, "border-end-end-radius": anyValue,
-  "border-top-left-radius": anyValue, "border-top-right-radius": anyValue, "border-bottom-left-radius": anyValue, "border-bottom-right-radius": anyValue,
-  outline: anyValue, "outline-color": anyValue, "outline-style": anyValue, "outline-width": anyValue, "outline-offset": anyValue,
-  "accent-color": anyValue, "caret-color": anyValue, cursor: anyValue,
-  "align-items": anyValue, "align-content": anyValue, "align-self": anyValue, "justify-items": anyValue, "justify-content": anyValue, "justify-self": anyValue,
-  "place-items": anyValue, "place-content": anyValue, "place-self": anyValue, "vertical-align": anyValue,
-  "flex-direction": anyValue, "flex-wrap": anyValue, "flex-flow": anyValue, "flex-grow": anyValue, "flex-shrink": anyValue, "flex-basis": sizeFloor, order: anyValue,
-  "grid-template-columns": gridTracks, "grid-template-rows": gridTracks, "grid-auto-columns": gridTracks, "grid-auto-rows": gridTracks, "grid-auto-flow": anyValue,
-  display: keywords(DISPLAY), "box-sizing": anyValue,
-  width: sizeFloor, "min-width": sizeFloor, "max-width": sizeFloor, height: sizeFloor, "min-height": sizeFloor, "max-height": sizeFloor,
-  "inline-size": sizeFloor, "block-size": sizeFloor, "min-inline-size": sizeFloor, "max-inline-size": sizeFloor, "min-block-size": sizeFloor, "max-block-size": sizeFloor,
-  "aspect-ratio": anyValue, "list-style": listStyle, "list-style-type": anyValue, "list-style-position": anyValue, "list-style-image": keywords(["none"]),
-  "border-collapse": anyValue, "border-spacing": anyValue, "table-layout": anyValue, "object-fit": anyValue, "object-position": anyValue,
-};
 
 function checkDeclarationName(name: string): void {
   if (name.startsWith("--")) {
-    if (!/^--t-[a-z0-9-]{1,40}$/.test(name)) refuse("custom_property", `${name}: the theme's own custom properties are named --t-<name>; the store's tokens are the theme's tokens, set in the theme document.`);
+    if (!/^--t-[a-z0-9-]{1,40}$/.test(name)) refuse("custom_property", `${name}: the theme's own custom properties are named --t-<name>.`);
     return;
   }
   if (!/^[a-z][a-z-]*$/.test(name) || FORBIDDEN.has(name)) refuse("syntax", `${name} is not a property this stylesheet may set.`);
-  if (POSITIONING.has(name)) refuse("positioning", `${name} can move one thing over another, which no rule here may do.`);
+  if (ANCHORING.has(name)) refuse("positioning", `${name} places a box against something outside its region.`);
+}
+
+/** `position` is a fixed word, never fixed or sticky: a box stays in its sealed region. */
+function checkPosition(value: readonly CssNode[]): void {
+  const items = words(value);
+  const [only] = items;
+  if (items.length !== 1 || only?.type !== "ident" || !["static", "relative", "absolute"].includes(only.value.toLowerCase())) {
+    refuse("positioning", "position is static, relative or absolute (as a plain word): nothing here is fixed to the screen or sticks outside its region.");
+  }
+}
+
+/** An animation names the theme's own keyframes only (already prefixed), with fixed words around them. */
+function checkAnimation(name: string, value: readonly CssNode[], keyframes: ReadonlySet<string>): void {
+  for (const node of words(value)) {
+    if (node.type === "comma" || node.type === "number" || node.type === "dimension" || node.type === "percentage") continue;
+    if (node.type === "ident" && (keyframes.has(node.value) || (name === "animation" && ANIMATION_WORDS.has(node.value.toLowerCase())) || node.value.toLowerCase() === "none")) continue;
+    if (name === "animation" && node.type === "fn" && ["cubic-bezier", "steps", "linear"].includes(node.name)) continue;
+    refuse("animation_name", `${name} names only this stylesheet's own @keyframes (and fixed words): ${node.type === "ident" ? node.value : node.type} is not one.`);
+  }
 }
 
 // ─── Selectors ────────────────────────────────────────────────────────────
@@ -532,50 +433,66 @@ function writeComplex(complex: Complex): string {
   return out;
 }
 
-const isAttr = (simple: Simple, attr: string, value?: string): boolean =>
-  simple.kind === "attr" && simple.name === attr && (value === undefined ? simple.op === null || simple.op === "=" : simple.op === "=" && simple.value === value);
+/** A region's wrapper as a selector names it: `[data-free]`, a region kind, a content block's hook or an app's block. */
+function anchorOf(compound: Compound): string | null {
+  if (compound.length !== 1 || compound[0]!.kind !== "attr") return null;
+  const attr = compound[0] as Extract<Simple, { kind: "attr" }>;
+  if (attr.flag) return null;
+  if (attr.name === "data-free") {
+    if (attr.op === null) return "[data-free]";
+    return attr.op === "=" && ["block", "header", "footer", "app"].includes(attr.value!) ? `[data-free="${attr.value}"]` : null;
+  }
+  if (attr.op !== "=") return null;
+  if (attr.name === "data-hook" && /^[a-z][a-z0-9]*(?:-[a-z0-9]+){0,5}$/.test(attr.value!) && attr.value!.length <= 40) return `[data-free="block"][data-hook="${attr.value}"]`;
+  if (attr.name === "data-buyer-ui-app" && /^[a-z0-9][a-z0-9.-]{0,63}$/.test(attr.value!)) return `[data-free="app"][data-buyer-ui-app="${attr.value}"]`;
+  return null;
+}
 
-/** A selector scoped to the private surfaces, and whether it is free of the protected-part limits. */
-function scopeSelector(complex: Complex, context: PrivateCssContext): { text: string; free: boolean } {
-  const [first, ...more] = complex.compounds;
-  const firstCombinator = complex.combinators[0];
-  const isRoot = first!.some((simple) => (simple.kind === "type" && (simple.name === "html" || simple.name === "body")) || (simple.kind === "pseudo" && simple.name === "root"));
-  if (isRoot) {
-    if (!first!.every((simple) => simple.kind === "attr" || (simple.kind === "pseudo" && !simple.selectors) || (simple.kind === "type" && (simple.name === "html" || simple.name === "body")))) {
-      refuse("unscoped_selector", "The page root takes only a state (an attribute or a pseudo-class) before the rest of a selector.");
+const NAMED = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
+
+/** Class and id names as the region's markup writes them (`tc-<name>`), everywhere in a selector. */
+function ownNames(complex: Complex): Complex {
+  const simple = (item: Simple): Simple => {
+    if (item.kind === "class" || item.kind === "id") {
+      if (!NAMED.test(item.name)) refuse("unsupported_selector", `${item.kind === "class" ? "." : "#"}${item.name}: a name of letters, digits, _ and - only.`);
+      return { ...item, name: `${PRIVATE_CHROME_NAME_PREFIX}${item.name}` };
     }
-    const state = first!.filter((simple) => simple.kind !== "type" && !(simple.kind === "pseudo" && simple.name === "root")).map(writeSimple).join("");
-    const prefix = state ? `:root${state} ` : "";
-    if (more.length === 0) return { text: `${prefix}${PRIVATE_CSS_PAGE}`, free: false };
-    if (firstCombinator === "+" || firstCombinator === "~") refuse("unscoped_selector", "A sibling of the page root is outside the private pages.");
-    const rest: Complex = { lead: null, compounds: more, combinators: complex.combinators.slice(1) };
-    return { text: `${prefix}${PRIVATE_CSS_SCOPE} ${writeComplex(rest)}`, free: isFree(rest, context) };
-  }
-  if (isAttr(first![0]!, "data-private")) {
-    if (firstCombinator === "+" || firstCombinator === "~") refuse("unscoped_selector", "A sibling of a private surface is outside it.");
-    return { text: writeComplex(complex), free: isFree(complex, context) };
-  }
-  return { text: `${PRIVATE_CSS_SCOPE} ${writeComplex(complex)}`, free: isFree(complex, context) };
+    if (item.kind === "attr" && ["class", "id", "style", "for", "name", "data-free", "data-private", "data-hook", "data-buyer-ui-app"].includes(item.name)) {
+      refuse("unsupported_selector", `[${item.name}…]: select by .class, #id, a tag or a data-ui kind inside a region.`);
+    }
+    if (item.kind === "pseudo" && item.selectors) return { ...item, selectors: item.selectors.map(ownNames) };
+    return item;
+  };
+  return { ...complex, compounds: complex.compounds.map((compound) => compound.map(simple)) };
 }
 
 /**
- * True when the selector's subject is the theme's own content block, a part
- * the anatomy marks free, or inside one: some compound from the subject
- * leftwards, across descendant and child combinators only, is anchored on
- * one. Anything else (a type, a class, a layout node, a broad descendant)
- * can reach a protected part.
+ * A selector scoped to the inside of one free region: an optional root
+ * state, the region's wrapper, then a descendant or child combinator and
+ * what it selects inside. Its subject is always strictly inside the wrapper.
  */
-function isFree(complex: Complex, context: PrivateCssContext): boolean {
-  for (let index = complex.compounds.length - 1; index >= 0; index -= 1) {
-    const compound = complex.compounds[index]!;
-    if (compound.some((simple) => simple.kind === "attr" && simple.op === "=" && (
-      (simple.name === "data-hook" && context.freeHooks.has(simple.value!))
-      || (simple.name === "data-part" && context.freeParts.has(simple.value!))
-    ))) return true;
-    const joiner = complex.combinators[index - 1];
-    if (joiner === "+" || joiner === "~") return false;
+function scopeSelector(complex: Complex): string {
+  let compounds = complex.compounds;
+  let combinators = complex.combinators;
+  let state = "";
+  const first = compounds[0]!;
+  if (first.some((simple) => (simple.kind === "type" && (simple.name === "html" || simple.name === "body")) || (simple.kind === "pseudo" && simple.name === "root"))) {
+    if (!first.every((simple) => simple.kind === "attr" || (simple.kind === "pseudo" && !simple.selectors) || (simple.kind === "type" && (simple.name === "html" || simple.name === "body")))) {
+      refuse("unscoped_selector", "The page root takes only a state (an attribute or a pseudo-class) before the region.");
+    }
+    if (combinators[0] !== " ") refuse("unscoped_selector", "A root state is followed by a space and a region.");
+    state = first.filter((simple) => simple.kind !== "type" && !(simple.kind === "pseudo" && simple.name === "root")).map(writeSimple).join("");
+    compounds = compounds.slice(1);
+    combinators = combinators.slice(1);
   }
-  return false;
+  const anchor = compounds[0] ? anchorOf(compounds[0]) : null;
+  if (!anchor) {
+    refuse("unscoped_selector", "Start every selector at a free region and select inside it: [data-hook=\"<your block>\"] p, [data-free=\"header\"] .logo, [data-buyer-ui-app=\"<app>\"] [data-ui=\"banner\"]. Host parts take tokens (privatePages.tokens), not selectors.");
+  }
+  if (compounds.length < 2) refuse("unscoped_selector", "A region's wrapper is the host's: select something inside it.");
+  if (combinators[0] !== " " && combinators[0] !== ">") refuse("unscoped_selector", "Inside a region means a descendant ( ) or a child (>) of its wrapper.");
+  const inside = ownNames({ lead: null, compounds: compounds.slice(1), combinators: combinators.slice(1) });
+  return `${state ? `:root${state} ` : ""}${PRIVATE_CSS_PAGE} ${anchor}${combinators[0] === ">" ? ">" : " "}${writeComplex(inside)}`;
 }
 
 // ─── Rules ────────────────────────────────────────────────────────────────
@@ -655,8 +572,6 @@ class Compiler {
 
   styleRule(rule: Extract<CssRule, { kind: "qualified" }>, inKeyframes: boolean): Approved | null {
     let selector: string;
-    let free: boolean;
-    let pseudoElement = false;
     if (inKeyframes) {
       const frames = splitTop(trim(rule.prelude)).map((part) => {
         const [only, ...rest] = trim(part);
@@ -665,15 +580,8 @@ class Compiler {
         return refuse("syntax", "A keyframe is from, to or a percentage.");
       });
       selector = frames.join(",");
-      // Animations run only on what a rule may freely style (refused elsewhere).
-      free = true;
     } else {
-      const list = parseSelectorList(trim(rule.prelude), false, false);
-      const scoped = list.map((complex) => scopeSelector(complex, this.context));
-      selector = scoped.map((entry) => entry.text).join(",");
-      free = scoped.every((entry) => entry.free);
-      pseudoElement = list.some((complex) => complex.compounds[complex.compounds.length - 1]!.some((simple) => simple.kind === "element"));
-      if (!free && pseudoElement) refuse("protected_pseudo", `${selector.slice(0, 80)}: a pseudo-element can cover or fake what a buyer must see; anchor the rule on your own content block or a free part.`);
+      selector = parseSelectorList(trim(rule.prelude), false, false).map(scopeSelector).join(",");
     }
     const declarations: Array<[string, string, boolean]> = [];
     for (const declaration of parseDeclarations(rule.block)) {
@@ -686,20 +594,19 @@ class Compiler {
           namesKeyframes: name === "animation" || name === "animation-name",
         });
         if (value.length === 0) refuse("syntax", `${name} has no value.`);
-        if (name === "position" && keywords(["static", "relative"])(value) !== null) refuse("positioning", "position may be static or relative only: nothing here is placed over anything.");
-        if (/^margin/.test(name) && nonNegative(value) !== null) refuse("positioning", `${name} may not be negative or computed: a negative margin can pull one thing over another.`);
-        if (!free && !name.startsWith("--")) {
-          const check = PROTECTED_PROPERTIES[name];
-          if (!check) refuse("protected_property", `${name} may not be set by ${selector.slice(0, 80)}: it can reach a part a buyer must see. Anchor the rule on your own content block or a free part, or set a presentational property.`);
-          const problem = check!(value);
-          if (problem) refuse("protected_value", `${name} needs ${problem} in ${selector.slice(0, 80)}.`);
-        }
+        if (name === "position") checkPosition(value);
+        if (name === "animation" || name === "animation-name") checkAnimation(name, value, this.prefixed);
         declarations.push([declaration.name.startsWith("--") ? declaration.name : name, serializeCss(value), declaration.important]);
       } catch (error) {
         this.issue(error);
       }
     }
     return declarations.length > 0 ? { kind: "style", selector, declarations } : null;
+  }
+
+  /** The theme's keyframe names as written (`t-<name>`). */
+  get prefixed(): ReadonlySet<string> {
+    return new Set([...this.keyframes].map((name) => `t-${name}`));
   }
 }
 
@@ -719,7 +626,7 @@ export function readPrivateCssStructure(css: string): Approved[] {
       declarations: parseDeclarations(rule.block).map((declaration) => [declaration.name, serializeCss(declaration.value), declaration.important]),
     };
   });
-  return read(parseRules(componentValues(tokenizeCss(css))));
+  return read(parseRules(componentValues(tokenizeCss(css), PRIVATE_CSS_MAX_DEPTH + 4)));
 }
 
 /** Loading functions, escapes and markup an output may never hold, whatever the checks above decided. */
@@ -730,13 +637,26 @@ const UNSAFE_OUTPUT = /\\|url\s*\(|image(?:-set)?\s*\(|cross-fade|element\s*\(|s
  * refused; `css` is then "" (nothing is served from a stylesheet with an issue).
  */
 export function compilePrivateCss(source: string, context: PrivateCssContext = EMPTY_CONTEXT): PrivateCssResult {
+  try {
+    return compile(source, context);
+  } catch (error) {
+    // A limit this checker failed to state as a refusal still refuses: a save never fails with a 500.
+    return { css: "", issues: [{ reason: "syntax", message: `The stylesheet could not be read (${error instanceof Error ? error.name : "error"}).` }] };
+  }
+}
+
+function compile(source: string, context: PrivateCssContext): PrivateCssResult {
   if (new TextEncoder().encode(source).byteLength > PRIVATE_CSS_MAX_BYTES) {
     return { css: "", issues: [{ reason: "too_large", message: `The private pages' stylesheet is at most ${PRIVATE_CSS_MAX_BYTES / 1024} KiB.` }] };
   }
   const compiler = new Compiler(context);
   let rules: CssRule[];
   try {
-    rules = parseRules(componentValues(tokenizeCss(source)));
+    const tokens = tokenizeCss(source);
+    if (tokens.length > PRIVATE_CSS_MAX_TOKENS) {
+      return { css: "", issues: [{ reason: "too_large", message: `The stylesheet holds over ${PRIVATE_CSS_MAX_TOKENS} tokens.` }] };
+    }
+    rules = parseRules(componentValues(tokens, PRIVATE_CSS_MAX_DEPTH));
   } catch (error) {
     compiler.issue(error);
     return { css: "", issues: compiler.issues };

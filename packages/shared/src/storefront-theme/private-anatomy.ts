@@ -3,9 +3,13 @@
 // Each private page is drawn by the host from named parts. A part is core
 // markup with stable `data-part` hooks inside it; a theme arranges parts,
 // its own content blocks and the apps' extension targets in a tree of
-// layout nodes (private-arrangement.ts) and styles the hooks with a scoped
-// stylesheet (private-css.ts). No theme or app script ever runs on these
-// pages. Each page says which parts a buyer must see and do (mandatory:
+// layout nodes (private-arrangement.ts). A theme never writes a selector
+// for a host part: each page names its style targets (`styles`), the parts'
+// elements a theme gives a look through typed tokens (private-tokens.ts),
+// and the host writes all the CSS that reads them. The theme's own
+// stylesheet (private-css.ts) reaches only inside free regions (its content
+// blocks, its header and footer, the inside of an app's block), which the
+// host seals. No theme or app script ever runs on these pages. Each page says which parts a buyer must see and do (mandatory:
 // every arrangement holds them exactly once) and which a theme may leave out.
 // A repeated unit (a cart line) has its own arrangement of its sub-parts.
 //
@@ -16,9 +20,9 @@
 // written before it gets the new part in its default place on read.
 //
 // Registering a page: add a `PrivatePageSpec` below (its root, frames,
-// parts, targets, layouts, default layout, items, labels and icons) and add
-// it to `PRIVATE_PAGES`. Its default layout must hold every mandatory part
-// and target exactly once.
+// parts, targets, layouts, default layout, items, style targets, labels and
+// icons) and add it to `PRIVATE_PAGES`. Its default layout must hold every
+// mandatory part and target exactly once. Nothing else is per page.
 
 /** Rises when a page gains a mandatory part or target (a stored arrangement then fills it in on read). */
 export const PRIVATE_ANATOMY_VERSION = 1 as const;
@@ -68,11 +72,54 @@ export interface PrivatePartSpec {
   readonly mandatory: boolean;
   /** Its closed variants, the first the default. */
   readonly variants?: readonly [string, ...string[]];
-  /** Its `data-part` hooks, its own name first. A mandatory part's hooks are protected, but for `free`. */
+  /** Its `data-part` hooks, its own name first (the anatomy contract; no theme selector reaches them). */
   readonly hooks: readonly string[];
-  /** A mandatory part's hooks that hold nothing a buyer must read or use (a theme may restyle them freely). */
-  readonly free?: readonly string[];
 }
+
+/**
+ * The tokens a theme may set (private-tokens.ts says each one's type,
+ * bounds and the CSS the host writes from it). A style target or a layout
+ * node takes the ones it lists.
+ */
+export const PRIVATE_TOKEN_NAMES = [
+  "background", "gradient", "text", "muted", "link", "error", "border", "border-width", "border-style", "radius", "shadow", "padding", "gap",
+  "font", "weight", "size", "case", "tracking", "align", "clamp",
+  "columns", "columns-wide", "width", "height", "width-wide", "height-wide", "fit", "max-width",
+] as const;
+export type PrivateTokenName = (typeof PRIVATE_TOKEN_NAMES)[number];
+
+/** A palette role (contrast.ts `STOREFRONT_THEME_COLOR_KEYS`), as the anatomy names one. */
+export type PrivatePaletteRole =
+  | "background" | "foreground" | "card" | "card-foreground" | "popover" | "popover-foreground" | "primary" | "primary-foreground"
+  | "secondary" | "secondary-foreground" | "muted" | "muted-foreground" | "accent" | "accent-foreground" | "destructive" | "destructive-foreground"
+  | "border" | "input" | "ring";
+
+/**
+ * An element of a host part a theme gives a look by tokens. The host writes
+ * `<root> <selector> { … }` from the validated values; the theme never
+ * writes a selector here. `surface` and `text` are what the host paints by
+ * default, so the save can keep every text above the contrast floor: the
+ * `text` token replaces the first text role (and the foreground inside),
+ * `muted`, `link` and `error` the muted, primary and destructive text inside.
+ */
+export interface PrivateStyleSpec {
+  /** The host's selector, inside the page root (or the whole document, `absolute`: the dialogs, the body). */
+  readonly selector: string;
+  readonly absolute?: boolean;
+  readonly tokens: readonly PrivateTokenName[];
+  /** Its default background: a palette role, or `under` (none of its own: what is beneath shows). */
+  readonly surface: PrivatePaletteRole | "under";
+  /** The text roles it draws (the first is its own colour). */
+  readonly text: readonly PrivatePaletteRole[];
+  /** The style target it is drawn inside (what is beneath it). */
+  readonly on?: string;
+  /** The part it belongs to (its place in the arrangement says what is beneath it), and its unit for a repeated one. */
+  readonly part?: string;
+  readonly item?: string;
+}
+
+/** The tokens a theme's layout node takes (`@<hook>` in `privatePages.tokens`). */
+export const PRIVATE_LAYOUT_TOKENS = ["background", "gradient", "border", "border-width", "border-style", "radius", "shadow", "padding", "gap", "columns", "columns-wide"] as const satisfies readonly PrivateTokenName[];
 
 /** A page, or a repeated unit inside one (a cart line). */
 export interface PrivateUnitSpec {
@@ -91,6 +138,8 @@ export interface PrivateLabelSpec {
 }
 
 export interface PrivatePageSpec extends PrivateUnitSpec {
+  /** The elements a theme styles by tokens, by name (`page` is the page itself). */
+  readonly styles: Readonly<Record<string, PrivateStyleSpec>>;
   /** The `data-private` value of its root (the stylesheet's scope). */
   readonly root: string;
   /** The page frame's closed variants, the first the default. */
@@ -99,13 +148,6 @@ export interface PrivatePageSpec extends PrivateUnitSpec {
   readonly layoutHooks?: Partial<Record<PrivateLayoutKind, readonly string[]>>;
   /** What a host layout may hold (parts and targets by name; content blocks and plain layouts always). */
   readonly layoutContents?: Partial<Record<PrivateLayoutKind, readonly string[]>>;
-  /**
-   * Protected selectors besides the mandatory parts' hooks: what a buyer
-   * must read on this page (money rows, the apps' targets, the fold's bar).
-   * A stylesheet rule that can reach one may set only presentational
-   * properties; the visibility guard checks each.
-   */
-  readonly protect?: readonly string[];
   /** Repeated units, by name. */
   readonly items: Readonly<Record<string, PrivateUnitSpec>>;
   /** Host labels the theme may reword (plain text, per language). */
@@ -114,7 +156,7 @@ export interface PrivatePageSpec extends PrivateUnitSpec {
   readonly icons: readonly string[];
 }
 
-const part = (mandatory: boolean, hooks: readonly string[], extra: Omit<PrivatePartSpec, "mandatory" | "hooks"> = {}): PrivatePartSpec => ({ mandatory, hooks, ...extra });
+const part = (mandatory: boolean, hooks: readonly string[]): PrivatePartSpec => ({ mandatory, hooks });
 const p = (name: string): PrivateNode => ({ type: "part", part: name });
 const t = (target: string): PrivateNode => ({ type: "target", target });
 const l = (layout: PrivateLayoutKind, children: PrivateNode[]): PrivateNode => ({ type: "layout", layout, children });
@@ -138,6 +180,39 @@ const CART_LINE_PARTS = {
 /** The line's own hook (its root). */
 export const PRIVATE_LINE_HOOK = "line";
 
+const TEXT_TOKENS = ["text", "font", "weight", "size", "case", "tracking"] as const satisfies readonly PrivateTokenName[];
+const BOX_TOKENS = ["background", "gradient", "text", "muted", "link", "error", "border", "border-width", "border-style", "radius", "shadow", "padding"] as const satisfies readonly PrivateTokenName[];
+const BUTTON_TOKENS = ["background", "gradient", "text", "border", "border-width", "border-style", "radius", "shadow", "font", "weight", "size", "case", "tracking"] as const satisfies readonly PrivateTokenName[];
+
+/** The cart page's style targets (and the store's dialogs over it). */
+const CART_STYLES: Record<string, PrivateStyleSpec> = {
+  // The page's paint (F2: a gradient behind everything) and its frame's width.
+  page: { selector: "body[data-private-body]", absolute: true, tokens: ["background", "gradient"], surface: "background", text: ["foreground", "muted-foreground"] },
+  frame: { selector: "", tokens: ["max-width"], surface: "under", text: [], on: "page" },
+  notice: { selector: '[data-part="notice"]', tokens: ["background", "text", "border", "border-width", "radius"], surface: "background", text: ["destructive"], part: "notices" },
+  lines: { selector: '[data-part="lines"]', tokens: [...BOX_TOKENS], surface: "card", text: ["foreground", "muted-foreground"], part: "lines" },
+  "lines-heading": { selector: '[data-part="lines-heading"]', tokens: [...TEXT_TOKENS], surface: "under", text: ["foreground"], on: "lines" },
+  "cart-empty": { selector: '[data-part="cart-empty"]', tokens: ["text", "muted"], surface: "under", text: ["foreground", "muted-foreground"], on: "lines" },
+  line: { selector: '[data-part="line"]', tokens: ["background", "border", "border-width", "border-style", "radius", "padding"], surface: "under", text: [], on: "lines" },
+  "line-image": { selector: '[data-part="line-image"]', tokens: ["width", "height", "width-wide", "height-wide", "radius", "background", "border", "border-width", "border-style", "fit"], surface: "muted", text: [], item: "line", part: "image" },
+  "line-title": { selector: '[data-part="line-title"]', tokens: [...TEXT_TOKENS, "clamp"], surface: "under", text: ["foreground"], item: "line", part: "title" },
+  "line-details": { selector: '[data-part="line-details"]', tokens: ["text", "size"], surface: "under", text: ["muted-foreground"], item: "line", part: "details" },
+  "line-price": { selector: '[data-part="line-price"]', tokens: ["text", "muted", "font", "weight", "size", "align"], surface: "under", text: ["foreground", "muted-foreground"], item: "line", part: "price" },
+  "line-quantity": { selector: '[data-part="line-quantity"]', tokens: ["background", "text", "border", "border-width", "border-style", "radius"], surface: "under", text: ["foreground"], item: "line", part: "quantity" },
+  "line-remove": { selector: '[data-part="line-remove"]', tokens: ["text", "radius"], surface: "under", text: ["muted-foreground"], item: "line", part: "remove" },
+  "fold-toggle": { selector: '[data-part="fold-toggle"]', tokens: ["background", "text", "border", "border-width", "radius", "shadow"], surface: "card", text: ["foreground"] },
+  summary: { selector: '[data-part="summary"]', tokens: [...BOX_TOKENS, "gap"], surface: "card", text: ["foreground", "muted-foreground", "primary", "destructive"], part: "summary" },
+  "summary-rows": { selector: '[data-summary-row]:not([data-summary-row="total"])', tokens: ["text", "muted", "size"], surface: "under", text: ["muted-foreground", "foreground"], on: "summary" },
+  "summary-total": { selector: '[data-summary-row="total"]', tokens: [...TEXT_TOKENS], surface: "under", text: ["foreground"], on: "summary" },
+  input: { selector: ':is(input:not([type="checkbox"],[type="radio"]),select,textarea)', tokens: ["background", "text", "border", "border-width", "radius"], surface: "background", text: ["foreground"] },
+  "details-form": { selector: '[data-part="details-form"]', tokens: [...BOX_TOKENS], surface: "card", text: ["foreground", "muted-foreground", "destructive", "primary"], part: "details" },
+  "section-heading": { selector: ':is([data-part="contact"],[data-part="delivery"]) h2', tokens: [...TEXT_TOKENS], surface: "under", text: ["foreground"], on: "details-form" },
+  submit: { selector: '[data-part="details-submit"]', tokens: [...BUTTON_TOKENS], surface: "primary", text: ["primary-foreground"] },
+  legal: { selector: '[data-part="legal"]', tokens: ["text", "size", "align"], surface: "under", text: ["muted-foreground", "foreground"], on: "details-form" },
+  dialog: { selector: '[data-private="dialog"]', absolute: true, tokens: ["background", "text", "muted", "border", "border-width", "radius", "shadow"], surface: "card", text: ["foreground", "muted-foreground"] },
+  "dialog-confirm": { selector: '[data-private="dialog"] [data-part="dialog-confirm"]', absolute: true, tokens: [...BUTTON_TOKENS], surface: "primary", text: ["primary-foreground"] },
+};
+
 /** The cart page: the information step (lines, totals, the details form and its submit). */
 const CART_PAGE: PrivatePageSpec = {
   root: "cart",
@@ -145,21 +220,19 @@ const CART_PAGE: PrivatePageSpec = {
   layoutHooks: { fold: ["fold-toggle", "fold-body"] },
   // The fold starts closed on phones: it may hold the cart, never what a buyer must fill in or read first.
   layoutContents: { fold: ["lines", "summary", "discount", "cart.page.summary"] },
-  protect: ['[data-summary-row]', '[data-buyer-ui-target]', '[data-part="fold-toggle"]', '[data-part="line"]'],
   parts: {
     progress: part(false, ["progress"]),
     notices: part(true, ["notice"]),
-    lines: part(true, ["lines", "lines-heading", "lines-continue", "lines-loading", "lines-list", "lines-clear", "lines-undo", "cart-empty", "cart-empty-icon"], {
-      free: ["lines-continue", "lines-loading", "lines-clear", "cart-empty-icon"],
-    }),
+    lines: part(true, ["lines", "lines-heading", "lines-continue", "lines-loading", "lines-list", "lines-clear", "lines-undo", "cart-empty", "cart-empty-icon"]),
     // Its money rows carry `data-summary-row` (subtotal, add-on, delivery, discount, tax, total), as on every surface.
     summary: part(true, ["summary", "summary-validation"]),
     discount: part(false, ["discount"]),
-    details: part(true, ["details", "details-sign-in", "details-form", "contact", "delivery", "details-errors", "details-submit", "legal"], { free: ["details-sign-in"] }),
+    details: part(true, ["details", "details-sign-in", "details-form", "contact", "delivery", "details-errors", "details-submit", "legal"]),
     empty: part(false, ["empty-extras"]),
   },
   targets: ["cart.page.summary", "cart.page.below"],
   layouts: ["stack", "columns", "grid", "group", "fold"],
+  styles: CART_STYLES,
   layout: [
     p("progress"),
     p("notices"),
@@ -221,6 +294,8 @@ const CART_DRAWER: PrivatePageSpec = {
   },
   targets: ["cart_drawer.footer"],
   layouts: ["stack", "columns", "grid", "group", "scroll"],
+  // It opens over public pages and is part of them: its look is the public stylesheet's.
+  styles: {},
   layout: [
     p("header"),
     p("added"),
@@ -282,6 +357,18 @@ export const PRIVATE_HOOK_MAX = 40;
 export const PRIVATE_SCOPES = ["dialog", "header", "footer"] as const;
 
 /**
+ * Free regions: boxes the host seals (nothing inside paints, lays out or
+ * acts outside them) and the only places the theme's stylesheet reaches,
+ * strictly inside the wrapper (`data-free`): the theme's content blocks
+ * (`block`, with their `data-hook`), its header and footer (`header`,
+ * `footer`) and each app block a buyer UI target draws (`app`, with its
+ * `data-buyer-ui-app`).
+ */
+export const PRIVATE_FREE_REGIONS = ["block", "header", "footer", "app"] as const;
+export type PrivateFreeRegion = (typeof PRIVATE_FREE_REGIONS)[number];
+export const PRIVATE_FREE_ATTRIBUTE = "data-free";
+
+/**
  * The store's dialogs over a private page (`data-private="dialog"`): the
  * confirmation an app's choice asks for, and sign-in (`sign-in`).
  */
@@ -289,40 +376,16 @@ export const PRIVATE_DIALOG_HOOKS = ["sign-in", "dialog-title", "dialog-text", "
 
 /**
  * An app's buyer UI block, wherever a private page draws it: its mount's
- * `data-buyer-ui-target`, the block's `data-buyer-ui-app` (the app's id) and
- * each node's kind on `data-ui` (`banner`, `text`, `button`, …). A theme's
- * content blocks carry the same `data-ui` kinds.
+ * `data-buyer-ui-target`, the block's free-region wrapper with
+ * `data-buyer-ui-app` (the app's id) and each node's kind on `data-ui`
+ * (`banner`, `text`, `button`, …). A theme's content blocks carry the same
+ * `data-ui` kinds.
  */
 export const PRIVATE_BUYER_UI_HOOKS = ["data-buyer-ui-target", "data-buyer-ui-app", "data-ui"] as const;
 
 /** Every label key of every page, with its page. */
 export function privateLabelKeys(): Array<{ page: PrivatePageKey; key: string; max: number }> {
   return PRIVATE_PAGE_KEYS.flatMap((page) => Object.entries(PRIVATE_PAGES[page].labels).map(([key, spec]) => ({ page, key, max: spec.max })));
-}
-
-/** A unit's protected hooks: every hook of a mandatory part but its free ones. */
-function protectedHooks(unit: PrivateUnitSpec): string[] {
-  return Object.values(unit.parts).flatMap((entry) => entry.mandatory ? entry.hooks.filter((hook) => !entry.free?.includes(hook)) : []);
-}
-
-/**
- * What a buyer must see on a page, as selectors: its and its repeated units'
- * protected hooks, and the page's own protected selectors. A rule of the
- * theme's stylesheet that can reach one may set only presentational
- * properties (private-css.ts), and the visibility guard checks each.
- */
-export function privateProtectedSelectors(page: PrivatePageKey): string[] {
-  const spec: PrivatePageSpec = PRIVATE_PAGES[page];
-  const units: PrivateUnitSpec[] = [spec, ...Object.values(spec.items)];
-  return [...new Set([...units.flatMap(protectedHooks).map((hook) => `[data-part="${hook}"]`), ...(spec.protect ?? [])])];
-}
-
-/** The `data-part` hooks a theme may restyle freely on every page: optional parts' and the free ones, never one protected anywhere. */
-export function privateFreeParts(): string[] {
-  const units: PrivateUnitSpec[] = PRIVATE_PAGE_KEYS.flatMap((page) => [PRIVATE_PAGES[page], ...Object.values(PRIVATE_PAGES[page].items)]);
-  const protectedEverywhere = new Set(units.flatMap(protectedHooks));
-  const free = units.flatMap((unit) => Object.values(unit.parts).flatMap((entry) => entry.mandatory ? [...(entry.free ?? [])] : [...entry.hooks]));
-  return [...new Set(free)].filter((hook) => !protectedEverywhere.has(hook));
 }
 
 /** Every icon key of every page. */
@@ -338,7 +401,7 @@ export function privatePageAnatomy(): string[] {
   const lines: string[] = [];
   const unit = (prefix: string, spec: PrivateUnitSpec) => {
     for (const [name, entry] of Object.entries(spec.parts)) {
-      lines.push(`${prefix} part ${name}${entry.mandatory ? " mandatory" : ""}${entry.variants ? ` variants=${entry.variants.join("|")}` : ""} hooks=${entry.hooks.join(",")}${entry.free ? ` free=${entry.free.join(",")}` : ""}`);
+      lines.push(`${prefix} part ${name}${entry.mandatory ? " mandatory" : ""}${entry.variants ? ` variants=${entry.variants.join("|")}` : ""} hooks=${entry.hooks.join(",")}`);
     }
     for (const target of spec.targets) lines.push(`${prefix} target ${target}`);
     lines.push(`${prefix} layouts ${spec.layouts.join(",")}`);
@@ -349,7 +412,7 @@ export function privatePageAnatomy(): string[] {
     unit(page, spec);
     for (const [kind, hooks] of Object.entries(spec.layoutHooks ?? {})) lines.push(`${page} layout ${kind} hooks=${hooks.join(",")}`);
     for (const [kind, names] of Object.entries(spec.layoutContents ?? {})) lines.push(`${page} layout ${kind} holds=${names.join(",")}`);
-    if (spec.protect) lines.push(`${page} protect ${spec.protect.join(",")}`);
+    for (const [name, style] of Object.entries(spec.styles)) lines.push(`${page} style ${name} ${style.absolute ? "" : "<root> "}${style.selector || "<root>"} tokens=${style.tokens.join(",")}`);
     for (const [name, item] of Object.entries(spec.items)) {
       lines.push(`${page}.${name} root ${PRIVATE_PART_ATTRIBUTE}=${PRIVATE_LINE_HOOK}`);
       unit(`${page}.${name}`, item);
@@ -360,5 +423,7 @@ export function privatePageAnatomy(): string[] {
   lines.push(`dialog root ${PRIVATE_SCOPE_ATTRIBUTE}=dialog hooks=${PRIVATE_DIALOG_HOOKS.join(",")}`);
   lines.push(`buyer-ui attributes=${PRIVATE_BUYER_UI_HOOKS.join(",")}`);
   lines.push(`chrome roots ${PRIVATE_SCOPE_ATTRIBUTE}=header|footer`);
+  lines.push(`layout tokens=${PRIVATE_LAYOUT_TOKENS.join(",")}`);
+  lines.push(`free regions ${PRIVATE_FREE_ATTRIBUTE}=${PRIVATE_FREE_REGIONS.join("|")}`);
   return lines;
 }

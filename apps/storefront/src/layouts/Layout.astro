@@ -15,7 +15,6 @@ import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 import { themePaint } from "@/lib/theme-paint";
-import { PRIVATE_STYLE_GUARD_SCRIPT } from "@/lib/private-pages/guard";
 import { privateImageOrigins } from "@/lib/middleware-helper/csp-handler";
 import { cartDrawerPlan } from "@/lib/private-pages/drawer";
 import { privateAssetUrls } from "@/lib/private-pages/html";
@@ -28,6 +27,7 @@ import {
   getRuntimeMediaUrl,
   getRuntimeApiBaseUrl,
   getRuntimeCspAllowedDomains,
+  getRuntimeCspImageSources,
   getRuntimeStorefrontUrl,
   setRuntimePrivateImageOrigins,
   setRuntimeImageCdnPolicy,
@@ -57,7 +57,7 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { AD_CLICK_ID_SCRIPT, REACT_REFRESH_PREAMBLE, SIGNED_IN_HINT_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-boot-scripts";
 import WindowGlobals from "../components/WindowGlobals.astro";
-import { rendersStoreScripts } from "@/lib/analytics-csp";
+import { isPaymentPage, rendersStoreScripts } from "@/lib/analytics-csp";
 import { gateMarketingScript, optimizeAnalyticsScriptDelivery, scriptNeedsConsent, isGoogleTagScript } from "@/lib/analytics-script-delivery";
 import { consentRegimeFor } from "@scalius/shared/tracking-consent";
 import ConsentBanner from "../components/consent/ConsentBanner.astro";
@@ -122,10 +122,10 @@ interface Props {
   libraryPreview?: boolean;
   /**
    * A buyer's private page drawn from parts (lib/private-pages): the theme's
-   * stylesheet for it, compiled and scoped when the theme was saved, with the
-   * selectors its visibility guard keeps visible. Empty: no style, no guard.
+   * look for it (the region seal, token rules and the free regions'
+   * stylesheet), compiled when the theme was saved. Empty: the default look.
    */
-  privateStyle?: { css: string; guard: string };
+  privateStyle?: string;
   /**
    * A private page that shows the theme's own header and footer
    * (`privatePages.chrome: theme`): drawn script-free, from the store's
@@ -167,7 +167,7 @@ setRuntimeImageCdnPolicy(layoutData?.media);
 const privateImages = storefrontAppPage(Astro.url.pathname) === "private"
   ? privateImageOrigins(
     { apiBaseUrl: getRuntimeApiBaseUrl(), storefrontUrl: getRuntimeStorefrontUrl(), mediaUrl: getRuntimeMediaUrl(), cdnBaseUrl: getCdnBase() },
-    getRuntimeCspAllowedDomains(),
+    { merchantSources: getRuntimeCspAllowedDomains(), imageSources: getRuntimeCspImageSources(), paymentPage: isPaymentPage(Astro.locals) },
   )
   : null;
 if (privateImages) setRuntimePrivateImageOrigins(privateImages);
@@ -564,7 +564,7 @@ const pageStoreTimeZone = storeTimeZone();
     <ThemeHead paint={paint} preview={isThemePreview} />
     {appStylesheets.map((href) => <link rel="stylesheet" href={href} data-app-stylesheet />)}
     {/* The theme's private-page stylesheet: checked and scoped on save (private-css.ts), after the store's own. */}
-    {privateStyle?.css && <style is:inline data-private-style data-guard={privateStyle.guard} set:html={privateStyle.css} />}
+    {privateStyle && <style is:inline data-private-style set:html={privateStyle} />}
 
     <slot name="head" />
   </head>
@@ -572,7 +572,7 @@ const pageStoreTimeZone = storeTimeZone();
     class="flex flex-col min-h-screen site-root"
     {...paint.attributes}
     data-storefront-route={storefrontRouteKind}
-    data-private-body={privateStyle?.css ? "" : undefined}
+    data-private-body={privateStyle ? "" : undefined}
   >
     {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
 
@@ -653,8 +653,6 @@ const pageStoreTimeZone = storeTimeZone();
     {/* Stale-asset recovery, installed before deferred module execution. */}
     <script is:inline set:html={STALE_ASSET_RECOVERY_SCRIPT} />
     {drawerPlan && <script is:inline type="application/json" id={CART_DRAWER_PLAN_ID} set:html={serializeJsonForInlineScript(drawerPlan)} />}
-    {/* The host's guard: a theme stylesheet that hides what a buyer must see is dropped for this view. */}
-    {privateStyle?.css && <script is:inline set:html={PRIVATE_STYLE_GUARD_SCRIPT} />}
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
     {consentNeeded && <ConsentBanner regime={consentRegime} language={themeLanguage} />}

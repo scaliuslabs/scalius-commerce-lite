@@ -41,7 +41,6 @@ import { PARTYTOWN_BOOTSTRAP_SCRIPT } from "./partytown-config";
 import { RECENTLY_VIEWED_RECORD_SCRIPT, RECENTLY_VIEWED_RENDER_SCRIPT } from "./recently-viewed";
 import { LIBRARY_PREVIEW_SCRIPT } from "./theme-preview-library";
 import { THEME_PREVIEW_BRIDGE_SCRIPT } from "./theme-preview-bridge";
-import { PRIVATE_STYLE_GUARD_SCRIPT } from "./private-pages/guard";
 import { CONSENT_RUNTIME_SCRIPT, consentBootScript } from "@/components/consent/consent-scripts";
 
 /** The `client:` directives the storefront's islands use; each adds Astro's directive script. */
@@ -71,7 +70,6 @@ export function storefrontInlineScripts(development = import.meta.env.DEV): stri
     CART_PICKUP_CHOICE_SCRIPT,
     CART_COLUMN_PLACE_SCRIPT,
     CART_SUMMARY_FOLD_SCRIPT,
-    PRIVATE_STYLE_GUARD_SCRIPT,
     CATALOG_SHELF_VIEW_RESTORE_SCRIPT,
     CATALOG_VIEW_RESTORE_SCRIPT,
     RECENTLY_VIEWED_RECORD_SCRIPT,

@@ -6284,6 +6284,15 @@
       },
       "additionalProperties": false
      },
+     "tokens": {
+      "type": "object",
+      "propertyNames": {
+       "$ref": "#/$defs/__schema88"
+      },
+      "additionalProperties": {
+       "$ref": "#/$defs/__schema89"
+      }
+     },
      "css": {
       "type": "string",
       "maxLength": 24576
@@ -6330,7 +6339,7 @@
      "assets": {
       "type": "object",
       "propertyNames": {
-       "$ref": "#/$defs/__schema88"
+       "$ref": "#/$defs/__schema90"
       },
       "additionalProperties": {
        "$ref": "#/$defs/__schema87"
@@ -6346,7 +6355,7 @@
        },
        "sanitizer": {
         "type": "integer",
-        "minimum": 1,
+        "minimum": 0,
         "maximum": 9007199254740991
        },
        "css": {
@@ -6365,6 +6374,7 @@
     "required": [
      "chrome",
      "pages",
+     "tokens",
      "css",
      "labels",
      "icons",
@@ -6721,6 +6731,25 @@
     "additionalProperties": false
    },
    "__schema88": {
+    "type": "string",
+    "pattern": "^[a-zA-Z]{1,24}$"
+   },
+   "__schema89": {
+    "type": "object",
+    "propertyNames": {
+     "type": "string",
+     "pattern": "^@?[a-z][a-z0-9-]{0,40}$"
+    },
+    "additionalProperties": {
+     "type": "object",
+     "propertyNames": {
+      "type": "string",
+      "pattern": "^[a-z][a-z-]{0,23}$"
+     },
+     "additionalProperties": {}
+    }
+   },
+   "__schema90": {
     "type": "string",
     "pattern": "^[a-z][a-z0-9-]{0,31}$"
    }

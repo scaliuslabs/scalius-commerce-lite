@@ -42,7 +42,7 @@ export interface CssDeclaration {
   important: boolean;
 }
 
-export type CssSyntaxReason = "null_byte" | "bad_string" | "bad_url" | "escape" | "comment" | "unbalanced" | "syntax" | "nested_rule";
+export type CssSyntaxReason = "null_byte" | "bad_string" | "bad_url" | "escape" | "comment" | "unbalanced" | "syntax" | "nested_rule" | "too_deep";
 
 export class CssSyntaxError extends Error {
   constructor(readonly reason: CssSyntaxReason, message: string, readonly at: number) {
@@ -52,8 +52,8 @@ export class CssSyntaxError extends Error {
 }
 
 const isDigit = (c: string | undefined) => c !== undefined && c >= "0" && c <= "9";
-const isHex = (c: string | undefined) => c !== undefined && /^[0-9a-fA-F]$/.test(c);
-const isNameStart = (c: string | undefined) => c !== undefined && (/^[A-Za-z_]$/.test(c) || c.charCodeAt(0) >= 0x80);
+const isHex = (c: string | undefined) => c !== undefined && ((c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F"));
+const isNameStart = (c: string | undefined) => c !== undefined && ((c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c === "_" || c.charCodeAt(0) >= 0x80);
 const isName = (c: string | undefined) => isNameStart(c) || isDigit(c) || c === "-";
 const isWhitespace = (c: string | undefined) => c === " " || c === "\t" || c === "\n";
 const validEscape = (a: string | undefined, b: string | undefined) => a === "\\" && b !== "\n" && b !== undefined;
@@ -210,15 +210,18 @@ export function tokenizeCss(source: string): CssToken[] {
 
 const CLOSER = { "{": "}", "[": "]", "(": ")" } as const;
 
-/** Tokens as component values: blocks and functions closed, or a refusal. */
-export function componentValues(tokens: readonly CssToken[]): CssNode[] {
+/** Tokens as component values: blocks and functions closed, at most `maxDepth` deep, or a refusal. */
+export function componentValues(tokens: readonly CssToken[], maxDepth = 32): CssNode[] {
   let i = 0;
+  let depth = 0;
   const consume = (until: ")" | "]" | "}" | null): CssNode[] => {
+    if (depth > maxDepth) throw new CssSyntaxError("too_deep", `Blocks and functions nest at most ${maxDepth} deep.`, i);
+    depth += 1;
     const out: CssNode[] = [];
     while (i < tokens.length) {
       const token = tokens[i++]!;
       if (token.type === ")" || token.type === "]" || token.type === "}") {
-        if (token.type === until) return out;
+        if (token.type === until) { depth -= 1; return out; }
         throw new CssSyntaxError("unbalanced", `An unmatched ${token.type}.`, i);
       }
       if (token.type === "cdo" || token.type === "cdc") throw new CssSyntaxError("syntax", "<!-- and --> have no place in a stylesheet.", i);
@@ -320,10 +323,10 @@ export function parseStylesheet(source: string): CssRule[] {
 /**
  * Characters that can hide or reorder what a reader sees: controls (but tab and
  * line feed), direction marks, overrides and isolates, and invisible ones. The
- * joiners (U+200C, U+200D) and variation selectors stay: Bangla conjuncts and
- * emoji need them.
+ * joiners (U+200C, U+200D), variation selectors and tag characters stay:
+ * Bangla conjuncts, emoji and subdivision flags need them.
  */
-const HIDDEN = /(?![\t\n\u200c\u200d\p{Variation_Selector}])[\p{Cc}\p{Default_Ignorable_Code_Point}]/u;
+const HIDDEN = /(?![\t\n\u200c\u200d\p{Variation_Selector}\u{E0020}-\u{E007F}])[\p{Cc}\p{Default_Ignorable_Code_Point}]/u;
 
 /** Text without the characters that can hide or reorder it (HIDDEN). */
 export function withoutHiddenCharacters(text: string): string {

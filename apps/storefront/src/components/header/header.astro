@@ -65,7 +65,7 @@ const privateMarkup = privatePage ? await privateChromeMarkup(Astro.locals, Astr
 {privatePage ? (
 <div class="contents" data-storefront-header data-private="header">
   {privateMarkup ? (
-    <Fragment><PrivateMarkup markup={privateMarkup} embeds={embeds} />{tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}</Fragment>
+    <Fragment><div data-free="header"><PrivateMarkup markup={privateMarkup} embeds={embeds} /></div>{tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}</Fragment>
   ) : <CoreHeader {...props} />}
 </div>
 ) : (

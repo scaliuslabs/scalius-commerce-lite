@@ -10,7 +10,6 @@ import {
   privateAssetProperty,
   privateFrame,
   privatePagesCss,
-  privateProtectedSelectors,
   privateItemIsDefault,
   privateLayoutIsDefault,
   privatePageArrangement,
@@ -57,22 +56,29 @@ export function privatePagePlan(theme: StorefrontThemeDocument, page: PrivatePag
 const ASSET_PATH = /^\/_x\/[a-z0-9][a-z0-9.-]*\/[A-Za-z0-9._-]+\/public\/[A-Za-z0-9._%/-]+$/;
 
 /**
- * The theme's private stylesheet as the page writes it ("" for none) and what
- * its guard checks. Only CSS this build's checker approved is served
- * (`privatePagesCss`). The theme's assets become the custom properties its
- * stylesheet names (`url(<asset>)` was compiled to `var(--private-asset-…)`),
- * each URL built here from the store's own origin; an asset whose app is not
- * active draws nothing.
+ * The seal on every free region (private-anatomy.ts `PRIVATE_FREE_REGIONS`):
+ * its own containing block and stacking context, its paint and layout
+ * contained and clipped (with the older browsers' overflow clip first), and
+ * a bounded height, so nothing a theme's stylesheet does inside one paints,
+ * lays out or sits outside it. The stylesheet never selects a wrapper.
  */
-export function privateStyle(theme: StorefrontThemeDocument, pages: readonly PrivatePageKey[], asset: PrivateAssetUrl): { css: string; guard: string } {
+export const PRIVATE_FREE_REGION_SEAL =
+  "[data-free]{display:block;position:relative;z-index:0;isolation:isolate;overflow:hidden;overflow:clip;contain:layout paint style;max-block-size:60rem}"
+  + '[data-free="header"]{max-block-size:24rem}[data-free="footer"]{max-block-size:80rem}[data-free="app"]{max-block-size:40rem}';
+
+/**
+ * The theme's look as the page writes it ("" for none): the region seal, the
+ * theme's assets as the custom properties its stylesheet names (each URL
+ * built here from the store's own origin; an asset whose app is not active
+ * draws nothing), then the compiled token rules and stylesheet. Only what
+ * this build's checker compiled is served (`privatePagesCss`).
+ */
+export function privateStyle(theme: StorefrontThemeDocument, asset: PrivateAssetUrl): string {
   const css = privatePagesCss(theme.privatePages);
-  if (!css) return { css: "", guard: "" };
+  if (!css) return "";
   const properties = Object.entries(theme.privatePages.assets).flatMap(([key, ref]) => {
     const url = asset(ref);
     return url && ASSET_PATH.test(url) ? [`${privateAssetProperty(key)}:url("${url}")`] : [];
   });
-  return {
-    css: `${properties.length > 0 ? `body[data-private-body]{${properties.join(";")}}` : ""}${css}`,
-    guard: JSON.stringify(pages.flatMap((page) => privateProtectedSelectors(page))),
-  };
+  return `${PRIVATE_FREE_REGION_SEAL}${properties.length > 0 ? `body[data-private-body]{${properties.join(";")}}` : ""}${css}`;
 }

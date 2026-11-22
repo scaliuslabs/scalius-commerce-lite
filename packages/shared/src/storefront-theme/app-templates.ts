@@ -17,6 +17,7 @@ import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBlocksSchema } from "./blocks";
 import {
   compileStorefrontPrivatePages,
+  privatePagesContextOf,
   storefrontPrivatePagesDefault,
   storefrontPrivatePagesTemplateSchema,
   type StorefrontPrivatePages,
@@ -215,9 +216,13 @@ function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHa
     parsed = storefrontAppTemplateThemeSchema.safeParse(candidate);
   }
   if (!parsed.success) return { ok: false, problem: issueText(parsed.error) };
-  // Its private pages pass the checks a save runs (arrangements, words, stylesheet), so applying it always saves.
+  // Its private pages pass the checks a save runs (arrangements, tokens against its own colours,
+  // words, stylesheet). Its files are its own app's: the one app every file it names comes from.
   if (parsed.data.privatePages) {
-    const compiled = compileStorefrontPrivatePages({ ...storefrontPrivatePagesDefault(), ...parsed.data.privatePages } as StorefrontPrivatePages);
+    const value = { ...storefrontPrivatePagesDefault(), ...parsed.data.privatePages } as StorefrontPrivatePages;
+    const apps = new Set([...Object.values(value.assets), ...Object.values(value.icons)].flatMap((ref) => ref ? [ref.app] : []));
+    const context = privatePagesContextOf({ tokens: parsed.data.tokens ?? DEFAULT_STOREFRONT_THEME.tokens });
+    const compiled = compileStorefrontPrivatePages(value, { ...context, themeApp: apps.size === 1 ? [...apps][0]! : null });
     if (!compiled.ok) {
       const issue = compiled.issues[0]!;
       return { ok: false, problem: `${issue.path.join(".")}: ${issue.message}` };
