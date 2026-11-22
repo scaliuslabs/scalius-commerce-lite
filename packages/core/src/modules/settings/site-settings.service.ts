@@ -41,6 +41,7 @@ import {
   DEFAULT_STOREFRONT_THEME,
   THEME_VERSION_CHANGES_MAX,
   compareThemeDocuments,
+  compileStorefrontPrivatePages,
   parseStoredStorefrontThemeDocument,
   storefrontThemeDocumentSchema,
   storefrontThemeTranslationProblems,
@@ -320,11 +321,20 @@ function serializeThemeSettings(theme: StorefrontThemeDocument): {
   if (translationProblems.length > 0) {
     throw new ValidationError(translationProblems[0]!.message, translationProblems);
   }
-  const serialized = JSON.stringify(result.data);
+  // The private pages compile here, on every save and publish: each arrangement against its page's
+  // parts, the theme's words, and its stylesheet checked and scoped. What the request said was
+  // compiled is never kept: the page reads only what this wrote.
+  const privatePages = compileStorefrontPrivatePages(result.data.privatePages);
+  if (!privatePages.ok) {
+    const first = privatePages.issues[0]!;
+    throw new ValidationError(first.message, { reason: first.reason, issues: privatePages.issues.slice(0, 20) });
+  }
+  const compiled = { ...result.data, privatePages: privatePages.value };
+  const serialized = JSON.stringify(compiled);
   if (new TextEncoder().encode(serialized).byteLength > THEME_DOCUMENT_MAX_BYTES) {
     throw new ValidationError("Storefront style is too large. Shorten page content or remove unused landing pages.");
   }
-  return { theme: result.data, serialized };
+  return { theme: compiled, serialized };
 }
 
 const THEME_REVISION_CONFLICT_SENTINEL = "theme_revision_conflict";
