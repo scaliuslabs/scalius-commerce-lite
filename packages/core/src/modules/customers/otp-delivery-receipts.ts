@@ -8,9 +8,8 @@
 // computes again to delete a buyer's receipts.
 import type { Database } from "@scalius/database/client";
 import { authOtpDeliveryReceipts, type AuthOtpDeliveryReceiptStatus } from "@scalius/database/schema";
-import { and, eq, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
 import { sha256HexSync } from "@scalius/shared/hash";
-import { sweepExpiredRows } from "../../utils/sweep-expired-rows";
 import { hashCustomerAuthOtpIdentifier } from "./customer-auth-otp-challenges";
 
 export type { AuthOtpDeliveryReceiptStatus };
@@ -293,7 +292,7 @@ async function selectAuthOtpDeliveryReceiptByKey(
  * The expiry sweep: a receipt whose code expired before a send was accepted
  * ends `expired` (a lease still held finishes first), and every receipt goes
  * an hour after its code expired. Both read `auth_otp_delivery_receipts_expires_idx`,
- * at most `limit` rows each.
+ * at most `limit` rows each, in one database call when there is nothing to do.
  */
 export async function sweepAuthOtpDeliveryReceipts(
     db: Database,
@@ -301,22 +300,21 @@ export async function sweepAuthOtpDeliveryReceipts(
     options: { limit?: number } = {},
 ): Promise<{ expired: number; deleted: number; hasMore: boolean; limit: number }> {
     const limit = Math.max(1, Math.min(options.limit ?? 200, 500));
-    const open = await db.select({ id: authOtpDeliveryReceipts.id }).from(authOtpDeliveryReceipts)
-        .where(and(lte(authOtpDeliveryReceipts.otpExpiresAt, nowSeconds), openReceipt(nowSeconds)))
-        .limit(limit);
+    const ending = and(lte(authOtpDeliveryReceipts.otpExpiresAt, nowSeconds), openReceipt(nowSeconds));
+    const stale = lte(authOtpDeliveryReceipts.otpExpiresAt, nowSeconds - RECEIPT_RETENTION_SECONDS);
+    const [open, old] = await db.batch([
+        db.select({ id: authOtpDeliveryReceipts.id }).from(authOtpDeliveryReceipts).where(ending).limit(limit),
+        db.select({ id: authOtpDeliveryReceipts.id }).from(authOtpDeliveryReceipts).where(stale).limit(limit),
+    ]);
     const expired = open.length === 0 ? [] : await db.update(authOtpDeliveryReceipts).set({
         status: "expired",
         claimId: null,
         claimExpiresAt: null,
         updatedAt: sql`unixepoch()`,
-    }).where(and(
-        inArray(authOtpDeliveryReceipts.id, open.map((row) => row.id)),
-        lte(authOtpDeliveryReceipts.otpExpiresAt, nowSeconds),
-        openReceipt(nowSeconds),
-    )).returning({ id: authOtpDeliveryReceipts.id });
-    const deleted = await sweepExpiredRows(db, authOtpDeliveryReceipts, authOtpDeliveryReceipts.id,
-        and(isNotNull(authOtpDeliveryReceipts.otpExpiresAt), lte(authOtpDeliveryReceipts.otpExpiresAt, nowSeconds - RECEIPT_RETENTION_SECONDS)), limit);
-    return { expired: expired.length, deleted: deleted.deleted, hasMore: open.length === limit || deleted.hasMore, limit };
+    }).where(and(inArray(authOtpDeliveryReceipts.id, open.map((row) => row.id)), ending)).returning({ id: authOtpDeliveryReceipts.id });
+    const deleted = old.length === 0 ? [] : await db.delete(authOtpDeliveryReceipts)
+        .where(and(inArray(authOtpDeliveryReceipts.id, old.map((row) => row.id)), stale)).returning({ id: authOtpDeliveryReceipts.id });
+    return { expired: expired.length, deleted: deleted.length, hasMore: open.length === limit || old.length === limit, limit };
 }
 
 /** Waiting for a send, or held by an attempt whose lease ran out. */
