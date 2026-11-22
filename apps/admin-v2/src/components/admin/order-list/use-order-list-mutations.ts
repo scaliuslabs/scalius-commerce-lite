@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import {
   postApiV1AdminOrdersArchive,
@@ -10,6 +10,7 @@ import {
 import { apiData } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "~/lib/query-keys";
+import { useCommand } from "~/lib/use-command";
 import { useMessages } from "~/i18n";
 import { orderArchiveMessages } from "~/i18n/order-archive";
 import {
@@ -31,8 +32,9 @@ function invalidateAfterOrderChange(queryClient: QueryClient) {
 }
 
 /**
- * `requestKey` is made once per dialog opening and reused when the merchant
- * retries: the server replays an order it already handled for that key.
+ * `requestKey` is made once per dialog opening, not per intent, and reused
+ * when the merchant retries the orders that failed: the server reports an
+ * order it already handled for that key as done instead of doing it again.
  */
 type BulkInput =
   | { action: "confirm"; orderIds: string[]; requestKey: string }
@@ -66,7 +68,7 @@ async function runBulkChunk(input: BulkInput, orderIds: string[]): Promise<BulkR
 export function useOrderBulkRun() {
   const queryClient = useQueryClient();
   const t = useMessages(orderArchiveMessages);
-  return useMutation({
+  return useCommand({
     mutationFn: async (input: BulkInput): Promise<OrderBulkOutcome> => {
       const outcome: OrderBulkOutcome = { succeeded: [], failures: [] };
       let queue = [...input.orderIds];
@@ -133,7 +135,7 @@ export function useArchiveOrdersWithUndo({ canUndo }: { canUndo: boolean }) {
     else toast.success(orders.length === 1 ? t("restoredOne") : t("restoredOther"));
   };
 
-  return useMutation({
+  return useCommand({
     mutationFn: async ({ orders }: { orders: readonly ArchivableOrder[]; skipped: number }) => {
       const archived: ArchivableOrder[] = [];
       try {

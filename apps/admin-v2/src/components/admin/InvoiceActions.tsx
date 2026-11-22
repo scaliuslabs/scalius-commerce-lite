@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { postApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
 import { Alert, AlertDescription } from "~/components/ui/alert";
@@ -7,6 +7,8 @@ import { useMessages } from "~/i18n";
 import { orderInvoiceMessages as orderDetailMessages } from "~/i18n/order-invoice";
 import { apiData, type ApiResult } from "~/lib/api";
 import { orderErrorMessage } from "~/lib/api-mutations/orders";
+import { useCommand } from "~/lib/use-command";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 export type IssuedInvoiceDocument = ApiResult<typeof postApiV1AdminOrdersByIdInvoice>;
 
@@ -35,28 +37,15 @@ export function InvoiceActions({
   languageToggle?: ReactNode;
 }) {
   const t = useMessages(orderDetailMessages);
-  const operationKey = useRef<string | null>(null);
-  const [issuing, setIssuing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const issue = async () => {
-    if (issuing) return;
-    operationKey.current ??= `invoice:${crypto.randomUUID()}`;
-    setIssuing(true);
-    setError(null);
-    try {
-      const document = await apiData(postApiV1AdminOrdersByIdInvoice({
-        path: { id: orderId },
-        body: { operationKey: operationKey.current, expectedOrderVersion },
-      }));
-      operationKey.current = null;
-      onIssued(document);
-    } catch (issueError) {
-      setError(orderErrorMessage(issueError));
-    } finally {
-      setIssuing(false);
-    }
-  };
+  // One operation key per issue until it succeeds: a retry never takes a second invoice number.
+  const command = useCommand({
+    createKey: () => `invoice:${crypto.randomUUID()}`,
+    mutationFn: (input: { orderId: string; expectedOrderVersion: number }, operationKey: string) =>
+      apiData(postApiV1AdminOrdersByIdInvoice({ path: { id: input.orderId }, body: { operationKey, expectedOrderVersion: input.expectedOrderVersion } })),
+  });
+  const issuing = command.isPending;
+  const error = command.error ? orderErrorMessage(command.error) : null;
+  const issue = () => command.mutate({ orderId, expectedOrderVersion }, { onSuccess: (document) => onIssued(document) });
 
   return (
     <div className="sticky top-0 z-10 border-b bg-background print:hidden">
@@ -72,6 +61,7 @@ export function InvoiceActions({
           <Button onClick={() => window.print()}>{t("invoice.print")}</Button>
         </div>
         {issued || packingSlip ? null : <p className="w-full text-body text-muted-foreground">{t("invoice.issueHelp")}</p>}
+        <CommandKeyNotice notice={command.notice({ orderId })} target="order" />
         {error ? <p role="alert" className="w-full text-body text-destructive">{error}</p> : null}
         {businessNameMissing ? (
           <Alert variant="warning">

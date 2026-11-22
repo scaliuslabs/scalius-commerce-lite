@@ -7,7 +7,6 @@ import { MARKET_NAME_MAX_LENGTH } from "@scalius/shared/markets";
 import { toast } from "~/lib/toast";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
-import { useSubmitOnce } from "~/components/admin/shared/use-submit-once";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
@@ -31,7 +30,6 @@ export function CreateMarketDialog({ open, onOpenChange, taken }: {
   const [countries, setCountries] = useState<string[]>([]);
   const [errors, setErrors] = useState<Partial<Record<"name" | "countries", SettingsMarketsMessageKey>>>({});
   const create = useCreateMarket();
-  const submitOnce = useSubmitOnce();
   const reset = create.reset;
 
   useEffect(() => {
@@ -55,12 +53,13 @@ export function CreateMarketDialog({ open, onOpenChange, taken }: {
       document.getElementById(problems.name ? "market-create-name" : "market-create-countries")?.focus();
       return;
     }
-    // One request at a time: a double click must not add the market twice.
-    submitOnce(async () => {
-      const market = await create.mutateAsync(createMarketBody(name, countries));
-      toast.success(t("created"));
-      onOpenChange(false);
-      await navigate({ to: "/admin/settings/markets/$marketId", params: { marketId: market.id } });
+    // One request at a time (the command drops a double click): the market is added once.
+    create.mutate(createMarketBody(name, countries), {
+      onSuccess: (market) => {
+        toast.success(t("created"));
+        onOpenChange(false);
+        void navigate({ to: "/admin/settings/markets/$marketId", params: { marketId: market.id } });
+      },
     });
   };
 

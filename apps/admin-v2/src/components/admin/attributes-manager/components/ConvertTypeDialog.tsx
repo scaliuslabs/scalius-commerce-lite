@@ -1,6 +1,6 @@
 import { announceSave, presenceKey } from "~/lib/realtime/store";
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { postApiV1AdminAttributesByIdConvertType } from "@scalius/api-client/sdk";
 import {
@@ -20,6 +20,7 @@ import type { AttributeDto } from "~/lib/api-query-options/attributes";
 import { formatNumber, useMessages } from "~/i18n";
 import { attributeTypeMessages } from "~/i18n/attribute-types";
 import { Field } from "~/components/ui/field";
+import { useCommand } from "~/lib/use-command";
 
 type Result = ApiResult<typeof postApiV1AdminAttributesByIdConvertType>;
 
@@ -51,13 +52,13 @@ export function ConvertTypeDialog({ attribute, open, onClose, onConverted }: {
       dryRun,
     },
   }));
-  const check = useMutation({
+  const check = useCommand({
     mutationFn: () => request(true),
     onMutate: () => setError(null),
     onSuccess: setPreview,
     onError: (failure) => setError(getServerFnError(failure, t("actionFailed"))),
   });
-  const convert = useMutation({
+  const convert = useCommand({
     mutationFn: () => request(false),
     onMutate: () => setError(null),
     onSuccess: (result) => {

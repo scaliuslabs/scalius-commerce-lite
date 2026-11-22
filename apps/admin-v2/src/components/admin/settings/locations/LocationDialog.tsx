@@ -9,7 +9,6 @@ import { countryName } from "~/lib/country-name";
 import { getStoreRegion } from "~/lib/store-time-zone";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
-import { useSubmitOnce } from "~/components/admin/shared/use-submit-once";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
@@ -102,7 +101,6 @@ export function LocationDialog({ location, open, onOpenChange }: {
   const [draft, setDraft] = useState<Draft>(() => draftOf(location));
   const [errors, setErrors] = useState<Errors>({});
   const save = useSaveInventoryLocation();
-  const submitOnce = useSubmitOnce();
   const reset = save.reset;
 
   useEffect(() => {
@@ -128,13 +126,14 @@ export function LocationDialog({ location, open, onOpenChange }: {
       if (first) document.getElementById(`inventory-location-${first}`)?.focus();
       return;
     }
-    // One request at a time: a double click must not create the location twice.
-    submitOnce(async () => {
-      // The seeded name shown in this language, untouched, stays stored as it was.
-      const body = location ? { ...result.body, name: savedSeededName(location, result.body.name) } : result.body;
-      await save.mutateAsync({ id: location?.id ?? null, version: location?.version ?? null, body });
-      toast.success(t(location ? "saved" : "created"));
-      onOpenChange(false);
+    // The seeded name shown in this language, untouched, stays stored as it was.
+    const body = location ? { ...result.body, name: savedSeededName(location, result.body.name) } : result.body;
+    // One request at a time (the command drops a double click): the location is created once.
+    save.mutate({ id: location?.id ?? null, version: location?.version ?? null, body }, {
+      onSuccess: () => {
+        toast.success(t(location ? "saved" : "created"));
+        onOpenChange(false);
+      },
     });
   };
 

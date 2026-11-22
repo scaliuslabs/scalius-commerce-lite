@@ -21,6 +21,7 @@ import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
 import { isOrderConflict, orderErrorMessage, useRecordOrderPayment } from "~/lib/api-mutations/orders";
 import { MoneyInput } from "../shared/MoneyInput";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 /**
  * Money received against an invoice (net terms). Each opening mounts it fresh
@@ -48,7 +49,6 @@ export function RecordPaymentDialog({
   const t = useMessages(orderPaymentDialogMessages);
   const r = useMessages(resourceMessages);
   const mutation = useRecordOrderPayment();
-  const [requestKey] = useState(() => `record-payment-${crypto.randomUUID()}`);
   const [amount, setAmount] = useState<number | null>(balanceDue);
   const [amountError, setAmountError] = useState<string | null>(null);
   const [via, setVia] = useState<RecordedPaymentVia>("bank_transfer");
@@ -71,7 +71,6 @@ export function RecordPaymentDialog({
     }
     mutation.mutate({
       orderId,
-      requestKey,
       amountMinor: typedMinor(amount!, currencyCode),
       via,
       ...(reference.trim() ? { reference: reference.trim() } : {}),
@@ -85,13 +84,14 @@ export function RecordPaymentDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next && !mutation.isPending) onClose(); }}>
+    <Dialog open={open} onOpenChange={mutation.guardClose((next) => { if (!next) onClose(); })}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("netTerms.recordTitle")}</DialogTitle>
           <DialogDescription>{t("netTerms.recordHelp")}</DialogDescription>
         </DialogHeader>
         <form id="order-record-payment" method="post" className="space-y-4" onSubmit={submit} noValidate>
+          <CommandKeyNotice notice={mutation.notice({ orderId })} target="order" startOver={{ kind: "payment", onClick: () => mutation.forget({ orderId }) }} />
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <Field
             id="recordPaymentAmount"

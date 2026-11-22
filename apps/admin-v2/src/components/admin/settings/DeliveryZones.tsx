@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { seededName, savedSeededName } from "~/lib/seeded-names";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Plus, X } from "lucide-react";
 import { BangladeshPlacesNotice, useBangladeshPlacesMissing } from "./BangladeshPlacesNotice";
 import { toast } from "~/lib/toast";
@@ -51,6 +51,7 @@ import { InlineError } from "~/components/admin/states/InlineError";
 import { SettingsCard, SettingsCardLoading, SettingsDialog, SettingsField, SettingsRow } from "./SettingsPage";
 import { settingsSheet } from "./SettingsSheet";
 import { sameFormValue } from "~/lib/form-values";
+import { useCommand } from "~/lib/use-command";
 
 type Zone = DeliveryZones["zones"][number];
 type Rate = Zone["rates"][number];
@@ -799,7 +800,7 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
     ...zoneRegionsBody(draft.countries, draft.places),
     rates: draft.rates.map(toRateInput),
   });
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: () =>
       zone
         ? send("put", `${ZONES_URL}/${encodeURIComponent(zone.id)}`, { ...body(), expectedRevision: zone.revision })
@@ -807,7 +808,7 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
     onSuccess: refresh,
     onError: onConflict,
   });
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: () => send("delete", `${ZONES_URL}/${encodeURIComponent(zone!.id)}`),
     onSuccess: async () => {
       toast.success(t("zoneDeleted"));
@@ -906,7 +907,7 @@ function PickupForm({ pickup }: { pickup: DeliveryZones["pickup"] }) {
   const onConflict = useConflictReload();
   const [saved] = useState(() => pickup.rates.map(toDraft));
   const [rates, setRates] = useState(saved);
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: () =>
       send("put", `${ZONES_URL}/pickup`, { rates: rates.map(toRateInput), expectedRevision: pickup.revision }),
     onSuccess: refresh,
@@ -964,7 +965,7 @@ export function DeliveryZonesCard() {
   const placesMissing = useBangladeshPlacesMissing();
   const [template, setTemplate] = useState<(typeof TEMPLATES)[number]["id"] | null>(null);
   const [templateError, setTemplateError] = useState<string | null>(null);
-  const applyTemplate = useMutation({
+  const applyTemplate = useCommand({
     // Written in the dashboard's language: the merchant's own text from then on.
     mutationFn: (id: string) => send("put", `${ZONES_URL}/template`, { template: id, language: getLocale() }),
     onSuccess: async () => {

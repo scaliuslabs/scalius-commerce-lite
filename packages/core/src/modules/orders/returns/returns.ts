@@ -258,13 +258,17 @@ function resolveReplay(
   requestHash: string,
 ): OrderReturnCommandResult | null {
   if (!replay) return null;
-  if (replay.requestHash !== requestHash) {
-    throw keyReused();
-  }
+  // Nothing about a command still processing is known yet: in progress, whatever this request is.
   if (replay.status !== "committed") {
+    if (replay.requestHash !== requestHash) {
+      throw commandRunning("Return command is still processing under this command key. Retry it shortly.");
+    }
     throw new ServiceUnavailableError(
       "Return command is still processing. Retry with the same command key.",
     );
+  }
+  if (replay.requestHash !== requestHash) {
+    throw keyReused();
   }
   return parseCommandResult(replay.responsePayload);
 }
@@ -963,8 +967,9 @@ export async function receiveOrderReturn(
     // The stored result says whether this receipt returned the order.
     return resolveReplay(existingCommand, identity.requestHash)!;
   }
+  // A receipt still processing (running, or its Worker died) is resumed only by the same request.
   if (existingCommand && existingCommand.requestHash !== identity.requestHash) {
-    throw keyReused();
+    throw commandRunning("Return receipt is still processing under this command key. Retry it shortly.");
   }
   const receiptActor: OrderReturnActor = existingCommand
     ? { type: existingCommand.actorType, id: existingCommand.actorId }

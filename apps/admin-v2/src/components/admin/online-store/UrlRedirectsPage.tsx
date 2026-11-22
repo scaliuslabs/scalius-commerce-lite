@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Waypoints } from "lucide-react";
 import {
   deleteApiV1AdminUrlRedirectsById,
@@ -24,6 +24,7 @@ import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { resourceMessages } from "~/i18n/resource";
 import { OnlineStorePage } from "./shared";
+import { useCommand } from "~/lib/use-command";
 
 type UrlRedirect = ApiResult<typeof getApiV1AdminUrlRedirects>["redirects"][number];
 const QUERY_KEY = ["url-redirects"] as const;
@@ -45,7 +46,7 @@ export function UrlRedirectsPage() {
   const rows = useMemo(() => list.data?.redirects ?? [], [list.data]);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<UrlRedirect | null>(null);
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: (id: string) => apiData(deleteApiV1AdminUrlRedirectsById({ path: { id } })),
     onSuccess: () => {
       toast.success(t("redirectDeleted"));
@@ -127,7 +128,7 @@ function CreateRedirectDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   const queryClient = useQueryClient();
   const [fromPath, setFromPath] = useState("");
   const [toPath, setToPath] = useState("");
-  const create = useMutation({
+  const create = useCommand({
     mutationFn: () => apiData(postApiV1AdminUrlRedirects({ body: { fromPath, toPath } })),
     onSuccess: () => {
       toast.success(t("redirectAdded"));

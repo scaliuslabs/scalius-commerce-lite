@@ -3,7 +3,7 @@
 // registry, and the facts about who signed it and what it may use. Nothing
 // here runs the app's code; every value comes from the API's description.
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import {
   AlertDialog,
@@ -26,6 +26,7 @@ import { formatFileSize } from "../media-manager/utils/formatters";
 import { Fact } from "./AppListingParts";
 import { ThemeAppFallbackNotice } from "./ThemeAppParts";
 import { pluginKeyFingerprint } from "@scalius/shared/plugins/registry";
+import { useCommand } from "~/lib/use-command";
 
 function useRefreshApps() {
   const queryClient = useQueryClient();
@@ -42,7 +43,7 @@ export function AppStopAction({ app }: { app: AppDetail }) {
   const t = useMessages(appsLifecycleMessages);
   const refresh = useRefreshApps();
   const [open, setOpen] = useState(false);
-  const stop = useMutation({
+  const stop = useCommand({
     mutationFn: () => stopApp(app.id),
     onSuccess: ({ app: next }) => {
       refresh(next);
@@ -57,7 +58,7 @@ export function AppStopAction({ app }: { app: AppDetail }) {
   return (
     <>
       <Button type="button" variant="outline" onClick={() => setOpen(true)}>{t("stopNow")}</Button>
-      <AlertDialog open={open} onOpenChange={(next) => (stop.isPending ? undefined : setOpen(next))}>
+      <AlertDialog open={open} onOpenChange={stop.guardClose(setOpen)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("stopTitle", { name: app.name })}</AlertDialogTitle>
@@ -84,7 +85,7 @@ function UpdateNotice({ app }: { app: AppDetail }) {
   const { data } = useQuery(appRegistryQueryOptions());
   const [undone, setUndone] = useState<string | null>(null);
   const listed = data?.apps.find((entry) => entry.id === app.id && entry.updateAvailable) ?? null;
-  const update = useMutation({
+  const update = useCommand({
     mutationFn: () => updateRegistryApp(app, listed!.registryId, listed!.version),
     onSuccess: ({ app: next, rolledBack, error }) => {
       refresh(next);

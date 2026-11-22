@@ -3,10 +3,11 @@
 // header (8 to 200 printable characters) and keeps its first response for 24
 // hours in `system_kv`: the same caller repeating the same operation with the
 // same key gets that response again (`Idempotent-Replayed: true`) instead of
-// acting twice. The same key with a different request is refused (422
-// idempotency_key_reused), and a repeat while the first is still running
-// waits for nothing (409 idempotency_in_progress). A 5xx is not kept, so its
-// retry runs again.
+// acting twice. While the first is still running any repeat waits for nothing
+// (409 idempotency_in_progress); once it succeeded, the same key with a
+// different request is refused (422 idempotency_key_reused); once it was
+// refused (a kept 4xx), nothing was recorded, so a different request runs
+// under the key. A 5xx is not kept, so its retry runs again.
 //
 // The claim and the write are separate, so a Worker can die after the write
 // commits and before its response is kept. The claim therefore holds a short
@@ -245,10 +246,24 @@ export const idempotentReplay: MiddlewareHandler<{ Bindings: Env }> = async (c, 
     own = claimed.own;
   } else {
     const { earlier } = claimed;
+    const leaseLive = !claimed.raw || (earlier.state !== "done" && (earlier.leaseUntil ?? 0) > nowSeconds());
+    // While the first request runs, nothing about it is known: in progress, whatever this body is.
+    if (leaseLive) refuse(409, "idempotency_in_progress", IN_PROGRESS);
     if (earlier.request !== request) {
-      refuse(422, "idempotency_key_reused", "This Idempotency-Key was used for a different request. Use a new key for a new request.");
-    }
-    if (earlier.state === "done") {
+      // "Reused" says the key's request was recorded: only a kept success proves that. A kept
+      // refusal recorded nothing, so this request runs under the key. A first run that stopped
+      // without a kept answer may or may not have acted: an operation keyed by its own request
+      // decides (it replays, refuses or runs); any other answers outcome unknown.
+      if (earlier.state === "done" && earlier.status < 400) {
+        refuse(422, "idempotency_key_reused", "This Idempotency-Key was used for a different request. Use a new key for a new request.");
+      }
+      if (earlier.state !== "done" && retryAfterLostResponse(operation) === "outcome_unknown") {
+        refuse(409, "idempotency_outcome_unknown", "The first request with this Idempotency-Key stopped before its response was kept, so it may have taken effect. Read the resource to check, and repeat with a new key only if it is missing.");
+      }
+      const taken = await takeOver(c, storeKey, claimed.raw, request);
+      if (!taken) refuse(409, "idempotency_in_progress", IN_PROGRESS);
+      own = taken;
+    } else if (earlier.state === "done") {
       if (earlier.secret) {
         refuse(409, "idempotency_secret_not_replayed", "This request already succeeded, and its secret is shown only once. List the resource to find it.");
       }
@@ -260,15 +275,15 @@ export const idempotentReplay: MiddlewareHandler<{ Bindings: Env }> = async (c, 
           "Idempotent-Replayed": "true",
         },
       });
+    } else {
+      // The first run stopped before its response was kept (its Worker died): recover by the operation's own guard.
+      if (retryAfterLostResponse(operation) === "outcome_unknown") {
+        refuse(409, "idempotency_outcome_unknown", "The first request with this Idempotency-Key stopped before its response was kept, so it may have taken effect. Read the resource to check, and repeat with a new key only if it is missing.");
+      }
+      const taken = await takeOver(c, storeKey, claimed.raw, request);
+      if (!taken) refuse(409, "idempotency_in_progress", IN_PROGRESS);
+      own = taken;
     }
-    if (!claimed.raw || (earlier.leaseUntil ?? 0) > nowSeconds()) refuse(409, "idempotency_in_progress", IN_PROGRESS);
-    // The first run stopped before its response was kept (its Worker died): recover by the operation's own guard.
-    if (retryAfterLostResponse(operation) === "outcome_unknown") {
-      refuse(409, "idempotency_outcome_unknown", "The first request with this Idempotency-Key stopped before its response was kept, so it may have taken effect. Read the resource to check, and repeat with a new key only if it is missing.");
-    }
-    const taken = await takeOver(c, storeKey, claimed.raw, request);
-    if (!taken) refuse(409, "idempotency_in_progress", IN_PROGRESS);
-    own = taken;
   }
 
   const db = c.get("db");

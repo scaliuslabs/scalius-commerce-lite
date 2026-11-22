@@ -1,6 +1,6 @@
 import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 import { Fragment, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Copy } from "lucide-react";
 import { toast } from "~/lib/toast";
@@ -35,6 +35,7 @@ import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { ImageField } from "./ImageField";
 import { Field, OnlineStorePage, SectionCard, failSave, useDocumentDraft } from "./shared";
+import { useCommand } from "~/lib/use-command";
 
 interface Preferences {
   homepageTitle: string;
@@ -179,7 +180,7 @@ function FeedLinks({ origin }: { origin: string }) {
   const queryClient = useQueryClient();
   const options = feedDiagnosticsQueryOptions(1, true);
   const { data } = useQuery(options);
-  const register = useMutation({
+  const register = useCommand({
     mutationFn: (starts: string[]) => apiData(postApiV1AdminSettingsSeoFeedFilesRegistered({ body: { starts } })),
     onSuccess: () => {
       // The list and the home to-do both count the links nobody confirmed.

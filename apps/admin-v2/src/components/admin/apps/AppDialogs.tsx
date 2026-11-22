@@ -6,7 +6,7 @@
 // store's own design.
 import { TypedConfirmField, typedConfirmMatches } from "~/components/admin/shared/TypedConfirmField";
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { TriangleAlert } from "lucide-react";
 import { toast } from "~/lib/toast";
@@ -30,6 +30,7 @@ import { activateApp, appErrorCode, appFieldInTheme, deactivateApp, isAppChanged
 import { queryKeys } from "~/lib/query-keys";
 import { AppAccess } from "./AppAccess";
 import { ThemeAppFallbackNotice } from "./ThemeAppParts";
+import { useCommand } from "~/lib/use-command";
 
 interface DialogProps {
   app: AppDetail;
@@ -66,7 +67,7 @@ export function ActivateAppDialog({ app, open, onOpenChange }: DialogProps) {
   const queryClient = useQueryClient();
   const result = useAppMutationResult(app);
   const update = app.needsApproval;
-  const activate = useMutation({
+  const activate = useCommand({
     mutationFn: () => activateApp(app),
     onSuccess: ({ app: next, hookError }) => {
       result.applied(next, hookError, t(update ? "approved" : "activated"));
@@ -85,7 +86,7 @@ export function ActivateAppDialog({ app, open, onOpenChange }: DialogProps) {
   });
   const missing = app.settings.fields.filter((field) => app.settings.missing.includes(field.key));
   return (
-    <Dialog open={open} onOpenChange={(next) => (activate.isPending ? undefined : onOpenChange(next))}>
+    <Dialog open={open} onOpenChange={activate.guardClose(onOpenChange)}>
       <DialogContent className="sm:max-w-160">
         <DialogHeader>
           <DialogTitle>{t(update ? "approveTitle" : "activateTitle", { name: app.name })}</DialogTitle>
@@ -127,7 +128,7 @@ export function ActivateAppDialog({ app, open, onOpenChange }: DialogProps) {
 export function DeactivateAppDialog({ app, open, onOpenChange }: DialogProps) {
   const t = useMessages(installedAppsMessages);
   const result = useAppMutationResult(app);
-  const deactivate = useMutation({
+  const deactivate = useCommand({
     mutationFn: () => deactivateApp(app),
     onSuccess: ({ app: next, hookError }) => {
       result.applied(next, hookError, t("deactivated"));
@@ -139,7 +140,7 @@ export function DeactivateAppDialog({ app, open, onOpenChange }: DialogProps) {
     },
   });
   return (
-    <AlertDialog open={open} onOpenChange={(next) => (deactivate.isPending ? undefined : onOpenChange(next))}>
+    <AlertDialog open={open} onOpenChange={deactivate.guardClose(onOpenChange)}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("deactivateTitle", { name: app.name })}</AlertDialogTitle>
@@ -164,7 +165,7 @@ export function UninstallAppDialog({ app, open, onOpenChange }: DialogProps) {
   const result = useAppMutationResult(app);
   const [keepData, setKeepData] = useState(true);
   const [typed, setTyped] = useState("");
-  const uninstall = useMutation({
+  const uninstall = useCommand({
     mutationFn: () => uninstallApp(app, keepData),
     onSuccess: async ({ hookError }) => {
       result.applied(null, hookError, t("uninstalled"));

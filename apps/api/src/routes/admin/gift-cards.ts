@@ -151,6 +151,11 @@ function amountToMinor(amount: number, currencyCode: string, priceIncrementMinor
 }
 
 /** Issuing or moving value takes one key, in the body or as the Idempotency-Key header (`requiredRequestKey`). */
+const keyReusedResponse = {
+  description: "Another request under a used key (`idempotency_key_reused`): the key's request was recorded",
+  content: { "application/json": { schema: errorResponses[400].content["application/json"].schema } },
+};
+
 const requestKeySchema = z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9:_-]+$/).optional().openapi({
   description: "One key per change: a repeat returns the first. Required unless the Idempotency-Key header carries it; it wins when both are sent.",
 });
@@ -381,7 +386,7 @@ app.openapi(createRoute({
   path: "/",
   tags: ["Admin - Gift cards"],
   summary: "Issue a gift card",
-  description: "Issues a manual gift card. Idempotent by `requestKey` (or the Idempotency-Key header); one is required. The response carries the full code once; afterwards staff see the last 4 characters only.",
+  description: "Issues a manual gift card. Idempotent by `requestKey` (or the Idempotency-Key header); one is required: the same request again answers the same card, and another request under the key is refused (422 `idempotency_key_reused`): the key's card was issued. The response carries the full code once; afterwards staff see the last 4 characters only.",
   request: {
     headers: valueKeyHeaders,
     body: {
@@ -407,6 +412,7 @@ app.openapi(createRoute({
       })) } },
     },
     ...errorResponses,
+    422: keyReusedResponse,
     503: serviceUnavailableResponse,
   },
 }), async (c) => {
@@ -460,7 +466,7 @@ app.openapi(createRoute({
   path: "/{giftCardId}/adjust",
   tags: ["Admin - Gift cards"],
   summary: "Adjust a gift card balance",
-  description: "Adds (positive) or removes (negative) balance with a required reason, as one ledger transaction. Idempotent by `requestKey` (or the Idempotency-Key header); one is required.",
+  description: "Adds (positive) or removes (negative) balance with a required reason, as one ledger transaction. Idempotent by `requestKey` (or the Idempotency-Key header); one is required: the same adjustment again answers the card, and another adjustment under the key is refused (422 `idempotency_key_reused`): the key's adjustment was applied.",
   request: {
     params: z.object({ giftCardId: z.string().min(4).max(80) }),
     headers: valueKeyHeaders,
@@ -480,6 +486,7 @@ app.openapi(createRoute({
     },
     ...errorResponses,
     409: conflictResponse,
+    422: keyReusedResponse,
   },
 }), async (c) => {
   const db = c.get("db");

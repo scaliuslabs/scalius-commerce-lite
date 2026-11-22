@@ -21,7 +21,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, desc, eq, ne, notInArray, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { isFulfillmentType, type FulfillmentType } from "@scalius/shared/fulfilment";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
     recordCODCollection,
     resolveOrderCurrencySnapshot,
@@ -246,6 +246,7 @@ async function findFulfilmentByRequestKey(db: Database, orderId: string, request
         id: orderFulfillments.id,
         kind: orderFulfillments.kind,
         shipmentId: orderFulfillments.shipmentId,
+        cashCollectedMinor: orderFulfillments.cashCollectedMinor,
     }).from(orderFulfillments).where(and(
         eq(orderFulfillments.orderId, orderId),
         eq(orderFulfillments.requestKey, requestKey),
@@ -355,6 +356,46 @@ async function readOrderForFulfilment(db: Database, orderId: string) {
     return order;
 }
 
+/**
+ * A request key names one hand-over: a repeat replays it only when it asks the
+ * same thing in every field the server stored (its kind; its lines when it
+ * names them; the cash taken at the counter; the own-rider parcel's courier,
+ * tracking, note and collect amount, normalized as they were written). A
+ * different hand-over under the key is refused as already used, never answered
+ * as done.
+ */
+async function assertSameHandOver(
+    db: Database,
+    orderId: string,
+    replay: NonNullable<Awaited<ReturnType<typeof findFulfilmentByRequestKey>>>,
+    input: RecordOrderFulfilmentInput,
+): Promise<void> {
+    const asked = (lines: ReadonlyArray<{ id: string; quantity: number }>) =>
+        JSON.stringify([...lines].sort((left, right) => left.id.localeCompare(right.id)).map((line) => [line.id, line.quantity]));
+    const sameLines = input.lines === undefined
+        || asked(input.lines.map((line) => ({ id: line.itemId, quantity: line.quantity })))
+            === asked(replay.lines.map((line) => ({ id: line.orderItemId, quantity: line.quantity })));
+    const currency = resolveOrderCurrencySnapshot(await readOrderForFulfilment(db, orderId));
+    const asMinor = (value: number | null | undefined) => (value == null ? null : onCashOnDeliveryIncrementMinor(value, currency));
+    const sameCash = asMinor(input.cashReceivedMinor) === replay.cashCollectedMinor;
+    // A replay with a parcel row compares an absent parcel as one with every field empty.
+    let sameParcel = replay.shipmentId === null;
+    if (replay.shipmentId) {
+        const parcel = await db.select({
+            courierName: deliveryShipments.courierName, trackingId: deliveryShipments.trackingId,
+            trackingUrl: deliveryShipments.trackingUrl, note: deliveryShipments.note, shipmentAmountMinor: deliveryShipments.shipmentAmountMinor,
+        }).from(deliveryShipments).where(eq(deliveryShipments.id, replay.shipmentId)).get();
+        const text = (value: string | undefined) => value?.trim() || null;
+        sameParcel = parcel !== undefined
+            && parcel.courierName === text(input.parcel?.courierName) && parcel.trackingId === text(input.parcel?.trackingId)
+            && parcel.trackingUrl === text(input.parcel?.trackingUrl) && parcel.note === text(input.parcel?.note)
+            && parcel.shipmentAmountMinor === asMinor(input.parcel?.shipmentAmountMinor);
+    }
+    if (replay.kind !== input.kind || !sameLines || !sameCash || !sameParcel) {
+        throw new AppError(422, "idempotency_key_reused", "This request key was already used for another hand-over. Start a new one.");
+    }
+}
+
 async function replayResult(
     db: Database,
     orderId: string,
@@ -398,7 +439,10 @@ export async function recordOrderFulfilment(
 ): Promise<RecordOrderFulfilmentResult> {
     const requestKey = normalizeRequestKey(input.requestKey);
     const replay = await findFulfilmentByRequestKey(db, orderId, requestKey);
-    if (replay) return replayResult(db, orderId, replay);
+    if (replay) {
+        await assertSameHandOver(db, orderId, replay, input);
+        return replayResult(db, orderId, replay);
+    }
 
     const order = await readOrderForFulfilment(db, orderId);
     assertNoActiveShipmentClaim(order);
@@ -517,7 +561,10 @@ export async function recordOrderFulfilment(
         nextFulfillmentStatus = projectedFulfilmentStatus(await safeBatch(db, statements));
     } catch (error) {
         const raced = await findFulfilmentByRequestKey(db, orderId, requestKey).catch(() => null);
-        if (raced) return replayResult(db, orderId, raced);
+        if (raced) {
+            await assertSameHandOver(db, orderId, raced, input);
+            return replayResult(db, orderId, raced);
+        }
         if (isBatchGuardError(error, FULFILMENT_CLAIM_GUARD) || isLedgerBoundsError(error)) {
             throw new ConflictError("This order changed. Reload to see the latest.");
         }

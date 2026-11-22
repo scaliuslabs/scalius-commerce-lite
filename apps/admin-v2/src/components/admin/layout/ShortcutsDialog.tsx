@@ -12,6 +12,7 @@ import { shortcutsMessages } from "~/i18n/shortcuts";
 import { SETTINGS_ITEM, type VisibleNavItem } from "./AdminNav";
 import { comboCaps, GO_DEFAULTS, goCaps, goKeys, goSequence, SHORTCUTS, type KeyCombo } from "./shortcuts";
 import { staffShortcutsQueryOptions, useStaffShortcuts } from "./staff-shortcuts";
+import { useCommand } from "~/lib/use-command";
 
 function Caps({ caps }: { caps: string[] }) {
   return (
@@ -56,7 +57,6 @@ export function ShortcutsDialog({
   const keys = goKeys(overrides);
   const [recording, setRecording] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
 
   // Every page in the menu once (a section without its own page shares its first sub-page's).
   const destinations = new Map<string, string>();
@@ -68,25 +68,21 @@ export function ShortcutsDialog({
   if (canOpen(SETTINGS_ITEM.to)) destinations.set(SETTINGS_ITEM.to, shell("settings"));
   const owner = new Map([...keys].filter(([to]) => destinations.has(to)).map(([to, key]) => [key, to]));
 
-  async function save(next: Record<string, string>) {
-    setSaving(true);
-    try {
-      const saved = await apiData(putApiV1AdminAuthShortcuts({ body: { expectedRevision: stored.data?.revision ?? 0, shortcuts: next } }));
+  const command = useCommand({
+    mutationFn: (shortcuts: Record<string, string>) =>
+      apiData(putApiV1AdminAuthShortcuts({ body: { expectedRevision: stored.data?.revision ?? 0, shortcuts } })),
+    onSuccess: (saved) => {
       queryClient.setQueryData(staffShortcutsQueryOptions().queryKey, saved);
       toast.success(t("saved"));
-      return true;
-    } catch (failure) {
-      if (readSettingsRevisionConflict(failure)) {
-        await queryClient.invalidateQueries({ queryKey: staffShortcutsQueryOptions().queryKey });
-        setError(t("errorConflict"));
-      } else {
-        setError(t("errorSave"));
-      }
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }
+    },
+    onError: async (failure) => {
+      if (!readSettingsRevisionConflict(failure)) return setError(t("errorSave"));
+      await queryClient.invalidateQueries({ queryKey: staffShortcutsQueryOptions().queryKey });
+      setError(t("errorConflict"));
+    },
+  });
+  const saving = command.isPending;
+  const save = (next: Record<string, string>, onSaved?: () => void) => command.mutate(next, { onSuccess: onSaved });
 
   async function record(to: string, event: KeyboardEvent<HTMLButtonElement>) {
     if (["Shift", "Meta", "Control", "Alt", "Tab"].includes(event.key)) return;
@@ -119,7 +115,7 @@ export function ShortcutsDialog({
       else next[to] = goSequence(key);
     }
     setError("");
-    if (await save(next)) setRecording(null);
+    save(next, () => setRecording(null));
   }
 
   const groups = (["general", "editing", "inbox"] as const).map((group) => ({
@@ -225,7 +221,7 @@ export function ShortcutsDialog({
           {recording ? <p className="text-body text-muted-foreground">{t("recordHint")}</p> : null}
           {Object.keys(overrides).length > 0 ? (
             <div className="flex justify-end pt-2">
-              <Button type="button" variant="outline" disabled={saving} onClick={() => void save({})}>
+              <Button type="button" variant="outline" disabled={saving} onClick={() => save({})}>
                 {t("reset")}
               </Button>
             </div>

@@ -5,7 +5,7 @@
 // market's (Settings → Markets).
 import { useRef, useState, type ReactNode } from "react";
 import { fromMinor } from "@scalius/shared/money";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { toast } from "~/lib/toast";
@@ -68,6 +68,7 @@ import {
 import { Field, FieldRow } from "~/components/ui/field";
 import { cn } from "@scalius/shared/utils";
 import { TRY_IT_FIELDS, tryItKey, tryItProblems, type TryItField, type TryItInputs } from "./tax-try-it";
+import { useCommand } from "~/lib/use-command";
 
 const configurationQuery = taxConfigurationQueryOptions();
 const taxSettingsQuery = taxSettingsQueryOptions();
@@ -105,7 +106,7 @@ export function useTaxServices() {
 function StartGroup({ canEdit, onCreated }: { canEdit: boolean; onCreated: (id: string) => void }) {
   const t = useMessages(taxesMessages);
   const refresh = useRefreshTaxes();
-  const create = useMutation({
+  const create = useCommand({
     mutationFn: () => apiData(postApiV1AdminTaxesClasses({ body: { name: t("standardGroupName"), isExempt: false } })),
     onSuccess: async ({ taxClass }) => {
       await refresh();
@@ -296,7 +297,7 @@ function GroupForm({ group, config }: { group: TaxClassRecord | null; config: Ta
   const needsRate = settings.enabled && inSettings && group?.isExempt === true && !draft.isExempt
     && !config.rates.some((rate) => rate.isActive && rate.taxClassId === group?.id);
 
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: () => {
       const body = { name: draft.name.trim(), isExempt: draft.isExempt };
       return group
@@ -305,7 +306,7 @@ function GroupForm({ group, config }: { group: TaxClassRecord | null; config: Ta
     },
     onSuccess: refresh,
   });
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: () =>
       apiData(deleteApiV1AdminTaxesClassesById({ path: { id: group!.id }, query: { expectedVersion: group!.version } })),
     onSuccess: async () => {
@@ -417,7 +418,7 @@ function AddCountryForm({ taken }: { taken: ReadonlySet<string> }) {
   const saveFailure = useSaveFailure();
   const [country, setCountry] = useState("");
   const options = useCountryOptions(taken);
-  const create = useMutation({
+  const create = useCommand({
     mutationFn: () => apiData(postApiV1AdminTaxesRegions({ body: { countryCode: country } })),
     onSuccess: async ({ region }) => {
       await refresh();
@@ -515,7 +516,9 @@ export function TryItRow({ config }: { config: TaxConfigurationPayload }) {
   const key = tryItKey(inputs);
   const shownProblem = (field: TryItField) => (attempted || left.has(field) ? problems[field] : undefined);
   const leave = (field: TryItField) => setLeft((current) => (current.has(field) ? current : new Set([...current, field])));
-  const preview = useMutation({
+  const preview = useCommand({
+    // Every preview runs; only the latest one's answer is shown.
+    subject: ({ request }) => String(request),
     mutationFn: ({ inputs: sample }: { inputs: TryItInputs; key: string; request: number }) => requestTaxPreview(sample),
     onSuccess: (result, sent) => {
       if (sent.request === latestRequest.current) setAnswer({ key: sent.key, result });
@@ -736,7 +739,7 @@ function OverrideForm({ item, groups }: { item: TaxClassificationItem; groups: T
   const groupName = useGroupName();
   const saved = item.taxClassId ?? NONE;
   const [draft, setDraft] = useState(saved);
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: () =>
       apiData(putApiV1AdminTaxesClassificationsByKindById({
         path: { kind: item.kind, id: item.id },

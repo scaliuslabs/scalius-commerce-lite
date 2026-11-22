@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createDateColumn } from "~/components/admin/data-table/columns/column-factories";
 import { toast } from "~/lib/toast";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { patchApiV1AdminInventoryAlerts, putApiV1AdminInventoryDefaultAlertLevel } from "@scalius/api-client/sdk";
 import type { ColumnDef, Row } from "~/components/admin/data-table/table-config";
 import { DataTable } from "~/components/admin/data-table/DataTable";
@@ -34,6 +34,7 @@ import {
   type InventoryFilters,
   type InventoryFiltersChange,
 } from "./inventory-search";
+import { useCommand } from "~/lib/use-command";
 
 const ALERT_LABEL = {
   active: "alertActive",
@@ -63,7 +64,7 @@ function StoreAlertLevel({ level, canEdit, open, onOpenChange }: {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<number | null>(level);
   const valid = draft === null || (Number.isSafeInteger(draft) && draft >= 0 && draft <= ALERT_LEVEL_MAX);
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: (defaultLowStockThreshold: number | null) =>
       apiData(putApiV1AdminInventoryDefaultAlertLevel({ body: { defaultLowStockThreshold } })),
     onSuccess: async () => {
@@ -143,7 +144,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
   const [storeLevelOpen, setStoreLevelOpen] = useState(false);
   useEffect(() => setPage(1), [search, status]);
 
-  const acknowledge = useMutation({
+  const acknowledge = useCommand({
     mutationFn: (variantId: string) => apiData(patchApiV1AdminInventoryAlerts({ body: { variantId } })),
     onSuccess: async () => {
       toast.success(t("markedSeen"));

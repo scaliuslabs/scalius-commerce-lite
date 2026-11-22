@@ -4,7 +4,7 @@
 // still turned on by itself, with its own grant key, one after another (each
 // answer carries the next feature's key). Only a Super Admin approves.
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -18,6 +18,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { serviceGroups } from "./app-services";
 import { useAppMutationResult } from "./AppDialogs";
 import { FeatureAccess, hasFeatureAccess } from "./AppFeatures";
+import { useCommand } from "~/lib/use-command";
 
 export function FeatureChecklist({ app, canTurnOn }: { app: AppDetail; canTurnOn: boolean }) {
   const t = useMessages(appFeaturesMessages);
@@ -29,7 +30,7 @@ export function FeatureChecklist({ app, canTurnOn }: { app: AppDetail; canTurnOn
   // The review agrees to a list only when one is there.
   const asks = chosen.some(hasFeatureAccess);
   const groups = serviceGroups({ features: app.features, providers: [] });
-  const turnOn = useMutation({
+  const turnOn = useCommand({
     mutationFn: async () => {
       let current = app;
       for (const wanted of chosen) {
@@ -98,7 +99,7 @@ export function FeatureChecklist({ app, canTurnOn }: { app: AppDetail; canTurnOn
           {t("reviewCount", { count: chosen.length })}
         </Button>
       ) : null}
-      <Dialog open={reviewing} onOpenChange={(next) => (turnOn.isPending ? undefined : setReviewing(next))}>
+      <Dialog open={reviewing} onOpenChange={turnOn.guardClose(setReviewing)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("reviewTitle", { count: chosen.length })}</DialogTitle>

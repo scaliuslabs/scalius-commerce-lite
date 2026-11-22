@@ -55,8 +55,8 @@ function MessageRow({ orderId, message, canRetry }: {
     && label("messages.status.", lines[0]!.status) === statusLabel;
   const sendable = canSendNotificationAgain(message);
   const turnedOff = notificationTurnedOff(message);
-  const retrying = retryMutation.isPending && retryMutation.variables?.outboxId === message.id;
-  const resending = resendMutation.isPending && resendMutation.variables?.outboxId === message.id;
+  const retrying = retryMutation.pending.has(message.id);
+  const resending = resendMutation.pending.has(message.id);
   const sentAt = formatOrderTimestamp(message.sentAt ?? message.createdAt);
 
   return (
@@ -87,7 +87,7 @@ function MessageRow({ orderId, message, canRetry }: {
             size="sm"
             variant="outline"
             loading={resending}
-            onClick={() => resendMutation.mutate({ orderId, outboxId: message.id, resendRequestId: crypto.randomUUID() })}
+            onClick={() => resendMutation.mutate({ orderId, outboxId: message.id })}
           >
             {t("messages.sendAgain")}
           </Button>

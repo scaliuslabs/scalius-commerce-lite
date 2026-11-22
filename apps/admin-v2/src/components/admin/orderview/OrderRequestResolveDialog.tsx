@@ -1,7 +1,6 @@
 // Answering a customer request on the order page: loaded the first time a
 // request is reviewed, so the page renders without its form.
-import { IntentRequestKey } from "~/lib/intent-request-key";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -17,13 +16,14 @@ import { orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useResolveOrderSupportRequest } from "~/lib/api-mutations/orders";
 import { getRemainingReturnableQuantities, type OrderReturnDto } from "~/lib/order-return-workflow";
-import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./order-returns/shared";
+import { getOrderItemName, clampQuantity } from "./order-returns/shared";
 import { restockedUnits, shippedCancelReason } from "./cancel-order";
 import type { Order, OrderSupportRequest } from "./types";
 import { resolutionsFor, type Resolution } from "./request-resolutions";
 import { inboxKeys } from "~/lib/api-query-options/inbox";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import { Field } from "~/components/ui/field";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 const EMPTY_RETURNS: readonly OrderReturnDto[] = [];
 
@@ -49,7 +49,6 @@ export function ResolveDialog({
   const [choiceMissing, setChoiceMissing] = useState(false);
   const [note, setNote] = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const commandKey = useRef(new IntentRequestKey(createReturnCommandKey));
   const isReturnApproval = request?.type === "return" && selected === "approved";
   const returnsQuery = useQuery({ ...orderReturnsQueryOptions(order.id), enabled: open && isReturnApproval });
   const returns = returnsQuery.data?.returns ?? EMPTY_RETURNS;
@@ -73,7 +72,6 @@ export function ResolveDialog({
     setChoiceMissing(false);
     setNote("");
     setQuantities({});
-    commandKey.current.clear();
     mutation.reset();
   }, [open, request?.id, request?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -100,12 +98,9 @@ export function ResolveDialog({
       requestId: request.id,
       status: selected,
       note: note.trim() || null,
-      ...(returnRequest
-        ? { returnRequest: { commandKey: commandKey.current.get("support-request", returnRequest), ...returnRequest } }
-        : {}),
+      ...(returnRequest ? { returnRequest } : {}),
     }, {
       onSuccess: () => {
-        commandKey.current.clear();
         // The status change is a line on the order's conversation.
         void queryClient.invalidateQueries({ queryKey: inboxKeys.order(order.id) });
         onOpenChange(false);
@@ -114,13 +109,14 @@ export function ResolveDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
+    <Dialog open={open} onOpenChange={mutation.guardClose(onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{o(`request.${request.type}`)}</DialogTitle>
           <DialogDescription>{request.reason}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          <CommandKeyNotice notice={mutation.notice({ requestId: request.id })} target="order" />
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <RadioGroup
             value={selected ?? ""}

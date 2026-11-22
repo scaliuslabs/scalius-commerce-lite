@@ -7,7 +7,7 @@
 // installed but not running keeps its place. Staff who only view see the
 // order without the controls.
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
@@ -24,6 +24,7 @@ import { appFunctionOrderQueryOptions, type AppFunctionPointOrder } from "~/lib/
 import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
 import { isKnownFunctionPoint } from "./app-functions";
+import { useCommand } from "~/lib/use-command";
 
 type OrderedApp = AppFunctionPointOrder["apps"][number];
 
@@ -152,7 +153,7 @@ export function CheckoutOrderCard() {
   const { data, isError, isRefetching, refetch } = useQuery({ ...appFunctionOrderQueryOptions(), enabled: canView });
   // The point whose last save lost to a newer order: it says so where the merchant is looking.
   const [conflictAt, setConflictAt] = useState<string | null>(null);
-  const save = useMutation({
+  const save = useCommand({
     // Each save names the order it started from, so a stale tab never replaces a newer one.
     mutationFn: ({ point, appIds, revision }: { point: AppFunctionPointOrder["point"]; appIds: string[] | null; revision: string }) =>
       setAppFunctionOrder(point, appIds, revision),
@@ -193,7 +194,7 @@ export function CheckoutOrderCard() {
           order={order}
           canManage={canManage}
           busy={save.isPending}
-          saving={save.isPending ? { point: save.variables.point, reset: save.variables.appIds === null } : null}
+          saving={save.isPending && save.variables ? { point: save.variables.point, reset: save.variables.appIds === null } : null}
           conflict={conflictAt === order.point}
           onSave={(current, appIds) => save.mutate({ point: current.point, appIds, revision: current.revision })}
         />

@@ -90887,6 +90887,10 @@ export type PostApiV1AdminGiftCardsErrors = {
         };
     };
     /**
+     * Another request under a used key (`idempotency_key_reused`): the key's request was recorded
+     */
+    422: ErrorResponse;
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -91302,6 +91306,10 @@ export type PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Another request under a used key (`idempotency_key_reused`): the key's request was recorded
+     */
+    422: ErrorResponse;
     /**
      * Rate limit exceeded
      */

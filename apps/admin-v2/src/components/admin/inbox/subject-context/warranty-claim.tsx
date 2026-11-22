@@ -4,7 +4,7 @@
 // Claims are records: resolving one never moves money, stock or the order;
 // a replacement or refund is done from the order page, linked here.
 import { formatOrderNumber } from "~/lib/order-number";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
@@ -27,7 +27,6 @@ import { warrantyMessages } from "~/i18n/warranty";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { getServerFnError } from "~/lib/api-helpers";
 import type { StaffThread } from "~/lib/api-query-options/inbox";
-import { newRequestKey } from "../inbox-api";
 import { ClaimStatusBadge } from "../../warranty/ClaimStatusBadge";
 import { useUpdateWarrantyClaim, warrantyClaimQueryOptions, type WarrantyClaim } from "../../warranty/warranty-api";
 import { warrantyDate, warrantySummary } from "../../warranty/warranty-format";
@@ -97,7 +96,6 @@ function ClaimStatusForm({ claim }: { claim: WarrantyClaim }) {
   const [resolution, setResolution] = useState<WarrantyClaimResolution | "">(claim.resolution ?? "");
   const [message, setMessage] = useState("");
   const [missingResolution, setMissingResolution] = useState(false);
-  const requestKey = useRef(newRequestKey());
   const update = useUpdateWarrantyClaim(claim.id);
 
   useEffect(() => {
@@ -120,13 +118,11 @@ function ClaimStatusForm({ claim }: { claim: WarrantyClaim }) {
         status,
         resolution: status === "resolved" ? (resolution as WarrantyClaimResolution) : null,
         message: message.trim() || null,
-        requestKey: requestKey.current,
       },
       {
         onSuccess: () => {
           toast.success(t("updated"));
           setMessage("");
-          requestKey.current = newRequestKey();
         },
       },
     );

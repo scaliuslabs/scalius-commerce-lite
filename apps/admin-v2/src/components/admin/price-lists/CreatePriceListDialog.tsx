@@ -9,7 +9,6 @@ import { PRICE_LIST_NAME_MAX_LENGTH } from "@scalius/shared/market-pricing";
 import { toast } from "~/lib/toast";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
-import { useSubmitOnce } from "~/components/admin/shared/use-submit-once";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
@@ -41,7 +40,6 @@ export function CreatePriceListDialog({ open, onOpenChange, marketId: fixedMarke
   const [segmentId, setSegmentId] = useState("");
   const [problems, setProblems] = useState<Problems>({});
   const create = useCreatePriceList();
-  const submitOnce = useSubmitOnce();
   const reset = create.reset;
 
   useEffect(() => {
@@ -77,18 +75,19 @@ export function CreatePriceListDialog({ open, onOpenChange, marketId: fixedMarke
       document.getElementById(first)?.focus();
       return;
     }
-    // One request at a time: a double click must not add the list twice.
-    submitOnce(async () => {
-      const list = await create.mutateAsync({
-        name: name.trim(),
-        kind,
-        marketId: chosenMarket,
-        segmentId: kind === "segment" ? segmentId : null,
-        status: "draft",
-      });
-      toast.success(t("created"));
-      onOpenChange(false);
-      await navigate({ to: "/admin/price-lists/$priceListId", params: { priceListId: list.id } });
+    // One request at a time (the command drops a double click): the list is added once.
+    create.mutate({
+      name: name.trim(),
+      kind,
+      marketId: chosenMarket,
+      segmentId: kind === "segment" ? segmentId : null,
+      status: "draft",
+    }, {
+      onSuccess: (list) => {
+        toast.success(t("created"));
+        onOpenChange(false);
+        void navigate({ to: "/admin/price-lists/$priceListId", params: { priceListId: list.id } });
+      },
     });
   };
 

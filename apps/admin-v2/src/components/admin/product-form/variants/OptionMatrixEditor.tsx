@@ -3,7 +3,7 @@ import { seededName } from "~/lib/seeded-names";
 import { WeightInput, useWeightUnit } from "./WeightInput";
 import { formatWeight } from "./weight-format";
 import { createPortal } from "react-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Palette, Plus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,6 +88,7 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "@/hooks/use-currency";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { useCommand } from "~/lib/use-command";
 
 const MAX_AXES = MAX_PRODUCT_OPTION_AXES;
 const MAX_COMBINATIONS = MAX_PRODUCT_OPTION_COMBINATIONS;
@@ -663,7 +664,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
       }
     : { optionMatrix: { options: matrixSaveOptions(options), variants: matrixSaveVariants(shownVariants, savedVariants, fulfilmentMode, decimalPlaces) } };
 
-  const mutation = useMutation({
+  const mutation = useCommand({
     mutationFn: (revisionOverride?: number) => {
       const body = compositionBody();
       const expectedAggregateRevision = revisionOverride ?? aggregateRevision!;

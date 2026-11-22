@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { ChevronDown } from "lucide-react";
@@ -39,6 +39,7 @@ import { productListMessages } from "~/i18n/product-list";
 import { resourceMessages } from "~/i18n/resource";
 import type { ProductListItem } from "./product-columns";
 import { downloadPagedExport } from "~/components/admin/store-transfer/export-download";
+import { useCommand } from "~/lib/use-command";
 
 /** Products the bulk editor opens at once (its read's limit). */
 const BULK_EDIT_MAX = 50;
@@ -117,7 +118,7 @@ export function ProductBulkActions({ target, filter, done, run }: {
   // Setting live products as draft hides them from the store: confirm first, naming how many.
   const liveCount = matching ? count : rows.filter((row) => row.isActive).length;
   const [confirmDraft, setConfirmDraft] = useState(false);
-  const printLabels = useMutation({
+  const printLabels = useCommand({
     mutationFn: async () => {
       const variantIds: string[] = [];
       for (const row of rows) {
@@ -165,7 +166,7 @@ export function ProductBulkActions({ target, filter, done, run }: {
   };
   const busy = setStatus.isPending || change.isPending;
   // The Shopify product CSV of the ticked products (Settings → Import and export has the whole catalogue).
-  const exporting = useMutation({
+  const exporting = useCommand({
     mutationFn: () => downloadPagedExport("products", undefined, rows.map((row) => row.id)),
     onSuccess: () => toast.success(t("exported")),
     onError: () => toast.error(t("exportFailed")),
@@ -256,7 +257,7 @@ export function ProductBulkActions({ target, filter, done, run }: {
           />
         </Suspense>
       ) : null}
-      <Dialog open={picker !== null} onOpenChange={(next) => { if (!next && !change.isPending) setPicker(null); }}>
+      <Dialog open={picker !== null} onOpenChange={change.guardClose((next) => { if (!next) setPicker(null); })}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>

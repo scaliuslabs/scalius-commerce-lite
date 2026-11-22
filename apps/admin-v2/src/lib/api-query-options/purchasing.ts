@@ -3,7 +3,8 @@
 // document; a write refreshes it, and a write that moves or promises stock
 // (ordering, receiving, shipping, cancelling) also refreshes the inventory
 // lists and the per-location numbers it changes.
-import { queryOptions, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { queryOptions, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useCommand } from "../use-command";
 import {
   deleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderId,
   deleteApiV1AdminInventoryTransfersByTransferId,
@@ -149,7 +150,7 @@ function refreshDocuments(
 
 export function useSaveSupplier() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { id: string | null; version: number | null; body: SupplierBody }) =>
       input.id
         ? apiData(patchApiV1AdminInventorySuppliersBySupplierId({
@@ -170,7 +171,7 @@ export function useSaveSupplier() {
 
 export function useSupplierAction() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { id: string; action: "archive" | "unarchive" }) => {
       const options = { path: { supplierId: input.id } };
       return apiData(input.action === "archive"
@@ -186,7 +187,7 @@ export function useSupplierAction() {
 /** Creates a draft (no id) or saves one (every field; `lines` only while it is a draft). */
 export function useSavePurchaseOrder() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { id: string | null; revision: number | null; body: PurchaseOrderBody }) =>
       input.id
         ? apiData(putApiV1AdminInventoryPurchaseOrdersByPurchaseOrderId({
@@ -205,7 +206,7 @@ export function useSavePurchaseOrder() {
 /** Mark as ordered or cancel: a status change at the revision the merchant saw. */
 export function usePurchaseOrderStatus() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { id: string; revision: number; action: "order" | "cancel" }) => {
       const options = { path: { purchaseOrderId: input.id }, body: { expectedRevision: input.revision } };
       return apiData(input.action === "order"
@@ -223,7 +224,7 @@ export function usePurchaseOrderStatus() {
 
 export function useDeletePurchaseOrder() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { id: string; revision: number }) =>
       apiData(deleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderId({
         path: { purchaseOrderId: input.id },
@@ -234,14 +235,14 @@ export function useDeletePurchaseOrder() {
   });
 }
 
-/** Books received units under one operation key; the same key replays a retry. */
+/** Books received units under the receipt's operation key; the same key replays a retry. */
 export function useReceivePurchaseOrder() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { id: string; operationKey: string; body: Omit<PurchaseOrderReceiveBody, "operationKey"> }) =>
+  return useCommand({
+    mutationFn: (input: { id: string; body: Omit<PurchaseOrderReceiveBody, "operationKey"> }, operationKey: string) =>
       apiData(postApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceive({
         path: { purchaseOrderId: input.id },
-        body: { ...input.body, operationKey: input.operationKey },
+        body: { ...input.body, operationKey },
       })),
     onSuccess: (receipt, input) => announceSave(presenceKey("purchase-order", input.id), receipt.revision),
     // After a failure the page keeps what it showed, so a retry sends the same intent (and key);
@@ -254,7 +255,7 @@ export function useReceivePurchaseOrder() {
 
 export function useSaveTransfer() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { id: string | null; revision: number | null; body: TransferBody }) =>
       input.id
         ? apiData(putApiV1AdminInventoryTransfersByTransferId({
@@ -272,7 +273,7 @@ export function useSaveTransfer() {
 
 export function useDeleteTransfer() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { id: string; revision: number }) =>
       apiData(deleteApiV1AdminInventoryTransfersByTransferId({
         path: { transferId: input.id },
@@ -283,14 +284,14 @@ export function useDeleteTransfer() {
   });
 }
 
-/** Ship or cancel: a stock command at the revision the merchant saw, under one operation key. */
+/** Ship or cancel: a stock command at the revision the merchant saw, under its operation key. */
 export function useTransferCommand() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { id: string; revision: number; operationKey: string; action: "ship" | "cancel" }) => {
+  return useCommand({
+    mutationFn: (input: { id: string; revision: number; action: "ship" | "cancel" }, operationKey: string) => {
       const options = {
         path: { transferId: input.id },
-        body: { expectedRevision: input.revision, operationKey: input.operationKey },
+        body: { expectedRevision: input.revision, operationKey },
       };
       return apiData(input.action === "ship"
         ? postApiV1AdminInventoryTransfersByTransferIdShip(options)
@@ -303,11 +304,11 @@ export function useTransferCommand() {
 
 export function useReceiveTransfer() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { id: string; operationKey: string; lines: Array<{ lineId: string; quantity: number }> }) =>
+  return useCommand({
+    mutationFn: (input: { id: string; lines: Array<{ lineId: string; quantity: number }> }, operationKey: string) =>
       apiData(postApiV1AdminInventoryTransfersByTransferIdReceive({
         path: { transferId: input.id },
-        body: { lines: input.lines, operationKey: input.operationKey },
+        body: { lines: input.lines, operationKey },
       })),
     onSuccess: (result, input) => announceSave(presenceKey("transfer", input.id), result.revision),
     onSettled: (_result, error, input) => refreshDocuments(queryClient, "transfer", error ? null : input.id, true),

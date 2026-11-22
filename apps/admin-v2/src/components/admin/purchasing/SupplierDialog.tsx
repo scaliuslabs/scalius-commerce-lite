@@ -103,7 +103,7 @@ export function SupplierDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!save.isPending) onOpenChange(next); }}>
+    <Dialog open={open} onOpenChange={save.guardClose(onOpenChange)}>
       <DialogContent data-presence-root={key ?? undefined}>
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2"><DialogTitle className="min-w-0 flex-1">{t(supplier ? "editSupplier" : "addSupplier")}</DialogTitle><PresenceSlot presenceKey={key} revision={supplier?.version} dirty={dirty} /></div>

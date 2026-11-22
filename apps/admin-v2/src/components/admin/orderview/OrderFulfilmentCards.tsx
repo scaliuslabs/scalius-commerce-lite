@@ -66,6 +66,7 @@ import {
 } from "./fulfilment-groups";
 import type { OrderActionRequest } from "./primary-action";
 import type { Order, OrderFulfillment } from "./types";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 // The hand-over dialog loads the first time a card opens it.
 const ManualFulfillmentDialog = lazy(() => import("./ManualFulfillmentDialog").then((module) => ({ default: module.ManualFulfillmentDialog })));
@@ -96,18 +97,10 @@ function useOrderMoney(order: Order): Money & { saved: ReturnType<typeof resolve
   };
 }
 
-/**
- * "Mark as ready for pickup", from the Pickup card or the page's next step.
- * One key per attempt: a retry after a failure replays it; a success ends it.
- */
+/** "Mark as ready for pickup", from the Pickup card or the page's next step. */
 export function usePickupReadyAction(orderId: string) {
   const mutation = useMarkPickupReady();
-  const key = useRef<string | null>(null);
-  const run = () => {
-    key.current ??= crypto.randomUUID();
-    mutation.mutate({ orderId, requestKey: key.current }, { onSuccess: () => { key.current = null; } });
-  };
-  return { run, isPending: mutation.isPending };
+  return { run: () => mutation.mutate({ orderId }), isPending: mutation.isPending };
 }
 
 /**
@@ -477,17 +470,13 @@ export function VoidFulfillmentDialog({ order, fulfillment, units, open, onOpenC
   const t = useMessages(orderDetailMessages);
   const r = useMessages(resourceMessages);
   const mutation = useVoidFulfillment();
-  const key = useRef("");
   useEffect(() => {
-    if (!open) return;
-    key.current = crypto.randomUUID();
-    mutation.reset();
-    // Every opening is a new attempt.
+    if (open) mutation.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   const ship = fulfillment.kind === "ship";
   return (
-    <AlertDialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
+    <AlertDialog open={open} onOpenChange={mutation.guardClose(onOpenChange)}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t(ship ? "shipments.cameBackTitle" : "void.title")}</AlertDialogTitle>
@@ -497,6 +486,7 @@ export function VoidFulfillmentDialog({ order, fulfillment, units, open, onOpenC
               : units === 1 ? t("void.bodyOne") : t("void.body", { count: units })}
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <CommandKeyNotice notice={mutation.notice({ fulfillmentId: fulfillment.id })} target="order" />
         {mutation.isError ? <p role="alert" className="text-body text-destructive">{orderErrorMessage(mutation.error)}</p> : null}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={mutation.isPending}>{r("cancel")}</AlertDialogCancel>
@@ -506,7 +496,7 @@ export function VoidFulfillmentDialog({ order, fulfillment, units, open, onOpenC
             onClick={(event) => {
               event.preventDefault();
               mutation.mutate(
-                { orderId: order.id, fulfillmentId: fulfillment.id, requestKey: key.current },
+                { orderId: order.id, fulfillmentId: fulfillment.id },
                 { onSuccess: () => onOpenChange(false) },
               );
             }}

@@ -8,7 +8,7 @@
 // sale". Both send the same event or order ID, so the platform counts an
 // event once. Code-split: the Integrations page loads it after its own cards.
 import { lazy, Suspense, useRef, type ReactNode } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { postApiV1AdminAnalyticsTestEvent, postApiV1AdminSettingsTracking } from "@scalius/api-client/sdk";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -51,6 +51,7 @@ import {
   type TagIds,
   type TrackingHealth,
 } from "./tracking-settings";
+import { useCommand } from "~/lib/use-command";
 
 const SettingsAdvanced = lazy(() => import("./SettingsAdvanced").then((module) => ({ default: module.SettingsAdvanced })));
 
@@ -457,7 +458,7 @@ function DestinationHealth({ name, children }: { name: Destination; children?: R
   const t = useMessages(settingsPrivacyMessages);
   const canSend = usePermissions().hasPermission(ADMIN_PERMISSIONS.ANALYTICS_EDIT);
   const health = useQuery(trackingHealthQuery);
-  const test = useMutation({
+  const test = useCommand({
     mutationFn: () => apiData(postApiV1AdminAnalyticsTestEvent({ body: { destination: name } })),
     onSuccess: (result) => {
       if (result.accepted) toast.success(t("testSent"));

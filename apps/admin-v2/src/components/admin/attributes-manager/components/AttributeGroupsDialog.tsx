@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
 import { toast } from "~/lib/toast";
 import {
@@ -21,6 +21,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { attributeGroupsQueryOptions, type AttributeGroupDto } from "~/lib/api-query-options/attributes";
 import { useMessages } from "~/i18n";
 import { attributeTypeMessages } from "~/i18n/attribute-types";
+import { useCommand } from "~/lib/use-command";
 
 /**
  * The specification table's sections: add, rename, reorder and delete.
@@ -38,7 +39,7 @@ export function AttributeGroupsDialog({ open, onClose, canEdit }: { open: boolea
   const [error, setError] = useState<string | null>(null);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.attributes.all });
-  const run = useMutation({
+  const run = useCommand({
     mutationFn: (action: () => Promise<unknown>) => action(),
     onSuccess: () => setError(null),
     onError: (failure) => setError(getServerFnError(failure, t("actionFailed"))),

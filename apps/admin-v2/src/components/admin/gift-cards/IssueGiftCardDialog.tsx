@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { Check, Copy, TriangleAlert } from "lucide-react";
 import { GIFT_CARD_LIMITS } from "@scalius/core/modules/gift-cards/browser";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
-import { useSubmitOnce } from "~/components/admin/shared/use-submit-once";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "~/components/ui/sheet";
@@ -30,6 +29,7 @@ import {
 import { maskedGiftCard, todayStoreDay } from "./gift-card-format";
 import { useIssueGiftCard } from "./use-gift-card-mutations";
 import { DateInput } from "~/components/ui/date-input";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 /** The first API field error the dialog can place on a field (`recipient.phone` → the contact field). */
 function serverFieldIssue(error: unknown): { field: IssueField; message: string } | null {
@@ -56,9 +56,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
   const [draft, setDraft] = useState<IssueDraft>(EMPTY_ISSUE_DRAFT);
   const [errors, setErrors] = useState<IssueErrors>({});
   const [copied, setCopied] = useState<"idle" | "copied" | "failed">("idle");
-  const requestKey = useRef("");
   const mutation = useIssueGiftCard();
-  const submitOnce = useSubmitOnce();
   const issued = mutation.data;
   const reset = mutation.reset;
   // A field the API refused shows at that field, in the API's words.
@@ -73,7 +71,6 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
       setDraft(EMPTY_ISSUE_DRAFT);
       setErrors({});
       setCopied("idle");
-      requestKey.current = crypto.randomUUID();
       return;
     }
     // Closing forgets the code.
@@ -103,8 +100,8 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
       document.getElementById(`gift-card-${first}`)?.focus();
       return;
     }
-    // One request at a time (the request key also makes a repeat return the same card).
-    submitOnce(() => mutation.mutateAsync(issueRequestBody(draft, requestKey.current)));
+    // One request at a time; the request key also makes a repeat return the same card.
+    mutation.mutate(issueRequestBody(draft));
   };
 
   const copy = async (code: string) => {
@@ -124,7 +121,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
   const busy = mutation.isPending;
 
   return (
-    <Sheet open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
+    <Sheet open={open} onOpenChange={mutation.guardClose(onOpenChange)}>
       <SheetContent
         className="flex flex-col"
         // With the code on screen, only Done, the close button or Esc closes: a stray click must not lose it.
@@ -172,6 +169,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
               <SheetDescription>{t("issueHelp")}</SheetDescription>
             </SheetHeader>
             <form id="issue-gift-card" method="post" noValidate className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4" onSubmit={submit}>
+              <CommandKeyNotice notice={mutation.notice({})} target="giftCard" />
               {mutation.isError && !serverIssue ? (
                 <Alert variant="destructive"><AlertDescription>{getServerFnError(mutation.error, t("issueFailed"))}</AlertDescription></Alert>
               ) : null}

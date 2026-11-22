@@ -25,6 +25,7 @@ import type { OrderPaymentsPayload } from "~/lib/api-query-options/orders";
 import { formatSavedMinorAmount } from "~/lib/order-money-format";
 import { typedMinor } from "~/lib/typed-money";
 import { MoneyInput } from "../shared/MoneyInput";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 /** A payment and what it still holds: the most a chargeback on it may take. */
 type Payment = OrderPaymentsPayload["payments"][number] & { heldMinor: number };
@@ -56,7 +57,6 @@ export function RecordDisputeDialog({
   const t = useMessages(orderDisputeMessages);
   const r = useMessages(resourceMessages);
   const mutation = useRecordOrderDispute();
-  const [requestKey] = useState(() => `record-dispute-${crypto.randomUUID()}`);
   const [paymentId, setPaymentId] = useState(payments[0]?.id ?? "");
   // The last list that held a payment: a refetch that empties it never leaves the form without one.
   const [shown, setShown] = useState(payments);
@@ -110,7 +110,6 @@ export function RecordDisputeDialog({
     mutation.mutate({
       orderId,
       paymentId: payment.id,
-      requestKey,
       amountMinor: typedMinor(amount!, payment.currency),
       reason: reason.trim(),
       fundsWithdrawn: withdrawn || lost,
@@ -120,13 +119,14 @@ export function RecordDisputeDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next && !mutation.isPending) onClose(); }}>
+    <Dialog open={open} onOpenChange={mutation.guardClose((next) => { if (!next) onClose(); })}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("recordTitle")}</DialogTitle>
           <DialogDescription>{t("recordHelp")}</DialogDescription>
         </DialogHeader>
         <form id="order-record-dispute" method="post" className="space-y-4" onSubmit={submit} noValidate>
+          <CommandKeyNotice notice={mutation.notice({ paymentId: payment.id })} target="order" startOver={{ kind: "dispute", onClick: () => mutation.forget({ paymentId: payment.id }) }} />
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           {list.length > 1 ? (
             <Field id="disputePayment" label={t("payment")}>

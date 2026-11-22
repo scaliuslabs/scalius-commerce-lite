@@ -14,6 +14,7 @@ import {
   postApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceive,
   postApiV1AdminInventoryTransfersByTransferIdReceive,
 } from "@scalius/api-client/sdk";
+import { useCommand } from "~/lib/use-command";
 import { apiData } from "@/lib/api";
 import { AdminApiResponseError } from "@/lib/admin-api-error";
 import { Label } from "~/components/ui/label";
@@ -26,14 +27,14 @@ import type { FlashState } from "./ScanFlash";
 import {
   clampTally,
   countedTotal,
-  createIntentKeys,
-  receiveFingerprint,
   receiveLines,
   setCounted,
   tallyScan,
   type ReceiveLine,
   type ReceiveTally,
 } from "./receive-tally";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
+import { keyAlreadyUsed } from "~/lib/intent-request-key";
 
 const tr = (key: keyof typeof scannerMessages.en, vars?: Record<string, string | number>) =>
   translate(scannerMessages, key, vars);
@@ -154,7 +155,7 @@ export async function fetchReceiveDocument(kind: ReceiveKind, id: string): Promi
 
 /** A receive command; retried once with the same key unless the API refused it. */
 async function postReceive(
-  receiving: ReceiveDocument,
+  receiving: Pick<ReceiveDocument, "kind" | "id">,
   lines: Array<{ lineId: string; quantity: number }>,
   updateCost: boolean,
   operationKey: string,
@@ -198,7 +199,14 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
   const submittingRef = useRef(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [keys] = useState(() => createIntentKeys());
+  // The receipt's operation key per intent: after an unknown outcome the same key goes again, even for
+  // a changed count. It lasts while this screen does: the inventory server does not yet refuse another
+  // receipt under a used key in a way the dashboard can read.
+  const receive = useCommand({
+    createKey: () => `invop_${crypto.randomUUID()}`,
+    mutationFn: (intent: { kind: ReceiveDocument["kind"]; id: string; revision: number; lines: Array<{ lineId: string; quantity: number }>; updateCost: boolean }, operationKey: string) =>
+      postReceive(intent, intent.lines, intent.updateCost, operationKey),
+  });
 
   const setTally = useCallback((next: ReceiveTally) => {
     tallyRef.current = next;
@@ -224,12 +232,11 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
       setTally({});
       setUpdateCost(false);
       setProblem(null);
-      keys.settle();
       setOpening(null);
     } catch {
       setOpenFailed(true);
     }
-  }, [keys, setTally]);
+  }, [setTally]);
 
   // Back to the list (which reloads as it opens).
   const close = useCallback(() => {
@@ -238,8 +245,7 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
     setOpenFailed(false);
     setTally({});
     setProblem(null);
-    keys.settle();
-  }, [keys, setTally]);
+  }, [setTally]);
 
   /** One scanned unit: counted on its line, or why not. */
   const scan = useCallback((code: string) => {
@@ -284,16 +290,8 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
     setSubmitting(true);
     setProblem(null);
     const withCost = current.kind === "purchaseOrder" && updateCost;
-    const operationKey = keys.keyFor(receiveFingerprint({
-      kind: current.kind,
-      documentId: current.id,
-      revision: current.revision,
-      lines,
-      updateCost: withCost,
-    }));
     try {
-      await postReceive(current, lines, withCost, operationKey);
-      keys.settle();
+      await receive.mutateAsync({ kind: current.kind, id: current.id, revision: current.revision, lines, updateCost: withCost });
       const units = lines.reduce((total, line) => total + line.quantity, 0);
       setTally({});
       onReceived({ number: current.number, title: current.title, units });
@@ -325,10 +323,11 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
         setReceiving(latest);
       }
     } catch (error) {
+      // The server says this key's earlier receipt was booked: the notice says so, the next tap is a new receipt.
+      if (keyAlreadyUsed(error)) return;
       if (error instanceof AdminApiResponseError && error.status < 500) {
         // Refused: nothing was booked. Changed meanwhile (another receipt, a cancel): reload and keep what still fits.
-        keys.settle();
-        if (error.status === 409 || error.status === 404) {
+          if (error.status === 409 || error.status === 404) {
           try {
             const latest = await fetchReceiveDocument(current.kind, current.id);
             setReceiving(latest);
@@ -350,7 +349,7 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
       submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [feedback, keys, onReceived, setTally, updateCost]);
+  }, [feedback, onReceived, receive, setTally, updateCost]);
 
   return {
     choices,
@@ -369,6 +368,7 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
     submit,
     problem,
     notice,
+    keyNotice: receiving ? receive.notice({ id: receiving.id }) : null,
   };
 }
 
@@ -487,6 +487,7 @@ export function ReceiveMode({ session, showDestination }: {
       </div>
 
       <div className="shrink-0 space-y-2 border-t bg-card px-3 py-3">
+        <CommandKeyNotice notice={session.keyNotice} target="document" />
         {session.problem ? (
           <div role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-body text-destructive">{session.problem}</div>
         ) : null}

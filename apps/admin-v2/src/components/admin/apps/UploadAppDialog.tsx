@@ -3,7 +3,7 @@
 // or not signed at all, stops at a warning step; only a Super Admin can accept
 // it. The app then opens on its page, where the usual approval turns it on.
 import { useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -16,6 +16,7 @@ import { toast } from "~/lib/toast";
 import { appErrorCode, handOverRemovedAppData } from "~/lib/api-mutations/apps";
 import { appErrorDetails, appErrorMessage, uploadAppPackage } from "~/lib/api-query-options/apps-lifecycle";
 import { pluginKeyFingerprint } from "@scalius/shared/plugins/registry";
+import { useCommand } from "~/lib/use-command";
 
 /** The API refuses a larger package (20 MiB). */
 const MAX_PACKAGE_BYTES = 20 * 1024 * 1024;
@@ -50,7 +51,7 @@ export function UploadAppDialog({ open, onOpenChange }: { open: boolean; onOpenC
   const [step, setStep] = useState<Step>({ kind: "choose" });
   const [problem, setProblem] = useState<{ text: string; detail: string | null } | null>(null);
 
-  const upload = useMutation({
+  const upload = useCommand({
     mutationFn: async (trust: Trust) => {
       // A Super Admin's "hand over and install": the kept data goes to this release's key first.
       if (step.kind === "held") await handOverRemovedAppData({ id: step.appId, revision: step.retainedRevision }, step.releaseSigner);

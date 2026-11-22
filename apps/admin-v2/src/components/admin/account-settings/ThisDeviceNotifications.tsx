@@ -17,7 +17,7 @@
  * the page's loader, so the section appears whole and nothing below moves.
  */
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
@@ -40,6 +40,7 @@ import {
   type PushBlocker,
   type TestPushOutcome,
 } from "~/lib/web-push";
+import { useCommand } from "~/lib/use-command";
 
 type UnblockKey = "unblockIos" | "unblockEdge" | "unblockChrome" | "unblockFirefox" | "unblockSafari" | "unblockOther";
 
@@ -161,7 +162,7 @@ export function ThisDeviceNotifications() {
   };
   const testText = () => ({ title: t("testTitle"), body: t("testBody") });
 
-  const sendTest = useMutation({
+  const sendTest = useCommand({
     mutationFn: (id: string) => sendTestPush(id, testText()),
     onSuccess: async (outcome, id) => {
       if (id === thisDeviceId() && outcome === "sent") {
@@ -174,7 +175,7 @@ export function ThisDeviceNotifications() {
     },
     onError: (_error, id) => setResults((current) => ({ ...current, [id]: "failed" })),
   });
-  const turnOn = useMutation({
+  const turnOn = useCommand({
     mutationFn: () => {
       const { browser, system } = browserAndSystem(navigator.userAgent);
       const label = browser && system ? t("deviceLabel", { browser, system }) : browser || t("unknownDevice");
@@ -187,7 +188,7 @@ export function ThisDeviceNotifications() {
     },
     onError: () => void toast.error(t("failed")),
   });
-  const turnOff = useMutation({
+  const turnOff = useCommand({
     mutationFn: turnOffThisDevice,
     onSuccess: async () => {
       setAsking(null);
@@ -196,7 +197,7 @@ export function ThisDeviceNotifications() {
     },
     onError: () => void toast.error(t("failed")),
   });
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: (id: string) => removeDevice(id),
     onSuccess: async () => {
       toast.success(t("removed"));

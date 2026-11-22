@@ -3,7 +3,7 @@
 // to or unpublished from them, 90 products per call, or every product the
 // list's filter matches, one server slice at a time.
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -20,6 +20,7 @@ import {
   salesChannelsQueryOptions,
   setProductPublications,
 } from "~/lib/api-query-options/sales-channels";
+import { useCommand } from "~/lib/use-command";
 
 export function PublicationsDialog({ action, target, filter, bulk, onClose, onDone }: {
   action: "publish" | "unpublish";
@@ -37,7 +38,7 @@ export function PublicationsDialog({ action, target, filter, bulk, onClose, onDo
   const [error, setError] = useState<string | null>(null);
   const count = target.kind === "rows" ? target.rows.length : target.count;
 
-  const run = useMutation({
+  const run = useCommand({
     mutationFn: async () => {
       if (target.kind === "rows") {
         await inChunks(target.rows.map((row) => row.id), (chunk) => setProductPublications({ action, productIds: chunk, channelIds: chosen }));
@@ -61,7 +62,7 @@ export function PublicationsDialog({ action, target, filter, bulk, onClose, onDo
   });
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !run.isPending) onClose(); }}>
+    <Dialog open onOpenChange={run.guardClose((open) => { if (!open) onClose(); })}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t(action === "publish" ? "publishTitle" : "unpublishTitle", { count })}</DialogTitle>

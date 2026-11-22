@@ -41,6 +41,7 @@ import type { Order, OrderFulfillment, OrderItem, OrderShipment } from "./types"
 import { isPartSent } from "./primary-action";
 import { listedActions } from "./order-actions";
 import { Field } from "~/components/ui/field";
+import { isSettledShipment } from "@scalius/shared/shipment-state";
 
 // The courier check: its form loads when the merchant first opens it.
 const CourierCheckDialog = lazy(() => import("./CourierCheckDialog").then((module) => ({ default: module.CourierCheckDialog })));
@@ -90,7 +91,6 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
   const recovery = order.shipmentRecovery;
   const repairMutation = useReconcileShipment();
   const lookupMutation = useLookupUnknownShipment();
-  const lookupKey = useRef<string | null>(null);
   const copy = recovery ? shipmentRecoveryCopy(t, recovery.reason) : null;
   if (!recovery || recovery.state === "none" || !copy) return null;
 
@@ -102,13 +102,7 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
   // A courier that finds a booking by the order number can confirm a lost answer itself.
   const recoveryCourier = order.deliveryProviders?.find((provider) => provider.type === recovery.providerType);
 
-  const lookup = () => {
-    lookupKey.current ??= crypto.randomUUID();
-    lookupMutation.mutate(
-      { orderId: order.id, shipmentId, expectedOrderVersion: order.version, operationKey: lookupKey.current },
-      { onSuccess: () => { lookupKey.current = null; } },
-    );
-  };
+  const lookup = () => lookupMutation.mutate({ orderId: order.id, shipmentId, expectedOrderVersion: order.version });
 
   return (
     <div role="status" className="space-y-2">
@@ -326,8 +320,6 @@ export function BookCourier({ order, focusRequest, guard }: {
   );
 }
 
-const SETTLED_SHIPMENT_STATUSES = new Set(["delivered", "returned", "cancelled", "failed"]);
-
 /**
  * The courier side of an order that ships: each parcel's live status and
  * tracking, a courier booking that needs checking, and Mark delivered. What
@@ -363,7 +355,7 @@ export function ShipmentCard({ order }: { order: Order }) {
   });
   const cod = hydrated && outForDelivery ? codQuery.data?.tracking ?? null : null;
   const failure = cod?.codStatus === "failed" ? cod : null;
-  const openShipmentId = shipments.find((shipment) => !SETTLED_SHIPMENT_STATUSES.has(shipment.status.toLowerCase()))?.id;
+  const openShipmentId = shipments.find((shipment) => !isSettledShipment(shipment.status))?.id;
   const openLabel = status === "returned"
     ? t("cod.status.returned")
     : failure

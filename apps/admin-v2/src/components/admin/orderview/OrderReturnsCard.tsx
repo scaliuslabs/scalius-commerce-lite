@@ -1,7 +1,7 @@
 import { InlineError } from "~/components/admin/states/InlineError";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { pollWhileOffline } from "~/lib/admin-query-client";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { postApiV1AdminOrdersByIdRefundKept } from "@scalius/api-client/sdk";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { apiData } from "~/lib/api";
@@ -27,6 +27,7 @@ import {
 import type { Order } from "./types";
 import { hasReturnsCard } from "./card-rules";
 import { OrderReturnRow, type ReturnDialogAction } from "./order-returns/OrderReturnRow";
+import { useCommand } from "~/lib/use-command";
 
 // The return dialogs load the first time one is opened.
 const ApproveReturnDialog = lazy(() => import("./order-returns/ApproveReturnDialog").then((module) => ({ default: module.ApproveReturnDialog })));
@@ -66,7 +67,7 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
   // A return refunded only in part on purpose (a restocking fee): keep the rest, so nothing stays owed.
   const queryClient = useQueryClient();
   const [keeping, setKeeping] = useState(false);
-  const keep = useMutation({
+  const keep = useCommand({
     mutationFn: () => apiData(postApiV1AdminOrdersByIdRefundKept({ path: { id: order.id }, body: {} })),
     onSuccess: () => {
       toast.success(t("returns.restKept"));

@@ -151,7 +151,7 @@ export function SupplierList({ tab, onTabChange }: { tab: SupplierTab; onTabChan
       <SupplierDialog key={session} supplier={editing} open={editOpen && canEdit} onOpenChange={setEditOpen} />
       <ConfirmDialog
         open={archiving !== null && canEdit}
-        onOpenChange={(open) => { if (!open && !action.isPending) setArchiving(null); }}
+        onOpenChange={action.guardClose((open) => { if (!open) setArchiving(null); })}
         title={t("archiveTitle", { name: archiving?.name ?? "" })}
         description={t("archiveBody")}
         confirmLabel={t("archive")}

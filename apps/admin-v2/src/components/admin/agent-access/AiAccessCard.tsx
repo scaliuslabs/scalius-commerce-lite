@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { toast } from "~/lib/toast";
@@ -52,6 +52,7 @@ import {
 import { REFRESH_TOKEN_REUSE_OPERATION, disconnectionCause, type AgentAuditEvent, type AgentConnection, type AgentRisk } from "./types";
 import { sameFormValue } from "~/lib/form-values";
 import { connectionOwner, staffActor } from "~/lib/actor";
+import { useCommand } from "~/lib/use-command";
 
 const ACTIVITY_LIMIT = 10;
 const RISKS: ReadonlySet<string> = new Set<AgentRisk>(["read", "write", "destructive", "financial", "security"]);
@@ -175,7 +176,7 @@ function ConnectionRow({
     connection.kind === "pat" || connection.kind === "cli"
       ? connection.credentials?.find((credential) => credential.revokedAt === null)
       : undefined;
-  const replace = useMutation({
+  const replace = useCommand({
     // The new key goes straight to component state; the mutation keeps nothing.
     mutationFn: async (credentialId: string) => {
       const result = await rotateAgentCredential(credentialId);
@@ -188,7 +189,7 @@ function ConnectionRow({
     },
     onError: () => toast.error(t("replaceFailed")),
   });
-  const disconnect = useMutation({
+  const disconnect = useCommand({
     mutationFn: () => revokeAgentGrant(connection.id),
     onSuccess: async () => {
       toast.success(t("disconnected"));
@@ -290,7 +291,7 @@ function SecurityRevokedRow({ connection, canManage }: { connection: AgentConnec
   const [open, setOpen] = useState(false);
   const name = connection.label || connection.clientName || t("unnamed");
   const revokedOn = formatDate(connection.revokedAt ?? null, true);
-  const dismiss = useMutation({
+  const dismiss = useCommand({
     mutationFn: () => dismissAgentSecurityRevocation(connection.id),
     onSuccess: async () => {
       toast.success(t("dismissed"));
@@ -492,7 +493,7 @@ export function AiAccessCard() {
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmOld, setConfirmOld] = useState(false);
 
-  const disconnectAll = useMutation({
+  const disconnectAll = useCommand({
     mutationFn: () => revokeAllAgentGrants(),
     onSuccess: async () => {
       toast.success(t("disconnectedAll"));
@@ -500,7 +501,7 @@ export function AiAccessCard() {
     },
     onError: () => toast.error(t("disconnectFailed")),
   });
-  const clearOld = useMutation({
+  const clearOld = useCommand({
     mutationFn: () => purgeRevokedAgentConnections(),
     onSuccess: async () => {
       toast.success(t("cleared"));

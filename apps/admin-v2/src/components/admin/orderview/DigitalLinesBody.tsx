@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import {
   postApiV1AdminDigitalEntitlementsByIdReset,
@@ -20,6 +20,7 @@ import { apiData } from "~/lib/api";
 import { invalidateOrder, orderErrorMessage } from "~/lib/api-mutations/orders";
 import { formatOrderTimestamp } from "./formatters";
 import type { DigitalDelivery, LineDownload } from "./digital-lines";
+import { useCommand } from "~/lib/use-command";
 
 /**
  * What the order delivered digitally, per line: each file with "3 of 5
@@ -38,19 +39,18 @@ export function DigitalLinesBody({ orderId, delivery }: { orderId: string; deliv
   const canResend = permissions.canEditOrders && !accessEnded;
   const canManage = permissions.canManageDigitalAccess && !accessEnded;
   const [revoking, setRevoking] = useState<LineDownload | null>(null);
-  const resendKey = useRef<string | null>(null);
   const done = (message: string) => {
     toast.success(message);
     void invalidateOrder(queryClient, orderId);
   };
   const failed = (error: Error) => toast.error(orderErrorMessage(error));
 
-  const reset = useMutation({
+  const reset = useCommand({
     mutationFn: (entitlementId: string) => apiData(postApiV1AdminDigitalEntitlementsByIdReset({ path: { id: entitlementId } })),
     onSuccess: () => done(t("downloadsReset")),
     onError: failed,
   });
-  const revoke = useMutation({
+  const revoke = useCommand({
     mutationFn: (entitlementId: string) => apiData(postApiV1AdminDigitalEntitlementsByIdRevoke({ path: { id: entitlementId } })),
     onSuccess: () => {
       setRevoking(null);
@@ -58,13 +58,11 @@ export function DigitalLinesBody({ orderId, delivery }: { orderId: string; deliv
     },
     onError: failed,
   });
-  // One key per attempt: a retry after a failure replays it; a success ends it.
-  const resend = useMutation({
-    mutationFn: (requestKey: string) => apiData(postApiV1AdminOrdersByIdDigitalResend({ path: { id: orderId }, body: { requestKey } })),
-    onSuccess: () => {
-      resendKey.current = null;
-      done(t("resent"));
-    },
+  // The command's key: a retry after a lost answer replays it; a success ends it.
+  const resend = useCommand({
+    mutationFn: (_input: { orderId: string }, requestKey: string) =>
+      apiData(postApiV1AdminOrdersByIdDigitalResend({ path: { id: orderId }, body: { requestKey } })),
+    onSuccess: () => done(t("resent")),
     onError: failed,
   });
   const hasDelivered = lines.some((line) => line.downloads.length > 0 || line.keys.length > 0);
@@ -81,10 +79,7 @@ export function DigitalLinesBody({ orderId, delivery }: { orderId: string; deliv
               variant="outline"
               size="sm"
               loading={resend.isPending}
-              onClick={() => {
-                resendKey.current ??= crypto.randomUUID();
-                resend.mutate(resendKey.current);
-              }}
+              onClick={() => resend.mutate({ orderId })}
             >
               {t("resend")}
             </Button>
@@ -162,7 +157,7 @@ export function DigitalLinesBody({ orderId, delivery }: { orderId: string; deliv
       </CardContent>
       <ConfirmDialog
         open={revoking !== null}
-        onOpenChange={(open) => { if (!open && !revoke.isPending) setRevoking(null); }}
+        onOpenChange={revoke.guardClose((open) => { if (!open) setRevoking(null); })}
         title={t("revokeAccessTitle", { name: revoking?.displayName ?? "" })}
         description={t("revokeAccessBody")}
         confirmLabel={t("revokeAccess")}

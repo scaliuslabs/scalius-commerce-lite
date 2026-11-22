@@ -191,7 +191,7 @@ function ManageChannelDialog({ channel, locations, choosesLocations: storeChoose
   };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !update.isPending) onClose(); }}>
+    <Dialog open onOpenChange={update.guardClose((open) => { if (!open) onClose(); })}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("manageTitle", { name })}</DialogTitle>

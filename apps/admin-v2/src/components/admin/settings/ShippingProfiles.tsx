@@ -4,7 +4,7 @@
 // General's (a profile without its own), its own charges with weight and
 // order-value bands, or free on every option.
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { Alert, AlertDescription } from "~/components/ui/alert";
@@ -40,6 +40,7 @@ import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsCardLoading, SettingsDialog, SettingsField, SettingsRow } from "./SettingsPage";
 import { settingsSheet } from "./SettingsSheet";
 import { sameFormValue } from "~/lib/form-values";
+import { useCommand } from "~/lib/use-command";
 
 type Messages = ReturnType<typeof useMessages<keyof typeof shippingMessages.en>>;
 
@@ -220,7 +221,7 @@ function ProfileForm({ profile, options, storeWeightGrams }: {
   const [draft, setDraft] = useState(saved);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const isDefault = profile?.isDefault === true;
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: () => profile
       // The seeded name shown in this language, untouched, stays stored as it was.
       ? send("put", `${PROFILES_URL}/${encodeURIComponent(profile.id)}`, { ...profileBody(draft), name: savedSeededName(profile, draft.name), expectedRevision: profile.revision })
@@ -230,7 +231,7 @@ function ProfileForm({ profile, options, storeWeightGrams }: {
       if (error instanceof AdminApiResponseError && error.status === 409) void refresh();
     },
   });
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: () => send("delete", `${PROFILES_URL}/${encodeURIComponent(profile!.id)}`),
     onSuccess: async () => {
       toast.success(t("profileDeleted"));

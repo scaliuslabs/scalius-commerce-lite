@@ -90,10 +90,25 @@ export async function importLicenceKeys(
 
     const importId = `lki_${(await sha256Hex(`${input.assetId}\0${input.requestKey}`)).slice(0, 32)}`;
     const operationKey = `licence-import:${importId}`;
+    const cipher = await licenceKeyCrypto(input.credentialKey);
+    const hashed = await Promise.all(parsed.keys.map(async (key) => ({ key, hash: await cipher.hash(key) })));
     const replay = async (): Promise<ImportLicenceKeysResult | null> => {
         const operation = await db.select({ key: inventoryOperations.operationKey }).from(inventoryOperations)
             .where(eq(inventoryOperations.operationKey, operationKey)).get();
         if (!operation) return null;
+        // The same import names the same keys: every key it imported is asked again, and every key asked is in the pool.
+        const asked = new Set(hashed.map((entry) => entry.hash));
+        const importedHashes = await db.select({ hash: digitalLicenceKeys.keyHash }).from(digitalLicenceKeys)
+            .where(and(eq(digitalLicenceKeys.assetId, input.assetId), eq(digitalLicenceKeys.importId, importId))).all();
+        const inPool = new Set<string>();
+        for (const part of chunkForD1([...asked])) {
+            const rows = await db.select({ hash: digitalLicenceKeys.keyHash }).from(digitalLicenceKeys)
+                .where(and(eq(digitalLicenceKeys.assetId, input.assetId), inArray(digitalLicenceKeys.keyHash, part))).all();
+            for (const row of rows) inPool.add(row.hash);
+        }
+        if (importedHashes.some((row) => !asked.has(row.hash)) || [...asked].some((hash) => !inPool.has(hash))) {
+            throw new AppError(422, "idempotency_key_reused", "This request key was already used for another import. Start a new one.");
+        }
         const [row] = await db.select({ count: sql<number>`count(*)` }).from(digitalLicenceKeys)
             .where(and(eq(digitalLicenceKeys.assetId, input.assetId), eq(digitalLicenceKeys.importId, importId))).all();
         const variant = await db.select({ stock: productVariants.stock }).from(productVariants).where(eq(productVariants.id, pool.variantId)).get();
@@ -112,8 +127,6 @@ export async function importLicenceKeys(
     const replayed = await replay();
     if (replayed) return replayed;
 
-    const cipher = await licenceKeyCrypto(input.credentialKey);
-    const hashed = await Promise.all(parsed.keys.map(async (key) => ({ key, hash: await cipher.hash(key) })));
     const existing = new Set<string>();
     for (const part of chunkForD1(hashed.map((entry) => entry.hash))) {
         const rows = await db.select({ hash: digitalLicenceKeys.keyHash }).from(digitalLicenceKeys)
@@ -140,8 +153,11 @@ export async function importLicenceKeys(
         importId,
         createdAt: now,
     })));
-    const companions: BatchItem<"sqlite">[] = chunkRowsForD1(rows, KEY_INSERT_PARAMS).map((chunk) =>
-        db.insert(digitalLicenceKeys).values(chunk) as BatchItem<"sqlite">);
+    const companions: BatchItem<"sqlite">[] = [
+        // One import per request key: a racing import under the key that committed first stops this one.
+        buildBatchGuard(db, sql`NOT EXISTS (SELECT 1 FROM ${digitalLicenceKeys} WHERE ${digitalLicenceKeys.importId} = ${importId})`, "licence_import_raced"),
+        ...chunkRowsForD1(rows, KEY_INSERT_PARAMS).map((chunk) => db.insert(digitalLicenceKeys).values(chunk) as BatchItem<"sqlite">),
+    ];
 
     try {
         const result = await executeInventoryOperation(db, {
@@ -155,6 +171,13 @@ export async function importLicenceKeys(
             // note never carries an internal id (History shows it to merchants).
             reason: "Imported",
         }, input.adminUserId, { companionStatements: companions });
+        // A racing import under the key may have won: the operation then replayed its stock edge
+        // without these keys. Answer as that import (or refuse this other one), never as done.
+        const landed = await db.select({ id: digitalLicenceKeys.id }).from(digitalLicenceKeys).where(eq(digitalLicenceKeys.id, rows[0]!.id)).get();
+        if (!landed) {
+            const winner = await replay();
+            if (winner) return winner;
+        }
         return {
             importId,
             imported: rows.length,
@@ -192,6 +215,11 @@ export async function revokeLicenceKeys(
     const done = await db.select({ result: inventoryOperations.resultPayload }).from(inventoryOperations)
         .where(eq(inventoryOperations.operationKey, operationKey)).get();
     if (done) {
+        // The same revoke left every key it named unavailable: a key still for sale was not in it.
+        const stillAvailable = await db.select({ id: digitalLicenceKeys.id }).from(digitalLicenceKeys)
+            .where(and(eq(digitalLicenceKeys.assetId, input.assetId), inArray(digitalLicenceKeys.id, ids), eq(digitalLicenceKeys.status, "available")))
+            .get();
+        if (stillAvailable) throw new AppError(422, "idempotency_key_reused", "This request key was already used for another revoke. Start a new one.");
         const parsed = JSON.parse(done.result) as { delta?: number; newStock?: number };
         const stock = parsed.newStock ?? 0;
         return { revoked: Math.abs(parsed.delta ?? 0), variantId: pool.variantId, previousStock: stock, stock, replayed: true };
@@ -223,6 +251,10 @@ export async function revokeLicenceKeys(
         }
         throw error;
     });
+    // A racing revoke under the key may have won: the operation then replayed without these keys.
+    const notRevoked = await db.select({ id: digitalLicenceKeys.id }).from(digitalLicenceKeys)
+        .where(and(inArray(digitalLicenceKeys.id, targets), eq(digitalLicenceKeys.status, "available"))).get();
+    if (notRevoked) throw new AppError(422, "idempotency_key_reused", "This request key was already used for another revoke. Start a new one.");
     return { revoked: targets.length, variantId: pool.variantId, previousStock: result.previousStock, stock: result.newStock, replayed: false };
 }
 

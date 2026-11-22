@@ -1,10 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
-import {
-  useMutation,
-  useQueryClient,
-  type QueryClient,
-  type UseMutationOptions,
-} from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import {
   deleteApiV1AdminOrdersByIdTimelineByEventId,
@@ -44,6 +38,7 @@ import { translate } from "~/i18n";
 import { classifyAdminError, readAdminApiError } from "../admin-api-error";
 import { orderToastMessages, type OrderToastMessageKey } from "~/i18n/order-toasts";
 import { apiData, type ApiBody } from "../api";
+import { useCommand } from "../use-command";
 import { showOrderNotice } from "../order-notice";
 import type {
   ApproveOrderReturnInput,
@@ -69,7 +64,7 @@ type ResolveUnknownShipmentBody =
   ApiBody<typeof postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknown>;
 /** Flat dialog command; the outcome decides which contract branch it satisfies. */
 export type ResolveUnknownShipmentInput = OrderShipmentRef &
-  Omit<ResolveUnknownShipmentBody, "outcome"> & {
+  Omit<ResolveUnknownShipmentBody, "outcome" | "operationKey"> & {
     outcome: ResolveUnknownShipmentBody["outcome"];
     externalId?: string;
     trackingId?: string;
@@ -178,76 +173,9 @@ export function orderErrorMessage(error: unknown): string {
   }
 }
 
-/** The callbacks of one call: they run when that call settles, whatever else runs meanwhile. */
-interface CallCallbacks<TData, TVariables> {
-  onSuccess?: (data: TData, variables: TVariables) => void;
-  onError?: (error: Error, variables: TVariables) => void;
-  onSettled?: (data: TData | undefined, error: Error | null, variables: TVariables) => void;
-}
-
-/** What a call acts on: its order (or record), else the whole request. */
-function callSubject(variables: unknown): string {
-  const subject = variables as { orderId?: unknown; id?: unknown } | null;
-  if (typeof subject?.orderId === "string") return subject.orderId;
-  if (typeof subject?.id === "string") return subject.id;
-  return JSON.stringify(variables);
-}
-
-/**
- * A mutation that runs once at a time per order: a second click (or Enter)
- * on the same order before React re-renders the disabled button is dropped
- * here, while another order's call (another list row) runs. Each call's own
- * callbacks run when it settles; React Query's would run for the latest call
- * only. The server still replays a repeated request key, so dropping only
- * saves the extra trip.
- */
-function useSingleFlightMutation<TData, TVariables>(
-  options: UseMutationOptions<TData, Error, TVariables>,
-) {
-  const inFlight = useRef(new Set<string>());
-  // A call's own callbacks belong to the screen that made it: none run once it is gone.
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  const mutation = useMutation<TData, Error, TVariables>(options);
-  const { mutateAsync } = mutation;
-  const mutate = useCallback((variables: TVariables, callbacks?: CallCallbacks<TData, TVariables>) => {
-    const subject = callSubject(variables);
-    if (inFlight.current.has(subject)) return;
-    inFlight.current.add(subject);
-    const settle = (...runs: Array<() => void>) => {
-      inFlight.current.delete(subject);
-      if (!mounted.current) return;
-      // A callback that throws is reported, never left as an unhandled rejection, and the next still runs.
-      for (const run of runs) {
-        try {
-          run();
-        } catch (error) {
-          globalThis.reportError?.(error);
-        }
-      }
-    };
-    void mutateAsync(variables).then(
-      (data) => settle(
-        () => callbacks?.onSuccess?.(data, variables),
-        () => callbacks?.onSettled?.(data, null, variables),
-      ),
-      (error: Error) => settle(
-        () => callbacks?.onError?.(error, variables),
-        () => callbacks?.onSettled?.(undefined, error, variables),
-      ),
-    );
-  }, [mutateAsync]);
-  return { ...mutation, mutate };
-}
-
 export function useCreateOrder() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (body: ApiBody<typeof postApiV1AdminOrders>) =>
       apiData(postApiV1AdminOrders({ body })),
     onSuccess: () => {
@@ -264,7 +192,7 @@ export function useCreateOrder() {
  */
 export function useConfirmManualOrderAmendment() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: ({ id, ...body }: ConfirmManualOrderAmendmentInput) =>
       apiData(postApiV1AdminOrdersByIdAmendments({ path: { id }, body })),
     onSuccess: (_result, variables) => {
@@ -278,7 +206,7 @@ export function useConfirmManualOrderAmendment() {
 /** Customer and delivery details of an order that hasn't shipped. */
 export function useUpdateOrderDetails() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: ({ orderId, ...body }: UpdateOrderDetailsInput) =>
       apiData(putApiV1AdminOrdersByIdDetails({ path: { id: orderId }, body })),
     onSuccess: (_result, variables) => {
@@ -292,8 +220,8 @@ export function useUpdateOrderDetails() {
 /** A staff comment; one Idempotency-Key per draft, so a repeated Post adds it once. */
 export function useAddOrderComment() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
-    mutationFn: ({ orderId, requestKey, ...body }: { orderId: string; requestKey: string } & ApiBody<typeof postApiV1AdminOrdersByIdTimeline>) =>
+  return useCommand({
+    mutationFn: ({ orderId, ...body }: { orderId: string } & ApiBody<typeof postApiV1AdminOrdersByIdTimeline>, requestKey: string) =>
       apiData(postApiV1AdminOrdersByIdTimeline({ path: { id: orderId }, body, headers: { "idempotency-key": requestKey } })),
     onSuccess: (_result, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["orders", "timeline", variables.orderId] });
@@ -304,7 +232,7 @@ export function useAddOrderComment() {
 /** Deletes the viewer's own comment. */
 export function useDeleteOrderComment() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
+  return useCommand({
     mutationFn: ({ orderId, eventId }: { orderId: string; eventId: string }) =>
       apiData(deleteApiV1AdminOrdersByIdTimelineByEventId({ path: { id: orderId, eventId } })),
     onSuccess: (_result, variables) => {
@@ -322,7 +250,7 @@ export function useDeleteOrderComment() {
  */
 export function usePutOrderStockBack() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
+  return useCommand({
     mutationFn: ({ orderId }: { orderId: string }) =>
       apiData(putApiV1AdminOrdersByIdStatus({ path: { id: orderId }, body: { status: "cancelled", notifyCustomer: false } })),
     onSuccess: (_result, variables) => {
@@ -336,7 +264,7 @@ export function usePutOrderStockBack() {
 
 export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
+  return useCommand({
     mutationFn: ({ orderId, ...body }: UpdateOrderStatusInput) =>
       apiData(putApiV1AdminOrdersByIdStatus({ path: { id: orderId }, body })),
     onSuccess: (_result, variables) => {
@@ -351,7 +279,7 @@ export function useUpdateOrderStatus() {
 /** Courier booking; the Delivery card shows a failure next to the Book button. */
 export function useCreateOrderShipment() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
+  return useCommand({
     mutationFn: ({ orderId, ...body }: { orderId: string } &
       ApiBody<typeof postApiV1AdminOrdersByIdShipments>) =>
       apiData(postApiV1AdminOrdersByIdShipments({ path: { id: orderId }, body })),
@@ -369,7 +297,7 @@ export function useCreateOrderShipment() {
 }
 
 export type CreateFulfillmentInput = { orderId: string } &
-  ApiBody<typeof postApiV1AdminOrdersByIdFulfillments>;
+  Omit<ApiBody<typeof postApiV1AdminOrdersByIdFulfillments>, "requestKey">;
 
 const FULFILLMENT_TOASTS: Record<CreateFulfillmentInput["kind"], OrderToastMessageKey> = {
   ship: "toast.fulfilled",
@@ -379,15 +307,16 @@ const FULFILLMENT_TOASTS: Record<CreateFulfillmentInput["kind"], OrderToastMessa
 
 /**
  * Hand units over: sent with your own rider, picked up at the counter, or a
- * service performed. One `requestKey` per opened dialog, so a double click or
- * a retry replays the first fulfilment instead of recording a second one.
+ * service performed. One request key per intent, so a double click or a
+ * retry replays the first fulfilment instead of recording a second one.
  * The dialog shows a failure inline.
  */
 export function useCreateFulfillment() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
-    mutationFn: ({ orderId, ...body }: CreateFulfillmentInput) =>
-      apiData(postApiV1AdminOrdersByIdFulfillments({ path: { id: orderId }, body })),
+  return useCommand({
+    name: "orders.fulfillment",
+    mutationFn: ({ orderId, ...body }: CreateFulfillmentInput, requestKey: string) =>
+      apiData(postApiV1AdminOrdersByIdFulfillments({ path: { id: orderId }, body: { ...body, requestKey } })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
       invalidateOrderInventoryQueries(queryClient);
@@ -403,12 +332,13 @@ export function useCreateFulfillment() {
 
 /**
  * Void a fulfilment (an own-rider parcel that came back): its units go back
- * on the unsent list, still reserved. The confirm dialog owns the key.
+ * on the unsent list, still reserved.
  */
 export function useVoidFulfillment() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
-    mutationFn: ({ orderId, fulfillmentId, requestKey }: { orderId: string; fulfillmentId: string; requestKey: string }) =>
+  return useCommand({
+    subject: ({ fulfillmentId }) => fulfillmentId,
+    mutationFn: ({ orderId, fulfillmentId }: { orderId: string; fulfillmentId: string }, requestKey: string) =>
       apiData(postApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoid({
         path: { id: orderId, fulfillmentId },
         body: {},
@@ -426,7 +356,7 @@ export function useVoidFulfillment() {
 /** Where an unshipped order's stock leaves from (an active location, or null for the default). */
 export function useSetOrderFulfillmentLocation() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
+  return useCommand({
     mutationFn: ({ orderId, locationId, expectedVersion }: { orderId: string; locationId: string | null; expectedVersion: number }) =>
       apiData(putApiV1AdminOrdersByIdFulfillmentLocation({ path: { id: orderId }, body: { locationId, expectedVersion } })),
     onSuccess: (_data, variables) => {
@@ -437,11 +367,11 @@ export function useSetOrderFulfillmentLocation() {
   });
 }
 
-/** Tell the buyer a pickup order is ready to collect; one key per click attempt. */
+/** Tell the buyer a pickup order is ready to collect. */
 export function useMarkPickupReady() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
-    mutationFn: ({ orderId, requestKey }: { orderId: string; requestKey: string }) =>
+  return useCommand({
+    mutationFn: ({ orderId }: { orderId: string }, requestKey: string) =>
       apiData(postApiV1AdminOrdersByIdPickupReady({ path: { id: orderId }, body: {}, headers: { "idempotency-key": requestKey } })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
@@ -454,7 +384,7 @@ export function useMarkPickupReady() {
 /** A shipped, fully sent, already-paid order reached the buyer (Delivery card and next step). */
 export function useMarkOrderDelivered() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
+  return useCommand({
     mutationFn: ({ orderId }: { orderId: string }) =>
       apiData(postApiV1AdminOrdersByIdMarkDelivered({ path: { id: orderId }, body: {} })),
     onSuccess: (_data, variables) => {
@@ -471,7 +401,7 @@ export function useMarkOrderDelivered() {
  */
 export function useReleaseOrderHold() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
+  return useCommand({
     mutationFn: ({ orderId, holdId }: { orderId: string; holdId: string }) =>
       apiData(postApiV1AdminOrdersByIdHoldsByHoldIdRelease({ path: { id: orderId, holdId } })),
     onSuccess: (_data, variables) => {
@@ -485,12 +415,12 @@ export function useReleaseOrderHold() {
 /** Refund dialog; a failure stays inside the dialog. */
 export function useRefundOrder() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
+  return useCommand({
     // `lines` names the order lines the refund is for (the amount stays the money);
     // the intersection keeps this compiling before and after the SDK carries the field.
     mutationFn: ({ orderId, ...body }: { orderId: string; lines?: Array<{ orderItemId: string; quantity: number }> } &
-      ApiBody<typeof postApiV1AdminOrdersByIdRefund>) =>
-      apiData(postApiV1AdminOrdersByIdRefund({ path: { id: orderId }, body })),
+      Omit<ApiBody<typeof postApiV1AdminOrdersByIdRefund>, "requestKey">, requestKey: string) =>
+      apiData(postApiV1AdminOrdersByIdRefund({ path: { id: orderId }, body: { ...body, requestKey } })),
     onSuccess: (result, variables) => {
       invalidateOrder(queryClient, variables.orderId);
       if (result.isFullRefund) invalidateOrderInventoryQueries(queryClient);
@@ -508,7 +438,7 @@ export function useRefundOrder() {
 
 export function useIssueOrderPaymentRecoveryLink() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: ({ orderId }: { orderId: string }) =>
       apiData(postApiV1AdminOrdersByIdPaymentRecoveryLink({ path: { id: orderId } })),
     onSuccess: (_result, variables) => invalidateOrder(queryClient, variables.orderId),
@@ -518,7 +448,7 @@ export function useIssueOrderPaymentRecoveryLink() {
 
 export function useReconcileRefundAttempt() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: ({ orderId, attemptId }: { orderId: string; attemptId: string }) =>
       apiData(postApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcile({
         path: { id: orderId, attemptId },
@@ -543,7 +473,7 @@ export function useReconcileRefundAttempt() {
 
 export function useReconcileShipment() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: ({ orderId, shipmentId }: OrderShipmentRef) =>
       apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile({
         path: { id: orderId, shipmentId },
@@ -562,9 +492,10 @@ export function useReconcileShipment() {
 
 export function useLookupUnknownShipment() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ orderId, shipmentId, expectedOrderVersion, operationKey }: OrderShipmentRef &
-      ApiBody<typeof postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup>) =>
+  return useCommand({
+    subject: ({ shipmentId }) => shipmentId,
+    mutationFn: ({ orderId, shipmentId, expectedOrderVersion }: OrderShipmentRef &
+      Omit<ApiBody<typeof postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup>, "operationKey">, operationKey: string) =>
       apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup({
         path: { id: orderId, shipmentId },
         body: { expectedOrderVersion, operationKey },
@@ -580,11 +511,12 @@ export function useLookupUnknownShipment() {
 
 export function useResolveUnknownShipment() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ orderId, shipmentId, ...body }: ResolveUnknownShipmentInput) =>
+  return useCommand({
+    subject: ({ shipmentId }) => shipmentId,
+    mutationFn: ({ orderId, shipmentId, ...body }: ResolveUnknownShipmentInput, operationKey: string) =>
       apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknown({
         path: { id: orderId, shipmentId },
-        body: body as ResolveUnknownShipmentBody,
+        body: { ...body, operationKey } as ResolveUnknownShipmentBody,
       })),
     onSuccess: (result, variables) => {
       invalidateOrder(queryClient, variables.orderId);
@@ -598,7 +530,7 @@ export function useResolveUnknownShipment() {
 /** Cash collected, failed delivery or returned by the courier; dialogs show failures inline. */
 export function useUpdateOrderCod() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
+  return useCommand({
     mutationFn: ({ orderId, ...body }: { orderId: string } &
       ApiBody<typeof postApiV1AdminOrdersByIdCod>) =>
       apiData(postApiV1AdminOrdersByIdCod({ path: { id: orderId }, body })),
@@ -619,14 +551,14 @@ export function useUpdateOrderCod() {
 }
 
 /**
- * Money received against an invoice (net terms): one request key per dialog
- * opening, so a retry after a lost answer records nothing twice.
+ * Money received against an invoice (net terms): a retry after a lost
+ * answer records nothing twice.
  */
 export function useRecordOrderPayment() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
-    mutationFn: ({ orderId, requestKey, ...body }: { orderId: string; requestKey: string } &
-      ApiBody<typeof postApiV1AdminResourcesOrdersByIdPayments>) =>
+  return useCommand({
+    mutationFn: ({ orderId, ...body }: { orderId: string } &
+      ApiBody<typeof postApiV1AdminResourcesOrdersByIdPayments>, requestKey: string) =>
       apiData(postApiV1AdminResourcesOrdersByIdPayments({ path: { id: orderId }, headers: { "idempotency-key": requestKey }, body })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
@@ -637,14 +569,15 @@ export function useRecordOrderPayment() {
 }
 
 /**
- * A chargeback recorded by hand on a payment whose gateway reports none: one
- * request key per dialog opening, so a retry records nothing twice.
+ * A chargeback recorded by hand on a payment whose gateway reports none: a
+ * retry records nothing twice.
  */
 export function useRecordOrderDispute() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
-    mutationFn: ({ orderId, paymentId, requestKey, ...body }: { orderId: string; paymentId: string; requestKey: string } &
-      ApiBody<typeof postApiV1AdminOrdersByIdPaymentsByPaymentIdDisputes>) =>
+  return useCommand({
+    subject: ({ paymentId }) => paymentId,
+    mutationFn: ({ orderId, paymentId, ...body }: { orderId: string; paymentId: string } &
+      ApiBody<typeof postApiV1AdminOrdersByIdPaymentsByPaymentIdDisputes>, requestKey: string) =>
       apiData(postApiV1AdminOrdersByIdPaymentsByPaymentIdDisputes({ path: { id: orderId, paymentId }, headers: { "idempotency-key": requestKey }, body })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
@@ -658,7 +591,7 @@ export function useRecordOrderDispute() {
 /** The outcome of a chargeback recorded by hand: won gives the money back to the order, lost keeps it taken. */
 export function useResolveOrderDispute() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
+  return useCommand({
     mutationFn: ({ orderId, disputeId, outcome }: { orderId: string; disputeId: string; outcome: "won" | "lost" }) =>
       apiData(postApiV1AdminOrdersByIdDisputesByDisputeIdOutcome({ path: { id: orderId, disputeId }, body: { outcome } })),
     onSuccess: (_data, variables) => {
@@ -672,7 +605,8 @@ export function useResolveOrderDispute() {
 
 export function useRetryOrderNotification() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
+    subject: ({ outboxId }) => outboxId,
     mutationFn: ({ orderId, outboxId }: { orderId: string; outboxId: string }) =>
       apiData(postApiV1AdminOrdersByIdNotificationsByOutboxIdRetry({
         path: { id: orderId, outboxId },
@@ -687,12 +621,9 @@ export function useRetryOrderNotification() {
 
 export function useResendOrderNotification() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ orderId, outboxId, resendRequestId }: {
-      orderId: string;
-      outboxId: string;
-      resendRequestId: string;
-    }) =>
+  return useCommand({
+    subject: ({ outboxId }) => outboxId,
+    mutationFn: ({ orderId, outboxId }: { orderId: string; outboxId: string }, resendRequestId: string) =>
       apiData(postApiV1AdminOrdersByIdNotificationsByOutboxIdResend({
         path: { id: orderId, outboxId },
         body: { resendRequestId },
@@ -708,14 +639,17 @@ export function useResendOrderNotification() {
 /** Customer request review; accepting a cancellation cancels the order on the server. */
 export function useResolveOrderSupportRequest() {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
+  return useCommand({
+    subject: ({ requestId }) => requestId,
+    createKey: () => returnCommandKey("support-request"),
     mutationFn: ({ orderId, requestId, status, note, returnRequest }: {
       orderId: string;
       requestId: string;
-    } & ApiBody<typeof putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus>) =>
+      returnRequest?: Omit<SupportReturnRequest, "commandKey">;
+    } & Omit<ApiBody<typeof putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus>, "returnRequest">, commandKey: string) =>
       apiData(putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus({
         path: { id: orderId, requestId },
-        body: { status, note: note ?? null, returnRequest },
+        body: { status, note: note ?? null, returnRequest: returnRequest && { ...returnRequest, commandKey } },
       })),
     onSuccess: (_result, variables) => {
       invalidateOrder(queryClient, variables.orderId);
@@ -726,12 +660,22 @@ export function useResolveOrderSupportRequest() {
   });
 }
 
+type SupportReturnRequest = NonNullable<ApiBody<typeof putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus>["returnRequest"]>;
+
+function returnCommandKey(action: string): string {
+  return `return:${action}:${crypto.randomUUID()}`;
+}
+
 function useOrderReturnMutation<Input extends { orderId: string }, Result>(
-  mutationFn: (input: Input) => Promise<Result>,
+  action: string,
+  mutationFn: (input: Input, commandKey: string) => Promise<Result>,
   onDone: (queryClient: QueryClient, result: Result, input: Input) => void,
 ) {
   const queryClient = useQueryClient();
-  return useSingleFlightMutation({
+  return useCommand({
+    // A new return belongs to its order; a command on one acts on that return.
+    subject: (input) => (input as { returnId?: string }).returnId ?? input.orderId,
+    createKey: () => returnCommandKey(action),
     mutationFn,
     onSuccess: (result: Result, input: Input) => {
       void invalidateOrder(queryClient, input.orderId);
@@ -744,24 +688,27 @@ function useOrderReturnMutation<Input extends { orderId: string }, Result>(
 
 export function useCreateOrderReturn() {
   return useOrderReturnMutation(
-    ({ orderId, ...body }: CreateOrderReturnInput) =>
-      apiData(postApiV1AdminOrdersByIdReturns({ path: { id: orderId }, body })),
+    "create",
+    ({ orderId, ...body }: CreateOrderReturnInput, commandKey: string) =>
+      apiData(postApiV1AdminOrdersByIdReturns({ path: { id: orderId }, body: { ...body, commandKey } })),
     () => toast.success(msg("toast.returnRequested")),
   );
 }
 
 export function useApproveOrderReturn() {
   return useOrderReturnMutation(
-    ({ orderId, returnId, ...body }: ApproveOrderReturnInput) =>
-      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdApprove({ path: { id: orderId, returnId }, body })),
+    "approve",
+    ({ orderId, returnId, ...body }: ApproveOrderReturnInput, commandKey: string) =>
+      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdApprove({ path: { id: orderId, returnId }, body: { ...body, commandKey } })),
     (_client, result) => toast.success(msg(result.status === "rejected" ? "toast.returnRejected" : "toast.returnApproved")),
   );
 }
 
 export function useReceiveOrderReturn() {
   return useOrderReturnMutation(
-    ({ orderId, returnId, ...body }: ReceiveOrderReturnInput) =>
-      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdReceive({ path: { id: orderId, returnId }, body })),
+    "receive",
+    ({ orderId, returnId, ...body }: ReceiveOrderReturnInput, commandKey: string) =>
+      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdReceive({ path: { id: orderId, returnId }, body: { ...body, commandKey } })),
     (queryClient, result, input) => {
       if (input.lines.some((line) => line.restockQuantity > 0)) invalidateOrderInventoryQueries(queryClient);
       toast.success(msg(result.status === "completed" ? "toast.returnReceived" : "toast.receiptRecorded"));
@@ -771,15 +718,16 @@ export function useReceiveOrderReturn() {
 
 export function useCancelOrderReturn() {
   return useOrderReturnMutation(
-    ({ orderId, returnId, ...body }: CancelOrderReturnInput) =>
-      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdCancel({ path: { id: orderId, returnId }, body })),
+    "cancel",
+    ({ orderId, returnId, ...body }: CancelOrderReturnInput, commandKey: string) =>
+      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdCancel({ path: { id: orderId, returnId }, body: { ...body, commandKey } })),
     () => toast.success(msg("toast.returnCancelled")),
   );
 }
 
 export function useReconcileOrderReturn() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: ({ orderId, returnId }: ReconcileOrderReturnInput) =>
       apiData(postApiV1AdminOrdersByIdReturnsByReturnIdReconcile({ path: { id: orderId, returnId } })),
     onSuccess: (_result, variables) => {
@@ -796,7 +744,7 @@ export function useReconcileOrderReturn() {
 
 export function useRestoreOrder() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: ({ id, expectedVersion }: { id: string; expectedVersion: number }) =>
       apiData(postApiV1AdminOrdersByIdRestore({ path: { id }, body: { expectedVersion } })),
     onSuccess: (_data, input) => {

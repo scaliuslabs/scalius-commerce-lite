@@ -2,7 +2,7 @@
 // upload. The SDK carries JSON; image uploads stay on a same-origin multipart
 // fetch (the SDK transport sends text bodies only, as the media library does).
 // Reads live in lib/api-query-options/inbox.ts, which loads with the shell.
-import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 import {
   patchApiV1AdminConversationsById,
@@ -15,6 +15,7 @@ import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { apiData } from "~/lib/api";
 import { inboxKeys, type StaffThread } from "~/lib/api-query-options/inbox";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
+import { useCommand } from "~/lib/use-command";
 
 /** Where an attachment image loads from (same origin, session cookie, never cached). */
 export function attachmentUrl(conversationId: string, attachmentId: string): string {
@@ -23,10 +24,7 @@ export function attachmentUrl(conversationId: string, attachmentId: string): str
   );
 }
 
-export function newRequestKey(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-}
+export { newRequestKey } from "~/lib/intent-request-key";
 
 function putThread(queryClient: QueryClient, thread: StaffThread) {
   queryClient.setQueryData(inboxKeys.thread(thread.id), thread);
@@ -46,7 +44,7 @@ export interface PostInput {
 /** Reply or note on a thread, or on an order (which starts its thread when needed). */
 export function usePostMessage(target: { conversationId?: string | null; orderId?: string | null }) {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: async (input: PostInput) => {
       if (target.conversationId) {
         return (await apiData(postApiV1AdminConversationsByIdMessages({ path: { id: target.conversationId }, body: input }))).conversation;
@@ -62,7 +60,7 @@ export function usePostMessage(target: { conversationId?: string | null; orderId
 
 export function useUpdateThread() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: async (input: { id: string; version: number; status?: "open" | "pending" | "closed"; assigneeUserId?: string | null }) => {
       const { id, ...body } = input;
       return (await apiData(patchApiV1AdminConversationsById({ path: { id }, body }))).conversation;

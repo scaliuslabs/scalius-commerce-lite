@@ -6,7 +6,7 @@
 // Code-split: Home loads it after its first render.
 import { lazy, Suspense, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { postApiV1AdminDashboardSetupGuideDismiss } from "@scalius/api-client/sdk";
 import { useShowSetupGuide } from "./use-show-setup-guide";
 import { Button } from "~/components/ui/button";
@@ -19,6 +19,7 @@ import { BANGLADESH_PACK_ID } from "~/lib/bangladesh-pack";
 import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
 import type { getApiV1AdminDashboardSetupGuide } from "@scalius/api-client/sdk";
+import { useCommand } from "~/lib/use-command";
 
 /**
  * The card is built from what Home's first download already holds (Button,
@@ -115,7 +116,7 @@ export default function SetupGuide({ guide, canOpen }: { guide: SetupGuideData; 
   const [open, setOpen] = useState(() => steps.find((step) => !step.done)?.key ?? "");
 
   const show = useShowSetupGuide();
-  const dismiss = useMutation({
+  const dismiss = useCommand({
     mutationFn: () => apiData(postApiV1AdminDashboardSetupGuideDismiss()),
     onSuccess: () => {
       queryClient.setQueryData<SetupGuideData>(queryKeys.dashboard.setupGuide(), (current) => current && { ...current, dismissed: true });

@@ -2,7 +2,7 @@
 // a row that opens to the error; failed ones can be sent again by managers)
 // and its log, newest first. Shown only once there is something to show.
 import { Fragment, useState, type ReactNode } from "react";
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { cn } from "@scalius/shared/utils";
@@ -19,6 +19,7 @@ import { retryAppDelivery } from "~/lib/api-mutations/apps";
 import { queryKeys } from "~/lib/query-keys";
 import { deliveryStatusVariant, formatDuration, formatWhen, topicLabel } from "../settings/webhooks/webhook-format";
 import { LOG_LEVEL_VARIANT } from "./app-status";
+import { useCommand } from "~/lib/use-command";
 
 const COLUMNS = 6;
 
@@ -58,7 +59,7 @@ function Deliveries({ appId, canManage }: { appId: string; canManage: boolean })
   const [expanded, setExpanded] = useState<string | null>(null);
   const log = useInfiniteQuery(appDeliveriesQueryOptions(appId, null));
   const deliveries = log.data?.pages.flatMap((page) => page.deliveries) ?? [];
-  const retry = useMutation({
+  const retry = useCommand({
     mutationFn: (deliveryId: string) => retryAppDelivery(appId, deliveryId),
     onSuccess: () => void toast.success(t("retried")),
     onError: () => void toast.error(t("retryFailed")),

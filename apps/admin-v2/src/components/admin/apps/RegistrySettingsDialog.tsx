@@ -3,7 +3,7 @@
 // further questions). The official registry and key are pinned in the code and
 // shown read-only. A save sends the revision the dialog showed.
 import { useId, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
@@ -23,6 +23,7 @@ import {
 } from "~/lib/api-query-options/apps-lifecycle";
 import { toast } from "~/lib/toast";
 import { pluginKeyFingerprint } from "@scalius/shared/plugins/registry";
+import { useCommand } from "~/lib/use-command";
 
 interface RegistryRow {
   uid: number;
@@ -68,7 +69,7 @@ function SettingsForm({ settings, canEdit, onClose }: { settings: AppRegistrySet
   const [errors, setErrors] = useState<RowErrors>({});
   const [failure, setFailure] = useState<string | null>(null);
 
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: () => {
       const taken = new Set(registries.flatMap((registry) => (registry.id ? [registry.id] : [])));
       const list = registries.map((registry) => {

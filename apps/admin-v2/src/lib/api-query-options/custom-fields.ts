@@ -2,7 +2,7 @@
 // each owner's values for the Custom data card. Values are read and written
 // through one route pair per owner type, so each sits under its owner's
 // permissions (products, customers, orders, …).
-import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useQueryClient } from "@tanstack/react-query";
 import {
   deleteApiV1AdminCustomFieldDefinitionsById,
   getApiV1AdminCustomFieldDefinitions,
@@ -33,6 +33,7 @@ import type {
   CustomFieldWireValue,
 } from "@scalius/shared/custom-fields";
 import { apiData } from "../api";
+import { useCommand } from "~/lib/use-command";
 
 /** A definition as the admin API returns it (`AdminCustomFieldDefinition`). */
 export interface CustomFieldDefinition {
@@ -144,7 +145,7 @@ function useRefreshDefinitions() {
 
 export function useSaveCustomFieldDefinition() {
   const refresh = useRefreshDefinitions();
-  return useMutation({
+  return useCommand({
     mutationFn: async (input: { id: null; body: CreateCustomFieldDefinitionBody } | { id: string; body: UpdateCustomFieldDefinitionBody }) =>
       (await (input.id === null
         ? apiData(postApiV1AdminCustomFieldDefinitions({ body: input.body as never }))
@@ -155,7 +156,7 @@ export function useSaveCustomFieldDefinition() {
 
 export function useDeleteCustomFieldDefinition() {
   const refresh = useRefreshDefinitions();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { id: string; expectedRevision: number }) =>
       apiData(deleteApiV1AdminCustomFieldDefinitionsById({ path: { id: input.id }, query: { expectedRevision: input.expectedRevision } })),
     onSettled: refresh,
@@ -164,7 +165,7 @@ export function useDeleteCustomFieldDefinition() {
 
 export function useReorderCustomFieldDefinitions() {
   const refresh = useRefreshDefinitions();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { ownerType: CustomFieldOwnerType; definitions: Array<{ id: string; expectedRevision: number }> }) =>
       apiData(postApiV1AdminCustomFieldDefinitionsReorder({ body: input })),
     onSettled: refresh,

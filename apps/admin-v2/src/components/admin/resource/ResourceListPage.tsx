@@ -1,7 +1,7 @@
 import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { RowLink } from "~/components/admin/data-table/RowLink";
-import { hashKey, useMutation, useQueryClient, type QueryKey, type UseQueryOptions } from "@tanstack/react-query";
+import { hashKey, useQueryClient, type QueryKey, type UseQueryOptions } from "@tanstack/react-query";
 import { cn } from "@scalius/shared/utils";
 import { toast } from "~/lib/toast";
 import { Button } from "~/components/ui/button";
@@ -30,6 +30,7 @@ import { dataTableMessages } from "~/i18n/data-table";
 import { FilteredEmptyState } from "~/components/admin/states/EmptyState";
 import { IndexTabs, type IndexTab } from "./IndexTabs";
 import { PageHeader } from "./PageHeader";
+import { subjectOf, useCommand } from "~/lib/use-command";
 
 // The trash and delete confirmation loads the first time it is asked for;
 // apps' bulk menu as soon as an app offers this list a bulk action.
@@ -240,7 +241,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
     },
   }), [invalidateAll]);
 
-  const mutation = useMutation({
+  const mutation = useCommand({
     mutationFn: async ({ action, target }: { action: ResourceAction; target: BulkTarget<T> }) => {
       if (target.kind === "rows") {
         await inChunks(target.rows, (chunk) => lifecycle!.run(action, chunk));
@@ -545,7 +546,8 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
 export function useResourceMutation<V>(fn: (variables: V) => Promise<unknown>, invalidate: readonly QueryKey[]) {
   const t = useMessages(resourceMessages);
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
+    subject: ({ variables }) => subjectOf(variables),
     mutationFn: ({ variables }: { variables: V; success?: string }) => fn(variables),
     onSuccess: (_data, { success }) => {
       if (success) toast.success(success);

@@ -2,7 +2,7 @@
 // product page's Publishing card and the products list's publishing actions
 // read one list query; a channel edit refreshes it, a publication write
 // refreshes it (product counts) and the product lists.
-import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useQueryClient } from "@tanstack/react-query";
 import {
   getApiV1AdminSettingsSalesChannels,
   patchApiV1AdminSettingsSalesChannelsById,
@@ -13,6 +13,7 @@ import { apiData, type ApiBody, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
 import { translate } from "~/i18n";
 import { salesChannelNamesMessages, type SalesChannelNamesMessageKey } from "~/i18n/sales-channel-names";
+import { useCommand } from "~/lib/use-command";
 
 export type SalesChannel = ApiResult<typeof getApiV1AdminSettingsSalesChannels>["items"][number];
 export type UpdateSalesChannelBody = ApiBody<typeof patchApiV1AdminSettingsSalesChannelsById>;
@@ -51,7 +52,7 @@ export function salesChannelName(channel: Pick<SalesChannel, "id" | "name">): st
 
 export function useUpdateSalesChannel() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: async ({ id, body }: { id: string; body: UpdateSalesChannelBody }) =>
       (await apiData(patchApiV1AdminSettingsSalesChannelsById({ path: { id }, body }))).channel,
     onSuccess: (channel) => {

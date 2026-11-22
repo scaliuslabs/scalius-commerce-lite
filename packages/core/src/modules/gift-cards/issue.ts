@@ -11,7 +11,7 @@ import type { Database } from "@scalius/database/client";
 import { safeBatch } from "@scalius/database/client";
 import { giftCards, giftCardTransactions } from "@scalius/database/schema";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
-import { ValidationError } from "../../errors";
+import { AppError, ValidationError } from "../../errors";
 import { GIFT_CARD_LIMITS, type GiftCardSource } from "./browser";
 import {
     decryptGiftCardCode,
@@ -222,6 +222,15 @@ export function giftCardWriteActor(input: { actorUserId: string | null; appId?: 
     return input.appId ? { type: "system", id: `app:${input.appId}` } : { type: "admin", id: input.actorUserId };
 }
 
+/**
+ * A different request under a used key: the key's request was recorded, and
+ * this one is not it. The one answer every keyed command gives (422
+ * `idempotency_key_reused`), so a caller knows the earlier attempt went through.
+ */
+export function giftCardKeyReused(what: "gift card" | "adjustment"): AppError {
+    return new AppError(422, "idempotency_key_reused", `This request was already used. Start a new ${what}.`);
+}
+
 export interface ManualGiftCardResult {
     giftCardId: string;
     /** The canonical code, returned once to the staff member who issued it. */
@@ -251,17 +260,26 @@ export async function issueManualGiftCard(
     // The key belongs to who issued under it: an app (system/app:<id>) or a staff member, never a shared null.
     if (!actor.id) throw new ValidationError("Sign in again to manage gift cards.");
     const issueKey = `issue:manual:${giftCardId}`;
-    const readIssued = () => db.select({ codeCiphertext: giftCards.codeCiphertext, actorType: giftCardTransactions.actorType, actorId: giftCardTransactions.actorId })
+    const readIssued = () => db.select({
+        codeCiphertext: giftCards.codeCiphertext, actorType: giftCardTransactions.actorType, actorId: giftCardTransactions.actorId,
+        initialAmountMinor: giftCards.initialAmountMinor, currencyCode: giftCards.currencyCode, message: giftCards.message,
+        recipientName: giftCards.recipientName, recipientEmail: giftCards.recipientEmail, recipientPhone: giftCards.recipientPhone,
+        customerId: giftCards.customerId, expiresAt: giftCards.expiresAt, note: giftCards.note,
+    })
         .from(giftCards)
         .leftJoin(giftCardTransactions, eq(giftCardTransactions.idempotencyKey, issueKey))
         .where(eq(giftCards.id, giftCardId)).get();
-    const issuedHere = (row: { actorType: string | null; actorId: string | null }) => row.actorType === actor.type && row.actorId === actor.id;
+    // A replay is the same request by the same caller: every field of the request, as the card stored it, matches.
+    // (Staff may later edit the expiry, owner or note: a repeat then is refused as reused, which is still true.)
+    const issuedHere = (row: NonNullable<Awaited<ReturnType<typeof readIssued>>>) => row.actorType === actor.type && row.actorId === actor.id
+        && row.initialAmountMinor === input.amountMinor && row.currencyCode === input.currencyCode && row.message === input.message
+        && row.customerId === input.customerId && row.expiresAt === input.expiresAt && row.note === input.note
+        && row.recipientName === (input.recipient?.name ?? null) && row.recipientEmail === (input.recipient?.email ?? null)
+        && row.recipientPhone === (input.recipient?.email ? null : input.recipient?.phone ?? null);
     const existing = await readIssued();
     const issuedByUserId = input.appId ? null : input.actorUserId;
     if (existing) {
-        if (!issuedHere(existing)) {
-            throw new ValidationError("This request was already used. Start a new gift card.");
-        }
+        if (!issuedHere(existing)) throw giftCardKeyReused("gift card");
         return { giftCardId, code: await decryptGiftCardCode(keys, existing.codeCiphertext), created: false };
     }
     const built = await buildGiftCardIssueStatements(db, keys, {
@@ -286,6 +304,8 @@ export async function issueManualGiftCard(
         if (winner && issuedHere(winner)) {
             return { giftCardId, code: await decryptGiftCardCode(keys, winner.codeCiphertext), created: false };
         }
+        // Another request under the key won: it was recorded, this one was not.
+        if (winner) throw giftCardKeyReused("gift card");
         throw error;
     }
     return { giftCardId, code: built.code, created: true };

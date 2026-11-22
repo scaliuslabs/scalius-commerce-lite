@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { toast } from "~/lib/toast";
 import {
@@ -42,6 +42,7 @@ import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 import { SettingsCheckbox } from "./SettingsCheckbox";
 import { queryKeys } from "~/lib/query-keys";
+import { useCommand } from "~/lib/use-command";
 
 type Platform = Omit<ApiResult<typeof getApiV1AdminSettingsPlatform>, "revision">;
 type Handoff = Platform["identityHandoff"];
@@ -456,7 +457,7 @@ export function RefreshStoreCard() {
   const common = useMessages(settingsMessages);
   const canRefresh = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_CACHE_MANAGE);
   const [confirming, setConfirming] = useState(false);
-  const refresh = useMutation({
+  const refresh = useCommand({
     mutationFn: () => apiData(postApiV1CacheClear()),
     onSuccess: () => {
       setConfirming(false);

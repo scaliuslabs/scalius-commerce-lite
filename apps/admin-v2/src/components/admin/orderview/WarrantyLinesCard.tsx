@@ -1,7 +1,7 @@
 // The order's warranties (Wave B §5.3, §9.1): per line the policy the buyer
 // bought, its expiry and replacement window, and the latest claim with a way
 // to it; staff can open a claim for the buyer (goodwill after expiry).
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
@@ -19,7 +19,6 @@ import { useHasPermission } from "~/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
 import { warrantyMessages } from "~/i18n/warranty";
 import { getServerFnError } from "~/lib/api-helpers";
-import { newRequestKey } from "../inbox/inbox-api";
 import { useOpenWarrantyClaim } from "../warranty/warranty-api";
 import { warrantyDate, warrantySummary } from "../warranty/warranty-format";
 import { ClaimStatusBadge } from "../warranty/ClaimStatusBadge";
@@ -151,7 +150,6 @@ function OpenClaimDialog({ orderId, line, onClose }: { orderId: string; line: Wa
   const navigate = useNavigate();
   const [description, setDescription] = useState("");
   const [error, setError] = useState(false);
-  const requestKey = useRef("");
   const open = useOpenWarrantyClaim(orderId);
   const reset = open.reset;
   const isOpen = line !== null;
@@ -160,7 +158,6 @@ function OpenClaimDialog({ orderId, line, onClose }: { orderId: string; line: Wa
     if (!isOpen) return;
     setDescription("");
     setError(false);
-    requestKey.current = newRequestKey();
     reset();
   }, [isOpen, reset]);
 
@@ -177,7 +174,7 @@ function OpenClaimDialog({ orderId, line, onClose }: { orderId: string; line: Wa
       return;
     }
     open.mutate(
-      { warrantyId: line.warrantyId, description: text, requestKey: requestKey.current },
+      { warrantyId: line.warrantyId, description: text },
       {
         onSuccess: (claim) => {
           toast.success(t("claimOpened"));

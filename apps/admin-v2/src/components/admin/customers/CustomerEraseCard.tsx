@@ -4,7 +4,7 @@
 // confirmation word is typed. The API refuses while an order is in
 // progress; that refusal shows in the dialog with a link to the order.
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { postApiV1AdminCustomersByIdErase } from "@scalius/api-client/sdk";
 import { formatOrderNumber } from "~/lib/order-number";
@@ -30,6 +30,7 @@ import { getServerFnError } from "~/lib/api-helpers";
 import { readAdminApiError } from "~/lib/admin-api-error";
 import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
+import { useCommand } from "~/lib/use-command";
 
 /** The order that blocks erasure, from a refusal's details (`{ orderId, orderNumber }`). */
 function blockingOrder(error: unknown): { id: string; number: string } | null {
@@ -82,7 +83,7 @@ export function EraseCustomerDialog({
   const [typed, setTyped] = useState("");
   const word = t("eraseConfirmWord");
   const confirmed = typed.trim().toLocaleUpperCase() === word.toLocaleUpperCase();
-  const erase = useMutation({
+  const erase = useCommand({
     mutationFn: () => apiData(postApiV1AdminCustomersByIdErase({ path: { id: customerId } })),
     onSuccess: async () => {
       toast.success(t("erasedToast"));

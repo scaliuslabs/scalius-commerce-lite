@@ -4,7 +4,7 @@
 // the signing secret, turns it off or on, opens deliveries, or deletes it.
 // Endpoints the API turned off after sustained failure get a banner on top.
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, MoreHorizontal, TriangleAlert } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
@@ -47,6 +47,7 @@ import {
   subscriptionStatus,
   topicLabel,
 } from "./webhook-format";
+import { useCommand } from "~/lib/use-command";
 
 const VISIBLE_TOPICS = 3;
 
@@ -195,7 +196,7 @@ export function WebhooksSettings() {
   const [deleting, setDeleting] = useState<WebhookSubscription | null>(null);
   const [tests, setTests] = useState<Record<string, TestResult>>({});
 
-  const rotate = useMutation({
+  const rotate = useCommand({
     // The secret goes straight to component state; the mutation keeps nothing.
     mutationFn: async (subscription: WebhookSubscription) => {
       const result = await rotateWebhookSecret(subscription.id);
@@ -205,7 +206,7 @@ export function WebhooksSettings() {
     onError: () => void toast.error(t("rotateFailed")),
     onSettled: refresh,
   });
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: (subscription: WebhookSubscription) => deleteWebhook(subscription.id),
     onSuccess: () => {
       toast.success(t("deleted"));
@@ -214,7 +215,7 @@ export function WebhooksSettings() {
     onError: () => void toast.error(t("deleteFailed")),
     onSettled: refresh,
   });
-  const toggle = useMutation({
+  const toggle = useCommand({
     mutationFn: (subscription: WebhookSubscription) =>
       updateWebhook(subscription.id, {
         expectedVersion: subscription.version,

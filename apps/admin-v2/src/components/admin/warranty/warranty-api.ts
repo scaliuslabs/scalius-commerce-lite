@@ -2,7 +2,7 @@
 // (Settings › Policies and the product editor's select), policy create/edit/
 // archive/restore, one claim and its status change, and a staff-opened claim
 // from the order page. Claims are records: nothing here moves money or stock.
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   deleteApiV1AdminWarrantyPoliciesById,
   patchApiV1AdminWarrantyClaimsById,
@@ -15,6 +15,7 @@ import { apiData, type ApiBody } from "~/lib/api";
 import { inboxKeys } from "~/lib/api-query-options/inbox";
 import { queryKeys } from "~/lib/query-keys";
 import { warrantyKeys } from "~/lib/api-query-options/warranty";
+import { useCommand } from "~/lib/use-command";
 
 // The reads live with the other query options (a route loader starts them).
 export {
@@ -30,7 +31,7 @@ export type WarrantyClaimUpdate = ApiBody<typeof patchApiV1AdminWarrantyClaimsBy
 
 export function useSaveWarrantyPolicy() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { id: string | null; version: number | null; body: WarrantyPolicyBody }) =>
       input.id
         ? apiData(putApiV1AdminWarrantyPoliciesById({ path: { id: input.id }, body: { ...input.body, version: input.version ?? 0 } }))
@@ -41,7 +42,7 @@ export function useSaveWarrantyPolicy() {
 
 export function useArchiveWarrantyPolicy() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { id: string; archive: boolean }) =>
       input.archive
         ? apiData(deleteApiV1AdminWarrantyPoliciesById({ path: { id: input.id } }))
@@ -53,9 +54,10 @@ export function useArchiveWarrantyPolicy() {
 /** A status change (with an optional public reply); the thread gains an event line. */
 export function useUpdateWarrantyClaim(claimId: string) {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (body: WarrantyClaimUpdate) =>
-      (await apiData(patchApiV1AdminWarrantyClaimsById({ path: { id: claimId }, body }))).claim,
+  return useCommand({
+    subject: () => claimId,
+    mutationFn: async (body: Omit<WarrantyClaimUpdate, "requestKey">, requestKey: string) =>
+      (await apiData(patchApiV1AdminWarrantyClaimsById({ path: { id: claimId }, body: { ...body, requestKey } }))).claim,
     onSuccess: (claim) => queryClient.setQueryData(warrantyKeys.claim(claimId), claim),
     onSettled: () => Promise.all([
       queryClient.invalidateQueries({ queryKey: warrantyKeys.claim(claimId) }),
@@ -67,9 +69,10 @@ export function useUpdateWarrantyClaim(claimId: string) {
 /** Staff open a claim for the buyer (also on an expired warranty: goodwill). */
 export function useOpenWarrantyClaim(orderId: string) {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (body: ApiBody<typeof postApiV1AdminOrdersByIdWarrantyClaims>) =>
-      (await apiData(postApiV1AdminOrdersByIdWarrantyClaims({ path: { id: orderId }, body }))).claim,
+  return useCommand({
+    subject: ({ warrantyId }) => warrantyId,
+    mutationFn: async (body: Omit<ApiBody<typeof postApiV1AdminOrdersByIdWarrantyClaims>, "requestKey">, requestKey: string) =>
+      (await apiData(postApiV1AdminOrdersByIdWarrantyClaims({ path: { id: orderId }, body: { ...body, requestKey } }))).claim,
     onSettled: () => Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(orderId) }),
       queryClient.invalidateQueries({ queryKey: inboxKeys.all }),

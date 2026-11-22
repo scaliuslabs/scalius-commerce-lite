@@ -1,5 +1,5 @@
 import React from "react";
-import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import {
   getApiV1AdminDigitalAssetsByIdLicenceKeys,
@@ -40,6 +40,8 @@ import { useMessages } from "~/i18n";
 import { digitalMessages } from "~/i18n/digital";
 import { resourceMessages } from "~/i18n/resource";
 import { Field } from "~/components/ui/field";
+import { useCommand } from "~/lib/use-command";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 const REJECT_TEXT: Record<LicenceKeyRejectReason, "rejectTooLong" | "rejectInvalid" | "rejectDuplicate"> = {
   too_long: "rejectTooLong",
@@ -69,51 +71,49 @@ export function KeyImportDialog({ productId, target, onOpenChange, onChanged }: 
   const [text, setText] = React.useState("");
   const parsed = React.useMemo(() => normalizeLicenceKeyImport(text), [text]);
   const fileRef = React.useRef<HTMLInputElement>(null);
-  // One key per content: repeating the same import replays it, never doubles the stock.
-  const requestKey = React.useRef("");
-  const changeText = (value: string) => {
-    requestKey.current = crypto.randomUUID();
-    setText(value);
-  };
   const createdPool = React.useRef<string | null>(null);
-  // Not a useMutation: its cache would keep the keys (the variables) after the dialog closes.
-  const [pending, setPending] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const submit = async () => {
-    if (!target || pending) return;
-    setPending(true);
-    setError(null);
-    try {
-      let poolId = target.poolId ?? createdPool.current;
+  // One key per content: repeating the same import replays it, never doubles the stock. The
+  // keys (the input) live only in this dialog's state and are dropped when it closes.
+  const importKeys = useCommand({
+    name: "digital.licence-keys.import",
+    subject: ({ variantId }) => variantId,
+    mutationFn: async ({ poolId: known, variantId, keys }: { poolId: string | null; variantId: string; keys: string[] }, requestKey: string) => {
+      let poolId = known ?? createdPool.current;
       if (!poolId) {
         const { asset } = await apiData(postApiV1AdminProductsByIdDigitalAssets({
           path: { id: productId },
-          body: { kind: "licence_keys", variantId: target.variantId },
+          body: { kind: "licence_keys", variantId },
         }));
         poolId = createdPool.current = asset.id;
       }
-      const result = await apiData(postApiV1AdminDigitalAssetsByIdLicenceKeys({ path: { id: poolId }, body: { requestKey: requestKey.current, keys: parsed.keys } }));
-      toast.success(t("keysImported", { count: result.imported }), {
-        description: result.alreadyInPool > 0 ? t("alreadyInPool", { count: result.alreadyInPool }) : undefined,
-      });
-      onOpenChange(false);
-    } catch (failure) {
-      setError(getServerFnError(failure));
-    } finally {
-      setPending(false);
-      onChanged();
-    }
+      return apiData(postApiV1AdminDigitalAssetsByIdLicenceKeys({ path: { id: poolId }, body: { requestKey, keys } }));
+    },
+    onSettled: () => onChanged(),
+  });
+  const pending = importKeys.isPending;
+  const error = importKeys.error ? getServerFnError(importKeys.error) : null;
+  const submit = () => {
+    if (!target) return;
+    importKeys.mutate({ poolId: target.poolId ?? null, variantId: target.variantId, keys: parsed.keys }, {
+      onSuccess: (result) => {
+        toast.success(t("keysImported", { count: result.imported }), {
+          description: result.alreadyInPool > 0 ? t("alreadyInPool", { count: result.alreadyInPool }) : undefined,
+        });
+        onOpenChange(false);
+      },
+    });
   };
+  const resetImport = importKeys.reset;
   React.useEffect(() => {
     if (open) return;
     setText("");
-    setError(null);
+    resetImport();
     createdPool.current = null;
-  }, [open]);
+  }, [open, resetImport]);
 
   const blocked = parsed.keys.length === 0 || parsed.exceedsLimit;
   return (
-    <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
+    <Dialog open={open} onOpenChange={importKeys.guardClose(onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{target?.label ? t("importTitleFor", { variant: target.label }) : t("importTitle")}</DialogTitle>
@@ -128,7 +128,7 @@ export function KeyImportDialog({ productId, target, onOpenChange, onChanged }: 
               spellCheck={false}
               autoComplete="off"
               aria-describedby="licence-keys-summary"
-              onChange={(event) => changeText(event.target.value)}
+              onChange={(event) => setText(event.target.value)}
             />
           </Field>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -144,7 +144,7 @@ export function KeyImportDialog({ productId, target, onOpenChange, onChanged }: 
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 event.target.value = "";
-                if (file) void file.text().then(changeText);
+                if (file) void file.text().then(setText);
               }}
             />
           </div>
@@ -164,6 +164,7 @@ export function KeyImportDialog({ productId, target, onOpenChange, onChanged }: 
               </ul>
             </div>
           ) : null}
+          {target ? <CommandKeyNotice notice={importKeys.notice({ variantId: target.variantId })} target="keys" /> : null}
           {error ? <p role="alert" className="text-body text-destructive">{error}</p> : null}
         </div>
         <DialogFooter>
@@ -200,15 +201,11 @@ export function KeyRevokeDialog({ productId, poolId, onOpenChange, onChanged }: 
   });
   const items = keys.data?.pages.flatMap((page) => page.items) ?? [];
   // One key per selection: repeating the same revoke replays it.
-  const requestKey = React.useRef("");
-  const choose = (next: ReadonlySet<string>) => {
-    requestKey.current = crypto.randomUUID();
-    setSelected(next);
-  };
-  const run = useMutation({
-    mutationFn: (keyIds: string[]) => apiData(postApiV1AdminDigitalAssetsByIdLicenceKeysRevoke({
+  const run = useCommand({
+    subject: () => poolId ?? "",
+    mutationFn: (keyIds: string[], requestKey: string) => apiData(postApiV1AdminDigitalAssetsByIdLicenceKeysRevoke({
       path: { id: poolId! },
-      body: { requestKey: requestKey.current, keyIds },
+      body: { requestKey, keyIds },
     })),
     onSuccess: (result) => {
       toast.success(t("keysRevoked", { count: result.revoked }));
@@ -230,11 +227,11 @@ export function KeyRevokeDialog({ productId, poolId, onOpenChange, onChanged }: 
     const next = new Set(selected);
     if (on && next.size < REVOKE_BATCH) next.add(id);
     else next.delete(id);
-    choose(next);
+    setSelected(next);
   };
   const firstCount = Math.min(items.length, REVOKE_BATCH);
   return (
-    <AlertDialog open={open} onOpenChange={(next) => !run.isPending && onOpenChange(next)}>
+    <AlertDialog open={open} onOpenChange={run.guardClose(onOpenChange)}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("revokeTitle")}</AlertDialogTitle>
@@ -248,7 +245,7 @@ export function KeyRevokeDialog({ productId, poolId, onOpenChange, onChanged }: 
           <p className="text-body text-muted-foreground">{t("noUnused")}</p>
         ) : (
           <div className="space-y-2">
-            <Button type="button" variant="link" onClick={() => choose(new Set(items.slice(0, REVOKE_BATCH).map((item) => item.id)))}>
+            <Button type="button" variant="link" onClick={() => setSelected(new Set(items.slice(0, REVOKE_BATCH).map((item) => item.id)))}>
               {t("selectFirst", { count: firstCount })}
             </Button>
             <ul className="max-h-72 overflow-y-auto">
@@ -276,6 +273,7 @@ export function KeyRevokeDialog({ productId, poolId, onOpenChange, onChanged }: 
             ) : null}
           </div>
         )}
+        <CommandKeyNotice notice={run.notice([])} target="keys" />
         {run.isError ? <p role="alert" className="text-body text-destructive">{getServerFnError(run.error)}</p> : null}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={run.isPending}>{r("cancel")}</AlertDialogCancel>

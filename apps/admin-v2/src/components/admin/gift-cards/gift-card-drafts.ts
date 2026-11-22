@@ -63,7 +63,7 @@ export function validateIssueDraft(draft: IssueDraft, currencyCode: string, now:
  * exactly one contact (the chosen channel). The expiry is always explicit, so
  * the card is what the dialog showed: no date means it never expires.
  */
-export function issueRequestBody(draft: IssueDraft, requestKey: string): IssueGiftCardInput {
+export function issueRequestBody(draft: IssueDraft): IssueGiftCardInput {
   const contact = draft.contact.trim();
   const name = draft.recipientName.trim();
   const recipient = name || contact
@@ -77,7 +77,6 @@ export function issueRequestBody(draft: IssueDraft, requestKey: string): IssueGi
   const message = draft.message.trim();
   const note = draft.note.trim();
   return {
-    requestKey,
     amount: draft.amount ?? 0,
     expiresAt,
     ...(draft.customer ? { customerId: draft.customer.id } : {}),
@@ -103,7 +102,7 @@ export type AdjustErrors = Partial<Record<"amount" | "reason", GiftCardMessageKe
 export function adjustmentFor(
   input: { direction: AdjustDirection; amount: number | null; reason: string },
   card: { balanceMinor: number; currencyCode: string },
-): { body: Omit<AdjustGiftCardInput, "requestKey">; deltaMinor: number } | { errors: AdjustErrors } {
+): { body: AdjustGiftCardInput; deltaMinor: number } | { errors: AdjustErrors } {
   const errors: AdjustErrors = {};
   const minor = giftCardAmountMinor(input.amount, card.currencyCode);
   if (minor === null) errors.amount = "amountRequired";

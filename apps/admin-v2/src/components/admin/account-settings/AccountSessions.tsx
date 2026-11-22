@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Laptop, MonitorSmartphone, Smartphone, Tablet } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { deleteApiV1AdminAuthSessions, deleteApiV1AdminAuthSessionsByCommandId } from "@scalius/api-client/sdk";
@@ -19,6 +19,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { formatDateTime, useMessages } from "~/i18n";
 import { accountMessages } from "~/i18n/account";
 import { accountFailureMessage, type AccountMessage } from "./account-error";
+import { useCommand } from "~/lib/use-command";
 
 const DEVICE_ICONS = { mobile: Smartphone, tablet: Tablet, desktop: Laptop, unknown: MonitorSmartphone } as const;
 
@@ -43,7 +44,7 @@ export function AccountSessions() {
       current ? { sessions: current.sessions.filter(filter), hasMore: hasMore ?? current.hasMore } : current,
     );
 
-  const signOutOne = useMutation({
+  const signOutOne = useCommand({
     mutationFn: (commandId: string) => apiData(deleteApiV1AdminAuthSessionsByCommandId({ path: { commandId } })),
     onSuccess: (_result, commandId) => {
       keep((session) => session.commandId !== commandId);
@@ -53,7 +54,7 @@ export function AccountSessions() {
     onSettled: settle,
   });
 
-  const signOutOthers = useMutation({
+  const signOutOthers = useCommand({
     mutationFn: () => apiData(deleteApiV1AdminAuthSessions()),
     onSuccess: (result) => {
       keep((session) => session.current, false);

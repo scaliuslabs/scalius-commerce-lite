@@ -1,5 +1,4 @@
-import { IntentRequestKey } from "~/lib/intent-request-key";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
@@ -22,8 +21,9 @@ import {
   type OrderReturnDto,
 } from "~/lib/order-return-workflow";
 import type { Order } from "../types";
-import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./shared";
+import { getOrderItemName, clampQuantity } from "./shared";
 import { Field } from "~/components/ui/field";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 /** Request a return. This never refunds money or changes stock. */
 export function CreateReturnDialog({
@@ -46,7 +46,6 @@ export function CreateReturnDialog({
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [errors, setErrors] = useState<{ reason?: string; quantity?: string }>({});
   const mutation = useCreateOrderReturn();
-  const commandKey = useRef(new IntentRequestKey(createReturnCommandKey));
   // With one returnable line, the whole returnable amount is the likely answer (R3-ORD-14).
   const quantityOf = (itemId: string) => quantities[itemId] ?? (eligibleItems.length === 1 ? remaining.get(itemId) ?? 0 : 0);
   const lines = eligibleItems
@@ -65,10 +64,9 @@ export function CreateReturnDialog({
     }
     const intent = { expectedOrderVersion: order.version, reason: reason.trim(), notes: notes.trim() || null, lines };
     mutation.mutate(
-      { orderId: order.id, commandKey: commandKey.current.get("create", intent), ...intent },
+      { orderId: order.id, ...intent },
       {
         onSuccess: () => {
-          commandKey.current.clear();
           setReason("");
           setNotes("");
           setQuantities({});
@@ -80,13 +78,14 @@ export function CreateReturnDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
+    <Dialog open={open} onOpenChange={mutation.guardClose(onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("returns.new")}</DialogTitle>
           <DialogDescription>{t("returns.newHelp")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          <CommandKeyNotice notice={mutation.notice({ orderId: order.id })} target="order" />
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <Field id="return-reason" label={t("returns.reason")} error={errors.reason ? errors.reason : undefined}>
             <Input

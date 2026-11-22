@@ -131,7 +131,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
   const addressErrors = { ...serverErrors, ...localErrors };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
+    <Dialog open={open} onOpenChange={mutation.guardClose(onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("details.title")}</DialogTitle>

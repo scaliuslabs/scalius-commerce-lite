@@ -10,7 +10,7 @@
  * click: the change is saved to the theme draft and, when the draft holds
  * nothing else, published at once.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { postApiV1AdminSettingsThemeDraft, postApiV1AdminSettingsThemePublish } from "@scalius/api-client/sdk";
 import type { StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
@@ -24,6 +24,7 @@ import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { themeWorkspaceQueryOptions } from "~/lib/api-query-options/online-store";
 import { toast } from "~/lib/toast";
 import { actionErrorText } from "./action-error";
+import { useCommand } from "~/lib/use-command";
 
 /**
  * Where the header menu shows: on its own, after the categories, behind More
@@ -56,7 +57,7 @@ export function useHeaderMenuReach(): HeaderMenuReach {
 export function HeaderMenuNotice({ reach, canSwitch }: { reach: HeaderMenuReach; canSwitch: boolean }) {
   const t = useMessages(onlineStoreMessages);
   const queryClient = useQueryClient();
-  const switchSource = useMutation({
+  const switchSource = useCommand({
     mutationFn: async () => {
       const workspace = await queryClient.fetchQuery({ ...themeWorkspaceQueryOptions(), staleTime: 0 });
       const draft = workspace.draft.theme as StorefrontThemeDocument;
