@@ -99,7 +99,10 @@ function row(index: number, dims: {
     city: null, zone: null, area: null, cityName: null, zoneName: null, areaName: null,
     ...shipmentFor(dims.shipment),
     paymentRecovery: { state: recovery, label: "", message: null, gateway: "sslcommerz", paymentType: null, status: null, attempts: 0, activeProcessing: false, staleProcessing: false, updatedAt: null },
-    activeRefundOperation: index % 11 === 0 ? { active: true, status: "processing", severity: index % 22 === 0 ? "danger" : "warning" } : null,
+    activeRefundOperation: index % 11 === 0
+      ? { active: true, status: "processing", severity: index % 22 === 0 ? "danger" : "warning" }
+      // A refund the provider accepted and is completing: active, but it holds none of the order's changes.
+      : index % 13 === 0 ? { active: true, status: "provider_processing", severity: "info", providerProcessing: true, locksOrder: false } : null,
     archivedAt: null,
     channel: dims.channel.channel,
     channelSource: dims.channel.channelSource,

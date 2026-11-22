@@ -63,7 +63,7 @@ const DisputesSection = lazy(() => import("./DisputesSection").then((module) => 
 type Payment = OrderPaymentsPayload["payments"][number];
 type SessionAttempt = OrderPaymentsPayload["paymentSessionAttempts"][number];
 
-const MANUAL_REFUND_CHECK_STATUSES = new Set(["processing", "provider_unknown", "reconcile_required", "pending"]);
+const MANUAL_REFUND_CHECK_STATUSES = new Set(["processing", "provider_unknown", "provider_processing", "reconcile_required", "pending"]);
 /** A hosted gateway the buyer can be sent back to: any app's (apps are hosted only). */
 function isRecoveryLinkGateway(value: string | null | undefined): boolean {
   return typeof value === "string" && isQualifiedProviderId(value.trim());
@@ -179,7 +179,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
       ? t("payment.bangladeshPack")
       : methodLabel(order.paymentMethod ?? ""));
   const activeRefundCopy = activeRefund
-    ? refundStateCopy(t, activeRefund.status, activeRefund.gateway, methodLabel(activeRefund.gateway), activeRefund.providerProcessing === true)
+    ? refundStateCopy(t, activeRefund.status, activeRefund.gateway, methodLabel(activeRefund.gateway))
     : null;
   // A refund its provider took and is completing is on its way: it locks nothing on the order.
   const isRefundLocked = Boolean(activeRefund?.active) && activeRefund?.locksOrder !== false;
@@ -529,7 +529,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
               {refundAttempts.map((attempt) => {
                 const checking = refundCheckMutation.isPending && refundCheckMutation.variables?.attemptId === attempt.id;
                 const when = time(attempt.refundedAt ?? attempt.failedAt ?? attempt.nextProbeAt ?? attempt.createdAt);
-                const copy = refundStateCopy(t, attempt.status, attempt.gateway, methodLabel(attempt.gateway), attempt.providerProcessing === true);
+                const copy = refundStateCopy(t, attempt.status, attempt.gateway, methodLabel(attempt.gateway));
                 return (
                   <li key={attempt.id} className="space-y-1 py-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">

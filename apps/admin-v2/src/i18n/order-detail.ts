@@ -691,19 +691,16 @@ const REFUND_STATES_WITH_COPY = new Set(["pending", "processing", "provider_unkn
 
 /**
  * A refund attempt's title and explanation in the merchant's language, from
- * its stable status code. The server's English prose is never shown. A
- * refund the provider took and is completing (`providerProcessing`) is on its
- * way, not an unknown outcome.
+ * its stable status code (a refund the provider took and is completing has its
+ * own, `provider_processing`). The server's English prose is never shown.
  */
 export function refundStateCopy(
   t: Translate,
   status: string,
   gateway: string,
   gatewayLabel: string,
-  providerProcessing = false,
 ): { label: string; help: string | null } {
-  const code = providerProcessing && status === "provider_unknown" ? "provider_processing" : status;
-  const known = REFUND_STATES_WITH_COPY.has(code) ? code : "other";
+  const known = REFUND_STATES_WITH_COPY.has(status) ? status : "other";
   const state = known === "reconcile_required" && gateway.trim().toLowerCase() === "cod" ? "reconcile_required_cod" : known;
   const helpKey = `refundState.${state}.help`;
   return {
