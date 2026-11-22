@@ -21,6 +21,9 @@ export { replaceEmailAddresses, trimTrailingCharacter } from "@scalius/shared/te
 
 import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
 import type {
+  BuyerUiLine,
+  FunctionCartLine,
+  FunctionLinePriceFacts,
   FunctionReadRecord,
   FunctionReads,
   PluginFunctionAnswer,
@@ -29,6 +32,7 @@ import type {
   PluginFunctionPoint,
   PluginManifestInput,
   PluginSettingValue,
+  PluginUiDocument,
   StorefrontUiSlot,
 } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
@@ -123,9 +127,9 @@ export type {
 } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, adminNumber, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
 /** Your words in the buyer's or staff member's language (`input.language`, `adminContext(request).locale`), else English. */
-export { textFor } from "./text";
+export { moneyFor, textFor } from "./text";
 /** The cart a checkout function sees (`cart` in every point's input). */
-export type { FunctionCart } from "@scalius/shared/plugins";
+export type { BuyerUiLine, FunctionCart, FunctionCartLine, FunctionLineOffer, FunctionLinePriceFacts, LineInputChange } from "@scalius/shared/plugins";
 export type { EventRepresentation, EventRepresentationType } from "@scalius/shared/events";
 import type { EventRepresentation } from "@scalius/shared/events";
 /**
@@ -161,6 +165,66 @@ export type PluginExtensionHandler<Settings = Readonly<Record<string, PluginSett
 ) => PluginFunctionAnswer<"buyer.ui"> | Promise<PluginFunctionAnswer<"buyer.ui">>;
 
 export type { FunctionReadRecord, FunctionReads, PluginFunctionRunInput };
+
+/** One add-on a line's price answers (`priceLines`): a fixed amount (per unit; `currency: "store"` converts once) or a share of the item. */
+export type LineAddOnAnswer =
+  | { amountMinor: number; currency?: "cart" | "store"; title: string }
+  | { percent: number; title: string };
+
+/**
+ * `cart.line_prices` written for one line: `price(line, facts, input,
+ * settings)` answers that line's add-ons. The helper answers every cart
+ * line, and each offer a per-line slot shows (`input.offers`: a real line
+ * with one of your inputs set to a choice, the rest of the cart as it is)
+ * with the same function, so "Add for ৳350" is what checkout then charges.
+ * An offer your function throws on is left without a price; a line it
+ * throws on fails the run, as any function does.
+ *
+ *   functions: { "cart.line_prices": priceLines((line) => line.properties["acme.wrap.wrap"] === "true" ? [{ amountMinor: 5_000, currency: "store", title: "Gift wrap" }] : []) }
+ */
+export function priceLines<Settings = Readonly<Record<string, PluginSettingValue>>>(
+  price: (line: FunctionCartLine, facts: FunctionLinePriceFacts | undefined, input: PluginFunctionRunInput<"cart.line_prices">, settings: Settings) => LineAddOnAnswer[],
+): PluginFunctionHandler<"cart.line_prices", Settings> {
+  return (input, settings) => {
+    const facts = new Map(input.lines.map((line) => [line.lineId, line]));
+    const lines = new Map(input.cart.lines.map((line) => [line.lineId, line]));
+    return {
+      prices: [],
+      adjustments: input.cart.lines.flatMap((line) => price(line, facts.get(line.lineId), input, settings).map((addOn) => ({ lineId: line.lineId, ...addOn }))),
+      ...(input.offers ? { offers: input.offers.flatMap((offer) => {
+        const line = lines.get(offer.lineId);
+        if (!line) return [];
+        try {
+          return price({ ...line, properties: { ...line.properties, [offer.key]: offer.value } }, facts.get(offer.lineId), input, settings)
+            .map((addOn) => ({ offerId: offer.offerId, ...addOn }));
+        } catch {
+          return [];
+        }
+      }) } : {}),
+    };
+  };
+}
+
+/**
+ * The render of a per-line slot (`cart.line.after`), written for one line:
+ * `render(line, input, settings)` answers that line's `ui` (or null to draw
+ * nothing under it). The store runs your extension once for the whole cart
+ * (`input.lines`, each with its offer prices) and draws each answer under
+ * its own line, so the cost never grows with the cart's lines.
+ *
+ *   extensions: { "cart.line.after": perLine((line, input) => line.inputs[0]?.eligible ? ui.view([ui.text(line.title)]) : null) }
+ */
+export function perLine<Settings = Readonly<Record<string, PluginSettingValue>>>(
+  render: (line: BuyerUiLine, input: PluginFunctionRunInput<"buyer.ui">, settings: Settings) => PluginUiDocument | null,
+): PluginExtensionHandler<Settings> {
+  return (input, settings) => ({
+    ui: null,
+    lines: (input.lines ?? []).flatMap((line) => {
+      const drawn = render(line, input, settings);
+      return drawn ? [{ lineKey: line.lineKey, ui: drawn }] : [];
+    }),
+  });
+}
 
 /** A single-key read (`customer`, `attribute.<key>`, a hop) from `input.reads`: the record, or null. */
 export function readOne<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): { revision: number; data: T } | null {

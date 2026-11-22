@@ -1,4 +1,5 @@
 import {
+  adoptCheckedLinePrices,
   cartStore,
   normalizeCartLineAdjustments,
   rekeyCartLine,
@@ -51,12 +52,15 @@ function sameDisplay(
  * flag, fulfilment kind, the labels of its buyer inputs and the apps'
  * add-ons priced into it (display only). When the server
  * resolved the inputs to a different canonical hash (its word is final), the
- * line moves to that key. Prices and quantities are never changed here; the
- * buyer repairs those through the line's issue.
+ * line moves to that key. Prices and quantities are never changed here (the
+ * buyer repairs those through the line's issue), except a line whose app
+ * inputs the buyer just changed (`repricing`): it was checked without a
+ * price and takes the store's.
  */
 export function reconcileValidatedCartSnapshot(
   validation: CartValidationResult,
 ): boolean {
+  const adopted = adoptCheckedLinePrices(validation.items);
   const state = cartStore.get();
   const updates: CartLineItemUpdate[] = [];
   const rekeys: Array<{ key: string; hash: string; properties: CartLineProperty[] }> = [];
@@ -114,7 +118,7 @@ export function reconcileValidatedCartSnapshot(
   for (const { key, hash, properties } of rekeys) {
     rekeyed = rekeyCartLine(key, hash, properties) || rekeyed;
   }
-  return updated || rekeyed;
+  return adopted || updated || rekeyed;
 }
 
 const CART_CURRENCY_KEY = "scalius_cart_currency";

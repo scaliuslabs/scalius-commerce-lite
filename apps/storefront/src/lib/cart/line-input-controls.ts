@@ -14,13 +14,12 @@
  * some line takes an input; nothing here reaches app code (app code is
  * barred on these pages).
  */
-import { cartLineKeyFor, cartLinePropertyInputs, cartStore, normalizeCartLineAdjustments, replaceCartLines, type CartLineProperty, type VariantCartItem } from "@/store/cart";
+import { cartLineKeyFor, cartStore, replaceCartLines, type CartLineProperty, type VariantCartItem } from "@/store/cart";
 import { cartLineInputCopy, type CartLineInputCopy } from "@/lib/cart-line-input-copy";
 import { lineEntryWords } from "@scalius/shared/line-entry-words";
+import { lineInputDrawnOn } from "@scalius/shared/line-input-surfaces";
 import { formatCount, pageLanguage } from "@/lib/store-time-zone";
-import { cartItemVariantLabel, cartLineName } from "./item-options";
-import { isCartLineRefusal, validateCartLinesInBrowser } from "./new-line";
-import { purchaseOptionsField } from "./purchase-option";
+import { cartLineName } from "./item-options";
 import {
   bulkActions,
   bulkTargets,
@@ -32,6 +31,7 @@ import {
   sameAnswer,
   undecidedLineInputs,
   withLineAnswer,
+  hostDrawsLineInput,
   type CartLineInputFacts,
   type CartLineInputView,
   type UndecidedLineInput,
@@ -56,38 +56,18 @@ function announce(root: ParentNode, message: string): void {
 export type LineEdit = { oldLineKey: string; item: Omit<VariantCartItem, "propertiesHash"> };
 
 /**
- * The edited lines at the store's price, checked without one as a new line
- * is: an add-on the new answer brings (or drops) is the line's price and its
- * add-ons, never a "price changed" refusal. Null, changing nothing, when the
- * store refuses an answer or cannot be reached.
+ * Replaces the edited lines in one cart change: false when nothing changed.
+ * Each waits for the store's price (`repricing`): the cart's own next check
+ * sends it without one, as a new line is checked (an add-on the new answer
+ * brings never reads as "price changed"), and the line takes the store's
+ * price and add-ons from that check. One check per edit; checkout checks the
+ * answer again.
  */
-export async function pricedLineEdits(edits: readonly LineEdit[]): Promise<LineEdit[] | null> {
-  const result = await validateCartLinesInBrowser(edits.map(({ item }, index) => ({
-    cartKey: String(index),
-    productId: item.id,
-    variantId: item.variantId,
-    quantity: item.quantity,
-    productName: item.name,
-    variantLabel: cartItemVariantLabel(item.options),
-    ...(item.properties?.length ? { properties: cartLinePropertyInputs(item) } : {}),
-    ...purchaseOptionsField(item),
-  })));
-  if (!result || isCartLineRefusal(result)) return null;
-  if (result.issues.some((issue) => issue.code === "properties_invalid" || issue.code === "properties_required" || issue.code === "confirmation_required")) return null;
-  const checked = new Map(result.items.map((line) => [line.index, line]));
-  return edits.map((edit, index) => {
-    const line = checked.get(index);
-    if (!line) return edit;
-    const { adjustments: _old, ...item } = edit.item;
-    const adjustments = normalizeCartLineAdjustments(line.adjustments);
-    return { ...edit, item: { ...item, price: line.unitPrice, ...(adjustments.length > 0 ? { adjustments } : {}) } };
-  });
-}
-
-/** Replaces the edited lines at the store's price, in one cart change: false when nothing changed. */
 export async function applyLineEdits(edits: readonly LineEdit[]): Promise<boolean> {
-  const priced = await pricedLineEdits(edits);
-  return priced !== null && replaceCartLines(priced);
+  return replaceCartLines(edits.map(({ oldLineKey, item }) => {
+    const { adjustments: _stale, ...rest } = item;
+    return { oldLineKey, item: { ...rest, repricing: true as const } };
+  }));
 }
 
 /**
@@ -280,10 +260,17 @@ function inputControl(
 export function mountCartLineInputs(root: ParentNode, facts: CartLineInputFacts): void {
   const { copy, checked } = words();
   const { items } = cartStore.get();
+  // The host draws an input's control in the cart unless its app draws it itself (`surfaces` without `cart`)
+  // and its block for the line arrived: a line that needs an answer always has a way to give it.
+  const drawnOn = (lineKey: string) => (key: string) => hostDrawsLineInput(facts, lineKey, key, items[lineKey]);
+  const drawn = (key: string) => {
+    const view = facts.inputs.get(key);
+    return view !== undefined && lineInputDrawnOn(view.input, "cart");
+  };
   // Phones fold the lines into the order summary: a line that needs the buyer (an undecided
   // input, a refused answer) shows above it too, editable without unfolding.
   for (const panel of root.querySelectorAll<HTMLElement>("[data-cart-line-decisions]")) {
-    const lines = linesNeedingDecision(items, facts);
+    const lines = linesNeedingDecision(items, facts).filter((lineKey) => (facts.byLine.get(lineKey) ?? []).some(drawnOn(lineKey)));
     panel.replaceChildren();
     panel.hidden = lines.length === 0;
     if (lines.length === 0) continue;
@@ -309,7 +296,7 @@ export function mountCartLineInputs(root: ParentNode, facts: CartLineInputFacts)
   for (const mount of root.querySelectorAll<HTMLElement>("[data-cart-line-inputs]")) {
     const lineKey = mount.dataset.lineKey ?? "";
     const item = items[lineKey];
-    const keys = item ? facts.byLine.get(lineKey) ?? [] : [];
+    const keys = item ? (facts.byLine.get(lineKey) ?? []).filter(drawnOn(lineKey)) : [];
     mount.replaceChildren();
     mount.hidden = keys.length === 0;
     if (!item) continue;
@@ -334,7 +321,7 @@ export function mountCartLineInputs(root: ParentNode, facts: CartLineInputFacts)
   }
   for (const bar of root.querySelectorAll<HTMLElement>("[data-cart-line-input-bulk]")) {
     bar.replaceChildren();
-    const actions = bulkActions(items, facts, checked);
+    const actions = bulkActions(items, facts, checked).filter(({ view }) => drawn(view.key));
     bar.hidden = actions.length === 0;
     for (const { view, apply, clear } of actions) {
       for (const [action, shown, label] of [["apply", apply, view.input.bulk?.apply?.label], ["clear", clear, view.input.bulk?.clear?.label]] as const) {

@@ -10,6 +10,8 @@ import { createHostedGatewayHandler } from "./handlers/hosted";
 import { createDeferredGatewayHandler } from "./handlers/deferred";
 import { formatPageNumber, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
 import { formatMoney, DEFAULT_CURRENCY } from "@/lib/currency";
+import { fromMinor } from "@scalius/shared/money";
+import { addOnRowsOver } from "@scalius/shared/add-on-totals";
 
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
@@ -775,7 +777,12 @@ export function renderOrderSummaryDetails(
   if (Object.keys(checkoutCopy).length === 0) readCheckoutLanguage();
   details.replaceChildren();
   appendOrderItems(details, quote, freeDeliveryCartKeys(data.cartItems));
-  appendSummaryRow(details, checkoutCopy.subtotalText, currencyFmt(quote.subtotalAmount, quote));
+  // The apps' add-ons as their own rows after the items' subtotal: together they are the quote's subtotal.
+  const addOns = addOnRowsOver(quote.subtotalMinor, quote.addOns);
+  appendSummaryRow(details, checkoutCopy.subtotalText, currencyFmt(fromMinor(addOns.itemsSubtotalMinor, quote.decimalPlaces), quote));
+  for (const row of addOns.rows) {
+    appendSummaryRow(details, row.title, currencyFmt(fromMinor(row.amountMinor, quote.decimalPlaces), quote)).dataset.summaryRow = "add-on";
+  }
   // Delivery savings show on the delivery line ("৳80 Free (CODE)"), never as a discount line.
   const deliveryDiscounts = quote.discounts.filter(({ shippingAmount }) => shippingAmount > 0);
   const deliveryCharged = Math.max(

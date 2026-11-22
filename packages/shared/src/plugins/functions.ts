@@ -23,12 +23,15 @@ import { z } from "zod";
 import { buyerUiOutputSchema, checkoutAttributesSchema } from "./buyer-ui";
 import { FUNCTION_READ_AS_PATTERN, FUNCTION_READS_MAX, functionReadsSchema } from "./function-reads";
 import { STOREFRONT_UI_SLOTS } from "./storefront-protocol";
+import { MAX_ORDER_LINES } from "../order-limits";
 import { APP_SCOPED_KEY_MAX_LENGTH, APP_SCOPED_KEY_PATTERN } from "./ids";
-import { LINE_PROPERTY_INPUT_LIMITS, LINE_PURCHASE_OPTIONS_MAX } from "../line-properties";
+import { LINE_INPUTS_MAX } from "./buyer-ui";
+import { CUSTOMIZATION_LIMITS, LINE_PROPERTY_INPUT_LIMITS, LINE_PURCHASE_OPTIONS_MAX } from "../line-properties";
 import type { PluginFunctionPoint } from "./manifest";
 import { PLUGIN_CUSTOMER_ROLE_PATTERN, PLUGIN_CUSTOMER_ROLE_REF_PATTERN, PLUGIN_CUSTOMER_ROLES_MAX } from "./customer-roles";
 import { PROTECTED_FIELD_KEYWORD, protectedPathsOf, type ProtectedCustomerData, type ProtectedPath } from "./protected-data";
 import { ORDER_CHANNELS } from "../order-channel";
+import { LINE_ADD_ONS_MAX } from "../add-on-totals";
 import { ONLINE_STORE_CHANNEL_ID, SALES_CHANNEL_ID_MAX_LENGTH, SALES_CHANNEL_ID_PATTERN } from "../sales-channels";
 
 const id = z.string().min(1).max(128);
@@ -38,8 +41,8 @@ const code = z.string().regex(/^[a-z0-9][a-z0-9_.-]{0,63}$/);
 const message = z.string().trim().min(1).max(200);
 const label = z.string().trim().min(1).max(80);
 
-/** Add-ons one line carries (`LINE_ADJUSTMENTS_PER_LINE_MAX`, declared here before the line schema reads it). */
-const LINE_ADJUSTMENTS_ON_LINE_MAX = 5;
+/** Add-ons one line carries: the one bound the cart, the page and checkout share (`LINE_ADD_ONS_MAX`). */
+const LINE_ADJUSTMENTS_ON_LINE_MAX = LINE_ADD_ONS_MAX;
 
 /** One cart line as functions see it. */
 export const functionCartLineSchema = z.object({
@@ -205,6 +208,9 @@ export const functionCartSchema = z.object({
   attributes: checkoutAttributesSchema,
 }).strict();
 export type FunctionCart = z.infer<typeof functionCartSchema>;
+export type FunctionCartLine = z.infer<typeof functionCartLineSchema>;
+export type FunctionLineOffer = z.infer<typeof functionLineOfferSchema>;
+export type FunctionLinePriceFacts = z.infer<typeof functionLinePriceFactsSchema>;
 
 // ── cart.validate ─────────────────────────────────────────────────────────
 
@@ -510,6 +516,24 @@ const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT
  * app decides what to deliver from the order line, never from its current
  * settings.
  */
+/** Offers one offer run prices at most (a cart line's choices a per-line slot shows). */
+export const LINE_OFFERS_MAX = 250;
+/**
+ * A choice the buyer could make on a real cart line (an offer a per-line
+ * slot shows: "Add Lifetime plan for ৳350"): the line it would change
+ * (`lineId`, a line of `cart.lines`; a bundle's, its anchor component) and
+ * the app's own input (`key`, `<app id>.<key>`) set to `value`. The cart
+ * itself is as it is: answer each offer's add-on in `offers` as you would
+ * answer that line once the buyer chose it. Only your own inputs' offers
+ * reach you; a quote never carries any.
+ */
+export const functionLineOfferSchema = z.object({
+  offerId: id,
+  lineId: id,
+  key: z.string().max(APP_SCOPED_KEY_MAX_LENGTH).regex(APP_SCOPED_KEY_PATTERN),
+  value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength),
+}).strict();
+
 export const cartLinePricesOutputSchema = z.object({
   prices: z.array(z.object({
     lineId: id,
@@ -536,6 +560,16 @@ export const cartLinePricesOutputSchema = z.object({
       title: label,
     }).strict(),
   ])).max(250).default([]),
+  /**
+   * The add-on each offer (`input.offers`) would bring, as an adjustment of
+   * its line once the buyer chose it: a fixed amount (per unit; a bundle's
+   * per bundle unit) or a share of the item. Read only for a per-line slot's
+   * offer prices; never charged. An offer left out shows no price.
+   */
+  offers: z.array(z.union([
+    z.object({ offerId: id, amountMinor: minor.nonnegative().max(LINE_ADJUSTMENT_MAX_MINOR), currency: amountCurrency, title: label }).strict(),
+    z.object({ offerId: id, percent: percentOfUnit, title: label }).strict(),
+  ])).max(LINE_OFFERS_MAX).optional(),
 }).strict();
 
 // ── Composition ───────────────────────────────────────────────────────────
@@ -568,9 +602,63 @@ export type PluginFunctionComposition = (typeof PLUGIN_FUNCTION_COMPOSITION)[Plu
 
 // ── Registry ──────────────────────────────────────────────────────────────
 
+/**
+ * One cart line as the cart's UI slots read it (`input.lines`): the buyer's
+ * line (an expanded bundle is one line), and of the apps' inputs only the
+ * extension's own app's. Money is in the cart's currency (`cart.currency`).
+ * The host builds it within these bounds; a line the app's own facts cannot
+ * fit leaves out that app's blocks alone (logged), never another app's.
+ */
+export const buyerUiLineSchema = z.object({
+  /** The line's key in the buyer's cart: what a `set_line_input` button names in `lineKeys`. */
+  lineKey: z.string().min(1).max(256),
+  productId: id,
+  variantId: id,
+  title: z.string().max(300),
+  quantity: z.number().int().min(1),
+  /** One unit as the buyer pays it, every add-on included. */
+  unitPriceMinor: nonNegativeMinor,
+  /** A bundle the store sells as one line (`cart.transform` expands it): its add-ons are once per bundle unit. */
+  bundle: z.boolean(),
+  /** Every app's add-ons on each unit, with the app that added it ("Protection ৳350"). */
+  addOns: z.array(z.object({ appId: z.string().max(128), title: z.string().max(80), amountMinor: minor }).strict()).max(LINE_ADJUSTMENTS_ON_LINE_MAX),
+  /**
+   * The app's own line inputs (`checkout.lineInputs`, keys without the app
+   * id), every one it declares: whether the line takes it (`eligible`, the
+   * rule checkout applies), the line's answer (null: none), whether checkout
+   * needs an answer on this line before a buyer's order (`decision`), and
+   * what each choice would add to one unit (`offers`: a select's choices
+   * that need no confirmation, a checkbox's `"true"`), priced by the app's
+   * own `cart.line_prices` as checkout would charge it, so a row can say
+   * "Add for ৳350" before the buyer adds it. A choice the app prices at
+   * nothing has `addOnMinor` 0; one it does not answer is left out. The
+   * price is the app's answer for this line with the choice set, the rest of
+   * the cart as it is: an app whose price depends on other lines sees them.
+   * Offers are given only on the per-line slot (`cart.line.after`).
+   */
+  inputs: z.array(z.object({
+    key: z.string().max(APP_SCOPED_KEY_MAX_LENGTH),
+    eligible: z.boolean(),
+    value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength).nullable(),
+    decision: z.boolean(),
+    offers: z.array(z.object({ value: z.string().max(64), addOnMinor: nonNegativeMinor }).strict()).max(CUSTOMIZATION_LIMITS.selectOptions),
+  }).strict()).max(LINE_INPUTS_MAX),
+}).strict();
+/** Every cart line's facts, as one app's run reads them (`input.lines`): at most an order's lines. */
+export const buyerUiLinesSchema = z.array(buyerUiLineSchema).max(MAX_ORDER_LINES);
+export type BuyerUiLine = z.infer<typeof buyerUiLineSchema>;
+
 export const buyerUiInputSchema = z.object({
   target: z.enum(STOREFRONT_UI_SLOTS), language: z.string().min(1).max(35), locale: z.string().min(1).max(35), currency: z.string().length(3),
   cart: functionCartSchema.nullable(), attributes: checkoutAttributesSchema,
+  /**
+   * Every cart line's facts (`BuyerUiLine`) on the cart's own slots (the
+   * cart page's, the payment step's and the drawer's): a summary says which
+   * lines take the app's input and offers "Add to all" or "Remove", and a
+   * per-line slot (`cart.line.after`, with offer prices) answers a block for
+   * each line in one run (`output.lines`; the SDK's `perLine`). Absent elsewhere.
+   */
+  lines: buyerUiLinesSchema.optional(),
   order: z.object({ orderId: id, status: z.string().max(64), paymentStatus: z.string().max(64), lines: z.array(z.object({ productId: id, variantId: id, quantity: z.number().int().min(1) }).strict()).max(250) }).strict().nullable(),
   customer: z.object({ id }).strict().nullable(), reads, now,
 }).strict();
@@ -585,6 +673,8 @@ export const PLUGIN_FUNCTION_SCHEMAS = {
     input: z.object({
       cart: functionCartSchema,
       lines: z.array(functionLinePriceFactsSchema).max(250),
+      /** Choices to price on the cart as it is (a per-line slot's offers); absent in a quote. */
+      offers: z.array(functionLineOfferSchema).max(LINE_OFFERS_MAX).optional(),
       reads, now, language,
     }).strict(),
     output: cartLinePricesOutputSchema,

@@ -618,6 +618,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               <span>{copy.subtotalText}</span>
               <span id="subtotal" class="font-medium tabular-nums text-foreground">—</span>
             </div>
+            {/* The apps' add-ons as their own rows ("Protection ৳350"), drawn with the totals: Subtotal and these add up to the cart's subtotal. */}
+            <div id="addOnRows" class="space-y-2" hidden></div>
             <div class="flex justify-between gap-3 text-sm text-muted-foreground group-data-[delivery-need=none]:hidden" id="shippingRow" data-summary-row="delivery">
               {/* A pickup order has no shipping: the row names the pickup. */}
               <span class="group-data-[delivery-mode=pickup]:hidden">{copy.shippingText}</span>

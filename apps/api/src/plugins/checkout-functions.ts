@@ -36,6 +36,8 @@ import { ValidationError } from "@scalius/core/errors";
 import { PLUGIN_EXTENSION_RUN, PLUGIN_FUNCTION_POINTS, type PluginFunctionInput, type PluginFunctionPoint, type PluginRunPoint } from "@scalius/shared/plugins";
 import type { PluginHost, PluginHostOptions } from "./host";
 import { prepareBuyerUiBlocks } from "./buyer-ui";
+import { BUYER_UI_BLOCKS_MAX, BUYER_UI_LINE_BLOCKS_MAX, BUYER_UI_RESPONSE_MAX_BYTES, type BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
+import { isStorefrontUiLineSlot } from "@scalius/shared/plugins/storefront-protocol";
 import { CHECKOUT_APP_BUDGET_MS, CHECKOUT_APP_CEILING_MS, checkoutAppShare, optionalAppBudget, PLUGIN_FUNCTION_WALL_MS, createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
@@ -143,6 +145,17 @@ function contextOf(ctx: ExecutionContext | undefined): ExecutionContext {
   return ctx ?? ({ waitUntil: () => undefined, passThroughOnException: () => undefined, props: {}, exports: {} } as unknown as ExecutionContext);
 }
 
+/**
+ * Offer runs (a per-line slot's prices) back off on their own, apart from the
+ * checkout circuit: after an app's offer run fails it is not asked again for
+ * `OFFER_BACKOFF_MS` (per isolate), so a broken pricing app costs one run and
+ * one log line a window, not one per cart check.
+ */
+export const OFFER_BACKOFF_MS = 60_000;
+/** The most an offer run may take: its own slice, never more than a third of the request's budget left. */
+export const OFFER_RUN_MS = 300;
+const offerBackoff = new Map<string, number>();
+
 export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions): CheckoutAppFunctions {
   const active = isResolved(options.registrations)
     ? orderFunctionRegistrations(options.registrations)
@@ -238,20 +251,77 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
     readRequests(wanted) {
       return wanted.flatMap((point) => functionReadRequests(registrations.filter((registration) => registration.name === point), point));
     },
+    buyerUiApps(target) {
+      return registrations.filter((registration) => registration.name === PLUGIN_EXTENSION_RUN
+        && registration.installation.grant?.extensions.includes(target)
+        && registration.installation.manifest.storefront.extensions.some((extension) => extension.target === target))
+        .map((registration) => registration.installation.pluginId);
+    },
     async buyerUi(input) {
       if (!points.has(PLUGIN_EXTENSION_RUN)) return [];
-      const blocks = [];
+      const slotBlocks: BuyerUiBlock[] = [];
+      const lineBlocks: BuyerUiBlock[] = [];
+      const cartLines = input.lines ?? [];
+      const lineKeys = new Set(cartLines.map((line) => line.lineKey));
+      // The cart's other slots read every line without offer prices; the per-line slot with them.
+      const withoutOffers = cartLines.map((entry) => ({ ...entry, inputs: entry.inputs.map((each) => ({ ...each, offers: [] })) }));
       for (const target of input.targets) {
-        const results = await runtime.run(PLUGIN_EXTENSION_RUN, { target, language: input.language ?? language, locale: input.locale ?? language, currency: input.currency, cart: input.cart ?? null, attributes: input.attributes ?? {}, order: input.order ?? null, customer: input.customer ?? (input.cart?.customer ? { id: input.cart.customer.id } : null) });
+        const perLine = isStorefrontUiLineSlot(target);
+        // A per-line slot runs once per app for every line (never once per line), and only for an app that declares it.
+        if (perLine && (cartLines.length === 0 || runtime.buyerUiApps!(target).length === 0)) continue;
+        const facts = perLine ? { lines: [...cartLines] } : input.lines ? { lines: withoutOffers } : {};
+        const results = await runtime.run(PLUGIN_EXTENSION_RUN, { target, language: input.language ?? language, locale: input.locale ?? language, currency: input.currency, cart: input.cart ?? null, attributes: input.attributes ?? {}, ...facts, order: input.order ?? null, customer: input.customer ?? (input.cart?.customer ? { id: input.cart.customer.id } : null) });
         for (const result of results) {
-          if (!result.output.ui) continue;
           const installation = registrations.find((entry) => entry.installation.pluginId === result.pluginId)!.installation;
           const prefix = `${result.pluginId}.`;
           const values = Object.fromEntries(Object.entries(input.attributes ?? {}).filter(([key]) => key.startsWith(prefix)).map(([key, value]) => [key.slice(prefix.length), value]));
-          blocks.push({ appId: result.pluginId, releaseId: installation.bundleSha256, target, ui: result.output.ui.root, attributes: attributeApps.get(result.pluginId)?.fields ?? [], values });
+          const block = { appId: result.pluginId, releaseId: installation.bundleSha256, target, attributes: attributeApps.get(result.pluginId)?.fields ?? [], values };
+          if (!perLine) {
+            if (result.output.ui) slotBlocks.push({ ...block, ui: result.output.ui.root });
+            continue;
+          }
+          // Each line's block, in the cart's order, for lines of this cart only, once each.
+          const answered = new Map((result.output.lines ?? []).filter((entry) => entry.ui && lineKeys.has(entry.lineKey)).map((entry) => [entry.lineKey, entry.ui!.root]));
+          for (const line of cartLines) {
+            const ui = answered.get(line.lineKey);
+            if (ui) lineBlocks.push({ ...block, ui, lineKey: line.lineKey });
+          }
         }
       }
-      try { return await prepareBuyerUiBlocks(options.db, blocks.slice(0, 12), registrations, options.env.CDN_DOMAIN_URL); } catch { return []; }
+      // One answer stays bounded: the slots' blocks first, then the lines', within the bytes a cart check carries.
+      let bytes = 0;
+      const encoder = new TextEncoder();
+      const blocks = [...slotBlocks.slice(0, BUYER_UI_BLOCKS_MAX), ...lineBlocks.slice(0, BUYER_UI_LINE_BLOCKS_MAX)].filter((block) => {
+        // UTF-8 bytes, as the answer travels (Bangla text is about three bytes a character).
+        bytes += encoder.encode(JSON.stringify(block)).byteLength;
+        return bytes <= BUYER_UI_RESPONSE_MAX_BYTES;
+      });
+      try { return await prepareBuyerUiBlocks(options.db, blocks, registrations, options.env.CDN_DOMAIN_URL); } catch { return []; }
+    },
+    async runOffers(appIds, given) {
+      // Only the named apps' pricing, outside the order's path: never blocking, no circuit, no pace; a failure
+      // prices nothing. An app whose offer run failed lately is not asked again until its backoff ends.
+      const now = Date.now();
+      const owners = registrations.filter((registration) => registration.name === "cart.line_prices" && appIds.has(registration.installation.pluginId)
+        && (offerBackoff.get(registration.installation.pluginId) ?? 0) <= now);
+      if (owners.length === 0) return [];
+      // Its own slice: at most OFFER_RUN_MS and a third of what the request has left, so the blocks keep the rest.
+      const left = Math.max(0, requestDeadline() - now);
+      const deadline = now + Math.min(OFFER_RUN_MS, Math.floor(left / 3));
+      let results: Array<CheckoutAppFunctionResult<"cart.line_prices">> = [];
+      try {
+        results = (await sharedHost().then((shared) => runPluginFunctions("cart.line_prices", { ...given, language: given.language ?? language }, options.env, ctx, {
+          db: options.db, registered: owners, host: shared, reads, roles, sandboxRuns, defaultLocale, deadline, uncounted: true,
+        }))).map((result) => ({ ...result, appName: result.pluginId }));
+      } catch {
+        results = [];
+      }
+      // An owner without an answer failed (or ran out of its slice): back off, so it is retried (and logged) once a window.
+      const answered = new Set(results.map((result) => result.pluginId));
+      for (const owner of owners) {
+        if (!answered.has(owner.installation.pluginId)) offerBackoff.set(owner.installation.pluginId, now + OFFER_BACKOFF_MS);
+      }
+      return results;
     },
     run<P extends PluginRunPoint>(point: P, given: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>> {
       if (!points.has(point)) return Promise.resolve([]);

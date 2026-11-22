@@ -53,6 +53,7 @@ import {
   type CheckoutAttribute,
   type BuyerUiBlock,
   type BuyerUiInput,
+  type BuyerUiLine,
   type StorefrontUiSlot,
   type PluginFunctionInput,
   type PluginFunctionOutput,
@@ -109,7 +110,20 @@ export interface CheckoutAppFunctions {
    * and every run hears it (`input.language`).
    */
   readonly language?: string;
-  buyerUi?(input: Partial<Omit<BuyerUiInput, "target">> & { targets: readonly StorefrontUiSlot[]; currency: string }): Promise<BuyerUiBlock[]>;
+  /** The apps approved to draw a UI slot (an extension for it, in their grant). */
+  buyerUiApps?(target: StorefrontUiSlot): string[];
+  /**
+   * The apps' buyer UI blocks for `targets`, one run per app and slot. The
+   * cart's slots read `lines` (every app's inputs: each app sees its own);
+   * a per-line slot (`STOREFRONT_UI_LINE_SLOTS`) answers a block per line,
+   * each naming its line.
+   */
+  buyerUi?(input: Partial<Omit<BuyerUiInput, "target" | "lines">> & { targets: readonly StorefrontUiSlot[]; currency: string; lines?: readonly BuyerUiLine[] }): Promise<BuyerUiBlock[]>;
+  /**
+   * `cart.line_prices` of the named apps alone, for an offer's price: never
+   * blocking, outside the failure circuits, and never part of the quote.
+   */
+  runOffers?(appIds: ReadonlySet<string>, input: Omit<PluginFunctionInput<"cart.line_prices">, "reads">): Promise<Array<CheckoutAppFunctionResult<"cart.line_prices">>>;
   /** `reads` is the platform's: each app gets its own declared reads. */
   run<P extends PluginRunPoint>(point: P, input: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>>;
   /** The declared reads of the apps at these points (none: no read). */

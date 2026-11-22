@@ -6,6 +6,7 @@
 
 import type { CustomFieldWireValue } from "../custom-fields";
 import type { BuyerEvent, PixelEventName } from "./buyer-events";
+import type { LineInputChange } from "./line-input-change";
 
 // ── Protocol ──────────────────────────────────────────────────────────────
 
@@ -94,6 +95,10 @@ export const STOREFRONT_UI_SLOT_PAGES = {
   // The cart drawer's footer, above its checkout button: on every public
   // page, drawn by the store from the extension's `ui` tree (no app code).
   "cart_drawer.footer": "cart_drawer",
+  // Under each cart line, on the cart page and in the drawer (the same
+  // block on both): the extension runs once for the whole cart with every
+  // line's facts (`input.lines`) and answers a block per line (`output.lines`).
+  "cart.line.after": "cart",
   // The thank-you page.
   "order.confirmation": "order",
   // The order status page (signed in, or the receipt's status view).
@@ -105,7 +110,20 @@ export type StorefrontUiSlot = keyof typeof STOREFRONT_UI_SLOT_PAGES;
 export type StorefrontUiSlotPage = (typeof STOREFRONT_UI_SLOT_PAGES)[StorefrontUiSlot];
 export const STOREFRONT_UI_SLOTS = Object.keys(STOREFRONT_UI_SLOT_PAGES) as [StorefrontUiSlot, ...StorefrontUiSlot[]];
 
-/** The UI slots one buyer page group draws (`checkout`: the cart page and the payment step; `cart_drawer`: the cart drawer). */
+/**
+ * The UI slots drawn under each cart line: one run for the whole cart
+ * (`input.lines`), each block of its answer for one line (`BuyerUiBlock.lineKey`).
+ */
+export const STOREFRONT_UI_LINE_SLOTS = ["cart.line.after"] as const satisfies readonly StorefrontUiSlot[];
+export function isStorefrontUiLineSlot(slot: string): slot is (typeof STOREFRONT_UI_LINE_SLOTS)[number] {
+  return (STOREFRONT_UI_LINE_SLOTS as readonly string[]).includes(slot);
+}
+
+/**
+ * The UI slots one buyer page group draws (`checkout`: the cart page and the
+ * payment step; `cart_drawer`: the cart drawer; `cart`: the cart's lines,
+ * on the cart page and in the drawer).
+ */
 export function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlot[] {
   return STOREFRONT_UI_SLOTS.filter((slot) => STOREFRONT_UI_SLOT_PAGES[slot] === page);
 }
@@ -1293,12 +1311,16 @@ export interface StorefrontCartLine {
  * What `setLineInput` did: `changed` lines (0 when every line already had the
  * answer), or why nothing changed: the buyer went back from the confirmation
  * (`cancelled`), the key is not one of this app's inputs (`unknown_input`),
- * a named line does not take it (`not_applicable`), or the cart could not be
- * checked or saved (`failed`).
+ * a named line does not take it (`not_applicable`), the store refused the
+ * answer as given and the cart was left as it was (`refused`, with the
+ * check's `code`: `properties_invalid`, `properties_required` or
+ * `confirmation_required`), or the cart could not be checked or saved
+ * (`failed`). On success the changed lines carry the store's price and add-ons.
  */
 export type StorefrontLineInputResult =
   | { ok: true; changed: number }
-  | { ok: false; reason: "cancelled" | "unknown_input" | "not_applicable" | "failed" };
+  | { ok: false; reason: "cancelled" | "unknown_input" | "not_applicable" | "failed" }
+  | { ok: false; reason: "refused"; code: string };
 
 /**
  * What `decide` did: `changed` lines (0: nothing was undecided), or why
@@ -1355,7 +1377,7 @@ export interface StorefrontIslandContext {
    */
   cart?: {
     lines(): Promise<StorefrontCartLine[]>;
-    setLineInput(change: { key: string; value: string | null; lineKeys?: string[] }): Promise<StorefrontLineInputResult>;
+    setLineInput(change: LineInputChange): Promise<StorefrontLineInputResult>;
     /**
      * What Place order does for this app's inputs that need a decision: asks
      * the buyer once, in the host's dialog, to agree to each input's

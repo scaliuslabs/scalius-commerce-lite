@@ -91,7 +91,7 @@ Every name in the manifest follows one rule, and a refusal names the rule (`Use 
 | `functions` | one per point | `{ point, priority (0 to 1000, default 100), onError, reads }`. |
 | `checkout.attributes` | 10 | Typed buyer inputs (`text`, `multiline`, `number`, `boolean`, `date`, `choice`, `file`). All of an order's attributes together are at most 8 KiB. A `file` takes `accept?`, `maxBytes?`, `maxFiles?` ([buyer uploads](commerce-hooks.md#buyer-uploads)). |
 | `checkout.purchaseOptions` | 10 | `{ key, title, description? }`. Needs a checkout function, a storefront extension or a payment provider. |
-| `checkout.lineInputs` | 10 | `{ key, label, labelSetting?, help?, helpSetting?, type, maxLength?, options?, accept?, maxBytes?, maxFiles?, products?, variants? }`: per-line buyer inputs under `<app id>.<key>` (`file` takes [buyer uploads](commerce-hooks.md#buyer-uploads)), never required; `products` and `variants` name your own storefront-visible boolean product and variant fields that show it, a SKU's value over its product's ([Line inputs](commerce-hooks.md#line-inputs)). Needs a checkout function, a storefront extension or a payment provider. |
+| `checkout.lineInputs` | 10 | `{ key, label, labelSetting?, help?, helpSetting?, type, maxLength?, options?, accept?, maxBytes?, maxFiles?, products?, variants?, bulk?, decision?, surfaces? }`: per-line buyer inputs under `<app id>.<key>` (`surfaces`: where the store draws it, the buy form and/or the cart) (`file` takes [buyer uploads](commerce-hooks.md#buyer-uploads)), never required; `products` and `variants` name your own storefront-visible boolean product and variant fields that show it, a SKU's value over its product's ([Line inputs](commerce-hooks.md#line-inputs)). Needs a checkout function, a storefront extension or a payment provider. |
 | `providers` | 24 in all | Grouped by port. |
 | `routes.admin`, `routes.public`, `routes.webhooks` | 40, 20, 10 | `{ name, methods?, description? }`. |
 | `cron` | 10 | `{ name, schedule }`. |
@@ -112,7 +112,7 @@ Every name in the manifest follows one rule, and a refusal names the rule (`Use 
 
 **Listing fields** describe the app on the Apps page. They grant nothing, and changing them needs no new approval: `icon` (square SVG or PNG, at most 64 KiB), `tagline` (100 characters), `categories` (3), `screenshots` (6 PNG, JPEG or WebP files, at most 512 KiB each), `support` (`{ url?, email? }`), `privacyPolicyUrl`, `documentationUrl`, `changelogUrl` (https), `countries` (ISO 3166-1 alpha-2, upper case) and `minPlatformVersion`. The packer checks every image file by its bytes and refuses an SVG with scripts, links, external references or entities.
 
-**Settings types:** `text`, `textarea`, `number`, `boolean`, `select`, `multiselect`, `secret`, `url` (https), `email`, `color`. A `secret` is encrypted at rest and masked everywhere. Only `ctx.settings` sees it decrypted. A secret that cannot be opened reads as `null`.
+**Settings types:** `text`, `textarea`, `number`, `boolean`, `select`, `multiselect`, `secret`, `url` (https; with `store: true`, a page of this store instead, a path such as `/pages/protection`: another site's address is refused on save, and one stored before shows as invalid on the settings screen until it is fixed), `email`, `color`. A `secret` is encrypted at rest and masked everywhere. Only `ctx.settings` sees it decrypted. A secret that cannot be opened reads as `null`.
 
 ## Access and consent
 

@@ -12,6 +12,7 @@ import {
 import { isFulfillmentKind, type FulfillmentKind } from "@scalius/shared/fulfilment";
 import { getCurrencyCode, getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
+import { LINE_ADD_ONS_MAX } from "@scalius/shared/add-on-totals";
 import {
   normalizeCartItemOptions,
   type CartItemOption,
@@ -98,6 +99,12 @@ export type CartItem = {
   propertiesHash?: string;
   /** Apps' add-ons from the last cart check (display only, never identity). */
   adjustments?: CartLineAdjustment[];
+  /**
+   * The line's app inputs changed: the next cart check sends it without a
+   * price and the line takes the store's price and add-ons from that check
+   * (`adoptCheckedLinePrices`), so an edit costs that one check.
+   */
+  repricing?: true;
   /** What the SKU is. Unknown (older lines) is treated as physical: it needs delivery. */
   fulfillmentKind?: FulfillmentKind;
 };
@@ -404,7 +411,7 @@ export function normalizeCartLineProperties(
   return properties;
 }
 
-const MAX_LINE_ADJUSTMENTS = 5;
+const MAX_LINE_ADJUSTMENTS = LINE_ADD_ONS_MAX;
 
 /** Add-ons from a server answer or a stored cart: display only, so bad entries are dropped, never the line. */
 export function normalizeCartLineAdjustments(value: unknown): CartLineAdjustment[] {
@@ -510,6 +517,7 @@ function normalizeStoredCartItem(value: unknown): VariantCartItem | null {
     propertiesHash,
     ...(adjustmentsOf(value.adjustments)),
     ...(isFulfillmentKind(value.fulfillmentKind) ? { fulfillmentKind: value.fulfillmentKind } : {}),
+    ...(value.repricing === true ? { repricing: true as const } : {}),
   };
 }
 
@@ -1090,6 +1098,8 @@ export function updateCartItemsByKeyAtomically(
       ...(isFulfillmentKind(refreshed.fulfillmentKind)
         ? { fulfillmentKind: refreshed.fulfillmentKind }
         : {}),
+      // A line waiting for the store's price keeps waiting until a check gives it one.
+      ...(existingItem.repricing && updates.price === undefined ? { repricing: true as const } : {}),
     };
     patches.push({
       lineKey,
@@ -1100,6 +1110,29 @@ export function updateCartItemsByKeyAtomically(
     replacements.set(lineKey, refreshedItem);
   }
   return applyLocalLinePatch(patches, replacements).ok;
+}
+
+/**
+ * The price a line waiting for one (`repricing`) takes from a cart check:
+ * the check's unit price and add-ons for that line, by its cart key. True
+ * when a line changed.
+ */
+export function adoptCheckedLinePrices(
+  checked: ReadonlyArray<{ cartKey?: string | null; unitPrice: number; adjustments?: unknown }>,
+): boolean {
+  ensureCartHydrated();
+  const { items } = cartStore.get();
+  const updates: CartLineItemUpdate[] = checked.flatMap((line) => {
+    const item = line.cartKey ? items[line.cartKey] : undefined;
+    if (!item?.repricing || !Number.isFinite(line.unitPrice) || line.unitPrice < 0) return [];
+    return [{ lineKey: line.cartKey!, updates: { price: line.unitPrice, adjustments: normalizeCartLineAdjustments(line.adjustments) } }];
+  });
+  return updates.length > 0 && updateCartItemsByKeyAtomically(updates);
+}
+
+/** What a cart check sends of a line's price: none for a line waiting for the store's (`repricing`). */
+export function cartLineCheckPrice(item: Pick<CartItem, "price" | "repricing">): { price?: number } {
+  return item.repricing ? {} : { price: item.price };
 }
 
 /** Keeps a code the buyer applied; the server quote decides what it is worth. */

@@ -284,6 +284,9 @@ export interface Budget {
 
 export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
   free: {
+    // Cart check, 20 lines, one bundled app drawing under each line (2026-11-23): one run of the app for the
+    // whole cart (never one per line) and one run of its own pricing for the offers; no write.
+    "cart-check-20-lines-line-app": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 0, rowsRead: 175, fullScans: 2 },
     "staff-sign-in": { d1Calls: 9, d1Statements: 9, externalFetches: 0, rowsWritten: 6, rowsRead: 10, fullScans: 0 },
     // rowsRead grows with the bundled apps a deployment ships (Noor and the
     // Bangladesh pack today).
@@ -341,6 +344,9 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-full-refund-cancel-subscribers-3": { d1Calls: 39, d1Statements: 82, externalFetches: 2, rowsWritten: 122, rowsRead: 164, fullScans: 7 },
   },
   paid: {
+    // Cart check, 20 lines, one bundled app drawing under each line (2026-11-23): one run of the app for the
+    // whole cart (never one per line) and one run of its own pricing for the offers; no write.
+    "cart-check-20-lines-line-app": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 0, rowsRead: 175, fullScans: 2 },
     "staff-sign-in": { d1Calls: 9, d1Statements: 9, externalFetches: 0, rowsWritten: 6, rowsRead: 10, fullScans: 0 },
     // rowsRead grows with the bundled apps a deployment ships (Noor and the
     // Bangladesh pack today).

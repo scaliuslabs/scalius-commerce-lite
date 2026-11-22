@@ -30,7 +30,7 @@ interface Props {
 const { section, order, orderId, copy, orderSuccessView, gateways, view } = Astro.props;
 const checkoutConfig = { gateways };
 const {
-  orderNumber, orderPlacedAt, receiptPaymentTerms, receiptMoney, receiptDiscounts, formatReceiptAmount, formatReceiptMinor,
+  orderNumber, orderPlacedAt, receiptPaymentTerms, receiptMoney, receiptAddOnRows, receiptItemsSubtotal, receiptDiscounts, formatReceiptAmount, formatReceiptMinor,
   showsReceiptDeliveryRow, receiptDeliveryRow, receiptDeliveryDetails, savedMoneySummary, receiptGiftCardTenders,
   visibleBalanceDue, receiptPayment, deliveryBlock, deliveryLocality, showOrderLineGroupHeadings, orderLineGroups, showsLineDiscounts,
   customerPhone, quantityText, appAnswers,
@@ -92,8 +92,14 @@ const answerWords = longAnswerWords(pageLanguage());
         <div class="space-y-3 border-t border-border pt-4">
           <div class="flex justify-between gap-4" data-summary-row="subtotal">
             <span class="text-muted-foreground">{copy.subtotalText}</span>
-            <span class="font-medium">{formatReceiptAmount(receiptMoney.subtotal)}</span>
+            <span class="font-medium">{formatReceiptAmount(receiptItemsSubtotal)}</span>
           </div>
+          {receiptAddOnRows.map((row) => (
+            <div class="flex justify-between gap-4" data-summary-row="add-on">
+              <span class="text-muted-foreground">{row.title}</span>
+              <span class="shrink-0 whitespace-nowrap font-medium">{formatReceiptAmount(row.amount)}</span>
+            </div>
+          ))}
           {showsReceiptDeliveryRow && receiptDeliveryRow && <div class="flex justify-between gap-4" data-summary-row="delivery">
             <span class="text-muted-foreground">{receiptDeliveryRow.label}</span>
             <span class="text-end font-medium">

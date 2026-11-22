@@ -176,7 +176,7 @@ function contextFor(element: Element): StorefrontIslandContext | null {
     // The cart's lines and this app's line inputs on them, through the store's check (loaded on the first call).
     cart: {
       lines: async () => (await loadLazyScript(() => import("@/lib/cart/island-cart"))).islandCartLines(pluginId),
-      setLineInput: async (change) => (await loadLazyScript(() => import("@/lib/cart/island-cart"))).islandSetLineInput(pluginId, change),
+      setLineInput: async (change) => (await loadLazyScript(() => import("@/lib/cart/island-cart"))).setAppLineInput(pluginId, change),
       decide: async () => (await loadLazyScript(() => import("@/lib/cart/island-cart"))).islandDecide(pluginId),
     },
     fetchApp: (path, init) => fetch(`/apps/${pluginId}/${path.replace(/^\/+/, "")}`, { credentials: "same-origin", ...init }),
