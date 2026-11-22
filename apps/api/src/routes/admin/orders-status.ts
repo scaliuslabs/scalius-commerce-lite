@@ -11,6 +11,7 @@ import {
     resolveUnknownOrderShipment,
 } from "@scalius/core/modules/fulfilment";
 import {
+    GENERIC_ADMIN_ORDER_STATUS_TARGETS,
     keepOwedRefund,
     recordOrderEvent,
     updateOrderStatus,
@@ -31,7 +32,7 @@ import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-
 import { ok, created } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
-import { orderResourceSchema, readOrderResource } from "./order-resource";
+import { orderExpectedRevisionDescription, orderResourceSchema, readOrderResource } from "./order-resource";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 
@@ -39,7 +40,6 @@ import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
 import { sendOrderNotificationsForStatus } from "../../utils/order-notifications";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 import { requestCourierProviders } from "../../plugins/providers/courier";
-import { ORDER_STATUSES } from "@scalius/shared/order-state";
 import { notificationSender } from "../../background/notification-sender";
 import { requestStaffId } from "./request-actor";
 import { principalBodyKey } from "./idempotency-key";
@@ -158,14 +158,16 @@ const updateStatusRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        status: z.enum(ORDER_STATUSES),
+                        status: z.enum(GENERIC_ADMIN_ORDER_STATUS_TARGETS).openapi({
+                            description: "The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; a refusal names them.",
+                        }),
                         /** Why an order is cancelled; recorded on the timeline. */
                         reason: z.enum(["customer_changed_mind", "unreachable", "fake_order", "out_of_stock", "other"]).optional(),
                         notifyCustomer: z.boolean().optional().openapi({
                             description: "False sends the customer no message about this change (a test or duplicate order). Default true.",
                         }),
                         expectedRevision: z.number().int().min(1).optional().openapi({
-                            description: "The order `revision` you read. A change since is refused with 409 and nothing changes. Omit to change it whatever happened since.",
+                            description: orderExpectedRevisionDescription("a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."),
                         }),
                     }),
                 },
@@ -251,7 +253,7 @@ const markDeliveredRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         expectedRevision: z.number().int().min(1).optional().openapi({
-                            description: "The order `revision` you read; a change since is refused with 409. Omit to mark it whatever happened since.",
+                            description: orderExpectedRevisionDescription("a change since is refused with 409. Omit to mark it whatever happened since."),
                         }),
                     }).strict(),
                 },

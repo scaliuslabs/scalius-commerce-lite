@@ -15,7 +15,7 @@ import { ConflictError } from "@scalius/core/errors";
  * it refuses in every state.
  */
 export const GENERIC_ADMIN_ORDER_STATUS_TARGETS = ORDER_STATUSES.filter((target) =>
-  Object.values(GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS).some((targets) => targets.includes(target)));
+  Object.values(GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS).some((targets) => targets.includes(target))) as [OrderStatusValue, ...OrderStatusValue[]];
 
 /** Where each fulfilment or money status really comes from: the operations that record it with its stock and money. */
 const FULFILMENT_STATUS_OPERATIONS: Readonly<Partial<Record<OrderStatusValue, string>>> = {

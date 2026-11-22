@@ -1,5 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { RETURN_SOURCES } from "@scalius/shared/resource-states";
+import { RETURN_SOURCES, RETURN_STATUSES } from "@scalius/shared/resource-states";
 import type { Context } from "hono";
 import { adminRouter } from "./admin-router";
 import { nullableIsoTimestampSchema } from "../../schemas/timestamps";
@@ -34,6 +34,7 @@ import { principalIdempotencyKey } from "./idempotency-key";
 import { notificationSender } from "../../background/notification-sender";
 import { requestAppId, requestStaffId } from "./request-actor";
 import { buyerText } from "@scalius/shared/buyer-text";
+import { returnActionsSchema } from "../../schemas/record-actions";
 
 const app = adminRouter();
 
@@ -91,7 +92,7 @@ const returnReceiptSchema = z.object({
 const orderReturnSchema = z.object({
     id: z.string(),
     orderId: z.string(),
-    status: z.enum(["requested", "approved", "receiving", "completed", "rejected", "cancelled"]),
+    status: z.enum(RETURN_STATUSES),
     reason: z.string(),
     notes: z.string().nullable(),
     actorType: z.string(),
@@ -113,12 +114,13 @@ const orderReturnSchema = z.object({
     }).nullable(),
     receipts: z.array(returnReceiptSchema),
     lines: z.array(returnLineSchema),
+    actions: returnActionsSchema,
 });
 
 const commandResultSchema = z.object({
     orderId: z.string(),
     returnId: z.string(),
-    status: z.enum(["requested", "approved", "receiving", "completed", "rejected", "cancelled"]),
+    status: z.enum(RETURN_STATUSES),
     version: z.number().int(),
     restockedQuantity: z.number().int(),
     wholeOrderReturned: z.boolean(),

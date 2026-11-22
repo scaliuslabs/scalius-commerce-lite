@@ -24,7 +24,7 @@ export const STOREFRONT_WHEN: Readonly<Record<string, string>> = {
   "storefront.checkout_language.get_active": "Use when reading the checkout page's wording.",
   "storefront.checkout.get_config": "Use when asked which payment methods, delivery options and sign-in rules checkout offers.",
   "storefront.checkout.quote": "Use when pricing the cart for checkout: items, discount, delivery and tax totals.",
-  "storefront.checkout.submit": "Use when the buyer confirmed and the order should be placed (idempotent by checkoutRequestId).",
+  "storefront.checkout.submit": "Use when the buyer confirmed and the order should be placed (a repeat with the same Idempotency-Key places it once).",
   "storefront.checkout.validate": "Use when checking the cart and delivery choice are valid before checkout.",
   "storefront.collections.directory": "Use when listing the collections a buyer can shop, with product counts.",
   "storefront.collections.get": "Use when reading one collection with its products.",

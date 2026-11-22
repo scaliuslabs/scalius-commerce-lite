@@ -15,7 +15,7 @@ Note: Discount money is minor units (2,000 BDT = 200000).
 
 ## Fulfil order #1042 and book it with Pathao
 1. read   dashboard.orders.list: query {search:"1042"}
-2. read   dashboard.delivery_providers.list: the Pathao providerId
+2. read   dashboard.delivery_providers.list: the Pathao provider `id`
 3. write  dashboard.orders.create_shipment needs path.id, body.providerId: books the courier
 4. verify dashboard.orders.shipments
 Note: Own rider or counter pickup instead: dashboard.orders.fulfillment_create.

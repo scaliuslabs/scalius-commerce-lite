@@ -14,6 +14,15 @@ export const OrderResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.orde
 /** `data: { order }` beside any receipt fields of the write. */
 export const orderResourceSchema = z.object({ order: OrderResource });
 
+/**
+ * An order write's `expectedRevision`, by the name the order page's read
+ * gives it (`version` on dashboard.orders.get; the order a write answers
+ * calls the same number revision).
+ */
+export function orderExpectedRevisionDescription(refusal: string): string {
+  return `The order's \`version\` from dashboard.orders.get (revision in the order a write answers) that you read; ${refusal}`;
+}
+
 /** The order's sealed representation, read after a write (not found once it is gone). */
 export async function readOrderResource(db: Database, orderId: string) {
   const [order] = await readOrderRepresentations(db, [orderId]);

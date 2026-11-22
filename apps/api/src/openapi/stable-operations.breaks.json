@@ -3244,5 +3244,11 @@
   "from": "32e77c7e313c8e26",
   "change": "reviews.create input body.authorDisplayName: maxLength tightened to 60.",
   "reason": "Pre-release contract fix (clean-room app builder, Nov 9): the transport bound was twice the review's real limit (to let surrogate pairs through) while the domain counts code points, so a test against the sealed contract passed a title production refuses. The contract now carries the real limit, counted in code points as JSON Schema's maxLength is (characterText)."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "ba34897af1af3b8a",
+  "change": "orders.set_status input body.status: no longer accepts \"processing\", \"shipped\", \"delivered\", \"returned\", \"refunded\", \"incomplete\".",
+  "reason": "Pre-lock contract fix (state-machine audit, rule platform.agent-write-schema-offers-accepted-values): the generic status editor refuses each of these in every state, so the request offered values no call could use; it now offers the statuses it sets (pending, confirmed, completed, cancelled) and a refusal names the operation that records the others."
  }
 ]
