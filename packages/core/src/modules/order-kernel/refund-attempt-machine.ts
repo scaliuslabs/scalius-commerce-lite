@@ -49,9 +49,16 @@ export const REFUND_ATTEMPT_MACHINE = defineMachine({
         /** Settled: only an attempt the provider completed, never one that was not sent. */
         refunded: { from: ["processing", "provider_unknown", "provider_processing", "reconcile_required"], to: "refunded" },
         /**
-         * The provider says a refund it completed did not reach the buyer (Stripe
-         * `refund.failed`, or `requires_action` again): the money is the store's
-         * again until its status check settles the refund once more.
+         * The provider says a refund it completed failed after all (Stripe
+         * `refund.failed`: the buyer's bank returned it): it ends failed in one
+         * move, its money the store's again. It never re-enters the in-flight
+         * set, so another refund of the payment in flight never blocks it.
+         */
+        reversed: { from: ["refunded"], to: "failed" },
+        /**
+         * The provider put a refund it completed back in progress (Stripe
+         * `requires_action`: the buyer's bank returned it and the buyer is asked
+         * for details again): in flight again until its status check settles it.
          */
         reopened: { from: ["refunded"], to: "provider_processing" },
     },

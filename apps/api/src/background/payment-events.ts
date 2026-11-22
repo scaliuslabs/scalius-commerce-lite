@@ -14,6 +14,7 @@ import {
   LOCAL_REFUND_IN_PROGRESS_REASON,
   applyProviderDispute,
   applyProviderRefundChanges,
+  isRefundChangeWaitingForRefundError,
   cancelDueSessions,
   isDisputeWaitingForRefundError,
   listDuePaymentCommands,
@@ -80,9 +81,10 @@ export async function applyClaimedPaymentEvent(
     outcome = await runWithReadObserver(writes, () => applyPaymentEvent(db, env, ctx, send, claim.payload));
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
-    if (isDisputeWaitingForRefundError(error)) {
-      // A refund on the order is in flight: the dispute waits for it, uncounted; its settling makes it due.
-      await parkPaymentEventForRefund(db, claim, claim.attempts, message, error.paymentId);
+    if (isDisputeWaitingForRefundError(error) || isRefundChangeWaitingForRefundError(error)) {
+      // A refund on the order is in flight: the event waits for it, uncounted; its settling makes it due.
+      // A dispute names its payment (refunds on it wait too); a provider's refund change names none.
+      await parkPaymentEventForRefund(db, claim, claim.attempts, message, isDisputeWaitingForRefundError(error) ? error.paymentId : null);
       console.warn(`[payments] Event ${claim.id} waits for a refund on its order; retrying`);
       return "retrying";
     }
@@ -387,7 +389,10 @@ async function applyPaymentEvent(
         });
       }
       if (changes.attemptIds.length > 0) {
-        return { status: "processed", result: { ...refs, outcome: "refund_changed", reopened: changes.reopenedAttemptIds.length, ...event.details } };
+        return {
+          status: "processed",
+          result: { ...refs, outcome: "refund_changed", reversed: changes.reversedAttemptIds.length, reopened: changes.reopenedAttemptIds.length, ...event.details },
+        };
       }
       // The order's own refund (sent from the dashboard) is already recorded:
       // checked now, it is done. Anything else waits for the scheduled

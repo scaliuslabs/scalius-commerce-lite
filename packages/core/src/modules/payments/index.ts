@@ -142,6 +142,8 @@ export type {
 } from "./refund-service";
 export {
   applyProviderRefundChanges,
+  isRefundChangeWaitingForRefundError,
+  RefundChangeWaitsForRefundError,
   reconcileDueRefundAttempts,
   reconcileExternalRefundWebhooks,
   verifyObservedRefund,

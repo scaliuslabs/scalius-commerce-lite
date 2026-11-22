@@ -325,13 +325,14 @@ export async function parkPaymentEventForRefund(
   claim: WebhookEventClaimToken,
   attempts: number,
   error: string,
-  paymentId: string,
+  /** The disputed payment (refunds on it wait for the dispute); null for an event that holds no payment back. */
+  paymentId: string | null,
 ): Promise<void> {
   const counted = Math.max(0, attempts - 1);
   await webhookEventMove(db, "wait", heldWebhookEvent(claim), {
     attempts: counted,
     nextAttemptAt: sql`CASE WHEN ${refundInFlightOnEventOrder()} THEN unixepoch() + ${PAYMENT_EVENT_PARKED_RECHECK_SECONDS} ELSE unixepoch() END`,
-    result: JSON.stringify({ reason: REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT, paymentId, attempts: counted, error }),
+    result: JSON.stringify({ reason: REFUND_IN_FLIGHT_PARKED_PAYMENT_EVENT, ...(paymentId ? { paymentId } : {}), attempts: counted, error }),
     processedAt: sql`unixepoch()`,
   });
 }
