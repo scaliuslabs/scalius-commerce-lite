@@ -12,7 +12,7 @@
 
 import type { Database } from "@scalius/database/client";
 import { orderItems, orderPayments, orders, orderTrackingSignals, trackingDeliveries } from "@scalius/database/schema";
-import { and, asc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -39,15 +39,28 @@ import {
   trackingConsentDocument,
 } from "./settings";
 import { expiredTrackingSignalsDelete, orderConsent, TRACKING_SIGNALS_RETENTION_SECONDS, type OrderTrackingSignalsRow } from "./signals";
+import { leasedQueue } from "../../utils/leased-queue";
 
 export type TrackingDestination = "ga4" | "tiktok";
 export type TrackingDeliveryStatus = "pending" | "processing" | "sent" | "failed" | "skipped";
 
-const LEASE_SECONDS = 5 * 60;
 const MAX_FLUSH_LIMIT = 25;
-const MAX_ERROR_LENGTH = 300;
-/** A delivery that keeps failing gives up after this many attempts (about 8 hours of backoff). */
-const MAX_ATTEMPTS = 12;
+
+/** GA4 and TikTok deliveries on the queue kernel (utils/leased-queue.ts); `skipped` is both given up and not sendable. */
+export const TRACKING_QUEUE = leasedQueue(trackingDeliveries, {
+  name: "tracking delivery",
+  states: { waiting: "pending", running: "processing", retrying: "failed", done: "sent", givenUp: "skipped" },
+  base: "trk",
+  leaseSeconds: 5 * 60,
+  /** About 8 hours of backoff. */
+  maxAttempts: 12,
+  backoff: [60, 120, 240, 480, 960, 1_920, 3_600],
+  doneAt: "sentAt",
+  errorLength: 300,
+  capReason: "attempt_limit",
+  // A purchase waiting for its hosted payment is held as not yet started.
+  holds: true,
+});
 /** Sent and skipped rows are kept this long for tracking_health and refund matching. */
 export const TRACKING_DELIVERY_RETENTION_SECONDS = 90 * 24 * 60 * 60;
 export const CONSENT_DENIED = "consent_denied";
@@ -87,10 +100,7 @@ function dueDeliveries(db: Database, limit: number) {
   return db
     .select(deliveryRefColumns)
     .from(trackingDeliveries)
-    .where(or(
-      and(inArray(trackingDeliveries.status, ["pending", "failed"]), lte(trackingDeliveries.nextAttemptAt, sql`unixepoch()`)),
-      and(eq(trackingDeliveries.status, "processing"), lte(trackingDeliveries.claimExpiresAt, sql`unixepoch()`)),
-    ))
+    .where(or(...TRACKING_QUEUE.dueBranches()))
     .orderBy(asc(trackingDeliveries.nextAttemptAt))
     .limit(Math.max(1, Math.min(limit, MAX_FLUSH_LIMIT)));
 }
@@ -160,11 +170,11 @@ export async function processTrackingDeliveriesForOrder(
   if (runtime.paymentConfirmed) await db
     .update(trackingDeliveries)
     .set({ nextAttemptAt: sql`unixepoch() - 1`, updatedAt: sql`unixepoch()` })
-    .where(and(eq(trackingDeliveries.orderId, orderId), eq(trackingDeliveries.status, "pending")));
+    .where(and(eq(trackingDeliveries.orderId, orderId), eq(trackingDeliveries.status, TRACKING_QUEUE.states.waiting)));
   const rows = await db
     .select(deliveryRefColumns)
     .from(trackingDeliveries)
-    .where(and(eq(trackingDeliveries.orderId, orderId), inArray(trackingDeliveries.status, ["pending", "failed"])))
+    .where(and(eq(trackingDeliveries.orderId, orderId), inArray(trackingDeliveries.status, TRACKING_QUEUE.statuses("waiting", "retrying"))))
     .all();
   const outcomes: Outcome[] = [];
   for (const row of rows) outcomes.push(await processTrackingDelivery(db, row, runtime));
@@ -179,24 +189,8 @@ export async function processTrackingDeliveriesForOrder(
  */
 export async function processTrackingDelivery(db: Database, delivery: string | DeliveryRef, runtime: TrackingRuntime): Promise<Outcome> {
   const deliveryId = typeof delivery === "string" ? delivery : delivery.id;
-  const claimId = `trkc_${crypto.randomUUID().replace(/-/g, "")}`;
-  const claim = db
-    .update(trackingDeliveries)
-    .set({
-      status: "processing",
-      claimId,
-      claimExpiresAt: sql`unixepoch() + ${LEASE_SECONDS}`,
-      attempts: sql`${trackingDeliveries.attempts} + 1`,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(and(
-      eq(trackingDeliveries.id, deliveryId),
-      or(
-        and(inArray(trackingDeliveries.status, ["pending", "failed"]), lte(trackingDeliveries.nextAttemptAt, sql`unixepoch()`)),
-        and(eq(trackingDeliveries.status, "processing"), lte(trackingDeliveries.claimExpiresAt, sql`unixepoch()`)),
-      ),
-    ))
-    .returning();
+  // One delivery at a time: its runner dies only with it.
+  const claim = TRACKING_QUEUE.claim(db, eq(trackingDeliveries.id, deliveryId), { alone: true }).returning();
   let claimed: DeliveryRow[];
   let facts: FactRows | undefined;
   if (typeof delivery === "string") {
@@ -209,6 +203,9 @@ export async function processTrackingDelivery(db: Database, delivery: string | D
   }
   const row = claimed[0];
   if (!row) return "busy";
+  // Its runner died alone at every attempt: the claim gave it up.
+  if (row.status !== TRACKING_QUEUE.states.running) return "skipped";
+  const claimId = row.claimId!;
 
   try {
     const attempt = await attemptDelivery(db, row, runtime, facts);
@@ -227,26 +224,16 @@ type Attempt =
   | { outcome: "failed"; error: string };
 
 async function settle(db: Database, row: DeliveryRow, claimId: string, attempt: Attempt): Promise<void> {
-  const owned = and(eq(trackingDeliveries.id, row.id), eq(trackingDeliveries.claimId, claimId));
-  const base = { claimId: null, claimExpiresAt: null, updatedAt: sql`unixepoch()` };
+  const ofRow = eq(trackingDeliveries.id, row.id);
+  const held = TRACKING_QUEUE.heldBy(claimId);
   if (attempt.outcome === "sent") {
-    await db.update(trackingDeliveries).set({
-      ...base, status: "sent", sentAt: sql`unixepoch()`, lastError: null, matchSignals: attempt.matchSignals.join(","),
-    }).where(owned);
+    await TRACKING_QUEUE.finish(db, ofRow, held, { matchSignals: attempt.matchSignals.join(",") });
   } else if (attempt.outcome === "skipped") {
-    await db.update(trackingDeliveries).set({ ...base, status: "skipped", lastError: bounded(attempt.error) }).where(owned);
+    await TRACKING_QUEUE.giveUp(db, ofRow, held, attempt.error);
   } else if (attempt.outcome === "deferred") {
-    await db.update(trackingDeliveries).set({
-      ...base, status: "pending", attempts: 0, lastError: bounded(attempt.error),
-      nextAttemptAt: sql`unixepoch() + ${attempt.delaySeconds}`,
-    }).where(owned);
-  } else if (row.attempts >= MAX_ATTEMPTS) {
-    await db.update(trackingDeliveries).set({ ...base, status: "skipped", lastError: bounded(`attempt_limit: ${attempt.error}`) }).where(owned);
+    await TRACKING_QUEUE.release(db, ofRow, held, attempt.error, { delaySeconds: attempt.delaySeconds, waiting: true });
   } else {
-    await db.update(trackingDeliveries).set({
-      ...base, status: "failed", lastError: bounded(attempt.error),
-      nextAttemptAt: sql`unixepoch() + ${retryDelaySeconds(row.attempts)}`,
-    }).where(owned);
+    await TRACKING_QUEUE.fail(db, ofRow, held, row.attempts, attempt.error).statement;
   }
 }
 
@@ -379,14 +366,6 @@ function storefrontOrigin(value: string | null | undefined): string | null {
   }
 }
 
-function retryDelaySeconds(attempts: number): number {
-  return Math.min(60 * 60, 60 * 2 ** (Math.max(1, Math.min(attempts, 8)) - 1));
-}
-
-function bounded(message: string): string {
-  return message.length > MAX_ERROR_LENGTH ? `${message.slice(0, MAX_ERROR_LENGTH)}...` : message;
-}
-
 /** Deletes finished deliveries past the retention, at most `limit`. */
 export async function purgeFinishedTrackingDeliveries(db: Database, options: { limit: number; nowSeconds?: number }): Promise<number> {
   return (await finishedTrackingDeliveriesDelete(db, options)).length;
@@ -398,7 +377,7 @@ function finishedTrackingDeliveriesDelete(db: Database, options: { limit: number
     .delete(trackingDeliveries)
     .where(sql`${trackingDeliveries.id} IN (
       SELECT ${trackingDeliveries.id} FROM ${trackingDeliveries}
-      WHERE ${lt(trackingDeliveries.createdAt, cutoff)} AND ${inArray(trackingDeliveries.status, ["sent", "skipped"])}
+      WHERE ${lt(trackingDeliveries.createdAt, cutoff)} AND ${TRACKING_QUEUE.settled()}
       ORDER BY ${trackingDeliveries.createdAt} LIMIT ${Math.max(1, Math.floor(options.limit))}
     )`)
     .returning({ id: trackingDeliveries.id });

@@ -7,7 +7,7 @@
 //   harness.route("admin", "overview", fixtures.adminRouteRequest({ query: { cursor: "abc" } }));
 //   harness.extension(fixtures.storefrontExtensionInput("checkout.contact.after", { attributes: { gift_message: "Hi" } }));
 
-import type { EventTopic } from "@scalius/shared/events";
+import type { EventFacts, EventTopic } from "@scalius/shared/events";
 import { STOREFRONT_UI_SLOT_PAGES, type StorefrontUiSlot } from "@scalius/shared/plugins/storefront-protocol";
 import type { BuyerUiInput, FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
 import type { BuyerEvent, BuyerEventData, BuyerLine, BuyerMerchandise, PixelEventName } from "@scalius/shared/plugins/buyer-events";
@@ -16,7 +16,11 @@ import type { PluginEvent, PluginMoney, PluginRouteRequest } from "./context";
 let eventCounter = 0;
 
 /** A delivered event: a fresh id, now, and a resource named after the topic (`order.paid` is about an `order`). */
-function event<T extends EventTopic>(topic: T, overrides: Partial<PluginEvent<T>> = {}): PluginEvent<T> {
+function event<T extends EventTopic>(
+  topic: T,
+  // A test names only the facts it reads; each one it names is type-checked.
+  overrides: Partial<Omit<PluginEvent<T>, "facts">> & { facts?: Partial<EventFacts<T>> & Record<string, unknown> } = {},
+): PluginEvent<T> {
   eventCounter += 1;
   const type = topic.split(".")[0] ?? "resource";
   return {
@@ -25,8 +29,8 @@ function event<T extends EventTopic>(topic: T, overrides: Partial<PluginEvent<T>
     apiVersion: "2026-10",
     occurredAt: new Date().toISOString(),
     resource: { type, id: `${type}_test_${eventCounter}` },
-    facts: {},
     ...overrides,
+    facts: (overrides.facts ?? {}) as PluginEvent<T>["facts"],
   };
 }
 

@@ -13,6 +13,7 @@ export {
   markNotificationOutboxDeadLettered,
   markNotificationOutboxProcessingFailed,
   markNotificationOutboxSent,
+  NOTIFICATION_QUEUE,
   parseNotificationPayload,
   recordAndSendNotification,
   sanitizeNotificationData,

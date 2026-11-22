@@ -1,27 +1,43 @@
-import { OrderStatus } from "@scalius/database/schema";
-import { isGenericAdminOrderStatusTransitionAllowed } from "@scalius/shared/order-admin-actions";
-import { ConflictError, ValidationError } from "@scalius/core/errors";
+import {
+  GENERIC_ADMIN_ORDER_STATUS_TARGETS,
+  GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS,
+  isGenericAdminOrderStatusTransitionAllowed,
+} from "@scalius/shared/order-admin-actions";
+import { ORDER_MACHINE, type OrderStatusValue } from "@scalius/shared/order-state";
+import type { MachineRefusal } from "@scalius/shared/machine";
+import { ConflictError } from "@scalius/core/errors";
 
 // The generic status editor's moves are shared with the dashboard's menu
 // (@scalius/shared/order-admin-actions), so the two never disagree.
-/** Where each fulfilment or money status really comes from, in the merchant's words. */
-const FULFILMENT_STATUS_PATHS: Readonly<Record<string, string>> = {
-  [OrderStatus.SHIPPED]: "Use Mark as sent or Book courier: they record what left and move the stock.",
-  [OrderStatus.DELIVERED]: "Record the cash as collected, or use Mark delivered once everything is sent.",
-  [OrderStatus.RETURNED]: "Use Mark returned, or a return on the order page.",
-  [OrderStatus.REFUNDED]: "Use Refund on the order page for this.",
-};
+
+/**
+ * The statuses the generic editor sets from some state: exactly what
+ * `dashboard.orders.update_status` offers, so its schema never offers a value
+ * it refuses in every state (policy.test.ts derives it from the move table).
+ */
+export { GENERIC_ADMIN_ORDER_STATUS_TARGETS };
 
 export { isGenericAdminOrderStatusTransitionAllowed };
 
+/**
+ * Refuses a status the generic editor does not set from `current` (409),
+ * with where the order is and the statuses it may set from there. (Its
+ * route refuses a status recorded by another operation before this, naming it.)
+ */
 export function assertGenericAdminOrderStatusTransition(current: string, next: string): void {
   if (isGenericAdminOrderStatusTransitionAllowed(current, next)) return;
-  const fulfilmentPath = FULFILMENT_STATUS_PATHS[next];
-  if (fulfilmentPath) throw new ValidationError(fulfilmentPath);
+  const refusal: MachineRefusal = {
+    reason: "state_conflict",
+    machine: ORDER_MACHINE.name,
+    current,
+    move: next,
+    allowed: [...(GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS[current as OrderStatusValue] ?? [])],
+  };
   // The dashboard only offers allowed moves, so a refusal means the order
-  // changed since it was loaded: answer 409 so the page reloads it.
+  // changed since it was loaded: the page reloads it.
   throw new ConflictError(
     `This order is now ${statusWords(current)}, so it can't be marked ${statusWords(next)}. Reload to see the latest.`,
+    refusal,
   );
 }
 

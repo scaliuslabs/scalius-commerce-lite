@@ -64,6 +64,7 @@ import { nullableTimestampSchema, timestampSchema } from "../../schemas/timestam
 import { costsVisible } from "./cost-access";
 import { requestActorId } from "./request-actor";
 import { majorMoney } from "@scalius/shared/money-field";
+import { inventoryTransferActionsSchema, purchaseOrderActionsSchema } from "../../schemas/record-actions";
 
 const TAG = "Admin - Inventory";
 
@@ -220,6 +221,7 @@ const purchaseOrderSummarySchema = z.object({
   cancelledAt: nullableTimestampSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
+  actions: purchaseOrderActionsSchema,
 });
 
 const purchaseOrderDetailSchema = purchaseOrderSummarySchema.extend({
@@ -497,6 +499,7 @@ const transferSummarySchema = z.object({
   cancelledAt: nullableTimestampSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
+  actions: inventoryTransferActionsSchema,
 });
 const locationRef = z.object({ id: z.string(), name: z.string(), code: z.string(), status: z.string() });
 const transferDetailSchema = transferSummarySchema.extend({

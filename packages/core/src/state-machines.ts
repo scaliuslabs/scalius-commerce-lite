@@ -14,13 +14,19 @@
 //   rows, a provider's own words, a record of one outcome).
 import type { AnyMachine } from "@scalius/shared/machine";
 import { COD_MACHINE, ORDER_MACHINE } from "@scalius/shared/order-state";
+import { INVENTORY_TRANSFER_MACHINE, RETURN_MACHINE } from "@scalius/shared/record-lifecycles";
 import { REVIEW_MACHINE } from "@scalius/shared/reviews";
 import { INVITATION_MACHINE } from "./auth/invitation-state";
+import { META_PURCHASE_QUEUE } from "./integrations/meta/purchase-outbox";
+import { TRACKING_QUEUE } from "./integrations/tracking/deliveries";
 import { GRANT_MACHINE, PAIRING_MACHINE } from "./modules/agent-access";
+import { EVENT_QUEUE, WEBHOOK_DELIVERY_QUEUE } from "./modules/events";
 import { PURCHASE_ORDER_MACHINE, SUPPLIER_MACHINE } from "./modules/inventory";
 import { MEDIA_MACHINE, MEDIA_UPLOAD_MACHINE } from "./modules/media";
+import { NOTIFICATION_QUEUE } from "./modules/notifications";
 import { REFUND_ATTEMPT_MACHINE } from "./modules/order-kernel";
 import { DISPUTE_MACHINE, SESSION_MACHINE, WEBHOOK_EVENT_MACHINE } from "./modules/payments";
+import { PLUGIN_DELIVERY_QUEUE } from "./modules/plugins";
 
 type StateColumn = `${string}.${string}`;
 
@@ -36,10 +42,19 @@ export const MACHINES: Readonly<Record<StateColumn, AnyMachine>> = {
     "admin_invitations.status": INVITATION_MACHINE,
     "purchase_orders.status": PURCHASE_ORDER_MACHINE,
     "suppliers.status": SUPPLIER_MACHINE,
+    "order_returns.status": RETURN_MACHINE,
+    "inventory_transfers.status": INVENTORY_TRANSFER_MACHINE,
     "media.status": MEDIA_MACHINE,
     "media_upload_sessions.state": MEDIA_UPLOAD_MACHINE,
     "refund_attempts.status": REFUND_ATTEMPT_MACHINE,
     "webhook_events.status": WEBHOOK_EVENT_MACHINE,
+    // The leased queues: one kernel (utils/leased-queue.ts), each queue its own declaration.
+    "event_outbox.status": EVENT_QUEUE.machine,
+    "webhook_event_deliveries.status": WEBHOOK_DELIVERY_QUEUE.machine,
+    "plugin_event_deliveries.status": PLUGIN_DELIVERY_QUEUE.machine,
+    "notification_outbox.status": NOTIFICATION_QUEUE.machine,
+    "tracking_deliveries.status": TRACKING_QUEUE.machine,
+    "meta_capi_purchase_outbox.status": META_PURCHASE_QUEUE.machine,
 };
 
 export const NOT_MACHINES: Readonly<Record<StateColumn, string>> = {
@@ -60,7 +75,6 @@ export const NOT_MACHINES: Readonly<Record<StateColumn, string>> = {
 export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     // Orders and delivery
     "delivery_shipments.status": "17 states, about 20 writers, most unguarded; couriers report in any order, so it needs settled/open rules more than an edge table",
-    "order_returns.status": "inline `status IN` checks per command in orders/returns/returns.ts, guarded by version",
     "order_return_commands.status": "idempotency claim: processing, committed",
     "order_support_requests.status": "admin moves are a table (orders/order-support-requests.ts ADMIN_SUPPORT_REQUEST_TRANSITIONS); `withdrawn` has no writer",
     "order_fulfillments.status": "active, voided; guarded writes in fulfilment/ledger.ts",
@@ -76,7 +90,6 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "customer_payment_methods.status": "active, removed; a re-saved method returns to active",
     "gift_cards.status": "active, disabled; staff or an app disables a card, a refund clawback never does",
     // Stock and supply
-    "inventory_transfers.status": "inline assertStatus plus a revision guard (inventory/transfers.ts)",
     "inventory_locations.status": "active, archived",
     "product_low_stock_alerts.alert_status": "two implementations in inventory/alerts.ts and a third derivation in the list read",
     "warranty_claims.status": "any status to any, by design, guarded by version",
@@ -92,15 +105,9 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "brands.status": "publication state with a trash flag",
     "object_records.status": "two vocabularies in one column: `active`, or draft and published for storefront types",
     "order_review_requests.status": "scheduled to queued or skipped, by trigger and drain",
-    // Queues and jobs: the same claim, retry and give-up machine written once per table
-    "event_outbox.status": "outbox on the shared claim (utils/queue-claim.ts): lease 300 s, 8 tries, dead_lettered",
-    "webhook_event_deliveries.status": "outbox on the shared claim: lease 120 s, 8 tries, exhausted; staff retry",
-    "plugin_event_deliveries.status": "outbox on the shared claim: lease 120 s, 8 tries, exhausted; held deliveries are `pending`",
-    "notification_outbox.status": "outbox on the shared claim: lease 120 s, 8 tries, dead_lettered",
+    // Queues and jobs not yet on the queue kernel (utils/leased-queue.ts)
     "notification_delivery_receipts.status": "receipt per channel; `delivered` has no writer",
     "auth_otp_delivery_receipts.status": "a copy of the notification receipt; `delivered` has no writer",
-    "meta_capi_purchase_outbox.status": "outbox: lease 300 s, gives up by age as `skipped`",
-    "tracking_deliveries.status": "outbox: lease 300 s, 12 tries, `skipped`",
     "bulk_runs.status": "running, done, failed with a lease; a cancelled app job is stored as failed",
     "plugin_cron_runs.status": "insert-claim with a lease: running, succeeded, failed",
     "plugin_installations.status": "installed, active, disabled, failed; 8 writers with three kinds of guard",

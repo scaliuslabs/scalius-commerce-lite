@@ -45,10 +45,6 @@ import {
   TaxQuoteUnavailableError,
 } from "./tax-quote-client";
 import { discountLineKey, type CheckoutTaxQuote } from "./tax-quote-contract";
-import {
-  hideCheckoutLoadingOverlay,
-  showCheckoutLoadingOverlay,
-} from "./loading-overlay";
 import { normalizeCheckoutRedirectUrl } from "./redirect-url";
 import {
   getGatewayPresentation,
@@ -87,6 +83,7 @@ import {
   type StoredGiftCard,
 } from "./gift-cards";
 import { logicalPathname, pagePath } from "@/lib/presence-url";
+import { createSubmit, onHistoryRestore, submitBusy, withinStepLimit } from "./submit-machine";
 import { checkoutLineGroups, showsOrderLineGroupHeadings } from "../order-line-groups";
 
 // COD, the card flow and a fully gift-card-paid order have their own handlers;
@@ -153,7 +150,6 @@ let checkoutData: Record<string, unknown> | null = null;
 let checkoutConfig: CheckoutConfig | null = null;
 let gateways: CheckoutConfig["gateways"] = [];
 let authoritativeTaxQuote: CheckoutTaxQuote | null = null;
-let isProcessing = false;
 let selectionVersion = 0;
 let retrySelection: {
   methodId: string;
@@ -198,11 +194,39 @@ function quoteFailureText(error: unknown): string {
   return checkoutFailureText(error, checkoutCopy, "totalVerificationFailedText");
 }
 
+/** What Pay says, and whether it takes a press, while no press is under way (the chosen method's state). */
+let payReadiness: { text: string; disabled: boolean } | null = null;
+
+/** The Pay press (submit-machine.ts): the method's word until pressed, then the press's. */
+const paySubmit = createSubmit({
+  get button() {
+    return document.getElementById("payButton") as HTMLButtonElement | null;
+  },
+  get label() {
+    return document.getElementById("payButtonText");
+  },
+  text: (state) =>
+    state.status === "placing" || state.status === "redirecting" || state.step === "reprice"
+      ? checkoutCopy.processingText
+      : null,
+  labelText: () => payReadiness?.text ?? document.getElementById("payButtonText")?.textContent ?? "",
+  ready: () => {
+    const button = document.getElementById("payButton") as HTMLButtonElement | null;
+    if (button && payReadiness) button.disabled = payReadiness.disabled;
+  },
+  moved: (state, previous) => {
+    if (state.status === "idle") return setPaymentControlsDisabled(false);
+    const held = submitBusy(state.status);
+    if (held === submitBusy(previous.status)) return;
+    // A press holds the methods and the gift cards; its end gives them back while the checkout stands.
+    setPaymentControlsDisabled(held || !checkoutData);
+    setGiftCardControlsDisabled(held || !checkoutData);
+  },
+});
+
 function setPayButton(text: string, disabled = false): void {
-  const btn = document.getElementById("payButton") as HTMLButtonElement | null;
-  const span = document.getElementById("payButtonText");
-  if (btn) btn.disabled = disabled || isProcessing;
-  if (span) span.textContent = text;
+  payReadiness = { text, disabled };
+  paySubmit.render();
 }
 
 function setPaymentControlsDisabled(disabled: boolean): void {
@@ -259,6 +283,7 @@ function checkoutRecoveryHref(orderId: string, gateway: string): string {
 function showExistingCheckout(href: string | null): void {
   checkoutData = null;
   clearCheckoutPresentation();
+  paySubmit.move("conflict");
   showError(checkoutCopy.checkoutAttemptConflictText);
   showReturnToCartAction();
   const action = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement | null;
@@ -275,6 +300,7 @@ function endExpiredCheckout(): void {
   clearCheckoutAttemptSession({ preserveFormDraft: true });
   checkoutData = null;
   clearCheckoutPresentation();
+  paySubmit.move("expire");
   showError(checkoutCopy.checkoutAttemptExpiredText);
   showReturnToCartAction();
 }
@@ -304,6 +330,7 @@ async function recoverExistingCheckout(recovery: HostedPaymentRecoverySession): 
     return false;
   }
   if (status === "active" && matchesCheckoutRecoverySession(recovery, checkoutData?.cartItems)) {
+    paySubmit.move("redirect");
     window.location.replace(recovery.href);
   } else {
     showExistingCheckout(recovery.href);
@@ -615,6 +642,7 @@ function redirectToCartForRepair(result: CheckoutCartFreshnessResult): void {
     issues: result.issues,
     ...(result.ruleErrors?.length ? { ruleErrors: result.ruleErrors } : {}),
   });
+  paySubmit.move("redirect", { overlay: null });
   window.location.href = pagePath("/cart?checkoutIssues=1");
 }
 
@@ -1047,7 +1075,7 @@ async function selectMethod(
   methodId: string,
   gw: CheckoutConfig["gateways"][number],
 ): Promise<void> {
-  if (isProcessing) return;
+  if (submitBusy(paySubmit.state.status)) return;
   if (methodId !== "stripe") samePageStripeRetry = null;
   const selectionId = ++selectionVersion;
   retrySelection = null;
@@ -1146,25 +1174,38 @@ async function selectMethod(
 
 // ── Process payment ───────────────────────────────────────────────────────────
 
-let awaitingBuyerUi = false;
-
+/** A Pay press: taken only when the machine declares it, and every way out of it is a move. */
 async function processPayment(): Promise<void> {
+  if (!paySubmit.move("press", { step: "start" })) return;
+  const pressInitVersion = initVersion;
+  try {
+    await payForSelection(pressInitVersion);
+  } catch (error: unknown) {
+    // A check before the order threw or never answered (the order's own failures are said below): Pay comes back.
+    if (pressInitVersion !== initVersion || !paySubmit.move("fail", { reason: "error" })) return;
+    showError(checkoutCopy.genericErrorText);
+    console.error("Checkout press failed:", error);
+  }
+}
+
+async function payForSelection(pressInitVersion: number): Promise<void> {
+  const stop = (reason: string) => void paySubmit.move("fail", { reason });
   // The quote's app fields draw once their renderer loads: their required answers are checked on them.
   if (buyerUiPending()) {
-    if (awaitingBuyerUi) return;
-    awaitingBuyerUi = true;
-    try { await buyerUiDrawn(); } finally { awaitingBuyerUi = false; }
+    paySubmit.move("step", { step: "buyer_ui" });
+    await withinStepLimit(buyerUiDrawn());
+    // The page started again meanwhile: this press is over.
+    if (pressInitVersion !== initVersion) return;
   }
   if (
     !selectedMethod ||
-    isProcessing ||
     !checkoutData ||
     !checkoutConfig ||
     !authoritativeTaxQuote
-  ) return;
+  ) return stop("not_ready");
 
   for (const control of document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-buyer-attribute]")) {
-    if (!control.reportValidity()) return;
+    if (!control.reportValidity()) return stop("attributes");
   }
   const processingMethod = selectedMethod;
   const existingRecovery = readHostedPaymentRecoverySession();
@@ -1180,23 +1221,17 @@ async function processPayment(): Promise<void> {
       ? samePageStripeRetry
       : null;
   if (existingRecovery && !stripeRetry) {
-    isProcessing = true;
-    const recovered = await recoverExistingCheckout(existingRecovery);
-    isProcessing = false;
-    if (recovered) return;
+    paySubmit.move("step", { step: "recovery" });
+    // Recovered: the attempt's own move was made (conflict, expired, redirect) or the page started again.
+    if (await recoverExistingCheckout(existingRecovery)) return;
   }
-  if (giftCardBusy) return;
+  if (giftCardBusy) return stop("gift_card_busy");
   const submittedCheckoutData: Record<string, unknown> = { ...checkoutData, attributes: readBuyerAttributes() };
   const submitInitVersion = initVersion;
-  isProcessing = true;
-  setGiftCardControlsDisabled(true);
-  setPaymentControlsDisabled(true);
   hideError();
-  setPayButton(checkoutCopy.processingText, true);
-  trackAddPaymentInfoForSelection(processingMethod);
-
-  showCheckoutLoadingOverlay(
-    processingMethod === "cod" || processingMethod === GIFT_CARD_PAYMENT_METHOD
+  // A press the page no longer holds (it started again) asks for no order.
+  if (submitInitVersion !== pressInitVersion || !paySubmit.move("place", {
+    overlay: processingMethod === "cod" || processingMethod === GIFT_CARD_PAYMENT_METHOD
       ? {
           title: checkoutCopy.placingOrderTitle,
           message: checkoutCopy.placingOrderMessage,
@@ -1207,30 +1242,28 @@ async function processPayment(): Promise<void> {
             title: checkoutCopy.openingSecurePaymentTitle,
             message: checkoutCopy.openingSecurePaymentMessage,
           },
-  );
+  })) return;
+  trackAddPaymentInfoForSelection(processingMethod);
 
   const handler = handlerFor(processingMethod);
   if (!handler) {
-    hideCheckoutLoadingOverlay();
+    paySubmit.move("fail", { reason: "unknown_method" });
     showError(checkoutCopy.unknownPaymentMethodText);
-    isProcessing = false;
-    setPaymentControlsDisabled(false);
     setPayButton(checkoutCopy.paymentMethodUnavailableText, true);
     return;
   }
 
-  let navigationCommitted = false;
   try {
     const totalAmount = authoritativeTaxQuote.totalAmount;
     const { request: paymentRequest, payableAmount: advanceAmount } = checkoutPaymentRequestFor(
-      checkoutConfig,
+      checkoutConfig!,
       authoritativeTaxQuote,
     );
     const giftCardsPaidPart = hasGiftCardTender(authoritativeTaxQuote);
 
     const ctx: PaymentContext = {
       checkoutData: submittedCheckoutData,
-      config: checkoutConfig,
+      config: checkoutConfig!,
       copy: checkoutCopy,
       orderId: stripeRetry?.orderId ?? "",
       totalAmount,
@@ -1287,19 +1320,17 @@ async function processPayment(): Promise<void> {
           // A malformed snapshot leaves the cart to the receipt.
         }
       }
-      navigationCommitted = true;
+      paySubmit.move("redirect");
       window.location.replace(redirectUrl);
       return;
     }
 
     if (!result.success) {
       if (result.errorCode === "checkout_attempt_expired") {
-        hideCheckoutLoadingOverlay();
         endExpiredCheckout();
         return;
       }
       if (result.errorCode === "checkout_attempt_conflict") {
-        hideCheckoutLoadingOverlay();
         // Do not associate the changed cart with the old order or overwrite its
         // submitted snapshot. The receipt requires its own cookie or account.
         const href = checkoutAttemptRecoveryHref(result.details);
@@ -1313,7 +1344,6 @@ async function processPayment(): Promise<void> {
         return;
       }
       if (result.cartIssues && result.cartIssues.length > 0) {
-        hideCheckoutLoadingOverlay({ restoreFocus: false });
         redirectToCartForRepair({
           valid: false,
           issues: result.cartIssues,
@@ -1322,7 +1352,6 @@ async function processPayment(): Promise<void> {
         return;
       }
       if (result.refusal?.reason === "cart_rules") {
-        hideCheckoutLoadingOverlay({ restoreFocus: false });
         redirectToCartForRepair({
           valid: false,
           issues: [],
@@ -1331,10 +1360,16 @@ async function processPayment(): Promise<void> {
         });
         return;
       }
-      if (result.refusal?.reason === "payment_method_unavailable") {
-        // A store app hid this method for the order: the current quote lists
-        // the methods left, and the page selects one of them.
-        hideCheckoutLoadingOverlay();
+      // A store app hid this method for the order (the current quote lists the
+      // methods left, and the page selects one of them), or the total moved:
+      // the page prices the order again before the buyer may press.
+      const repriced = result.refusal?.reason === "payment_method_unavailable"
+        ? checkoutCopy.paymentMethodUnavailableMessage
+        : result.errorCode === "storefront_checkout_quote_conflict"
+          ? checkoutCopy.totalChangedReviewText
+          : null;
+      if (repriced) {
+        paySubmit.move("reprice", { step: "reprice" });
         let refreshed: Awaited<ReturnType<typeof fetchQuoteForCheckout>>;
         try {
           refreshed = await fetchQuoteForCheckout();
@@ -1346,35 +1381,19 @@ async function processPayment(): Promise<void> {
         adoptQuote(refreshed.quote);
         showGiftCardMessage(refreshed.notice);
         renderSummary();
-        isProcessing = false;
+        paySubmit.move("fail", { reason: "repriced" });
         await renderGateways();
-        showError(checkoutCopy.paymentMethodUnavailableMessage);
-        return;
-      }
-
-      if (result.errorCode === "storefront_checkout_quote_conflict") {
-        hideCheckoutLoadingOverlay();
-        let refreshed: Awaited<ReturnType<typeof fetchQuoteForCheckout>>;
-        try {
-          refreshed = await fetchQuoteForCheckout();
-        } catch (error) {
-          if (redirectForCartRefusal(error)) return;
-          showReturnToCartAction();
-          throw new CheckoutBuyerMessage(quoteFailureText(error));
-        }
-        adoptQuote(refreshed.quote);
-        showGiftCardMessage(refreshed.notice);
-        renderSummary();
-        isProcessing = false;
-        await renderGateways();
-        showError(checkoutCopy.totalChangedReviewText);
+        showError(repriced);
         return;
       }
       if (result.errorCode === "gift_card_changed") {
         // A card's balance, status or expiry moved since the quote: price it again.
-        hideCheckoutLoadingOverlay();
-        isProcessing = false;
+        paySubmit.move("fail", { reason: "gift_card_changed" });
         const requoted = await requoteForGiftCards();
+        if (submitInitVersion !== initVersion) return;
+        // Priced or not, the methods and the cards can be chosen again (a failed price leaves Pay saying why).
+        setPaymentControlsDisabled(!checkoutData);
+        setGiftCardControlsDisabled(!checkoutData);
         if (requoted) showError(giftCopy.giftCardChangedText);
         return;
       }
@@ -1383,20 +1402,12 @@ async function processPayment(): Promise<void> {
     }
   } catch (err: unknown) {
     if (submitInitVersion !== initVersion) return;
-    hideCheckoutLoadingOverlay();
+    paySubmit.move("fail", { reason: "payment" });
     showError(checkoutFailureText(err, checkoutCopy, "genericErrorText"));
-    isProcessing = false;
-    setPaymentControlsDisabled(false);
     setPayButton(
       paymentActionLabel(processingMethod),
       handler.isReady ? !handler.isReady() : false,
     );
-  } finally {
-    if (!navigationCommitted && submitInitVersion === initVersion) {
-      isProcessing = false;
-      setPaymentControlsDisabled(!checkoutData);
-      setGiftCardControlsDisabled(!checkoutData);
-    }
   }
 }
 
@@ -1426,7 +1437,7 @@ function forgetAppliedGiftCards(): void {
 }
 
 function setGiftCardControlsDisabled(disabled: boolean): void {
-  const busy = disabled || giftCardBusy || isProcessing;
+  const busy = disabled || giftCardBusy || submitBusy(paySubmit.state.status);
   const input = document.getElementById("giftCardCode") as HTMLInputElement | null;
   const button = document.getElementById("giftCardApply") as HTMLButtonElement | null;
   if (input) input.disabled = busy;
@@ -1517,7 +1528,7 @@ async function fetchQuoteForCheckout(): Promise<{ quote: CheckoutTaxQuote; notic
 function adoptQuote(quote: CheckoutTaxQuote): void {
   authoritativeTaxQuote = quote;
   void renderBuyerUiWhenNeeded(quote.buyerUi, { onChange: async () => {
-    if (!checkoutData || isProcessing) return;
+    if (!checkoutData || submitBusy(paySubmit.state.status)) return;
     hydrateCartFromStorage();
     const cart = cartStore.get();
     checkoutData = {
@@ -1571,7 +1582,7 @@ async function requoteForGiftCards(): Promise<boolean> {
 }
 
 async function removeGiftCard(handle: string): Promise<void> {
-  if (giftCardBusy || isProcessing) return;
+  if (giftCardBusy || submitBusy(paySubmit.state.status)) return;
   const removed = appliedGiftCards.find((card) => card.handle === handle);
   if (!removed) return;
   giftCardBusy = true;
@@ -1596,7 +1607,7 @@ async function removeGiftCard(handle: string): Promise<void> {
 async function applyGiftCardFromForm(event?: SubmitEvent): Promise<void> {
   // The code never becomes a navigation: the form's own POST is the no-script path.
   event?.preventDefault();
-  if (giftCardBusy || isProcessing) return;
+  if (giftCardBusy || submitBusy(paySubmit.state.status)) return;
   const input = document.getElementById("giftCardCode") as HTMLInputElement | null;
   const button = document.getElementById("giftCardApply") as HTMLButtonElement | null;
   if (!checkoutData || !authoritativeTaxQuote) {
@@ -1677,7 +1688,8 @@ export async function initCheckoutPage(): Promise<void> {
   checkoutData = null;
   gateways = [];
   authoritativeTaxQuote = null;
-  isProcessing = false;
+  payReadiness = null;
+  paySubmit.move("reset");
   retrySelection = null;
   samePageStripeRetry = null;
   selectionVersion += 1;
@@ -1802,12 +1814,21 @@ export function renderCheckoutSample(sample: {
   if (first) choose(first);
 }
 
+/** The payment step's page script: start now (or once parsed), and again when restored from history. */
+export function startCheckoutPage(): void {
+  const start = () => void initCheckoutPage();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start, { once: true });
+  } else {
+    start();
+  }
+  onHistoryRestore(resumeCheckoutPageFromHistory);
+}
+
 export async function resumeCheckoutPageFromHistory(): Promise<void> {
-  hideCheckoutLoadingOverlay({ restoreFocus: false });
-  isProcessing = false;
+  paySubmit.move("reset");
   retrySelection = null;
   selectionVersion += 1;
-  setPaymentControlsDisabled(false);
   resetStripePaymentElement();
   await initCheckoutPage();
 }

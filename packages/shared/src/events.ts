@@ -13,6 +13,18 @@
 import { z } from "zod";
 import { hmacSha256Hex } from "./hash";
 import type { EventDataTruncation, EventRepresentation } from "./events-representations";
+import { OBJECT_STATUSES } from "./plugins/objects";
+import {
+  FULFILLMENT_STATUSES,
+  GIFT_CARD_STATUSES,
+  ORDER_STATUSES,
+  PAYMENT_RECORD_STATUSES,
+  PAYMENT_STATUSES,
+  REFUND_STATUSES,
+  RETURN_STATUSES,
+  SHIPMENT_STATUSES,
+} from "./resource-states";
+import { REVIEW_STATUSES } from "./reviews";
 
 /** The payload version every delivery and plugin event declares. */
 export const EVENTS_API_VERSION = "2026-10" as const;
@@ -146,6 +158,26 @@ const id = z.string().min(1).max(128);
 const state = z.string().min(1).max(64);
 const nullableState = state.nullable();
 const nullableId = id.nullable();
+/**
+ * A status fact: typed as its resource's closed list (resource-states.ts, what
+ * an app compiles against) and read as stored. A value outside the list (a
+ * state a newer platform adds, or one a column the database does not
+ * constrain holds) is delivered as it is, never dropped: a consumer treats a
+ * state it does not know as unknown.
+ */
+function statusOf<const S extends readonly [string, ...string[]]>(states: S): z.ZodType<S[number]> {
+  return z.union([z.enum(states), state]) as unknown as z.ZodType<S[number]>;
+}
+const orderStatus = statusOf(ORDER_STATUSES);
+const paymentStatus = statusOf(PAYMENT_STATUSES);
+const fulfillmentStatus = statusOf(FULFILLMENT_STATUSES);
+const returnStatus = statusOf(RETURN_STATUSES);
+const refundStatus = statusOf(REFUND_STATUSES);
+const shipmentStatus = statusOf(SHIPMENT_STATUSES);
+const paymentRecordStatus = statusOf(PAYMENT_RECORD_STATUSES);
+const reviewStatus = statusOf(REVIEW_STATUSES);
+const giftCardStatus = statusOf(GIFT_CARD_STATUSES);
+const objectStatus = statusOf(OBJECT_STATUSES);
 
 /** The most lines a `lines` fact lists (a representation lists at most 500 too). */
 export const EVENT_FACT_LINES_MAX = 500;
@@ -170,28 +202,28 @@ export type EventFactLine = z.infer<typeof eventFactLinesSchema>[number];
 export const EVENT_FACT_SCHEMAS = {
   "order.created": z.object({
     orderId: id,
-    status: state,
-    paymentStatus: state,
+    status: orderStatus,
+    paymentStatus: paymentStatus,
     channel: state,
   }),
   "order.updated": z.object({
     orderId: id,
-    previousStatus: state,
-    status: state,
-    previousPaymentStatus: state,
-    paymentStatus: state,
-    previousFulfillmentStatus: state,
-    fulfillmentStatus: state,
+    previousStatus: orderStatus,
+    status: orderStatus,
+    previousPaymentStatus: paymentStatus,
+    paymentStatus: paymentStatus,
+    previousFulfillmentStatus: fulfillmentStatus,
+    fulfillmentStatus: fulfillmentStatus,
   }),
   "order.paid": z.object({
     orderId: id,
     /** Null when the order was placed already paid (a gift card covered it). */
-    previousPaymentStatus: nullableState,
-    paymentStatus: state,
+    previousPaymentStatus: paymentStatus.nullable(),
+    paymentStatus: paymentStatus,
   }),
   "order.cancelled": z.object({
     orderId: id,
-    previousStatus: state,
+    previousStatus: orderStatus,
   }),
   "order.fulfilled": z.object({
     orderId: id,
@@ -208,8 +240,8 @@ export const EVENT_FACT_SCHEMAS = {
   "return.updated": z.object({
     returnId: id,
     orderId: id,
-    previousStatus: nullableState,
-    status: state,
+    previousStatus: returnStatus.nullable(),
+    status: returnStatus,
   }),
   "product.created": z.object({
     productId: id,
@@ -310,7 +342,7 @@ export const EVENT_FACT_SCHEMAS = {
   "refund.created": z.object({
     refundId: id,
     orderId: id,
-    status: state,
+    status: refundStatus,
     lines: eventFactLinesSchema,
   }),
   /**
@@ -320,23 +352,23 @@ export const EVENT_FACT_SCHEMAS = {
   "refund.updated": z.object({
     refundId: id,
     orderId: id,
-    previousStatus: state,
-    status: state,
+    previousStatus: refundStatus,
+    status: refundStatus,
     lines: eventFactLinesSchema,
   }),
   "shipment.updated": z.object({
     shipmentId: id,
     orderId: id,
     providerId: nullableId,
-    previousStatus: state,
-    status: state,
+    previousStatus: shipmentStatus,
+    status: shipmentStatus,
   }),
   "payment.updated": z.object({
     paymentId: id,
     orderId: id,
     provider: z.string().min(1).max(150),
-    previousStatus: nullableState,
-    status: state,
+    previousStatus: paymentRecordStatus.nullable(),
+    status: paymentRecordStatus,
   }),
   "checkout.abandoned": z.object({
     abandonedCheckoutId: id,
@@ -365,26 +397,26 @@ export const EVENT_FACT_SCHEMAS = {
   "review.created": z.object({
     reviewId: id,
     productId: id,
-    previousStatus: nullableState,
-    status: state,
+    previousStatus: reviewStatus.nullable(),
+    status: reviewStatus,
     rating: z.number().int().min(1).max(5),
   }),
   "review.updated": z.object({
     reviewId: id,
     productId: id,
-    previousStatus: nullableState,
-    status: state,
+    previousStatus: reviewStatus.nullable(),
+    status: reviewStatus,
     rating: z.number().int().min(1).max(5),
   }),
   "gift_card.created": z.object({
     giftCardId: id,
-    previousStatus: nullableState,
-    status: state,
+    previousStatus: giftCardStatus.nullable(),
+    status: giftCardStatus,
   }),
   "gift_card.updated": z.object({
     giftCardId: id,
-    previousStatus: nullableState,
-    status: state,
+    previousStatus: giftCardStatus.nullable(),
+    status: giftCardStatus,
   }),
   "gift_card_transaction.created": z.object({
     giftCardId: id,
@@ -396,19 +428,19 @@ export const EVENT_FACT_SCHEMAS = {
     objectType: z.string().min(1).max(192),
     objectId: id,
     revision: z.number().int().positive(),
-    status: state,
+    status: objectStatus,
   }),
   "object.updated": z.object({
     objectType: z.string().min(1).max(192),
     objectId: id,
     revision: z.number().int().positive(),
-    status: state,
+    status: objectStatus,
   }),
   "object.deleted": z.object({
     objectType: z.string().min(1).max(192),
     objectId: id,
     revision: z.number().int().positive(),
-    status: state,
+    status: statusOf(["deleted"]),
   }),
   // Reserved until the core provides an erasure/data-request flow.
   "customer.redact_requested": z.object({

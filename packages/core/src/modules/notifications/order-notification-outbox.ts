@@ -9,6 +9,7 @@ import type { OrderNotificationType } from "./notification-types";
 import {
     buildNotificationOutboxInsertWhen,
     createNotificationOutboxInsertValues,
+    NOTIFICATION_QUEUE,
     parseNotificationPayload,
     recordAndSendNotification,
     selectNotificationOutboxById,
@@ -290,21 +291,11 @@ export async function retryFailedOrderNotificationOutboxById(options: {
     }
 
     await resetRetryableNotificationDeliveryReceipts(options.db, existing.id);
-    await options.db
-        .update(notificationOutbox)
-        .set({
-            status: "pending",
-            nextAttemptAt: sql`unixepoch()`,
-            lastError: null,
-            claimId: null,
-            claimExpiresAt: null,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(notificationOutbox.id, existing.id),
-            eq(notificationOutbox.orderId, options.orderId),
-            inArray(notificationOutbox.status, ["pending", "failed", "dead_lettered"]),
-        ));
+    // A stopped row starts a fresh retry cycle; a waiting one is due now.
+    const row = and(eq(notificationOutbox.id, existing.id), eq(notificationOutbox.orderId, options.orderId));
+    await (existing.status === "pending"
+        ? NOTIFICATION_QUEUE.requeue(options.db, row, { nextAttemptAt: sql`unixepoch()` })
+        : NOTIFICATION_QUEUE.retry(options.db, row));
 
     const base = { outboxId: existing.id, dedupeKey: existing.dedupeKey, created: false };
     if (!options.send) return { ...base, enqueued: false, skippedReason: "no_sender" };

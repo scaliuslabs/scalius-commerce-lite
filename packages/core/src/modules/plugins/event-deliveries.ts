@@ -43,45 +43,24 @@ import {
 } from "@scalius/database/schema";
 import { eventRecipientApp, topicMatchesAnyFilter } from "@scalius/shared/events";
 import { planLimits } from "@scalius/shared/plan-limits";
-import { and, asc, desc, eq, gte, inArray, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import type { EventFanOutTarget, FannedOutDelivery } from "../events";
 import { PluginError } from "./errors";
-import { maskPluginLogText } from "./logs";
-import { HELD_UNTIL } from "./held-deliveries";
+import { HELD_UNTIL, PLUGIN_DELIVERY_MAX_ATTEMPTS, PLUGIN_DELIVERY_QUEUE } from "./held-deliveries";
 import { jsonChunks } from "../../utils/json-chunks";
-import { claimKeepsDying, heldOrGivenUp, leasedQueueClaimSet, newClaimToken } from "../../utils/queue-claim";
-
-/** App deliveries' claim id prefix (queue-claim.ts `claimIdsOf`). */
-const CLAIM_BASE = "pd";
 import { hasApprovedEventPlugins, listApprovedEventPluginsForEvents, getActivePluginInstallation } from "./registry";
 
-export const PLUGIN_DELIVERY_MAX_ATTEMPTS = 8;
-/** Delay after attempt n (1-based) fails; the same 7 waits over about 22.6 hours as webhooks. */
-export const PLUGIN_DELIVERY_RETRY_DELAYS_SECONDS = [60, 300, 1_800, 3_600, 10_800, 21_600, 43_200] as const;
-/** A claim outlives the longest invocation (30 s wall time) with room for the bridge. */
-export const PLUGIN_DELIVERY_LEASE_SECONDS = 120;
 /** Deliveries of one plugin in flight at once; the rest stay due for the next drain. */
 export const PLUGIN_DELIVERY_MAX_IN_FLIGHT = 4;
 export const MAX_PLUGIN_DELIVERY_FLUSH_LIMIT = 200;
 export const PLUGIN_DELIVERY_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 export const PLUGIN_DELIVERY_LIST_MAX_LIMIT = 100;
-const MAX_ERROR_LENGTH = 500;
-const NEVER = HELD_UNTIL;
 const HELD_REASON = "Waiting for the app to run again: it is turned off, failed or waiting for approval.";
 const PRUNE_BATCH_SIZE = 500;
-export function pluginDeliveryRetryDelaySeconds(attempts: number): number {
-  const index = Math.max(1, Math.min(attempts, PLUGIN_DELIVERY_RETRY_DELAYS_SECONDS.length)) - 1;
-  return PLUGIN_DELIVERY_RETRY_DELAYS_SECONDS[index]!;
-}
 
 /** `pld_` + epoch milliseconds (13 digits) + 12 random hex: unique and time-sortable. */
 export function newPluginDeliveryId(nowMs = Date.now()): string {
   return `pld_${String(Math.floor(nowMs)).padStart(13, "0")}${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
-}
-
-function normalizeError(error: unknown): string {
-  const message = maskPluginLogText(error instanceof Error ? error.message : String(error)).trim() || "The delivery failed.";
-  return message.length > MAX_ERROR_LENGTH ? `${message.slice(0, MAX_ERROR_LENGTH - 1)}…` : message;
 }
 
 // ── Fan-out ───────────────────────────────────────────────────────────────
@@ -149,16 +128,8 @@ export const pluginEventFanOutTarget: EventFanOutTarget = {
 
 // ── Claim and finish ──────────────────────────────────────────────────────
 
-/** The due states, each one index range. */
-function claimableBranches() {
-  return [
-    and(inArray(pluginEventDeliveries.status, ["pending", "failed"]), lte(pluginEventDeliveries.nextAttemptAt, sql`unixepoch()`))!,
-    and(eq(pluginEventDeliveries.status, "processing"), lte(pluginEventDeliveries.claimExpiresAt, sql`unixepoch()`))!,
-  ];
-}
-
 function claimableCondition() {
-  return or(...claimableBranches());
+  return or(...PLUGIN_DELIVERY_QUEUE.dueBranches());
 }
 
 /**
@@ -166,7 +137,7 @@ function claimableCondition() {
  * probe per due state (the scheduled drain runs only when one finds a row).
  */
 export function pluginEventDeliveryDueProbes(db: Database) {
-  return claimableBranches().map((where) =>
+  return PLUGIN_DELIVERY_QUEUE.dueBranches().map((where) =>
     db.select({ id: pluginEventDeliveries.id }).from(pluginEventDeliveries).where(where).limit(1));
 }
 
@@ -198,26 +169,10 @@ export async function claimPluginEventDelivery(
   /** `alone`: sent by itself (a delivery that keeps dying): no other send shares its invocation's fate. */
   options: { maxInFlight?: number; alone?: boolean } = {},
 ): Promise<PluginDeliveryClaim> {
-  const claimed = await db
-    .update(pluginEventDeliveries)
-    .set({
-      ...leasedQueueClaimSet(pluginEventDeliveries, {
-        base: CLAIM_BASE,
-        token: newClaimToken(),
-        alone: options.alone === true,
-        leaseSeconds: PLUGIN_DELIVERY_LEASE_SECONDS,
-        maxAttempts: PLUGIN_DELIVERY_MAX_ATTEMPTS,
-        giveUp: "exhausted",
-        never: NEVER,
-      }),
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(and(
-      eq(pluginEventDeliveries.id, deliveryId),
-      claimableCondition(),
-      underInFlightLimit(options.maxInFlight ?? PLUGIN_DELIVERY_MAX_IN_FLIGHT),
-    ))
-    .returning();
+  const claimed = await PLUGIN_DELIVERY_QUEUE.claim(db, and(
+    eq(pluginEventDeliveries.id, deliveryId),
+    underInFlightLimit(options.maxInFlight ?? PLUGIN_DELIVERY_MAX_IN_FLIGHT),
+  )!, { alone: options.alone === true }).returning();
   if (claimed[0]?.status === "exhausted") return { status: "exhausted", pluginId: claimed[0].pluginId };
   if (claimed[0]) return { status: "claimed", delivery: claimed[0], claimId: claimed[0].claimId! };
   const existing = await db
@@ -229,10 +184,7 @@ export async function claimPluginEventDelivery(
   return Number(existing.claimable) === 1 ? { status: "busy", pluginId: existing.pluginId } : { status: "skipped", reason: "not_due" };
 }
 
-/** The row while `claimId` still holds it running (a given-up row keeps the claim, but only a success may finish it). */
-function claimed(delivery: PluginEventDeliveryRow, claimId: string) {
-  return and(eq(pluginEventDeliveries.id, delivery.id), eq(pluginEventDeliveries.status, "processing"), eq(pluginEventDeliveries.claimId, claimId));
-}
+const byId = (delivery: PluginEventDeliveryRow) => eq(pluginEventDeliveries.id, delivery.id);
 
 export async function completePluginEventDelivery(
   db: Database,
@@ -240,17 +192,11 @@ export async function completePluginEventDelivery(
   claimId: string,
   result: { durationMs: number },
 ): Promise<void> {
-  await db.update(pluginEventDeliveries).set({
-    status: "succeeded",
-    claimId: null,
-    claimExpiresAt: null,
+  // A run the next claim gave up while it was still going did deliver: its success stands.
+  await PLUGIN_DELIVERY_QUEUE.finish(db, byId(delivery), PLUGIN_DELIVERY_QUEUE.heldBy(claimId), {
     lastAttemptAt: sql`unixepoch()`,
     durationMs: Math.max(0, Math.round(result.durationMs)),
-    lastError: null,
-    deliveredAt: sql`unixepoch()`,
-    updatedAt: sql`unixepoch()`,
-    // A run the next claim gave up while it was still going did deliver: its success stands.
-  }).where(and(eq(pluginEventDeliveries.id, delivery.id), heldOrGivenUp(pluginEventDeliveries, eq(pluginEventDeliveries.claimId, claimId)!, "exhausted")));
+  });
 }
 
 /**
@@ -264,20 +210,11 @@ export async function failPluginEventDelivery(
   claimId: string,
   result: { error: string; durationMs: number },
 ): Promise<{ status: "failed" | "exhausted"; retryInSeconds: number | null }> {
-  const attempts = Number(delivery.attempts);
-  const exhausted = attempts >= PLUGIN_DELIVERY_MAX_ATTEMPTS;
-  const retryInSeconds = exhausted ? null : pluginDeliveryRetryDelaySeconds(attempts);
-  await db.update(pluginEventDeliveries).set({
-    status: exhausted ? "exhausted" : "failed",
-    claimId: null,
-    claimExpiresAt: null,
-    lastAttemptAt: sql`unixepoch()`,
-    durationMs: Math.max(0, Math.round(result.durationMs)),
-    lastError: normalizeError(result.error),
-    nextAttemptAt: exhausted ? NEVER : sql`unixepoch() + ${retryInSeconds}`,
-    updatedAt: sql`unixepoch()`,
-  }).where(claimed(delivery, claimId));
-  return { status: exhausted ? "exhausted" : "failed", retryInSeconds };
+  const failed = PLUGIN_DELIVERY_QUEUE.fail(db, byId(delivery), PLUGIN_DELIVERY_QUEUE.heldBy(claimId), Number(delivery.attempts), result.error, {
+    set: { lastAttemptAt: sql`unixepoch()`, durationMs: Math.max(0, Math.round(result.durationMs)) },
+  });
+  await failed.statement;
+  return { status: failed.gaveUp ? "exhausted" : "failed", retryInSeconds: failed.retryInSeconds };
 }
 
 /** The plugin cannot take this delivery any more (inactive, uninstalled, event pruned). */
@@ -287,14 +224,7 @@ export async function cancelPluginEventDelivery(
   claimId: string,
   reason: string,
 ): Promise<void> {
-  await db.update(pluginEventDeliveries).set({
-    status: "cancelled",
-    claimId: null,
-    claimExpiresAt: null,
-    lastError: normalizeError(reason),
-    nextAttemptAt: NEVER,
-    updatedAt: sql`unixepoch()`,
-  }).where(claimed(delivery, claimId));
+  await PLUGIN_DELIVERY_QUEUE.cancel(db, byId(delivery), reason, PLUGIN_DELIVERY_QUEUE.heldBy(claimId));
 }
 
 /**
@@ -308,15 +238,7 @@ export async function holdPluginEventDelivery(
   delivery: PluginEventDeliveryRow,
   claimId: string,
 ): Promise<void> {
-  await db.update(pluginEventDeliveries).set({
-    status: "pending",
-    attempts: sql`CASE WHEN ${pluginEventDeliveries.attempts} > 0 THEN ${pluginEventDeliveries.attempts} - 1 ELSE 0 END`,
-    claimId: null,
-    claimExpiresAt: null,
-    lastError: HELD_REASON,
-    nextAttemptAt: HELD_UNTIL,
-    updatedAt: sql`unixepoch()`,
-  }).where(claimed(delivery, claimId));
+  await PLUGIN_DELIVERY_QUEUE.release(db, byId(delivery), PLUGIN_DELIVERY_QUEUE.heldBy(claimId), HELD_REASON, { delaySeconds: null, waiting: true });
 }
 
 /**
@@ -329,15 +251,7 @@ export async function releasePluginEventDelivery(
   claimId: string,
   options: { delaySeconds: number; reason: string },
 ): Promise<void> {
-  await db.update(pluginEventDeliveries).set({
-    status: "failed",
-    attempts: sql`CASE WHEN ${pluginEventDeliveries.attempts} > 0 THEN ${pluginEventDeliveries.attempts} - 1 ELSE 0 END`,
-    claimId: null,
-    claimExpiresAt: null,
-    lastError: normalizeError(options.reason),
-    nextAttemptAt: sql`unixepoch() + ${Math.max(1, Math.round(options.delaySeconds))}`,
-    updatedAt: sql`unixepoch()`,
-  }).where(claimed(delivery, claimId));
+  await PLUGIN_DELIVERY_QUEUE.release(db, byId(delivery), PLUGIN_DELIVERY_QUEUE.heldBy(claimId), options.reason, { delaySeconds: options.delaySeconds });
 }
 
 // ── Scheduled drain and retention ─────────────────────────────────────────
@@ -359,7 +273,7 @@ export async function listDuePluginEventDeliveryTargets(
     .orderBy(asc(pluginEventDeliveries.nextAttemptAt), asc(pluginEventDeliveries.id))
     .limit(Math.max(1, Math.min(limit, MAX_PLUGIN_DELIVERY_FLUSH_LIMIT)))
     .all();
-  return due.map((row) => ({ id: row.id, lapsed: row.status === "processing" && claimKeepsDying(row.claimId, CLAIM_BASE), attempts: Number(row.attempts) }));
+  return due.map((row) => ({ id: row.id, lapsed: row.status === "processing" && PLUGIN_DELIVERY_QUEUE.claimKeepsDying(row.claimId), attempts: Number(row.attempts) }));
 }
 
 /**
@@ -372,14 +286,11 @@ export async function listDuePluginEventDeliveryTargets(
 export async function dropExpiredHeldPluginDeliveries(db: Database, nowSeconds = Math.floor(Date.now() / 1000)): Promise<number> {
   const { heldEventDays, heldEvents } = planLimits().plugins;
   const cutoff = nowSeconds - heldEventDays * 24 * 60 * 60;
-  const rows = await db.update(pluginEventDeliveries).set({
-    status: "cancelled",
-    lastError: `The app was not running: it keeps at most ${heldEvents} events for ${heldEventDays} days.`,
-    updatedAt: sql`unixepoch()`,
-  }).where(inArray(pluginEventDeliveries.id, sql`(SELECT held.id FROM (
+  const rows = await PLUGIN_DELIVERY_QUEUE.cancel(db, inArray(pluginEventDeliveries.id, sql`(SELECT held.id FROM (
       SELECT id, created_at, row_number() OVER (PARTITION BY plugin_id ORDER BY id DESC) AS newest
       FROM plugin_event_deliveries WHERE status = 'pending' AND next_attempt_at >= ${HELD_UNTIL}
-    ) AS held WHERE held.newest > ${heldEvents} OR held.created_at < ${cutoff} LIMIT ${PRUNE_BATCH_SIZE})`))
+    ) AS held WHERE held.newest > ${heldEvents} OR held.created_at < ${cutoff} LIMIT ${PRUNE_BATCH_SIZE})`),
+  `The app was not running: it keeps at most ${heldEvents} events for ${heldEventDays} days.`)
     .returning({ id: pluginEventDeliveries.id });
   return rows.length;
 }
@@ -399,10 +310,7 @@ export async function prunePluginEventDeliveries(db: Database, nowSeconds = Math
         .from(pluginEventDeliveries)
         .where(and(
           lt(pluginEventDeliveries.createdAt, nowSeconds - PLUGIN_DELIVERY_RETENTION_SECONDS),
-          or(
-            inArray(pluginEventDeliveries.status, ["succeeded", "exhausted", "cancelled"]),
-            and(eq(pluginEventDeliveries.status, "failed"), gte(pluginEventDeliveries.nextAttemptAt, NEVER)),
-          ),
+          PLUGIN_DELIVERY_QUEUE.settled(),
         ))
         .limit(PRUNE_BATCH_SIZE),
     ))
@@ -444,7 +352,7 @@ export function toPluginEventDeliveryView(row: PluginEventDeliveryRow): PluginEv
     maxAttempts: PLUGIN_DELIVERY_MAX_ATTEMPTS,
     durationMs: row.durationMs === null ? null : Number(row.durationMs),
     error: row.lastError ?? null,
-    nextAttemptAt: waiting && Number(row.nextAttemptAt) < NEVER ? Number(row.nextAttemptAt) : null,
+    nextAttemptAt: waiting && Number(row.nextAttemptAt) < HELD_UNTIL ? Number(row.nextAttemptAt) : null,
     lastAttemptAt: row.lastAttemptAt === null ? null : Number(row.lastAttemptAt),
     deliveredAt: row.deliveredAt === null ? null : Number(row.deliveredAt),
     createdAt: Number(row.createdAt),
@@ -485,18 +393,9 @@ export async function retryPluginEventDelivery(
   if (!(await getActivePluginInstallation(db, pluginId))) {
     throw new PluginError("installation_inactive", "Activate the app before retrying its deliveries.");
   }
-  const rows = await db.update(pluginEventDeliveries).set({
-    status: "pending",
-    attempts: 0,
-    claimId: null,
-    claimExpiresAt: null,
-    nextAttemptAt: sql`unixepoch()`,
-    lastError: null,
-    updatedAt: sql`unixepoch()`,
-  }).where(and(
+  const rows = await PLUGIN_DELIVERY_QUEUE.retry(db, and(
     eq(pluginEventDeliveries.id, deliveryId),
     eq(pluginEventDeliveries.pluginId, pluginId),
-    inArray(pluginEventDeliveries.status, ["failed", "exhausted", "cancelled"]),
     sql`${pluginEventDeliveries.eventId} IS NOT NULL`,
   )).returning();
   if (!rows[0]) {

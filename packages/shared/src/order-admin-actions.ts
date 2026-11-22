@@ -23,7 +23,11 @@ import {
  * nothing actually sent may still be cancelled; the cancel path refuses while
  * any unit is with the courier.
  */
-export const GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS: Readonly<Record<OrderStatusValue, readonly OrderStatusValue[]>> = {
+/** The statuses the menu sets from some state: what `dashboard.orders.update_status` offers. */
+export const GENERIC_ADMIN_ORDER_STATUS_TARGETS = ["pending", "confirmed", "completed", "cancelled"] as const satisfies readonly OrderStatusValue[];
+export type GenericAdminOrderStatusTarget = (typeof GENERIC_ADMIN_ORDER_STATUS_TARGETS)[number];
+
+export const GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS: Readonly<Record<OrderStatusValue, readonly GenericAdminOrderStatusTarget[]>> = {
   incomplete: ["pending", "cancelled"],
   pending: ["confirmed", "cancelled"],
   processing: ["confirmed", "cancelled"],
@@ -37,7 +41,7 @@ export const GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS: Readonly<Record<OrderStatus
 };
 
 export function isGenericAdminOrderStatusTransitionAllowed(current: string, next: string): boolean {
-  return current === next || (GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS[current as OrderStatusValue] ?? []).includes(next as OrderStatusValue);
+  return current === next || (GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS[current as OrderStatusValue] ?? []).includes(next as GenericAdminOrderStatusTarget);
 }
 
 /**
@@ -198,7 +202,7 @@ export type OrderNextStep = (typeof ORDER_NEXT_STEPS)[number];
 
 export interface OrderAdminActions {
   /** The status menu's moves, in the order the order machine lists them. */
-  moves: Array<{ status: OrderStatusValue } & OrderActionState>;
+  moves: Array<{ status: GenericAdminOrderStatusTarget } & OrderActionState>;
   /** Handing units over: send, pickup, service done. */
   handOver: OrderActionState;
   /** Sending the ship lines left (Mark as sent, or a courier booking). */
@@ -225,7 +229,7 @@ function orderLock(facts: OrderActionFacts): OrderActionBlock | null {
   return null;
 }
 
-function moveState(facts: OrderActionFacts, target: OrderStatusValue): OrderActionState {
+function moveState(facts: OrderActionFacts, target: GenericAdminOrderStatusTarget): OrderActionState {
   if (facts.onHold && moveWaitsForHold(target)) return blocked("on_hold");
   const lock = orderLock(facts);
   if (lock) return blocked(lock);
@@ -326,7 +330,7 @@ export function orderAdminActions(facts: OrderActionFacts): OrderAdminActions {
   const known = ORDER_MACHINE.is(status);
   const moves = known
     ? ORDER_STATUS_TRANSITIONS[status]
-      .filter((target) => GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS[status].includes(target))
+      .filter((target): target is GenericAdminOrderStatusTarget => (GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS[status] as readonly string[]).includes(target))
       .map((target) => ({ status: target, ...moveState(facts, target) }))
     : [];
   const handOver = handOverState(facts, status);

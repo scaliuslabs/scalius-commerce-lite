@@ -57,10 +57,11 @@ import {
   agentErrorResult,
   buildAgentToolError,
   errorFromOperationResult,
+  refusalOperationCandidates,
   errorFromUnknown,
   type AgentToolError,
 } from "./errors";
-import { describeAuthorizedWorkflow, getAuthorizedOperation } from "./operations";
+import { describeAuthorizedWorkflow, getAuthorizedOperation, isMcpOperationExposure } from "./operations";
 import { registerAgentPrompts } from "./prompts";
 import {
   AGENT_STEP_ID_PATTERN,
@@ -333,14 +334,44 @@ interface ShapedStep {
   meta: ShapedMeta & { operationId: string; requestId?: string; status?: number; replayed?: true; idempotencyKey?: string };
 }
 
+/** The operations a refusal could name next that this grant can run, so a hint never sends the agent to one it cannot. */
+async function runnableRefusalOperations(principal: AgentPrincipal, result: AgentOperationResult): Promise<ReadonlySet<string>> {
+  const body = result.data && typeof result.data === "object" ? (result.data as { error?: { details?: unknown } }).error : undefined;
+  const candidates = refusalOperationCandidates(result.operationId, body?.details);
+  const runnable = new Set<string>();
+  if (candidates.length === 0) return runnable;
+  // A failed authority check keeps the refusal and names no operation (fail closed).
+  try {
+    const backend = await loadAgentAccessBackend();
+    for (const operationId of candidates) {
+      const operation = AGENT_OPERATIONS_BY_ID[operationId];
+      if (!operation || !isMcpOperationExposure(operation)) continue;
+      const allowed = await backend.authorizeOperation(principal, {
+        rbac: operation.rbac,
+        risk: operation.risk,
+        surface: operation.surface,
+        exposure: operation.exposure,
+        principals: operation.principals,
+        grantScope: operation.grantScope ?? null,
+      });
+      if (allowed) runnable.add(operationId);
+    }
+  } catch {
+    return new Set();
+  }
+  return runnable;
+}
+
 /** The route's payload, projected and bounded, with pagination as one cursor. */
-function shapeOperationResult(
+async function shapeOperationResult(
   operation: AgentOperationManifestEntry,
   result: AgentOperationResult,
   options: ShapeOptions,
-): ShapedStep {
+  principal: AgentPrincipal,
+): Promise<ShapedStep> {
   if (!result.ok) {
-    return { ok: false, error: errorFromOperationResult(result), meta: { operationId: operation.operationId } };
+    const runnable = await runnableRefusalOperations(principal, result);
+    return { ok: false, error: errorFromOperationResult(result, runnable), meta: { operationId: operation.operationId } };
   }
   if (result.artifact) {
     const { artifact } = result;
@@ -480,7 +511,7 @@ async function dispatchStep(
       ...(confirmation?.by === "approval" && stepGated(step) ? { approvalId: confirmation.token } : {}),
       ...(step.changedMoneyFields ? { moneyFieldsChanged: step.changedMoneyFields } : {}),
     });
-    const shaped = shapeOperationResult(step.operation, result, options);
+    const shaped = await shapeOperationResult(step.operation, result, options, principal);
     if (input.idempotencyKey && step.operation.idempotency !== "none") shaped.meta.idempotencyKey = input.idempotencyKey;
     return shaped;
   } catch (error) {
@@ -617,7 +648,7 @@ async function singleResult(
     return formatAgentBrowserHandoffResult(handoff);
   }
   if (result.ok && result.artifact) return artifactResult(result);
-  const shaped = shapeOperationResult(operation, result, options);
+  const shaped = await shapeOperationResult(operation, result, options, principal);
   if (!shaped.ok) return agentErrorResult(shaped.error!);
   if (input.idempotencyKey && operation.idempotency !== "none") shaped.meta.idempotencyKey = input.idempotencyKey;
   if (result.oneTimeSecret) {
@@ -656,7 +687,7 @@ async function validateBeforeApproval(
       const result = await dispatchAgentOperation({
         operation, input, principal, env: deps.env, ctx: deps.ctx, validateOnly: true,
       });
-      if (!result.ok) return agentErrorResult(shapeOperationResult(operation, result, options).error!);
+      if (!result.ok) return agentErrorResult((await shapeOperationResult(operation, result, options, principal)).error!);
     } catch (error) {
       return agentErrorResult(errorFromUnknown(error, operation.operationId));
     }
@@ -842,7 +873,7 @@ async function dryRunStep(
   const options: ShapeOptions = { budget: AGENT_READ_BUDGET_BYTES };
   if (support === "native") {
     const result = await dispatchAgentOperation({ operation: step.operation, input, principal, env: deps.env, ctx: deps.ctx, dryRun: "native" });
-    const shaped = shapeOperationResult(step.operation, result, options);
+    const shaped = await shapeOperationResult(step.operation, result, options, principal);
     return { id: step.id, operationId: step.operation.operationId, support: "native", preview: stepResultValue(shaped) };
   }
   const previewId = support.slice("preview:".length);
@@ -852,7 +883,7 @@ async function dryRunStep(
   }
   const { idempotencyKey: _key, ...previewInput } = input;
   const result = await dispatchAgentOperation({ operation: preview, input: previewInput, principal, env: deps.env, ctx: deps.ctx });
-  const shaped = shapeOperationResult(preview, result, options);
+  const shaped = await shapeOperationResult(preview, result, options, principal);
   return { id: step.id, operationId: step.operation.operationId, support, preview: stepResultValue(shaped) };
 }
 

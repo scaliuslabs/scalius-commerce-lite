@@ -217,6 +217,15 @@ function readForeignDestination(formData: FormData): { shippingAdminArea?: strin
   };
 }
 
+/**
+ * A cash order refused because the store sells only to signed-in customers
+ * and the session ended during the press (another tab signed out): the cart
+ * opens sign-in instead of saying an error, and the buyer presses again on it.
+ */
+export function cashOrderNeedsSignIn(result: object): boolean {
+  return "errorCode" in result && result.errorCode === "customer_sign_in_required";
+}
+
 export async function processOrder(
   formData: FormData,
   options: ProcessOrderOptions,

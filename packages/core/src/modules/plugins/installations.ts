@@ -58,7 +58,7 @@ import { and, asc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { appSalesChannelId } from "@scalius/shared/sales-channels";
 import { PluginError } from "./errors";
 import { appJobRowsCondition } from "./app-jobs";
-import { releaseHeldPluginDeliveriesStatement } from "./held-deliveries";
+import { PLUGIN_DELIVERY_QUEUE, releaseHeldPluginDeliveriesStatement } from "./held-deliveries";
 import {
   appDataDeleteStatements,
   assertAppDataDeletable,
@@ -1104,7 +1104,6 @@ export async function uninstallPlugin(
   pluginId: string,
   options: { keepData: boolean; expectedRevision: number },
 ): Promise<void> {
-  const waiting = ["pending", "processing", "failed"] as const;
   const read = await readPluginInstallation(db, pluginId);
   const installed = read?.readable ? read.installation : null;
   const hadChannels = (installed?.manifest.salesChannels.length ?? 0) > 0;
@@ -1141,14 +1140,8 @@ export async function uninstallPlugin(
       }).where(and(appJobRowsCondition(pluginId), eq(bulkRuns.status, "running"))),
       ...(options.keepData
         ? [
-          db.update(pluginEventDeliveries).set({
-            status: "cancelled",
-            claimId: null,
-            claimExpiresAt: null,
-            lastError: "The app was uninstalled.",
-            nextAttemptAt: 253_402_300_799,
-            updatedAt: sql`unixepoch()`,
-          }).where(and(eq(pluginEventDeliveries.pluginId, pluginId), inArray(pluginEventDeliveries.status, [...waiting]))),
+          // Every delivery not yet settled ends, a running one too: its runner's outcome then writes nothing.
+          PLUGIN_DELIVERY_QUEUE.cancel(db, eq(pluginEventDeliveries.pluginId, pluginId), "The app was uninstalled.", "open"),
           retain(),
         ]
         : appDataDeleteStatements(db, pluginId)),

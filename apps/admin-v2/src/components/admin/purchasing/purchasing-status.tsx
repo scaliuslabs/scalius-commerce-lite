@@ -1,4 +1,4 @@
-import { PURCHASE_ORDER_OPEN_STATUSES } from "@scalius/shared/purchasing-state";
+import { PURCHASE_ORDER_MACHINE } from "@scalius/shared/record-lifecycles";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { useMessages } from "~/i18n";
 import { purchasingMessages } from "~/i18n/purchasing";
@@ -35,7 +35,7 @@ export function transferStatus(status: TransferStatus) {
 
 /** Still expecting units: they can be received (and cancelled). The server's open set. */
 export function isOpenPurchaseOrder(status: PurchaseOrderStatus): boolean {
-  return (PURCHASE_ORDER_OPEN_STATUSES as readonly string[]).includes(status);
+  return (PURCHASE_ORDER_MACHINE.moves.receive_part.from as readonly string[]).includes(status);
 }
 
 export function isOpenTransfer(status: TransferStatus): boolean {

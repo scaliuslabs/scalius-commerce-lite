@@ -25,7 +25,7 @@ import {
 import { bangladeshAddressesOffered, physicalDeliveryOffered } from "@/lib/delivery-facts";
 import { catalogCopy } from "@/lib/catalog-copy";
 import { marketingConsentCheckbox } from "@/lib/checkout/marketing-consent";
-import { processOrder } from "@/lib/cart/server";
+import { cashOrderNeedsSignIn, processOrder } from "@/lib/cart/server";
 import { CheckoutCopyError, checkoutFailureText } from "@/lib/checkout/error-messages";
 import { checkoutAttemptRecoveryHref } from "@/lib/checkout/attempt-recovery";
 import {
@@ -166,6 +166,8 @@ const [existingCheckoutMessageBefore, existingCheckoutMessageAfter = ""] =
 let errorMessage = "";
 let isProcessing = false;
 let expiredCheckoutId: string | undefined;
+// The cash order needs a signed-in buyer again: the page opens sign-in (cashOrderNeedsSignIn).
+let signInRequired = false;
 let codCartRepairState: {
   source: "cart";
   message: string;
@@ -316,6 +318,10 @@ if (Astro.request.method === "POST" && codPlaceable) {
             createdAt: Date.now(),
           };
         }
+        if (cashOrderNeedsSignIn(result)) {
+          signInRequired = true;
+          errorMessage = "";
+        }
       }
     }
   } catch (error: unknown) {
@@ -389,6 +395,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     data-guest-checkout-enabled={checkoutConfig.guestCheckoutEnabled !== false
       ? "true"
       : "false"}
+    data-sign-in-required={signInRequired ? "true" : undefined}
     hidden
   >
   </div>
@@ -1155,6 +1162,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     isDiscountValidationPending,
     decideUndecidedCartLines,
     hasUndecidedCartLines,
+    holdCheckoutButtonWhile,
     refreshCartBlockingState,
     resumeCartPageFromHistory,
     updateCheckoutButtonState,
@@ -1218,10 +1226,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     enhanceCheckoutFields,
     setFieldError,
   } from "@/lib/checkout/field-validation";
-  import {
-    hideCheckoutLoadingOverlay,
-    showCheckoutLoadingOverlay,
-  } from "@/lib/checkout/loading-overlay";
+  import { createSubmit, onHistoryRestore, submitBusy, SubmitStepTimeout, withinStepLimit, type SubmitStep } from "@/lib/checkout/submit-machine";
   import type { CheckoutLanguageData as CheckoutLanguageStrings } from "@scalius/shared/checkout-language";
   import type { QuotedShippingRate } from "@/lib/checkout/tax-quote-contract";
   import type { ItemsDeliveryRefusal } from "@/lib/checkout/tax-quote-error-contract";
@@ -1829,6 +1834,14 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     }
   };
 
+  // The cash order was refused for a session that ended during the press:
+  // sign in here, then press again on this cart (the auth modal loads on the event).
+  if (meta?.dataset.signInRequired === "true") {
+    const openSignIn = () => window.dispatchEvent(new CustomEvent("open-auth-modal"));
+    if (document.readyState === "complete") openSignIn();
+    else window.addEventListener("load", openSignIn, { once: true, signal: cartPageSignal });
+  }
+
   const revealCheckoutFormForCustomer = () => {
     document.getElementById("checkoutSignInPrompt")?.classList.add("hidden");
     document.getElementById("checkoutFormCard")?.classList.remove("hidden");
@@ -1886,6 +1899,10 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   );
 
   // ── Submit ──
+  // One press runs the checks below in order on the submit machine
+  // (lib/checkout/submit-machine.ts). A wait is a step of the same press,
+  // which then reads the page again from the top; the account and a cash
+  // order's cart are checked once per press.
 
   runWhenDomReady(() => {
     const form = document.getElementById("checkoutForm") as HTMLFormElement;
@@ -1900,33 +1917,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       return !input?.value || input.value === "{}" || input.value === "[]";
     };
 
-    let initialSubmitText = submitButtonText?.textContent?.trim() || checkoutCopy.placeOrderText;
+    // What a press does: the server's words until the quote decides (cash here, or the payment step).
+    let submitLabel = submitButtonText?.textContent?.trim() || checkoutCopy.placeOrderText;
     const checkoutFormMessage = document.getElementById("checkoutFormMessage");
-    let submitAfterCustomerSessionCheck = false;
-    let submitAfterCartValidation = false;
-    let awaitingPhoneValidator = false;
-    let awaitingBuyerUi = false;
-    // A press confirms the total it was made on. Checking the cart before the
-    // order re-prices it (a rate, a shipping profile, a price, a discount, tax
-    // or the rate of exchange may have changed since): a different total is
-    // shown and confirmed again, never placed (shipping-profiles QA D5).
-    let confirmedTotal = "";
-    // A press confirms the button it was made on too. A quote that lands
-    // while it waits may change how this buyer pays (cash alone: Place order
-    // and the cash terms; another method: Continue to payment): the press
-    // then stops, and the buyer presses again on the screen that shows it.
-    let confirmedPlacesCash = codOnly;
-    const paymentChangedWhileWaiting = () => {
-      if (codOnly === confirmedPlacesCash) return false;
-      restoreSubmitButton();
-      submitButton.focus({ preventScroll: true });
-      return true;
-    };
-    let resubmitting = false;
-    const resubmit = () => {
-      resubmitting = true;
-      form.requestSubmit();
-    };
 
     // The order total rides on the phone summary bar and beside the button's
     // label ("Place order · ৳1,500"), as the summary shows it: an amount only,
@@ -1953,16 +1946,30 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     }
     syncOrderTotal();
 
-    const setSubmitButtonText = (text: string) => {
-      if (submitButtonText) submitButtonText.textContent = text;
-      submitShowsLabel = text === initialSubmitText;
-      syncOrderTotal();
+    const stepText: Partial<Record<SubmitStep, string>> = {
+      account: checkoutCopy.checkingAccountText,
+      quote: checkoutCopy.calculatingText,
+      cart: checkoutCopy.checkingCartText,
     };
-
-    const restoreSubmitButton = () => {
-      setSubmitButtonText(initialSubmitText);
-      updateCheckoutButtonState();
-    };
+    const submit = createSubmit({
+      button: submitButton,
+      label: submitButtonText,
+      labelText: () => submitLabel,
+      text: (state) =>
+        state.status === "validating"
+          ? stepText[state.step!] ?? null
+          : state.status === "placing"
+            ? checkoutCopy.processingText
+            : state.status === "redirecting"
+              ? checkoutCopy.redirectingToPaymentText
+              : null,
+      ready: updateCheckoutButtonState,
+      rendered: (showsLabel) => {
+        submitShowsLabel = showsLabel;
+        syncOrderTotal();
+      },
+    });
+    holdCheckoutButtonWhile(() => submitBusy(submit.state.status));
 
     // Gift cards are applied on the payment step: a COD-only store sends a
     // buyer who has one (or already applied one) there instead of placing
@@ -1993,9 +2000,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       document.getElementById("cashAgreement")?.toggleAttribute("hidden", !placesCash);
       document.querySelectorAll<HTMLElement>("[data-checkout-payment-step]").forEach((step) => step.toggleAttribute("hidden", placesCash));
       refreshCartBlockingState();
-      const pressable = submitButtonText?.textContent?.trim() === initialSubmitText;
-      initialSubmitText = placesCash ? checkoutCopy.placeOrderText : checkoutCopy.continueToPaymentText;
-      if (pressable) setSubmitButtonText(initialSubmitText);
+      submitLabel = placesCash ? checkoutCopy.placeOrderText : checkoutCopy.continueToPaymentText;
+      submit.render();
     };
     giftCardStep?.addEventListener("click", () => {
       // The cart no longer needs cash to pay: the payment step takes the card.
@@ -2028,21 +2034,6 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       checkoutFormMessage.classList.add("hidden");
     };
 
-    const showCheckoutTransferError = (message: string) => {
-      restoreSubmitButton();
-      hideCheckoutLoadingOverlay();
-
-      const messageEl = document.getElementById("cartValidationMessage");
-      if (!messageEl) {
-        showCheckoutFormError(message, submitButton);
-        return;
-      }
-
-      messageEl.textContent = message;
-      messageEl.classList.remove("hidden");
-      messageEl.scrollIntoView?.({ behavior: "smooth", block: "center" });
-    };
-
     updateCheckoutButtonState();
     document.addEventListener("cart-updated", updateCheckoutButtonState, {
       signal: cartPageSignal,
@@ -2053,18 +2044,11 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
     if (!form || !submitButton) return;
 
-    window.addEventListener(
-      "pageshow",
-      (event) => {
-        if (!(event as PageTransitionEvent).persisted) return;
-        submitAfterCustomerSessionCheck = false;
-        submitAfterCartValidation = false;
-        hideCheckoutLoadingOverlay({ restoreFocus: false });
-        restoreSubmitButton();
-        void resumeCartPageFromHistory();
-      },
-      { signal: cartPageSignal },
-    );
+    onHistoryRestore(() => {
+      currentPress = null;
+      submit.move("reset");
+      return resumeCartPageFromHistory();
+    }, cartPageSignal);
 
     const fields = enhanceCheckoutFields(
       checkoutInformationFields(form, checkoutCopy, () => readCheckoutDeliveryMode(), () => billingAddress?.readRules() ?? null),
@@ -2117,344 +2101,284 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       return false;
     };
 
+    /**
+     * What a press confirmed: the total beside the button and what the button
+     * meant (cash placed here, or the payment step). A different total is shown
+     * and confirmed again, never placed (shipping-profiles QA D5); a quote that
+     * changes how this buyer pays stops the press, and the buyer presses again
+     * on the screen that shows it.
+     */
+    type Press = { total: string; placesCash: boolean; accountChecked: boolean; cartChecked: boolean };
+
+    // The press whose checks may still act: a later press, or Back/Forward, ends an earlier one.
+    let currentPress: Press | null = null;
+    class PressSuperseded extends Error {}
+    /** A check's answer for `press`, within the step limit (`bounded` false: the buyer's own choice). */
+    async function answer<T>(press: Press, work: Promise<T> | T, bounded = true): Promise<T> {
+      const value = await (bounded ? withinStepLimit(Promise.resolve(work)) : work);
+      if (currentPress !== press) throw new PressSuperseded();
+      return value;
+    }
+
+    /** The press ends here (the page says why where it belongs): false, the press is over. */
+    const fail = (reason: string, message?: string, focus?: HTMLElement | null) => {
+      submit.move("fail", { reason });
+      if (message) showCheckoutFormError(message, focus ?? submitButton);
+      return false;
+    };
+    const paymentChanged = (press: Press) => {
+      if (codOnly === press.placesCash) return false;
+      fail("payment_changed");
+      submitButton.focus({ preventScroll: true });
+      return true;
+    };
+
+    /** One reading of the page for the press: true when it waited and reads the page again. */
+    const checkPress = async (press: Press): Promise<boolean> => {
+      clearCheckoutFormError();
+      if (buyerUiPending()) {
+        // An app's fields are still loading: check their answers once they are drawn.
+        submit.move("step", { step: "buyer_ui" });
+        await answer(press, buyerUiDrawn());
+        return true;
+      }
+      for (const control of document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-buyer-attribute]")) {
+        if (!control.reportValidity()) return fail("attributes");
+      }
+      if (isDiscountValidationPending()) return fail("discount_pending");
+      if (checkoutPhoneResult().pending) {
+        // Numbers outside the Bangladesh-mobile fast path need the full validator first.
+        submit.move("step", { step: "phone" });
+        await answer(press, loadCheckoutPhoneValidator());
+        return true;
+      }
+      if (checkoutUnavailable) return fail("unavailable", checkoutUnavailableMessage);
+
+      const pendingCheckout = readHostedPaymentRecoverySession();
+      const checkoutId = form.querySelector<HTMLInputElement>('[name="checkoutId"]')?.value;
+      if (pendingCheckout?.checkoutId && pendingCheckout.checkoutId === checkoutId) {
+        return fail("existing_checkout", checkoutCopy.reviewExistingCheckoutText, document.getElementById("checkoutRecoveryLink"));
+      }
+
+      // Guest checkout off: the press checks the account once.
+      if (!guestCheckoutEnabled && !press.accountChecked) {
+        submit.move("step", { step: "account" });
+        const session = await answer(press, getCustomerSession());
+        if (isDiscountValidationPending()) return fail("discount_pending");
+        if (session.unavailable) return fail("account_unavailable", session.error || checkoutCopy.accountUnavailableText);
+        if (!session.authenticated) {
+          fail("signed_out");
+          window.dispatchEvent(new CustomEvent("open-auth-modal"));
+          return false;
+        }
+        press.accountChecked = true;
+        if (codOnly) return true;
+      }
+
+      if (isCartEmpty()) return fail("cart_empty", checkoutCopy.cartEmptyErrorText);
+
+      // Persist the current DOM immediately so explicit empty edits replace
+      // older draft values before any async validation or navigation.
+      persistCheckoutFormDraftNow(true);
+
+      if (!validateInformation()) return fail("information");
+      const phoneValidation = checkoutPhoneResult();
+
+      const quoted = () => /^taxq_[A-Za-z0-9_-]{22}$/.test(quoteFingerprint?.value ?? "");
+      if (codOnly && !quoted()) {
+        // A thana chosen a moment ago: its options and total are on their
+        // way. Wait for them and place the order the buyer sees (buyer QA M6),
+        // deciding on that quote (it may add a method: the payment step follows).
+        submit.move("step", { step: "quote" });
+        await answer(press, shippingMethods?.settled());
+        await answer(press, window.cartTotalsSettled?.());
+        refreshPaymentStep();
+        if (paymentChanged(press)) return false;
+        if (quoted()) return true;
+        // Still no total: said here, on the page the buyer is on.
+        return fail("total_unverified", checkoutCopy.taxVerificationFailedText);
+      }
+
+      if (!press.cartChecked) {
+        submit.move("step", { step: "cart" });
+        // A quote still on its way (an address changed a moment ago) decides
+        // how this buyer pays, as it does before the payment step: wait for
+        // it, then place cash only if that fresh quote leaves cash alone.
+        await answer(press, shippingMethods?.settled());
+        await answer(press, window.cartTotalsSettled?.());
+        refreshPaymentStep();
+        if (paymentChanged(press)) return false;
+        if (codOnly && !quoted()) return fail("total_unverified", checkoutCopy.taxVerificationFailedText);
+        // A delivery rate the merchant removed or repriced since the buyer chose
+        // it: say what changed next to the options and let the buyer review first.
+        if (await answer(press, shippingMethods?.recheck())) return fail("delivery_rate_changed");
+        const cartIsValid = await answer(press, window.validateCartSnapshot?.() ?? true);
+        if (isDiscountValidationPending()) return fail("discount_pending");
+        if (!cartIsValid || window.hasCartValidationIssues?.() === true) {
+          fail("cart_invalid");
+          // A removed thana is asked for again at its own field.
+          const locationControl = document.querySelector<HTMLElement>(
+            '[data-location-fields] [aria-invalid="true"]',
+          );
+          if (locationControl) {
+            locationControl.scrollIntoView?.({ behavior: "smooth", block: "center" });
+            locationControl.focus({ preventScroll: true });
+            return false;
+          }
+          // A store app's rule is already said above this button.
+          const ruleBanner = document.getElementById("cartRuleErrors");
+          if (window.hasCartRuleErrors?.() && ruleBanner && !ruleBanner.classList.contains("hidden")) {
+            ruleBanner.scrollIntoView?.({ behavior: "smooth", block: "center" });
+            ruleBanner.focus({ preventScroll: true });
+            return false;
+          }
+          // A refused delivery rate is explained next to the delivery options,
+          // never with the cart-items copy.
+          const blocked = window.getCartBlockedMessage?.();
+          if (blocked || !document.querySelector("[data-shipping-notice]:not(.hidden)")) {
+            showCheckoutFormError(blocked || checkoutCopy.reviewCartItemsText, submitButton);
+          }
+          return false;
+        }
+
+        if (paymentChanged(press)) return false;
+        // Lines an app needs a decision on (a protection plan or its decline): asked once,
+        // then the changed cart is checked and quoted again before the order goes.
+        if (hasUndecidedCartLines()) {
+          const decided = await answer(press, decideUndecidedCartLines(submitButton), false);
+          return decided.decided || fail("lines_undecided", decided.message, decided.focus);
+        }
+        if (codOnly) {
+          press.cartChecked = true;
+          return true;
+        }
+      }
+
+      // The payment step's handoff waits for a total still on its way (cash posts only once quoted).
+      if (!codOnly) await answer(press, window.cartTotalsSettled?.());
+      if (paymentChanged(press)) return false;
+      syncOrderTotal();
+      // The summary already shows the new total; the next press confirms it.
+      if (lastShownTotal !== press.total) return fail("total_changed", checkoutCopy.totalChangedReviewText);
+
+      const attributesInput = document.getElementById("attributesInput") as HTMLInputElement | null;
+      if (attributesInput) attributesInput.value = JSON.stringify(readBuyerAttributes());
+
+      const submittedCart =
+        (document.getElementById("cartItemsInput") as HTMLInputElement | null)?.value ?? "{}";
+
+      if (!codOnly) {
+        // ── Multi-gateway flow: hand the checkout to /checkout ──
+        submit.move("hand_off");
+        const formData = new FormData(form);
+        const checkoutData: Record<string, string> = {};
+        formData.forEach((value, key) => {
+          checkoutData[key] = value as string;
+        });
+        checkoutData.customerPhone = phoneValidation.value;
+
+        // The address travels only when something ships: a pickup or
+        // service order carries none (the disabled address fieldset is not
+        // in the form data; the location controls are read here).
+        const deliveryMode = readCheckoutDeliveryMode();
+        const locationValue = (name: string) => findNamedCheckoutControl(document, name)?.value;
+        Object.assign(checkoutData, checkoutTransferPath(deliveryMode, {
+          shippingCountryCode: chosenShippingCountry(),
+          shippingAddressLine2: locationValue("shippingAddressLine2"),
+          shippingDependentLocality: locationValue("shippingDependentLocality"),
+          shippingLocality: locationValue("shippingLocality"),
+          shippingAdminArea: locationValue("shippingAdminArea"),
+          shippingPostalCode: locationValue("shippingPostalCode"),
+          shippingAddress: locationValue("shippingAddress"),
+          city: locationValue("city"),
+          zone: locationValue("zone"),
+          area: locationValue("area"),
+          cityName: locationValue("cityName"),
+          zoneName: locationValue("zoneName"),
+          areaName: locationValue("areaName"),
+        }));
+        // The billing address: only what checkout asked for (Shopify's rule).
+        const billingFields = checkoutBillingFields(deliveryMode, requireFullBillingAddress, checkoutData);
+        for (const field of ["billingSameAsShipping", "billingCountryCode", ...BILLING_ADDRESS_FIELDS]) delete checkoutData[field];
+        for (const [field, value] of Object.entries(billingFields)) checkoutData[field] = String(value);
+        for (const field of Object.keys(checkoutData)) {
+          if (checkoutData[field] === null || checkoutData[field] === undefined) delete checkoutData[field];
+        }
+
+        // The delivery or pickup option chosen (validation required one); none without physical items.
+        const chosenMethod = deliveryMode === "none" ? undefined : window.lastShippingEventDetail;
+        const shippingLocation = locationValue("shippingLocation");
+        if (chosenMethod && shippingLocation) checkoutData.shippingLocation = shippingLocation;
+        else delete checkoutData.shippingLocation;
+
+        checkoutData["shippingCharge"] = String(chosenMethod
+          ? getEffectiveCartShippingFee(JSON.parse(submittedCart), chosenMethod.fee, chosenMethod.freeOver, chosenMethod.quoted)
+          : 0);
+        if (chosenMethod) {
+          checkoutData["shippingMethodId"] = chosenMethod.id;
+          checkoutData["shippingMethodName"] = chosenMethod.name;
+          if (chosenMethod.kind === "pickup") {
+            if (chosenMethod.pickupAddress) checkoutData.pickupAddress = chosenMethod.pickupAddress;
+            if (chosenMethod.pickupHours) checkoutData.pickupHours = chosenMethod.pickupHours;
+          }
+        }
+
+        const transferWrite = writeCheckoutTransferSession(
+          checkoutData,
+          meta?.dataset.gateways || "[]",
+        );
+        if (!transferWrite.ok) {
+          fail("transfer");
+          const message = checkoutCopy[transferWrite.copyKey];
+          const messageEl = document.getElementById("cartValidationMessage");
+          if (!messageEl) {
+            showCheckoutFormError(message, submitButton);
+            return false;
+          }
+          messageEl.textContent = message;
+          messageEl.classList.remove("hidden");
+          messageEl.scrollIntoView?.({ behavior: "smooth", block: "center" });
+          return false;
+        }
+        emitCheckoutFormSubmitted(checkoutData);
+        submit.move("redirect", {
+          overlay: { title: checkoutCopy.openingPaymentOptionsTitle, message: checkoutCopy.openingPaymentOptionsMessage },
+        });
+        window.location.href = pagePath("/checkout");
+        return false;
+      }
+
+      // ── Cash placed here: the form's own POST, which the submit listener lets through ──
+      const postedFields: Record<string, string> = {};
+      new FormData(form).forEach((value, key) => {
+        if (typeof value === "string") postedFields[key] = value;
+      });
+      emitCheckoutFormSubmitted({ ...postedFields, customerPhone: phoneValidation.value });
+      rememberSubmittedCart(submittedCart);
+      submit.move("place", {
+        overlay: { title: checkoutCopy.processingOrderTitle, message: checkoutCopy.processingOrderMessage },
+      });
+      form.requestSubmit();
+      return false;
+    };
+
     form.addEventListener(
       "submit",
-      async (e) => {
-        if (!resubmitting) {
-          syncOrderTotal();
-          confirmedTotal = lastShownTotal;
-          // What the button meant when the buyer pressed it: place cash here, or go to the payment step.
-          confirmedPlacesCash = codOnly;
-        }
-        resubmitting = false;
-        clearCheckoutFormError();
-        if (buyerUiPending()) {
-          // An app's fields are still loading: check their answers once they are drawn.
-          e.preventDefault();
-          if (awaitingBuyerUi) return;
-          awaitingBuyerUi = true;
-          submitButton.disabled = true;
-          await buyerUiDrawn();
-          awaitingBuyerUi = false;
-          restoreSubmitButton();
-          resubmit();
-          return;
-        }
-        for (const control of document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-buyer-attribute]")) {
-          if (!control.reportValidity()) { e.preventDefault(); return; }
-        }
-        if (isDiscountValidationPending()) {
-          e.preventDefault();
-          restoreSubmitButton();
-          return;
-        }
-        if (checkoutPhoneResult().pending) {
-          // Numbers outside the Bangladesh-mobile fast path need the full
-          // validator first; the resubmitted pass then validates synchronously.
-          e.preventDefault();
-          if (awaitingPhoneValidator) return;
-          awaitingPhoneValidator = true;
-          submitButton.disabled = true;
-          await loadCheckoutPhoneValidator();
-          awaitingPhoneValidator = false;
-          restoreSubmitButton();
-          resubmit();
-          return;
-        }
-        if (checkoutUnavailable) {
-          e.preventDefault();
-          showCheckoutFormError(checkoutUnavailableMessage, submitButton);
-          return;
-        }
-
-        const pendingCheckout = readHostedPaymentRecoverySession();
-        const checkoutId = form.querySelector<HTMLInputElement>('[name="checkoutId"]')?.value;
-        if (pendingCheckout?.checkoutId && pendingCheckout.checkoutId === checkoutId) {
-          e.preventDefault();
-          restoreSubmitButton();
-          const recoveryLink = document.getElementById("checkoutRecoveryLink") as HTMLAnchorElement | null;
-          showCheckoutFormError(
-            checkoutCopy.reviewExistingCheckoutText,
-            recoveryLink ?? submitButton,
-          );
-          return;
-        }
-
-        // Guest Checkout Interception
-        if (!guestCheckoutEnabled && !submitAfterCustomerSessionCheck) {
-          e.preventDefault();
-          submitButton.disabled = true;
-          setSubmitButtonText(checkoutCopy.checkingAccountText);
-
-          const session = await getCustomerSession();
-          if (isDiscountValidationPending()) {
-            restoreSubmitButton();
-            return;
-          }
-          if (session.unavailable) {
-            restoreSubmitButton();
-            showCheckoutFormError(
-              session.error ||
-                checkoutCopy.accountUnavailableText,
-              submitButton,
-            );
-            return;
-          }
-
-          if (!session.authenticated) {
-            restoreSubmitButton();
-            window.dispatchEvent(new CustomEvent("open-auth-modal"));
-            return;
-          }
-
-          if (codOnly) {
-            submitAfterCustomerSessionCheck = true;
-            resubmit();
-            return;
-          }
-        }
-
-        if (submitAfterCustomerSessionCheck) {
-          submitAfterCustomerSessionCheck = false;
-        }
-
-        if (isCartEmpty()) {
-          e.preventDefault();
-          restoreSubmitButton();
-          showCheckoutFormError(
-            checkoutCopy.cartEmptyErrorText,
-            submitButton,
-          );
-          return;
-        }
-
-        // Persist the current DOM immediately so explicit empty edits replace
-        // older draft values before any async validation or navigation.
-        persistCheckoutFormDraftNow(true);
-
-        if (!validateInformation()) {
-          e.preventDefault();
-          restoreSubmitButton();
-          return;
-        }
-        const phoneValidation = checkoutPhoneResult();
-
-        const expectedQuoteFingerprintInput = document.getElementById(
-          "expectedQuoteFingerprint",
-        ) as HTMLInputElement | null;
-        const quoted = () => /^taxq_[A-Za-z0-9_-]{22}$/.test(expectedQuoteFingerprintInput?.value ?? "");
-        if (codOnly && !quoted()) {
-          // A thana chosen a moment ago: its options and total are on their
-          // way. Wait for them and place the order the buyer sees (buyer QA M6),
-          // deciding on that quote (it may add a method: the payment step follows).
-          e.preventDefault();
-          submitButton.disabled = true;
-          setSubmitButtonText(checkoutCopy.calculatingText);
-          await shippingMethods?.settled();
-          await window.cartTotalsSettled?.();
-          refreshPaymentStep();
-          if (paymentChangedWhileWaiting()) return;
-          restoreSubmitButton();
-          if (quoted()) {
-            resubmit();
-            return;
-          }
-          // Still no total: said here, on the page the buyer is on.
-          showCheckoutFormError(
-            checkoutCopy.taxVerificationFailedText,
-            submitButton,
-          );
-          return;
-        }
-
-        if (!submitAfterCartValidation) {
-          e.preventDefault();
-          submitButton.disabled = true;
-          setSubmitButtonText(checkoutCopy.checkingCartText);
-          // A quote still on its way (an address changed a moment ago) decides
-          // how this buyer pays, as it does before the payment step: wait for
-          // it, then place cash only if that fresh quote leaves cash alone.
-          await shippingMethods?.settled();
-          await window.cartTotalsSettled?.();
-          refreshPaymentStep();
-          if (paymentChangedWhileWaiting()) return;
-          if (codOnly && !quoted()) {
-            restoreSubmitButton();
-            showCheckoutFormError(checkoutCopy.taxVerificationFailedText, submitButton);
-            return;
-          }
-          // A delivery rate the merchant removed or repriced since the buyer chose
-          // it: say what changed next to the options and let the buyer review first.
-          if (await shippingMethods?.recheck()) {
-            restoreSubmitButton();
-            return;
-          }
-          const cartIsValid = await (window.validateCartSnapshot?.() ??
-            Promise.resolve(true));
-          if (isDiscountValidationPending()) {
-            restoreSubmitButton();
-            return;
-          }
-          if (!cartIsValid || window.hasCartValidationIssues?.() === true) {
-            restoreSubmitButton();
-            // A removed thana is asked for again at its own field.
-            const locationControl = document.querySelector<HTMLElement>(
-              '[data-location-fields] [aria-invalid="true"]',
-            );
-            if (locationControl) {
-              locationControl.scrollIntoView?.({ behavior: "smooth", block: "center" });
-              locationControl.focus({ preventScroll: true });
-              return;
-            }
-            // A store app's rule is already said above this button.
-            const ruleBanner = document.getElementById("cartRuleErrors");
-            if (window.hasCartRuleErrors?.() && ruleBanner && !ruleBanner.classList.contains("hidden")) {
-              ruleBanner.scrollIntoView?.({ behavior: "smooth", block: "center" });
-              ruleBanner.focus({ preventScroll: true });
-              return;
-            }
-            // A refused delivery rate is explained next to the delivery options,
-            // never with the cart-items copy.
-            const blocked = window.getCartBlockedMessage?.();
-            if (blocked || !document.querySelector("[data-shipping-notice]:not(.hidden)")) {
-              showCheckoutFormError(blocked || checkoutCopy.reviewCartItemsText, submitButton);
-            }
-            return;
-          }
-
-          // A quote that landed while the cart was checked changed the button: press again.
-          if (paymentChangedWhileWaiting()) return;
-          // Lines an app needs a decision on (a protection plan or its decline): asked once,
-          // then the changed cart is checked and quoted again before the order goes.
-          if (hasUndecidedCartLines()) {
-            const decided = await decideUndecidedCartLines(submitButton);
-            restoreSubmitButton();
-            if (decided.decided) resubmit();
-            else if (decided.message) showCheckoutFormError(decided.message, decided.focus ?? submitButton);
-            return;
-          }
-          if (codOnly) {
-            submitAfterCartValidation = true;
-            resubmit();
-            return;
-          }
-        }
-
-        if (submitAfterCartValidation) {
-          submitAfterCartValidation = false;
-        }
-
-        // The payment step's handoff waits for a total still on its way (cash posts only once quoted).
-        if (!codOnly) await window.cartTotalsSettled?.();
-        if (paymentChangedWhileWaiting()) {
-          e.preventDefault();
-          return;
-        }
+      (e) => {
+        // The cash order's own POST, sent by the press it ends.
+        if (submit.state.status === "placing") return;
+        e.preventDefault();
         syncOrderTotal();
-        if (lastShownTotal !== confirmedTotal) {
-          // The summary already shows the new total; the next press confirms it.
-          e.preventDefault();
-          restoreSubmitButton();
-          showCheckoutFormError(checkoutCopy.totalChangedReviewText, submitButton);
-          return;
-        }
-
-        const attributesInput = document.getElementById("attributesInput") as HTMLInputElement | null;
-        if (attributesInput) attributesInput.value = JSON.stringify(readBuyerAttributes());
-
-        const submittedCart =
-          (document.getElementById("cartItemsInput") as HTMLInputElement | null)?.value ?? "{}";
-
-        if (!codOnly) {
-          // ── Multi-gateway flow: intercept and redirect to /checkout ──
-          e.preventDefault();
-
-          const formData = new FormData(form);
-          const checkoutData: Record<string, string> = {};
-          formData.forEach((value, key) => {
-            checkoutData[key] = value as string;
-          });
-          checkoutData.customerPhone = phoneValidation.value;
-
-          // The address travels only when something ships: a pickup or
-          // service order carries none (the disabled address fieldset is not
-          // in the form data; the location controls are read here).
-          const deliveryMode = readCheckoutDeliveryMode();
-          const locationValue = (name: string) => findNamedCheckoutControl(document, name)?.value;
-          Object.assign(checkoutData, checkoutTransferPath(deliveryMode, {
-            shippingCountryCode: chosenShippingCountry(),
-            shippingAddressLine2: locationValue("shippingAddressLine2"),
-            shippingDependentLocality: locationValue("shippingDependentLocality"),
-            shippingLocality: locationValue("shippingLocality"),
-            shippingAdminArea: locationValue("shippingAdminArea"),
-            shippingPostalCode: locationValue("shippingPostalCode"),
-            shippingAddress: locationValue("shippingAddress"),
-            city: locationValue("city"),
-            zone: locationValue("zone"),
-            area: locationValue("area"),
-            cityName: locationValue("cityName"),
-            zoneName: locationValue("zoneName"),
-            areaName: locationValue("areaName"),
-          }));
-          // The billing address: only what checkout asked for (Shopify's rule).
-          const billingFields = checkoutBillingFields(deliveryMode, requireFullBillingAddress, checkoutData);
-          for (const field of ["billingSameAsShipping", "billingCountryCode", ...BILLING_ADDRESS_FIELDS]) delete checkoutData[field];
-          for (const [field, value] of Object.entries(billingFields)) checkoutData[field] = String(value);
-          for (const field of Object.keys(checkoutData)) {
-            if (checkoutData[field] === null || checkoutData[field] === undefined) delete checkoutData[field];
-          }
-
-          // The delivery or pickup option chosen (validation required one); none without physical items.
-          const chosenMethod = deliveryMode === "none" ? undefined : window.lastShippingEventDetail;
-          const shippingLocation = locationValue("shippingLocation");
-          if (chosenMethod && shippingLocation) checkoutData.shippingLocation = shippingLocation;
-          else delete checkoutData.shippingLocation;
-
-          checkoutData["shippingCharge"] = String(chosenMethod
-            ? getEffectiveCartShippingFee(JSON.parse(submittedCart), chosenMethod.fee, chosenMethod.freeOver, chosenMethod.quoted)
-            : 0);
-          if (chosenMethod) {
-            checkoutData["shippingMethodId"] = chosenMethod.id;
-            checkoutData["shippingMethodName"] = chosenMethod.name;
-            if (chosenMethod.kind === "pickup") {
-              if (chosenMethod.pickupAddress) checkoutData.pickupAddress = chosenMethod.pickupAddress;
-              if (chosenMethod.pickupHours) checkoutData.pickupHours = chosenMethod.pickupHours;
-            }
-          }
-
-          const transferWrite = writeCheckoutTransferSession(
-            checkoutData,
-            meta?.dataset.gateways || "[]",
-          );
-          if (!transferWrite.ok) {
-            showCheckoutTransferError(checkoutCopy[transferWrite.copyKey]);
-            return;
-          }
-          emitCheckoutFormSubmitted(checkoutData);
-
-          submitButton.disabled = true;
-          setSubmitButtonText(checkoutCopy.redirectingToPaymentText);
-
-          showCheckoutLoadingOverlay({
-            title: checkoutCopy.openingPaymentOptionsTitle,
-            message: checkoutCopy.openingPaymentOptionsMessage,
-          });
-          window.location.href = pagePath("/checkout");
-          return;
-        }
-
-        // ── COD-only flow: normal form POST ──
-        const postedFields: Record<string, string> = {};
-        new FormData(form).forEach((value, key) => {
-          if (typeof value === "string") postedFields[key] = value;
-        });
-        emitCheckoutFormSubmitted({ ...postedFields, customerPhone: phoneValidation.value });
-        rememberSubmittedCart(submittedCart);
-        submitButton.disabled = true;
-        setSubmitButtonText(checkoutCopy.processingText);
-        showCheckoutLoadingOverlay({
-          title: checkoutCopy.processingOrderTitle,
-          message: checkoutCopy.processingOrderMessage,
+        const press: Press = { total: lastShownTotal, placesCash: codOnly, accountChecked: false, cartChecked: false };
+        if (!submit.move("press", { step: "start" })) return;
+        currentPress = press;
+        void (async () => {
+          while (await checkPress(press));
+        })().catch((error: unknown) => {
+          // A check that threw or never answered: the button comes back and the buyer presses again.
+          if (error instanceof PressSuperseded || currentPress !== press) return;
+          fail(error instanceof SubmitStepTimeout ? "timeout" : "error", checkoutCopy.genericErrorText);
+          if (!(error instanceof SubmitStepTimeout)) console.error("Checkout press failed:", error);
         });
       },
       { signal: cartPageSignal },

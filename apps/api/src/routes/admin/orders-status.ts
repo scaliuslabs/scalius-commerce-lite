@@ -11,6 +11,7 @@ import {
     resolveUnknownOrderShipment,
 } from "@scalius/core/modules/fulfilment";
 import {
+    GENERIC_ADMIN_ORDER_STATUS_TARGETS,
     keepOwedRefund,
     recordOrderEvent,
     updateOrderStatus,
@@ -31,7 +32,7 @@ import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-
 import { ok, created } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
-import { orderResourceSchema, readOrderResource } from "./order-resource";
+import { orderExpectedRevisionDescription, orderResourceSchema, readOrderResource } from "./order-resource";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 
@@ -39,7 +40,6 @@ import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
 import { sendOrderNotificationsForStatus } from "../../utils/order-notifications";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 import { requestCourierProviders } from "../../plugins/providers/courier";
-import { ORDER_STATUSES } from "@scalius/shared/order-state";
 import { notificationSender } from "../../background/notification-sender";
 import { requestStaffId } from "./request-actor";
 import { principalBodyKey } from "./idempotency-key";
@@ -146,6 +146,53 @@ const adminShipmentCreateErrorResponses = {
 
 // ─── PUT /:id/status ─────────────────────────────────────────────────────────
 
+/**
+ * Where each status the editor does not set is recorded, with the goods or
+ * money that move with it: in plain words for a person, and the operations
+ * for agents and dashboard callers and the app API's names for apps (in
+ * `details` only: each surface words them for its caller).
+ */
+export const STATUS_SET_ELSEWHERE: Readonly<Record<"shipped" | "delivered" | "returned" | "refunded", { words: string; operations: readonly string[]; appOperations: readonly string[] }>> = {
+    shipped: {
+        words: "An order is marked shipped when it is sent: by your own rider or a courier booking.",
+        operations: ["dashboard.orders.fulfillment_create", "dashboard.orders.create_shipment"],
+        appOperations: ["fulfillments.create", "shipments.create"],
+    },
+    delivered: {
+        words: "An order is marked delivered when its cash is collected or it is marked delivered after everything is sent.",
+        operations: ["dashboard.orders.cod_update", "dashboard.orders.mark_delivered"],
+        appOperations: ["orders.mark_delivered"],
+    },
+    returned: {
+        words: "An order is marked returned when its parcel comes back or its return is received.",
+        operations: ["dashboard.orders.cod_update", "dashboard.orders.return_create"],
+        appOperations: ["returns.create"],
+    },
+    refunded: {
+        words: "An order is marked refunded when its money is refunded.",
+        operations: ["dashboard.orders.refund"],
+        appOperations: ["refunds.create"],
+    },
+};
+
+/**
+ * The status editor's refusal of a status another operation records, in the
+ * schema itself so every validator built from it (the route, an agent's
+ * check before approval) answers it the same way.
+ */
+const statusSetHere = z.preprocess((value, ctx) => {
+    if (typeof value === "string" && Object.hasOwn(STATUS_SET_ELSEWHERE, value)) {
+        const elsewhere = STATUS_SET_ELSEWHERE[value as keyof typeof STATUS_SET_ELSEWHERE];
+        ctx.addIssue({
+            code: "custom",
+            message: `${elsewhere.words} It is not set here.`,
+            input: value,
+            params: { reason: "status_set_elsewhere", field: "status", status: value, operations: elsewhere.operations, appOperations: elsewhere.appOperations },
+        });
+    }
+    return value;
+}, z.enum(GENERIC_ADMIN_ORDER_STATUS_TARGETS));
+
 const updateStatusRoute = createRoute({
     operationId: "dashboard.orders.update_status",
     method: "put",
@@ -158,14 +205,16 @@ const updateStatusRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        status: z.enum(ORDER_STATUSES),
+                        status: statusSetHere.openapi({
+                            description: "The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; asking for one here is refused with those operations in `details.operations` (agents) and `details.appOperations` (apps).",
+                        }),
                         /** Why an order is cancelled; recorded on the timeline. */
                         reason: z.enum(["customer_changed_mind", "unreachable", "fake_order", "out_of_stock", "other"]).optional(),
                         notifyCustomer: z.boolean().optional().openapi({
                             description: "False sends the customer no message about this change (a test or duplicate order). Default true.",
                         }),
                         expectedRevision: z.number().int().min(1).optional().openapi({
-                            description: "The order `revision` you read. A change since is refused with 409 and nothing changes. Omit to change it whatever happened since.",
+                            description: orderExpectedRevisionDescription("a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."),
                         }),
                     }),
                 },
@@ -251,7 +300,7 @@ const markDeliveredRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         expectedRevision: z.number().int().min(1).optional().openapi({
-                            description: "The order `revision` you read; a change since is refused with 409. Omit to mark it whatever happened since.",
+                            description: orderExpectedRevisionDescription("a change since is refused with 409. Omit to mark it whatever happened since."),
                         }),
                     }).strict(),
                 },
