@@ -998,7 +998,7 @@ export default function CartFlyout({ onReady }: Props) {
               {(discountTotal > 0 || estimate.addOns.rows.length > 0) && (
                 <div className="space-y-1 text-sm">
                   <div className="flex items-center justify-between gap-3 text-muted-foreground" data-cart-subtotal-row data-summary-row="subtotal">
-                    <span>{estimate.addOns.rows.length > 0 ? copy.items : copy.subtotal}</span>
+                    <span>{copy.subtotal}</span>
                     <span className="tabular-nums" data-cart-subtotal>{formatMoney(fromMinor(estimate.addOns.itemsSubtotalMinor, moneyPlaces))}</span>
                   </div>
                   {estimate.addOns.rows.map((row) => (
@@ -1017,7 +1017,8 @@ export default function CartFlyout({ onReady }: Props) {
               )}
               <div className="flex items-end justify-between gap-3" data-summary-row="total">
                 <div className="text-sm text-muted-foreground">
-                  {discountTotal > 0 ? copy.estimatedTotal : copy.subtotal}
+                  {/* Subtotal is the items alone wherever add-on rows show: the sum below them is the total. */}
+                  {discountTotal > 0 || estimate.addOns.rows.length > 0 ? copy.estimatedTotal : copy.subtotal}
                 </div>
                 <div className="text-lg font-semibold text-foreground tabular-nums sm:text-xl" data-cart-total aria-busy={discountsPending || undefined}>
                   {discountsPending ? copy.updating : formatMoney(estimate.total)}

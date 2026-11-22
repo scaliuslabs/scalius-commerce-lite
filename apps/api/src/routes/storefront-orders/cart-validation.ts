@@ -77,7 +77,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 /**
  * The UI slots this check answers: the cart page's (checkout's first step)
  * and the cart drawer's, which both read their cart from it, and the slot
- * under each of their lines (`cart.line.after`, run once per line). An app runs only
+ * under each of their lines (`cart.line.after`, one run for the whole cart). An app runs only
  * for a slot it declares, so a slot no app fills costs nothing.
  */
 const CART_VALIDATION_UI_SLOTS = [...storefrontUiSlotsOn("checkout"), ...storefrontUiSlotsOn("cart_drawer"), ...storefrontUiSlotsOn("cart")];

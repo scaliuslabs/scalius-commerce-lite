@@ -21,10 +21,13 @@ export function textFor<T>(language: string | null | undefined, texts: { readonl
 
 /**
  * An amount (integer minor units of its ISO currency) in a reader's language,
- * as the store writes money on its pages ("৳350.00", "৳৩৫০.০০" in Bangla).
+ * as the store writes money on its pages: whole amounts without decimals.
  * In a storefront extension pass `input.language` and money in `input.currency`.
  *
- *   ui.text(textFor(input.language, { en: "Add for {price}" }).replace("{price}", moneyFor(input.language, { amountMinor: 35_000, currency: input.currency })))
+ *   moneyFor("en", { amountMinor: 35_000, currency: "BDT" })  // "৳350"
+ *   moneyFor("bn", { amountMinor: 35_000, currency: "BDT" })  // "৳৩৫০"
+ *   moneyFor("en", { amountMinor: 35_050, currency: "BDT" })  // "৳350.50"
+ *   moneyFor("en", { amountMinor: 287, currency: "USD" })     // "$2.87"
  */
 export function moneyFor(language: string | null | undefined, money: { amountMinor: number; currency: string }): string {
   return formatStoreMoney(money.amountMinor / 10 ** getDecimalPlaces(money.currency), { code: money.currency, language: language || "en" });

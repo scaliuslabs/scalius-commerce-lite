@@ -40,8 +40,6 @@ export interface CartDrawerCopy {
   /** The discounts are being priced again for the cart's new lines: no stale amount is shown. */
   updating: string;
   subtotal: string;
-  /** The first summary row when apps' add-ons follow it as their own rows: the items alone. */
-  items: string;
   viewCart: string;
   checkout: string;
   continueShopping: string;
@@ -76,7 +74,6 @@ const EN: CartDrawerCopy = {
   estimatedTotal: "Estimated total (excl. shipping)",
   updating: "Updating…",
   subtotal: "Subtotal (excl. shipping)",
-  items: "Items",
   viewCart: "View cart",
   checkout: "Check out",
   continueShopping: "Continue shopping",
@@ -111,7 +108,6 @@ const BN: CartDrawerCopy = {
   estimatedTotal: "আনুমানিক মোট (ডেলিভারি চার্জ ছাড়া)",
   updating: "হালনাগাদ হচ্ছে…",
   subtotal: "সাবটোটাল (ডেলিভারি চার্জ ছাড়া)",
-  items: "পণ্য",
   viewCart: "কার্ট দেখুন",
   checkout: "চেকআউট",
   continueShopping: "কেনাকাটা চালিয়ে যান",

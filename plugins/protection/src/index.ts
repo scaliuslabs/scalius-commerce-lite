@@ -14,7 +14,7 @@
 // - It is chosen in the cart only, and drawn by the app (`surfaces: []`):
 //   under each eligible line (`cart.line.after`) an offer row names each
 //   plan with what it adds to the line, priced by this app's own
-//   `cart.line_prices` (`input.line.inputs[].offers`), and an Add button
+//   `cart.line_prices` (`input.lines[].inputs[].offers`), and an Add button
 //   (`ui.cart.setLineInput`); a protected line says so with Remove. The
 //   cart's summary (`cart.page.summary`, `cart_drawer.footer`) says whether
 //   protection is recommended or every item is protected, adds a plan to

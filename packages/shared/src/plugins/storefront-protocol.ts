@@ -96,8 +96,8 @@ export const STOREFRONT_UI_SLOT_PAGES = {
   // page, drawn by the store from the extension's `ui` tree (no app code).
   "cart_drawer.footer": "cart_drawer",
   // Under each cart line, on the cart page and in the drawer (the same
-  // block on both): the extension runs once per line with that line's
-  // facts (`input.line`) and answers for that line alone.
+  // block on both): the extension runs once for the whole cart with every
+  // line's facts (`input.lines`) and answers a block per line (`output.lines`).
   "cart.line.after": "cart",
   // The thank-you page.
   "order.confirmation": "order",
@@ -111,8 +111,8 @@ export type StorefrontUiSlotPage = (typeof STOREFRONT_UI_SLOT_PAGES)[StorefrontU
 export const STOREFRONT_UI_SLOTS = Object.keys(STOREFRONT_UI_SLOT_PAGES) as [StorefrontUiSlot, ...StorefrontUiSlot[]];
 
 /**
- * The UI slots drawn once per cart line (`input.line` carries the line):
- * each block answers one line (`BuyerUiBlock.lineKey`).
+ * The UI slots drawn under each cart line: one run for the whole cart
+ * (`input.lines`), each block of its answer for one line (`BuyerUiBlock.lineKey`).
  */
 export const STOREFRONT_UI_LINE_SLOTS = ["cart.line.after"] as const satisfies readonly StorefrontUiSlot[];
 export function isStorefrontUiLineSlot(slot: string): slot is (typeof STOREFRONT_UI_LINE_SLOTS)[number] {

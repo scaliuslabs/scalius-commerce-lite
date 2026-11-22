@@ -116,7 +116,7 @@ export const ui = {
     setAttribute: (key: string, value: string): PluginUiAction => ({ kind: "cart", op: "set_attribute", key, value }),
     /**
      * Sets one of the app's own line inputs (`checkout.lineInputs` key) to
-     * `value` on the named cart lines (`input.line.lineKey` in a
+     * `value` on the named cart lines (`line.lineKey` of `input.lines` in a
      * `cart.line.after` extension), or on every line it applies to. The store
      * checks it as its own cart controls do: a choice that needs confirmation
      * asks in the store's dialog, and the line is priced again.

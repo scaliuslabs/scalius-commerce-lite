@@ -76,7 +76,7 @@ A slot is a named place where apps add their piece.
 | Cart page (checkout's first step) | `checkout.contact.after`, `checkout.delivery.after`, `cart.page.summary`, `cart.page.below` |
 | Payment step | `checkout.payment.after`, `checkout.actions.before`, `checkout.summary.after` |
 | Cart drawer (every page) | `cart_drawer.footer` |
-| Under each cart line (cart page and drawer) | `cart.line.after`, once per line with `input.line` |
+| Under each cart line (cart page and drawer) | `cart.line.after`: one run for the whole cart (`input.lines`), a block per line (`perLine`) |
 | Thank-you and order status | `order.confirmation`, `account.order` |
 | Account | `account.overview`, `account.profile` |
 

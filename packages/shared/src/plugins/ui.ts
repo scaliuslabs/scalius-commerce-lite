@@ -178,7 +178,7 @@ export type PluginUiRouteAction = z.input<typeof pluginUiRouteActionSchema>;
  * host runs one implementation for both. `key` is the input's key without
  * the app id (an app names only its own inputs); `value` null or "" clears
  * the answer. `lineKeys` names the cart lines (a `cart.line.after` extension
- * reads its line's key in `input.line.lineKey`); without it, every line the
+ * reads each line's key in `input.lines[].lineKey`); without it, every line the
  * input applies to (clearing: every line that has an answer). The host
  * checks it as the cart's own controls do: the input applies to each named
  * line, a choice that needs confirmation is asked for in the host's dialog
