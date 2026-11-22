@@ -153,8 +153,11 @@ export async function importLicenceKeys(
         importId,
         createdAt: now,
     })));
-    const companions: BatchItem<"sqlite">[] = chunkRowsForD1(rows, KEY_INSERT_PARAMS).map((chunk) =>
-        db.insert(digitalLicenceKeys).values(chunk) as BatchItem<"sqlite">);
+    const companions: BatchItem<"sqlite">[] = [
+        // One import per request key: a racing import under the key that committed first stops this one.
+        buildBatchGuard(db, sql`NOT EXISTS (SELECT 1 FROM ${digitalLicenceKeys} WHERE ${digitalLicenceKeys.importId} = ${importId})`, "licence_import_raced"),
+        ...chunkRowsForD1(rows, KEY_INSERT_PARAMS).map((chunk) => db.insert(digitalLicenceKeys).values(chunk) as BatchItem<"sqlite">),
+    ];
 
     try {
         const result = await executeInventoryOperation(db, {
@@ -168,6 +171,13 @@ export async function importLicenceKeys(
             // note never carries an internal id (History shows it to merchants).
             reason: "Imported",
         }, input.adminUserId, { companionStatements: companions });
+        // A racing import under the key may have won: the operation then replayed its stock edge
+        // without these keys. Answer as that import (or refuse this other one), never as done.
+        const landed = await db.select({ id: digitalLicenceKeys.id }).from(digitalLicenceKeys).where(eq(digitalLicenceKeys.id, rows[0]!.id)).get();
+        if (!landed) {
+            const winner = await replay();
+            if (winner) return winner;
+        }
         return {
             importId,
             imported: rows.length,
@@ -241,6 +251,10 @@ export async function revokeLicenceKeys(
         }
         throw error;
     });
+    // A racing revoke under the key may have won: the operation then replayed without these keys.
+    const notRevoked = await db.select({ id: digitalLicenceKeys.id }).from(digitalLicenceKeys)
+        .where(and(inArray(digitalLicenceKeys.id, targets), eq(digitalLicenceKeys.status, "available"))).get();
+    if (notRevoked) throw new AppError(422, "idempotency_key_reused", "This request key was already used for another revoke. Start a new one.");
     return { revoked: targets.length, variantId: pool.variantId, previousStock: result.previousStock, stock: result.newStock, replayed: false };
 }
 

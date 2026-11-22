@@ -304,6 +304,8 @@ export async function issueManualGiftCard(
         if (winner && issuedHere(winner)) {
             return { giftCardId, code: await decryptGiftCardCode(keys, winner.codeCiphertext), created: false };
         }
+        // Another request under the key won: it was recorded, this one was not.
+        if (winner) throw giftCardKeyReused("gift card");
         throw error;
     }
     return { giftCardId, code: built.code, created: true };
