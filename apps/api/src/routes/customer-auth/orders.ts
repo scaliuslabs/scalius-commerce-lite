@@ -25,6 +25,7 @@ import { buyerOrderShippingAddressShape } from "../../schemas/entities";
 import {
     buyerOrderFulfilmentSchema,
     orderFulfilmentShape,
+    orderLineBundleSchema,
     orderLineFulfilmentShape,
 } from "../../schemas/order-lines";
 import { created, ok } from "../../utils/api-response";
@@ -252,6 +253,8 @@ const customerOrderDetailSchema = z.object({
     taxAmountMinor: z.number().int(),
     ...orderLineFulfilmentShape,
     ...orderLineExtrasShape,
+    /** The bundle the line was bought in: a store kit's lines name its SKU and product, so Buy again puts the kit back. */
+    bundle: orderLineBundleSchema.nullable().optional(),
     createdAt: nullableTimestampSchema,
   }).passthrough()),
   /** Each handed-over action: a parcel sent, a pickup, a performed service. */

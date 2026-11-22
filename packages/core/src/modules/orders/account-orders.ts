@@ -1177,6 +1177,7 @@ export async function getCustomerOrderDetailForOrder(
             properties,
             propertiesPriceMinor,
             baseUnitPriceMinor,
+            bundleQuantity: item.quantity,
         }, order.currencyDecimalPlaces),
         price: amount(item.unitPriceMinor),
         unitPrice: amount(item.unitPriceMinor),

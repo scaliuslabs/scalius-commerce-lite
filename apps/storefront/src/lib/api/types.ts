@@ -734,6 +734,18 @@ export interface OrderLineFulfilmentFacts {
   propertiesPrice?: number;
   propertiesPriceMinor?: number;
   baseUnitPriceMinor?: number | null;
+  /** The bundle the line was bought in: a store kit names its own SKU and product (`kit`); null for a plain line. */
+  bundle?: OrderLineBundleFacts | null;
+}
+
+export interface OrderLineBundleFacts {
+  id: string;
+  kind: "expand" | "merge" | "kit";
+  kit: { variantId: string; productId: string } | null;
+  anchor: boolean;
+  /** Bundles bought; null when the line's quantity no longer reads as whole bundles. */
+  units: number | null;
+  perUnit: number | null;
 }
 
 export interface OrderPickup {

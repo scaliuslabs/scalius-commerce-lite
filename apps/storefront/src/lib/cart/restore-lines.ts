@@ -7,7 +7,9 @@
 // and the apps' add-ons, so an add-on that did not come back is never called
 // a price change. An input that cannot come back (an upload binds to one
 // order; an app input the store no longer takes) is named, never dropped
-// silently. The check alone decides what is still sellable.
+// silently. The check alone decides what is still sellable. A store kit was
+// ordered as its items: it goes back as the kit (its own SKU, its units, the
+// inputs on its anchor line), never as its items at their full prices.
 import type { OpenCartEventDetail } from "@/components/CartFlyout";
 import { addLinesToCart, type CartLineQuantity } from "@/store/cart";
 import type { OrderLineFulfilmentFacts } from "@/lib/api/types";
@@ -35,6 +37,8 @@ export interface StoredCartLine {
   price?: number | null;
   /** The line's buyer inputs and apps' options, as the order kept them (each with its surcharge). */
   properties?: OrderLineFulfilmentFacts["properties"];
+  /** The bundle the line was bought in (an order's line); a kit's lines go back as the kit. */
+  bundle?: OrderLineFulfilmentFacts["bundle"];
 }
 
 export interface RestoredCartLines {
@@ -65,13 +69,49 @@ const lineName = (name: string, variantLabel: string | null | undefined) => vari
  * both price a line); or null when the store couldn't be reached. Opens the
  * cart drawer once when anything went in.
  */
+/**
+ * A kit's item lines as the one line the buyer bought: the kit's SKU, its units, the
+ * anchor's inputs and options, and its price then (its items' prices over its units).
+ * Lines of a kit whose units no longer read whole (staff changed a quantity) stay as they are.
+ */
+export function storedKitLines(stored: readonly StoredCartLine[]): StoredCartLine[] {
+  const kits = new Map<string, StoredCartLine[]>();
+  for (const line of stored) {
+    const bundle = line.bundle;
+    if (bundle?.kind !== "kit" || !bundle.kit || bundle.units === null) continue;
+    kits.set(bundle.id, [...(kits.get(bundle.id) ?? []), line]);
+  }
+  const placed = new Set<string>();
+  return stored.flatMap((line): StoredCartLine[] => {
+    const bundle = line.bundle;
+    const members = bundle ? kits.get(bundle.id) : undefined;
+    if (!bundle?.kit || !members || bundle.units === null) return [line];
+    if (placed.has(bundle.id)) return [];
+    placed.add(bundle.id);
+    const units = bundle.units;
+    const anchor = members.find((member) => member.bundle?.anchor) ?? members[0]!;
+    const priced = members.every((member) => typeof member.price === "number");
+    return [{
+      productId: bundle.kit.productId,
+      variantId: bundle.kit.variantId,
+      quantity: units,
+      productName: line.productName ?? null,
+      // The kit's unit price then: its items' line totals over its units (each item's share, exact).
+      ...(priced ? { price: members.reduce((total, member) => total + member.price! * member.quantity, 0) / units } : {}),
+      properties: anchor.properties ?? [],
+    }];
+  });
+}
+
 export async function restoreCartLines(
   stored: readonly StoredCartLine[],
   options: { quantity: CartLineQuantity; currencyCode?: string | null },
 ): Promise<RestoredCartLines | { refused: string } | null> {
-  const lines = stored.filter((line): line is StoredCartLine & { productId: string; variantId: string } =>
+  // A kit's lines are one line here: what was bought, and what is counted as missing.
+  const bought = storedKitLines(stored);
+  const lines = bought.filter((line): line is StoredCartLine & { productId: string; variantId: string } =>
     Boolean(line.productId && line.variantId) && Number.isInteger(line.quantity) && line.quantity > 0);
-  if (lines.length === 0) return { added: 0, missing: stored.length, repriced: [], uncarried: [], currencyCode: null };
+  if (lines.length === 0) return { added: 0, missing: bought.length, repriced: [], uncarried: [], currencyCode: null };
   // Lines sent without their inputs (the second check, after the store refused them).
   const bare = new Set<number>();
   const check = (quantities: readonly number[]) => validateCartLinesInBrowser(lines.map((line, index): CartValidationRequestItem => {
@@ -162,5 +202,5 @@ export async function restoreCartLines(
   if (addedKeys.length > 0) {
     document.dispatchEvent(new CustomEvent<OpenCartEventDetail>("open-cart", { detail: { addedLineKey: addedKeys[0], addedCount: addedKeys.length } }));
   }
-  return { added: addedKeys.length, missing: stored.length - addedKeys.length, repriced, uncarried, currencyCode };
+  return { added: addedKeys.length, missing: bought.length - addedKeys.length, repriced, uncarried, currencyCode };
 }

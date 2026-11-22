@@ -173,6 +173,17 @@ export const orderLineFulfilmentShape = {
   baseUnitPriceMinor: z.number().int().nullable(),
 };
 
+/** The bundle an order line was bought in, for the buyer's own order (Buy again puts a kit back as the kit). */
+export const orderLineBundleSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  kind: z.enum(["expand", "merge", "kit"]),
+  kit: z.object({ variantId: z.string(), productId: z.string() }).nullable(),
+  anchor: z.boolean(),
+  units: z.number().int().nullable(),
+  perUnit: z.number().int().nullable(),
+});
+
 export const orderPickupSchema = z.object({
   address: z.string().nullable(),
   hours: z.string().nullable(),

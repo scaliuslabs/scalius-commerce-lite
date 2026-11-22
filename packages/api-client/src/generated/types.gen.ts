@@ -15825,6 +15825,18 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 propertiesPriceMinor: number;
                 baseUnitPriceMinor: number | null;
                 extras?: OrderLineExtras;
+                bundle?: {
+                    id: string;
+                    title: string;
+                    kind: 'expand' | 'merge' | 'kit';
+                    kit: {
+                        variantId: string;
+                        productId: string;
+                    } | null;
+                    anchor: boolean;
+                    units: number | null;
+                    perUnit: number | null;
+                } | null;
                 createdAt: NullableTimestamp;
                 [key: string]: unknown;
             }>;
