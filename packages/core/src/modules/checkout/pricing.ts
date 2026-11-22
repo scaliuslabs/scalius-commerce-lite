@@ -251,7 +251,7 @@ type PromotionLineSource = Pick<StorefrontCartValidationResult["items"][number],
  * The cart's lines as the store's promotions read them, by tax allocation
  * line id: what each line is charged, and for a kit's line the kit it was
  * bought as (`pricedAs`: promotions judge the kit, its product and SKU, its
- * quantity, at its price; catalog.kits-sell-as-components). Gift cards are
+ * quantity, at its price). Gift cards are
  * marked (outside every promotion). One builder for the quote, the order,
  * the agent quote and the cart's discount preview.
  */

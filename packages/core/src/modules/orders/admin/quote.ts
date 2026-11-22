@@ -498,7 +498,7 @@ export async function prepareManualOrderQuote(
         // A pickup ships nothing: the backup market, as the order is placed in.
         pickup: chosenKind === "pickup",
     };
-    // A kit is sold as its items, here as at checkout (catalog.kits-sell-as-components).
+    // A kit is sold as its items, here as at checkout.
     const { items: inputItems, resolved: resolvedItems } = await expandAdminOrderKits(
         db, data.items, await resolveAdminOrderItemInventory(db, data.items, marketSignals), marketSignals, currency.priceIncrementMinor,
     );
@@ -572,7 +572,7 @@ export async function prepareManualOrderQuote(
     const trackedItems: PreparedManualOrderLine[] = resolvedItems.map((item, index) => ({
         ...item,
         ...lineProperties[index]!,
-        // A kit's item names its kit on the order line (apps.order-lines-name-their-bundle).
+        // A kit's item names its kit on the order line, as checkout freezes it.
         ...(item.bundle ? { properties: serializeOrderLineProperties([...readOrderLineProperties(lineProperties[index]!.properties), lineBundleProperty(item.bundle)]) } : {}),
         fulfillmentType: plan.lineTypes[index]!,
     }));

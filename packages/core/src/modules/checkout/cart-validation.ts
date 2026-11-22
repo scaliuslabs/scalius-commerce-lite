@@ -1222,7 +1222,7 @@ export function presentBundleRows<T extends ProductBundleRow>(rows: readonly T[]
  * line of a product counts toward its tiers, whatever its SKU or inputs. Sets
  * each line's `bundleDiscountMinor` and returns the products that reached a
  * tier. Gift cards are sold at their value and never bundle. A kit's lines
- * are the kit's (catalog.kits-sell-as-components): they never count toward a
+ * are the kit's: they never count toward a
  * tier, not even one of a plain line of the same product.
  */
 function resolveCartBundleSavings(
