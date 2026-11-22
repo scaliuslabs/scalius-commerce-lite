@@ -204,8 +204,8 @@ export function leasedQueue<T extends QueueTable, S extends string>(table: T, de
       });
       return { statement, gaveUp, retryInSeconds };
     },
-    giveUp: (db: Database, row: SQL | undefined, claim: SQL, reason: unknown) =>
-      write(db, "giveUp", held(row, claim), { ...ended, lastError: error(reason), nextAttemptAt: NEVER_DUE }),
+    giveUp: (db: Database, row: SQL | undefined, claim: SQL, reason: unknown, set: Columns = {}) =>
+      write(db, "giveUp", held(row, claim), { ...ended, lastError: error(reason), nextAttemptAt: NEVER_DUE, ...set }),
     /** Cancels a row by its claim, or (no claim) rows still waiting. */
     cancel(db: Database, row: SQL | undefined, reason: unknown, claim?: SQL) {
       const where = claim ? and(held(row, claim), eq(table.status, states.running)) : and(row, inArray(table.status, [states.waiting, states.retrying]));
