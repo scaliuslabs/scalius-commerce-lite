@@ -209,6 +209,20 @@ function disputeOf(dispute: Stripe.Dispute, eventType: string): PaymentDispute |
   };
 }
 
+/** The order a PaymentIntent was created for; "retry" when Stripe did not answer. */
+async function orderOfIntent(paymentIntentId: string, secretKey: string): Promise<string | null | "retry"> {
+  let intent: Stripe.PaymentIntent;
+  try {
+    intent = await stripeClient(secretKey).paymentIntents.retrieve(paymentIntentId, {}, {
+      timeout: DISPUTE_LOOKUP_TIMEOUT_MS,
+      maxNetworkRetries: 0,
+    });
+  } catch {
+    return "retry";
+  }
+  return intent.id === paymentIntentId ? intent.metadata?.orderId ?? null : null;
+}
+
 /**
  * A `charge.dispute.*` event as the kernel's dispute event. Stripe's dispute
  * names its PaymentIntent but not the order, so the intent is read for the
@@ -219,17 +233,9 @@ async function disputeEvent(event: Stripe.Event, secretKey: string): Promise<Pay
   const paymentIntentId = idOf(dispute.payment_intent);
   const facts = disputeOf(dispute, event.type);
   if (!paymentIntentId || !facts) return null;
-  let intent: Stripe.PaymentIntent;
-  try {
-    intent = await stripeClient(secretKey).paymentIntents.retrieve(paymentIntentId, {}, {
-      timeout: DISPUTE_LOOKUP_TIMEOUT_MS,
-      maxNetworkRetries: 0,
-    });
-  } catch {
-    return "retry";
-  }
-  const orderId = intent.metadata?.orderId;
-  if (!orderId || intent.id !== paymentIntentId) return null;
+  const orderId = await orderOfIntent(paymentIntentId, secretKey);
+  if (orderId === "retry") return "retry";
+  if (!orderId) return null;
   return {
     kind: "dispute",
     eventType: event.type,
@@ -240,6 +246,36 @@ async function disputeEvent(event: Stripe.Event, secretKey: string): Promise<Pay
     dispute: facts,
   };
 }
+
+/** A refund Stripe no longer reports completed or on its way: failed, cancelled, or back to the buyer's bank details. */
+const TURNED_BACK_REFUND_STATUSES = new Set(["failed", "canceled", "requires_action"]);
+
+/**
+ * A `refund.failed` or `refund.updated` event as the kernel's
+ * `refund_observed`: the store asks Stripe for the charge's refunds and
+ * settles its own from the answer. Only a refund that turned back is
+ * passed on; the refund names its intent, which is read for the order.
+ */
+async function refundChangeEvent(event: Stripe.Event, secretKey: string): Promise<PaymentEvent | "retry" | null> {
+  const refund = event.data.object as Stripe.Refund;
+  const paymentIntentId = idOf(refund.payment_intent);
+  const chargeId = idOf(refund.charge);
+  if (!paymentIntentId || !chargeId || !TURNED_BACK_REFUND_STATUSES.has(refund.status ?? "")) return null;
+  const orderId = await orderOfIntent(paymentIntentId, secretKey);
+  if (orderId === "retry") return "retry";
+  if (!orderId) return null;
+  return {
+    kind: "refund_observed",
+    eventType: event.type,
+    eventId: event.id,
+    orderId,
+    providerRef: paymentIntentId,
+    secondaryRef: chargeId,
+    details: { refundId: refund.id, refundStatus: refund.status ?? null, failureReason: refund.failure_reason ?? null },
+  };
+}
+
+const REFUND_CHANGE_EVENT_TYPES = new Set<string>(["refund.failed", "refund.updated"]);
 
 const DISPUTE_EVENT_TYPES = new Set<string>([
   "charge.dispute.created",
@@ -327,6 +363,13 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
       return dispute
         ? { status: "event", event: dispute }
         : { status: "ignored", reason: `Stripe ${event.type} names no payment of a Scalius order` };
+    }
+    if (REFUND_CHANGE_EVENT_TYPES.has(event.type)) {
+      const change = await refundChangeEvent(event, settings.secretKey);
+      if (change === "retry") return { status: "retry", reason: "Stripe did not answer which order the refunded payment belongs to" };
+      return change
+        ? { status: "event", event: change }
+        : { status: "ignored", reason: `Stripe ${event.type} names no refund that turned back on a Scalius order` };
     }
     const normalized = toEvent(event);
     return normalized

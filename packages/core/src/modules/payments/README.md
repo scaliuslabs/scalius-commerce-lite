@@ -124,8 +124,11 @@ again first; when the units are gone the payment is still recorded and the
 event goes to manual reconciliation (`confirmed_stock_unavailable`, no
 automatic fulfilment).
 
-A `refund_observed` event is checked when it arrives (`verifyObservedRefund`,
-read-only): when every refund the provider lists is already recorded (the
+A `refund_observed` event first asks the provider for the transaction's
+refunds (`applyProviderRefundChanges`): an own refund it no longer lists as
+completed (Stripe `refund.failed`) is reopened and checked at once, so its
+money counts as the store's again and the buyer hears it failed. Otherwise it
+is checked (`verifyObservedRefund`, read-only): when every refund the provider lists is already recorded (the
 merchant's own refund) it is processed at once; otherwise it waits for
 `reconcileExternalRefundWebhooks`, which imports refunds made in the provider
 dashboard but never while one of the order's own refunds is still settling

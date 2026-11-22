@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-o
 import {
   PaymentRecordStatus,
   notificationOutbox,
+  orderRefunds,
   refundAttempts,
   orderPayments,
   orders,
@@ -27,6 +28,7 @@ import {
 } from "./gateways/registry";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { webhookEventMove } from "./webhook-events";
+import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotalsSql } from "./payment-state";
 import { canOperateExistingPayments, type GatewayProviderRefund, type GatewayRefundProbe } from "./gateways/port";
 import { finalizeAcceptedRefundAttemptIds, isInternalRefundProviderStatus, refundNotificationOutboxId } from "./refund-service";
 import {
@@ -625,15 +627,15 @@ async function getExistingRefundAttemptByProviderRefundId(
   db: Database,
   provider: string,
   refundId: string,
-): Promise<{ id: string; status: string } | undefined> {
+): Promise<{ id: string; orderId: string; status: string } | undefined> {
   return await db
-    .select({ id: refundAttempts.id, status: refundAttempts.status })
+    .select({ id: refundAttempts.id, orderId: refundAttempts.orderId, status: refundAttempts.status })
     .from(refundAttempts)
     .where(and(
       eq(refundAttempts.gateway, provider),
       eq(refundAttempts.providerRefundId, refundId),
     ))
-    .get() as { id: string; status: string } | undefined;
+    .get() as { id: string; orderId: string; status: string } | undefined;
 }
 
 async function insertExternalRefundAttempt(
@@ -951,6 +953,118 @@ export async function verifyObservedRefund(
   } catch {
     return "unverified";
   }
+}
+
+/**
+ * A provider's word that refunds of a transaction changed (Stripe
+ * `refund.failed`, `refund.updated`), checked with the provider itself:
+ * every refund it lists as not completed whose local attempt reads
+ * `refunded` is reopened (`reopenRefundTurnedBack`), and every such attempt
+ * still in flight is checked now, so the refund ends as the provider says
+ * (failed: the buyer hears it failed and the money counts as the store's
+ * again; completed again: it settles once more, announced once). Answers the
+ * attempts it handled; none when the provider could not be asked.
+ */
+export async function applyProviderRefundChanges(
+  db: Database,
+  observed: { provider: string; secondaryRef?: string },
+  options: Pick<RefundReconciliationOptions, "encryptionKey" | "providers" | "nowSeconds"> = {},
+): Promise<{ attemptIds: string[]; reopenedAttemptIds: string[]; orderIds: string[]; refundNotifications: RefundNotificationFact[] }> {
+  const result = { attemptIds: [] as string[], reopenedAttemptIds: [] as string[], orderIds: [] as string[], refundNotifications: [] as RefundNotificationFact[] };
+  const gateway = (await paymentProvidersFor(options.providers, observed.provider)).get(observed.provider);
+  if (!gateway?.listRefunds || !observed.secondaryRef) return result;
+  const settings = await gateway.loadSettings(db, options.encryptionKey);
+  if (!canOperateExistingPayments(gateway, settings)) return result;
+  const listed = await gateway.listRefunds({ sourceRef: observed.secondaryRef }, { settings, signal: new AbortController().signal });
+  for (const refund of listed) {
+    if (refund.succeeded || refund.sourceRef !== observed.secondaryRef) continue;
+    const attempt = await getExistingRefundAttemptByProviderRefundId(db, observed.provider, refund.id);
+    if (!attempt) continue;
+    if (attempt.status === "refunded") {
+      if (!await reopenRefundTurnedBack(db, attempt.id, refund.status ?? "failed")) continue;
+      result.reopenedAttemptIds.push(attempt.id);
+    } else if (!RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(attempt.status)) {
+      continue;
+    }
+    result.attemptIds.push(attempt.id);
+    // A check that throws gives its claim back: the scheduled reconciliation asks again.
+    const checked = await reconcileRefundAttemptForOrder(db, attempt.orderId, attempt.id, options);
+    result.orderIds.push(...checked.orderIds);
+    result.refundNotifications.push(...checked.refundNotifications);
+  }
+  return result;
+}
+
+const REOPEN_CONFLICT = "refund_reopen_conflict";
+
+/**
+ * A refund the provider completed and then turned back (the buyer's bank
+ * returned it): its attempt is in flight again (`reopened`), its refund row
+ * pending, its refund record pending, and the order's money is what its
+ * ledger now says (paid rises by it), in one batch guarded on the order's
+ * version and ledger. Its status check settles it next. False when it no
+ * longer reads refunded (another run reopened it first).
+ */
+export async function reopenRefundTurnedBack(db: Database, attemptId: string, providerStatus: string): Promise<boolean> {
+  for (let round = 0; round < 3; round += 1) {
+    const attempt = await db.select({
+      id: refundAttempts.id,
+      orderId: refundAttempts.orderId,
+      refundGroupId: refundAttempts.refundGroupId,
+      refundPaymentId: refundAttempts.refundPaymentId,
+      status: refundAttempts.status,
+    }).from(refundAttempts).where(eq(refundAttempts.id, attemptId)).get();
+    if (!attempt || attempt.status !== "refunded") return false;
+    const totalsSql = paymentLedgerTotalsSql(attempt.orderId);
+    const order = await db.select({
+      totalAmountMinor: orders.totalAmountMinor,
+      paymentTermsDays: orders.paymentTermsDays,
+      version: orders.version,
+      ...totalsSql,
+      refundRowMinor: sql<number | null>`(SELECT ${orderPayments.amountMinor} FROM ${orderPayments}
+        WHERE ${orderPayments.id} = ${attempt.refundPaymentId} AND ${orderPayments.status} = ${PaymentRecordStatus.REFUNDED})`,
+    }).from(orders).where(eq(orders.id, attempt.orderId)).get();
+    if (!order) return false;
+    const totals = { receivedMinor: Number(order.receivedMinor), returnedMinor: Number(order.returnedMinor), withdrawnMinor: Number(order.withdrawnMinor) };
+    const back = Number(order.refundRowMinor ?? 0);
+    const money = deriveOrderPaymentState({
+      totalAmountMinor: order.totalAmountMinor,
+      deferred: order.paymentTermsDays !== null,
+      ledger: { ...totals, returnedMinor: totals.returnedMinor - back },
+    });
+    try {
+      await db.batch([
+        buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${attempt.orderId} AND ${orders.version} = ${order.version})
+          AND ${ledgerTotalsCondition(attempt.orderId, totals)}
+          AND EXISTS (SELECT 1 FROM ${refundAttempts} WHERE ${refundAttempts.id} = ${attempt.id} AND ${refundAttempts.status} = 'refunded')`, REOPEN_CONFLICT),
+        db.update(orderPayments).set({ status: PaymentRecordStatus.PENDING, updatedAt: sql`unixepoch()` })
+          .where(and(eq(orderPayments.id, attempt.refundPaymentId), eq(orderPayments.status, PaymentRecordStatus.REFUNDED))),
+        db.update(orders).set({
+          paidAmountMinor: money.paidAmountMinor,
+          balanceDueMinor: money.balanceDueMinor,
+          paymentStatus: money.paymentStatus,
+          disputedMinor: money.disputedMinor,
+          version: sql`${orders.version} + 1`,
+          updatedAt: sql`unixepoch()`,
+        }).where(and(eq(orders.id, attempt.orderId), eq(orders.version, order.version))),
+        refundAttemptMove(db, "reopened", eq(refundAttempts.id, attempt.id), {
+          providerStatus,
+          claimId: null,
+          claimExpiresAt: null,
+          nextProbeAt: sql`unixepoch()`,
+          lastError: `The provider turned the refund back after completing it (${providerStatus}).`.slice(0, MAX_REFUND_RECONCILIATION_ERROR_LENGTH),
+        }),
+        // The record reads pending again until its attempts settle (its triggers move it then).
+        db.update(orderRefunds).set({ status: "pending", updatedAt: sql`unixepoch()` })
+          .where(and(eq(orderRefunds.id, attempt.refundGroupId), sql`${orderRefunds.status} <> 'pending'`)),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+      ] as any);
+      return true;
+    } catch (error: unknown) {
+      if (!isBatchGuardError(error, REOPEN_CONFLICT)) throw error;
+    }
+  }
+  throw new Error(`Refund attempt ${attemptId} could not be reopened: its order kept changing.`);
 }
 
 export async function reconcileExternalRefundWebhooks(

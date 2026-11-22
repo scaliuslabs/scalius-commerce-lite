@@ -13,6 +13,7 @@ import { runWithReadObserver } from "@scalius/database/read-observer";
 import {
   LOCAL_REFUND_IN_PROGRESS_REASON,
   applyProviderDispute,
+  applyProviderRefundChanges,
   cancelDueSessions,
   isDisputeWaitingForRefundError,
   listDuePaymentCommands,
@@ -43,6 +44,7 @@ import {
 import { isShipmentClaimConflictError } from "@scalius/core/modules/order-kernel";
 import { createEventWriteObserver } from "../middleware/event-dispatch";
 import { notificationSender } from "./notification-sender";
+import { sendOrderRefundNotification } from "../utils/order-notifications";
 import { runOrderAutoFulfil } from "./auto-fulfil";
 import { appPaymentProvidersLoader } from "../plugins/providers/payment";
 
@@ -365,10 +367,32 @@ async function applyPaymentEvent(
       };
     }
     case "refund_observed": {
-      // The provider reports the transaction's refunds. The order's own
-      // refund (sent from the dashboard) is already recorded: checked now, it
-      // is done. Anything else waits for the scheduled reconciliation, which
-      // imports refunds made in the provider dashboard; nothing is imported here.
+      // The provider reports the transaction's refunds. One of the order's
+      // own that the provider turned back (failed after completing, or back to
+      // the buyer's bank details) is reopened and checked now: the buyer hears
+      // it failed and its money counts as the store's again.
+      const changes = await applyProviderRefundChanges(db, { provider, secondaryRef: event.secondaryRef }, {
+        encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+        providers: appPaymentProvidersLoader(env, db, ctx),
+      });
+      for (const notification of changes.refundNotifications) {
+        await sendOrderRefundNotification({
+          db,
+          send,
+          orderId: notification.orderId,
+          notificationType: notification.notificationType,
+          dedupeKey: notification.dedupeKey,
+          source: "refund-provider-changed",
+          data: { amount: notification.amount, ...(notification.refundId ? { refundId: notification.refundId } : {}) },
+        });
+      }
+      if (changes.attemptIds.length > 0) {
+        return { status: "processed", result: { ...refs, outcome: "refund_changed", reopened: changes.reopenedAttemptIds.length, ...event.details } };
+      }
+      // The order's own refund (sent from the dashboard) is already recorded:
+      // checked now, it is done. Anything else waits for the scheduled
+      // reconciliation, which imports refunds made in the provider dashboard;
+      // nothing is imported here.
       const verdict = await verifyObservedRefund(db, {
         provider,
         orderId: event.orderId,
