@@ -287,6 +287,13 @@ const DISPUTE_EVENT_TYPES = new Set<string>([
 
 /** The port's most refunds per list (`providerRefundsSchema`). */
 const STRIPE_LISTED_REFUNDS_MAX = 100;
+/**
+ * Pages of a charge's refunds one list reads (100 each, 500 refunds): five
+ * Stripe requests, read once per event, beside the intent lookup and a status
+ * check per refund turned back, well inside the Free plan's 50 subrequests
+ * per invocation. A charge with more refunds than that is very rare.
+ */
+const STRIPE_REFUND_LIST_PAGES = 5;
 
 function refundOf(refund: Stripe.Refund): GatewayProviderRefund {
   return {
@@ -501,10 +508,19 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
     return { outcome: pending ? "processing" : "unknown", providerRefundId: refund.id, providerStatus: refund.status ?? "unknown", responsePayload: payload };
   },
 
-  // Every page of the charge's refunds (a refund that failed may sit past the
-  // first 100), those not completed first: the port answers at most 100.
+  // The charge's refunds, newest first, at most STRIPE_REFUND_LIST_PAGES
+  // pages, those not completed first: the port answers at most 100. A refund
+  // past the last page read is not listed, and nothing acts on an unlisted one.
   async listRefunds({ sourceRef }, { settings }) {
-    const listed = await stripeClient(settings.secretKey).refunds.list({ charge: sourceRef, limit: 100 }).autoPagingToArray({ limit: 10_000 });
+    const stripe = stripeClient(settings.secretKey);
+    const listed: Stripe.Refund[] = [];
+    let startingAfter: string | undefined;
+    for (let page = 0; page < STRIPE_REFUND_LIST_PAGES; page += 1) {
+      const result = await stripe.refunds.list({ charge: sourceRef, limit: 100, ...(startingAfter ? { starting_after: startingAfter } : {}) });
+      listed.push(...result.data);
+      if (!result.has_more || result.data.length === 0) break;
+      startingAfter = result.data.at(-1)!.id;
+    }
     const refunds = listed.map(refundOf);
     return [...refunds.filter((refund) => !refund.succeeded), ...refunds.filter((refund) => refund.succeeded)].slice(0, STRIPE_LISTED_REFUNDS_MAX);
   },

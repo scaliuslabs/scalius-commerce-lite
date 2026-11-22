@@ -15,6 +15,7 @@ import {
   applyProviderDispute,
   applyProviderRefundChanges,
   isRefundChangeWaitingForRefundError,
+  listObservedRefunds,
   cancelDueSessions,
   isDisputeWaitingForRefundError,
   listDuePaymentCommands,
@@ -373,10 +374,13 @@ async function applyPaymentEvent(
       // own that the provider turned back (failed after completing, or back to
       // the buyer's bank details) is reopened and checked now: the buyer hears
       // it failed and its money counts as the store's again.
-      const changes = await applyProviderRefundChanges(db, { provider, secondaryRef: event.secondaryRef }, {
+      // The provider's list of the transaction's refunds is read once for both checks.
+      const lookup = {
         encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
         providers: appPaymentProvidersLoader(env, db, ctx),
-      });
+      };
+      const listed = await listObservedRefunds(db, { provider, secondaryRef: event.secondaryRef }, lookup);
+      const changes = await applyProviderRefundChanges(db, { provider, secondaryRef: event.secondaryRef }, { ...lookup, listed });
       for (const notification of changes.refundNotifications) {
         await sendOrderRefundNotification({
           db,
@@ -403,10 +407,7 @@ async function applyPaymentEvent(
         orderId: event.orderId,
         providerRef: event.providerRef,
         secondaryRef: event.secondaryRef,
-      }, {
-        encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-        providers: appPaymentProvidersLoader(env, db, ctx),
-      });
+      }, { ...lookup, listed });
       if (verdict === "represented") {
         return { status: "processed", result: { ...refs, outcome: "refund_represented", ...event.details } };
       }

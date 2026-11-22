@@ -931,23 +931,40 @@ async function hasActiveLocalRefundAttempt(db: Database, orderId: string): Promi
  */
 export type ObservedRefundVerdict = "represented" | "own_refund_in_progress" | "unrepresented" | "unverified";
 
+/**
+ * The refunds a provider lists for a transaction (`listRefunds`), read once
+ * per event and handed to `applyProviderRefundChanges` and
+ * `verifyObservedRefund`; null when the provider cannot be asked. A provider
+ * error throws (the event is tried again).
+ */
+export async function listObservedRefunds(
+  db: Database,
+  observed: { provider: string; secondaryRef?: string },
+  options: Pick<RefundReconciliationOptions, "encryptionKey" | "providers"> = {},
+): Promise<GatewayProviderRefund[] | null> {
+  const gateway = (await paymentProvidersFor(options.providers, observed.provider)).get(observed.provider);
+  if (!gateway?.listRefunds || !observed.secondaryRef) return null;
+  const settings = await gateway.loadSettings(db, options.encryptionKey);
+  if (!canOperateExistingPayments(gateway, settings)) return null;
+  return gateway.listRefunds({ sourceRef: observed.secondaryRef }, { settings, signal: new AbortController().signal });
+}
+
 export async function verifyObservedRefund(
   db: Database,
   observed: { provider: string; orderId: string; providerRef?: string; secondaryRef?: string },
-  options: Pick<ExternalRefundWebhookReconciliationOptions, "encryptionKey" | "providers"> = {},
+  options: Pick<ExternalRefundWebhookReconciliationOptions, "encryptionKey" | "providers"> & { listed?: GatewayProviderRefund[] | null } = {},
 ): Promise<ObservedRefundVerdict> {
   try {
-    const gateway = (await paymentProvidersFor(options.providers, observed.provider)).get(observed.provider);
-    if (!gateway?.listRefunds || !observed.secondaryRef) return "unverified";
+    if (!observed.secondaryRef) return "unverified";
     const sourcePayment = await findSourcePayment(db, observed.provider, {
       providerRef: observed.providerRef,
       secondaryRef: observed.secondaryRef,
       eventOrderId: observed.orderId,
     });
     if (!sourcePayment) return "unverified";
-    const settings = await gateway.loadSettings(db, options.encryptionKey);
-    if (!canOperateExistingPayments(gateway, settings)) return "unverified";
-    const succeeded = (await gateway.listRefunds({ sourceRef: observed.secondaryRef }, { settings, signal: new AbortController().signal }))
+    const listed = options.listed !== undefined ? options.listed : await listObservedRefunds(db, observed, options);
+    if (!listed) return "unverified";
+    const succeeded = listed
       .filter((refund) => refund.sourceRef === observed.secondaryRef && refund.succeeded && refund.amountMinor > 0);
     if (succeeded.length === 0) return "unverified";
     if ((await unrecordedProviderRefunds(db, observed.provider, succeeded)).length === 0) return "represented";
@@ -975,18 +992,16 @@ export async function verifyObservedRefund(
 export async function applyProviderRefundChanges(
   db: Database,
   observed: { provider: string; secondaryRef?: string },
-  options: Pick<RefundReconciliationOptions, "encryptionKey" | "providers" | "nowSeconds"> = {},
+  options: Pick<RefundReconciliationOptions, "encryptionKey" | "providers" | "nowSeconds"> & { listed?: GatewayProviderRefund[] | null } = {},
 ): Promise<{ attemptIds: string[]; reopenedAttemptIds: string[]; reversedAttemptIds: string[]; orderIds: string[]; refundNotifications: RefundNotificationFact[] }> {
   const result = {
     attemptIds: [] as string[], reopenedAttemptIds: [] as string[], reversedAttemptIds: [] as string[],
     orderIds: [] as string[], refundNotifications: [] as RefundNotificationFact[],
   };
   const providers = await paymentProvidersFor(options.providers, observed.provider);
-  const gateway = providers.get(observed.provider);
-  if (!gateway?.listRefunds || !observed.secondaryRef) return result;
-  const settings = await gateway.loadSettings(db, options.encryptionKey);
-  if (!canOperateExistingPayments(gateway, settings)) return result;
-  const listed = await gateway.listRefunds({ sourceRef: observed.secondaryRef }, { settings, signal: new AbortController().signal });
+  // Only a refund the provider listed as not completed is ever turned back: one it did not list is left as it is.
+  const listed = options.listed !== undefined ? options.listed : await listObservedRefunds(db, observed, { ...options, providers });
+  if (!listed) return result;
   for (const refund of listed) {
     if (refund.succeeded || refund.sourceRef !== observed.secondaryRef) continue;
     const attempt = await getExistingRefundAttemptByProviderRefundId(db, observed.provider, refund.id);

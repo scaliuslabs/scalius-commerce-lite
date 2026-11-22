@@ -142,6 +142,7 @@ export type {
 } from "./refund-service";
 export {
   applyProviderRefundChanges,
+  listObservedRefunds,
   isRefundChangeWaitingForRefundError,
   RefundChangeWaitsForRefundError,
   reconcileDueRefundAttempts,
