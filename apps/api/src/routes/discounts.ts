@@ -2,21 +2,17 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { ValidationError } from "@scalius/core/errors";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
-import { marketStoreConversion, readMarketPriceContext } from "@scalius/core/modules/price-lists";
 import { isMarketSubfolder } from "@scalius/shared/markets";
 import { presentmentPricingCurrency } from "@scalius/shared/presentment";
 import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
-import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
 import {
   platformDiscountClasses,
   previewStorefrontAppDiscounts,
-  previewStorefrontBundleSavings,
-  resolveBundlePromotionInterplay,
-  selectStorefrontCartProductRows,
+  quotePlatformDiscount,
+  validateStorefrontCartItems,
 } from "@scalius/core/modules/checkout";
 import { listActiveFunctionRegistrations } from "@scalius/core/modules/plugins";
-import type { Database } from "@scalius/database/client";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 
@@ -40,13 +36,9 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 // Reject null/empty/string coercion so crafted requests cannot turn them into 0.
 const cartItemSchema = z.object({
   id: z.string().trim().min(1).max(100).openapi({ description: "Product id" }),
-  price: z.number().finite().nonnegative().max(MAX_MAJOR_AMOUNT),
   quantity: z.number().int().positive().max(10_000),
   variantId: z.string().trim().min(1).max(100).optional(),
-  basePrice: z.number().finite().nonnegative().max(MAX_MAJOR_AMOUNT).optional().openapi({
-    description: "Unit price before buyer-input surcharges, which quantity bundles price from; defaults to `price`.",
-  }),
-});
+}).openapi({ description: "A cart line. Prices are the catalogue's, as checkout charges them (a kit at its price), never the client's." });
 
 const validateDiscountSchema = z.object({
   codes: discountCodesSchema,
@@ -57,13 +49,6 @@ const validateDiscountSchema = z.object({
   customerPhone: phoneNumberSchema.optional().openapi({ description: "Customer phone for per-customer limits" }),
   presence: z.string().max(5).optional().openapi({ description: "The page's subfolder presence (`en-gb`): a market in its own currency previews in it, its shop amounts converted at its rate (MARKETS-DESIGN step 6). Omit at the root." }),
 });
-
-/** The cart's gift-card products: promotions never apply to them (Wave B §4.2). */
-async function selectGiftCardProductIds(db: Database, productIds: readonly string[]): Promise<Set<string>> {
-  if (productIds.length === 0) return new Set();
-  const rows = await selectStorefrontCartProductRows(db, productIds);
-  return new Set(rows.filter((row) => row.isGiftCard).map((row) => row.id));
-}
 
 // POST /discounts/validate: buyer/cart data stays in the body, never the URL.
 const validateDiscountRoute = createRoute({
@@ -117,64 +102,43 @@ app.openapi(validateDiscountRoute, async (c) => {
   // signed-in buyer, who previews as checkout will price them (their segment
   // discounts and per-customer limits); a missing or stale session is a guest.
   const sessionToken = getCustomerSessionTokenFromRequest(c);
-  const [shopCurrency, giftCardProductIds, registrations, sessionCustomer, market] = await Promise.all([
+  const [shopCurrency, registrations, sessionCustomer] = await Promise.all([
     readStoreCurrency(db),
-    selectGiftCardProductIds(db, lines.map(({ item }) => item.id)),
     listActiveFunctionRegistrations(db),
     sessionToken
       ? getCustomerBySession(db, sessionToken, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))
       : null,
-    // The page's market: a currency of its own prices the preview (one more statement, at a presence only).
-    presence && isMarketSubfolder(presence) ? readMarketPriceContext(db, presence).catch(() => null) : null,
   ]);
-  const money = market?.money ?? null;
-  const currency = money ? { ...presentmentPricingCurrency(money), symbol: shopCurrency.symbol } : shopCurrency;
   const signedInCustomerId = sessionCustomer?.customerId ?? null;
-  const cartLines = lines.map(({ item, index, variantId }) => ({
-    id: `cart:${index}:${variantId}`,
+  // The cart priced as checkout prices it, from the catalogue (never the
+  // client's numbers): the page's market, a kit sold as its items at its price.
+  const cart = await validateStorefrontCartItems(db, lines.map(({ item, variantId }) => ({
     productId: item.id,
-    unitPriceMinor: toMinor(item.price, currency.decimalPlaces),
-    baseUnitPriceMinor: toMinor(item.basePrice ?? item.price, currency.decimalPlaces),
+    variantId,
     quantity: item.quantity,
-  }));
-  const discount = await quoteStorefrontDiscount(db, {
+  })), {
+    currencyCode: shopCurrency.code,
+    priceIncrementMinor: shopCurrency.priceIncrementMinor,
+    market: { ...(presence && isMarketSubfolder(presence) ? { presence } : {}), customerId: signedInCustomerId },
+  });
+  const money = cart.money;
+  const currency = { ...presentmentPricingCurrency(money), symbol: shopCurrency.symbol };
+  const shippingMinor = toMinor(shippingCost ?? 0, currency.decimalPlaces);
+  // The same authority as the tax quote and the order (pricing.ts quotePlatformDiscount).
+  const interplay = await quotePlatformDiscount(db, {
+    items: cart.items,
+    currency: { code: currency.code, priceIncrementMinor: currency.priceIncrementMinor },
+    money,
     codes,
     customerId: signedInCustomerId,
     segmentCustomerId: signedInCustomerId,
     customerPhone,
+    shippingMinor,
     shippingKnown: shippingCost !== undefined,
-    cart: {
-      currencyCode: currency.code,
-      priceIncrementMinor: currency.priceIncrementMinor,
-      lines: lines.map(({ item, index, variantId }) => ({
-        id: `cart:${index}:${variantId}`,
-        productId: item.id,
-        variantId,
-        unitPriceMinor: toMinor(item.price, currency.decimalPlaces),
-        quantity: item.quantity,
-        // Gift-card lines are outside every promotion (Wave B §4.2).
-        ...(giftCardProductIds.has(item.id) ? { giftCard: true } : {}),
-      })),
-      shippingAmountMinor: toMinor(shippingCost ?? 0, currency.decimalPlaces),
-      ...(money ? { money } : {}),
-    },
   });
-  // The same rule as the tax quote and the order: promotions or bundles,
-  // whichever saves more (checkout/bundle-discounts.ts).
-  // Fixed tiers take the page market's product price policy, as its product page shows them.
-  const bundleSavings = await previewStorefrontBundleSavings(db, cartLines, currency.priceIncrementMinor, market ? marketStoreConversion(market) : null);
-  const interplay = resolveBundlePromotionInterplay(
-    cartLines.map((line) => ({
-      lineId: line.id,
-      unitPriceMinor: line.unitPriceMinor,
-      quantity: line.quantity,
-      bundleDiscountMinor: bundleSavings.lineSavings.get(line) ?? 0,
-    })),
-    discount,
-  );
   // Apps' discounts stack after the platform's, exactly as at checkout.
   const apps = previewStorefrontAppDiscounts(db, {
-    marketContext: market ? { id: market.marketId, country: null } : undefined,
+    marketContext: cart.marketContext,
     apps: createCheckoutAppFunctions({
       env: c.env,
       // The buyer's language: every app word and function run speaks it.
@@ -187,17 +151,17 @@ app.openapi(validateDiscountRoute, async (c) => {
     currency: { code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor },
     // A market's preview is in its currency; an app's store amounts are in the shop's.
     storeCurrency: { code: shopCurrency.code, decimalPlaces: shopCurrency.decimalPlaces },
-    lines: lines.map(({ item, index, variantId }) => ({
-      lineId: `cart:${index}:${variantId}`,
-      productId: item.id,
-      variantId,
-      unitPriceMinor: toMinor(item.price, currency.decimalPlaces),
+    lines: cart.items.map((item, position) => ({
+      lineId: interplay.lineIds[position]!,
+      productId: item.productId,
+      variantId: item.variantId,
+      unitPriceMinor: item.unitPriceMinor,
       quantity: item.quantity,
-      ...(giftCardProductIds.has(item.id) ? { giftCard: true } : {}),
+      ...(item.isGiftCard ? { giftCard: true } : {}),
     })),
     platformAllocation: interplay.allocation,
     platformClasses: platformDiscountClasses(interplay),
-    shippingMinor: toMinor(shippingCost ?? 0, currency.decimalPlaces),
+    shippingMinor,
     discountCodes: codes,
   });
   const appResolution = await apps;
@@ -210,13 +174,15 @@ app.openapi(validateDiscountRoute, async (c) => {
     }
     : interplay.discount;
   const appDiscountMinor = (appResolution?.merchandiseMinor ?? 0) + (appResolution?.shippingMinor ?? 0);
+  // Each buyer line's share: a kit's lines (its items) speak for the kit's line.
+  const sourceOf = new Map(cart.items.map((item, position) => [interplay.lineIds[position]!, item.sourceIndex]));
   return ok(c, {
     totalDiscount: fromMinor(
       (quote.applied?.totalDiscountMinor ?? 0) + interplay.bundleDiscountMinor + appDiscountMinor,
       currency.decimalPlaces,
     ),
     bundleDiscountAmount: fromMinor(interplay.bundleDiscountMinor, currency.decimalPlaces),
-    bundles: (interplay.bundleDiscountMinor > 0 ? bundleSavings.bundles : []).map((bundle) => ({
+    bundles: (interplay.bundleDiscountMinor > 0 ? cart.bundles ?? [] : []).map((bundle) => ({
       productId: bundle.productId,
       quantity: bundle.quantity,
       discountType: bundle.discountType,
@@ -224,13 +190,12 @@ app.openapi(validateDiscountRoute, async (c) => {
     })),
     ...presentStorefrontDiscountQuote(quote, currency.decimalPlaces, appResolution?.applied ?? []),
     // Each line's share, as the quote and the order keep it (by the same allocation ids).
-    lineDiscounts: lines.map(({ index, variantId }) => {
-      const id = `cart:${index}:${variantId}`;
-      const discountMinor = (interplay.allocation?.lines ?? [])
-        .filter((line) => line.lineId === id)
-        .reduce((total, line) => total + line.amountMinor, 0);
-      return { index, discountMinor };
-    }),
+    lineDiscounts: lines.map(({ index }) => ({
+      index,
+      discountMinor: (interplay.allocation?.lines ?? [])
+        .filter((line) => sourceOf.get(line.lineId) === index)
+        .reduce((total, line) => total + line.amountMinor, 0),
+    })),
   });
 });
 

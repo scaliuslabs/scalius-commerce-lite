@@ -102,7 +102,7 @@ export function selectProductPageKitRows(db: Database, productId: string, pricin
         lowStockThreshold: sql<number | null>`COALESCE(page_variant.low_stock_threshold, ${storeDefaultLowStockThresholdSql()})`.as("pk_low_stock_threshold"),
         imageId: sql<string | null>`page_variant.image_id`.as("pk_image_id"),
         fulfillmentKind: sql<string | null>`page_variant.fulfillment_kind`.as("pk_fulfillment_kind"),
-        delivery: kitComponentDeliverySql({ id: variantId, productId: product, fulfillmentKind: sql`page_variant.fulfillment_kind` }).as("pk_delivery"),
+        delivery: kitComponentDeliverySql({ id: variantId, fulfillmentKind: sql`page_variant.fulfillment_kind` }).as("pk_delivery"),
         options: variantOptionValuesSql(variantId).as("pk_options"),
         // The placed SKU is itself a kit (its components are rows of this statement).
         isKit: sql<number>`EXISTS (SELECT 1 FROM variant_components AS placed_kit WHERE placed_kit.kit_variant_id = page_sku.variant_id)`.as("pk_is_kit"),

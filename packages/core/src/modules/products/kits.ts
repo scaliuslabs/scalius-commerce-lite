@@ -7,17 +7,17 @@
 //   quantity (`variant_components`; guard triggers refuse an illegal kit).
 // - No stock of its own: it is available while every component is, as many
 //   as the scarcest component allows (its available units over its quantity).
-// - Price: the kit's own price is what the buyer pays, never more than its
-//   components bought one by one; the compare-at is the components' current
-//   prices summed, computed on read, and the saving is the difference. The
-//   split over the components is `bundleGroupPricing`'s fixed-price set (one
-//   set: one kit), so it conserves exactly and no component's share passes its
-//   price (rules/money/bundle-components-conserved.md).
+// - Price: the kit's own price is what the buyer pays, on every surface. It
+//   is split over the components in proportion to their prices (`kitPrice`):
+//   each component line is charged its exact share, a price like any other,
+//   so promotions, tax and delivery thresholds read what is charged. The
+//   compare-at (the components' current prices summed) and the saving are
+//   display only, computed on read.
 //
 // Checkout sells a kit as its components through `cart.transform` expand
 // (checkout/cart-transform.ts): rules/catalog/kits-sell-as-components.md.
 import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
-import { bundleGroupPricing } from "@scalius/shared/product-bundles";
+import { allocateProportionalMinor } from "@scalius/shared/money-allocation";
 import { KIT_COMPONENTS_MAX, KIT_COMPONENT_QUANTITY_MAX, PRODUCT_PAGE_OFFERS_MAX } from "@scalius/database/schema";
 
 export { KIT_COMPONENTS_MAX, KIT_COMPONENT_QUANTITY_MAX, PRODUCT_PAGE_OFFERS_MAX };
@@ -74,21 +74,39 @@ export function parseKitComponents(value: unknown): KitComponentRef[] | null {
 
 /** A kit's money in one currency: its price, its components' summed prices and the saving. */
 export interface KitPrice {
-    /** What one kit costs the buyer: its own price, never more than `compareAtMinor`. */
+    /** What one kit costs the buyer: the kit SKU's own price, everywhere (page, cards, cart, order). */
     priceMinor: number;
-    /** Every component at its current price times its quantity. */
+    /** Every component at its current price times its quantity (display only). */
     compareAtMinor: number;
+    /** `compareAtMinor - priceMinor` when the kit costs less than its parts, else 0 (display only). */
     savingMinor: number;
     /** The saving as a whole percent of the compare-at (0 without one). */
     savingPercent: number;
-    /** Each component's share of the saving for one kit, in component order. */
-    componentSavingsMinor: number[];
+    /**
+     * Each component's unit price in the kit, in component order: the kit's
+     * price split over its items by their prices, in whole increments, so
+     * `sum(unit × quantity)` is exactly `priceMinor`. This is what checkout
+     * charges each component line; every reader of a price reads it.
+     */
+    componentUnitPricesMinor: number[];
+}
+
+/** A kit needs one item it holds once: that item takes what the others' whole per-unit prices leave. */
+export class KitWithoutSingleItemError extends Error {
+    constructor() {
+        super("A kit needs at least one item it holds once.");
+        this.name = "KitWithoutSingleItemError";
+    }
 }
 
 /**
- * One kit's price from its own price and its components' prices (all in the
- * same currency, each resolved by the one precedence): `bundleGroupPricing`
- * with one fixed-price set made of exactly one kit's units.
+ * One kit's price from its own price (resolved by the one precedence) and its
+ * components' current prices, all in one currency. The kit's price is split
+ * over the items in proportion to their prices (`allocateProportionalMinor`,
+ * stable order for ties): each item held several times per kit takes a whole
+ * per-unit price, and what that leaves goes to the dearest item held once,
+ * so the split is exact. Throws `KitWithoutSingleItemError` when no item is
+ * held once (the editor refuses such a kit).
  */
 export function kitPrice(
     kitPriceMinor: number,
@@ -96,23 +114,33 @@ export function kitPrice(
     /** The currency's price increment. */
     incrementMinor: number,
 ): KitPrice {
-    const units = components.reduce((total, component) => total + component.quantity, 0);
-    const pricing = bundleGroupPricing(
-        components.map((component, index) => ({ key: String(index), unitPriceMinor: component.unitPriceMinor, quantity: component.quantity })),
-        units > 0 && kitPriceMinor > 0
-            ? [{ quantity: units, discountType: "fixed_price", priceMinor: kitPriceMinor, label: null, isActive: true }]
-            : [],
-        incrementMinor,
+    const compareAtMinor = components.reduce((total, component) => total + component.unitPriceMinor * component.quantity, 0);
+    const priceMinor = kitPriceMinor;
+    const savingMinor = Math.max(0, compareAtMinor - priceMinor);
+    const single = components.reduce<number>((best, component, index) =>
+        component.quantity !== 1 ? best : best < 0 || component.unitPriceMinor > components[best]!.unitPriceMinor ? index : best, -1);
+    if (components.length > 0 && single < 0) throw new KitWithoutSingleItemError();
+    const unit = priceMinor % incrementMinor === 0 && components.every((component) => component.unitPriceMinor % incrementMinor === 0) ? incrementMinor : 1;
+    const weights = components.map((component) => BigInt(component.unitPriceMinor) * BigInt(component.quantity));
+    const totals = components.length === 0 ? [] : allocateProportionalMinor(
+        priceMinor / unit,
+        weights.some((weight) => weight > 0n) ? weights : components.map((component) => BigInt(component.quantity)),
     );
-    const compareAtMinor = pricing.plainMinor;
-    const priceMinor = units > 0 ? pricing.totalMinor : kitPriceMinor;
-    const savingMinor = pricing.savingMinor;
+    let leftover = 0;
+    const units = totals.map((total, index) => {
+        const quantity = components[index]!.quantity;
+        if (quantity === 1) return total;
+        const each = Math.floor(total / quantity);
+        leftover += total - each * quantity;
+        return each;
+    });
+    if (single >= 0) units[single]! += leftover;
     return {
         priceMinor,
         compareAtMinor,
         savingMinor,
-        savingPercent: compareAtMinor > 0 ? Math.round((savingMinor * 100) / compareAtMinor) : 0,
-        componentSavingsMinor: pricing.lineSavings.map((line) => line.savingMinor),
+        savingPercent: compareAtMinor > 0 && savingMinor > 0 ? Math.round((savingMinor * 100) / compareAtMinor) : 0,
+        componentUnitPricesMinor: units.map((count) => count * unit),
     };
 }
 
@@ -169,7 +197,7 @@ export type KitComponentDelivery = "physical" | "service" | "digital_key" | "dig
  * The delivery of a SKU as SQL: its fulfilment kind, and for a digital SKU
  * whether a ready licence-key pool (a key) or a file delivers it.
  */
-export function kitComponentDeliverySql(variant: { id: SQL; productId: SQL; fulfillmentKind: SQL }): SQL<string | null> {
+export function kitComponentDeliverySql(variant: { id: SQL; fulfillmentKind: SQL }): SQL<string | null> {
     return sql<string | null>`CASE WHEN ${variant.fulfillmentKind} = 'digital' THEN (CASE WHEN EXISTS (
             SELECT 1 FROM digital_assets AS kit_key_pool
             WHERE kit_key_pool.variant_id = ${variant.id} AND kit_key_pool.kind = 'licence_keys' AND kit_key_pool.status = 'ready'

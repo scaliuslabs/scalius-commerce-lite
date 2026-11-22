@@ -36,6 +36,7 @@ import {
   productBundleTiersByProduct,
   kitComponentsSql,
   kitPrice,
+  KitWithoutSingleItemError,
   parseKitComponents,
   type ProductMediaProjection,
   resolveSkuImageRepresentation,
@@ -162,11 +163,12 @@ export interface CartLineBundle {
     /** The app line inputs that apply to the bundle SKU (`lineInputs` of the buyer's line). */
     lineInputs?: string[];
     /**
-     * A kit's (products/kits.ts): the kit SKU and its price for one kit, in
-     * the cart's currency. Its components' saving against it is each line's
-     * `bundleDiscountMinor`; quantity tiers never apply to its lines.
+     * A kit's (products/kits.ts): the kit SKU, its product, its price for one
+     * kit in the cart's currency and how many components it has. Each of its
+     * lines is charged its exact share of that price (`kitPrice`); quantity
+     * tiers never count its lines.
      */
-    kit?: { variantId: string; unitPriceMinor: number };
+    kit?: { variantId: string; productId: string; unitPriceMinor: number; components: number };
 }
 
 export interface StorefrontCartItemIssue {
@@ -867,7 +869,7 @@ export function resolveStorefrontCartValidationFromRows(
                 action: "remove",
                 message: gone
                     ? `${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""} can't be bought right now: one of its items is no longer sold.`
-                    : `${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""} can't be ordered this way. Remove it and add it again.`,
+                    : `${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""} is sold as its items, and they can't be added here: remove a paid option chosen on it, or place it in an order of fewer items (99 at most).`,
                 productName: product.name,
                 variantLabel: requestedVariantLabel,
                 ...(gone ? { componentVariantId: gone.variantId } : {}),
@@ -1106,19 +1108,28 @@ export function resolveStorefrontCartValidationFromRows(
         }
     });
 
-    // A kit's lines: its saving against its own price, per line (`kitLineSavings`).
-    const kitSavings = kitLineSavings(validatedItems, priceIncrementMinor);
+    // A kit's lines: each charged its exact share of the kit's price (`priceKitLines`).
+    for (const refused of priceKitLines(validatedItems, priceIncrementMinor)) {
+        validatedItems.splice(validatedItems.indexOf(refused.line), 1);
+        const item = items[refused.line.index]!;
+        addIssue(issues, item, refused.line.index, {
+            code: "product_unavailable",
+            action: "remove",
+            message: `${refused.line.bundle!.title} can't be sold right now: the store must add an item it holds once. Remove it from your cart.`,
+            productName: refused.line.productName,
+            variantLabel: refused.line.variantLabel,
+        });
+    }
+    subtotalMinor = validatedItems.reduce((total, line) => total + line.unitPriceMinor * line.quantity, 0);
     // A bundle's add-ons, once every line of it is priced: one fee per bundle
     // unit (a share of the bundle unit's price: each line's item price times
-    // what it holds per unit, less a kit's saving), on the anchor at the fee
-    // over the anchor's units per bundle unit. A fee that does not divide
-    // evenly refuses checkout.
+    // what it holds per unit; a kit's lines' prices are its price), on the
+    // anchor at the fee over the anchor's units per bundle unit. A fee that
+    // does not divide evenly refuses checkout.
     for (const anchor of bundleAnchors) {
         const lines = validatedItems.filter((line) => line.bundle && line.bundle.id === anchor.validated.bundle?.id);
-        const units = Math.max(1, anchor.validated.bundle?.units ?? 1);
         const bundleUnitMinor = lines.reduce((total, line) =>
-            total + (line.baseUnitPriceMinor + line.propertiesPriceMinor) * (line.quantity / Math.max(1, line.bundle!.units ?? line.quantity))
-            - (kitSavings.get(line) ?? 0) / units, 0);
+            total + (line.baseUnitPriceMinor + line.propertiesPriceMinor) * (line.quantity / Math.max(1, line.bundle!.units ?? line.quantity)), 0);
         const priced = anchor.addOns.map((addOn) => {
             const perBundleUnit = "percent" in addOn ? addOnShareMinor(bundleUnitMinor, addOn.percent, money.incrementMinor) : addOn.amountMinor;
             const perUnit = addOn.bundle!.perUnit;
@@ -1161,7 +1172,7 @@ export function resolveStorefrontCartValidationFromRows(
     // that ships is in a free-delivery profile (one free line waives only its own share).
     const shipped = validatedItems.filter((line) => line.fulfillmentKind === "physical" && !line.isGiftCard);
     hasFreeDeliveryProduct = shipped.length > 0 && shipped.every((line) => line.freeDelivery === true);
-    const bundles = resolveCartBundleSavings(validatedItems, presentBundleRows(bundleRows, conversion), priceIncrementMinor, kitSavings);
+    const bundles = resolveCartBundleSavings(validatedItems, presentBundleRows(bundleRows, conversion), priceIncrementMinor);
 
     const pricingSegmentIds = [...(options.priceScope?.segmentIds ?? [])].sort();
     return markTrustedStorefrontCartValidationResult({
@@ -1198,33 +1209,36 @@ export function presentBundleRows<T extends ProductBundleRow>(rows: readonly T[]
  * line of a product counts toward its tiers, whatever its SKU or inputs. Sets
  * each line's `bundleDiscountMinor` and returns the products that reached a
  * tier. Gift cards are sold at their value and never bundle. A kit's lines
- * are priced by their kit (`kitSavings`) and never count toward a tier.
+ * are the kit's (catalog.kits-sell-as-components): they never count toward a
+ * tier, not even one of a plain line of the same product.
  */
 function resolveCartBundleSavings(
     items: StorefrontCartValidatedItem[],
     bundleRows: readonly ProductBundleRow[],
     priceIncrementMinor: number,
-    kitSavings: ReadonlyMap<StorefrontCartValidatedItem, number>,
 ): StorefrontCartBundleSaving[] {
     const { lineSavings, bundles } = bundleLineSavings(
         items.filter((item) => !item.isGiftCard && !item.bundle?.kit),
         bundleRows,
         priceIncrementMinor,
     );
-    for (const item of items) item.bundleDiscountMinor = item.bundle?.kit ? kitSavings.get(item) ?? 0 : lineSavings.get(item) ?? 0;
+    for (const item of items) item.bundleDiscountMinor = lineSavings.get(item) ?? 0;
     return bundles;
 }
 
 /**
- * Each kit line's share of its kit's saving (products/kits.ts `kitPrice`:
- * one fixed-price set of one kit's units, times the kits bought), from the
- * lines' prices after the whole precedence, before surcharges and add-ons.
- * The shares of a kit conserve its saving exactly and none passes its line.
+ * Charges each kit line its exact share of its kit's price (`kitPrice`, the
+ * lines' prices after the whole precedence as weights): the line's price IS
+ * its share, so everything that reads a price (promotions, tax, delivery
+ * thresholds) reads what is charged, and one kit's shares sum exactly to its
+ * price. A kit whose lines are not all here is left as priced (one has an
+ * issue, which refuses it). Returns the lines of kits that cannot be split
+ * (no item held once), for the caller to refuse.
  */
-export function kitLineSavings<TLine extends Pick<StorefrontCartValidatedItem, "bundle" | "baseUnitPriceMinor" | "quantity">>(
+export function priceKitLines<TLine extends Pick<StorefrontCartValidatedItem, "bundle" | "baseUnitPriceMinor" | "unitPriceMinor" | "quantity" | "storeUnitPriceMinor">>(
     lines: readonly TLine[],
     priceIncrementMinor: number,
-): Map<TLine, number> {
+): Array<{ line: TLine }> {
     const groups = new Map<string, TLine[]>();
     for (const line of lines) {
         if (!line.bundle?.kit) continue;
@@ -1232,17 +1246,34 @@ export function kitLineSavings<TLine extends Pick<StorefrontCartValidatedItem, "
         group.push(line);
         groups.set(line.bundle.id, group);
     }
-    const savings = new Map<TLine, number>();
+    const refused: Array<{ line: TLine }> = [];
     for (const group of groups.values()) {
         const bundle = group[0]!.bundle!;
+        if (group.length !== bundle.kit!.components) continue;
         const units = Math.max(1, bundle.units ?? 1);
-        const price = kitPrice(bundle.kit!.unitPriceMinor, group.map((line) => ({
-            unitPriceMinor: line.baseUnitPriceMinor,
-            quantity: Math.max(1, Math.round(line.quantity / units)),
-        })), priceIncrementMinor);
-        group.forEach((line, position) => savings.set(line, (price.componentSavingsMinor[position] ?? 0) * units));
+        let price: ReturnType<typeof kitPrice>;
+        try {
+            price = kitPrice(bundle.kit!.unitPriceMinor, group.map((line) => ({
+                unitPriceMinor: line.baseUnitPriceMinor,
+                quantity: Math.max(1, Math.round(line.quantity / units)),
+            })), priceIncrementMinor);
+        } catch (error) {
+            if (!(error instanceof KitWithoutSingleItemError)) throw error;
+            refused.push(...group.map((line) => ({ line })));
+            continue;
+        }
+        group.forEach((line, position) => {
+            const share = price.componentUnitPricesMinor[position]!;
+            const listed = line.baseUnitPriceMinor;
+            line.unitPriceMinor += share - listed;
+            line.baseUnitPriceMinor = share;
+            // The store-currency amount follows the share (one conversion for the kit, none per line).
+            if (line.storeUnitPriceMinor !== undefined && listed > 0) {
+                line.storeUnitPriceMinor = Math.round((line.storeUnitPriceMinor * share) / listed);
+            }
+        });
     }
-    return savings;
+    return refused;
 }
 
 /** A cart line as quantity bundles price it: catalog unit price before buyer-input surcharges. */
@@ -1292,25 +1323,6 @@ export function bundleLineSavings<TLine extends BundlePricedLine>(
         });
     }
     return { lineSavings, bundles: savings };
-}
-
-/**
- * Bundle savings for the cart's discount preview (before delivery is known),
- * from the products' active tiers. Lines are priced as the buyer's cart sends
- * them; the authoritative tax quote re-prices from the catalog.
- */
-export async function previewStorefrontBundleSavings<TLine extends BundlePricedLine>(
-    db: Database,
-    lines: readonly TLine[],
-    /** The cart currency's price increment. */
-    priceIncrementMinor: number,
-    /** The page market's conversion: fixed tier prices take its product price policy. */
-    conversion?: StoreAmountConversion | null,
-): Promise<{ lineSavings: Map<TLine, number>; bundles: StorefrontCartBundleSaving[] }> {
-    const productIds = [...new Set(lines.map((line) => line.productId))];
-    const bundleRows = productIds.length > 0 ? await selectActiveProductBundleRows(db, productIds) : [];
-    const rows = (bundleRows ?? []) as ProductBundleRow[];
-    return bundleLineSavings(lines, conversion ? presentBundleRows(rows, conversion) : rows, priceIncrementMinor);
 }
 
 export async function validateStorefrontCartItems(

@@ -5,7 +5,21 @@ import type { PresentmentMoney } from "@scalius/shared/presentment";
 
 export type AppliedPromotion = NonNullable<PromotionEvaluationResult["applied"]>;
 
-type CheckoutLine = Omit<PromotionEvaluationCart["lines"][number], "collectionIds">;
+/**
+ * The item a line is priced as part of (a kit's component line: the kit):
+ * promotions judge the item, never the line's own product. Lines naming one
+ * `id` are evaluated as that one item (its product and SKU, its `quantity`,
+ * their summed price), and a discount on it lands on them in proportion to
+ * their prices (`splitPricedAsAllocations`).
+ */
+export interface PricedAsIdentity {
+    id: string;
+    productId: string;
+    variantId: string;
+    quantity: number;
+}
+
+type CheckoutLine = Omit<PromotionEvaluationCart["lines"][number], "collectionIds"> & { pricedAs?: PricedAsIdentity };
 
 export interface StorefrontDiscountCart {
     currencyCode: string;

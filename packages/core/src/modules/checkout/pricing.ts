@@ -244,6 +244,87 @@ function safeAppCart(build: () => FunctionCart): FunctionCart | null {
   }
 }
 
+/** A validated line as promotions read it. */
+type PromotionLineSource = Pick<StorefrontCartValidationResult["items"][number], "index" | "productId" | "variantId" | "unitPriceMinor" | "quantity" | "isGiftCard" | "bundle">;
+
+/**
+ * The cart's lines as the store's promotions read them, by tax allocation
+ * line id: what each line is charged, and for a kit's line the kit it was
+ * bought as (`pricedAs`: promotions judge the kit, its product and SKU, its
+ * quantity, at its price; catalog.kits-sell-as-components). Gift cards are
+ * marked (outside every promotion). One builder for the quote, the order,
+ * the agent quote and the cart's discount preview.
+ */
+export function promotionCartLines(items: readonly PromotionLineSource[]) {
+  return items.map((item) => ({
+    id: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
+    productId: item.productId,
+    variantId: item.variantId,
+    unitPriceMinor: item.unitPriceMinor,
+    quantity: item.quantity,
+    // Gift-card lines are outside every promotion (§4.2).
+    ...(item.isGiftCard ? { giftCard: true } : {}),
+    ...(item.bundle?.kit && item.bundle.units
+      ? { pricedAs: { id: item.bundle.id, productId: item.bundle.kit.productId, variantId: item.bundle.kit.variantId, quantity: item.bundle.units } }
+      : {}),
+  }));
+}
+
+/**
+ * The store's own discounts on a priced cart: its promotions and codes, then
+ * quantity bundles, whichever saves more (`resolveBundlePromotionInterplay`).
+ * The one authority the checkout price, the agent quote and the cart's
+ * discount preview call.
+ */
+export async function quotePlatformDiscount(
+  db: Database,
+  input: {
+    items: readonly (PromotionLineSource & { bundleDiscountMinor?: number })[];
+    currency: { code: string; priceIncrementMinor: number };
+    money?: PresentmentMoney;
+    codes: readonly string[];
+    customerId?: string | null;
+    segmentCustomerId?: string | null;
+    customerPhone?: string | null;
+    shippingMinor: number;
+    shippingShares?: Array<{ profileId: string; amountMinor: number }>;
+    shippingKnown?: boolean;
+  },
+): Promise<{ typed: StorefrontDiscountQuote; lineIds: string[] } & BundlePromotionInterplay> {
+  const lines = promotionCartLines(input.items);
+  const discount = await quoteStorefrontDiscount(db, {
+    codes: [...input.codes],
+    customerId: input.customerId,
+    segmentCustomerId: input.segmentCustomerId ?? null,
+    customerPhone: input.customerPhone,
+    ...(input.shippingKnown === undefined ? {} : { shippingKnown: input.shippingKnown }),
+    cart: {
+      currencyCode: input.currency.code,
+      priceIncrementMinor: input.currency.priceIncrementMinor,
+      // Shop-currency amounts of a promotion convert at the locked rate (Shopify).
+      ...(input.money && input.money.currencyCode !== input.money.shopCurrencyCode ? { money: input.money } : {}),
+      lines,
+      shippingAmountMinor: input.shippingMinor,
+      // One default-profile share is the whole charge: nothing for an exclusion to split.
+      ...(input.shippingShares && input.shippingShares.some((share) => share.profileId !== DEFAULT_SHIPPING_PROFILE_ID) ? { shippingShares: input.shippingShares } : {}),
+    },
+  });
+  // Promotions or quantity bundles price the order, never both (bundle-discounts.ts).
+  return {
+    typed: discount,
+    lineIds: lines.map((line) => line.id),
+    ...resolveBundlePromotionInterplay(
+      input.items.map((item, position) => ({
+        lineId: lines[position]!.id,
+        unitPriceMinor: item.unitPriceMinor,
+        quantity: item.quantity,
+        bundleDiscountMinor: item.bundleDiscountMinor ?? 0,
+      })),
+      discount,
+    ),
+  };
+}
+
 export async function priceStorefrontCheckout(
   db: Database,
   input: StorefrontCheckoutPricingInput,
@@ -254,47 +335,17 @@ export async function priceStorefrontCheckout(
   const apps = input.apps;
   const lineIds = cartValidation.items.map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId));
 
-  const platformPricing = async (shippingMinor: number, shippingShares?: Array<{ profileId: string; amountMinor: number }>) => {
-    const discount = await quoteStorefrontDiscount(db, {
-      codes: [...input.discountCodes],
-      customerId: input.customerId,
-      segmentCustomerId: input.segmentCustomerId ?? null,
-      customerPhone: input.customerPhone,
-      cart: {
-        currencyCode: currency.code,
-        priceIncrementMinor: currency.priceIncrementMinor,
-        // Shop-currency amounts of a promotion convert at the locked rate (Shopify).
-        ...(cartValidation.money && cartValidation.money.currencyCode !== cartValidation.money.shopCurrencyCode
-          ? { money: cartValidation.money }
-          : {}),
-        lines: cartValidation.items.map((item, position) => ({
-          id: lineIds[position]!,
-          productId: item.productId,
-          variantId: item.variantId,
-          unitPriceMinor: item.unitPriceMinor,
-          quantity: item.quantity,
-          // Gift-card lines are outside every promotion (§4.2).
-          ...(item.isGiftCard ? { giftCard: true } : {}),
-        })),
-        shippingAmountMinor: shippingMinor,
-        // One default-profile share is the whole charge: nothing for an exclusion to split.
-        ...(shippingShares && shippingShares.some((share) => share.profileId !== DEFAULT_SHIPPING_PROFILE_ID) ? { shippingShares } : {}),
-      },
-    });
-    // Promotions or quantity bundles price the order, never both (bundle-discounts.ts).
-    return {
-      typed: discount,
-      ...resolveBundlePromotionInterplay(
-        cartValidation.items.map((item, position) => ({
-          lineId: lineIds[position]!,
-          unitPriceMinor: item.unitPriceMinor,
-          quantity: item.quantity,
-          bundleDiscountMinor: item.bundleDiscountMinor ?? 0,
-        })),
-        discount,
-      ),
-    };
-  };
+  const platformPricing = (shippingMinor: number, shippingShares?: Array<{ profileId: string; amountMinor: number }>) => quotePlatformDiscount(db, {
+    items: cartValidation.items,
+    currency: { code: currency.code, priceIncrementMinor: currency.priceIncrementMinor },
+    money: cartValidation.money,
+    codes: input.discountCodes,
+    customerId: input.customerId,
+    segmentCustomerId: input.segmentCustomerId ?? null,
+    customerPhone: input.customerPhone,
+    shippingMinor,
+    shippingShares,
+  });
 
   let shippingMinor = delivery.shippingMinor;
   let shippingMethod = delivery.shippingMethod;

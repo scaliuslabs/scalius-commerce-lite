@@ -183,13 +183,14 @@ export function createCartTransformer(
 export interface CartKitExpansion {
     title: string;
     variantId: string;
+    productId: string;
     unitPriceMinor: number;
     components: Array<{ variantId: string; productId: string; quantity: number }>;
 }
 
 /** The valid kit lines of a first pass (`kitComponents`), by line index. */
 export function cartKitExpansions(
-    valid: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "variantId" | "productName" | "variantLabel" | "baseUnitPriceMinor" | "kitComponents" | "bundle">>,
+    valid: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "productId" | "variantId" | "productName" | "variantLabel" | "baseUnitPriceMinor" | "kitComponents" | "bundle">>,
 ): Map<number, CartKitExpansion> {
     const kits = new Map<number, CartKitExpansion>();
     for (const line of valid) {
@@ -197,6 +198,7 @@ export function cartKitExpansions(
         kits.set(line.index, {
             title: line.variantLabel ? `${line.productName} (${line.variantLabel})` : line.productName,
             variantId: line.variantId,
+            productId: line.productId,
             unitPriceMinor: line.baseUnitPriceMinor,
             components: line.kitComponents,
         });
@@ -259,7 +261,7 @@ export function applyCartTransform(
             title: kit.title,
             components: kit.components.map((component) => ({ variantId: component.variantId, productId: component.productId, perUnit: component.quantity })),
             inputs: bundleInputs(parent),
-            kit: { variantId: kit.variantId, unitPriceMinor: kit.unitPriceMinor },
+            kit: { variantId: kit.variantId, productId: kit.productId, unitPriceMinor: kit.unitPriceMinor, components: kit.components.length },
         });
     }
 
@@ -446,11 +448,7 @@ export function presentTransformedCartLines(
         // A component with an issue: the issue speaks for the bundle line.
         if (components.some((component) => !component.item)) continue;
         const buyer = buyerItems[source]!;
-        // A kit costs its own price: its components' saving (`bundleDiscountMinor`, per line) comes off one kit.
-        const kitSavingMinor = components[0]!.item!.bundle?.kit
-            ? components.reduce((sum, component) => sum + (component.item!.bundleDiscountMinor ?? 0), 0) / Math.max(1, buyer.quantity)
-            : 0;
-        const bundleUnitMinor = components.reduce((sum, component) => sum + component.item!.unitPriceMinor * component.perUnit, 0) - kitSavingMinor;
+        const bundleUnitMinor = components.reduce((sum, component) => sum + component.item!.unitPriceMinor * component.perUnit, 0);
         const available = components.reduce<number | null>((least, component) => {
             const quantity = component.item!.availableQuantity;
             if (quantity === null) return least;
@@ -494,8 +492,6 @@ export function presentTransformedCartLines(
             lineInputs: first.bundle?.lineInputs ?? [],
             productName: expansion.title,
             variantLabel: null,
-            // The kit line is the kit's: its saving is in its price.
-            bundleDiscountMinor: 0,
             availableQuantity: available,
             freeDelivery: components.every((component) => component.item!.freeDelivery),
         });
