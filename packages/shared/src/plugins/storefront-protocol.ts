@@ -1311,12 +1311,16 @@ export interface StorefrontCartLine {
  * What `setLineInput` did: `changed` lines (0 when every line already had the
  * answer), or why nothing changed: the buyer went back from the confirmation
  * (`cancelled`), the key is not one of this app's inputs (`unknown_input`),
- * a named line does not take it (`not_applicable`), or the cart could not be
- * checked or saved (`failed`).
+ * a named line does not take it (`not_applicable`), the store refused the
+ * answer as given and the cart was left as it was (`refused`, with the
+ * check's `code`: `properties_invalid`, `properties_required` or
+ * `confirmation_required`), or the cart could not be checked or saved
+ * (`failed`). On success the changed lines carry the store's price and add-ons.
  */
 export type StorefrontLineInputResult =
   | { ok: true; changed: number }
-  | { ok: false; reason: "cancelled" | "unknown_input" | "not_applicable" | "failed" };
+  | { ok: false; reason: "cancelled" | "unknown_input" | "not_applicable" | "failed" }
+  | { ok: false; reason: "refused"; code: string };
 
 /**
  * What `decide` did: `changed` lines (0: nothing was undecided), or why

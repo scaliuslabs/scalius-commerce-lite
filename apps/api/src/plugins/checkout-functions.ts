@@ -145,6 +145,17 @@ function contextOf(ctx: ExecutionContext | undefined): ExecutionContext {
   return ctx ?? ({ waitUntil: () => undefined, passThroughOnException: () => undefined, props: {}, exports: {} } as unknown as ExecutionContext);
 }
 
+/**
+ * Offer runs (a per-line slot's prices) back off on their own, apart from the
+ * checkout circuit: after an app's offer run fails it is not asked again for
+ * `OFFER_BACKOFF_MS` (per isolate), so a broken pricing app costs one run and
+ * one log line a window, not one per cart check.
+ */
+export const OFFER_BACKOFF_MS = 60_000;
+/** The most an offer run may take: its own slice, never more than a third of the request's budget left. */
+export const OFFER_RUN_MS = 300;
+const offerBackoff = new Map<string, number>();
+
 export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions): CheckoutAppFunctions {
   const active = isResolved(options.registrations)
     ? orderFunctionRegistrations(options.registrations)
@@ -286,17 +297,29 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
       try { return await prepareBuyerUiBlocks(options.db, blocks, registrations, options.env.CDN_DOMAIN_URL); } catch { return []; }
     },
     async runOffers(appIds, given) {
-      // Only the named apps' pricing, outside the order's path: never blocking, no circuit, no pace; a failure prices nothing.
-      const owners = registrations.filter((registration) => registration.name === "cart.line_prices" && appIds.has(registration.installation.pluginId));
+      // Only the named apps' pricing, outside the order's path: never blocking, no circuit, no pace; a failure
+      // prices nothing. An app whose offer run failed lately is not asked again until its backoff ends.
+      const now = Date.now();
+      const owners = registrations.filter((registration) => registration.name === "cart.line_prices" && appIds.has(registration.installation.pluginId)
+        && (offerBackoff.get(registration.installation.pluginId) ?? 0) <= now);
       if (owners.length === 0) return [];
+      // Its own slice: at most OFFER_RUN_MS and a third of what the request has left, so the blocks keep the rest.
+      const left = Math.max(0, requestDeadline() - now);
+      const deadline = now + Math.min(OFFER_RUN_MS, Math.floor(left / 3));
+      let results: Array<CheckoutAppFunctionResult<"cart.line_prices">> = [];
       try {
-        const results = await sharedHost().then((shared) => runPluginFunctions("cart.line_prices", { ...given, language: given.language ?? language }, options.env, ctx, {
-          db: options.db, registered: owners, host: shared, reads, roles, sandboxRuns, defaultLocale, deadline: requestDeadline(), budgetShare, uncounted: true,
-        }));
-        return results.map((result) => ({ ...result, appName: result.pluginId }));
+        results = (await sharedHost().then((shared) => runPluginFunctions("cart.line_prices", { ...given, language: given.language ?? language }, options.env, ctx, {
+          db: options.db, registered: owners, host: shared, reads, roles, sandboxRuns, defaultLocale, deadline, uncounted: true,
+        }))).map((result) => ({ ...result, appName: result.pluginId }));
       } catch {
-        return [];
+        results = [];
       }
+      // An owner without an answer failed (or ran out of its slice): back off, so it is retried (and logged) once a window.
+      const answered = new Set(results.map((result) => result.pluginId));
+      for (const owner of owners) {
+        if (!answered.has(owner.installation.pluginId)) offerBackoff.set(owner.installation.pluginId, now + OFFER_BACKOFF_MS);
+      }
+      return results;
     },
     run<P extends PluginRunPoint>(point: P, given: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>> {
       if (!points.has(point)) return Promise.resolve([]);

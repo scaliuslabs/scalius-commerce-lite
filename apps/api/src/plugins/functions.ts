@@ -357,8 +357,8 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
     budgetShare?: number;
     /**
      * A run outside the order's own path (an offer price for a cart line):
-     * never blocking, never marked in flight, and neither its failures nor
-     * its successes touch the app's failure circuit.
+     * never blocking, and neither its failures nor its successes touch the
+     * app's failure circuit (it is still marked in flight: a hung run is a hang).
      */
     uncounted?: boolean;
 
@@ -515,11 +515,11 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
       })() : await sandboxRuns.run(suspect, async (shared) => {
         // The wait for a slot may have spent the budget: no mark, no run.
         if (budgetSpentForApp()) return null;
-        // A run outside the order's path writes no mark: it never decides whether the app is hung.
-        if (!options.uncounted) await markFunctionInflight(db, { pluginId: installation.pluginId, point, shared });
+        // Every sandboxed run is marked in flight, an offer run too: hang detection is not failure counting.
+        await markFunctionInflight(db, { pluginId: installation.pluginId, point, shared });
         if (appDeadline !== undefined) hadAtStart = appDeadline - Date.now();
         const answer = await invoke();
-        if (!options.uncounted) await clearFunctionInflight(db, { pluginId: installation.pluginId, point }).catch(() => console.warn("[plugins] function in-flight clear failed"));
+        await clearFunctionInflight(db, { pluginId: installation.pluginId, point }).catch(() => console.warn("[plugins] function in-flight clear failed"));
         return answer;
       });
       if (!outcome) {

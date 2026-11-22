@@ -21,13 +21,18 @@ import type { CartValidationIssue, CartValidationResult } from "@/lib/api/orders
 import { cartItemVariantLabel } from "./item-options";
 import { purchaseOptionsField } from "./purchase-option";
 import { cartLineInputFacts, confirmedChoice, lineAnswerFor, sameAnswer, lineAnswer, undecidedLineInputs, withLineAnswer, type CartLineInputFacts } from "./line-inputs";
-import { cartLineCheckPrice, cartLinePropertyInputs } from "@/store/cart";
+import { adoptCheckedLinePrices, cartLineCheckPrice, cartLinePropertyInputs, restoreCart } from "@/store/cart";
 import { isLineInputChange } from "@scalius/shared/plugins/line-input-change";
 
-/** The store's check of the cart as it is now: which line takes which input, in the buyer's language. */
-async function checkCart(items: Readonly<Record<string, VariantCartItem>>): Promise<CartLineInputFacts | null> {
+/**
+ * The store's check of the cart as it is now: which line takes which input,
+ * in the buyer's language, and what it refused. A line waiting for the
+ * store's price (an edit's) takes it from this check, so the cart's lines and
+ * totals are the store's whoever checked last.
+ */
+async function checkCart(items: Readonly<Record<string, VariantCartItem>>): Promise<{ facts: CartLineInputFacts; issues: CartValidationIssue[] } | null> {
   const entries = Object.entries(items);
-  if (entries.length === 0) return cartLineInputFacts(null);
+  if (entries.length === 0) return { facts: cartLineInputFacts(null), issues: [] };
   const attributes = readBuyerAttributes();
   const response = await fetch("/api/checkout/validate-cart", {
     method: "POST",
@@ -50,8 +55,13 @@ async function checkCart(items: Readonly<Record<string, VariantCartItem>>): Prom
   }).catch(() => null);
   const json = (await response?.json().catch(() => null)) as { data?: CartValidationResult; details?: { itemIssues?: CartValidationIssue[] } } | null;
   if (!json?.data) return null;
-  return cartLineInputFacts(json.data, json.data.issues ?? []);
+  adoptCheckedLinePrices(json.data.items ?? []);
+  const issues = json.data.issues ?? [];
+  return { facts: cartLineInputFacts(json.data, issues), issues };
 }
+
+/** The answers the store refuses as given (its reason a check names on the answer's key). */
+const REFUSALS = new Set(["properties_invalid", "properties_required", "confirmation_required"]);
 
 function money(amountMinor: number) {
   const currency = getCurrencyCode();
@@ -63,11 +73,13 @@ function money(amountMinor: number) {
 export async function islandCartLines(pluginId: string): Promise<StorefrontCartLine[]> {
   hydrateCartFromStorage();
   const { items } = cartStore.get();
-  const facts = await checkCart(items) ?? cartLineInputFacts(null);
+  const facts = (await checkCart(items))?.facts ?? cartLineInputFacts(null);
+  // The lines as the check left them: a line it priced carries the store's price and add-ons.
+  const priced = cartStore.get().items;
   const prefix = `${pluginId}.`;
   const places = getDecimalPlaces(getCurrencyCode());
-  const undecided = undecidedLineInputs(items, facts, pluginId);
-  return Object.entries(items).map(([lineKey, item]) => ({
+  const undecided = undecidedLineInputs(priced, facts, pluginId);
+  return Object.entries(priced).map(([lineKey, item]) => ({
     lineKey,
     productId: item.id,
     variantId: item.variantId,
@@ -97,7 +109,7 @@ export async function setAppLineInput(pluginId: string, change: unknown, known?:
   if (!isLineInputChange(change)) return { ok: false, reason: "unknown_input" };
   hydrateCartFromStorage();
   const { items } = cartStore.get();
-  const facts = known ?? await checkCart(items);
+  const facts = known ?? (await checkCart(items))?.facts;
   if (!facts) return { ok: false, reason: "failed" };
   const key = `${pluginId}.${change.key}`;
   const view = facts.inputs.get(key);
@@ -123,15 +135,30 @@ export async function setAppLineInput(pluginId: string, change: unknown, known?:
     return { oldLineKey: lineKey, item: { ...rest, properties: withLineAnswer(items[lineKey]!, key, answer, facts), quantity } };
   });
   const { applyLineEdits } = await import("./line-input-controls");
-  return (await applyLineEdits(edits)) ? { ok: true, changed: targets.length } : { ok: false, reason: "failed" };
+  const before = cartStore.get();
+  if (!(await applyLineEdits(edits))) return { ok: false, reason: "failed" };
+  // A page that checks its own cart (it passed its facts) prices and marks the edited lines itself. An
+  // island has no such check: it checks once now, so the lines take the store's price and add-ons at
+  // once, and an answer the store refuses is undone and its reason returned.
+  if (!known) {
+    const after = await checkCart(cartStore.get().items);
+    const refusal = after?.issues.find((issue) => issue.propertyKey === key && REFUSALS.has(issue.code));
+    if (refusal) {
+      restoreCart(before);
+      return { ok: false, reason: "refused", code: refusal.code };
+    }
+  }
+  return { ok: true, changed: targets.length };
 }
 
 /** Place order's decision for this app's inputs: asks once in the host's dialog and sets the agreed choice on every undecided line. */
 export async function islandDecide(pluginId: string): Promise<StorefrontDecideResult> {
   hydrateCartFromStorage();
-  const facts = await checkCart(cartStore.get().items);
-  if (!facts) return { ok: false, reason: "failed" };
+  const checked = await checkCart(cartStore.get().items);
+  if (!checked) return { ok: false, reason: "failed" };
   const { decideUndecidedLines } = await import("./line-input-controls");
-  const result = await decideUndecidedLines(facts, { appId: pluginId });
+  const result = await decideUndecidedLines(checked.facts, { appId: pluginId });
+  // The decided lines take the store's price from one more check, as an edit's do.
+  if (result.ok && result.changed > 0) await checkCart(cartStore.get().items);
   return result.ok ? result : { ok: false, reason: result.reason };
 }
