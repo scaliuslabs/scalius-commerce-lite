@@ -24,11 +24,25 @@ import {
   type EventResourceType,
   type EventTopic,
 } from "@scalius/shared/events";
-import { and, asc, desc, eq, inArray, lt, lte, or, sql, type SQL } from "drizzle-orm";
-import { claimedUnder, heldOrGivenUp, keepsDying, leasedQueueClaimSet, newClaimToken, RUNNER_NEVER_FINISHED } from "../../utils/queue-claim";
+import { and, asc, desc, eq, lt, sql, type SQL } from "drizzle-orm";
+import { newClaimToken, RUNNER_NEVER_FINISHED } from "../../utils/queue-claim";
+import { leasedQueue } from "../../utils/leased-queue";
 
-/** The event outbox's claim id prefix (queue-claim.ts `claimIdsOf`). */
-const CLAIM_BASE = "ev";
+export const MAX_EVENT_DISPATCH_ATTEMPTS = 8;
+
+/** The event outbox on the queue kernel (utils/leased-queue.ts). */
+export const EVENT_QUEUE = leasedQueue(eventOutbox, {
+  name: "event",
+  states: { waiting: "pending", running: "processing", retrying: "failed", done: "dispatched", givenUp: "dead_lettered" },
+  base: "ev",
+  leaseSeconds: 5 * 60,
+  maxAttempts: MAX_EVENT_DISPATCH_ATTEMPTS,
+  /** 30 s doubling: the eighth failure gives up. */
+  backoff: [30, 60, 120, 240, 480, 960, 1_920],
+  doneAt: "dispatchedAt",
+  errorLength: 500,
+  capReason: "event_attempt_limit_reached",
+});
 
 /**
  * Work a fan-out target recorded for an event: one durable delivery row the
@@ -68,38 +82,10 @@ export interface EventFanOutTarget {
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
-const PROCESSING_LEASE_SECONDS = 5 * 60;
-export const MAX_EVENT_DISPATCH_ATTEMPTS = 8;
 /** Due rows one drain may take (the scheduled sweep's ceiling). */
 export const MAX_EVENT_FLUSH_LIMIT = 200;
 /** Default number of events one drain may take. */
 export const EVENT_FLUSH_BATCH_SIZE = 50;
-const MAX_ERROR_LENGTH = 500;
-const DEAD_LETTER_NEXT_ATTEMPT_AT = 253_402_300_799;
-
-export function eventDispatchRetryDelaySeconds(attempts: number): number {
-  const normalized = Math.max(1, Math.min(attempts, MAX_EVENT_DISPATCH_ATTEMPTS));
-  return Math.min(60 * 60, 30 * 2 ** (normalized - 1));
-}
-
-function normalizeError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.length > MAX_ERROR_LENGTH ? `${message.slice(0, MAX_ERROR_LENGTH - 3)}...` : message;
-}
-
-/** Due pending/failed rows and expired leases. */
-function claimableCondition() {
-  return or(
-    and(
-      inArray(eventOutbox.status, ["pending", "failed"]),
-      lte(eventOutbox.nextAttemptAt, sql`unixepoch()`),
-    ),
-    and(
-      eq(eventOutbox.status, "processing"),
-      lte(eventOutbox.claimExpiresAt, sql`unixepoch()`),
-    ),
-  );
-}
 
 /**
  * The ids of up to `limit` due rows, oldest first: one bounded walk of
@@ -109,14 +95,14 @@ function claimableCondition() {
  * million rows on every drain). Ties keep index order.
  */
 const DUE_WALKS = [
-  { status: "pending", column: sql.raw(`"next_attempt_at"`) },
-  { status: "failed", column: sql.raw(`"next_attempt_at"`) },
-  { status: "processing", column: sql.raw(`"claim_expires_at"`) },
+  { status: EVENT_QUEUE.states.waiting, column: sql.raw(`"next_attempt_at"`) },
+  { status: EVENT_QUEUE.states.retrying, column: sql.raw(`"next_attempt_at"`) },
+  { status: EVENT_QUEUE.states.running, column: sql.raw(`"claim_expires_at"`) },
 ] as const;
 
 /** One due state's bounded index walk, oldest first; a lapsed lease only on its first lapse. */
 function dueWalk(walk: (typeof DUE_WALKS)[number], limit: number): SQL {
-  const firstLapse = walk.status === "processing" ? sql`AND NOT ${keepsDying(sql.raw(`"claim_id"`), CLAIM_BASE)}` : sql``;
+  const firstLapse = walk.status === EVENT_QUEUE.states.running ? sql`AND NOT ${EVENT_QUEUE.keepsDying(sql.raw(`"claim_id"`))}` : sql``;
   return sql`SELECT "id", ${walk.column} AS "due" FROM "event_outbox"
     WHERE "status" = ${walk.status} AND ${walk.column} <= unixepoch() ${firstLapse} ORDER BY ${walk.column} LIMIT ${limit}`;
 }
@@ -209,7 +195,7 @@ export async function dispatchPendingEvents(options: {
     try {
       await options.onFlushed(flushed);
     } catch (error) {
-      console.warn("[events] Flush observer failed:", normalizeError(error));
+      console.warn("[events] Flush observer failed:", EVENT_QUEUE.error(error));
     }
   }
   return result;
@@ -270,31 +256,14 @@ async function claimAndDispatch(
   alone = false,
 ): Promise<Array<Exclude<EventDispatchOutcome, { status: "skipped" }>>> {
   const token = newClaimToken();
-  const claim = db
-    .update(eventOutbox)
-    .set({
-      ...leasedQueueClaimSet(eventOutbox, {
-        base: CLAIM_BASE,
-        token,
-        alone,
-        leaseSeconds: PROCESSING_LEASE_SECONDS,
-        maxAttempts: MAX_EVENT_DISPATCH_ATTEMPTS,
-        giveUp: "dead_lettered",
-        never: DEAD_LETTER_NEXT_ATTEMPT_AT,
-      }),
-      updatedAt: sql`unixepoch()`,
-    })
-    // The claim re-checks each row (a concurrent drain cannot take it twice).
-    // As a CASE it is no index's range, so SQLite seeks the chosen ids by key
-    // instead of walking every due row.
-    .where(and(which, sql`(CASE WHEN ${claimableCondition()} THEN 1 ELSE 0 END) = 1`))
-    .returning();
+  // The claim re-checks each row: a concurrent drain cannot take it twice.
+  const claim = EVENT_QUEUE.claim(db, which, { token, alone }).returning();
   let taken: EventOutboxRow[];
   if (lapsed) {
     const [claimedRows, lapsedRows] = await safeBatch(db, [
       claim,
       db.select({ id: eventOutbox.id, attempts: eventOutbox.attempts }).from(eventOutbox)
-        .where(and(eq(eventOutbox.status, "processing"), lte(eventOutbox.claimExpiresAt, sql`unixepoch()`), keepsDying(eventOutbox.claimId, CLAIM_BASE)))
+        .where(and(EVENT_QUEUE.dueBranches()[1], EVENT_QUEUE.keepsDying()))
         .orderBy(asc(eventOutbox.claimExpiresAt))
         .limit(lapsed.limit),
     ] as never) as [EventOutboxRow[], Array<{ id: string; attempts: number }>];
@@ -304,9 +273,9 @@ async function claimAndDispatch(
     taken = await claim;
   }
   const outcomes: Array<Exclude<EventDispatchOutcome, { status: "skipped" }>> = taken
-    .filter((row) => row.status !== "processing")
+    .filter((row) => row.status !== EVENT_QUEUE.states.running)
     .map((row) => ({ status: "dead_lettered", eventId: row.id, reason: RUNNER_NEVER_FINISHED }));
-  const claimed = taken.filter((row) => row.status === "processing");
+  const claimed = taken.filter((row) => row.status === EVENT_QUEUE.states.running);
   if (claimed.length === 0) return outcomes;
   const rows = claimed.sort((a, b) => Number(a.nextAttemptAt) - Number(b.nextAttemptAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
@@ -333,7 +302,7 @@ async function claimAndDispatch(
       await fanOut(readable.map(({ event }) => event));
     } catch (error) {
       if (readable.length === 1) {
-        failures.set(readable[0]!.row.id, normalizeError(error));
+        failures.set(readable[0]!.row.id, EVENT_QUEUE.error(error));
       } else {
         // One event's failure must not fail the drain: each event alone, so
         // only the events that fail on their own retry (targets are
@@ -343,35 +312,24 @@ async function claimAndDispatch(
           try {
             await fanOut([event]);
           } catch (single) {
-            failures.set(event.id, normalizeError(single));
+            failures.set(event.id, EVENT_QUEUE.error(single));
           }
         }
       }
     }
   }
 
-  const underClaim = claimedUnder(eventOutbox.claimId, CLAIM_BASE, token);
-  const ofClaim = (id: string) => and(eq(eventOutbox.id, id), eq(eventOutbox.status, "processing"), underClaim);
+  const underClaim = EVENT_QUEUE.heldByToken(token);
   const statements: SQLiteBatchItem[] = [];
   for (const row of unreadable) {
-    statements.push(deadLetterStatement(db, ofClaim(row.id), "unreadable_event: topic, resource or facts do not match the catalog"));
+    statements.push(EVENT_QUEUE.giveUp(db, eq(eventOutbox.id, row.id), underClaim, "unreadable_event: topic, resource or facts do not match the catalog"));
     outcomes.push({ status: "dead_lettered", eventId: row.id, reason: "unreadable_event" });
   }
   const dispatched = readable.filter(({ row }) => !failures.has(row.id));
   if (dispatched.length > 0) {
     const ids = JSON.stringify(dispatched.map(({ row }) => row.id));
-    statements.push(db
-      .update(eventOutbox)
-      .set({
-        status: "dispatched",
-        claimId: null,
-        claimExpiresAt: null,
-        lastError: null,
-        dispatchedAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      })
-      // A slow drain whose events a later claim gave up still records them dispatched.
-      .where(and(sql`${eventOutbox.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ids}))`, heldOrGivenUp(eventOutbox, underClaim, "dead_lettered"))));
+    // A slow drain whose events a later claim gave up still records them dispatched.
+    statements.push(EVENT_QUEUE.finish(db, sql`${eventOutbox.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ids}))`, underClaim));
   }
   for (const { row, event } of readable) {
     const failure = failures.get(row.id);
@@ -379,40 +337,12 @@ async function claimAndDispatch(
       outcomes.push({ status: "dispatched", eventId: row.id, event, deliveries: deliveries.get(row.id) ?? [] });
       continue;
     }
-    if (row.attempts >= MAX_EVENT_DISPATCH_ATTEMPTS) {
-      statements.push(deadLetterStatement(db, ofClaim(row.id), `event_attempt_limit_reached: ${failure}`));
-      outcomes.push({ status: "dead_lettered", eventId: row.id, reason: failure });
-      continue;
-    }
-    statements.push(db
-      .update(eventOutbox)
-      .set({
-        status: "failed",
-        claimId: null,
-        claimExpiresAt: null,
-        lastError: failure,
-        nextAttemptAt: sql`unixepoch() + ${eventDispatchRetryDelaySeconds(row.attempts)}`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(ofClaim(row.id)));
-    outcomes.push({ status: "failed", eventId: row.id, reason: failure });
+    const failed = EVENT_QUEUE.fail(db, eq(eventOutbox.id, row.id), underClaim, row.attempts, failure);
+    statements.push(failed.statement);
+    outcomes.push({ status: failed.gaveUp ? "dead_lettered" : "failed", eventId: row.id, reason: failure });
   }
   if (statements.length > 0) await safeBatch(db, statements as [SQLiteBatchItem, ...SQLiteBatchItem[]]);
   return outcomes;
-}
-
-function deadLetterStatement(db: Database, where: SQL | undefined, reason: string): SQLiteBatchItem {
-  return db
-    .update(eventOutbox)
-    .set({
-      status: "dead_lettered",
-      claimId: null,
-      claimExpiresAt: null,
-      lastError: normalizeError(reason),
-      nextAttemptAt: DEAD_LETTER_NEXT_ATTEMPT_AT,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(where);
 }
 
 // ── Admin reads ───────────────────────────────────────────────────────────

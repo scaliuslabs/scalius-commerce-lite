@@ -8,7 +8,7 @@ import {
     PaymentStatus,
     OrderStatus,
 } from "@scalius/database/schema";
-import { and, asc, eq, inArray, lte, or, sql, type SQL } from "drizzle-orm";
+import { asc, eq, or, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { fromMinor } from "@scalius/shared/money";
 import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
@@ -17,6 +17,7 @@ import { sendCapiEvent, type SendCapiEventResult } from "./conversions-api";
 import { DEFAULT_TRACKING_CONSENT_SETTINGS } from "@scalius/shared/tracking-consent";
 import { orderConsent, type OrderTrackingSignalsRow } from "../tracking/signals";
 import { trackingConsentDocument } from "../tracking/settings";
+import { leasedQueue } from "../../utils/leased-queue";
 
 /** The skip reason of a purchase the buyer's consent does not allow (tracking_health counts it). */
 export const CONSENT_DENIED_REASON = "consent_denied: the buyer did not grant marketing consent.";
@@ -93,9 +94,26 @@ export interface MetaPurchaseOutboxClaimBatchInput extends MetaPurchaseOutboxCla
     onlyIf?: SQL;
 }
 
-const PROCESSING_LEASE_SECONDS = 5 * 60;
 const MAX_FLUSH_LIMIT = 25;
-const MAX_ERROR_LENGTH = 500;
+
+/**
+ * Meta's Purchase outbox on the queue kernel (utils/leased-queue.ts). It
+ * gives up by age (`event_too_old`, Meta's 7 days), not by a count: the cap
+ * is past a week of hourly retries and only bounds a runner that keeps dying.
+ */
+export const META_PURCHASE_QUEUE = leasedQueue(metaCapiPurchaseOutbox, {
+    name: "Meta purchase",
+    states: { waiting: "pending", running: "processing", retrying: "failed", done: "sent", givenUp: "skipped" },
+    base: "mcap",
+    leaseSeconds: 5 * 60,
+    maxAttempts: 180,
+    backoff: [60, 120, 240, 480, 960, 1_920, 3_600],
+    doneAt: "sentAt",
+    givenUpAt: "skippedAt",
+    errorLength: 500,
+    capReason: "attempt_limit",
+    clearErrorOnClaim: true,
+});
 
 export function createMetaPurchaseEventId(orderId: string): string {
     return `Purchase:${orderId}`;
@@ -260,7 +278,7 @@ export async function processExistingMetaPurchaseOutboxForOrder(options: {
         };
     }
 
-    if (row.status === "sent" || row.status === "skipped") {
+    if (row.status === META_PURCHASE_QUEUE.states.done || row.status === META_PURCHASE_QUEUE.states.givenUp) {
         return {
             outboxId: row.id,
             missing: false,
@@ -297,18 +315,7 @@ export async function flushPendingMetaPurchaseOutbox(options: {
     const dueQuery = options.db
         .select({ id: metaCapiPurchaseOutbox.id })
         .from(metaCapiPurchaseOutbox)
-        .where(
-            or(
-                and(
-                    inArray(metaCapiPurchaseOutbox.status, ["pending", "failed"]),
-                    lte(metaCapiPurchaseOutbox.nextAttemptAt, sql`unixepoch()`),
-                ),
-                and(
-                    eq(metaCapiPurchaseOutbox.status, "processing"),
-                    lte(metaCapiPurchaseOutbox.claimExpiresAt, sql`unixepoch()`),
-                ),
-            ),
-        )
+        .where(or(...META_PURCHASE_QUEUE.dueBranches()))
         .orderBy(asc(metaCapiPurchaseOutbox.nextAttemptAt), asc(metaCapiPurchaseOutbox.createdAt))
         .limit(limit);
     let dueRows: Array<{ id: string }>;
@@ -349,7 +356,7 @@ async function processMetaPurchaseOutboxById(
     if (!claim.claimed) {
         return {
             processed: false,
-            status: claim.reason === "already_sent" ? "sent" : "processing",
+            status: claim.reason === "already_sent" ? "sent" : claim.reason === "skipped" ? "skipped" : "processing",
         };
     }
 
@@ -365,20 +372,9 @@ async function processMetaPurchaseOutboxById(
             // A purchase per order: every success is logged.
             successLog: "every",
         });
-        await markMetaPurchaseOutboxAfterSend(db, claim.row.id, claim.claimId, claim.row.attempts, result);
-        return {
-            processed: true,
-            status: result.success ? "sent" : result.retryable === false ? "skipped" : "failed",
-        };
+        return { processed: true, status: await markMetaPurchaseOutboxAfterSend(db, claim.row.id, claim.claimId, claim.row.attempts, result) };
     } catch (error) {
-        await markMetaPurchaseOutboxFailed(
-            db,
-            claim.row.id,
-            claim.claimId,
-            claim.row.attempts,
-            error,
-        );
-        return { processed: true, status: "failed" };
+        return { processed: true, status: await markMetaPurchaseOutboxFailed(db, claim.row.id, claim.claimId, claim.row.attempts, error) };
     }
 }
 
@@ -450,40 +446,20 @@ async function claimMetaPurchaseOutbox(
     | { claimed: true; claimId: string; row: Pick<PurchaseOutboxRow, "id" | "orderId" | "attempts"> }
     | { claimed: false; reason: "already_sent" | "skipped" | "busy" | "missing" }
 > {
-    const claimId = createClaimId();
-    const rows = await db
-        .update(metaCapiPurchaseOutbox)
-        .set({
-            status: "processing",
-            claimId,
-            claimExpiresAt: sql`unixepoch() + ${PROCESSING_LEASE_SECONDS}`,
-            attempts: sql`${metaCapiPurchaseOutbox.attempts} + 1`,
-            lastError: null,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(
-            and(
-                eq(metaCapiPurchaseOutbox.id, outboxId),
-                or(
-                    and(
-                        inArray(metaCapiPurchaseOutbox.status, ["pending", "failed"]),
-                        lte(metaCapiPurchaseOutbox.nextAttemptAt, sql`unixepoch()`),
-                    ),
-                    and(
-                        eq(metaCapiPurchaseOutbox.status, "processing"),
-                        lte(metaCapiPurchaseOutbox.claimExpiresAt, sql`unixepoch()`),
-                    ),
-                ),
-            ),
-        )
+    // One purchase at a time: its runner dies only with it.
+    const rows = await META_PURCHASE_QUEUE.claim(db, eq(metaCapiPurchaseOutbox.id, outboxId), { alone: true })
         .returning({
             id: metaCapiPurchaseOutbox.id,
             orderId: metaCapiPurchaseOutbox.orderId,
             attempts: metaCapiPurchaseOutbox.attempts,
+            status: metaCapiPurchaseOutbox.status,
+            claimId: metaCapiPurchaseOutbox.claimId,
         });
 
     const row = rows[0];
-    if (row) return { claimed: true, claimId, row };
+    if (row?.status === META_PURCHASE_QUEUE.states.running) return { claimed: true, claimId: row.claimId!, row };
+    // Its runner died alone at every attempt: the claim gave it up.
+    if (row) return { claimed: false, reason: "skipped" };
 
     const existing = await selectOutboxById(db, outboxId);
     if (!existing) return { claimed: false, reason: "missing" };
@@ -492,86 +468,36 @@ async function claimMetaPurchaseOutbox(
     return { claimed: false, reason: "busy" };
 }
 
+/** Records a send's outcome and returns the state it left the row in. */
 async function markMetaPurchaseOutboxAfterSend(
     db: Database,
     outboxId: string,
     claimId: string,
     attempts: number,
     result: SendCapiEventResult,
-): Promise<void> {
+): Promise<"sent" | "failed" | "skipped"> {
     if (result.success) {
-        await markMetaPurchaseOutboxSent(db, outboxId, claimId);
-        return;
+        await META_PURCHASE_QUEUE.finish(db, eq(metaCapiPurchaseOutbox.id, outboxId), META_PURCHASE_QUEUE.heldBy(claimId));
+        return "sent";
     }
 
     if (result.retryable === false) {
         await markMetaPurchaseOutboxSkipped(db, outboxId, claimId, result.error ?? "Meta CAPI event skipped.");
-        return;
+        return "skipped";
     }
 
-    await markMetaPurchaseOutboxFailed(db, outboxId, claimId, attempts, result.error ?? "Meta CAPI send failed.");
+    return await markMetaPurchaseOutboxFailed(db, outboxId, claimId, attempts, result.error ?? "Meta CAPI send failed.");
 }
 
-async function markMetaPurchaseOutboxSent(db: Database, outboxId: string, claimId: string): Promise<void> {
-    await db
-        .update(metaCapiPurchaseOutbox)
-        .set({
-            status: "sent",
-            claimId: null,
-            claimExpiresAt: null,
-            lastError: null,
-            sentAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(metaCapiPurchaseOutbox.id, outboxId),
-            eq(metaCapiPurchaseOutbox.claimId, claimId),
-        ));
+async function markMetaPurchaseOutboxSkipped(db: Database, outboxId: string, claimId: string, reason: string): Promise<void> {
+    await META_PURCHASE_QUEUE.giveUp(db, eq(metaCapiPurchaseOutbox.id, outboxId), META_PURCHASE_QUEUE.heldBy(claimId), reason);
 }
 
-async function markMetaPurchaseOutboxSkipped(
-    db: Database,
-    outboxId: string,
-    claimId: string,
-    reason: string,
-): Promise<void> {
-    await db
-        .update(metaCapiPurchaseOutbox)
-        .set({
-            status: "skipped",
-            claimId: null,
-            claimExpiresAt: null,
-            lastError: normalizeError(reason),
-            skippedAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(metaCapiPurchaseOutbox.id, outboxId),
-            eq(metaCapiPurchaseOutbox.claimId, claimId),
-        ));
-}
-
-async function markMetaPurchaseOutboxFailed(
-    db: Database,
-    outboxId: string,
-    claimId: string,
-    attempts: number,
-    error: unknown,
-): Promise<void> {
-    await db
-        .update(metaCapiPurchaseOutbox)
-        .set({
-            status: "failed",
-            claimId: null,
-            claimExpiresAt: null,
-            lastError: normalizeError(error),
-            nextAttemptAt: sql`unixepoch() + ${getRetryDelaySeconds(attempts)}`,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(metaCapiPurchaseOutbox.id, outboxId),
-            eq(metaCapiPurchaseOutbox.claimId, claimId),
-        ));
+/** Retried after its backoff, or skipped on its last attempt. */
+async function markMetaPurchaseOutboxFailed(db: Database, outboxId: string, claimId: string, attempts: number, error: unknown): Promise<"failed" | "skipped"> {
+    const failed = META_PURCHASE_QUEUE.fail(db, eq(metaCapiPurchaseOutbox.id, outboxId), META_PURCHASE_QUEUE.heldBy(claimId), attempts, error);
+    await failed.statement;
+    return failed.gaveUp ? "skipped" : "failed";
 }
 
 async function selectOutboxById(db: Database, outboxId: string): Promise<PurchaseOutboxRow | undefined> {
@@ -616,23 +542,9 @@ function createOutboxId(): string {
     return `mcap_${createRandomId()}`;
 }
 
-function createClaimId(): string {
-    return `mcapc_${createRandomId()}`;
-}
-
 function createRandomId(): string {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
         return crypto.randomUUID().replace(/-/g, "");
     }
     return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
-}
-
-function getRetryDelaySeconds(attempts: number): number {
-    const normalizedAttempts = Math.max(1, Math.min(attempts, 8));
-    return Math.min(60 * 60, 60 * 2 ** (normalizedAttempts - 1));
-}
-
-function normalizeError(error: unknown): string {
-    const message = error instanceof Error ? error.message : String(error);
-    return message.length > MAX_ERROR_LENGTH ? `${message.slice(0, MAX_ERROR_LENGTH)}...` : message;
 }

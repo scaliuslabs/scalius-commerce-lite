@@ -1,5 +1,5 @@
-// The claim of a leased queue row (the event outbox, webhook and app event
-// deliveries, the notification outbox). A row whose runner dies alone with
+// The claim of a leased queue row, which the queue kernel (leased-queue.ts)
+// builds for every queue on it. A row whose runner dies alone with
 // its attempts at the cap is not run again: the next claim moves it to its
 // give-up state, so work that dies every time stops after as many attempts
 // as work that fails cleanly, and a row that only shared a dying runner never
@@ -71,7 +71,7 @@ export function claimKeepsDying(claimId: string | null, base: string): boolean {
  * `maxAttempts` used is not run again: it moves to `giveUp` with
  * `RUNNER_NEVER_FINISHED`, keeping the claim of the attempt it gave up, so
  * that attempt, if it was only slow, can still record its success
- * (`heldOrGivenUp`). The caller tells claimed and given-up rows apart by the
+ * (the kernel's `finish`, utils/leased-queue.ts). The caller tells claimed and given-up rows apart by the
  * status the statement returns, and reads each row's claim id from it.
  * Column references render unqualified, as an UPDATE's own.
  */
@@ -85,6 +85,8 @@ export function leasedQueueClaimSet(
     alone: boolean;
     leaseSeconds: number;
     maxAttempts: number;
+    /** The queue's running state: a claimed row's, and a lapsed one's. */
+    running: string;
     giveUp: string;
     /** When the given-up row is next due: never. */
     never: number;
@@ -93,12 +95,12 @@ export function leasedQueueClaimSet(
   },
 ): Record<keyof LeasedQueueColumns, SQL> {
   const ids = claimIdsOf(options.base, options.token);
-  const lapsed = sql`${columns.status} = 'processing'`;
+  const lapsed = sql`${columns.status} = ${options.running}`;
   const diedAlone = sql`(${lapsed} AND ${claimKind(columns.claimId, options.base)} = 'l')`;
   const spent = sql`(${diedAlone} AND ${columns.attempts} >= ${options.maxAttempts})`;
   const either = (gaveUp: SQL, claimed: SQL) => sql`CASE WHEN ${spent} THEN ${gaveUp} ELSE ${claimed} END`;
   return {
-    status: either(sql`${options.giveUp}`, sql`'processing'`),
+    status: either(sql`${options.giveUp}`, sql`${options.running}`),
     // A lapse under a shared claim is given back: this attempt replaces it.
     attempts: sql`CASE WHEN ${spent} THEN ${columns.attempts} WHEN ${lapsed} AND NOT ${diedAlone} THEN ${columns.attempts} ELSE ${columns.attempts} + 1 END`,
     claimId: options.alone
@@ -108,14 +110,4 @@ export function leasedQueueClaimSet(
     lastError: either(sql`${RUNNER_NEVER_FINISHED}`, options.clearError ? sql`NULL` : sql`${columns.lastError}`),
     nextAttemptAt: either(sql`${options.never}`, sql`${columns.nextAttemptAt}`),
   };
-}
-
-/**
- * The row a success write may finish: still held by its claim (`claimed`),
- * or given up while that very attempt was running (the give-up kept its
- * claim). Every other outcome write needs the row still `processing` under
- * its claim.
- */
-export function heldOrGivenUp(columns: Pick<LeasedQueueColumns, "status">, claimed: SQL, giveUp: string): SQL {
-  return sql`(${claimed} AND ${columns.status} IN ('processing', ${giveUp}))`;
 }

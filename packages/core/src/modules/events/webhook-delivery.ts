@@ -55,15 +55,26 @@ import {
 import { COST_BEARING_EVENT_RESOURCES, INBOX_EVENT_RESOURCES, parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret, type AppWebhookAccess } from "./webhook-subscriptions";
 import { eventFilterCovered, isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import { drainEvent, drainEventsSource, eventAfterSubscriptionStart } from "./event-start-fence";
-import { claimKeepsDying, heldOrGivenUp, leasedQueueClaimSet, newClaimToken } from "../../utils/queue-claim";
-
-/** Webhook deliveries' claim id prefix (queue-claim.ts `claimIdsOf`). */
-const CLAIM_BASE = "wh";
+import { leasedQueue, NEVER_DUE, type QueueSet } from "../../utils/leased-queue";
 import { jsonChunks } from "../../utils/json-chunks";
 
 export const WEBHOOK_MAX_ATTEMPTS = 8;
 /** Delay after attempt n (1-based) fails; 7 waits over about 22.6 hours. */
 export const WEBHOOK_RETRY_DELAYS_SECONDS = [60, 300, 1_800, 3_600, 10_800, 21_600, 43_200] as const;
+
+/** Webhook event deliveries on the queue kernel (utils/leased-queue.ts). */
+export const WEBHOOK_DELIVERY_QUEUE = leasedQueue(webhookDeliveries, {
+  name: "webhook delivery",
+  states: { waiting: "pending", running: "processing", retrying: "failed", done: "succeeded", givenUp: "exhausted", cancelled: "cancelled" },
+  base: "wh",
+  leaseSeconds: 120,
+  maxAttempts: WEBHOOK_MAX_ATTEMPTS,
+  backoff: WEBHOOK_RETRY_DELAYS_SECONDS,
+  doneAt: "deliveredAt",
+  errorLength: 500,
+  cancels: true,
+  staffRetry: true,
+});
 /** An endpoint failing this long, with a full retry cycle of failures, is disabled. */
 export const WEBHOOK_DISABLE_AFTER_FAILING_SECONDS = 24 * 60 * 60;
 export const WEBHOOK_DISABLE_MIN_FAILURES = WEBHOOK_MAX_ATTEMPTS;
@@ -71,21 +82,10 @@ export const WEBHOOK_REQUEST_TIMEOUT_MS = 10_000;
 export const WEBHOOK_RESPONSE_EXCERPT_LENGTH = 256;
 /** Bodies above this carry the truncation shape in `data` (`{ truncated: true, id, fetch }`). */
 export const WEBHOOK_MAX_BODY_BYTES = 512 * 1024;
-const PROCESSING_LEASE_SECONDS = 120;
-const MAX_ERROR_LENGTH = 500;
-const NEVER = 253_402_300_799;
 export const MAX_DELIVERY_FLUSH_LIMIT = 200;
 const USER_AGENT = "Scalius-Webhooks/1.0";
 
-export function webhookRetryDelaySeconds(attempts: number): number {
-  const index = Math.max(1, Math.min(attempts, WEBHOOK_RETRY_DELAYS_SECONDS.length)) - 1;
-  return WEBHOOK_RETRY_DELAYS_SECONDS[index]!;
-}
-
-function normalizeError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.length > MAX_ERROR_LENGTH ? `${message.slice(0, MAX_ERROR_LENGTH - 3)}...` : message;
-}
+const normalizeError = WEBHOOK_DELIVERY_QUEUE.error;
 
 /** `whd_` + epoch milliseconds + 12 random hex: unique and time-sortable like event ids. */
 export function newDeliveryId(nowMs = Date.now()): string {
@@ -352,24 +352,12 @@ export const webhookFanOutTarget: EventFanOutTarget = {
 
 // ── Delivery processing ───────────────────────────────────────────────────
 
-/** The due states of event deliveries, each one index range. */
-function deliveryClaimableBranches() {
-  return [
-    and(inArray(webhookDeliveries.status, ["pending", "failed"]), lte(webhookDeliveries.nextAttemptAt, sql`unixepoch()`))!,
-    and(eq(webhookDeliveries.status, "processing"), lte(webhookDeliveries.claimExpiresAt, sql`unixepoch()`))!,
-  ];
-}
-
-function deliveryClaimableCondition() {
-  return and(eq(webhookDeliveries.kind, "event"), or(...deliveryClaimableBranches()));
-}
-
 /**
  * Whether `listDueWebhookDeliveries` would find a row: one bounded index
  * probe per due state (the scheduled drain runs only when one finds a row).
  */
 export function webhookDeliveryDueProbes(db: Database) {
-  return deliveryClaimableBranches().map((branch) =>
+  return WEBHOOK_DELIVERY_QUEUE.dueBranches().map((branch) =>
     db.select({ id: webhookDeliveries.id }).from(webhookDeliveries)
       .where(and(eq(webhookDeliveries.kind, "event"), branch)).limit(1));
 }
@@ -409,22 +397,8 @@ export async function processWebhookDelivery(options: {
   alone?: boolean;
 }): Promise<WebhookDeliveryOutcome> {
   const { db, deliveryId } = options;
-  const claimed = await db
-    .update(webhookDeliveries)
-    .set({
-      // Counted at claim, so a crash mid-attempt still uses one up; spent, it is exhausted instead.
-      ...leasedQueueClaimSet(webhookDeliveries, {
-        base: CLAIM_BASE,
-        token: newClaimToken(),
-        alone: options.alone === true,
-        leaseSeconds: PROCESSING_LEASE_SECONDS,
-        maxAttempts: WEBHOOK_MAX_ATTEMPTS,
-        giveUp: "exhausted",
-        never: NEVER,
-      }),
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(and(eq(webhookDeliveries.id, deliveryId), deliveryClaimableCondition()))
+  // Counted at claim, so a crash mid-attempt still uses one up; spent, it is exhausted instead.
+  const claimed = await WEBHOOK_DELIVERY_QUEUE.claim(db, and(eq(webhookDeliveries.id, deliveryId), eq(webhookDeliveries.kind, "event"))!, { alone: options.alone === true })
     .returning();
   const delivery = claimed[0];
   if (!delivery) {
@@ -442,12 +416,12 @@ export async function processWebhookDelivery(options: {
   const subscription = (subscriptionRows as WebhookSubscription[])[0];
   const eventRow = delivery.eventId ? (eventRows as EventOutboxRow[])[0] : undefined;
   if (!subscription || subscription.status !== "active") {
-    await finishDelivery(db, delivery, claimId, { status: "cancelled", error: "subscription_disabled" });
+    await cancelDelivery(db, delivery, claimId, "subscription_disabled");
     return { status: "cancelled", deliveryId, subscriptionDisabled: false, retryInSeconds: null };
   }
   const event = eventRow ? toOutboxEvent(eventRow) : null;
   if (!event) {
-    await finishDelivery(db, delivery, claimId, { status: "cancelled", error: eventRow ? "event_unreadable" : "event_pruned" });
+    await cancelDelivery(db, delivery, claimId, eventRow ? "event_unreadable" : "event_pruned");
     return { status: "cancelled", deliveryId, subscriptionDisabled: false, retryInSeconds: null };
   }
   // An app's endpoint delivers only within its app's live grant.
@@ -456,7 +430,7 @@ export async function processWebhookDelivery(options: {
     const access = options.appAccess ? await options.appAccess(subscription.pluginId) : null;
     const refusal = appDeliveryRefusal(access, subscription.url, event.topic, event.resourceType);
     if (refusal) {
-      await finishDelivery(db, delivery, claimId, { status: "cancelled", error: refusal });
+      await cancelDelivery(db, delivery, claimId, refusal);
       return { status: "cancelled", deliveryId, subscriptionDisabled: false, retryInSeconds: null };
     }
     customerData = new Set([...customerData].filter((category) => access!.customerData.includes(category)));
@@ -502,21 +476,8 @@ export async function processWebhookDelivery(options: {
   });
   if (result.ok) {
     await safeBatch(db, [
-      db.update(webhookDeliveries)
-        .set({
-          status: "succeeded",
-          claimId: null,
-          claimExpiresAt: null,
-          lastAttemptAt: sql`unixepoch()`,
-          responseStatus: result.responseStatus,
-          durationMs: result.durationMs,
-          responseExcerpt: result.responseExcerpt,
-          lastError: null,
-          deliveredAt: sql`unixepoch()`,
-          updatedAt: sql`unixepoch()`,
-        })
-        // A send the next claim gave up while it was still running did go out: its success stands.
-        .where(and(eq(webhookDeliveries.id, deliveryId), heldOrGivenUp(webhookDeliveries, eq(webhookDeliveries.claimId, claimId)!, "exhausted"))),
+      // A send the next claim gave up while it was still running did go out: its success stands.
+      WEBHOOK_DELIVERY_QUEUE.finish(db, eq(webhookDeliveries.id, deliveryId), WEBHOOK_DELIVERY_QUEUE.heldBy(claimId), attemptColumns(result)),
       db.update(webhookSubscriptions)
         .set({ failureStreak: 0, failingSince: null, lastSuccessAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
         .where(eq(webhookSubscriptions.id, subscription.id)),
@@ -548,23 +509,13 @@ function appDeliveryRefusal(access: AppWebhookAccess | null, url: string, topic:
   return isPluginHostAllowed(parsed.hostname, access.allowedHosts, parsed.port) ? null : "app_host_not_granted";
 }
 
-async function finishDelivery(
-  db: Database,
-  delivery: WebhookDelivery,
-  claimId: string,
-  outcome: { status: WebhookDeliveryStatus; error: string },
-): Promise<void> {
-  await db
-    .update(webhookDeliveries)
-    .set({
-      status: outcome.status,
-      claimId: null,
-      claimExpiresAt: null,
-      lastError: outcome.error,
-      nextAttemptAt: NEVER,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(and(eq(webhookDeliveries.id, delivery.id), eq(webhookDeliveries.status, "processing"), eq(webhookDeliveries.claimId, claimId)));
+async function cancelDelivery(db: Database, delivery: WebhookDelivery, claimId: string, reason: string): Promise<void> {
+  await WEBHOOK_DELIVERY_QUEUE.cancel(db, eq(webhookDeliveries.id, delivery.id), reason, WEBHOOK_DELIVERY_QUEUE.heldBy(claimId));
+}
+
+/** What an attempt that reached the endpoint (or tried to) records. */
+function attemptColumns(result: Pick<WebhookAttemptResult, "responseStatus" | "durationMs" | "responseExcerpt">): QueueSet<typeof webhookDeliveries> {
+  return { lastAttemptAt: sql`unixepoch()`, responseStatus: result.responseStatus, durationMs: result.durationMs, responseExcerpt: result.responseExcerpt };
 }
 
 async function recordFailure(
@@ -576,26 +527,14 @@ async function recordFailure(
   policy: { countsAgainstEndpoint: boolean; terminal?: boolean },
 ): Promise<WebhookDeliveryOutcome> {
   const { db } = options;
-  const attempts = Number(delivery.attempts);
-  const exhausted = policy.terminal === true || attempts >= WEBHOOK_MAX_ATTEMPTS;
-  // A throttled endpoint is not asked again before the wait it named.
-  const retryInSeconds = exhausted ? null : Math.max(webhookRetryDelaySeconds(attempts), result.retryAfterSeconds ?? 0);
-  const statements: BatchItem<"sqlite">[] = [
-    db.update(webhookDeliveries)
-      .set({
-        status: exhausted ? "exhausted" : "failed",
-        claimId: null,
-        claimExpiresAt: null,
-        lastAttemptAt: sql`unixepoch()`,
-        responseStatus: result.responseStatus,
-        durationMs: result.durationMs,
-        responseExcerpt: result.responseExcerpt,
-        lastError: result.error ? normalizeError(result.error) : null,
-        nextAttemptAt: exhausted ? NEVER : sql`unixepoch() + ${retryInSeconds}`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(and(eq(webhookDeliveries.id, delivery.id), eq(webhookDeliveries.status, "processing"), eq(webhookDeliveries.claimId, claimId))),
-  ];
+  const failed = WEBHOOK_DELIVERY_QUEUE.fail(db, eq(webhookDeliveries.id, delivery.id), WEBHOOK_DELIVERY_QUEUE.heldBy(claimId), Number(delivery.attempts), result.error || null, {
+    // A throttled endpoint is not asked again before the wait it named.
+    notBefore: result.retryAfterSeconds,
+    terminal: policy.terminal,
+    set: attemptColumns(result),
+  });
+  const { gaveUp: exhausted, retryInSeconds } = failed;
+  const statements: BatchItem<"sqlite">[] = [failed.statement];
   if (policy.countsAgainstEndpoint) {
     statements.push(
       db.update(webhookSubscriptions)
@@ -631,14 +570,11 @@ async function recordFailure(
     if (disabled[0]) {
       subscriptionDisabled = true;
       // Its waiting rows end now, in one statement, instead of each being listed and cancelled in turn.
-      await db.update(webhookDeliveries)
-        .set({ status: "cancelled", claimId: null, claimExpiresAt: null, lastError: "subscription_disabled", nextAttemptAt: NEVER, updatedAt: sql`unixepoch()` })
-        .where(and(
-          eq(webhookDeliveries.subscriptionId, subscription.id),
-          // This one keeps the failure that disabled it (its next claim cancels it).
-          sql`${webhookDeliveries.id} <> ${delivery.id}`,
-          inArray(webhookDeliveries.status, ["pending", "failed"]),
-        ));
+      await WEBHOOK_DELIVERY_QUEUE.cancel(db, and(
+        eq(webhookDeliveries.subscriptionId, subscription.id),
+        // This one keeps the failure that disabled it (its next claim cancels it).
+        sql`${webhookDeliveries.id} <> ${delivery.id}`,
+      ), "subscription_disabled");
       // Ids only in logs; the URL is merchant configuration, not buyer data.
       console.warn(`[webhooks] Subscription ${disabled[0].id} disabled after sustained delivery failure`);
       await options.onSubscriptionDisabled?.(disabled[0]).catch((error: unknown) => {
@@ -712,7 +648,7 @@ export async function listDueWebhookDeliveryTargets(db: Database, limit = MAX_DE
     })
     .sort((a, b) => a.turn - b.turn || (a.at ?? 0) - (b.at ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .slice(0, take)
-    .map((row) => ({ id: row.id, subscriptionId: row.subscriptionId, lapsed: row.status === "processing" && claimKeepsDying(row.claimId, CLAIM_BASE), attempts: Number(row.attempts) }));
+    .map((row) => ({ id: row.id, subscriptionId: row.subscriptionId, lapsed: row.status === "processing" && WEBHOOK_DELIVERY_QUEUE.claimKeepsDying(row.claimId), attempts: Number(row.attempts) }));
 }
 
 /**
@@ -743,7 +679,7 @@ export async function deferDueEndpointDeliveries(db: Database, deliveryId: strin
       eq(webhookDeliveries.kind, "event"),
       sql`${webhookDeliveries.subscriptionId} = (SELECT d.subscription_id FROM webhook_event_deliveries AS d WHERE d.id = ${deliveryId})`,
       sql`${webhookDeliveries.id} <> ${deliveryId}`,
-      inArray(webhookDeliveries.status, ["pending", "failed"]),
+      inArray(webhookDeliveries.status, WEBHOOK_DELIVERY_QUEUE.statuses("waiting", "retrying")),
       lt(webhookDeliveries.nextAttemptAt, waitUntil),
     ));
 }
@@ -788,7 +724,7 @@ export function toWebhookDeliveryView(row: WebhookDelivery): WebhookDeliveryView
     durationMs: row.durationMs ?? null,
     responseExcerpt: row.responseExcerpt ?? null,
     error: row.lastError ?? null,
-    nextAttemptAt: waiting && Number(row.nextAttemptAt) < NEVER ? Number(row.nextAttemptAt) : null,
+    nextAttemptAt: waiting && Number(row.nextAttemptAt) < NEVER_DUE ? Number(row.nextAttemptAt) : null,
     lastAttemptAt: row.lastAttemptAt ?? null,
     deliveredAt: row.deliveredAt ?? null,
     createdAt: Number(row.createdAt),
@@ -837,25 +773,12 @@ export async function retryWebhookDelivery(
     .get();
   if (!subscription) throw new NotFoundError("Webhook not found");
   if (subscription.status !== "active") throw new ConflictError("Turn the webhook on before retrying its deliveries.");
-  const rows = await db
-    .update(webhookDeliveries)
-    .set({
-      status: "pending",
-      attempts: 0,
-      claimId: null,
-      claimExpiresAt: null,
-      nextAttemptAt: sql`unixepoch()`,
-      lastError: null,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(and(
-      eq(webhookDeliveries.id, deliveryId),
-      eq(webhookDeliveries.subscriptionId, subscriptionId),
-      eq(webhookDeliveries.kind, "event"),
-      inArray(webhookDeliveries.status, ["failed", "exhausted", "cancelled"]),
-      sql`${webhookDeliveries.eventId} IS NOT NULL`,
-    ))
-    .returning();
+  const rows = await WEBHOOK_DELIVERY_QUEUE.retry(db, and(
+    eq(webhookDeliveries.id, deliveryId),
+    eq(webhookDeliveries.subscriptionId, subscriptionId),
+    eq(webhookDeliveries.kind, "event"),
+    sql`${webhookDeliveries.eventId} IS NOT NULL`,
+  )).returning();
   if (!rows[0]) {
     const existing = await db
       .select({ id: webhookDeliveries.id })
@@ -912,7 +835,7 @@ export async function sendWebhookTest(
       topic: WEBHOOK_TEST_TOPIC,
       status: result.ok ? "succeeded" : "failed",
       attempts: 1,
-      nextAttemptAt: NEVER,
+      nextAttemptAt: NEVER_DUE,
       lastAttemptAt: sql`unixepoch()`,
       responseStatus: result.responseStatus,
       durationMs: result.durationMs,
@@ -949,10 +872,7 @@ export async function pruneEventsAndDeliveries(db: Database, nowSeconds = Math.f
         .where(and(
           lt(webhookDeliveries.createdAt, nowSeconds - DELIVERY_RETENTION_SECONDS),
           // A `failed` delivery with a next attempt is still being retried: only one that is never tried again (a test send) goes.
-          or(
-            inArray(webhookDeliveries.status, ["succeeded", "exhausted", "cancelled"]),
-            and(eq(webhookDeliveries.status, "failed"), gte(webhookDeliveries.nextAttemptAt, NEVER)),
-          ),
+          WEBHOOK_DELIVERY_QUEUE.settled(),
         ))
         .limit(PRUNE_BATCH_SIZE),
     ))
