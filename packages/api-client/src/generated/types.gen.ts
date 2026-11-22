@@ -69566,7 +69566,7 @@ export type GetApiV1AdminOrdersData = {
          */
         status?: string;
         /**
-         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).
+         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back: a cancelled order's, a late payment's, or what a refund that failed did not return), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, unanswered past its window, or its status check needs a person).
          */
         view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes' | 'refunds_to_resolve';
         /**
@@ -70044,7 +70044,7 @@ export type GetApiV1AdminOrdersExportData = {
          */
         status?: string;
         /**
-         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).
+         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back: a cancelled order's, a late payment's, or what a refund that failed did not return), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, unanswered past its window, or its status check needs a person).
          */
         view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes' | 'refunds_to_resolve';
         openRequest?: 'true' | 'false';
@@ -71081,7 +71081,7 @@ export type PostApiV1AdminOrdersArchiveData = {
                 search?: string;
                 status?: string;
                 /**
-                 * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).
+                 * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back: a cancelled order's, a late payment's, or what a refund that failed did not return), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, unanswered past its window, or its status check needs a person).
                  */
                 view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes' | 'refunds_to_resolve';
                 openRequest?: boolean;

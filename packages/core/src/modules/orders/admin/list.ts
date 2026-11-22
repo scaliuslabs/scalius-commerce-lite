@@ -10,6 +10,7 @@ import {
     paymentSessionAttempts,
     orderPayments,
     refundAttempts,
+    orderRefunds,
     PaymentRecordStatus,
     codTracking,
     CodStatus,
@@ -46,6 +47,7 @@ import { orderBillingAddressFields, orderBillingAddressSelection } from "../bill
 import { orderNumberSearchCondition } from "../number";
 import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch } from "../../../utils/phone-search";
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
+import { failedRefundOwedSql } from "./refund-kept";
 import { formatOrderCsvLineProperties } from "../csv-export";
 import {
   disputedOrderIds,
@@ -258,13 +260,15 @@ function openCustomerRequestExists(db: Database): SQL {
  * provider could not refund automatically (late-payment.ts marks it: `manual`
  * when the provider has no refund, `retry` when the failure may heal) has
  * less of it gone back than came in: a part returned keeps the order here
- * until all of it is, and money a bank took back leaves nothing to return.
+ * until all of it is, and money a bank took back leaves nothing to return;
+ * or, whatever its status, its latest refund ended without all its money
+ * going back and staff have not kept it since (`failedRefundOwedSql`).
  */
 function moneyToReturnCondition(db: Database): SQL {
     return sql`${ordersAmong(db, moneyToReturnCandidateIds())}
         AND ${orders.paidAmountMinor} - ${orders.disputedMinor} > 0
         AND ${noActiveRefundAttemptForOrderColumnCondition()}
-        AND (${orders.status} = ${OrderStatus.CANCELLED} OR EXISTS (
+        AND (${orders.status} = ${OrderStatus.CANCELLED} OR ${failedRefundOwedSql(qualifiedColumn(orders.id))} > 0 OR EXISTS (
         SELECT 1 FROM ${orderPayments} AS late
         WHERE late.order_id = ${qualifiedColumn(orders.id)}
           AND late.payment_type <> 'refund'
@@ -279,10 +283,10 @@ function moneyToReturnCondition(db: Database): SQL {
 }
 
 /**
- * The orders Money to return may list, each half from its own partial index
- * (0220): cancelled orders the store holds money on
- * (`orders_money_to_return_idx`) and late payments put before staff
- * (`order_payments_late_refund_idx`). The read is proportional to these,
+ * The orders Money to return may list, each part from its own partial index:
+ * cancelled orders the store holds money on (`orders_money_to_return_idx`),
+ * late payments put before staff (`order_payments_late_refund_idx`, both
+ * 0220) and refunds that ended failed or partial (`order_refunds_unsettled_idx`, 0222). The read is proportional to these,
  * never to the order history; the literals match the indexes' predicates.
  */
 function moneyToReturnCandidateIds(): SQL {
@@ -290,7 +294,10 @@ function moneyToReturnCandidateIds(): SQL {
         WHERE ${orders.status} = 'cancelled' AND ${orders.paidAmountMinor} > ${orders.disputedMinor}
         UNION
         SELECT ${orderPayments.orderId} AS order_id FROM ${orderPayments}
-        WHERE json_extract(${orderPayments.metadata}, '$.latePayment.refund') IN ('manual', 'retry')`;
+        WHERE json_extract(${orderPayments.metadata}, '$.latePayment.refund') IN ('manual', 'retry')
+        UNION
+        SELECT ${orderRefunds.orderId} AS order_id FROM ${orderRefunds}
+        WHERE ${orderRefunds.status} IN ('failed', 'partial')`;
 }
 
 /**
