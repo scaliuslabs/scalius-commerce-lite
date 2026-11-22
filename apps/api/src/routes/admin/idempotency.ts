@@ -251,12 +251,13 @@ export const idempotentReplay: MiddlewareHandler<{ Bindings: Env }> = async (c, 
     if (leaseLive) refuse(409, "idempotency_in_progress", IN_PROGRESS);
     if (earlier.request !== request) {
       // "Reused" says the key's request was recorded: only a kept success proves that. A kept
-      // refusal recorded nothing, so this request runs under the key; a first run that stopped
-      // without a kept answer may or may not have acted.
+      // refusal recorded nothing, so this request runs under the key. A first run that stopped
+      // without a kept answer may or may not have acted: an operation keyed by its own request
+      // decides (it replays, refuses or runs); any other answers outcome unknown.
       if (earlier.state === "done" && earlier.status < 400) {
         refuse(422, "idempotency_key_reused", "This Idempotency-Key was used for a different request. Use a new key for a new request.");
       }
-      if (earlier.state !== "done") {
+      if (earlier.state !== "done" && retryAfterLostResponse(operation) === "outcome_unknown") {
         refuse(409, "idempotency_outcome_unknown", "The first request with this Idempotency-Key stopped before its response was kept, so it may have taken effect. Read the resource to check, and repeat with a new key only if it is missing.");
       }
       const taken = await takeOver(c, storeKey, claimed.raw, request);
