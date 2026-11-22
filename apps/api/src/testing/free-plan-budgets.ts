@@ -249,13 +249,6 @@
  * and the settlement's read, +2 statements; a refund of a gift-card purchase
  * also reads them in its clawback settlement, +3. Every payment insert stays
  * free of a scan: the disputes' payment key is indexed.
- *
- * Sign-in code receipts end and go (2026-11-22): the OTP cleanup job also
- * reads the receipts whose code expired unsent and those an hour past it, two
- * selects in one batch, and writes only when it finds some. An idle Paid hour
- * runs the job once more than Free's worst minute shows: cron-idle 63 -> 64
- * calls and 73 -> 75 statements Paid (Free unchanged). It buys bounded
- * retention of a buyer's contact hash and an end state for every receipt.
  */
 import type { WorkersPlan } from "@scalius/shared/plan-limits";
 
@@ -365,7 +358,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-refund": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 19, rowsRead: 27, fullScans: 3 },
     "order-refund-gift-card": { d1Calls: 27, d1Statements: 63, externalFetches: 0, rowsWritten: 48, rowsRead: 53, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
-    "cron-idle": { d1Calls: 64, d1Statements: 75, externalFetches: 0, rowsWritten: 105, rowsRead: 7483, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 3.01 },
+    "cron-idle": { d1Calls: 63, d1Statements: 73, externalFetches: 0, rowsWritten: 105, rowsRead: 7483, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 3.01 },
     "cron-nightly": { d1Calls: 119, d1Statements: 763, externalFetches: 0, rowsWritten: 430, rowsRead: 17128, fullScans: 438 },
     "drain-busy": { d1Calls: 8, d1Statements: 23, externalFetches: 0, rowsWritten: 17, rowsRead: 669, fullScans: 19 },
     "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },

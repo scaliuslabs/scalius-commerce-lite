@@ -2,15 +2,15 @@
 // sent at most once per delivery. `pending` and `failed` wait for a send
 // (`processing` holds one under a lease); `accepted`, `skipped` and `expired`
 // are final, the last written by the sweep once the code expired unsent
-// (`sweepAuthOtpDeliveryReceipts`), which also deletes every receipt an hour
+// (`sweepSignInCodes`), which also deletes every receipt an hour
 // after its code expired. The contact is kept only as the challenge's keyed
 // identifier hash (`hashCustomerAuthOtpIdentifier`), which customer erasure
 // computes again to delete a buyer's receipts.
 import type { Database } from "@scalius/database/client";
-import { authOtpDeliveryReceipts, type AuthOtpDeliveryReceiptStatus } from "@scalius/database/schema";
-import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
+import { authOtpDeliveryReceipts, customerAuthOtpChallenges, type AuthOtpDeliveryReceiptStatus } from "@scalius/database/schema";
+import { and, eq, inArray, isNull, lte, or, sql, type SQLWrapper } from "drizzle-orm";
 import { sha256HexSync } from "@scalius/shared/hash";
-import { hashCustomerAuthOtpIdentifier } from "./customer-auth-otp-challenges";
+import { expiredCustomerAuthOtpChallenges, hashCustomerAuthOtpIdentifier } from "./customer-auth-otp-challenges";
 
 export type { AuthOtpDeliveryReceiptStatus };
 export type AuthOtpDeliveryChannel = "email" | "sms" | "whatsapp";
@@ -289,32 +289,69 @@ async function selectAuthOtpDeliveryReceiptByKey(
 }
 
 /**
- * The expiry sweep: a receipt whose code expired before a send was accepted
- * ends `expired` (a lease still held finishes first), and every receipt goes
- * an hour after its code expired. Both read `auth_otp_delivery_receipts_expires_idx`,
- * at most `limit` rows each, in one database call when there is nothing to do.
+ * The sign-in code cleanup, in one read: the challenges whose code expired
+ * (`expiredCustomerAuthOtpChallenges`), the receipts whose code expired unsent
+ * (they end `expired`; a lease still held finishes first) and the receipts an
+ * hour past their code's expiry (deleted). A receipt with no expiry, which an
+ * older Worker could write, counts as made with a ten-minute code. Each part
+ * reads at most `limit` rows from its own index; writes run only for what it
+ * found, so an idle store pays one statement.
  */
-export async function sweepAuthOtpDeliveryReceipts(
+export async function sweepSignInCodes(
     db: Database,
     nowSeconds = Math.floor(Date.now() / 1000),
-    options: { limit?: number } = {},
-): Promise<{ expired: number; deleted: number; hasMore: boolean; limit: number }> {
+    options: { limit?: number; receiptLimit?: number } = {},
+): Promise<{
+    challenges: { scanned: number; deleted: number; limit: number; hasMore: boolean };
+    receipts: { expired: number; deleted: number; limit: number; hasMore: boolean };
+}> {
     const limit = Math.max(1, Math.min(options.limit ?? 200, 500));
-    const ending = and(lte(authOtpDeliveryReceipts.otpExpiresAt, nowSeconds), openReceipt(nowSeconds));
-    const stale = lte(authOtpDeliveryReceipts.otpExpiresAt, nowSeconds - RECEIPT_RETENTION_SECONDS);
-    const [open, old] = await db.batch([
-        db.select({ id: authOtpDeliveryReceipts.id }).from(authOtpDeliveryReceipts).where(ending).limit(limit),
-        db.select({ id: authOtpDeliveryReceipts.id }).from(authOtpDeliveryReceipts).where(stale).limit(limit),
-    ]);
-    const expired = open.length === 0 ? [] : await db.update(authOtpDeliveryReceipts).set({
+    const receiptLimit = Math.max(1, Math.min(options.receiptLimit ?? limit, 500));
+    const challengeGone = expiredCustomerAuthOtpChallenges(nowSeconds);
+    const ending = and(codeExpiredBy(nowSeconds), openReceipt(nowSeconds))!;
+    const stale = codeExpiredBy(nowSeconds - RECEIPT_RETENTION_SECONDS);
+    const part = (kind: string, query: SQLWrapper) => sql`SELECT kind, id FROM (${query.getSQL()}) AS ${sql.raw(`"${kind}_rows"`)}`;
+    const rows = await db.all<{ kind: string; id: string }>(sql.join([
+        part("challenge", db.select({ kind: sql`'challenge'`.as("kind"), id: sql`${customerAuthOtpChallenges.otpKey}`.as("id") })
+            .from(customerAuthOtpChallenges).where(challengeGone).limit(limit + 1)),
+        part("ending", db.select({ kind: sql`'ending'`.as("kind"), id: sql`${authOtpDeliveryReceipts.id}`.as("id") })
+            .from(authOtpDeliveryReceipts).where(ending).limit(receiptLimit)),
+        part("stale", db.select({ kind: sql`'stale'`.as("kind"), id: sql`${authOtpDeliveryReceipts.id}`.as("id") })
+            .from(authOtpDeliveryReceipts).where(stale).limit(receiptLimit)),
+    ], sql` UNION ALL `));
+    const ids = (kind: string) => rows.map((row) => Array.isArray(row) ? { kind: String(row[0]), id: String(row[1]) } : row)
+        .filter((row) => row.kind === kind).map((row) => row.id);
+    const challengeIds = ids("challenge");
+    const endingIds = ids("ending");
+    const staleIds = ids("stale");
+    const goneChallenges = challengeIds.length === 0 ? [] : await db.delete(customerAuthOtpChallenges)
+        .where(and(challengeGone, inArray(customerAuthOtpChallenges.otpKey, challengeIds.slice(0, limit))))
+        .returning({ id: customerAuthOtpChallenges.otpKey });
+    const expired = endingIds.length === 0 ? [] : await db.update(authOtpDeliveryReceipts).set({
         status: "expired",
         claimId: null,
         claimExpiresAt: null,
         updatedAt: sql`unixepoch()`,
-    }).where(and(inArray(authOtpDeliveryReceipts.id, open.map((row) => row.id)), ending)).returning({ id: authOtpDeliveryReceipts.id });
-    const deleted = old.length === 0 ? [] : await db.delete(authOtpDeliveryReceipts)
-        .where(and(inArray(authOtpDeliveryReceipts.id, old.map((row) => row.id)), stale)).returning({ id: authOtpDeliveryReceipts.id });
-    return { expired: expired.length, deleted: deleted.length, hasMore: open.length === limit || old.length === limit, limit };
+    }).where(and(inArray(authOtpDeliveryReceipts.id, endingIds), ending)).returning({ id: authOtpDeliveryReceipts.id });
+    const deleted = staleIds.length === 0 ? [] : await db.delete(authOtpDeliveryReceipts)
+        .where(and(inArray(authOtpDeliveryReceipts.id, staleIds), stale)).returning({ id: authOtpDeliveryReceipts.id });
+    return {
+        challenges: { scanned: Math.min(challengeIds.length, limit), deleted: goneChallenges.length, limit, hasMore: challengeIds.length > limit },
+        receipts: {
+            expired: expired.length,
+            deleted: deleted.length,
+            limit: receiptLimit,
+            hasMore: endingIds.length === receiptLimit || staleIds.length === receiptLimit,
+        },
+    };
+}
+
+/** The receipt's code expired by `at` (one with no expiry: ten minutes after it was made). */
+function codeExpiredBy(at: number) {
+    return or(
+        lte(authOtpDeliveryReceipts.otpExpiresAt, at),
+        and(isNull(authOtpDeliveryReceipts.otpExpiresAt), lte(authOtpDeliveryReceipts.createdAt, at - UNKNOWN_EXPIRY_SECONDS)),
+    )!;
 }
 
 /** Waiting for a send, or held by an attempt whose lease ran out. */
