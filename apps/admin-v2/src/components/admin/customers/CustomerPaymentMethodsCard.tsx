@@ -7,7 +7,7 @@
 // provider's reference.
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -25,6 +25,7 @@ import {
 } from "~/lib/api-query-options/customers";
 import { resourceMessages } from "~/i18n/resource";
 import { toast } from "~/lib/toast";
+import { useCommand } from "~/lib/use-command";
 
 type Translate = ReturnType<typeof useMessages<keyof typeof customerPaymentMethodsMessages.en>>;
 
@@ -90,7 +91,7 @@ export function CustomerPaymentMethodsCard({ customerId, canEdit }: { customerId
   const queryClient = useQueryClient();
   const methods = useQuery(customerPaymentMethodsQueryOptions(customerId));
   const [removing, setRemoving] = useState<CustomerSavedPaymentMethod | null>(null);
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: (methodId: string) => removeCustomerPaymentMethod(customerId, methodId),
     onSuccess: (result) => {
       queryClient.setQueryData(customerPaymentMethodsQueryOptions(customerId).queryKey, result);
@@ -134,7 +135,7 @@ export function CustomerPaymentMethodsCard({ customerId, canEdit }: { customerId
       </CardContent>
       <ConfirmDialog
         open={canEdit && removing !== null}
-        onOpenChange={(open) => { if (!open && !remove.isPending) setRemoving(null); }}
+        onOpenChange={remove.guardClose((open) => { if (!open) setRemoving(null); })}
         title={t("removeTitle", { method: removing ? paymentMethodName(removing, t) : "" })}
         description={t("removeBody")}
         confirmLabel={t("remove")}

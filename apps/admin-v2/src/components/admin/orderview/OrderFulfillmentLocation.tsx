@@ -53,7 +53,7 @@ export function OrderFulfillmentLocation({ order }: { order: Order }) {
           {t("location.change")}
         </Button>
       ) : null}
-      <Dialog open={open} onOpenChange={(next) => (save.isPending ? undefined : setOpen(next))}>
+      <Dialog open={open} onOpenChange={save.guardClose(setOpen)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("location.dialogTitle")}</DialogTitle>

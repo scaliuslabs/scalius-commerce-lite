@@ -2,7 +2,7 @@
 // cursor, and a row that opens to the error and the receiver's response.
 // Failed, exhausted and cancelled deliveries can be sent again.
 import { Fragment, useState, type ReactNode } from "react";
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { cn } from "@scalius/shared/utils";
@@ -25,6 +25,7 @@ import {
 } from "~/lib/api-query-options/webhooks";
 import { DeliveryError } from "./DeliveryError";
 import { deliveryStatusVariant, formatDuration, formatWhen, topicLabel } from "./webhook-format";
+import { useCommand } from "~/lib/use-command";
 
 /** The statuses a merchant filters by. */
 const FILTERS = ["succeeded", "failed", "exhausted", "cancelled", "pending", "processing"] as const satisfies readonly WebhookDeliveryStatus[];
@@ -82,7 +83,7 @@ function DeliveriesLog({ subscription, canManage }: { subscription: WebhookSubsc
   const [expanded, setExpanded] = useState<string | null>(null);
   const log = useInfiniteQuery(webhookDeliveriesQueryOptions(subscription.id, status));
   const deliveries = log.data?.pages.flatMap((page) => page.deliveries) ?? [];
-  const retry = useMutation({
+  const retry = useCommand({
     mutationFn: (deliveryId: string) => retryWebhookDelivery(subscription.id, deliveryId),
     onSuccess: () => void toast.success(t("retried")),
     onError: () => void toast.error(t("retryFailed")),

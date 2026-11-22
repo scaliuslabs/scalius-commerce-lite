@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { PresenceSlot, announceSave, presenceKey } from "~/lib/realtime/store";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { postApiV1AdminAttributes, putApiV1AdminAttributesById } from "@scalius/api-client/sdk";
@@ -24,7 +24,6 @@ import { ConvertTypeDialog } from "./ConvertTypeDialog";
 import { useAutoHandle } from "~/lib/handle-spelling";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
-import { useSubmitOnce } from "~/components/admin/shared/use-submit-once";
 import { apiData } from "~/lib/api";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { queryKeys } from "~/lib/query-keys";
@@ -33,6 +32,7 @@ import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
 import { attributeTypeMessages } from "~/i18n/attribute-types";
 import { Field, FieldRow } from "~/components/ui/field";
+import { useCommand } from "~/lib/use-command";
 
 const HANDLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** While typing a handle: lowercase, spaces become dashes, nothing else outside a-z, 0-9 and "-". */
@@ -89,8 +89,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
       : checked.slug && slugInvalid ? t("handleInvalid") : null,
   };
 
-  const submitOnce = useSubmitOnce();
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: () => {
       // Presets are also edited in the values editor: resend them only when changed here.
       const optionsChanged = options.join("\u0000") !== (attribute?.options ?? []).join("\u0000");
@@ -166,8 +165,8 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
               setChecked({ name: true, slug: true });
               setServerError(null);
               if (name.trim().length < 2 || slugInvalid) return;
-              // One request at a time: a double click must not create the attribute twice.
-              submitOnce(() => save.mutateAsync());
+              // One request at a time (the command drops a double click): the attribute is created once.
+              save.mutate(undefined);
             }}
           >
             {serverError?.field === "form" ? (

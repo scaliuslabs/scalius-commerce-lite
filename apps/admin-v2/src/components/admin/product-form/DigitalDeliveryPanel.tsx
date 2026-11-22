@@ -1,5 +1,5 @@
 import React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { FileText, MoreHorizontal } from "lucide-react";
 import {
@@ -51,6 +51,7 @@ import { KeyImportDialog, KeyRevokeDialog } from "./DigitalKeyDialogs";
 import { digitalAssetsKey, digitalAssetsQueryOptions } from "./digital-stock";
 import { Field, FieldRow } from "~/components/ui/field";
 import { formMessages } from "~/i18n/forms";
+import { useCommand } from "~/lib/use-command";
 
 type T = (key: DigitalMessageKey, vars?: Record<string, string | number>) => string;
 
@@ -187,7 +188,8 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
     fileRef.current?.click();
   };
 
-  const setStatus = useMutation({
+  const setStatus = useCommand({
+    subject: ({ asset }) => asset.id,
     mutationFn: ({ asset, status }: { asset: DigitalAssetDto; status: "ready" | "archived" }) =>
       apiData(patchApiV1AdminDigitalAssetsById({ path: { id: asset.id }, body: { version: asset.version, status } })),
     onSuccess: ({ asset }) => {
@@ -197,7 +199,7 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
     onError: (error) => toast.error(digitalErrorText(error, t)),
     onSettled: () => void refresh(),
   });
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: (asset: DigitalAssetDto) => apiData(deleteApiV1AdminDigitalAssetsById({ path: { id: asset.id } })),
     onSuccess: () => toast.success(t("fileDeleted")),
     onError: (error) => toast.error(digitalErrorText(error, t)),
@@ -428,7 +430,7 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
   const [expires, setExpires] = React.useState(false);
   const [checked, setChecked] = React.useState(false);
   const open = asset !== null;
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: (body: { displayName: string; downloadLimit: number | null; accessDays: number | null }) =>
       apiData(patchApiV1AdminDigitalAssetsById({ path: { id: asset!.id }, body: { version: asset!.version, ...body } })),
     onSuccess: ({ asset: saved }) => {
@@ -460,7 +462,7 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
     save.mutate({ displayName: name.trim(), downloadLimit: limited ? limit : null, accessDays: expires ? days : null });
   };
   return (
-    <Dialog open={open} onOpenChange={(next) => !save.isPending && onOpenChange(next)}>
+    <Dialog open={open} onOpenChange={save.guardClose(onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("editTitle", { name: asset?.displayName ?? "" })}</DialogTitle>

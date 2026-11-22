@@ -29,7 +29,6 @@ import { sameFormValue } from "~/lib/form-values";
 import { DEFAULT_CURRENCY, getDecimalPlaces } from "@scalius/shared/currency";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
-import { useSubmitOnce } from "~/components/admin/shared/use-submit-once";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -159,7 +158,6 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
   const save = useSaveCustomFieldDefinition();
   const reset = save.reset;
   const queryClient = useQueryClient();
-  const submitOnce = useSubmitOnce();
   // Keys this dialog has sent a create for since it opened.
   const sentKeys = useRef(new Set<string>());
 
@@ -237,32 +235,29 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
         validations,
         storefrontVisible: storefrontAllowed && draft.storefrontVisible,
       };
-      submitOnce(async () => {
-        const sentBefore = sentKeys.current.has(body.key);
-        sentKeys.current.add(body.key);
-        try {
-          await save.mutateAsync({ id: null, body });
-        } catch (error) {
+      if (save.isPending) return;
+      const sentBefore = sentKeys.current.has(body.key);
+      sentKeys.current.add(body.key);
+      save.mutate({ id: null, body }, {
+        onSuccess,
+        onError: async (error) => {
           // This dialog's own earlier create (its answer lost) made the field: that is a success.
-          if (!sentBefore || readAdminApiErrorCode(error) !== "custom_field_key_taken" || !await createdAlready(body)) throw error;
+          if (!sentBefore || readAdminApiErrorCode(error) !== "custom_field_key_taken" || !await createdAlready(body)) return;
           save.reset();
-        }
-        onSuccess();
+          onSuccess();
+        },
       });
     } else {
-      submitOnce(async () => {
-        await save.mutateAsync({
-          id: definition.id,
-          body: {
-            expectedRevision: definition.revision,
-            name,
-            description,
-            validations,
-            ...(storefrontAllowed ? { storefrontVisible: draft.storefrontVisible } : {}),
-          },
-        });
-        onSuccess();
-      });
+      save.mutate({
+        id: definition.id,
+        body: {
+          expectedRevision: definition.revision,
+          name,
+          description,
+          validations,
+          ...(storefrontAllowed ? { storefrontVisible: draft.storefrontVisible } : {}),
+        },
+      }, { onSuccess });
     }
   };
 

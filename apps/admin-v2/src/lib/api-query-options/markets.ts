@@ -2,7 +2,7 @@
 // reads and writes. An edit can change the backup market's price increment,
 // which every money field reads through the currency settings query, so an
 // edit refreshes that query too.
-import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useQueryClient } from "@tanstack/react-query";
 import {
   deleteApiV1AdminSettingsMarketsById,
   getApiV1AdminSettingsMarkets,
@@ -13,6 +13,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
+import { useCommand } from "~/lib/use-command";
 
 export type Market = ApiResult<typeof getApiV1AdminSettingsMarkets>["items"][number];
 export type MarketPresence = NonNullable<Market["presence"]>;
@@ -72,7 +73,7 @@ function useRefreshMarketList() {
 
 export function useCreateMarket() {
   const refresh = useRefreshMarketList();
-  return useMutation({
+  return useCommand({
     mutationFn: async (body: CreateMarketBody) => (await apiData(postApiV1AdminSettingsMarkets({ body }))).market,
     onSettled: refresh,
   });
@@ -80,7 +81,7 @@ export function useCreateMarket() {
 
 export function useDeleteMarket() {
   const refresh = useRefreshMarketList();
-  return useMutation({
+  return useCommand({
     mutationFn: (market: Pick<Market, "id" | "revision">) =>
       apiData(deleteApiV1AdminSettingsMarketsById({ path: { id: market.id }, query: { expectedRevision: market.revision } })),
     onSettled: refresh,

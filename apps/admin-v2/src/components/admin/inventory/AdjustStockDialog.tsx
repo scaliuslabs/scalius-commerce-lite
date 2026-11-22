@@ -19,7 +19,8 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NumberInput } from "~/components/ui/number-input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { apiData } from "~/lib/api";
+import { apiData, type ApiBody } from "~/lib/api";
+import { useCommand } from "~/lib/use-command";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
 import type { InventoryAdjustmentReason, InventoryVariant } from "~/lib/api-query-options/inventory";
 import type { InventoryLocation, VariantInventoryLevels } from "~/lib/api-query-options/inventory-locations";
@@ -71,6 +72,10 @@ interface AdjustStockDialogProps {
  * operation key per stock intent. Always mounted; the parent re-keys it per
  * opening so every opening starts clean.
  */
+type StockIntent =
+  | { mode: "stocktake"; variantId: string; body: ApiBody<typeof postApiV1AdminInventoryStockSet> }
+  | { mode: "relative"; variantId: string; body: ApiBody<typeof postApiV1AdminInventoryByVariantIdAdjust> };
+
 export function AdjustStockDialog({
   variant,
   storeLevel = null,
@@ -107,8 +112,21 @@ export function AdjustStockDialog({
   // Validation appears once the merchant has typed, not on open.
   const [touched, setTouched] = useState(false);
   const [serverErrors, setServerErrors] = useState<Partial<Record<ProblemField, string>>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const operationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  // The stock change keeps its operation key per intent and, after a lost answer, until a success.
+  const stockChange = useCommand({
+    name: "inventory.stock",
+    subject: ({ variantId }: StockIntent) => variantId,
+    createKey: () => `invop_${crypto.randomUUID()}`,
+    mutationFn: (intent: StockIntent, operationKey) => intent.mode === "stocktake"
+      ? apiData(postApiV1AdminInventoryStockSet({ body: intent.body, headers: { "idempotency-key": operationKey } }))
+      : apiData(postApiV1AdminInventoryByVariantIdAdjust({
+        path: { variantId: intent.variantId },
+        body: intent.body,
+        headers: { "idempotency-key": operationKey },
+      })),
+  });
+  const submission = useCommand({ mutationFn: (current: InventoryVariant) => save(current) });
+  const submitting = submission.isPending;
   const fieldRefs = {
     location: useRef<HTMLButtonElement>(null),
     quantity: useRef<HTMLInputElement>(null),
@@ -149,15 +167,6 @@ export function AdjustStockDialog({
   const clearServerError = (field: ProblemField) =>
     setServerErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
 
-  const operationKeyForIntent = (fingerprint: string) => {
-    if (operationIntentRef.current?.fingerprint === fingerprint) {
-      return operationIntentRef.current.key;
-    }
-    const key = `invop_${crypto.randomUUID()}`;
-    operationIntentRef.current = { fingerprint, key };
-    return key;
-  };
-
   const updateDelta = (next: number | null) => {
     setTouched(true);
     clearServerError("quantity");
@@ -168,26 +177,12 @@ export function AdjustStockDialog({
     const trimmedNotes = notes.trim();
     // A store with one location sends none: the API uses the default.
     const at = pickLocation && location ? { locationId: location.id } : {};
-    if (mode === "stocktake") {
-      const stocktakeReason = trimmedNotes || "Manual stocktake";
-      const body = { variantId: current.id, newStock: targetStock!, reason: stocktakeReason, ...at };
-      await apiData(postApiV1AdminInventoryStockSet({
-        body,
-        headers: { "idempotency-key": operationKeyForIntent(JSON.stringify({ mode, ...body })) },
-      }));
-      return;
-    }
-    const body = { delta: effectiveDelta, reason, ...(trimmedNotes ? { notes: trimmedNotes } : {}), ...at };
-    await apiData(postApiV1AdminInventoryByVariantIdAdjust({
-      path: { variantId: current.id },
-      body,
-      headers: { "idempotency-key": operationKeyForIntent(JSON.stringify({ mode, variantId: current.id, ...body })) },
-    }));
+    await stockChange.mutateAsync(mode === "stocktake"
+      ? { mode, variantId: current.id, body: { variantId: current.id, newStock: targetStock!, reason: trimmedNotes || "Manual stocktake", ...at } }
+      : { mode, variantId: current.id, body: { delta: effectiveDelta, reason, ...(trimmedNotes ? { notes: trimmedNotes } : {}), ...at } });
   };
 
-  const handleSubmit = async () => {
-    if (!variant || !canSubmit) return;
-    setSubmitting(true);
+  const save = async (variant: InventoryVariant) => {
     setServerErrors({});
     const saved = { alertLevel: false, stock: false };
     try {
@@ -225,13 +220,14 @@ export function AdjustStockDialog({
       } else {
         toast.error(t(saved.alertLevel ? "stockNotUpdated" : alertLevelChanged ? "alertLevelFailed" : "adjustFailed"));
       }
-    } finally {
-      setSubmitting(false);
     }
+  };
+  const handleSubmit = () => {
+    if (variant && canSubmit) submission.mutate(variant);
   };
 
   return (
-    <Dialog open={open && variant !== null} onOpenChange={(next) => { if (!next) onClose(); }}>
+    <Dialog open={open && variant !== null} onOpenChange={submission.guardClose((next) => { if (!next) onClose(); })}>
       <DialogContent onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>{t("adjustTitle")}</DialogTitle>

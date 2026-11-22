@@ -10,7 +10,7 @@
 // the data over to it or deletes it. Staff who cannot see Apps get the
 // app's id and no group card, as with "Managed by".
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatList } from "@scalius/shared/locale-words";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
@@ -30,6 +30,7 @@ import { customFieldKeys } from "~/lib/api-query-options/custom-fields";
 import { objectKeys } from "~/lib/api-query-options/objects";
 import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
+import { useCommand } from "~/lib/use-command";
 
 type RemovedAppDataKey = keyof typeof removedAppDataMessages.en;
 
@@ -62,7 +63,7 @@ export function RemovedAppDataCard({ show }: { show?: (group: RemovedAppData) =>
   // The last group asked about stays in the dialog while it closes.
   const [confirming, setConfirming] = useState<RemovedAppData | null>(null);
   const [open, setOpen] = useState(false);
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: deleteRemovedAppData,
     onSuccess: ({ catalogKept }) => {
       toast.success(catalogKept > 0 ? t("deletedKept", { count: catalogKept }) : t("deleted"));
@@ -84,7 +85,7 @@ export function RemovedAppDataCard({ show }: { show?: (group: RemovedAppData) =>
   });
   const [handing, setHanding] = useState<RemovedAppData | null>(null);
   const [handOpen, setHandOpen] = useState(false);
-  const handOver = useMutation({
+  const handOver = useCommand({
     // A waiting release is the store's own bundled code: it takes the data with no key.
     mutationFn: (group: RemovedAppData) => handOverRemovedAppData(group, null),
     onSuccess: (_result, group) => {
@@ -170,7 +171,7 @@ export function RemovedAppDataCard({ show }: { show?: (group: RemovedAppData) =>
       ) : null}
       <ConfirmDialog
         open={open}
-        onOpenChange={(next) => (remove.isPending ? undefined : setOpen(next))}
+        onOpenChange={remove.guardClose(setOpen)}
         title={t("deleteTitle", { app: confirming?.name ?? "" })}
         description={confirming ? t("deleteBody", { what: summary(confirming, t) }) : ""}
         confirmLabel={t("deleteData")}
@@ -183,7 +184,7 @@ export function RemovedAppDataCard({ show }: { show?: (group: RemovedAppData) =>
       />
       <ConfirmDialog
         open={handOpen}
-        onOpenChange={(next) => (handOver.isPending ? undefined : setHandOpen(next))}
+        onOpenChange={handOver.guardClose(setHandOpen)}
         title={t("handOverTitle", { app: handing?.name ?? "", version: handing?.waitingRelease?.version ?? "" })}
         description={handing ? t("handOverBody", { version: handing.waitingRelease?.version ?? "", what: summary(handing, t) }) : ""}
         confirmLabel={t("handOver")}

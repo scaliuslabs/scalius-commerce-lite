@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { snippetProblems } from "@scalius/shared/store-scripts";
 import { providerLabel } from "~/i18n/provider-copy";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { Code2, Loader2, ShieldCheck } from "lucide-react";
 import {
@@ -59,6 +59,7 @@ import { OfficialProviderMark, type ProviderMarkId } from "./provider-marks";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsCardLoading, SettingsDialog, SettingsField, SettingsRow } from "./SettingsPage";
 import { sameFormValue } from "~/lib/form-values";
+import { useCommand } from "~/lib/use-command";
 
 /** Saved secrets come back masked; sending the mask back keeps them. */
 const MASKED_VALUE = "••••••••••••";
@@ -200,7 +201,7 @@ function ScriptForm({ script, scripts, types }: {
     scripts.some((other) => other.type === draft.type && other.isActive);
   const service = t(draft.type);
 
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: (): Promise<unknown> => {
       const body = {
         name: draft.name.trim(),
@@ -220,7 +221,7 @@ function ScriptForm({ script, scripts, types }: {
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.analytics.all }),
   });
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: async () => {
       // Trash, then delete for good: nothing on this page restores from trash.
       const trashed = await apiData(deleteApiV1AdminAnalyticsById({
@@ -420,7 +421,7 @@ export function ScriptList({ types, emptyLabel, addLabel }: {
     setSwitched({});
     setKeepBoth(false);
   };
-  const toggle = useMutation({
+  const toggle = useCommand({
     mutationFn: async () => {
       // Turn scripts off first so swapping one for another never overlaps.
       const ordered = [...changed].sort((a, b) => Number(isOn(a)) - Number(isOn(b)));
@@ -720,7 +721,7 @@ function AppFraudProviderForm({
   const [draft, setDraft] = useState(saved);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.fraudChecker.all });
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: () => {
       const body = { name: provider?.name || name, providerType, isActive: draft.isActive };
       return provider
@@ -729,7 +730,7 @@ function AppFraudProviderForm({
     },
     onSuccess: refresh,
   });
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: () => apiData(deleteApiV1AdminFraudCheckerById({ path: { id: provider!.id } })),
     onSuccess: async () => {
       toast.success(t("providerRemoved", { name }));
@@ -849,7 +850,7 @@ function ScannerCardBody() {
   const [qr, setQr] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const qrFailed = t("qrFailed");
-  const create = useMutation({
+  const create = useCommand({
     mutationFn: () => apiData(postApiV1AdminAuthScannerLink()),
     onSuccess: ({ token, expiresAt }) => {
       const expiry = new Date(expiresAt).getTime();

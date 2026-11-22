@@ -12,6 +12,12 @@ function canonicalize(value: unknown): unknown {
   return value;
 }
 
+/** A request key; outside a secure context (no `crypto.randomUUID`) still unique enough for one tab. */
+export function newRequestKey(): string {
+  if (typeof crypto?.randomUUID === "function") return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+}
+
 export function commandIntent(action: string, payload: unknown): string {
   return `${action}:${JSON.stringify(canonicalize(payload))}`;
 }
@@ -36,7 +42,7 @@ export class IntentRequestKey {
   private current: { intent: string; key: string } | null = null;
   private open = false;
 
-  constructor(private readonly createKey: (action: string) => string = () => crypto.randomUUID()) {}
+  constructor(private readonly createKey: (action: string) => string = newRequestKey) {}
 
   get(action: string, payload: unknown): string {
     const intent = commandIntent(action, payload);

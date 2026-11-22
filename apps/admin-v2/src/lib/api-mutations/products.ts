@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import {
@@ -17,6 +17,7 @@ import {
 import { readProductRevisionConflict } from "../admin-api-conflicts";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { useCommand } from "~/lib/use-command";
 
 const t = (key: ProductMessageKey, vars?: Record<string, string | number>) =>
   translate(productMessages, key, vars);
@@ -33,7 +34,7 @@ function toastProductError(error: unknown) {
 export function useTrashProduct() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  return useMutation({
+  return useCommand({
     mutationFn: ({ id, expectedAggregateRevision }: ProductAggregateRevisionClaim) =>
       apiData(deleteApiV1AdminProductsById({ path: { id }, query: { expectedRevision: expectedAggregateRevision } })),
     onSuccess: (_data, variables) => {
@@ -54,7 +55,7 @@ export function useTrashProduct() {
 export function useDuplicateProduct() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  return useMutation({
+  return useCommand({
     mutationFn: ({ id, name }: { id: string; name: string }) =>
       apiData(postApiV1AdminProductsByIdDuplicate({
         path: { id },

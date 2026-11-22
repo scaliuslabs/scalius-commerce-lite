@@ -1,6 +1,7 @@
-import { keepPreviousData, queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions, useQueryClient } from "@tanstack/react-query";
 import type { ObjectField, ObjectTypeView, ObjectRecordView } from "@scalius/shared/plugins/objects";
 import { apiClient, apiData } from "../api";
+import { useCommand } from "~/lib/use-command";
 
 export type ObjectType = ObjectTypeView;
 export type ObjectRecord = ObjectRecordView;
@@ -84,7 +85,7 @@ export async function saveObjectRecord(type: string, id: string, body: UpdateObj
 }
 export function useDeleteObjectType() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (type: Pick<ObjectType, "handle" | "revision">) => apiData(apiClient.delete<Envelope<{ id: string; deleted: true }>>({
       url: typePath(type.handle), query: { expectedRevision: type.revision },
     })),
@@ -93,7 +94,7 @@ export function useDeleteObjectType() {
 }
 export function useDeleteObjectRecord(type: string) {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (record: Pick<ObjectRecord, "id" | "revision">) => apiData(apiClient.delete<Envelope<{ id: string; deleted: true }>>({
       url: recordPath(type, record.id), query: { expectedRevision: record.revision },
     })),

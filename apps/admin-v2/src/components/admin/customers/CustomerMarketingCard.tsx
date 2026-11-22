@@ -2,7 +2,7 @@ import { InlineError } from "~/components/admin/states/InlineError";
 import { useActorText } from "~/components/admin/shared/ActorName";
 import { consentEventActor } from "~/lib/actor";
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import {
   MARKETING_CHANNELS,
@@ -39,6 +39,7 @@ import { customerPageMessages } from "~/i18n/customer-page";
 import { resourceMessages } from "~/i18n/resource";
 import { CONSENT_BADGE, consentFacts, suggestedConsentChange } from "./marketing-display";
 import { Field } from "~/components/ui/field";
+import { useCommand } from "~/lib/use-command";
 
 /** Consent log entries shown before "Show all". */
 const HISTORY_PREVIEW = 3;
@@ -131,7 +132,7 @@ export function CustomerMarketingCard({ customerId, canEdit }: { customerId: str
     setOpen(true);
   };
 
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: () => setCustomerConsent(customerId, { channel, state: change, note: note.trim() || null }),
     onSuccess: (result) => {
       queryClient.setQueryData(customerMarketingQueryOptions(customerId).queryKey, result);
@@ -191,7 +192,7 @@ export function CustomerMarketingCard({ customerId, canEdit }: { customerId: str
         ) : null}
       </CardContent>
 
-      <Dialog open={canEdit && open} onOpenChange={(next) => { if (!next && !save.isPending) setOpen(false); }}>
+      <Dialog open={canEdit && open} onOpenChange={save.guardClose((next) => { if (!next) setOpen(false); })}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("editMarketingTitle")}</DialogTitle>

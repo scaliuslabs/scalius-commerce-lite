@@ -3,7 +3,7 @@
 // opens its page, where the usual access review turns it on. Without it, the
 // operator's command, then a deploy. The developer line says whether this
 // store trusts who signed the release.
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -17,6 +17,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
 import { AppIcon } from "./AppIcon";
 import { pluginKeyFingerprint } from "@scalius/shared/plugins/registry";
+import { useCommand } from "~/lib/use-command";
 
 interface RegistryAppDialogProps {
   /** The last app opened stays while the dialog closes. */
@@ -31,7 +32,7 @@ export function RegistryAppDialog({ app, installMode, open, onOpenChange }: Regi
   const main = useMessages(installedAppsMessages);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const install = useMutation({
+  const install = useCommand({
     mutationFn: () => installRegistryApp(app!),
     onSuccess: async ({ app: installed }) => {
       queryClient.setQueryData(queryKeys.apps.detail(installed.id), installed);
@@ -65,7 +66,7 @@ export function RegistryAppDialog({ app, installMode, open, onOpenChange }: Regi
 
   const trusted = app?.signer.trusted ?? false;
   return (
-    <Dialog open={open} onOpenChange={(next) => (install.isPending ? undefined : onOpenChange(next))}>
+    <Dialog open={open} onOpenChange={install.guardClose(onOpenChange)}>
       <DialogContent className="sm:max-w-160">
         {app ? (
           <>

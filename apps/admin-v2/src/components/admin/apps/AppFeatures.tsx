@@ -7,7 +7,7 @@
 // back with it); turning one off says what stops. Everything comes from the
 // API's description of the app; no app code runs here.
 import { useEffect, useState, type ReactNode } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { postApiV1AdminSettingsProvidersByIdTest } from "@scalius/api-client/sdk";
 import { Link } from "@tanstack/react-router";
 import { formatList } from "@scalius/shared/locale-words";
@@ -56,6 +56,7 @@ import { useAppMutationResult } from "./AppDialogs";
 import { AppIcon } from "./AppIcon";
 import { AppSettingControl, settingFieldId, type AppSettingsDraftApi } from "./AppSettingsForm";
 import { appPagePath } from "./ui/surfaces";
+import { useCommand } from "~/lib/use-command";
 
 /** Provider kinds the store uses as soon as they are on (`apps/api/src/plugins/provider-adoption.ts`). */
 const USED_WHEN_ON: ReadonlySet<string> = new Set(["payment", "sms"]);
@@ -138,7 +139,7 @@ interface FeatureDialogProps {
 export function EnableFeatureDialog({ app, feature, open, onOpenChange, onEnabled }: FeatureDialogProps & { onEnabled: () => void }) {
   const t = useMessages(appFeaturesMessages);
   const result = useAppMutationResult(app);
-  const enable = useMutation({
+  const enable = useCommand({
     mutationFn: () => enableAppFeature(app, feature),
     onSuccess: ({ app: next, hookError }) => {
       result.applied(next, hookError, t("enabled", { name: feature.name }));
@@ -151,7 +152,7 @@ export function EnableFeatureDialog({ app, feature, open, onOpenChange, onEnable
     },
   });
   return (
-    <Dialog open={open} onOpenChange={(next) => (enable.isPending ? undefined : onOpenChange(next))}>
+    <Dialog open={open} onOpenChange={enable.guardClose(onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("enableTitle", { name: feature.name })}</DialogTitle>
@@ -187,7 +188,7 @@ export function DisableFeatureDialog({ app, feature, open, onOpenChange }: Featu
   const t = useMessages(appFeaturesMessages);
   const result = useAppMutationResult(app);
   const group = featureGroup(feature);
-  const disable = useMutation({
+  const disable = useCommand({
     mutationFn: () => disableAppFeature(app, feature.id),
     onSuccess: ({ app: next, hookError }) => {
       result.applied(next, hookError, t("disabled", { name: feature.name }));
@@ -199,7 +200,7 @@ export function DisableFeatureDialog({ app, feature, open, onOpenChange }: Featu
     },
   });
   return (
-    <AlertDialog open={open} onOpenChange={(next) => (disable.isPending ? undefined : onOpenChange(next))}>
+    <AlertDialog open={open} onOpenChange={disable.guardClose(onOpenChange)}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("disableTitle", { name: feature.name })}</AlertDialogTitle>
@@ -300,7 +301,7 @@ function ConnectionCheck({ app, provider, named }: { app: AppDetail; provider: A
   const queryClient = useQueryClient();
   // Tested with whatever tests the port's built-in providers.
   const { canManage } = useProviderPortAccess(provider.kind);
-  const test = useMutation({
+  const test = useCommand({
     mutationFn: () => apiData(postApiV1AdminSettingsProvidersByIdTest({ path: { id: provider.id } })),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.apps.detail(app.id) });

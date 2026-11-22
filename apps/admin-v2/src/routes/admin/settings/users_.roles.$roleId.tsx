@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import {
   deleteApiV1AdminRbacRolesById,
@@ -41,6 +41,7 @@ import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { usersMessages } from "~/i18n/settings-users";
 import { pageHead } from "~/i18n/page-titles";
 import { sameFormValue } from "~/lib/form-values";
+import { useCommand } from "~/lib/use-command";
 
 const NEW_ROLE = "new";
 
@@ -189,7 +190,7 @@ function DeleteRole({ role }: { role: RbacRole }) {
   const refresh = useAccessRefresh();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: () => apiData(deleteApiV1AdminRbacRolesById({ path: { id: role.id } })),
     onSuccess: async () => {
       toast.success(t("roleDeleted"));

@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { toast } from "~/lib/toast";
@@ -11,6 +11,7 @@ import { getServerFnError } from "~/lib/api-helpers";
 import { formatDateTime, useMessages } from "~/i18n";
 import { customerPageMessages } from "~/i18n/customer-page";
 import { resourceMessages } from "~/i18n/resource";
+import { useCommand } from "~/lib/use-command";
 
 export interface TrashedCustomer {
   id: string;
@@ -29,7 +30,7 @@ export function CustomerTrashNotice({ customer, canRestore }: { customer: Trashe
   const t = useMessages(customerPageMessages);
   const tr = useMessages(resourceMessages);
   const queryClient = useQueryClient();
-  const restore = useMutation({
+  const restore = useCommand({
     mutationFn: () => apiData(postApiV1AdminCustomersByIdRestore({ path: { id: customer.id } })),
     onSuccess: () => toast.success(tr("restored")),
     onError: (error) => toast.error(getServerFnError(error, tr("actionFailed"))),

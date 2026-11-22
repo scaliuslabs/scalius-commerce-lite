@@ -74,7 +74,7 @@ export function GiftCardSettingsDialog({ open, onOpenChange }: {
     : null;
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
+    <Dialog open={open} onOpenChange={mutation.guardClose(onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("settingsTitle")}</DialogTitle>

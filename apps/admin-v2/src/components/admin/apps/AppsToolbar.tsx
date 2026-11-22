@@ -2,7 +2,7 @@
 // the overflow menu (Stop all third-party apps, Registries and trusted
 // developers). The upload and registry dialogs load the first time they open.
 import { lazy, Suspense, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -24,6 +24,7 @@ import type { AppSummary } from "~/lib/api-query-options/apps";
 import { stopThirdPartyApps } from "~/lib/api-query-options/apps-lifecycle";
 import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
+import { useCommand } from "~/lib/use-command";
 
 const UploadAppDialog = lazy(() => import("./UploadAppDialog").then((module) => ({ default: module.UploadAppDialog })));
 const RegistrySettingsDialog = lazy(() => import("./RegistrySettingsDialog").then((module) => ({ default: module.RegistrySettingsDialog })));
@@ -33,7 +34,7 @@ type DialogName = "upload" | "stop" | "registries" | null;
 function StopAllDialog({ count, open, onOpenChange }: { count: number; open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useMessages(appsLifecycleMessages);
   const queryClient = useQueryClient();
-  const stop = useMutation({
+  const stop = useCommand({
     mutationFn: stopThirdPartyApps,
     onSuccess: ({ stopped }) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.apps.all });
@@ -46,7 +47,7 @@ function StopAllDialog({ count, open, onOpenChange }: { count: number; open: boo
     },
   });
   return (
-    <AlertDialog open={open} onOpenChange={(next) => (stop.isPending ? undefined : onOpenChange(next))}>
+    <AlertDialog open={open} onOpenChange={stop.guardClose(onOpenChange)}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("stopAllTitle", { count })}</AlertDialogTitle>

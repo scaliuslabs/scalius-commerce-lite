@@ -302,7 +302,7 @@ export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder;
       />
       <ConfirmDialog
         open={dialog === "cancel" && cancellable}
-        onOpenChange={(next) => { if (!next && !status.isPending) setDialog(null); }}
+        onOpenChange={status.guardClose((next) => { if (!next) setDialog(null); })}
         title={t("cancelPurchaseOrderTitle", { number: order.displayNumber })}
         description={t("cancelPurchaseOrderBody")}
         confirmLabel={t("cancelPurchaseOrder")}
@@ -478,7 +478,7 @@ function PurchaseOrderDetailsDialog({ order, open, onOpenChange, onReload }: {
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!save.isPending) onOpenChange(next); }}>
+    <Dialog open={open} onOpenChange={save.guardClose(onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("editDetails")}</DialogTitle>

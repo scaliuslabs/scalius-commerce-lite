@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { getApiV1AdminPages, postApiV1AdminPages } from "@scalius/api-client/sdk";
@@ -28,6 +28,7 @@ import { policiesMessages } from "~/i18n/settings-policies";
 import { policyTemplate, type PolicyKind } from "./policy-templates";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsCardLoading, SettingsDialog, SettingsField, SettingsRow } from "./SettingsPage";
+import { useCommand } from "~/lib/use-command";
 
 const POLICY_KINDS: PolicyKind[] = ["refund", "privacy", "terms", "shipping", "contact"];
 type Policies = Record<PolicyKind, string | null>;
@@ -154,7 +155,7 @@ function PolicyFields({ kind, canEdit }: { kind: PolicyKind; canEdit: boolean })
   // A page created whose link didn't save is remembered for this session (closing
   // the dialog too), so a retry links it instead of making another draft.
   const unlinkedKey = ["settings", "policies", "unlinked-template", kind] as const;
-  const createFromTemplate = useMutation({
+  const createFromTemplate = useCommand({
     mutationFn: async () => {
       let pageId = queryClient.getQueryData<string>(unlinkedKey);
       if (!pageId) {

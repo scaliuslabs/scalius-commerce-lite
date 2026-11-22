@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "~/lib/toast";
 import { GIFT_CARD_LIMITS } from "@scalius/core/modules/gift-cards/browser";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
@@ -93,7 +93,7 @@ function ActionDialog({ open, onOpenChange, busy, dirty, formId, title, descript
   );
 }
 
-/** Add or remove value with a required reason; one request key per opening, so a retry adds nothing twice. */
+/** Add or remove value with a required reason; one request key per intent, so a retry adds nothing twice. */
 export function AdjustBalanceDialog({ card, open, onOpenChange }: {
   card: GiftCardDetail;
   open: boolean;
@@ -104,7 +104,6 @@ export function AdjustBalanceDialog({ card, open, onOpenChange }: {
   const [amount, setAmount] = useState<number | null>(null);
   const [reason, setReason] = useState("");
   const [errors, setErrors] = useState<AdjustErrors>({});
-  const requestKey = useRef("");
   const mutation = useAdjustGiftCard(card.id);
   const reset = mutation.reset;
 
@@ -114,7 +113,6 @@ export function AdjustBalanceDialog({ card, open, onOpenChange }: {
     setAmount(null);
     setReason("");
     setErrors({});
-    requestKey.current = crypto.randomUUID();
     reset();
   }, [open, reset]);
 
@@ -129,7 +127,7 @@ export function AdjustBalanceDialog({ card, open, onOpenChange }: {
       return;
     }
     mutation.mutate(
-      { requestKey: requestKey.current, ...result.body },
+      result.body,
       {
         onSuccess: () => {
           toast.success(t("adjusted"));

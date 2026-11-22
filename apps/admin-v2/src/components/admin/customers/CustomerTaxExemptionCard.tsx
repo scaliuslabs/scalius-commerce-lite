@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ChoiceField, Field } from "~/components/ui/field";
@@ -13,6 +13,7 @@ import { toast } from "~/lib/toast";
 import { useMessages } from "~/i18n";
 import { customerTaxExemptionMessages } from "~/i18n/customer-tax-exemption";
 import { resourceMessages } from "~/i18n/resource";
+import { useCommand } from "~/lib/use-command";
 
 /** The longest exemption number the API accepts (`TAX_EXEMPTION_ID_MAX_LENGTH`). */
 const EXEMPTION_NUMBER_MAX = 64;
@@ -44,7 +45,7 @@ export function CustomerTaxExemptionCard({ customerId, taxExempt, taxExemptionId
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taxExempt, taxExemptionId]);
 
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: () => saveCustomerTaxExemption(customerId, {
       taxExempt: exempt,
       taxExemptionId: exempt ? number.trim() || null : null,

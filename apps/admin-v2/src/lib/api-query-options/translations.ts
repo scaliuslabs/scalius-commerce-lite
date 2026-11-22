@@ -1,7 +1,7 @@
 // Settings › Languages and Translate & adapt (docs/MARKETS-DESIGN.md D9): the
 // store's languages, each translatable resource with its translation in a
 // language and market, saves and machine translation through an app.
-import { keepPreviousData, queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions, useQueryClient } from "@tanstack/react-query";
 import {
   deleteApiV1AdminSettingsLanguagesByLocale,
   deleteApiV1AdminTranslationsByTypeById,
@@ -24,6 +24,7 @@ export type SaveTranslationBody = ApiBody<typeof putApiV1AdminTranslationsByType
 export type TranslationProvider = ApiResult<typeof getApiV1AdminTranslationsProviders>["items"][number];
 
 import { STORE_LANGUAGES_QUERY_KEY, type TranslationEditorType } from "../translation-types";
+import { useCommand } from "~/lib/use-command";
 
 export { TRANSLATION_EDITOR_TYPES, isTranslationEditorType, type TranslationEditorType } from "../translation-types";
 
@@ -97,7 +98,7 @@ function useRefreshTranslations() {
 export function useSaveTranslation(type: TranslationEditorType, id: string) {
   const queryClient = useQueryClient();
   const refresh = useRefreshTranslations();
-  return useMutation({
+  return useCommand({
     mutationFn: async (body: SaveTranslationBody) => apiData(putApiV1AdminTranslationsByTypeById({ path: { type, id }, body })),
     onSuccess: (view, body) => {
       queryClient.setQueryData(translationKeys.resource(type, id, body.locale, body.marketId ?? null), view);
@@ -109,7 +110,8 @@ export function useSaveTranslation(type: TranslationEditorType, id: string) {
 export function useDeleteTranslation(type: TranslationEditorType, id: string) {
   const queryClient = useQueryClient();
   const refresh = useRefreshTranslations();
-  return useMutation({
+  return useCommand({
+    subject: ({ locale, marketId }) => `${locale}:${marketId ?? ""}`,
     mutationFn: async (input: { locale: string; marketId: string | null }) =>
       apiData(deleteApiV1AdminTranslationsByTypeById({
         path: { type, id },
@@ -123,7 +125,7 @@ export function useDeleteTranslation(type: TranslationEditorType, id: string) {
 }
 
 export function useMachineTranslate() {
-  return useMutation({
+  return useCommand({
     mutationFn: async (body: ApiBody<typeof postApiV1AdminTranslationsMachine>) =>
       (await apiData(postApiV1AdminTranslationsMachine({ body }))).texts,
   });
@@ -136,7 +138,7 @@ function useRefreshLanguages() {
 
 export function useAddStoreLanguage() {
   const refresh = useRefreshLanguages();
-  return useMutation({
+  return useCommand({
     mutationFn: async (body: ApiBody<typeof postApiV1AdminSettingsLanguages>) =>
       (await apiData(postApiV1AdminSettingsLanguages({ body }))).language,
     onSettled: refresh,
@@ -145,7 +147,8 @@ export function useAddStoreLanguage() {
 
 export function useUpdateStoreLanguage() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
+    subject: ({ locale }) => locale,
     mutationFn: async (input: { locale: string; published?: boolean; isDefault?: true }) =>
       (await apiData(patchApiV1AdminSettingsLanguagesByLocale({
         path: { locale: input.locale },
@@ -164,7 +167,7 @@ export function useUpdateStoreLanguage() {
 
 export function useRemoveStoreLanguage() {
   const refresh = useRefreshLanguages();
-  return useMutation({
+  return useCommand({
     mutationFn: async (locale: string) => apiData(deleteApiV1AdminSettingsLanguagesByLocale({ path: { locale } })),
     onSettled: refresh,
   });

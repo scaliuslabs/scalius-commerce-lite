@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { LINE_ENTRY_WORD_KEYS } from "@scalius/shared/line-entry-words";
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import {
   deleteApiV1AdminSettingsCheckoutLanguagesById,
@@ -45,6 +45,7 @@ import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardL
 import { SettingsCheckbox } from "./SettingsCheckbox";
 import { FieldRow } from "~/components/ui/field";
 import { standaloneLinkClassName } from "~/components/ui/link";
+import { useCommand } from "~/lib/use-command";
 
 type Language = ApiResult<typeof getApiV1AdminSettingsCheckoutLanguages>["languages"][number];
 type FieldKey = "showOrderNotesField" | "showAreaField";
@@ -387,7 +388,7 @@ function LanguageForm({ language }: { language: Language | null }) {
       await refresh();
     },
   });
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: () => apiData(deleteApiV1AdminSettingsCheckoutLanguagesById({ path: { id: language!.id } })),
     onSuccess: async () => {
       toast.success(t("deleted"));

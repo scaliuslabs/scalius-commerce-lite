@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, MoreHorizontal, Search } from "lucide-react";
 import { toast } from "~/lib/toast";
 import {
@@ -55,6 +55,7 @@ import { useSaveBar } from "../shared/SaveBar";
 import { SettingsCard, SettingsDialog, SettingsField } from "./SettingsPage";
 import { SettingsCheckbox } from "./SettingsCheckbox";
 import { sameFormValue } from "~/lib/form-values";
+import { useCommand } from "~/lib/use-command";
 
 const PAGE_SIZE = 20;
 
@@ -124,7 +125,7 @@ function LocationForm({ country, level, location }: { country: string; level: nu
   const [confirmDelete, setConfirmDelete] = useState(false);
   const under = location ? placesUnder(descendantsOf(location)) : null;
   const top = level === 1;
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: (): Promise<unknown> => {
       // Courier ids (externalIds) come from imports, matched by name.
       const fields = {
@@ -140,7 +141,7 @@ function LocationForm({ country, level, location }: { country: string; level: nu
     },
     onSuccess: refresh,
   });
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: () => apiData(deleteApiV1AdminSettingsDeliveryLocationsById({ path: { id: location!.id } })),
     onSuccess: async () => {
       toast.success(t("deleted"));
@@ -286,13 +287,13 @@ export function DeliveryAreasManager() {
   const total = list.data?.pagination.total ?? 0;
   const totalPages = list.data?.pagination.totalPages ?? 1;
 
-  const toggleActive = useMutation({
+  const toggleActive = useCommand({
     mutationFn: (location: DeliveryLocation) =>
       apiData(putApiV1AdminSettingsDeliveryLocationsById({ path: { id: location.id }, body: { isActive: !location.isActive } })),
     onSuccess: refresh,
     onError: () => toast.error(common("saveFailed")),
   });
-  const bulk = useMutation({
+  const bulk = useCommand({
     mutationFn: (kind: "selected" | "all") =>
       kind === "all"
         ? apiData(deleteApiV1AdminSettingsDeliveryLocationsAll({ body: { confirmDeleteAll: true, countryCode: country } }))

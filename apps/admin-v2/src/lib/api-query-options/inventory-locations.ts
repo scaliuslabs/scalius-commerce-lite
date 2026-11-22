@@ -3,7 +3,7 @@
 // location filter and the order page; every write refreshes it and the
 // inventory lists whose per-location numbers it changes. An order's own
 // location is set through `useSetOrderFulfillmentLocation` (api-mutations/orders).
-import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useQueryClient } from "@tanstack/react-query";
 import {
   getApiV1AdminInventoryByVariantIdLevels,
   getApiV1AdminInventoryLevels,
@@ -16,6 +16,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
+import { useCommand } from "~/lib/use-command";
 
 export type InventoryLocation = ApiResult<typeof getApiV1AdminInventoryLocations>["locations"][number];
 export type InventoryLocationBody = ApiBody<typeof postApiV1AdminInventoryLocations>;
@@ -73,7 +74,7 @@ function useRefreshLocations() {
 
 export function useSaveInventoryLocation() {
   const refresh = useRefreshLocations();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { id: string | null; version: number | null; body: InventoryLocationBody }) =>
       input.id
         ? apiData(patchApiV1AdminInventoryLocationsByLocationId({
@@ -87,7 +88,7 @@ export function useSaveInventoryLocation() {
 
 export function useInventoryLocationAction() {
   const refresh = useRefreshLocations();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { id: string; action: "archive" | "unarchive" | "default" }) => {
       const options = { path: { locationId: input.id } };
       return apiData(input.action === "archive"

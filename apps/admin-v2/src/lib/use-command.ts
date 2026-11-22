@@ -9,6 +9,8 @@ export interface CommandCallbacks<TData, TInput> {
 }
 
 export interface CommandOptions<TInput, TData> extends CommandCallbacks<TData, TInput> {
+  /** Runs as a call is sent (not for a repeat that is dropped). */
+  onMutate?: (input: TInput) => unknown;
   /** Sends the request. A server that takes a request key gets `requestKey`; others ignore it. */
   mutationFn: (input: TInput, requestKey: string) => Promise<TData>;
   /**
@@ -49,7 +51,8 @@ export interface Command<TInput, TData> {
 
 const WHOLE_COMMAND = "*";
 
-function defaultSubject(input: unknown): string {
+/** What a call acts on unless the command says: its `orderId`, else `id`, else a string input, else the whole command. */
+export function subjectOf(input: unknown): string {
   if (typeof input === "string" || typeof input === "number") return String(input);
   const subject = input as { orderId?: unknown; id?: unknown } | null;
   if (typeof subject?.orderId === "string") return subject.orderId;
@@ -74,7 +77,8 @@ interface CommandState<TInput, TData> {
 function report(run: (() => unknown) | undefined): void {
   if (!run) return;
   try {
-    run();
+    const result = run();
+    if (result instanceof Promise) result.catch((error: unknown) => globalThis.reportError?.(error));
   } catch (error) {
     globalThis.reportError?.(error);
   }
@@ -131,9 +135,10 @@ export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInp
   }, []);
 
   const start = useCallback((input: TInput, callbacks?: CommandCallbacks<TData, TInput>): Promise<TData> => {
-    const subject = (latest.current.subject ?? defaultSubject)(input);
+    const subject = (latest.current.subject ?? subjectOf)(input);
     const already = running.current.get(subject);
     if (already) return already;
+    report(latest.current.onMutate && (() => latest.current.onMutate!(input)));
     const holder = keyHolder(subject, true)!;
     const requestKey = holder.get("command", input);
     const update = (change: (state: CommandState<TInput, TData>) => Partial<CommandState<TInput, TData>>) => {
@@ -177,14 +182,18 @@ export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInp
   }, [keyHolder]);
 
   const mutate = useCallback((input: TInput, callbacks?: CommandCallbacks<TData, TInput>) => {
-    const subject = (latest.current.subject ?? defaultSubject)(input);
+    const subject = (latest.current.subject ?? subjectOf)(input);
     if (running.current.has(subject)) return;
     // The failure is the command's state (`error`) and its callbacks', never an unhandled rejection.
     start(input, callbacks).catch(() => undefined);
   }, [start]);
 
   const mutateAsync = useCallback((input: TInput) => start(input), [start]);
-  const reset = useCallback(() => setState((current) => ({ ...current, error: null, succeeded: false, data: undefined, variables: undefined })), []);
+  // A clean command stays the same state, so a reset on open renders nothing.
+  const reset = useCallback(() => setState((current) =>
+    current.error === null && !current.succeeded && current.data === undefined && current.variables === undefined
+      ? current
+      : { ...current, error: null, succeeded: false, data: undefined, variables: undefined }), []);
   const isPending = state.pending.size > 0;
   // Read from the ref: a close in the same tick as the submit is refused too.
   const guardClose = useCallback(
@@ -197,7 +206,7 @@ export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInp
   const { keysSeen } = state;
   const mayHaveLanded = useCallback((input: TInput) => {
     void keysSeen;
-    return keyHolder((latest.current.subject ?? defaultSubject)(input), false)?.mayHaveLanded ?? false;
+    return keyHolder((latest.current.subject ?? subjectOf)(input), false)?.mayHaveLanded ?? false;
   }, [keyHolder, keysSeen]);
 
   return useMemo(() => ({

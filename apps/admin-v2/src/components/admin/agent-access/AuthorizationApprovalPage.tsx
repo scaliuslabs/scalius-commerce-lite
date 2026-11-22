@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { toast } from "~/lib/toast";
@@ -21,6 +21,7 @@ import {
 } from "./api";
 import { navigateOAuthDecisionCompletion } from "./oauth-completion";
 import type { AgentGrantSelection } from "./types";
+import { useCommand } from "~/lib/use-command";
 
 function redirectSite(value: string): string | null {
   try {
@@ -59,7 +60,7 @@ export function AuthorizationApprovalPage({
     setSelection(defaultSelection("oauth", request.resource, request.requestedPermissions));
   }, [request]);
 
-  const decide = useMutation({
+  const decide = useCommand({
     mutationFn: (approve: boolean) =>
       approve
         ? approveAgentAuthorizationRequest(requestId, {

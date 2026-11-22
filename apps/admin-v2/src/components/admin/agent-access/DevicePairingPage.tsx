@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+
 import { Loader2 } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
@@ -17,6 +17,7 @@ import {
   lookupAgentDeviceAuthorization,
 } from "./api";
 import type { AgentDeviceAuthorization, AgentGrantSelection } from "./types";
+import { useCommand } from "~/lib/use-command";
 
 function normalizeUserCode(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
@@ -34,7 +35,7 @@ export function DevicePairingPage() {
   const [decision, setDecision] = useState<"approved" | "denied" | null>(null);
   const [needsTwoStep, setNeedsTwoStep] = useState(false);
 
-  const lookup = useMutation({
+  const lookup = useCommand({
     mutationFn: () => lookupAgentDeviceAuthorization(userCode),
     onSuccess: (result) => {
       setDevice(result);
@@ -48,7 +49,7 @@ export function DevicePairingPage() {
       else toast.error(t(error instanceof AdminApiResponseError && error.status === 404 ? "pairNotFound" : "pairLookupFailed"));
     },
   });
-  const decide = useMutation({
+  const decide = useCommand({
     mutationFn: (approve: boolean) =>
       approve
         ? approveAgentDeviceAuthorization(device!.id, {

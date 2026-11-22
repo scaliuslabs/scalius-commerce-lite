@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { toast } from "~/lib/toast";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ProductFormValues } from "../types";
 import { formatFormValuesForSubmission, problemLine, productSubmitChanges } from "../utils";
 import { useNavigate } from "@tanstack/react-router";
@@ -25,6 +25,7 @@ import { useSkuCosts } from "../sku-costs";
 import { queryKeys } from "~/lib/query-keys";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { useCommand } from "~/lib/use-command";
 
 const t = (key: ProductMessageKey, vars?: Record<string, string | number>) => translate(productMessages, key, vars);
 
@@ -117,7 +118,7 @@ export function useProductSubmit({
     if (sent.current) rebaseForm(form, sent.current, sent.current);
   };
 
-  const mutation = useMutation({
+  const mutation = useCommand({
     mutationFn: async ({ values, acknowledgedSkuImageRemovalIds, expectedAggregateRevision, composition }: ProductMutationVariables) => {
       const dirty = form.formState.dirtyFields;
       const formattedValues = formatFormValuesForSubmission(values, isEdit ? productSubmitChanges(dirty) : undefined);

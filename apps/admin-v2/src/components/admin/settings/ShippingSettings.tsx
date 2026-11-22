@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import {
   deleteApiV1AdminSettingsDeliveryProvidersById,
@@ -37,6 +37,7 @@ import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardL
 import { SettingsCheckbox } from "./SettingsCheckbox";
 import { FieldRow } from "~/components/ui/field";
 import { sameFormValue } from "~/lib/form-values";
+import { useCommand } from "~/lib/use-command";
 
 function refreshCheckout(queryClient: ReturnType<typeof useQueryClient>, key: readonly unknown[]) {
   return Promise.all([
@@ -142,14 +143,14 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
     : (courier?.type === draft.type ? courier.readiness?.activationBlockers?.length ?? 0 : 1) > 0;
   const courierLabel = app?.name ?? courier?.courierName ?? draft.type;
   const refresh = () => refreshCheckout(queryClient, queryKeys.settings.deliveryProviders());
-  const save = useMutation({
+  const save = useCommand({
     // A courier's row carries no keys: the app's settings hold them.
     mutationFn: () => apiData(putApiV1AdminSettingsDeliveryProviders({
       body: { id: draft.id, name: draft.name.trim(), type: draft.type, isActive: draft.isActive },
     })),
     onSuccess: refresh,
   });
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: () => apiData(deleteApiV1AdminSettingsDeliveryProvidersById({ path: { id: draft.id } })),
     onSuccess: async () => {
       toast.success(t("courierDeleted"));

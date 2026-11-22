@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { providerLabel, providerSetupReason } from "~/i18n/provider-copy";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, Banknote, FileText, Wallet } from "lucide-react";
 import { toast } from "~/lib/toast";
@@ -73,6 +73,7 @@ import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { MoneyInput, useWholeUnitPrices } from "../shared/MoneyInput";
 import { AppProviderConnectionNote, ProvidedByChip } from "./AppProviderStatus";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsCardLoading, useCloseSettingsDialog } from "./SettingsPage";
+import { useCommand } from "~/lib/use-command";
 
 /** An app provider whose last test is unknown: only a test run here has anything to say. */
 const NOT_TESTABLE = { status: "none", testedAt: null, message: null } as const;
@@ -348,7 +349,7 @@ function RemoveKeys({ gateway, revision }: { gateway: "stripe"; revision: number
     [gatewayQuery(gateway).queryKey, paymentMethodsQuery.queryKey, checkoutFlowQuery.queryKey, queryKeys.settings.checkoutReadiness()]
       .map((queryKey) => queryClient.invalidateQueries({ queryKey })),
   );
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: () => apiData(deleteApiV1AdminSettingsStripe({ body: { expectedRevision: revision } })),
     onSuccess: async () => {
       toast.success(t("keysRemoved"));
@@ -402,7 +403,7 @@ export function PaymentMethodsCard() {
   // Installed apps' providers, offered or not; without them the active ones still list.
   const appProviders = useQuery({ ...appPaymentProvidersQuery, enabled: useProviderPortAccess("payment").canView });
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string; timedOut?: boolean }>>({});
-  const connectionTest = useMutation({
+  const connectionTest = useCommand({
     mutationFn: (id: string) => apiData(postApiV1AdminSettingsProvidersByIdTest({ path: { id } })),
     onSuccess: (result, id) => setTestResults((current) => ({ ...current, [id]: result })),
     onError: (error, id) => setTestResults((current) => ({ ...current, [id]: { ok: false, message: getServerFnError(error) } })),

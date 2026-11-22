@@ -14,6 +14,7 @@ import {
   postApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceive,
   postApiV1AdminInventoryTransfersByTransferIdReceive,
 } from "@scalius/api-client/sdk";
+import { useCommand } from "~/lib/use-command";
 import { apiData } from "@/lib/api";
 import { AdminApiResponseError } from "@/lib/admin-api-error";
 import { Label } from "~/components/ui/label";
@@ -26,8 +27,6 @@ import type { FlashState } from "./ScanFlash";
 import {
   clampTally,
   countedTotal,
-  createIntentKeys,
-  receiveFingerprint,
   receiveLines,
   setCounted,
   tallyScan,
@@ -154,7 +153,7 @@ export async function fetchReceiveDocument(kind: ReceiveKind, id: string): Promi
 
 /** A receive command; retried once with the same key unless the API refused it. */
 async function postReceive(
-  receiving: ReceiveDocument,
+  receiving: Pick<ReceiveDocument, "kind" | "id">,
   lines: Array<{ lineId: string; quantity: number }>,
   updateCost: boolean,
   operationKey: string,
@@ -198,7 +197,14 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
   const submittingRef = useRef(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [keys] = useState(() => createIntentKeys());
+  // The receipt's operation key per intent: after an unknown outcome the same key goes again,
+  // even for a changed count or a document opened again, so stock is never booked twice.
+  const receive = useCommand({
+    name: "scanner.receive",
+    createKey: () => `invop_${crypto.randomUUID()}`,
+    mutationFn: (intent: { kind: ReceiveDocument["kind"]; id: string; revision: number; lines: Array<{ lineId: string; quantity: number }>; updateCost: boolean }, operationKey) =>
+      postReceive(intent, intent.lines, intent.updateCost, operationKey),
+  });
 
   const setTally = useCallback((next: ReceiveTally) => {
     tallyRef.current = next;
@@ -224,12 +230,11 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
       setTally({});
       setUpdateCost(false);
       setProblem(null);
-      keys.settle();
       setOpening(null);
     } catch {
       setOpenFailed(true);
     }
-  }, [keys, setTally]);
+  }, [setTally]);
 
   // Back to the list (which reloads as it opens).
   const close = useCallback(() => {
@@ -238,8 +243,7 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
     setOpenFailed(false);
     setTally({});
     setProblem(null);
-    keys.settle();
-  }, [keys, setTally]);
+  }, [setTally]);
 
   /** One scanned unit: counted on its line, or why not. */
   const scan = useCallback((code: string) => {
@@ -284,16 +288,8 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
     setSubmitting(true);
     setProblem(null);
     const withCost = current.kind === "purchaseOrder" && updateCost;
-    const operationKey = keys.keyFor(receiveFingerprint({
-      kind: current.kind,
-      documentId: current.id,
-      revision: current.revision,
-      lines,
-      updateCost: withCost,
-    }));
     try {
-      await postReceive(current, lines, withCost, operationKey);
-      keys.settle();
+      await receive.mutateAsync({ kind: current.kind, id: current.id, revision: current.revision, lines, updateCost: withCost });
       const units = lines.reduce((total, line) => total + line.quantity, 0);
       setTally({});
       onReceived({ number: current.number, title: current.title, units });
@@ -327,8 +323,7 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
     } catch (error) {
       if (error instanceof AdminApiResponseError && error.status < 500) {
         // Refused: nothing was booked. Changed meanwhile (another receipt, a cancel): reload and keep what still fits.
-        keys.settle();
-        if (error.status === 409 || error.status === 404) {
+          if (error.status === 409 || error.status === 404) {
           try {
             const latest = await fetchReceiveDocument(current.kind, current.id);
             setReceiving(latest);
@@ -350,7 +345,7 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
       submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [feedback, keys, onReceived, setTally, updateCost]);
+  }, [feedback, onReceived, receive, setTally, updateCost]);
 
   return {
     choices,

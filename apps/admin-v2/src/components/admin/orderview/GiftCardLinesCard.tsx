@@ -2,7 +2,7 @@
 // what it holds now, once spent or taken back by a refund) and masked recipient,
 // with "Resend" for staff who manage gift cards while the card still holds value.
 // The code is never on this page; resending mails it to the card's contact.
-import { useMutation } from "@tanstack/react-query";
+
 import { toast } from "~/lib/toast";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { Badge } from "~/components/ui/badge";
@@ -15,6 +15,7 @@ import { apiClient, apiData } from "~/lib/api";
 import { formatSavedMinorAmount } from "~/lib/order-money-format";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import type { Order } from "./types";
+import { useCommand } from "~/lib/use-command";
 
 export interface IssuedGiftCardLine {
   giftCardId: string;
@@ -72,7 +73,8 @@ function resendGiftCard(giftCardId: string) {
 export function GiftCardLinesCard({ order }: { order: Order }) {
   const t = useMessages(giftCardOrderMessages);
   const canManage = useHasPermission(PERMISSIONS.GIFT_CARDS_MANAGE);
-  const resend = useMutation({
+  const resend = useCommand({
+    subject: ({ giftCardId }) => giftCardId,
     mutationFn: ({ giftCardId }: { giftCardId: string }) => resendGiftCard(giftCardId),
     onSuccess: () => void toast.success(t("lines.resent")),
     onError: (error) => void toast.error(t("lines.resendFailed"), {

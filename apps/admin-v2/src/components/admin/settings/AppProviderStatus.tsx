@@ -2,7 +2,7 @@
 // ones: its mark and "by <app>", the same readiness every send or lookup
 // checks, the link to its setup on its feature's page in the app (its own fields, kept
 // encrypted with the app), and the app's connection test.
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { postApiV1AdminSettingsProvidersByIdTest } from "@scalius/api-client/sdk";
 import { AppIcon } from "~/components/admin/apps/AppIcon";
@@ -21,6 +21,7 @@ import { formatDateTime, useMessages } from "~/i18n";
 import { appProvidersMessages } from "~/i18n/settings-app-providers";
 import { providerLabel, providerSetupReason } from "~/i18n/provider-copy";
 import { queryKeys } from "~/lib/query-keys";
+import { useCommand } from "~/lib/use-command";
 
 export { ProvidedByChip };
 
@@ -71,7 +72,7 @@ export function AppProviderStatus({ provider, onTested }: { provider: AppProvide
   const queryClient = useQueryClient();
   // Tested with whatever tests the port's built-in providers.
   const { canManage } = useProviderPortAccess(provider.kind);
-  const test = useMutation({
+  const test = useCommand({
     mutationFn: () => apiData(postApiV1AdminSettingsProvidersByIdTest({ path: { id: provider.id } })),
     // The outcome is kept, passed or failed: every list that reads it refetches.
     onSettled: () => Promise.all([

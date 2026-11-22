@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useRef, useState, type SetStateAction } from "react";
 import { announceSave } from "~/lib/realtime/store";
 import { PresenceScopeContext } from "~/lib/realtime/store";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { useSaveBar, type SaveBarEntry, type SaveProblem } from "~/components/admin/shared/SaveBar";
 import { readSettingsRevisionConflict } from "~/lib/admin-api-error";
@@ -9,6 +9,7 @@ import { translate } from "~/i18n";
 import { saveBarMessages } from "~/i18n/save-bar";
 import { threeWayMerge, type MergeOptions } from "~/lib/three-way-merge";
 import { sameFormValue } from "~/lib/form-values";
+import { useCommand } from "~/lib/use-command";
 
 /**
  * A settings document's revision as its GET returns it (`data.revision`): a
@@ -223,7 +224,7 @@ export function useSettingsForm<
     return values ? { values, theirs, revision: revision as R } : null;
   };
 
-  const mutation = useMutation({
+  const mutation = useCommand({
     // The revision the edits were made against. Cards that share a document
     // rebase onto the cached one at save time (another card's save just moved
     // it), so one save bar never conflicts with itself; a field both changed

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import {
   deleteApiV1AdminAuthUsersById,
@@ -49,6 +49,7 @@ import { useMessages } from "~/i18n";
 import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { usersMessages } from "~/i18n/settings-users";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
+import { useCommand } from "~/lib/use-command";
 
 // Stopgap until `pnpm generate:sdk` adds postApiV1AdminAuthUsersByIdRemove.
 const removeStaff = (id: string) =>
@@ -121,7 +122,7 @@ function ResendInvite({ member, status }: { member: AdminUser; status: StaffStat
   const t = useMessages(usersMessages);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const resend = useMutation({
+  const resend = useCommand({
     mutationFn: () => apiData(postApiV1AdminAuthUsersByIdResendSetup({ path: { id: member.id } })),
     onSuccess: () => toast.success(t("inviteSent")),
     onError: async (error) => {
@@ -155,7 +156,7 @@ function StaffAccessForm({ member }: { member: AdminUser }) {
   // A partial list would turn into wrong changes; don't edit what we can't fully see.
   const locked = !roles || member.rolesTruncated || member.overridesTruncated;
   const noRole = draft.roleIds.length === 0;
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: async () => {
       const changes = accessChanges(saved, draft);
       const userId = member.id;
@@ -243,7 +244,7 @@ function AccountActions({ member, actions }: { member: AdminUser; actions: Staff
     await reload();
     await navigate({ to: "/admin/settings/users" });
   };
-  const suspend = useMutation({
+  const suspend = useCommand({
     mutationFn: (suspended: boolean) =>
       apiData(postApiV1AdminAuthUsersByIdSuspension({ path: { id: member.id }, body: { suspended } })),
     onSuccess: async (_, suspended) => {
@@ -253,7 +254,7 @@ function AccountActions({ member, actions }: { member: AdminUser; actions: Staff
     },
     onError,
   });
-  const cancelInvite = useMutation({
+  const cancelInvite = useCommand({
     mutationFn: () => apiData(deleteApiV1AdminAuthUsersById({ path: { id: member.id } })),
     onSuccess: () => leave(t("inviteCancelled")),
     onError: async (error) => {
@@ -267,7 +268,7 @@ function AccountActions({ member, actions }: { member: AdminUser; actions: Staff
       if (status === 404) await navigate({ to: "/admin/settings/users" });
     },
   });
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: () => removeStaff(member.id),
     onSuccess: () => leave(t("staffRemoved")),
     onError,

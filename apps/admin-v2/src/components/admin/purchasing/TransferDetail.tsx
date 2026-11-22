@@ -161,7 +161,7 @@ export function TransferDetail({ transfer, onReload }: { transfer: Transfer; onR
 
       <ConfirmDialog
         open={confirmCancel && canEdit}
-        onOpenChange={(next) => { if (!next && !command.isPending) setConfirmCancel(false); }}
+        onOpenChange={command.guardClose((next) => { if (!next) setConfirmCancel(false); })}
         title={t("cancelTransferTitle", { number: transfer.displayNumber })}
         description={transfer.status === "draft"
           ? t("cancelDraftBody")

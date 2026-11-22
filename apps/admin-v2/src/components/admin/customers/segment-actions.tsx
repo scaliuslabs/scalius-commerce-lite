@@ -1,7 +1,7 @@
 // What the segments list and a segment's page share: member counts on request,
 // the CSV export of a segment and the delete confirmation.
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { RefreshCw } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -14,6 +14,7 @@ import { useMessages } from "~/i18n";
 import { customerSegmentMessages, type CustomerSegmentMessageKey } from "~/i18n/customer-segments";
 import { resourceMessages } from "~/i18n/resource";
 import { buildCustomerExportParams, CUSTOMER_EXPORT_MAX_ROWS, downloadCustomerExport } from "./customer-export";
+import { useCommand } from "~/lib/use-command";
 
 type Translate = (key: CustomerSegmentMessageKey, vars?: Record<string, string | number>) => string;
 
@@ -78,7 +79,7 @@ export function DeleteSegmentDialog({
   // The name stays in the title while the dialog closes.
   const [shown, setShown] = useState(segment);
   if (segment && segment !== shown) setShown(segment);
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: (id: string) => deleteCustomerSegment(id),
     onSuccess: () => {
       toast.success(t("deleted"));

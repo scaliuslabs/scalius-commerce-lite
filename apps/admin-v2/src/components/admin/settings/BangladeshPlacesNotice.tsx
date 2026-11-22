@@ -9,7 +9,7 @@
 // refreshes the setup guide and readiness, and every host drops it. Shown on
 // the shipping zones card, in the zone editor and in Home's setup guide.
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { MapPin } from "lucide-react";
 import { toast } from "~/lib/toast";
@@ -26,6 +26,7 @@ import { areaCountsQuery } from "~/lib/api-query-options/settings-screens";
 import { BANGLADESH_PACK_ID } from "~/lib/bangladesh-pack";
 import { queryKeys } from "~/lib/query-keys";
 import { FeatureAccess, hasFeatureAccess } from "../apps/AppFeatures";
+import { useCommand } from "~/lib/use-command";
 
 /** The pack's feature that loads Bangladesh's places when it is turned on. */
 export const BANGLADESH_PLACES_FEATURE = "places";
@@ -77,7 +78,7 @@ export function BangladeshPlacesNotice({ className }: { className?: string }) {
   }, [addressable, queryClient]);
   const canLoad = isSuperAdmin && Boolean(pack.data?.runtimeAvailable) && places !== null && !loading;
 
-  const load = useMutation({
+  const load = useCommand({
     mutationFn: () => loadBangladeshPlaces(pack.data!),
     onSuccess: ({ app, hookError }) => {
       queryClient.setQueryData(queryKeys.apps.detail(app.id), app);
@@ -118,7 +119,7 @@ export function BangladeshPlacesNotice({ className }: { className?: string }) {
           ) : null}
         </div>
       </AlertDescription>
-      <Dialog open={confirming && Boolean(pack.data && places)} onOpenChange={(next) => (load.isPending ? undefined : setConfirming(next))}>
+      <Dialog open={confirming && Boolean(pack.data && places)} onOpenChange={load.guardClose(setConfirming)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("dialogTitle")}</DialogTitle>

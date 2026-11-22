@@ -1,7 +1,7 @@
 // Review writes: moderation, the store's reply, the reviewer thread and the
 // settings. Reads live in lib/api-query-options/reviews.ts. Staff never write a
 // buyer's rating, title or text: there is no call here that could.
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   postApiV1AdminReviewsByIdConversation,
   postApiV1AdminReviewsModerate,
@@ -15,6 +15,7 @@ import { apiData, type ApiBody, type ApiResult } from "~/lib/api";
 import { fetchProducts } from "~/lib/api-query-options/products";
 import { reviewKeys, type ReviewSettings } from "~/lib/api-query-options/reviews";
 import { newRequestKey } from "../inbox/inbox-api";
+import { useCommand } from "~/lib/use-command";
 
 export type ModerationAction = "publish" | "reject" | "restore";
 export type ModerateBody = ApiBody<typeof postApiV1AdminReviewsModerate>;
@@ -62,7 +63,7 @@ export function undoableRejection(result: ModerateResult): SeenReview[] {
 
 export function useModerateReviews() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { reviews: readonly SeenReview[]; action: ModerationAction; reason?: ReviewRejectionReason }) =>
       moderateReviews(input.reviews, input.action, input.reason),
     onSettled: () => queryClient.invalidateQueries({ queryKey: reviewKeys.all }),
@@ -76,7 +77,7 @@ export function isConflict(error: unknown): boolean {
 /** Sets (or, with `null`, removes) the store's public reply, guarded by the review version. */
 export function useSaveReply(reviewId: string) {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (input: { body: string | null; version: number }) =>
       apiData(putApiV1AdminReviewsByIdReply({ path: { id: reviewId }, body: input })),
     onSuccess: (review) => {
@@ -91,7 +92,7 @@ export function useSaveReply(reviewId: string) {
 
 /** Opens (or reuses) the private conversation with the reviewer. */
 export function useOpenReviewThread() {
-  return useMutation({
+  return useCommand({
     mutationFn: async (reviewId: string) =>
       (await apiData(postApiV1AdminReviewsByIdConversation({ path: { id: reviewId } }))).conversationId,
   });
@@ -160,7 +161,7 @@ export function settingsBody(
 
 export function useSaveReviewSettings() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (body: ReviewSettingsBody) => apiData(putApiV1AdminReviewsSettings({ body })),
     onSuccess: (settings) => queryClient.setQueryData(reviewKeys.settings(), settings),
     onError: (error) => {

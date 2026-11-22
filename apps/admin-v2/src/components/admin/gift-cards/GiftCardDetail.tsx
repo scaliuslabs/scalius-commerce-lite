@@ -256,7 +256,7 @@ export function GiftCardDetail({ card, transactions }: { card: GiftCardDetailRec
           <EditDetailsDialog card={card} open={dialog === "details"} onOpenChange={closeDialog} />
           <ConfirmDialog
             open={dialog === "disable"}
-            onOpenChange={(open) => { if (!open && !update.isPending) setDialog(null); }}
+            onOpenChange={update.guardClose((open) => { if (!open) setDialog(null); })}
             title={t("disableTitle", { last4: card.last4 })}
             description={t("disableBody")}
             confirmLabel={t("disable")}

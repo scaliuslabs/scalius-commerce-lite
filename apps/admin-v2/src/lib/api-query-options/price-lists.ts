@@ -1,7 +1,7 @@
 // Price lists (docs/MARKETS-DESIGN.md D5): the list, one list and a page of
 // its SKU prices, and the writes. A list and its prices save under one
 // revision; every write refreshes the list and the list's own reads.
-import { keepPreviousData, queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions, useQueryClient } from "@tanstack/react-query";
 import {
   deleteApiV1AdminPriceListsById,
   getApiV1AdminPriceLists,
@@ -13,6 +13,7 @@ import {
   putApiV1AdminPriceListsByIdPrices,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody, type ApiResult } from "../api";
+import { useCommand } from "~/lib/use-command";
 
 export type PriceList = ApiResult<typeof getApiV1AdminPriceListsById>["priceList"];
 /** A row of the price lists index. */
@@ -78,7 +79,7 @@ export async function savePriceListPrices(id: string, body: SetPriceListPricesBo
 
 export function useCreatePriceList() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: async (body: CreatePriceListBody) => (await apiData(postApiV1AdminPriceLists({ body }))).priceList,
     onSettled: () => queryClient.invalidateQueries({ queryKey: priceListKeys.all }),
   });
@@ -86,7 +87,7 @@ export function useCreatePriceList() {
 
 export function useDeletePriceList() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (list: Pick<PriceList, "id" | "revision">) =>
       apiData(deleteApiV1AdminPriceListsById({ path: { id: list.id }, query: { expectedRevision: list.revision } })),
     onSettled: () => queryClient.invalidateQueries({ queryKey: priceListKeys.list() }),
@@ -95,7 +96,7 @@ export function useDeletePriceList() {
 
 export function useSavePriceListPrices(id: string) {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useCommand({
     mutationFn: (body: SetPriceListPricesBody) => savePriceListPrices(id, body),
     onSettled: () => queryClient.invalidateQueries({ queryKey: priceListKeys.all }),
   });

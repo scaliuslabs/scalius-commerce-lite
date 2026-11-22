@@ -6,7 +6,7 @@
 // area's rates is charged with them.
 import { useEditBase } from "~/hooks/use-edit-base";
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import {
@@ -55,6 +55,7 @@ import {
 import { NONE, CheckRow, useCanManageTaxes, useGroupName, useRefreshTaxes, useSaveFailure, useWriteFailure } from "./tax-shared";
 import { FieldRow } from "~/components/ui/field";
 import { sameFormValue } from "~/lib/form-values";
+import { useCommand } from "~/lib/use-command";
 
 const BD = "BD";
 
@@ -83,7 +84,7 @@ function ServiceCard({ region, config }: { region: TaxRegionRecord; config: TaxC
       : candidate),
   });
   const issueText = issue?.key === "groupNeedsRate" ? t("groupNeedsRate", { name: issue.name }) : issue ? t(issue.key) : undefined;
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: () => apiData(putApiV1AdminTaxesRegionsById({
       path: { id: region.id },
       body: { expectedVersion: version, providerId: draft === NONE ? null : draft },
@@ -164,7 +165,7 @@ function RateForm({ rate, country, regions, config }: {
   const onlyRateNote = roles.length === 2 ? t("onlyRateBoth") : roles[0] === "delivery" ? t("onlyRateDelivery") : t("onlyRateProducts");
   const inCountry = draft.taxRegionId === country.id;
 
-  const save = useMutation({
+  const save = useCommand({
     mutationFn: () => {
       const body = {
         taxClassId: draft.taxClassId,
@@ -183,7 +184,7 @@ function RateForm({ rate, country, regions, config }: {
     },
     onSuccess: refresh,
   });
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: () =>
       apiData(deleteApiV1AdminTaxesRatesById({ path: { id: rate!.id }, query: { expectedVersion: rate!.version } })),
     onSuccess: async () => {
@@ -314,7 +315,7 @@ function RegionForm({ country, regions }: { country: TaxRegionRecord; regions: T
   const [label, setLabel] = useState("");
   const prefix = kind === "postal_prefix" ? normalizePostalPrefix(value) : null;
   const ready = kind === "postal_prefix" ? prefix !== null : value !== "";
-  const create = useMutation({
+  const create = useCommand({
     mutationFn: () => apiData(postApiV1AdminTaxesRegions({
       body: {
         countryCode: country.countryCode,
@@ -406,7 +407,7 @@ function RemoveRegion({ region, label, onRemoved }: { region: TaxRegionRecord; l
   const failWrite = useWriteFailure();
   const [confirming, setConfirming] = useState(false);
   const country = region.kind === "country";
-  const remove = useMutation({
+  const remove = useCommand({
     mutationFn: () => apiData(deleteApiV1AdminTaxesRegionsById({ path: { id: region.id }, query: { expectedVersion: region.version } })),
     onSuccess: async () => {
       toast.success(t("removed"));

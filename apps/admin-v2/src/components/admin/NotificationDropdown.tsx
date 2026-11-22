@@ -1,6 +1,6 @@
 import { formatOrderNumber } from "~/lib/order-number";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Bell } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
@@ -16,6 +16,7 @@ import { mutateStaffAlert, staffAlertFeedOptions, staffAlertKeys, staffAlertSumm
 import { toast } from "~/lib/toast";
 import { TOP_BAR_BUTTON } from "./layout/nav-button";
 import { ListDate } from "./data-table/ListDate";
+import { useCommand } from "~/lib/use-command";
 
 /** The API supplies logical dashboard paths, never provider text or external links. */
 function dashboardPath(href: string): string | undefined {
@@ -78,7 +79,8 @@ function AccountNotifications({ userId = "" }: { userId?: string }) {
     }),
     enabled: open && Boolean(userId) && summary.isSuccess,
   });
-  const mutation = useMutation({ mutationFn: mutateStaffAlert });
+  // Each alert is its own subject: reading one never waits on another.
+  const mutation = useCommand({ mutationFn: mutateStaffAlert, subject: (action) => (action.kind === "read" ? `read:${action.seq}` : action.kind) });
   const pages = feed.data?.pages;
   const latest = pages?.at(-1);
   const head = ceiling.current?.window === view ? ceiling.current.head : pages?.[0]?.head;

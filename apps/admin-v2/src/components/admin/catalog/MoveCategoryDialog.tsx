@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { patchApiV1AdminCategoriesByIdParent } from "@scalius/api-client/sdk";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { categoryPathLabel, indexCategories } from "@/lib/category-tree";
 import { parentChoices } from "@/lib/category-parent-choices";
 import { useMessages } from "~/i18n";
 import { categoryFormMessages } from "~/i18n/category-form";
+import { useCommand } from "~/lib/use-command";
 
 export interface MoveTarget {
   id: string;
@@ -39,7 +40,7 @@ export function MoveCategoryDialog({ target, onClose }: { target: MoveTarget | n
     keywords: [category.name],
   })) : [];
 
-  const move = useMutation({
+  const move = useCommand({
     mutationFn: () => apiData(patchApiV1AdminCategoriesByIdParent({
       path: { id: target!.id },
       body: { expectedRevision: target!.revision, parentId },
@@ -58,7 +59,7 @@ export function MoveCategoryDialog({ target, onClose }: { target: MoveTarget | n
 
   const path = parentId ? categoryPathLabel(parentId, byId) : "";
   return (
-    <Dialog open={target !== null} onOpenChange={(next) => !next && !move.isPending && onClose()}>
+    <Dialog open={target !== null} onOpenChange={move.guardClose((next) => { if (!next) onClose(); })}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("moveTitle", { name: target?.name ?? "" })}</DialogTitle>

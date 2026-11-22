@@ -85,39 +85,3 @@ export function receiveLines(lines: readonly ReceiveLine[], tally: ReceiveTally)
   return lines.flatMap((line) => ((tally[line.id] ?? 0) > 0 ? [{ lineId: line.id, quantity: tally[line.id]! }] : []));
 }
 
-/**
- * One operation key per receive intent (the document at its revision, the
- * counted lines and, for a PO, whether costs move): the same intent sent
- * again after an unknown outcome (a dropped connection, a second tap) reuses
- * its key, so the server replays the first receipt instead of booking twice.
- * `settle` forgets the intent once its outcome is known (booked or refused),
- * so the next delivery of the same count is a new receipt.
- */
-export function createIntentKeys(newKey: () => string = () => `invop_${crypto.randomUUID()}`) {
-  let current: { fingerprint: string; key: string } | null = null;
-  return {
-    keyFor(fingerprint: string): string {
-      if (current?.fingerprint !== fingerprint) current = { fingerprint, key: newKey() };
-      return current.key;
-    },
-    settle() {
-      current = null;
-    },
-  };
-}
-
-export function receiveFingerprint(intent: {
-  kind: "purchaseOrder" | "transfer";
-  documentId: string;
-  revision: number;
-  lines: ReadonlyArray<{ lineId: string; quantity: number }>;
-  updateCost?: boolean;
-}): string {
-  return JSON.stringify([
-    intent.kind,
-    intent.documentId,
-    intent.revision,
-    intent.lines.map((line) => [line.lineId, line.quantity]),
-    Boolean(intent.updateCost),
-  ]);
-}
