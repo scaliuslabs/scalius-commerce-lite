@@ -14,6 +14,7 @@
 //   rows, a provider's own words, a record of one outcome).
 import type { AnyMachine } from "@scalius/shared/machine";
 import { COD_MACHINE, ORDER_MACHINE } from "@scalius/shared/order-state";
+import { INVENTORY_TRANSFER_MACHINE, RETURN_MACHINE } from "@scalius/shared/record-lifecycles";
 import { REVIEW_MACHINE } from "@scalius/shared/reviews";
 import { INVITATION_MACHINE } from "./auth/invitation-state";
 import { META_PURCHASE_QUEUE } from "./integrations/meta/purchase-outbox";
@@ -41,6 +42,8 @@ export const MACHINES: Readonly<Record<StateColumn, AnyMachine>> = {
     "admin_invitations.status": INVITATION_MACHINE,
     "purchase_orders.status": PURCHASE_ORDER_MACHINE,
     "suppliers.status": SUPPLIER_MACHINE,
+    "order_returns.status": RETURN_MACHINE,
+    "inventory_transfers.status": INVENTORY_TRANSFER_MACHINE,
     "media.status": MEDIA_MACHINE,
     "media_upload_sessions.state": MEDIA_UPLOAD_MACHINE,
     "refund_attempts.status": REFUND_ATTEMPT_MACHINE,
@@ -72,7 +75,6 @@ export const NOT_MACHINES: Readonly<Record<StateColumn, string>> = {
 export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     // Orders and delivery
     "delivery_shipments.status": "17 states, about 20 writers, most unguarded; couriers report in any order, so it needs settled/open rules more than an edge table",
-    "order_returns.status": "inline `status IN` checks per command in orders/returns/returns.ts, guarded by version",
     "order_return_commands.status": "idempotency claim: processing, committed",
     "order_support_requests.status": "admin moves are a table (orders/order-support-requests.ts ADMIN_SUPPORT_REQUEST_TRANSITIONS); `withdrawn` has no writer",
     "order_fulfillments.status": "active, voided; guarded writes in fulfilment/ledger.ts",
@@ -88,7 +90,6 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "customer_payment_methods.status": "active, removed; a re-saved method returns to active",
     "gift_cards.status": "active, disabled; staff or an app disables a card, a refund clawback never does",
     // Stock and supply
-    "inventory_transfers.status": "inline assertStatus plus a revision guard (inventory/transfers.ts)",
     "inventory_locations.status": "active, archived",
     "product_low_stock_alerts.alert_status": "two implementations in inventory/alerts.ts and a third derivation in the list read",
     "warranty_claims.status": "any status to any, by design, guarded by version",
