@@ -33,8 +33,8 @@ async function publicRead<T>(path: string, query = new URLSearchParams()): Promi
   return data;
 }
 
-/** A route or cart action (`set_attribute` and `navigate` run in the renderer). */
-export type RunnableAction = Exclude<PluginUiAction, { kind: "navigate" } | { op: "set_attribute" }>;
+/** A route or cart action (`set_attribute`, `set_line_input` and `navigate` run in the renderer). */
+export type RunnableAction = Exclude<PluginUiAction, { kind: "navigate" } | { op: "set_attribute" } | { op: "set_line_input" }>;
 
 /**
  * Adds a SKU without buyer inputs of its own to the cart: one-time, or under

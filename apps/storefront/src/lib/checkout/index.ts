@@ -11,6 +11,7 @@ import { createDeferredGatewayHandler } from "./handlers/deferred";
 import { formatPageNumber, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
 import { formatMoney, DEFAULT_CURRENCY } from "@/lib/currency";
 import { fromMinor } from "@scalius/shared/money";
+import { addOnRowsOver } from "@scalius/shared/add-on-totals";
 
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
@@ -777,8 +778,9 @@ export function renderOrderSummaryDetails(
   details.replaceChildren();
   appendOrderItems(details, quote, freeDeliveryCartKeys(data.cartItems));
   // The apps' add-ons as their own rows after the items' subtotal: together they are the quote's subtotal.
-  appendSummaryRow(details, checkoutCopy.subtotalText, currencyFmt(fromMinor(quote.addOns.itemsSubtotalMinor, quote.decimalPlaces), quote));
-  for (const row of quote.addOns.rows) {
+  const addOns = addOnRowsOver(quote.subtotalMinor, quote.addOns);
+  appendSummaryRow(details, checkoutCopy.subtotalText, currencyFmt(fromMinor(addOns.itemsSubtotalMinor, quote.decimalPlaces), quote));
+  for (const row of addOns.rows) {
     appendSummaryRow(details, row.title, currencyFmt(fromMinor(row.amountMinor, quote.decimalPlaces), quote)).dataset.summaryRow = "add-on";
   }
   // Delivery savings show on the delivery line ("৳80 Free (CODE)"), never as a discount line.

@@ -31,10 +31,14 @@ export interface AddOnTotals {
   rows: AddOnTotalRow[];
 }
 
-/** The add-ons a frozen or checked line carries among its entries (`_adjustment`: value is the title, priceMinor each unit's amount). */
-export function lineAddOnsOf(entries: ReadonlyArray<{ key: string; value?: string; displayValue?: string; priceMinor?: number; appId?: string | null }> | null | undefined): LineAddOn[] {
+/**
+ * The add-ons a frozen or checked line carries among its entries
+ * (`_adjustment`: value is the title, priceMinor each unit's amount). An
+ * entry without a key is one of a list of add-ons (a stored cart line's).
+ */
+export function lineAddOnsOf(entries: ReadonlyArray<{ key?: string; value?: string; displayValue?: string; priceMinor?: number; appId?: string | null }> | null | undefined): LineAddOn[] {
   return (entries ?? []).flatMap((entry) => {
-    if (entry.key !== LINE_ADJUSTMENT_KEY) return [];
+    if (entry.key !== undefined && entry.key !== LINE_ADJUSTMENT_KEY) return [];
     const amountMinor = entry.priceMinor;
     if (typeof amountMinor !== "number" || !Number.isSafeInteger(amountMinor) || amountMinor < 0) return [];
     const title = (entry.value ?? entry.displayValue ?? "").trim();
@@ -86,4 +90,10 @@ export function frozenAddOnTotals(
   } catch {
     return null;
   }
+}
+
+/** A summary's rows over its subtotal: the items' subtotal is what the rows leave of it. */
+export function addOnRowsOver(subtotalMinor: number, rows: readonly AddOnTotalRow[] | undefined): AddOnTotals {
+  const list = [...(rows ?? [])];
+  return { itemsSubtotalMinor: subtotalMinor - list.reduce((sum, row) => sum + row.amountMinor, 0), rows: list };
 }

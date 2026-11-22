@@ -5,7 +5,7 @@ import {
   type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import { parseCheckoutAttributeValues } from "@/lib/buyer-ui/checkout-attributes";
-import type { AddOnTotals } from "@scalius/shared/add-on-totals";
+import type { AddOnTotalRow, AddOnTotals } from "@scalius/shared/add-on-totals";
 import { LINE_PROPERTY_INPUT_LIMITS, linePropertyInputOf, normalizeLinePurchaseOptions, type LinePropertyInput } from "@scalius/shared/line-identity";
 import { APP_SCOPED_KEY_MAX_LENGTH, isAppScopedKey } from "@scalius/shared/plugins/ids";
 import { normalizeCartLinePurchaseOptions, type CartLinePurchaseOption } from "../cart/purchase-option";
@@ -213,8 +213,8 @@ export interface CheckoutTaxQuote extends CheckoutDiscountFacts, CheckoutGiftCar
   settingsVersion: number;
   subtotalMinor: number;
   subtotalAmount: number;
-  /** The apps' add-ons as their own rows and the items' subtotal without them: they add up to `subtotalMinor`. */
-  addOns: AddOnTotals;
+  /** The apps' add-ons as their own summary rows (`addOnRowsOver` gives the items' subtotal they leave): absent, none. */
+  addOns?: AddOnTotalRow[];
   shippingMinor: number;
   shippingAmount: number;
   discountMinor: number;
@@ -605,7 +605,7 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     return sum + lineSubtotalMinor;
   }, 0);
   if (itemSubtotalMinor !== subtotalMinor) fail();
-  const addOns = parseAddOnTotals(data.addOns, subtotalMinor);
+  const addOns = parseAddOnTotals(data.addOns, subtotalMinor).rows;
   const buyerUi = uncheckedBuyerUi(data.buyerUi);
 
   return {
@@ -620,7 +620,7 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     settingsVersion,
     subtotalMinor,
     subtotalAmount,
-    addOns,
+    ...(addOns.length > 0 ? { addOns } : {}),
     shippingMinor,
     shippingAmount,
     discountMinor,

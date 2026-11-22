@@ -48,7 +48,7 @@ import {
 } from "./browser-api";
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
-import type { AddOnTotals } from "@scalius/shared/add-on-totals";
+import { addOnRowsOver, type AddOnTotals } from "@scalius/shared/add-on-totals";
 
 import { numberLocale } from "@scalius/shared/locale-format";
 import { formatList } from "@scalius/shared/locale-words";
@@ -788,7 +788,7 @@ function renderAuthoritativeCartQuote(
   elements: TotalsElements,
 ): void {
   elements.taxRow?.classList.toggle("hidden", quote.taxMinor === 0);
-  renderAddOnRows(elements.subtotal, quote.addOns, quote.decimalPlaces);
+  renderAddOnRows(elements.subtotal, addOnRowsOver(quote.subtotalMinor, quote.addOns), quote.decimalPlaces);
   latestAllowedPaymentMethods = quote.allowedPaymentMethods;
   latestQuotedTotal = { amountMinor: quote.totalMinor, currency: quote.currencyCode };
   // The cart page drops the payment step when these leave cash alone (lib/checkout/payment-step.ts).
