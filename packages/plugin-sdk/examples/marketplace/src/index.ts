@@ -41,7 +41,18 @@
 // `acct_lost` payee and declining an `acct_frozen` one. A second provider,
 // `acme.marketplace:payouts_basic`, pays the same way but cannot reverse.
 
-import { definePayoutProvider, definePlugin, PLUGIN_API_VERSION, ProviderError, type PluginContext, type PluginEvent, type PluginManifestInput } from "@scalius/plugin-sdk";
+import {
+  defineMachine,
+  definePayoutProvider,
+  definePlugin,
+  movesByTarget,
+  moveRecordStatus,
+  PLUGIN_API_VERSION,
+  ProviderError,
+  type PluginContext,
+  type PluginEvent,
+  type PluginManifestInput,
+} from "@scalius/plugin-sdk";
 
 export const PAYOUT_PROVIDER = "acme.marketplace:payouts";
 /** The same fixture payouts without reversals. */
@@ -229,13 +240,34 @@ async function ignoreReplay(error: unknown, event: PluginEvent, ctx: PluginConte
 
 // ── Paying sellers ──────────────────────────────────────────────────────────
 
+const SELLER_PAYOUT_STATUSES = ["sending", "processing", "paid", "failed"] as const;
+type SellerPayoutStatus = (typeof SELLER_PAYOUT_STATUSES)[number];
+const SELLER_PAYOUT_MOVES: Record<SellerPayoutStatus, readonly SellerPayoutStatus[]> = {
+  sending: ["processing", "paid", "failed"],
+  processing: ["paid", "failed"],
+  paid: [],
+  failed: [],
+};
+/**
+ * A seller payout's record: recorded `sending`, then what the platform
+ * answers. Every status write is a declared move at the revision it read, so
+ * a late `processing` never moves a `paid` or `failed` record back.
+ */
+export const SELLER_PAYOUT_MACHINE = defineMachine({
+  name: "seller payout",
+  states: SELLER_PAYOUT_STATUSES,
+  initial: ["sending"],
+  final: ["paid", "failed"],
+  moves: movesByTarget(SELLER_PAYOUT_MOVES),
+});
+
 export interface SellerPayout extends Record<string, unknown> {
   seller_id: string;
   currency: string;
   round: number;
   amount_minor: number;
   account: string;
-  status: "sending" | "processing" | "paid" | "failed";
+  status: SellerPayoutStatus;
   payout_id: string | null;
   failure_code: string | null;
 }
@@ -274,9 +306,10 @@ async function sendSellerPayout(ctx: PluginContext, key: string, payout: SellerP
     ctx.log.warn("A seller payout is not answered yet", { key, code: sent.error?.code ?? null });
     return "sending";
   }
-  const status = keptStatus(sent.data.payout.status);
-  await ctx.objects.seller_payouts!.update(key, { status, payout_id: sent.data.payout.id, failure_code: sent.data.payout.failureCode });
-  return status;
+  const kept = await moveRecordStatus(ctx.objects.seller_payouts!, key, SELLER_PAYOUT_MACHINE, keptStatus(sent.data.payout.status), {
+    patch: { payout_id: sent.data.payout.id, failure_code: sent.data.payout.failureCode },
+  });
+  return (kept.status ?? "sending") as SellerPayout["status"];
 }
 
 /**
@@ -324,13 +357,30 @@ export async function settleSeller(ctx: PluginContext, sellerId: string): Promis
 
 // ── Clawing back refunded shares ────────────────────────────────────────────
 
+const SELLER_REVERSAL_STATUSES = ["sending", "processing", "reversed", "failed"] as const;
+type SellerReversalStatus = (typeof SELLER_REVERSAL_STATUSES)[number];
+const SELLER_REVERSAL_MOVES: Record<SellerReversalStatus, readonly SellerReversalStatus[]> = {
+  sending: ["processing", "reversed", "failed"],
+  processing: ["reversed", "failed"],
+  reversed: [],
+  failed: [],
+};
+/** A clawback's record, moved the same way as a payout's. */
+export const SELLER_REVERSAL_MACHINE = defineMachine({
+  name: "seller reversal",
+  states: SELLER_REVERSAL_STATUSES,
+  initial: ["sending"],
+  final: ["reversed", "failed"],
+  moves: movesByTarget(SELLER_REVERSAL_MOVES),
+});
+
 export interface SellerReversal extends Record<string, unknown> {
   seller_id: string;
   currency: string;
   round: number;
   payout_id: string;
   amount_minor: number;
-  status: "sending" | "processing" | "reversed" | "failed";
+  status: SellerReversalStatus;
   reversal_id: string | null;
   failure_code: string | null;
 }
@@ -357,9 +407,10 @@ async function sendSellerReversal(ctx: PluginContext, key: string, reversal: Sel
     return "sending";
   }
   const made = sent.data.payout.reversals.find((entry) => entry.id === sent.data!.reversalId);
-  const status = made ? keptReversalStatus(made.status) : "sending";
-  await ctx.objects.seller_reversals!.update(key, { status, reversal_id: sent.data.reversalId, failure_code: made?.failureCode ?? null });
-  return status;
+  const kept = await moveRecordStatus(ctx.objects.seller_reversals!, key, SELLER_REVERSAL_MACHINE, made ? keptReversalStatus(made.status) : "sending", {
+    patch: { reversal_id: sent.data.reversalId, failure_code: made?.failureCode ?? null },
+  });
+  return (kept.status ?? "sending") as SellerReversal["status"];
 }
 
 /**
@@ -442,7 +493,9 @@ async function recordReversalEvent(event: PluginEvent, ctx: PluginContext): Prom
   const record = byId.records[0] ?? (await allRecords<SellerReversal>(ctx, "seller_reversals", { seller_id: read.data.payout.payeeRef }))
     .find((row) => row.data.status === "sending" && !row.data.reversal_id && row.data.payout_id === payoutId && row.data.amount_minor === reversal.amountMinor);
   if (!record) return;
-  await ctx.objects.seller_reversals!.update(record.id, { status: keptReversalStatus(reversal.status), reversal_id: reversal.id, failure_code: reversal.failureCode });
+  await moveRecordStatus(ctx.objects.seller_reversals!, record.id, SELLER_REVERSAL_MACHINE, keptReversalStatus(reversal.status), {
+    patch: { reversal_id: reversal.id, failure_code: reversal.failureCode },
+  });
 }
 
 /** `payout.created` / `payout.updated`: keeps the platform's status on the app's record of the payout. */
@@ -457,7 +510,9 @@ async function recordPayoutEvent(event: PluginEvent, ctx: PluginContext): Promis
   const record = byId.records[0] ?? (await allRecords<SellerPayout>(ctx, "seller_payouts", { seller_id: payout.payeeRef }))
     .find((row) => row.data.status === "sending" && !row.data.payout_id && row.data.amount_minor === payout.amountMinor && row.data.currency === payout.currency);
   if (!record) return;
-  await ctx.objects.seller_payouts!.update(record.id, { status: keptStatus(payout.status), payout_id: payout.id, failure_code: payout.failureCode });
+  await moveRecordStatus(ctx.objects.seller_payouts!, record.id, SELLER_PAYOUT_MACHINE, keptStatus(payout.status), {
+    patch: { payout_id: payout.id, failure_code: payout.failureCode },
+  });
 }
 
 // ── The fixture payout provider (no network) ────────────────────────────────
