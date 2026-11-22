@@ -1,10 +1,17 @@
 import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
 import type { OrderItem, OrderReceipt } from "./api/types";
 import {
-  formatOrderSuccessLabel,
   formatOrderSuccessPaymentMethod as formatGatewayPaymentMethod,
   RECORDED_PAYMENT_METHOD,
 } from "./order-success-localization";
+import {
+  buyerOrderBadgeClass,
+  buyerOrderStatusText,
+  buyerPaymentBadgeClass,
+  buyerPaymentRefusalText,
+  buyerPaymentText,
+} from "./buyer-order-words";
+import type { BuyerOrderDetailView, BuyerOrderKind, BuyerOrderStatusWord, BuyerOrderView } from "@scalius/shared/buyer-order-view";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 
 import { baseLanguage, numberLocale } from "@scalius/shared/locale-format";
@@ -15,7 +22,6 @@ import { orderPaymentKind } from "@scalius/shared/order-payment-methods";
 import { orderDeliveryMode, type OrderFulfilmentView } from "./order-line-groups";
 import { giftCardCheckoutCopy } from "./checkout/gift-cards";
 
-export { formatOrderSuccessLabel } from "./order-success-localization";
 
 /** `orders.payment_method` of an order its gift cards paid in full (Wave B §4.3). */
 export const GIFT_CARD_PAYMENT_METHOD = "gift_card";
@@ -70,27 +76,6 @@ export function formatOrderSuccessPaymentMethod(
   return readReceiptGiftCardTenders(order).length > 0 ? `${giftCard} + ${method}` : method;
 }
 
-const NON_FINAL_ORDER_STATUSES = new Set(["incomplete"]);
-const PAYMENT_ISSUE_ORDER_STATUSES = new Set([
-  "failed",
-]);
-const ACTIVE_UPDATED_ORDER_STATUSES = new Set([
-  "confirmed",
-  "processing",
-  "shipped",
-  "delivered",
-  "completed",
-]);
-const CLOSED_ORDER_STATUSES = new Set([
-  "cancelled",
-  "refunded",
-  "returned",
-  "partially_refunded",
-]);
-const ACCEPTED_PAYMENT_STATUSES = new Set(["paid", "partial"]);
-/** A (partly) refunded payment reads like a settled one: no retry, nothing due. */
-const REFUNDED_PAYMENT_STATUSES = new Set(["refunded", "partially_refunded"]);
-const FAILED_PAYMENT_STATUSES = new Set(["failed"]);
 /** What a hosted payment's return (or a payment that could not start) says in `result`. */
 const FAILED_PAYMENT_RESULTS = new Set(["failed", "cancelled"]);
 
@@ -98,11 +83,7 @@ const FAILED_PAYMENT_RESULTS = new Set(["failed", "cancelled"]);
 export function isFailedPaymentResult(result: string | null | undefined): boolean {
   return FAILED_PAYMENT_RESULTS.has(normalize(result));
 }
-export type OrderSuccessStateKind =
-  | "order_placed"
-  | "order_updated"
-  | "payment_pending"
-  | "payment_issue";
+export type OrderSuccessStateKind = BuyerOrderKind;
 
 export interface OrderSuccessViewState {
   kind: OrderSuccessStateKind;
@@ -132,111 +113,21 @@ function normalize(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
-/**
- * Every payment method except cash on delivery, the store's invoice, a
- * gift-card-paid order and one paid as it was placed is an online gateway (a
- * gift card or a recorded payment settles at commit: nothing to confirm or
- * retry): a built-in id or an app provider's
- * `<plugin id>:<provider id>`. An app's own invoice is told apart by the
- * order's `paymentTerms` (`isPaidLater`).
- */
-function isOnlinePaymentMethod(paymentMethod: string | null | undefined): boolean {
+/** An online gateway: a built-in one or an app's `<plugin id>:<provider id>`. */
+function isOnlineMethod(paymentMethod: string | null | undefined): boolean {
   const method = normalize(paymentMethod);
-  // The platform's own methods by their kind; any other well-formed id is a gateway.
   const kind = orderPaymentKind(method);
   return kind === "online" || (kind === null && isPaymentMethodIdShape(method));
 }
 
-/** Paid later by invoice: placed now, nothing to confirm or retry online. */
-function isPaidLater(order: { paymentMethod?: string | null; paymentTerms?: OrderReceipt["paymentTerms"] }): boolean {
-  return normalize(order.paymentMethod) === "net_terms" || Boolean(order.paymentTerms);
-}
-
-/** Paid before anything is handed over: online, entirely by gift card, or as it was placed. */
+/**
+ * Paid before anything is handed over: an online gateway (a built-in id or an
+ * app's `<plugin id>:<provider id>`), entirely by gift card, or as it was placed.
+ */
 function isPrepaidPaymentMethod(paymentMethod: string | null | undefined): boolean {
-  return isOnlinePaymentMethod(paymentMethod) || normalize(paymentMethod) === GIFT_CARD_PAYMENT_METHOD
-    || normalize(paymentMethod) === RECORDED_PAYMENT_METHOD;
-}
-
-function isAcceptedPayment(order: Pick<OrderReceipt, "paymentStatus" | "paidAmount">): boolean {
-  const paymentStatus = normalize(order.paymentStatus);
-  if (ACCEPTED_PAYMENT_STATUSES.has(paymentStatus)) return true;
-  return Number(order.paidAmount ?? 0) > 0 && !FAILED_PAYMENT_STATUSES.has(paymentStatus);
-}
-
-export function getOrderSuccessStateKind(
-  order: Pick<
-    OrderReceipt,
-    "status" | "paymentMethod" | "paymentStatus" | "paidAmount"
-  > & Pick<Partial<OrderReceipt>, "paymentTerms">,
-): OrderSuccessStateKind {
-  const orderStatus = normalize(order.status);
-  const paymentStatus = normalize(order.paymentStatus);
-
-  if (CLOSED_ORDER_STATUSES.has(orderStatus) || REFUNDED_PAYMENT_STATUSES.has(paymentStatus)) {
-    return "order_updated";
-  }
-
-  if (
-    PAYMENT_ISSUE_ORDER_STATUSES.has(orderStatus)
-    || FAILED_PAYMENT_STATUSES.has(paymentStatus)
-  ) {
-    return "payment_issue";
-  }
-
-  if (!isOnlinePaymentMethod(order.paymentMethod) || isPaidLater(order)) {
-    if (NON_FINAL_ORDER_STATUSES.has(orderStatus)) return "payment_pending";
-    return ACTIVE_UPDATED_ORDER_STATUSES.has(orderStatus) ? "order_updated" : "order_placed";
-  }
-
-  if (NON_FINAL_ORDER_STATUSES.has(orderStatus) || !isAcceptedPayment(order)) {
-    return "payment_pending";
-  }
-
-  if (ACTIVE_UPDATED_ORDER_STATUSES.has(orderStatus)) return "order_updated";
-
-  return "order_placed";
-}
-
-export function getOrderSuccessVisibleBalanceDue(
-  order: Pick<OrderReceipt, "status" | "paymentStatus" | "totalAmount" | "paidAmount" | "balanceDue">,
-): number {
-  const orderStatus = normalize(order.status);
-  const paymentStatus = normalize(order.paymentStatus);
-  if (CLOSED_ORDER_STATUSES.has(orderStatus) || REFUNDED_PAYMENT_STATUSES.has(paymentStatus)) return 0;
-
-  const storedBalance = Number(order.balanceDue);
-  if (Number.isFinite(storedBalance)) return Math.max(0, storedBalance);
-  return Math.max(0, Number(order.totalAmount ?? 0) - Number(order.paidAmount ?? 0));
-}
-
-// Status badges tint a surface with a tone and keep the words in the text
-// colour, so they read in the theme's light and dark colours alike.
-export function getOrderStatusBadgeClass(value: string | null | undefined): string {
-  const status = normalize(value);
-  if (["delivered", "completed"].includes(status)) {
-    return "bg-success/15 text-foreground";
-  }
-  if (["failed"].includes(status)) {
-    return "bg-destructive text-destructive-foreground";
-  }
-  if (["pending"].includes(status)) {
-    return "bg-warning/15 text-foreground";
-  }
-  if (["confirmed", "processing", "shipped"].includes(status)) {
-    return "bg-primary/10 text-primary-ink";
-  }
-  return "bg-muted text-foreground";
-}
-
-export function getPaymentStatusBadgeClass(value: string | null | undefined): string {
-  const status = normalize(value);
-  if (status === "paid") return "bg-success/15 text-foreground";
-  if (status === "failed") return "bg-destructive text-destructive-foreground";
-  if (["unpaid", "pending", "processing", "partial"].includes(status)) {
-    return "bg-warning/15 text-foreground";
-  }
-  return "bg-muted text-foreground";
+  const method = normalize(paymentMethod);
+  const kind = orderPaymentKind(method);
+  return isOnlineMethod(method) || kind === "gift_card" || kind === "paid_to_store";
 }
 
 type OrderDeliveryFacts = Partial<Pick<OrderFulfilmentView, "requiresShipping" | "shippingMethodKind">>;
@@ -250,33 +141,28 @@ export function codDueText(order: OrderDeliveryFacts, copy: CheckoutLanguageData
   return mode === "pickup" ? copy.dueAtPickupText : mode === "none" ? copy.dueAtServiceText : copy.dueOnDeliveryText;
 }
 
-export function getOrderPaymentPresentation(
-  order: Pick<OrderReceipt, "status" | "paymentMethod" | "paymentStatus" | "totalAmount" | "paidAmount" | "balanceDue">
-    & OrderDeliveryFacts
-    & OrderGiftCardFacts,
-  copy: CheckoutLanguageData,
-) {
+/** The order facts the payment words and balance read: the server's view, the method and what is owed. */
+type OrderPaymentFacts = Pick<OrderReceipt, "paymentMethod" | "balanceDue">
+  & { buyerView: Pick<BuyerOrderView, "payment"> }
+  & OrderDeliveryFacts
+  & OrderGiftCardFacts;
+
+/**
+ * How the order is paid, in the page's words: the server's payment word
+ * (`orderPaymentWord`), the method, any gift cards and what is still owed
+ * (the API sends only a balance the buyer owes: none on a closed order).
+ */
+export function getOrderPaymentPresentation(order: OrderPaymentFacts, copy: CheckoutLanguageData) {
   const isCod = normalize(order.paymentMethod) === "cod";
-  const paymentStatus = normalize(order.paymentStatus);
-  const isClosed = CLOSED_ORDER_STATUSES.has(normalize(order.status)) || REFUNDED_PAYMENT_STATUSES.has(paymentStatus);
-  const codCollection = isCod && ["unpaid", "partial"].includes(paymentStatus);
   const giftCardTenders = readReceiptGiftCardTenders(order);
-  // Gift cards paid part and cash on delivery collects the rest: that rest is due at the door.
-  const codRemainder = isCod && paymentStatus === "partial" && giftCardTenders.length > 0;
+  const word = order.buyerView.payment;
   return {
-    isCod,
-    isClosed,
-    statusLabel: codCollection && isClosed
-      ? copy.orderReceiptPaymentStatusNoPaymentDueText
-      : isCod && (paymentStatus === "unpaid" || codRemainder)
-        ? codDueText(order, copy)
-        : formatOrderSuccessLabel(order.paymentStatus, copy),
-    badgeClass: codCollection
-      ? "bg-muted text-foreground"
-      : getPaymentStatusBadgeClass(order.paymentStatus),
+    word,
+    statusLabel: buyerPaymentText(word, copy),
+    badgeClass: buyerPaymentBadgeClass(word),
     methodLabel: formatOrderSuccessPaymentMethod(order.paymentMethod, copy, order),
     giftCardTenders,
-    balanceDue: getOrderSuccessVisibleBalanceDue(order),
+    balanceDue: Math.max(0, Number(order.balanceDue) || 0),
     balanceLabel: isCod
       ? codDueText(order, copy)
       : giftCardTenders.length > 0
@@ -285,38 +171,56 @@ export function getOrderPaymentPresentation(
   };
 }
 
+type ReceiptViewOrder = Pick<OrderReceipt, "id" | "orderNumber" | "paymentMethod" | "balanceDue">
+  & { buyerView: BuyerOrderDetailView; paymentRecovery?: Pick<NonNullable<OrderReceipt["paymentRecovery"]>, "refusal"> | null }
+  & OrderDeliveryFacts
+  & OrderGiftCardFacts;
+
+/** The receipt's heading and badges, worded from the server's view of the order. */
 export function getOrderSuccessViewState(
-  order: OrderReceipt,
+  order: ReceiptViewOrder,
   copy: CheckoutLanguageData,
   callbackResult?: string | null,
 ): OrderSuccessViewState {
-  const durableKind = getOrderSuccessStateKind(order);
-  const paymentStatus = normalize(order.paymentStatus);
+  const view = order.buyerView;
   const payment = getOrderPaymentPresentation(order, copy);
   // The order still waits for an online payment and the return says it
   // failed (or never started): that is known, so the page says it and offers
   // a retry instead of "pending". Anything the store recorded wins: a paid,
   // failed or closed order reads from its own state whatever the URL says.
-  const failedReturn = durableKind === "payment_pending"
-    && isOnlinePaymentMethod(order.paymentMethod)
-    && !isAcceptedPayment(order)
-    && isFailedPaymentResult(callbackResult);
-  const kind: OrderSuccessStateKind = failedReturn ? "payment_issue" : durableKind;
+  const failedReturn = view.kind === "payment_pending" && isOnlineMethod(order.paymentMethod) && isFailedPaymentResult(callbackResult);
+  const kind: OrderSuccessStateKind = failedReturn ? "payment_issue" : view.kind;
+  // No payment would start: the page says why, in the refusal's own words, instead of inviting one.
+  const refusal = view.paymentAction === "retry" ? null : buyerPaymentRefusalText(order.paymentRecovery?.refusal);
   // Copy templates already carry the "#": "We received order #{orderId}."
   const orderId = pageOrderNumber(order.orderNumber, order.id).slice(1);
+  const badges = {
+    orderStatusLabel: buyerOrderStatusText(view.status, copy),
+    paymentStatusLabel: payment.statusLabel,
+    orderBadgeClass: buyerOrderBadgeClass({ kind, status: view.status }),
+    paymentBadgeClass: payment.badgeClass,
+  };
+  if (kind === "checkout_expired") {
+    return {
+      kind,
+      shouldFinalizeClientSide: false,
+      title: copy.orderReceiptPaymentIssueTitleText,
+      message: buyerPaymentRefusalText("checkout_expired")!,
+      ...badges,
+    };
+  }
+
   if (kind === "payment_issue") {
     return {
       kind,
       shouldFinalizeClientSide: false,
-      title: failedReturn ? copy.orderReceiptPaymentFailedTitleText : copy.orderReceiptPaymentIssueTitleText,
-      message: checkoutText(
-        failedReturn ? copy.orderReceiptPaymentFailedMessageText : copy.orderReceiptPaymentIssueMessageText,
+      title: failedReturn || view.payment === "failed" ? copy.orderReceiptPaymentFailedTitleText : copy.orderReceiptPaymentIssueTitleText,
+      // A payment that failed says so, and what the buyer can do: try again, or why that is not possible.
+      message: refusal ?? checkoutText(
+        view.paymentAction === "retry" ? copy.orderReceiptPaymentFailedMessageText : copy.orderReceiptPaymentIssueMessageText,
         { orderId },
       ),
-      orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
-      paymentStatusLabel: payment.statusLabel,
-      orderBadgeClass: getOrderStatusBadgeClass(order.status),
-      paymentBadgeClass: payment.badgeClass,
+      ...badges,
     };
   }
 
@@ -326,69 +230,38 @@ export function getOrderSuccessViewState(
       shouldFinalizeClientSide: false,
       title: copy.orderReceiptPaymentPendingTitleText,
       message: checkoutText(copy.orderReceiptPaymentPendingMessageText, { orderId }),
-      orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
-      paymentStatusLabel: payment.statusLabel,
-      orderBadgeClass: "bg-warning/15 text-foreground",
-      paymentBadgeClass: payment.badgeClass,
+      ...badges,
     };
   }
 
   if (kind === "order_updated") {
-    const orderStatus = normalize(order.status);
-    const updatedCopy: Record<string, { title: string; message: string }> = {
-      confirmed: {
-        title: copy.orderReceiptConfirmedTitleText,
-        message: copy.orderReceiptConfirmedMessageText,
-      },
-      processing: {
-        title: copy.orderReceiptProcessingTitleText,
-        message: copy.orderReceiptProcessingMessageText,
-      },
-      shipped: {
-        title: copy.orderReceiptShippedTitleText,
-        message: copy.orderReceiptShippedMessageText,
-      },
-      delivered: {
-        title: copy.orderReceiptDeliveredTitleText,
-        message: copy.orderReceiptDeliveredMessageText,
-      },
-      completed: {
-        title: copy.orderReceiptCompletedTitleText,
-        message: copy.orderReceiptCompletedMessageText,
-      },
-      cancelled: {
-        title: copy.orderReceiptCancelledTitleText,
-        message: copy.orderReceiptCancelledMessageText,
-      },
-      refunded: {
-        title: copy.orderReceiptRefundedTitleText,
-        message: copy.orderReceiptRefundedMessageText,
-      },
-      returned: {
-        title: copy.orderReceiptReturnedTitleText,
-        message: copy.orderReceiptReturnedMessageText,
-      },
+    const updatedCopy: Partial<Record<BuyerOrderStatusWord | "partially_refunded", { title: string; message: string }>> = {
+      confirmed: { title: copy.orderReceiptConfirmedTitleText, message: copy.orderReceiptConfirmedMessageText },
+      shipped: { title: copy.orderReceiptShippedTitleText, message: copy.orderReceiptShippedMessageText },
+      delivered: { title: copy.orderReceiptDeliveredTitleText, message: copy.orderReceiptDeliveredMessageText },
+      // Worded for the pickup or the service by withOrderCompletionWording.
+      picked_up: { title: copy.orderReceiptDeliveredTitleText, message: copy.orderReceiptDeliveredMessageText },
+      completed: { title: copy.orderReceiptDeliveredTitleText, message: copy.orderReceiptDeliveredMessageText },
+      cancelled: { title: copy.orderReceiptCancelledTitleText, message: copy.orderReceiptCancelledMessageText },
+      refunded: { title: copy.orderReceiptRefundedTitleText, message: copy.orderReceiptRefundedMessageText },
+      returned: { title: copy.orderReceiptReturnedTitleText, message: copy.orderReceiptReturnedMessageText },
       partially_refunded: {
         title: copy.orderReceiptPartiallyRefundedTitleText,
         message: copy.orderReceiptPartiallyRefundedMessageText,
       },
     };
-    const stateCopy = REFUNDED_PAYMENT_STATUSES.has(paymentStatus) && !CLOSED_ORDER_STATUSES.has(orderStatus)
-      ? updatedCopy[paymentStatus]!
-      : updatedCopy[orderStatus] ?? {
-          title: copy.orderReceiptUpdatedTitleText,
-          message: copy.orderReceiptUpdatedMessageText,
-        };
+    // Money given back on an order still open reads as the refund; a closed order reads as what closed it.
+    const refundedOpenOrder = (view.payment === "refunded" || view.payment === "partially_refunded")
+      && !CLOSED_STATUS_WORDS.has(view.status);
+    const stateCopy = (refundedOpenOrder ? updatedCopy[view.payment as "refunded" | "partially_refunded"] : updatedCopy[view.status])
+      ?? { title: copy.orderReceiptUpdatedTitleText, message: copy.orderReceiptUpdatedMessageText };
 
     return {
       kind,
       shouldFinalizeClientSide: false,
       title: stateCopy.title,
       message: checkoutText(stateCopy.message, { orderId }),
-      orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
-      paymentStatusLabel: payment.statusLabel,
-      orderBadgeClass: getOrderStatusBadgeClass(order.status),
-      paymentBadgeClass: payment.badgeClass,
+      ...badges,
     };
   }
 
@@ -397,15 +270,11 @@ export function getOrderSuccessViewState(
     shouldFinalizeClientSide: true,
     title: copy.orderReceiptPlacedTitleText,
     message: checkoutText(copy.orderReceiptPlacedMessageText, { orderId }),
-    orderStatusLabel: formatOrderSuccessLabel(
-      order.status === "incomplete" ? "processing" : order.status,
-      copy,
-    ),
-    paymentStatusLabel: payment.statusLabel,
-    orderBadgeClass: getOrderStatusBadgeClass(order.status),
-    paymentBadgeClass: payment.badgeClass,
+    ...badges,
   };
 }
+
+const CLOSED_STATUS_WORDS = new Set<BuyerOrderStatusWord>(["cancelled", "returned", "refunded"]);
 
 /**
  * A receipt opened by tracking (`view=status`), or reopened after the store
@@ -459,7 +328,7 @@ export function isDigitalLinePreparing(
 ): boolean {
   if (line.fulfillmentType !== "digital") return false;
   if ((line.fulfilledQuantity ?? 0) >= line.quantity) return false;
-  if (CLOSED_ORDER_STATUSES.has(normalize(order.status))) return false;
+  if (["cancelled", "returned", "refunded"].includes(normalize(order.status))) return false;
   return normalize(order.paymentStatus) === "paid" || order.balanceDue === 0;
 }
 
@@ -491,23 +360,10 @@ export function getOrderSuccessNextSteps(
   ];
 }
 
-export function shouldClearCheckoutCartForOrder(
-  order: Pick<OrderReceipt, "status" | "paymentMethod" | "paymentStatus" | "paidAmount"> & Pick<Partial<OrderReceipt>, "paymentTerms">,
-): boolean {
-  const orderStatus = normalize(order.status);
-  const paymentStatus = normalize(order.paymentStatus);
-  if (
-    orderStatus === "incomplete" ||
-    orderStatus === "cancelled" ||
-    orderStatus === "refunded" ||
-    orderStatus === "returned" ||
-    orderStatus === "partially_refunded" ||
-    paymentStatus === "failed"
-  ) {
-    return false;
-  }
-  if (!isOnlinePaymentMethod(order.paymentMethod) || isPaidLater(order)) return true;
-  return ACCEPTED_PAYMENT_STATUSES.has(paymentStatus) || Number(order.paidAmount ?? 0) > 0;
+/** The checkout's cart is done with once the order is placed or moved on, and not closed. */
+export function shouldClearCheckoutCartForOrder(order: { buyerView: Pick<BuyerOrderView, "kind" | "status"> }): boolean {
+  const { kind, status } = order.buyerView;
+  return (kind === "order_placed" || kind === "order_updated") && !CLOSED_STATUS_WORDS.has(status);
 }
 
 export function createPurchaseTrackingPayload(

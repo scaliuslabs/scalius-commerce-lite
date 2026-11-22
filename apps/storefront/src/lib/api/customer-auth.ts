@@ -1,3 +1,4 @@
+import type { BuyerOrderDetailView, BuyerOrderView } from "@scalius/shared/buyer-order-view";
 import { buyerApiErrorText } from "../buyer-api-errors";
 import { currentPresence } from "../presence-url";
 import { STOREFRONT_PRESENCE_HEADER } from "@scalius/shared/markets";
@@ -465,6 +466,8 @@ export interface CustomerOrder {
   orderNumber?: number | null;
   status: string;
   statusLabel: string;
+  /** What the buyer is shown of the order, decided by the API (lib/buyer-order-words.ts words it). */
+  buyerView: BuyerOrderView;
   currencyCode: string;
   openSupportRequestType: string | null;
   totalAmount: number;
@@ -593,13 +596,17 @@ export interface CustomerActiveRefundOperation {
   providerStatus: null;
 }
 
+/** The payment the buyer may make, or why the session route would start none (the receipt sends the same). */
 export interface CustomerPaymentRecovery {
   eligible: boolean;
+  /** The method a payment starts first. */
   gateway: string | null;
+  /** Every method a session would be accepted for, the order's own first. */
+  gateways: string[];
   paymentType: "full" | "deposit" | "balance" | null;
   amountDue: number;
-  label: string | null;
-  reason: string | null;
+  /** Why not, a code the page words (lib/buyer-order-words.ts); null exactly when eligible. */
+  refusal: import("@scalius/shared/buyer-order-view").PaymentRefusal | null;
   requiresCardForm: boolean;
   hostedRedirect: boolean;
 }
@@ -743,6 +750,8 @@ export interface CustomerOrderDetail {
   cod: CustomerOrderDetailCod | null;
   progress: CustomerOrderProgress;
   paymentRecovery: CustomerPaymentRecovery;
+  /** What the buyer is shown of the order, decided by the API: the receipt sends the same. */
+  buyerView: BuyerOrderDetailView;
   timeline: CustomerOrderTimelineEvent[];
   /** Each discount used, as on the receipt: `amount` off the items, `shippingAmount` off delivery. */
   discounts?: OrderReceiptDiscount[];

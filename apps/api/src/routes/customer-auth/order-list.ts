@@ -13,6 +13,7 @@ import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { setPrivateNoStoreHeaders, requireCustomerSession } from "./shared";
+import { buyerOrderViewSchema } from "../shared/buyer-order-view";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -41,6 +42,8 @@ const getCustomerOrdersRoute = createRoute({
               invoiceNumber: z.number().nullable().optional(),
               status: z.string(),
               statusLabel: z.string(),
+              /** What the buyer is shown of the order: the account order page and the receipt send the same words. */
+              buyerView: buyerOrderViewSchema,
               openSupportRequestType: z.string().nullable(),
               currencyCode: z.string(),
               totalAmount: z.number(),

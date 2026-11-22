@@ -3,7 +3,14 @@
 // totals), the order detail with its payments, refunds, shipments, support
 // requests and tracking timeline, and the buyer-facing status words.
 
-import { checkoutHoldExpiredSql } from "../payments";
+import { checkoutHoldExpiredSql, isOnlinePaymentMethod } from "../payments";
+import {
+    BUYER_ORDER_STATUS_WORDS_EN,
+    buyerOrderStatusWord,
+    buyerOrderView,
+    type BuyerOrderFacts,
+    type BuyerOrderStatusWord,
+} from "@scalius/shared/buyer-order-view";
 import {
     codTracking,
     customerAddresses,
@@ -17,7 +24,9 @@ import {
     orderSupportRequests,
     orders,
     OrderStatus,
+    paymentDisputes,
     paymentPlans,
+    PaymentRecordStatus,
     PaymentStatus,
     products,
 } from "@scalius/database/schema";
@@ -155,19 +164,11 @@ const MILESTONE_COPY: Record<CustomerOrderMilestone, { label: string; details: s
     partially_refunded: { label: "Partly refunded", details: null },
 };
 
-const ORDER_STATUS_MILESTONE: Record<string, CustomerOrderMilestone> = {
-    pending: "placed",
-    incomplete: "placed",
-    confirmed: "confirmed",
-    processing: "confirmed",
-    shipped: "shipped",
-    delivered: "delivered",
-    completed: "delivered",
-    cancelled: "cancelled",
-    returned: "returned",
-    refunded: "refunded",
-    partially_refunded: "partially_refunded",
-};
+/** Where the tracker puts an order (its steps; the storefront words them for pickup and service). */
+function orderMilestone(status: string): CustomerOrderMilestone {
+    const word = buyerOrderStatusWord({ status });
+    return word === "awaiting_payment" || word === "checkout_expired" ? "placed" : word as CustomerOrderMilestone;
+}
 
 /** Every status change is recorded once in the notification outbox, whichever channels are on. */
 const NOTIFICATION_MILESTONE: Record<string, CustomerOrderMilestone> = {
@@ -182,10 +183,9 @@ const NOTIFICATION_MILESTONE: Record<string, CustomerOrderMilestone> = {
     order_partially_refunded: "partially_refunded",
 };
 
-/** The one status word a buyer sees for an order ("On its way"). */
-export function customerOrderStatusLabel(status: string): string {
-    if (status === OrderStatus.INCOMPLETE) return "Awaiting payment";
-    return MILESTONE_COPY[ORDER_STATUS_MILESTONE[status] ?? "placed"].label;
+/** The one status word a buyer sees for an order ("On its way"), in English. */
+export function customerOrderStatusLabel(word: BuyerOrderStatusWord): string {
+    return BUYER_ORDER_STATUS_WORDS_EN[word];
 }
 
 const SHIPMENT_STATUS_LABELS: Record<string, string> = {
@@ -274,7 +274,7 @@ export function buildCustomerOrderTracking(input: CustomerOrderTrackingInput): {
     }
     const courier = input.shipments.find((shipment) => shipment.providerName || shipment.courierName);
 
-    const current = ORDER_STATUS_MILESTONE[input.order.status] ?? "placed";
+    const current = orderMilestone(input.order.status);
     const stepIndex = CUSTOMER_ORDER_STEPS.indexOf(current as CustomerOrderStep);
     const reachedIndex = stepIndex >= 0
         ? stepIndex
@@ -441,6 +441,66 @@ export function getCustomerVisibleBalanceDueMinor(order: CustomerOrderMoneyState
     return Math.max(0, order.balanceDueMinor);
 }
 
+/**
+ * The columns a buyer's view of an order is decided from beyond its status,
+ * payment and money (`buyerOrderFacts`): what disputes took or hold open, and
+ * what was refunded.
+ */
+export function buyerOrderViewSelection() {
+    const outerOrderId = sql`${orders.id}`;
+    return {
+        disputedMinor: orders.disputedMinor,
+        // Through payment_disputes(order_id): an order has few disputes.
+        disputeOpen: sql<number>`EXISTS (
+            SELECT 1 FROM ${paymentDisputes}
+            WHERE ${paymentDisputes.orderId} = ${outerOrderId} AND ${paymentDisputes.status} IN ('needs_response', 'under_review')
+        )`.mapWith(Number),
+        refundedMinor: sql<number>`COALESCE((
+            SELECT SUM(${orderPayments.amountMinor}) FROM ${orderPayments}
+            WHERE ${orderPayments.orderId} = ${outerOrderId}
+              AND ${orderPayments.paymentType} = 'refund'
+              AND ${orderPayments.status} = ${PaymentRecordStatus.REFUNDED}
+        ), 0)`.mapWith(Number),
+    };
+}
+
+export interface BuyerOrderFactsRow {
+    status: string;
+    paymentStatus: string;
+    paymentMethod: string | null;
+    paymentTermsDays: number | null;
+    shippingMethodKind: string | null;
+    requiresShipping: boolean | null;
+    paidAmountMinor: number;
+    disputedMinor: number;
+    disputeOpen: number | boolean;
+    refundedMinor: number;
+    /** 1 once an unpaid checkout's hold is over (`checkoutHoldExpiredSql`). */
+    holdExpired: number;
+    /** When staff said a pickup order is ready to collect. */
+    pickupReadyAt: Date | number | null;
+}
+
+/** An order row's facts for `buyerOrderView` (amounts in minor units). */
+export function buyerOrderFacts(order: BuyerOrderFactsRow): BuyerOrderFacts {
+    return {
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        paymentMethod: order.paymentMethod,
+        shippingMethodKind: order.shippingMethodKind,
+        requiresShipping: order.requiresShipping,
+        paidAmount: order.paidAmountMinor,
+        refundedAmount: Number(order.refundedMinor) || 0,
+        disputedAmount: Number(order.disputedMinor) || 0,
+        disputeOpen: Boolean(Number(order.disputeOpen)),
+        // An incomplete checkout still takes its payment until its hold is over.
+        checkoutOpen: order.status === OrderStatus.INCOMPLETE && Number(order.holdExpired) !== 1,
+        pickupReady: order.pickupReadyAt != null,
+        onlinePayment: isOnlinePaymentMethod(order.paymentMethod),
+        paidLater: order.paymentMethod === "net_terms" || order.paymentTermsDays !== null,
+    };
+}
+
 export function customerAccountOrderVisibilityCondition(customerId: string): SQL {
     return and(
         customerAccountOwnershipCondition(customerId),
@@ -519,12 +579,16 @@ export async function getCustomerOrders(
             pricesIncludeTax: orders.pricesIncludeTax,
             paymentStatus: orders.paymentStatus,
             paymentMethod: orders.paymentMethod,
+            paymentTermsDays: orders.paymentTermsDays,
             fulfillmentStatus: orders.fulfillmentStatus,
             expectedDelivery: orders.expectedDelivery,
             ...orderShippingAddressSelection(orders),
             requiresShipping: orders.requiresShipping,
             shippingMethodKind: orders.shippingMethodKind,
+            pickupReadyAt: orders.pickupReadyAt,
             notes: orders.notes,
+            ...buyerOrderViewSelection(),
+            holdExpired: checkoutHoldExpiredSql(),
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`
         })
         .from(orders)
@@ -559,11 +623,17 @@ export async function getCustomerOrders(
             shippingFeeWaived: boolean | null;
             paymentStatus: string;
             paymentMethod: string;
+            paymentTermsDays: number | null;
             fulfillmentStatus: string;
             expectedDelivery: string | null;
             requiresShipping: boolean;
             shippingMethodKind: "delivery" | "pickup" | null;
             notes: string | null;
+            disputedMinor: number;
+            disputeOpen: number;
+            refundedMinor: number;
+            holdExpired: number;
+            pickupReadyAt: Date | null;
             createdAt: number | null;
         } & OrderShippingAddressFields>,
     ];
@@ -694,10 +764,13 @@ export async function getCustomerOrders(
     }
 
     // Format response
-    const formattedOrders = customerOrders.map((order) => ({
+    const formattedOrders = customerOrders.map(({ disputedMinor, disputeOpen, refundedMinor, paymentTermsDays, holdExpired, pickupReadyAt, ...order }) => {
+        const buyerView = buyerOrderView(buyerOrderFacts({ ...order, paymentTermsDays, disputedMinor, disputeOpen, refundedMinor, holdExpired, pickupReadyAt }), "account");
+        return {
         ...order,
         ...orderMoneyAmounts(order),
-        statusLabel: customerOrderStatusLabel(order.status),
+        statusLabel: customerOrderStatusLabel(buyerView.status),
+        buyerView,
         balanceDue: fromMinor(getCustomerVisibleBalanceDueMinor(order), order.currencyDecimalPlaces),
         createdAt: order.createdAt
             ? new Date(order.createdAt * 1000).toISOString()
@@ -708,7 +781,8 @@ export async function getCustomerOrders(
             ...item,
             price: fromMinor(unitPriceMinor, order.currencyDecimalPlaces),
         })),
-    }));
+        };
+    });
 
     return {
         orders: formattedOrders,
@@ -772,6 +846,7 @@ export async function getCustomerOwnedOrderForDetail(
             holdExpired: checkoutHoldExpiredSql(),
             // Whether the order may take a deposit plan (payment recovery), in this statement.
             lineTypes: orderLineTypesSql(),
+            ...buyerOrderViewSelection(),
         })
         .from(orders)
         .where(and(
@@ -789,7 +864,12 @@ export async function getCustomerOwnedOrderForDetail(
 
 export type CustomerOwnedOrderForDetail = Awaited<ReturnType<typeof getCustomerOwnedOrderForDetail>>;
 
-export function getCustomerPaymentSessionOrderForDetail(order: CustomerOwnedOrderForDetail) {
+/** The order as the payment session route reads it, from an account or receipt read that selected its columns. */
+export function getCustomerPaymentSessionOrderForDetail(order: Pick<CustomerOwnedOrderForDetail,
+    | "id" | "totalAmountMinor" | "currencyCode" | "shopCurrency" | "fxLockedUntil" | "version"
+    | "currencyDecimalPlaces" | "status" | "paymentStatus" | "paidAmountMinor" | "balanceDueMinor"
+    | "deletedAt" | "paymentMethod" | "shipmentClaimId" | "shipmentClaimExpiresAt" | "lineTypes" | "holdExpired"
+>) {
     return {
         id: order.id,
         totalAmountMinor: order.totalAmountMinor,
@@ -880,15 +960,19 @@ export async function getBuyerOrderTracking(
     });
 
     return {
-        progress,
-        timeline,
-        shipments: shipments.map((shipment) => ({
-            status: shipment.status,
-            statusLabel: customerShipmentStatusLabel(shipment.status),
-            courierName: shipment.courierName?.trim() || shipment.providerName?.trim() || null,
-            trackingId: shipment.trackingId?.trim() || null,
-            trackingUrl: buyerTrackingUrl(shipment.trackingUrl),
-        })),
+        tracking: {
+            progress,
+            timeline,
+            shipments: shipments.map((shipment) => ({
+                status: shipment.status,
+                statusLabel: customerShipmentStatusLabel(shipment.status),
+                courierName: shipment.courierName?.trim() || shipment.providerName?.trim() || null,
+                trackingId: shipment.trackingId?.trim() || null,
+                trackingUrl: buyerTrackingUrl(shipment.trackingUrl),
+            })),
+        },
+        // A refund to the buyer is in flight (the buyer view's `refundOnItsWay`).
+        refundInFlight: refunds.some((refund) => refund.active),
     };
 }
 
@@ -1174,7 +1258,7 @@ export async function getCustomerOrderDetailForOrder(
             orderNumber: order.orderNumber,
             invoiceNumber: order.invoiceNumber,
             status: order.status,
-            statusLabel: customerOrderStatusLabel(order.status),
+            statusLabel: customerOrderStatusLabel(buyerOrderView(buyerOrderFacts(order), "account").status),
             ...orderMoneyAmounts(order),
             balanceDue: amount(getCustomerVisibleBalanceDueMinor(order)),
             currencyCode: order.currencyCode,

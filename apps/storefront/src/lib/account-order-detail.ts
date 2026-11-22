@@ -22,7 +22,6 @@ import {
 import {
   accountMoney,
   accountOfflineMessage,
-  accountOrderStatusText,
   accountShipmentStatusText,
   formatAccountDate,
   formatOrderPlaces,
@@ -40,8 +39,6 @@ import { CheckoutBuyerMessage, CheckoutCopyError, checkoutFailureText } from "@/
 import { stripeErrorCopyKey, type StripeError } from "@/lib/checkout/stripe-error";
 import { followColorScheme, stripeCardStyle } from "@/lib/stripe-card-style";
 import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
-import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
-import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { fromMinor } from "@scalius/shared/money";
 
@@ -61,7 +58,6 @@ import {
 } from "@/lib/order-tracking-markup";
 import {
   groupOrderLines,
-  orderCompletionWording,
   orderLineGroupStatusText,
   orderLinePropertyRows,
   resolveOrderDeliveryBlock,
@@ -73,6 +69,7 @@ import { longAnswerHtml, longAnswerWords } from "@/lib/long-answer";
 import type { MoneySummaryRow } from "@/lib/money-summary-order";
 import { getOrderReceiptSupportActionLabel } from "@/lib/order-success-localization";
 import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
+import { buyerOrderStatusText } from "@/lib/buyer-order-words";
 
 /** The customer order-detail payload, including the buyer tracking fields. */
 export type AccountOrderDetail = CustomerOrderDetail;
@@ -82,7 +79,7 @@ export type AccountOrderDetail = CustomerOrderDetail;
  * read defensively until every client carries it).
  */
 function paymentFacts(detail: AccountOrderDetail) {
-  return { ...detail.order, giftCardTenders: (detail as { giftCardTenders?: unknown }).giftCardTenders };
+  return { ...detail.order, buyerView: detail.buyerView, giftCardTenders: (detail as { giftCardTenders?: unknown }).giftCardTenders };
 }
 
 interface StripeCardElement {
@@ -200,23 +197,9 @@ function gatewayMarkup(gateway: string): string {
   return `<span class="flex items-center gap-3">${mark}<span class="min-w-0"><span class="block font-medium">${escapeHtml(presentation.buyerLabel)}</span>${presentation.description ? `<span class="mt-0.5 block text-sm text-muted-foreground">${escapeHtml(presentation.description)}</span>` : ""}</span></span>`;
 }
 
+/** The methods the API says a session would be accepted for (amount, currency and readiness checked there). */
 function availableGateways(): string[] {
-  const detail = currentDetail;
-  if (!detail || !recoveryAction) return [];
-  const currencyCode = detail.order.currencyCode ?? currentCheckoutConfig?.currency?.code ?? DEFAULT_CURRENCY.code;
-  if (detail.paymentRecovery.paymentType === "balance") {
-    if (!currentCheckoutConfig || currentCheckoutConfig.unavailable) return [recoveryAction.gateway];
-    const configured = currentCheckoutConfig.gateways.find((gateway) => gateway.id === recoveryAction?.gateway);
-    return configured && isGatewayEligibleForPaymentAmount(configured, recoveryAction.amountDue, currencyCode)
-      ? [recoveryAction.gateway]
-      : [];
-  }
-  const configured = (currentCheckoutConfig?.gateways ?? [])
-    .filter((gateway) => isGatewayEligibleForPaymentAmount(gateway, recoveryAction?.amountDue ?? 0, currencyCode))
-    .map((gateway) => gateway.id)
-    .filter(isOnlineGateway);
-  if (configured.length > 0) return [...new Set(configured)];
-  return currentCheckoutConfig?.unavailable ? [recoveryAction.gateway] : [];
+  return currentDetail && recoveryAction ? currentDetail.paymentRecovery.gateways : [];
 }
 
 function recoveryButtonLabel(gateway: string): string {
@@ -267,8 +250,7 @@ function renderPaymentRecovery(detail: AccountOrderDetail): void {
   const container = byId("orderPaymentRecovery");
   const methods = byId("orderPaymentRecoveryMethods");
   if (!container) return;
-  const refunded = ["refunded", "partially_refunded"].includes(detail.order.paymentStatus);
-  recoveryAction = detail.activeRefundOperation || refunded ? null : getAccountPaymentRecoveryAction(detail.paymentRecovery);
+  recoveryAction = getAccountPaymentRecoveryAction(detail.paymentRecovery, detail.buyerView.paymentAction);
   const gateways = availableGateways();
   if (!recoveryAction || gateways.length === 0) return hideRecovery();
   if (!selectedGateway || !gateways.includes(selectedGateway)) {
@@ -806,9 +788,8 @@ export function renderOrderDetail(detail: AccountOrderDetail, checkoutConfig: Ch
   const status = byId("orderStatus");
   // A finished pickup order reads "Picked up"; a service/digital-only one "Completed", never "Delivered".
   if (status) {
-    status.className = accountPill(orderStatusTone(order.status));
-    status.textContent = orderCompletionWording(order, copy)?.statusLabel
-      ?? accountOrderStatusText(order.status);
+    status.className = accountPill(orderStatusTone(detail.buyerView.status));
+    status.textContent = buyerOrderStatusText(detail.buyerView.status, copy);
   }
   renderReturnNotice();
   renderProgress(detail);

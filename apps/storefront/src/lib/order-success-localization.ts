@@ -42,30 +42,6 @@ export function formatOrderReceiptDay(
   return formatStoreDateTime(date, checkoutLanguageBaseCode(languageCode), { dateStyle: "long" }, timeZone);
 }
 
-export function formatOrderSuccessLabel(
-  value: string | null | undefined,
-  copy: CheckoutLanguageData,
-): string {
-  const labels: Record<string, string> = {
-    pending: copy.orderReceiptStatusPendingText,
-    incomplete: copy.orderReceiptStatusIncompleteText,
-    confirmed: copy.orderReceiptStatusConfirmedText,
-    processing: copy.orderReceiptStatusProcessingText,
-    shipped: copy.orderReceiptStatusShippedText,
-    delivered: copy.orderReceiptStatusDeliveredText,
-    completed: copy.orderReceiptStatusCompletedText,
-    cancelled: copy.orderReceiptStatusCancelledText,
-    refunded: copy.orderReceiptStatusRefundedText,
-    returned: copy.orderReceiptStatusReturnedText,
-    partially_refunded: copy.orderReceiptStatusPartiallyRefundedText,
-    failed: copy.orderReceiptStatusFailedText,
-    paid: copy.orderReceiptPaymentStatusPaidText,
-    partial: copy.orderReceiptPaymentStatusPartialText,
-    unpaid: copy.orderReceiptPaymentStatusUnpaidText,
-  };
-  return labels[normalize(value)] ?? copy.orderReceiptStatusNotAvailableText;
-}
-
 /**
  * The order's payment method in the buyer's words. Cash is named for where it
  * is paid: on delivery, at pickup, or on service (nothing is delivered).

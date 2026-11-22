@@ -904,6 +904,10 @@ export interface OrderReceipt extends OrderFulfilmentFacts {
   fulfillments?: BuyerOrderFulfilment[];
   /** The order thread, once the buyer or the store has written on it. */
   conversationId?: string | null;
+  /** What the buyer is shown of the order, decided by the API: the account order page sends the same. */
+  buyerView: import("@scalius/shared/buyer-order-view").BuyerOrderDetailView;
+  /** The payment the buyer may make, or why none would start; null when the read omitted it (the status poll). */
+  paymentRecovery: import("./customer-auth").CustomerPaymentRecovery | null;
 }
 
 export interface OrderReceiptTracking {

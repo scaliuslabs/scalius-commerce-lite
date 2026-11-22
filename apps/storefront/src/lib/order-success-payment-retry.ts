@@ -1,7 +1,8 @@
-import type { OrderReceipt } from "./api/types";
 import type { GatewayConfig } from "./api/checkout";
+import type { CustomerPaymentRecovery } from "./api/customer-auth";
+import type { BuyerOrderDetailView } from "@scalius/shared/buyer-order-view";
 import type { OrderSuccessStateKind } from "./order-success-state";
-import { GIFT_CARD_PAYMENT_METHOD, RECORDED_PAYMENT_METHOD, getOrderSuccessVisibleBalanceDue, isFailedPaymentResult } from "./order-success-state";
+import { GIFT_CARD_PAYMENT_METHOD, RECORDED_PAYMENT_METHOD } from "./order-success-state";
 import { appGatewayName } from "./checkout/gateway-presentation";
 import { isPaymentMethodIdShape } from "./payment-method-id";
 
@@ -17,44 +18,12 @@ export type OrderSuccessRetryOption = {
   requiresCardForm: boolean;
 };
 
-const PAYMENT_BLOCKED_ORDER_STATUSES = new Set([
-  "cancelled",
-  "returned",
-  "refunded",
-  "partially_refunded",
-]);
-const PAYMENT_BLOCKED_PAYMENT_STATUSES = new Set(["paid", "refunded"]);
 function normalize(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
-export function isRetryableHostedPaymentMethod(paymentMethod: string | null | undefined): boolean {
-  return normalizeHostedGateway(paymentMethod) !== null;
-}
-
-export function getOrderSuccessRetryEndpoint(paymentMethod: string | null | undefined): string | null {
-  const method = normalizeHostedGateway(paymentMethod);
-  return method ? `/api/checkout/payment-session/${method}` : null;
-}
-
-export function isHostedPaymentRetryResult(result: string | null | undefined): boolean {
-  return isFailedPaymentResult(result);
-}
-
-export function canRetryOrderSuccessPayment(
-  order: Pick<
-    OrderReceipt,
-    "paymentMethod" | "status" | "paymentStatus" | "totalAmount" | "paidAmount" | "balanceDue"
-  >,
-  stateKind: OrderSuccessStateKind,
-  callbackResult: string | null | undefined,
-): boolean {
-  if (!isRetryableHostedPaymentMethod(order.paymentMethod)) return false;
-  if (PAYMENT_BLOCKED_ORDER_STATUSES.has(normalize(order.status))) return false;
-  if (PAYMENT_BLOCKED_PAYMENT_STATUSES.has(normalize(order.paymentStatus))) return false;
-  if (getOrderSuccessVisibleBalanceDue(order) <= 0) return false;
-  void callbackResult;
-  return stateKind === "payment_pending" || stateKind === "payment_issue";
+function retryEndpoint(gateway: string): string {
+  return `/api/checkout/payment-session/${gateway}`;
 }
 
 /**
@@ -70,60 +39,37 @@ function normalizeHostedGateway(value: string | null | undefined): OrderSuccessR
     : null;
 }
 
+/**
+ * The receipt's retry buttons: only for a payment that is pending or failed
+ * (`buyerView.paymentAction === "retry"`; paying a placed order's balance
+ * early is never offered as a retry here), and only the methods the server
+ * says a session would be accepted for. The method it starts first comes
+ * first; after a failed payment the others follow.
+ */
 export function getOrderSuccessRetryOptions(
-  order: Pick<
-    OrderReceipt,
-    "paymentMethod" | "status" | "paymentStatus" | "totalAmount" | "paidAmount" | "balanceDue"
-  >,
+  order: { buyerView: Pick<BuyerOrderDetailView, "paymentAction">; paymentRecovery: Pick<CustomerPaymentRecovery, "gateway" | "gateways"> | null },
   stateKind: OrderSuccessStateKind,
-  callbackResult: string | null | undefined,
   gateways: (Pick<GatewayConfig, "id"> & Partial<Pick<GatewayConfig, "name">>)[],
 ): OrderSuccessRetryOption[] {
-  if (!canRetryOrderSuccessPayment(order, stateKind, callbackResult)) return [];
-
-  const currentGateway = normalizeHostedGateway(order.paymentMethod);
+  const recovery = order.paymentRecovery;
+  if (order.buyerView.paymentAction !== "retry" || !recovery) return [];
+  const currentGateway = normalizeHostedGateway(recovery.gateway);
   if (!currentGateway) return [];
-
-  const visibleHostedGateways = gateways
-    .map((gateway) => normalizeHostedGateway(gateway.id))
-    .filter((gateway): gateway is OrderSuccessRetryGateway => gateway !== null);
-  const visibleUniqueGateways = [...new Set(visibleHostedGateways)];
+  const accepted = new Set(recovery.gateways);
   const allowAlternates = stateKind === "payment_issue";
 
-  return visibleUniqueGateways
+  return [...new Set(gateways.map((gateway) => normalizeHostedGateway(gateway.id)))]
+    .filter((gateway): gateway is OrderSuccessRetryGateway => gateway !== null && accepted.has(gateway))
     .filter((gateway) => gateway === currentGateway || allowAlternates)
-    .map((gateway) => {
-      const current = gateway === currentGateway;
-      return {
-        gateway,
-        endpoint: getOrderSuccessRetryEndpoint(gateway) ?? "",
-        current,
-        // An app's wallet reads by the checkout name the store serves, never its id;
-        // a built-in method by the page's copy (`getGatewayPresentation`).
-        label: appGatewayName(gateway, gateways) ?? gateway,
-        requiresCardForm: gateway === "stripe",
-      };
-    })
-    .filter((option) => option.endpoint);
-}
-
-export function resolveOrderSuccessRetryPaymentType(
-  order: Pick<OrderReceipt, "paymentStatus" | "paidAmount" | "balanceDue">,
-  requestedType: string | null | undefined,
-): OrderSuccessRetryPaymentType {
-  const requested = normalize(requestedType);
-  if (requested === "deposit" || requested === "balance" || requested === "full") {
-    return requested;
-  }
-
-  const paidAmount = Number(order.paidAmount ?? 0);
-  const balanceDue = Number(order.balanceDue ?? 0);
-  const paymentStatus = normalize(order.paymentStatus);
-  if (paymentStatus === "partial" || (paidAmount > 0 && balanceDue > 0)) {
-    return "balance";
-  }
-
-  return "full";
+    .map((gateway) => ({
+      gateway,
+      endpoint: retryEndpoint(gateway),
+      current: gateway === currentGateway,
+      // An app's wallet reads by the checkout name the store serves, never its id;
+      // a built-in method by the page's copy (`getGatewayPresentation`).
+      label: appGatewayName(gateway, gateways) ?? gateway,
+      requiresCardForm: gateway === "stripe",
+    }));
 }
 
 export function normalizeRetryDepositAmount(value: string | null | undefined): number | null {
