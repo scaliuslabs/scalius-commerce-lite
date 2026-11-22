@@ -1,8 +1,8 @@
 # Design the buyer's private pages
 
-The cart page and the cart drawer are a buyer's own pages: they hold a cart, an address, a phone number and a code. No theme or app script ever runs there. You still design them: you arrange the store's parts, add your own words and pictures, reword its labels and style everything with one stylesheet. The store draws the page from that data.
+The cart, checkout, payment, receipt and account pages are a buyer's own pages: they hold a cart, an address, a phone number and a code. No theme or app script runs there. You still design them: you arrange the store's parts, add your own words and pictures, reword its labels and style everything with one stylesheet. The store draws the page from that data.
 
-This page covers the cart page and the drawer. The checkout, the receipt and the account follow the same model as they move to it; until then they take the closed choices in [themes.md](themes.md#templates).
+This page covers the cart page, which is private, and the cart drawer. The drawer opens over public pages: there it is part of that page, styled by your public stylesheet through the same hooks, with that page's scripts. Only its arrangement, words and icons come from here. The checkout, the receipt and the account follow the same model as they move to it; until then they take the closed choices in [themes.md](themes.md#templates).
 
 ## What you set
 
@@ -15,6 +15,7 @@ A template sets them under `privatePages`. The merchant's theme document holds t
 | `css` | Your stylesheet for these pages, at most 24 KiB. |
 | `labels` | Your words for the store's labels, per language: `{ "cart.heading": { "en": "Your Cart", "bn": "আপনার কার্ট" } }`. |
 | `icons` | Your image for a store icon: `{ "cart.empty": { "app": "acme.studio", "file": "icons/bag.svg" } }` (a file in your `public/`). |
+| `assets` | Files your stylesheet names, by key: `{ "paper": { "app": "acme.studio", "file": "images/paper.webp" } }`, at most 16. |
 
 The store checks all of it when the theme is saved or published, and stores the checked stylesheet. A refusal names its `reason` (below).
 
@@ -48,6 +49,8 @@ Every arrangement holds each **mandatory** part and every target exactly once. Y
 | Cart page | `notices`, `lines`, `summary`, `details` | `progress`, `discount`, `empty` |
 | Cart line | `title`, `details`, `inputs`, `quantity`, `price`, `remove`, `limit`, `issue`, `rule` | `image` |
 | Drawer | `header`, `lines`, `undo`, `summary`, `actions` | `added`, `recommendations`, `offers` |
+
+The phone fold (`fold`) starts closed on phones, so it holds only `lines`, `summary`, `discount`, the `cart.page.summary` target and your own content (`layout_holds` otherwise).
 
 When the store later makes another part mandatory, a saved arrangement without it shows it in its default place. A store upgrade never breaks your page.
 
@@ -86,38 +89,55 @@ Example: the summary and the form in a side column, a line of your own words und
 
 ## The stylesheet
 
-Write ordinary CSS against the hooks. The store scopes every selector under `[data-private]` (each private surface's root). A rule for `:root`, `html` or `body` alone sets the page's own tokens and background, and a root state stays in front (`:root[data-color-scheme="dark"] [data-part="summary"]` styles the dark colours):
+Write ordinary CSS against the hooks. The store reads it with a CSS parser, keeps only what it understands and allows, and writes the result again from what it checked. Every selector is scoped under `[data-private]` (each private surface's root). A rule for `:root`, `html` or `body` alone is the page's own rule (its background and colour); a root state stays in front (`:root[data-color-scheme="dark"] [data-part="summary"]` styles the dark colours).
 
 ```css
-:root { --primary: #6d28d9; }
-body { background: radial-gradient(#1e1831, #0b0915); }
+body { background: url(paper) no-repeat, radial-gradient(#1e1831, #0b0915); }
 [data-hook="studio-grid"] { grid-template-columns: minmax(0, 1fr) 380px; }
-[data-part="line"] [data-hook="studio-line"] { grid-template-columns: 64px 1fr 88px; }
-[data-buyer-ui-app="acme.protection"] [data-ui="banner"] { border-radius: 0; }
-@media (min-width: 40rem) { [data-hook="studio-line"] { grid-template-columns: 92px 1fr 150px; } }
-@font-face { font-family: Studio; src: url(/_x/acme.studio/<release>/public/fonts/studio.woff2) format("woff2"); }
+[data-part="line"] [data-hook="studio-line"] { grid-template-columns: 64px minmax(0, 1fr) 88px; }
+[data-summary-row] { color: #fbfaf7; font-weight: 600; }
+[data-buyer-ui-app="acme.protection"] [data-ui="banner"] { border-color: #f59e0b; background: #fef3c7; }
+[data-hook="studio-lead"]::before { content: "\201C"; }
+@media (min-width: 40rem) { [data-hook="studio-line"] { grid-template-columns: 92px minmax(0, 1fr) 150px; } }
+@keyframes glow { from { opacity: .6 } to { opacity: 1 } }
+[data-hook="studio-lead"] { animation: glow 2s; }
 ```
 
-Allowed: style rules, `@media`, `@supports`, `@container`, `@layer`, `@font-face`, `@keyframes`, and `url()` for your own `public/` files or a fragment (`#id`). Write sides as logical properties (`margin-inline-start`, `inset-inline-end`), so a right-to-left page mirrors.
+**What it may hold.** Style rules, `@media`, `@supports`, `@container` and `@keyframes` (names get a `t-` prefix). Selectors of type, class, id and attribute, `:is`, `:where`, `:not`, `:has`, `:nth-*`, the usual state pseudo-classes, and `::before`, `::after`, `::marker`, `::first-line`, `::first-letter`, `::selection`. Values of words, numbers, colours, strings and these functions: colours, maths, gradients, `var()`, `env()`, timing, grid tracks, filters, shapes, counters. A file is `url(<asset key>)`; the store writes it as the store-origin URL of that file. Your own custom properties are `--t-<name>`; the store's tokens come from the theme's tokens. Write sides as logical properties (`margin-inline-start`), so a right-to-left page mirrors.
+
+**Protected parts.** What a buyer must read or use is protected: every hook of a mandatory part (the total and every money row, prices, quantities, remove, issues, limits, required inputs, notices, errors, legal text, the submit) and the apps' targets. A rule that can reach a protected part, or anything inside one, may set only presentational properties: colour (visible), fonts (at least 11px), spacing, borders, radius, shadows, backgrounds and gradients, gaps, alignment, grid tracks and sizes with a floor, and `display` other than `none`. Only a rule anchored on your own content block (`[data-hook]` of a content node, never of a layout node, which holds parts) or on an optional part (`[data-part="progress"]`, `discount`, `empty-extras`, `line-image`, and the free hooks the reference lists) is free of this. No rule may place one thing over another: no `position` but `static` or `relative`, no offsets, `z-index`, transforms, grid placement or negative margins.
 
 Refused, each with its `reason`:
 
 | `reason` | Why |
 | --- | --- |
-| `import` | `@import` reaches another file. |
-| `foreign_url` | A `url()` that is not your own file: another host, `//…`, an app page, a `..` path. |
-| `forbidden_function` | `image-set()`, `src()`, `attr()`, `element()`, `cross-fade()`. |
-| `form_value_selector` | An attribute-value selector on `input`, `select`, `textarea`, `option`, `button`, `output`, or on `value`, `placeholder`, `name`, `checked`: it could reveal what a buyer types. Style a field through its part: `[data-part="contact"] input`. |
-| `escape` | A backslash outside a quoted string. |
-| `unscoped_selector` | A selector starting with a combinator, or a sibling of a surface root (`[data-private] ~ *`). |
-| `nested_rule` | Nested rules: write each with its full selector. |
-| `unsupported_at_rule` | `@page`, `@namespace`, `@property` and others. |
+| `import` | `@import`. |
+| `foreign_url` | A `url()` that is not one of your listed assets. |
+| `forbidden_function` | Any function outside the list: `image()`, `image-set()`, `cross-fade()`, `element()`, `src()`, `attr()`, `paint()` and others. |
+| `custom_property` | A custom property not named `--t-…`. |
+| `form_value_selector` | An attribute-value selector on a form control, or on `value`, `placeholder`, `name`, `checked`: it could reveal what a buyer types. Style a field through its part: `[data-part="contact"] input`. |
+| `state_selector` | `:placeholder-shown`, `:valid`, `:invalid`, `:autofill` and the like, or `:checked` inside `:has()`. |
+| `unsupported_selector` | An unknown pseudo-class or pseudo-element, nesting (`&`), a namespace. |
+| `unscoped_selector` | A selector starting with a combinator, or a sibling of a surface or page root. |
+| `positioning` | Offsets, `z-index`, transforms, grid placement, `position` other than `static`/`relative`, negative margins. |
+| `protected_property`, `protected_value`, `protected_pseudo` | A rule that can reach a protected part sets a property outside the presentational list, a value under its floor (`display: none`, `color: transparent`, `font-size: 0`, a zero width), or a pseudo-element. |
+| `nested_rule`, `unsupported_at_rule` | A nested rule; `@font-face`, `@layer`, `@page`, `@property`, `@scope` and other at-rules. |
+| `escape`, `bad_string`, `bad_url`, `comment`, `unbalanced`, `null_byte`, `syntax` | A backslash outside a string, a string or url a browser would read differently, an unclosed comment or block, a NUL. |
 | `too_large` | Over 24 KiB. |
-| `syntax` | Not CSS the store can read. |
+| `unsafe_output` | The result did not read back as exactly what was checked; nothing is served. |
 
-The page's policy loads images only from the store's own origins, so a stylesheet cannot reach another host even by a path the check missed.
+A stylesheet the store's checker approved under an older version is never served: the page compiles it again, or shows without it until your next save.
 
-**The guard.** If your stylesheet hides what a buyer must see (the total, Check out, the details form's submit, a line's price, quantity or remove), by `display`, `visibility`, `opacity`, a zero size or moving it off the page, the page drops your stylesheet for that view, marks `<html data-private-style="dropped">` and says why in the console. Check your look with the theme editor's canvas.
+**The guard.** A small host script is a net for honest mistakes: if a protected part is hidden, transparent, clipped, of no size or off the page while it shows without your stylesheet, the page drops the stylesheet for that view, marks `<html data-private-style="dropped">` and says why in the console. It looks again whenever the page changes (the lines draw after the page), when the colour scheme changes and on resize.
+
+## What the store guarantees, and what is yours
+
+| The store guarantees | Your theme's responsibility |
+| --- | --- |
+| No theme or app script runs on these pages. | That your words and pictures say true things. |
+| The stylesheet reaches no host the store did not allow, and reads no typed value. | A look buyers can read: contrast beyond what the checks catch (a colour equal to its background). |
+| Every arrangement holds what a buyer must see and do, and the phone fold holds only the cart. | A sensible order: reading order is your order. |
+| A rule the save accepted cannot hide, cover or fake a protected part. | The drawer's look on public pages, through your public stylesheet. |
 
 ## Words and icons
 
@@ -132,7 +152,7 @@ Labels are plain text: `markup` refuses HTML and `label_too_long` refuses words 
 
 ## Your header and footer
 
-With `chrome: theme` the cart page draws your header and footer skins, the same projection as on any page (the store's name, logo, menus, routes), told the page is `/cart`. They draw without script: no island loads, deferred markup is drawn in place and no JSON-LD is written. Make the header work without its islands (a `<details>` menu, a `GET` search form, `menuDrawer()` and `CartCount`), and put its styles in this stylesheet: your public stylesheet does not load on private pages. A buyer's session, order or address never reaches a skin.
+With `chrome: theme` the cart page draws your header and footer skins from the same projection as any page (the store's name, logo, menus, routes), told the page is `/cart`. They draw without script and without input: islands are unwrapped (no script loads), deferred markup is drawn in place, no JSON-LD is written, and only one form survives, a `GET` search to `/search` with its search field. Every other form, field, select and label is left out, links keep an `href` only to a path on this store, and images only from the page's allowed origins. Make the header work that way (a `<details>` menu, `menuDrawer()`, `CartCount`), and put its styles in this stylesheet: your public stylesheet does not load on private pages. A buyer's session, order or address never reaches a skin.
 
 ## Anatomy reference
 
@@ -142,23 +162,25 @@ The contract a test pins: a renamed or removed part, hook or label fails the sto
 cart root data-private=cart frames=standard|narrow
 cart part progress hooks=progress
 cart part notices mandatory hooks=notice
-cart part lines mandatory hooks=lines,lines-heading,lines-continue,lines-loading,lines-list,lines-clear,lines-undo,cart-empty,cart-empty-icon
-cart part summary mandatory hooks=summary,summary-validation guard=[data-summary-row="total"]
+cart part lines mandatory hooks=lines,lines-heading,lines-continue,lines-loading,lines-list,lines-clear,lines-undo,cart-empty,cart-empty-icon free=lines-continue,lines-loading,lines-clear,cart-empty-icon
+cart part summary mandatory hooks=summary,summary-validation
 cart part discount hooks=discount
-cart part details mandatory hooks=details,details-sign-in,details-form,contact,delivery,details-errors,details-submit,legal guard=[data-part="details-submit"],[data-part="contact"],[data-part="delivery"]
+cart part details mandatory hooks=details,details-sign-in,details-form,contact,delivery,details-errors,details-submit,legal free=details-sign-in
 cart part empty hooks=empty-extras
 cart target cart.page.summary
 cart target cart.page.below
 cart layouts stack,columns,grid,group,fold
 cart layout fold hooks=fold-toggle,fold-body
+cart layout fold holds=lines,summary,discount,cart.page.summary
+cart protect [data-summary-row],[data-buyer-ui-target],[data-part="fold-toggle"],[data-part="line"]
 cart.line root data-part=line
 cart.line part image hooks=line-image
 cart.line part title mandatory hooks=line-title
 cart.line part details mandatory hooks=line-details
 cart.line part inputs mandatory hooks=line-inputs
-cart.line part quantity mandatory hooks=line-quantity guard=[data-part="line-quantity"]
-cart.line part price mandatory hooks=line-price guard=[data-part="line-price"]
-cart.line part remove mandatory hooks=line-remove guard=[data-part="line-remove"]
+cart.line part quantity mandatory hooks=line-quantity
+cart.line part price mandatory hooks=line-price
+cart.line part remove mandatory hooks=line-remove
 cart.line part limit mandatory hooks=line-limit
 cart.line part issue mandatory hooks=line-issue
 cart.line part rule mandatory hooks=line-rule
@@ -181,8 +203,8 @@ cartDrawer part lines mandatory hooks=drawer-lines,drawer-empty,drawer-empty-ico
 cartDrawer part recommendations hooks=drawer-recommendations
 cartDrawer part undo mandatory hooks=drawer-undo
 cartDrawer part offers hooks=drawer-offers
-cartDrawer part summary mandatory hooks=drawer-summary,drawer-total,drawer-blocked guard=[data-summary-row="total"]
-cartDrawer part actions mandatory hooks=drawer-checkout,drawer-actions,drawer-view-cart,drawer-continue guard=[data-part="drawer-checkout"]
+cartDrawer part summary mandatory hooks=drawer-summary,drawer-total,drawer-blocked
+cartDrawer part actions mandatory hooks=drawer-checkout,drawer-actions,drawer-view-cart,drawer-continue
 cartDrawer target cart_drawer.footer
 cartDrawer layouts stack,columns,grid,group,scroll
 cartDrawer layout scroll hooks=drawer-scroll
@@ -191,9 +213,9 @@ cartDrawer.line part image hooks=line-image
 cartDrawer.line part title mandatory hooks=line-title
 cartDrawer.line part details mandatory hooks=line-details
 cartDrawer.line part inputs mandatory hooks=line-inputs
-cartDrawer.line part quantity mandatory hooks=line-quantity guard=[data-part="line-quantity"]
-cartDrawer.line part price mandatory hooks=line-price guard=[data-part="line-price"]
-cartDrawer.line part remove mandatory hooks=line-remove guard=[data-part="line-remove"]
+cartDrawer.line part quantity mandatory hooks=line-quantity
+cartDrawer.line part price mandatory hooks=line-price
+cartDrawer.line part remove mandatory hooks=line-remove
 cartDrawer.line part limit mandatory hooks=line-limit
 cartDrawer.line part issue mandatory hooks=line-issue
 cartDrawer.line part rule mandatory hooks=line-rule
@@ -210,5 +232,3 @@ dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-ag
 buyer-ui attributes=data-buyer-ui-target,data-buyer-ui-app,data-ui
 chrome roots data-private=header|footer
 ```
-
-The drawer opens over public pages too. There your public stylesheet applies, through the same hooks.
