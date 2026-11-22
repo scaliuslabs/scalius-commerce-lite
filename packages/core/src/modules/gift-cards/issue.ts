@@ -264,13 +264,16 @@ export async function issueManualGiftCard(
         codeCiphertext: giftCards.codeCiphertext, actorType: giftCardTransactions.actorType, actorId: giftCardTransactions.actorId,
         initialAmountMinor: giftCards.initialAmountMinor, currencyCode: giftCards.currencyCode, message: giftCards.message,
         recipientName: giftCards.recipientName, recipientEmail: giftCards.recipientEmail, recipientPhone: giftCards.recipientPhone,
+        customerId: giftCards.customerId, expiresAt: giftCards.expiresAt, note: giftCards.note,
     })
         .from(giftCards)
         .leftJoin(giftCardTransactions, eq(giftCardTransactions.idempotencyKey, issueKey))
         .where(eq(giftCards.id, giftCardId)).get();
-    // A replay is the same request by the same caller: the card's own facts, as they were stored, match.
+    // A replay is the same request by the same caller: every field of the request, as the card stored it, matches.
+    // (Staff may later edit the expiry, owner or note: a repeat then is refused as reused, which is still true.)
     const issuedHere = (row: NonNullable<Awaited<ReturnType<typeof readIssued>>>) => row.actorType === actor.type && row.actorId === actor.id
         && row.initialAmountMinor === input.amountMinor && row.currencyCode === input.currencyCode && row.message === input.message
+        && row.customerId === input.customerId && row.expiresAt === input.expiresAt && row.note === input.note
         && row.recipientName === (input.recipient?.name ?? null) && row.recipientEmail === (input.recipient?.email ?? null)
         && row.recipientPhone === (input.recipient?.email ? null : input.recipient?.phone ?? null);
     const existing = await readIssued();
