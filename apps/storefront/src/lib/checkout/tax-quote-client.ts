@@ -1,5 +1,6 @@
 import { linePropertyInputOf, type LinePropertyInput } from "@scalius/shared/line-identity";
 import { fetchWithTransientRetry } from "../transient-fetch";
+import { TAX_QUOTE_TIMEOUT_MS } from "./check-budgets";
 import { buyerUiLocaleHeaders } from "../buyer-ui/locale";
 import { billingQuoteFields } from "./billing-address";
 import {
@@ -28,7 +29,6 @@ import {
 } from "./tax-quote-error-contract";
 
 const TAX_QUOTE_ENDPOINT = "/api/checkout/tax-quote";
-const TAX_QUOTE_TIMEOUT_MS = 10_000;
 
 type CheckoutCartLine = {
   id?: unknown;

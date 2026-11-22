@@ -6,6 +6,7 @@
 // the loading overlay and (through the page's view) its controls from the
 // state, and one Back/Forward-cache handler returns the machine to idle.
 import { defineMachine } from "@scalius/shared/machine";
+import { LONGEST_CHECK_MS } from "./check-budgets";
 import { hideCheckoutLoadingOverlay, showCheckoutLoadingOverlay } from "./loading-overlay";
 
 export const SUBMIT_STATES = ["idle", "validating", "handing_off", "placing", "redirecting", "failed", "conflict", "expired"] as const;
@@ -70,11 +71,13 @@ export interface SubmitView {
 
 /**
  * How long a press waits on one check before the order (an account, a total,
- * the cart, an app's fields) before it gives the button back. The order
- * request itself is never raced: its own deadlines bound it, and an abandoned
- * request could still place an order.
+ * the cart, an app's fields) before it gives the button back: a backstop for
+ * a check that never answers, so above the longest check's own retry budget
+ * (check-budgets.ts) with a margin. The order request itself is never raced:
+ * its own deadlines bound it, and an abandoned request could still place an
+ * order.
  */
-export const SUBMIT_STEP_LIMIT_MS = 30_000;
+export const SUBMIT_STEP_LIMIT_MS = LONGEST_CHECK_MS + 10_000;
 
 /** A check that did not answer within `SUBMIT_STEP_LIMIT_MS`. */
 export class SubmitStepTimeout extends Error {}
