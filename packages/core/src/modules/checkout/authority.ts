@@ -38,7 +38,8 @@ import {
   selectCheckoutProductMediaProjectionRows,
 } from "../products";
 import {
-    resolveStorefrontCartValidationFromRows,
+    cartItemsWithKitComponents,
+    resolveStorefrontCartLines,
     selectStorefrontCartProductRows,
     selectStorefrontCartVariantRows,
     type StorefrontCartProductRow,
@@ -60,8 +61,8 @@ import {
 } from "../delivery";
 import { createStorefrontTaxAuthorityReadPlan, type StorefrontTaxAuthoritySnapshot } from "../tax";
 import { resolveCheckoutPriceScope, type CheckoutMarketAuthority } from "../price-lists";
-import { resolveCartWithAppLinePrices, type AppLinePricer } from "./app-line-prices";
-import type { CartTransformer } from "./cart-transform";
+import type { AppLinePricer } from "./app-line-prices";
+import { presentTransformedCart, type CartTransformer } from "./cart-transform";
 import {
   ga4MeasurementDocument,
   ga4ServerEnabled,
@@ -399,7 +400,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
     const statements = [
         selectSettingsDocuments(db, CHECKOUT_SETTINGS_DOCUMENTS),
         selectSettingsDocuments(db, [checkoutDocument]),
-        selectStorefrontCartProductRows(db, productIds, salesChannelId),
+        selectStorefrontCartProductRows(db, productIds, salesChannelId, undefined, variantIds),
         selectStorefrontCartVariantRows(db, productIds, variantIds, salesChannelId),
         selectCheckoutProductMediaProjectionRows(db, productIds, variantIds),
         selectActiveDeliveryLocationRowsByIds(db, locationIds),
@@ -541,7 +542,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             // Each checkout's market prices its lines (the order's market rule);
             // segment membership is read only when a segment list applies.
             const priceScopes = await Promise.all(inputs.map((input) => resolveCheckoutPriceScope(db, {
-                items: input.items,
+                // A kit ships what its components ship.
+                items: cartItemsWithKitComponents(input.items, variantRows),
                 productRows,
                 variantRows,
                 currency: { code: currency.currencyCode, incrementMinor: currency.priceIncrementMinor },
@@ -559,7 +561,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 try {
                     const priceScope = priceScopes[inputIndex];
                     if (priceScope && "error" in priceScope) throw priceScope.error;
-                    const cartValidation = await resolveCartWithAppLinePrices(input.linePricer?.(), (pass) => resolveStorefrontCartValidationFromRows(
+                    // A kit line is sold as its components, priced from these rows (`resolveStorefrontCartLines`).
+                    const cartValidation = await resolveStorefrontCartLines(
                         input.items,
                         {
                             inventoryPool: input.inventoryPool,
@@ -568,17 +571,19 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                             priceScope,
                             purchaseOptions: input.purchaseOptions?.(),
                             lineInputs: input.lineInputs?.(),
-                            ...pass,
-                            deferSubmittedPriceCheck: input.deferSubmittedPriceCheck?.() || pass.deferSubmittedPriceCheck,
+                            deferSubmittedPriceCheck: input.deferSubmittedPriceCheck?.() ?? false,
                         },
-                        productRows,
-                        variantRows,
-                        mediaByProduct,
-                        bundleRows,
-                    ), input.beforeTransform?.() ? "before_transform" : "final");
-                    if (!cartValidation.valid) {
+                        { productRows, variantRows, mediaByProduct, bundleRows },
+                        input.linePricer?.(),
+                        input.beforeTransform?.() ? "before_transform" : "final",
+                    );
+                    // The buyer's lines: a kit's issues speak for its line, and its price is the one shown.
+                    const buyerView = cartValidation.transform
+                        ? presentTransformedCart(cartValidation, cartValidation.transform, input.items)
+                        : cartValidation;
+                    if (!cartValidation.valid || !buyerView.valid) {
                         throw new ValidationError("Some items in your cart need attention.", {
-                            itemIssues: cartValidation.issues,
+                            itemIssues: buyerView.issues,
                         });
                     }
                     // A transform may remove or add physical components. Only its

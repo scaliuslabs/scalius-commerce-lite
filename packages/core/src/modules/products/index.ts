@@ -19,6 +19,7 @@ export * from "./catalog-projections";
 export * from "./low-stock-policy";
 export * from "./content-blocks";
 export * from "./bundles";
+export * from "./kits";
 export * from "./emi";
 export * from "./digital-stock-rules";
 export * from "./gift-card-rules";
