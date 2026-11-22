@@ -6094,7 +6094,7 @@ export type OrderAdminActions = {
      * The statuses `PUT /{id}/status` can set from here, in menu order, each available or blocked with its reason. Shipped, delivered, returned and refunded come from their own actions.
      */
     moves: Array<OrderActionState & {
-        status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';
+        status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
     }>;
     handOver: OrderActionState & unknown;
     send: OrderActionState & unknown;

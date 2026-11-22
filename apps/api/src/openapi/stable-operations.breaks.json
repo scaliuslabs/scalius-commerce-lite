@@ -3249,6 +3249,6 @@
   "snapshot": "stable-operations.snapshot.json",
   "from": "ba34897af1af3b8a",
   "change": "orders.set_status input body.status: no longer accepts \"processing\", \"shipped\", \"delivered\", \"returned\", \"refunded\", \"incomplete\".",
-  "reason": "Pre-lock contract fix (state-machine audit, rule platform.agent-write-schema-offers-accepted-values): the generic status editor refuses each of these in every state, so the request offered values no call could use; it now offers the statuses it sets (pending, confirmed, completed, cancelled) and a refusal names the operation that records the others."
+  "reason": "Pre-lock contract fix (state-machine audit, Nov 22): the generic status editor refuses each of these in every state, so the request offered values no call could use; it now offers the statuses it sets (pending, confirmed, completed, cancelled) and a refusal names the operation that records the others."
  }
 ]

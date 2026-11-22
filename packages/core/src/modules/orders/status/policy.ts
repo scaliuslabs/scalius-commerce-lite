@@ -1,8 +1,9 @@
 import {
+  GENERIC_ADMIN_ORDER_STATUS_TARGETS,
   GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS,
   isGenericAdminOrderStatusTransitionAllowed,
 } from "@scalius/shared/order-admin-actions";
-import { ORDER_MACHINE, ORDER_STATUSES, type OrderStatusValue } from "@scalius/shared/order-state";
+import { ORDER_MACHINE, type OrderStatusValue } from "@scalius/shared/order-state";
 import type { MachineRefusal } from "@scalius/shared/machine";
 import { ConflictError } from "@scalius/core/errors";
 
@@ -12,10 +13,9 @@ import { ConflictError } from "@scalius/core/errors";
 /**
  * The statuses the generic editor sets from some state: exactly what
  * `dashboard.orders.update_status` offers, so its schema never offers a value
- * it refuses in every state.
+ * it refuses in every state (policy.test.ts derives it from the move table).
  */
-export const GENERIC_ADMIN_ORDER_STATUS_TARGETS = ORDER_STATUSES.filter((target) =>
-  Object.values(GENERIC_ADMIN_ORDER_STATUS_TRANSITIONS).some((targets) => targets.includes(target))) as [OrderStatusValue, ...OrderStatusValue[]];
+export { GENERIC_ADMIN_ORDER_STATUS_TARGETS };
 
 /** Where each fulfilment or money status really comes from: the operations that record it with its stock and money. */
 const FULFILMENT_STATUS_OPERATIONS: Readonly<Partial<Record<OrderStatusValue, string>>> = {

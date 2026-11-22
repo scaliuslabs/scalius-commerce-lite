@@ -56,13 +56,14 @@ export type ReturnActions = Record<ReturnCommand, RecordActionState<ReturnAction
 };
 
 export function returnActions(facts: ReturnActionFacts): ReturnActions {
-  const claimed = facts.orderReceiptClaimed || facts.receiptClaimed ? "receipt_in_progress" : null;
+  const claimed: ReturnActionBlock | null = facts.orderReceiptClaimed || facts.receiptClaimed ? "receipt_in_progress" : null;
+  const blocks: Partial<Record<ReturnCommand, ReturnActionBlock | null>> = {
+    approve: claimed,
+    receive: claimed,
+    cancel: claimed ?? (facts.unitsReceived ? "units_received" : null),
+  };
   return {
-    ...recordActions(RETURN_LIFECYCLE, facts.status, {
-      approve: claimed,
-      receive: claimed,
-      cancel: claimed ?? (facts.unitsReceived ? "units_received" : null),
-    }),
+    ...recordActions(RETURN_LIFECYCLE, facts.status, blocks),
     reconcile: facts.receiptClaimed ? { available: true, reason: null } : { available: false, reason: "nothing_to_reconcile" },
   };
 }
@@ -114,11 +115,12 @@ export interface PurchaseOrderActionFacts {
 export type PurchaseOrderActions = Record<PurchaseOrderCommand, RecordActionState<StockDocumentActionBlock>>;
 
 export function purchaseOrderActions(facts: PurchaseOrderActionFacts): PurchaseOrderActions {
-  const location = facts.destinationActive ? null : "location_archived";
-  return recordActions(PURCHASE_ORDER_LIFECYCLE, facts.status, {
+  const location: StockDocumentActionBlock | null = facts.destinationActive ? null : "location_archived";
+  const blocks: Partial<Record<PurchaseOrderCommand, StockDocumentActionBlock | null>> = {
     mark_ordered: facts.lineCount === 0 ? "no_lines" : location ?? (facts.supplierActive ? null : "supplier_archived"),
     receive: location,
-  });
+  };
+  return recordActions(PURCHASE_ORDER_LIFECYCLE, facts.status, blocks);
 }
 
 // ─── Transfers between locations ───────────────────────────────────────
@@ -165,10 +167,11 @@ export type InventoryTransferActions = Record<InventoryTransferCommand, RecordAc
 /** Origin stock is not read here: a shipment the origin cannot cover is refused with its own reason. */
 export function inventoryTransferActions(facts: InventoryTransferActionFacts): InventoryTransferActions {
   const shipped = facts.status !== "draft";
-  const nothingInTransit = facts.inTransitQuantity <= 0 ? "nothing_in_transit" : null;
-  return recordActions(INVENTORY_TRANSFER_LIFECYCLE, facts.status, {
+  const nothingInTransit: StockDocumentActionBlock | null = facts.inTransitQuantity <= 0 ? "nothing_in_transit" : null;
+  const blocks: Partial<Record<InventoryTransferCommand, StockDocumentActionBlock | null>> = {
     ship: facts.lineCount === 0 ? "no_lines" : facts.originActive && facts.destinationActive ? null : "location_archived",
     receive: facts.destinationActive ? nothingInTransit : "location_archived",
     cancel: shipped ? (facts.originActive ? nothingInTransit : "location_archived") : null,
-  });
+  };
+  return recordActions(INVENTORY_TRANSFER_LIFECYCLE, facts.status, blocks);
 }

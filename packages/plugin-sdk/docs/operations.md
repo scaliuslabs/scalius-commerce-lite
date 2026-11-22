@@ -1908,7 +1908,7 @@ Body:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `expectedRevision` | integer |  | The order `revision` you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since; at least 1 |
+| `expectedRevision` | integer |  | The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since; at least 1 |
 
 Response `data`:
 
@@ -2967,7 +2967,7 @@ Body:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `expectedRevision` | integer |  | The order `revision` you read; a change since is refused with 409. Omit to mark it whatever happened since; at least 1 |
+| `expectedRevision` | integer |  | The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409. Omit to mark it whatever happened since; at least 1 |
 
 Response `data`:
 
@@ -2992,7 +2992,7 @@ Body:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `expectedRevision` | integer |  | The order `revision` you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since; at least 1 |
+| `expectedRevision` | integer |  | The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since; at least 1 |
 
 Response `data`:
 
@@ -3077,10 +3077,10 @@ Body:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `status` | "pending" \| "processing" \| "confirmed" \| "shipped" \| "delivered" \| "completed" \| "cancelled" \| "returned" \| "refunded" \| "incomplete" | yes |  |
+| `status` | "pending" \| "confirmed" \| "completed" \| "cancelled" | yes | The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; a refusal names them |
 | `reason` | "customer_changed_mind" \| "unreachable" \| "fake_order" \| "out_of_stock" \| "other" |  |  |
 | `notifyCustomer` | boolean |  | False sends the customer no message about this change (a test or duplicate order). Default true |
-| `expectedRevision` | integer |  | The order `revision` you read. A change since is refused with 409 and nothing changes. Omit to change it whatever happened since; at least 1 |
+| `expectedRevision` | integer |  | The order's `version` from dashboard.orders.get (revision in the order a write answers) that you read; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since; at least 1 |
 
 Response `data`:
 

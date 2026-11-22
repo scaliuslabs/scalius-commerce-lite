@@ -13,8 +13,7 @@ import { categoryStatusSchema } from "@scalius/shared/category-publication";
 import { SKU_WARRANTY_MODES } from "@scalius/core/modules/products";
 import { ORDER_SHIPMENT_RECOVERY_REASONS } from "@scalius/core/modules/orders/browser";
 import { ORDER_CHANNELS, ORDER_CHANNEL_SOURCE_MAX_LENGTH } from "@scalius/shared/order-channel";
-import { ORDER_ACTION_BLOCKS, ORDER_NEXT_STEPS } from "@scalius/shared/order-admin-actions";
-import { ORDER_STATUSES } from "@scalius/shared/order-state";
+import { GENERIC_ADMIN_ORDER_STATUS_TARGETS, ORDER_ACTION_BLOCKS, ORDER_NEXT_STEPS } from "@scalius/shared/order-admin-actions";
 import {
   isoTimestampSchema,
   nullableIsoTimestampSchema,
@@ -342,7 +341,7 @@ const orderActionStateSchema = z.object({
 
 /** What staff may do to the order now, by the rules its commands refuse by. */
 export const orderAdminActionsSchema = z.object({
-  moves: z.array(orderActionStateSchema.extend({ status: z.enum(ORDER_STATUSES) })).openapi({
+  moves: z.array(orderActionStateSchema.extend({ status: z.enum(GENERIC_ADMIN_ORDER_STATUS_TARGETS) })).openapi({
     description: "The statuses `PUT /{id}/status` can set from here, in menu order, each available or blocked with its reason. Shipped, delivered, returned and refunded come from their own actions.",
   }),
   handOver: orderActionStateSchema.openapi({ description: "Handing units over: `POST /{id}/fulfillments` (send, pickup, service done)." }),

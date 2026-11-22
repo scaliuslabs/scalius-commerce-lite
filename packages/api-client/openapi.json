@@ -27549,15 +27549,9 @@
                       "type": "string",
                       "enum": [
                         "pending",
-                        "processing",
                         "confirmed",
-                        "shipped",
-                        "delivered",
                         "completed",
-                        "cancelled",
-                        "returned",
-                        "refunded",
-                        "incomplete"
+                        "cancelled"
                       ]
                     }
                   },
