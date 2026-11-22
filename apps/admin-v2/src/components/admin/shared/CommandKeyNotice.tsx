@@ -23,7 +23,7 @@ export function CommandKeyNotice({ notice, target, startOver, children }: {
     ? t("unknown.order")
     : t(`${notice === "landed" ? "landed" : "open"}.${target}`);
   const restart = notice === "outcome-unknown" && startOver
-    ? <Button type="button" variant="destructive" size="sm" className="h-auto whitespace-normal text-left" onClick={startOver.onClick}>{t(`startOver.${startOver.kind}`)}</Button>
+    ? <Button type="button" variant="destructive" size="sm" className="h-auto whitespace-normal text-start" onClick={startOver.onClick}>{t(`startOver.${startOver.kind}`)}</Button>
     : null;
   const actions = children || restart ? <>{children}{restart}</> : null;
   return (
