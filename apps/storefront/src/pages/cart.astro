@@ -25,7 +25,7 @@ import {
 import { bangladeshAddressesOffered, physicalDeliveryOffered } from "@/lib/delivery-facts";
 import { catalogCopy } from "@/lib/catalog-copy";
 import { marketingConsentCheckbox } from "@/lib/checkout/marketing-consent";
-import { processOrder } from "@/lib/cart/server";
+import { cashOrderNeedsSignIn, processOrder } from "@/lib/cart/server";
 import { CheckoutCopyError, checkoutFailureText } from "@/lib/checkout/error-messages";
 import { checkoutAttemptRecoveryHref } from "@/lib/checkout/attempt-recovery";
 import {
@@ -166,6 +166,8 @@ const [existingCheckoutMessageBefore, existingCheckoutMessageAfter = ""] =
 let errorMessage = "";
 let isProcessing = false;
 let expiredCheckoutId: string | undefined;
+// The cash order needs a signed-in buyer again: the page opens sign-in (cashOrderNeedsSignIn).
+let signInRequired = false;
 let codCartRepairState: {
   source: "cart";
   message: string;
@@ -316,6 +318,10 @@ if (Astro.request.method === "POST" && codPlaceable) {
             createdAt: Date.now(),
           };
         }
+        if (cashOrderNeedsSignIn(result)) {
+          signInRequired = true;
+          errorMessage = "";
+        }
       }
     }
   } catch (error: unknown) {
@@ -389,6 +395,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     data-guest-checkout-enabled={checkoutConfig.guestCheckoutEnabled !== false
       ? "true"
       : "false"}
+    data-sign-in-required={signInRequired ? "true" : undefined}
     hidden
   >
   </div>
@@ -1826,6 +1833,14 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       console.error("Cart autofill location err:", err);
     }
   };
+
+  // The cash order was refused for a session that ended during the press:
+  // sign in here, then press again on this cart (the auth modal loads on the event).
+  if (meta?.dataset.signInRequired === "true") {
+    const openSignIn = () => window.dispatchEvent(new CustomEvent("open-auth-modal"));
+    if (document.readyState === "complete") openSignIn();
+    else window.addEventListener("load", openSignIn, { once: true, signal: cartPageSignal });
+  }
 
   const revealCheckoutFormForCustomer = () => {
     document.getElementById("checkoutSignInPrompt")?.classList.add("hidden");
