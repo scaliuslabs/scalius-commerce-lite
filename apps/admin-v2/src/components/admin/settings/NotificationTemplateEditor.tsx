@@ -59,6 +59,7 @@ import { SettingsCard, SettingsCardLoading, SettingsField } from "./SettingsPage
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { Field } from "~/components/ui/field";
 import { SENDING_DIALOG } from "./sending-dialogs";
+import { useCommand } from "~/lib/use-command";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -172,31 +173,26 @@ function TestSmsDialog({
   const t = useMessages(notificationTemplateMessages);
   const [phone, setPhone] = useState("");
   const [left, setLeft] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
+  const test = useCommand({ mutationFn: sendTest });
+  const sending = test.isPending;
   const invalid = !normalizeBdMobile(phone);
-  const error = serverError ?? (invalid && left ? t("testPhoneInvalid") : null);
+  const error = (test.error ? getServerFnError(test.error) : null) ?? (invalid && left ? t("testPhoneInvalid") : null);
 
-  async function send() {
+  function send() {
     if (invalid) {
       setLeft(true);
       return;
     }
-    setSending(true);
-    setServerError(null);
-    try {
-      await sendTest({ channel: "sms", event, body, phone, ...(locale ? { locale } : {}) });
-      toast.success(t("testSent"));
-      onOpenChange(false);
-    } catch (cause) {
-      setServerError(getServerFnError(cause));
-    } finally {
-      setSending(false);
-    }
+    test.mutate({ channel: "sms", event, body, phone, ...(locale ? { locale } : {}) }, {
+      onSuccess: () => {
+        toast.success(t("testSent"));
+        onOpenChange(false);
+      },
+    });
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={test.guardClose(onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("testSmsTitle")}</DialogTitle>
@@ -207,7 +203,7 @@ function TestSmsDialog({
           className="space-y-4"
           onSubmit={(submitEvent) => {
             submitEvent.preventDefault();
-            void send();
+            send();
           }}
         >
           <Field id="test-sms-phone" label={t("testPhone")} error={error ? error : undefined}>
@@ -218,7 +214,7 @@ function TestSmsDialog({
               aria-describedby={error ? "test-sms-phone-note" : undefined}
               onChange={(value) => {
                 setPhone(value);
-                setServerError(null);
+                test.reset();
               }}
               onBlur={() => setLeft(true)}
             />

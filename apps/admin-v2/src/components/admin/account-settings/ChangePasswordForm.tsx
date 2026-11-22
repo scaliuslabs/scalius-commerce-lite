@@ -14,6 +14,7 @@ import { apiData } from "~/lib/api";
 import { useMessages } from "~/i18n";
 import { accountMessages } from "~/i18n/account";
 import { accountFailureMessage, type AccountMessage } from "./account-error";
+import { useCommand } from "~/lib/use-command";
 
 const MIN_LENGTH = 12;
 type PasswordKey = "current" | "next" | "confirm";
@@ -29,7 +30,10 @@ export function ChangePasswordForm() {
   const [values, setValues] = useState<Record<PasswordKey, string>>({ current: "", next: "", confirm: "" });
   const [touched, setTouched] = useState<Partial<Record<PasswordKey, boolean>>>({});
   const [shown, setShown] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const change = useCommand({
+    mutationFn: (body: { currentPassword: string; newPassword: string }) => apiData(postApiV1AdminAuthChangePassword({ body })),
+  });
+  const saving = change.isPending;
   const [wrongCurrent, setWrongCurrent] = useState(false);
   const [error, setError] = useState<AccountMessage | null>(null);
 
@@ -47,26 +51,25 @@ export function ChangePasswordForm() {
     if (field === "current") setWrongCurrent(false);
   };
 
-  const handleSubmit = async (event: SyntheticEvent) => {
+  const handleSubmit = (event: SyntheticEvent) => {
     event.preventDefault();
     setTouched({ current: true, next: true, confirm: true });
     setError(null);
     if (!values.current || values.next.length < MIN_LENGTH || reused || values.next !== values.confirm) return;
-    setSaving(true);
-    try {
-      await apiData(postApiV1AdminAuthChangePassword({ body: { currentPassword: values.current, newPassword: values.next } }));
-      setValues({ current: "", next: "", confirm: "" });
-      setTouched({});
-      setShown(false);
-      toast.success(t("passwordChanged"));
-    } catch (err) {
-      const failure = accountFailureMessage(err, ({ code }) =>
-        code === "PASSWORD_INCORRECT" ? "wrongCurrentPassword" : code === "PASSWORD_REUSED" ? "passwordReused" : null);
-      if (failure.key === "wrongCurrentPassword") setWrongCurrent(true);
-      else setError(failure);
-    } finally {
-      setSaving(false);
-    }
+    change.mutate({ currentPassword: values.current, newPassword: values.next }, {
+      onSuccess: () => {
+        setValues({ current: "", next: "", confirm: "" });
+        setTouched({});
+        setShown(false);
+        toast.success(t("passwordChanged"));
+      },
+      onError: (err) => {
+        const failure = accountFailureMessage(err, ({ code }) =>
+          code === "PASSWORD_INCORRECT" ? "wrongCurrentPassword" : code === "PASSWORD_REUSED" ? "passwordReused" : null);
+        if (failure.key === "wrongCurrentPassword") setWrongCurrent(true);
+        else setError(failure);
+      },
+    });
   };
 
   const field = (id: PasswordKey, label: string, autoComplete: string, help?: string) => {

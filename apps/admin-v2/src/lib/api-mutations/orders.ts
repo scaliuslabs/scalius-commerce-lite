@@ -628,7 +628,7 @@ export function useResendOrderNotification() {
   return useCommand({
     name: "orders.notification.resend",
     subject: ({ outboxId }) => outboxId,
-    mutationFn: ({ orderId, outboxId }: { orderId: string; outboxId: string }, resendRequestId) =>
+    mutationFn: ({ orderId, outboxId }: { orderId: string; outboxId: string }, resendRequestId: string) =>
       apiData(postApiV1AdminOrdersByIdNotificationsByOutboxIdResend({
         path: { id: orderId, outboxId },
         body: { resendRequestId },

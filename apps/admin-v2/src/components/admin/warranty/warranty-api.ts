@@ -73,7 +73,7 @@ export function useOpenWarrantyClaim(orderId: string) {
   return useCommand({
     name: "warranty.claim.open",
     subject: ({ warrantyId }) => warrantyId,
-    mutationFn: async (body: Omit<ApiBody<typeof postApiV1AdminOrdersByIdWarrantyClaims>, "requestKey">, requestKey) =>
+    mutationFn: async (body: Omit<ApiBody<typeof postApiV1AdminOrdersByIdWarrantyClaims>, "requestKey">, requestKey: string) =>
       (await apiData(postApiV1AdminOrdersByIdWarrantyClaims({ path: { id: orderId }, body: { ...body, requestKey } }))).claim,
     onSettled: () => Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(orderId) }),

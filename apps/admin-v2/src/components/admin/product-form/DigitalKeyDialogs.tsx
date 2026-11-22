@@ -76,7 +76,7 @@ export function KeyImportDialog({ productId, target, onOpenChange, onChanged }: 
   const importKeys = useCommand({
     name: "digital.licence-keys.import",
     subject: ({ variantId }) => variantId,
-    mutationFn: async ({ poolId: known, variantId, keys }: { poolId: string | null; variantId: string; keys: string[] }, requestKey) => {
+    mutationFn: async ({ poolId: known, variantId, keys }: { poolId: string | null; variantId: string; keys: string[] }, requestKey: string) => {
       let poolId = known ?? createdPool.current;
       if (!poolId) {
         const { asset } = await apiData(postApiV1AdminProductsByIdDigitalAssets({

@@ -20,16 +20,19 @@ export interface CommandOptions<TInput, TData> extends CommandCallbacks<TData, T
    */
   name?: string;
   /** What a call acts on (default: its `orderId`, else `id`, else a string input, else the whole command). */
-  subject?: (input: TInput) => string;
+  subject?: (input: NoInfer<TInput>) => string;
   /** Makes a request key (default a UUID). */
   createKey?: () => string;
 }
 
+/** A command that takes no input is called with none. */
+type InputArgs<TInput, Rest extends unknown[] = []> = undefined extends TInput ? [input?: TInput, ...Rest] : [input: TInput, ...Rest];
+
 export interface Command<TInput, TData> {
   /** Runs the command, unless one for the same subject is running: then nothing is sent and nothing changes. */
-  mutate: (input: TInput, callbacks?: CommandCallbacks<TData, TInput>) => void;
+  mutate: (...args: InputArgs<TInput, [callbacks?: CommandCallbacks<TData, TInput>]>) => void;
   /** As `mutate`; a repeat while one runs returns the running call. */
-  mutateAsync: (input: TInput) => Promise<TData>;
+  mutateAsync: (...args: InputArgs<TInput>) => Promise<TData>;
   /** A call of this command is running. */
   isPending: boolean;
   /** The subjects with a call running (rows of a list). */
@@ -181,14 +184,14 @@ export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInp
     return call;
   }, [keyHolder]);
 
-  const mutate = useCallback((input: TInput, callbacks?: CommandCallbacks<TData, TInput>) => {
-    const subject = (latest.current.subject ?? subjectOf)(input);
+  const mutate = useCallback((...[input, callbacks]: InputArgs<TInput, [callbacks?: CommandCallbacks<TData, TInput>]>) => {
+    const subject = (latest.current.subject ?? subjectOf)(input as TInput);
     if (running.current.has(subject)) return;
     // The failure is the command's state (`error`) and its callbacks', never an unhandled rejection.
-    start(input, callbacks).catch(() => undefined);
+    start(input as TInput, callbacks).catch(() => undefined);
   }, [start]);
 
-  const mutateAsync = useCallback((input: TInput) => start(input), [start]);
+  const mutateAsync = useCallback((...[input]: InputArgs<TInput>) => start(input as TInput), [start]);
   // A clean command stays the same state, so a reset on open renders nothing.
   const reset = useCallback(() => setState((current) =>
     current.error === null && !current.succeeded && current.data === undefined && current.variables === undefined

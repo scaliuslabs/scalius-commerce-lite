@@ -117,7 +117,7 @@ export function AdjustStockDialog({
     name: "inventory.stock",
     subject: ({ variantId }: StockIntent) => variantId,
     createKey: () => `invop_${crypto.randomUUID()}`,
-    mutationFn: (intent: StockIntent, operationKey) => intent.mode === "stocktake"
+    mutationFn: (intent: StockIntent, operationKey: string) => intent.mode === "stocktake"
       ? apiData(postApiV1AdminInventoryStockSet({ body: intent.body, headers: { "idempotency-key": operationKey } }))
       : apiData(postApiV1AdminInventoryByVariantIdAdjust({
         path: { variantId: intent.variantId },
