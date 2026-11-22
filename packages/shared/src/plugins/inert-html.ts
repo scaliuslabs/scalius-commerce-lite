@@ -15,8 +15,8 @@
 //   media and templates go with their content;
 // - attributes: presentation and accessibility only. A link keeps an href
 //   only to a path on this store; an image only a source the page allows;
-//   no event handler, `formaction`, `srcdoc`, `xlink:href`, app runtime or
-//   form-owner attribute, and no style that names a URL.
+//   no event handler, form action, frame document, `xlink:href`, app runtime
+//   or form-owner attribute, and no style that names a URL.
 import { isTag, isText, type ChildNode, type Element } from "domhandler";
 import { parseDocument } from "htmlparser2";
 import { UNTRUSTED_HTML_PARSING, VOID_ELEMENTS, escapeHtmlText, untrustedHtml, writeStartTag } from "../html-writer";
