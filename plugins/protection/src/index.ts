@@ -120,7 +120,7 @@ export const manifest = defineManifest({
       key: "require_decision", label: "Buyers must choose a plan or decline it", type: "boolean", default: false,
       help: "Checkout asks for a plan or the decline agreement on every item that offers plans before the order is placed.",
     },
-    { key: "policy_url", label: "Protection policy page", type: "text", maxLength: 200, public: true, help: "A page on your store, such as /pages/protection: \"Learn more\" under each item that offers a plan and on the product page goes there." },
+    { key: "policy_url", label: "Protection policy page", type: "url", store: true, public: true, help: "A page on your store, such as /pages/protection: \"Learn more\" under each item that offers a plan and on the product page goes there." },
   ],
   customFields: [
     {

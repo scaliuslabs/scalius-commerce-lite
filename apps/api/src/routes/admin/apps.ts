@@ -14,6 +14,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import { eq } from "drizzle-orm";
+import { pluginSettingIssues } from "@scalius/shared/plugins/settings-schema";
 import { user as userTable, PLUGIN_EVENT_DELIVERY_STATUSES } from "@scalius/database/schema";
 import {
   PLUGIN_DELIVERY_LIST_MAX_LIMIT,
@@ -357,6 +358,7 @@ const appDetailSchema = appSummarySchema.extend({
     secrets: z.record(z.string(), z.boolean()).openapi({ description: "Whether each secret is set; secret values are never returned." }),
     translations: z.record(z.string(), z.record(z.string(), z.string())).optional().openapi({ description: "Translatable settings in the store's other languages: store language code → setting key → text. Buyers read them through the store's fallback chain (their language, the store's default, then the setting's own value)." }),
     missing: z.array(z.string()).openapi({ description: "Required settings still empty (activation needs them)." }),
+    invalid: z.record(z.string(), z.string()).openapi({ description: "Stored values the setting no longer takes (an https address where a store page is wanted), by key, with the message a save gives: show the value as invalid, never drop it." }),
     sections: z.array(z.object({
       group: z.object({ id: z.string(), title: z.string(), description: z.string().nullable() }).nullable(),
       keys: z.array(z.string()),
@@ -671,6 +673,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
       secrets: described.secrets,
       translations: described.translations,
       missing: missingSettings(installation, described),
+      invalid: pluginSettingIssues(manifest.settings, installation.storedSettings),
       sections: appSettingsSections(manifest),
     },
     providers: manifest.providers.map((provider) => ({

@@ -42,6 +42,7 @@ export const appSettingFieldSchema = z.object({
   itemLabel: z.string().optional().openapi({ description: "`list`: what one item is called (\"Slide\")." }),
   translatable: z.boolean().optional().openapi({ description: "Buyer-facing text entered per store language: the value is the store's default language, `settings.translations` holds the others." }),
   public: z.boolean().optional().openapi({ description: "Shown on the storefront: the app's storefront parts read it (anyone can see it)." }),
+  store: z.boolean().optional().openapi({ description: "`url`: a page on this store (a path such as /pages/protection), not another site's address." }),
 }).openapi("AppSettingField");
 
 function appSettingItemField(field: PluginSettingItemField): z.infer<typeof appSettingItemFieldSchema> {
@@ -81,6 +82,7 @@ export function appSettingField(field: PluginSettingField): z.infer<typeof appSe
     ...(field.group ? { group: field.group } : {}),
     ...((field.type === "text" || field.type === "textarea") && field.translatable ? { translatable: true } : {}),
     ...(field.public ? { public: true } : {}),
+    ...(field.type === "url" && field.store ? { store: true } : {}),
   };
 }
 

@@ -290,8 +290,10 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
       }
       // One answer stays bounded: the slots' blocks first, then the lines', within the bytes a cart check carries.
       let bytes = 0;
+      const encoder = new TextEncoder();
       const blocks = [...slotBlocks.slice(0, BUYER_UI_BLOCKS_MAX), ...lineBlocks.slice(0, BUYER_UI_LINE_BLOCKS_MAX)].filter((block) => {
-        bytes += JSON.stringify(block).length;
+        // UTF-8 bytes, as the answer travels (Bangla text is about three bytes a character).
+        bytes += encoder.encode(JSON.stringify(block)).byteLength;
         return bytes <= BUYER_UI_RESPONSE_MAX_BYTES;
       });
       try { return await prepareBuyerUiBlocks(options.db, blocks, registrations, options.env.CDN_DOMAIN_URL); } catch { return []; }
