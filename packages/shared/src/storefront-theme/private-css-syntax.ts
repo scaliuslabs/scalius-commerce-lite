@@ -3,8 +3,9 @@
 // tokens back so the browser reads exactly the tokens that were checked.
 //
 // It is strict where the specification recovers: a broken string, a broken
-// url, an unterminated comment, an unbalanced block, a CDO or CDC token, a
-// NUL and any escape outside a quoted string are refusals, not repairs, so
+// url, an unterminated comment, an unbalanced block, `<!--` or `-->` (the
+// tokenizer refuses them, so no CDO or CDC token exists), a NUL and any
+// escape outside a quoted string are refusals, not repairs, so
 // no input reads one way here and another way in a browser. Comments are
 // dropped; where dropping one would join two tokens, the serializer writes
 // an empty comment between them, as the specification's serializer does.
@@ -23,8 +24,7 @@ export type CssToken =
   | { type: "percentage"; value: number; repr: string }
   | { type: "dimension"; value: number; repr: string; unit: string }
   | { type: "colon" } | { type: "semicolon" } | { type: "comma" }
-  | { type: "[" } | { type: "]" } | { type: "(" } | { type: ")" } | { type: "{" } | { type: "}" }
-  | { type: "cdo" } | { type: "cdc" };
+  | { type: "[" } | { type: "]" } | { type: "(" } | { type: ")" } | { type: "{" } | { type: "}" };
 
 /** A component value: a token, a simple block or a function with its arguments. */
 export type CssNode =
@@ -224,7 +224,6 @@ export function componentValues(tokens: readonly CssToken[], maxDepth = 32): Css
         if (token.type === until) { depth -= 1; return out; }
         throw new CssSyntaxError("unbalanced", `An unmatched ${token.type}.`, i);
       }
-      if (token.type === "cdo" || token.type === "cdc") throw new CssSyntaxError("syntax", "<!-- and --> have no place in a stylesheet.", i);
       if (token.type === "{" || token.type === "[" || token.type === "(") {
         out.push({ type: "block", open: token.type, values: consume(CLOSER[token.type]) });
       } else if (token.type === "function") {
