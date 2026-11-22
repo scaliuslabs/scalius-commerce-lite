@@ -36,8 +36,8 @@ export const RETURN_LIFECYCLE = defineRecordLifecycle(RETURN_MACHINE, {
 
 export type ReturnCommand = keyof typeof RETURN_LIFECYCLE.commands;
 
-/** Why a return command waits: a receipt on the order is being finished, or units already came back. */
-export const RETURN_ACTION_BLOCKS = ["receipt_in_progress", "units_received", "nothing_to_reconcile"] as const;
+/** Why a return command waits: a receipt on the order is being finished, or there is none to finish. */
+export const RETURN_ACTION_BLOCKS = ["receipt_in_progress", "nothing_to_reconcile"] as const;
 export type ReturnActionBlock = (typeof RETURN_ACTION_BLOCKS)[number];
 
 export interface ReturnActionFacts {
@@ -46,8 +46,6 @@ export interface ReturnActionFacts {
   orderReceiptClaimed: boolean;
   /** This return's own receipt is the claimed one. */
   receiptClaimed: boolean;
-  /** Some unit of this return was received. */
-  unitsReceived: boolean;
 }
 
 export type ReturnActions = Record<ReturnCommand, RecordActionState<ReturnActionBlock>> & {
@@ -60,7 +58,8 @@ export function returnActions(facts: ReturnActionFacts): ReturnActions {
   const blocks: Partial<Record<ReturnCommand, ReturnActionBlock | null>> = {
     approve: claimed,
     receive: claimed,
-    cancel: claimed ?? (facts.unitsReceived ? "units_received" : null),
+    // Units received move a return to receiving, which no cancel leaves: the state alone refuses it.
+    cancel: claimed,
   };
   return {
     ...recordActions(RETURN_LIFECYCLE, facts.status, blocks),
@@ -100,12 +99,14 @@ export const PURCHASE_ORDER_LIFECYCLE = defineRecordLifecycle(PURCHASE_ORDER_MAC
 
 export type PurchaseOrderCommand = keyof typeof PURCHASE_ORDER_LIFECYCLE.commands;
 
-export const STOCK_DOCUMENT_ACTION_BLOCKS = ["no_lines", "location_archived", "supplier_archived", "nothing_in_transit"] as const;
+export const STOCK_DOCUMENT_ACTION_BLOCKS = ["no_lines", "location_archived", "supplier_archived", "nothing_in_transit", "stock_short", "sku_retired"] as const;
 export type StockDocumentActionBlock = (typeof STOCK_DOCUMENT_ACTION_BLOCKS)[number];
 
 export interface PurchaseOrderActionFacts {
   status: string;
   lineCount: number;
+  /** Lines still to receive whose SKU is live (a retired SKU's line is not received). */
+  openLiveLines: number;
   /** The destination location takes stock (not archived). */
   destinationActive: boolean;
   /** The supplier is active, or none is named. */
@@ -118,7 +119,7 @@ export function purchaseOrderActions(facts: PurchaseOrderActionFacts): PurchaseO
   const location: StockDocumentActionBlock | null = facts.destinationActive ? null : "location_archived";
   const blocks: Partial<Record<PurchaseOrderCommand, StockDocumentActionBlock | null>> = {
     mark_ordered: facts.lineCount === 0 ? "no_lines" : location ?? (facts.supplierActive ? null : "supplier_archived"),
-    receive: location,
+    receive: location ?? (facts.openLiveLines > 0 ? null : "sku_retired"),
   };
   return recordActions(PURCHASE_ORDER_LIFECYCLE, facts.status, blocks);
 }
@@ -156,6 +157,8 @@ export type InventoryTransferCommand = keyof typeof INVENTORY_TRANSFER_LIFECYCLE
 export interface InventoryTransferActionFacts {
   status: string;
   lineCount: number;
+  /** Lines a shipment would refuse now: the origin holds too few units, they are committed to orders, or the SKU was retired. */
+  linesShort: number;
   /** Shipped units not yet received or returned. */
   inTransitQuantity: number;
   originActive: boolean;
@@ -164,12 +167,13 @@ export interface InventoryTransferActionFacts {
 
 export type InventoryTransferActions = Record<InventoryTransferCommand, RecordActionState<StockDocumentActionBlock>>;
 
-/** Origin stock is not read here: a shipment the origin cannot cover is refused with its own reason. */
 export function inventoryTransferActions(facts: InventoryTransferActionFacts): InventoryTransferActions {
   const shipped = facts.status !== "draft";
   const nothingInTransit: StockDocumentActionBlock | null = facts.inTransitQuantity <= 0 ? "nothing_in_transit" : null;
   const blocks: Partial<Record<InventoryTransferCommand, StockDocumentActionBlock | null>> = {
-    ship: facts.lineCount === 0 ? "no_lines" : facts.originActive && facts.destinationActive ? null : "location_archived",
+    ship: facts.lineCount === 0 ? "no_lines"
+      : !(facts.originActive && facts.destinationActive) ? "location_archived"
+      : facts.linesShort > 0 ? "stock_short" : null,
     receive: facts.destinationActive ? nothingInTransit : "location_archived",
     cancel: shipped ? (facts.originActive ? nothingInTransit : "location_archived") : null,
   };

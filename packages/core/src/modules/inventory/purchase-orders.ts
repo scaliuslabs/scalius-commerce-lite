@@ -217,6 +217,10 @@ const lineTotalsSql = {
   quantity: lineAggregate("SUM(po_line.quantity)"),
   receivedQuantity: lineAggregate("SUM(po_line.received_quantity)"),
   subtotalMinor: lineAggregate("SUM(po_line.quantity * po_line.unit_cost_minor)"),
+  // Open lines whose SKU is still live: a receipt refuses a retired SKU's line.
+  openLiveLines: sql<number>`(SELECT count(*) FROM ${purchaseOrderLines} AS live_line
+    JOIN ${productVariants} AS live_sku ON live_sku.id = live_line.variant_id
+    WHERE live_line.purchase_order_id = ${OUTER_PO_ID} AND live_line.quantity > live_line.received_quantity AND live_sku.deleted_at IS NULL)`.as("po_open_live_lines"),
 };
 
 const headerFields = {
@@ -252,7 +256,7 @@ type HeaderRow = {
   destinationId: string; destinationName: string | null; supplierStatus: string | null; destinationStatus: string | null;
   expectedOn: string | null; reference: string | null; currencyCode: string; shippingMinor: number; otherCostsMinor: number; taxMinor: number; revision: number;
   orderedAt: Date | null; receivedAt: Date | null; cancelledAt: Date | null; createdAt: Date; updatedAt: Date;
-  lineCount: number; quantity: number; receivedQuantity: number; subtotalMinor: number;
+  lineCount: number; quantity: number; receivedQuantity: number; subtotalMinor: number; openLiveLines: number;
 };
 
 function summaryFrom(row: HeaderRow): PurchaseOrderSummary {
@@ -282,6 +286,7 @@ function summaryFrom(row: HeaderRow): PurchaseOrderSummary {
     actions: purchaseOrderActions({
       status: row.status,
       lineCount: Number(row.lineCount),
+      openLiveLines: Number(row.openLiveLines),
       destinationActive: (row.destinationStatus ?? "active") === "active",
       supplierActive: row.supplierId === null || (row.supplierStatus ?? "active") === "active",
     }),

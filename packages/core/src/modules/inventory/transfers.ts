@@ -20,6 +20,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { buildBatchGuard, chunkRowsForD1, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
   inventoryCommands,
+  inventoryLevels,
   inventoryLocations,
   inventoryTransferLines,
   inventoryTransferMovements,
@@ -197,6 +198,19 @@ const destinationLocations = alias(inventoryLocations, "destination_location");
 const OUTER_TRANSFER_ID = sql.raw('"inventory_transfers"."id"');
 const lineAggregate = (expression: string) =>
   sql<number>`(SELECT COALESCE(${sql.raw(expression)}, 0) FROM ${inventoryTransferLines} AS transfer_line WHERE transfer_line.transfer_id = ${OUTER_TRANSFER_ID})`;
+const OUTER_ORIGIN_ID = sql.raw('"inventory_transfers"."origin_location_id"');
+/**
+ * Lines a shipment would refuse now, as `executeStockCommand` does: the origin
+ * holds fewer units, they would dip into units committed to orders, or the
+ * SKU was retired. One aggregate in the read's own statement.
+ */
+const linesShortSql = sql<number>`(SELECT count(*) FROM ${inventoryTransferLines} AS short_line
+  JOIN ${productVariants} AS short_sku ON short_sku.id = short_line.variant_id
+  LEFT JOIN ${inventoryLevels} AS short_level ON short_level.variant_id = short_line.variant_id AND short_level.location_id = ${OUTER_ORIGIN_ID}
+  WHERE short_line.transfer_id = ${OUTER_TRANSFER_ID}
+    AND (short_sku.deleted_at IS NOT NULL
+      OR short_sku.stock - short_line.quantity < short_sku.reserved_stock
+      OR COALESCE(short_level.on_hand, 0) < short_line.quantity))`;
 
 const headerFields = {
   id: inventoryTransfers.id,
@@ -224,6 +238,7 @@ const headerFields = {
   shippedQuantity: lineAggregate("SUM(transfer_line.shipped_quantity)"),
   receivedQuantity: lineAggregate("SUM(transfer_line.received_quantity)"),
   returnedQuantity: lineAggregate("SUM(transfer_line.returned_quantity)"),
+  linesShort: linesShortSql.as("transfer_lines_short"),
 };
 
 type HeaderRow = {
@@ -232,7 +247,7 @@ type HeaderRow = {
   expectedOn: string | null; reference: string | null;
   revision: number; shippedAt: Date | null; receivedAt: Date | null; cancelledAt: Date | null;
   createdAt: Date; updatedAt: Date; lineCount: number; quantity: number; shippedQuantity: number;
-  receivedQuantity: number; returnedQuantity: number;
+  receivedQuantity: number; returnedQuantity: number; linesShort: number;
 };
 
 function summaryFrom(row: HeaderRow): TransferSummary {
@@ -262,6 +277,7 @@ function summaryFrom(row: HeaderRow): TransferSummary {
     actions: inventoryTransferActions({
       status: row.status,
       lineCount: Number(row.lineCount),
+      linesShort: Number(row.linesShort),
       inTransitQuantity: shipped - received - returned,
       originActive: (row.originStatus ?? "active") === "active",
       destinationActive: (row.destinationStatus ?? "active") === "active",

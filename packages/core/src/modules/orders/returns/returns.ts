@@ -394,18 +394,9 @@ async function loadOrderReturnState(
   return { remainingByItem, receiptClaimed };
 }
 
-/** A return's actions from its own row and lines and whether any receipt on its order is claimed. */
-function actionsOf(
-  header: { status: string; activeOrderKey: string | null },
-  lines: ReadonlyArray<{ receivedQuantity: number }>,
-  orderReceiptClaimed: boolean,
-): ReturnActions {
-  return returnActions({
-    status: header.status,
-    orderReceiptClaimed,
-    receiptClaimed: header.activeOrderKey !== null,
-    unitsReceived: lines.some((line) => line.receivedQuantity > 0),
-  });
+/** A return's actions from its own row and whether any receipt on its order is claimed. */
+function actionsOf(header: { status: string; activeOrderKey: string | null }, orderReceiptClaimed: boolean): ReturnActions {
+  return returnActions({ status: header.status, orderReceiptClaimed, receiptClaimed: header.activeOrderKey !== null });
 }
 
 export async function getOrderReturn(
@@ -450,7 +441,7 @@ export async function getOrderReturn(
       ...line,
       remainingReturnableQuantity: remainingByItem.get(line.orderItemId) ?? 0,
     })),
-    actions: actionsOf(header, lines, receiptClaimed),
+    actions: actionsOf(header, receiptClaimed),
   };
 }
 
@@ -510,7 +501,7 @@ export async function listOrderReturns(
         : null,
       receipts: receiptsByReturn.get(header.id) ?? [],
       lines: returnLines,
-      actions: actionsOf(header, returnLines, orderReceiptClaimed),
+      actions: actionsOf(header, orderReceiptClaimed),
     };
   });
 }
@@ -1328,10 +1319,8 @@ export async function cancelOrderReturn(
   if (context.header.version !== input.expectedVersion) {
     throw returnChanged("Return changed while cancellation was being prepared. Reload and try again.");
   }
+  // A received unit moves the return to receiving, which no cancel leaves.
   assertCommand(context.header.status, "cancel", "cancelled");
-  if (context.lines.some((line) => line.receivedQuantity > 0)) {
-    throw new ValidationError("A return with received inventory cannot be cancelled.");
-  }
   const baseResult: Omit<OrderReturnCommandResult, "wholeOrderReturned"> = {
     orderId,
     returnId,
@@ -1361,7 +1350,6 @@ export async function cancelOrderReturn(
       inArray(orderReturns.status, sourcesOf("cancel")),
       eq(orderReturns.version, input.expectedVersion),
       eq(orders.version, context.order.version),
-      sql`NOT EXISTS (SELECT 1 FROM ${orderReturnLines} WHERE ${orderReturnLines.returnId} = ${returnId} AND ${orderReturnLines.receivedQuantity} > 0)`,
       notExists(db.select({ value: sql<number>`1` }).from(orderReturns).where(and(
         eq(orderReturns.orderId, orderId),
         isNotNull(orderReturns.activeOrderKey),
