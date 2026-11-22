@@ -372,13 +372,15 @@ class Compiler {
     }
     const first = /^[^\s>+~]+/.exec(selector)?.[0] ?? "";
     const rest = selector.slice(first.length);
-    if (/^(?::root|html|body)$/i.test(first)) {
-      if (!rest.trim()) return PRIVATE_CSS_PAGE;
+    // The page root, alone or in a state (`:root[data-color-scheme="dark"]`): the page's own rule, or the surfaces under it.
+    const root = /^(?::root|html|body)((?:\[[^\]]*\]|:[\w-]+(?:\([^)]*\))?)*)$/i.exec(first);
+    if (root) {
+      const state = root[1] ? `:root${root[1]} ` : "";
       if (/^\s*[+~]/.test(rest)) {
         this.issue("unscoped_selector", "A sibling of the page root is outside the private pages.", at);
         return null;
       }
-      return `${PRIVATE_CSS_SCOPE}${rest.startsWith(" ") ? rest : ` ${rest.trim()}`}`;
+      return rest.trim() ? `${state}${PRIVATE_CSS_SCOPE} ${rest.trim().replace(/^>\s*/, "")}` : `${state}${PRIVATE_CSS_PAGE}`;
     }
     if (/^\[data-private(?:=(?:"[a-z-]+"|'[a-z-]+'|[a-z-]+))?\]/.test(first)) {
       if (/^\s*[+~]/.test(rest)) {

@@ -86,7 +86,7 @@ Example: the summary and the form in a side column, a line of your own words und
 
 ## The stylesheet
 
-Write ordinary CSS against the hooks. The store scopes every selector under `[data-private]` (each private surface's root), and a rule for `:root`, `html` or `body` alone sets the page's own tokens and background:
+Write ordinary CSS against the hooks. The store scopes every selector under `[data-private]` (each private surface's root). A rule for `:root`, `html` or `body` alone sets the page's own tokens and background, and a root state stays in front (`:root[data-color-scheme="dark"] [data-part="summary"]` styles the dark colours):
 
 ```css
 :root { --primary: #6d28d9; }
