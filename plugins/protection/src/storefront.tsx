@@ -9,7 +9,7 @@
 // no plan draws nothing.
 
 import { componentFor, currencyDecimalPlaces, defineStorefront, formatMoney, t, type StorefrontRenderContext } from "@scalius/plugin-sdk/storefront";
-import { APP_ID, parsePriceTiers, planPercent, PLANS, tierPrice, type PlanId } from "./plans";
+import { APP_ID, parsePriceTiers, planPercent, PLANS, policyPath, tierPrice, type PlanId } from "./plans";
 
 const FLAG = `${APP_ID}.eligible`;
 
@@ -52,7 +52,7 @@ const PlanPrice = componentFor(["product.buy_box.after"], (props) => {
   const tiered = settings.pricing === "tiers";
   if (price === null && !tiered) return null;
   const every = offers.length === product.variants.length;
-  const policy = typeof settings.policy_url === "string" && settings.policy_url.startsWith("https://") ? settings.policy_url : null;
+  const policy = policyPath(settings.policy_url);
   return (
     <aside class="protection-offer" data-offers={offers.map((offer) => offer.id).join(" ")}>
       <p>
@@ -66,7 +66,7 @@ const PlanPrice = componentFor(["product.buy_box.after"], (props) => {
           {offers.map((offer) => offer.title).join(", ")}
         </p>
       )}
-      {policy ? <a href={policy} rel="noopener">{t(context, { en: "Learn more", bn: "আরও জানুন" })}</a> : null}
+      {policy ? <a href={policy}>{t(context, { en: "Learn more", bn: "আরও জানুন" })}</a> : null}
     </aside>
   );
 });

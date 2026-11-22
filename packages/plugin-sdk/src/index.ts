@@ -21,6 +21,7 @@ export { replaceEmailAddresses, trimTrailingCharacter } from "@scalius/shared/te
 
 import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
 import type {
+  BuyerUiLine,
   FunctionReadRecord,
   FunctionReads,
   PluginFunctionAnswer,
@@ -29,6 +30,7 @@ import type {
   PluginFunctionPoint,
   PluginManifestInput,
   PluginSettingValue,
+  PluginUiDocument,
   StorefrontUiSlot,
 } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
@@ -161,6 +163,27 @@ export type PluginExtensionHandler<Settings = Readonly<Record<string, PluginSett
 ) => PluginFunctionAnswer<"buyer.ui"> | Promise<PluginFunctionAnswer<"buyer.ui">>;
 
 export type { FunctionReadRecord, FunctionReads, PluginFunctionRunInput };
+
+/**
+ * The render of a per-line slot (`cart.line.after`), written for one line:
+ * `render(line, input, settings)` answers that line's `ui` (or null to draw
+ * nothing under it). The store runs your extension once for the whole cart
+ * (`input.lines`, each with its offer prices) and draws each answer under
+ * its own line, so the cost never grows with the cart's lines.
+ *
+ *   extensions: { "cart.line.after": perLine((line, input) => line.inputs[0]?.eligible ? ui.view([ui.text(line.title)]) : null) }
+ */
+export function perLine<Settings = Readonly<Record<string, PluginSettingValue>>>(
+  render: (line: BuyerUiLine, input: PluginFunctionRunInput<"buyer.ui">, settings: Settings) => PluginUiDocument | null,
+): PluginExtensionHandler<Settings> {
+  return (input, settings) => ({
+    ui: null,
+    lines: (input.lines ?? []).flatMap((line) => {
+      const drawn = render(line, input, settings);
+      return drawn ? [{ lineKey: line.lineKey, ui: drawn }] : [];
+    }),
+  });
+}
 
 /** A single-key read (`customer`, `attribute.<key>`, a hop) from `input.reads`: the record, or null. */
 export function readOne<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): { revision: number; data: T } | null {

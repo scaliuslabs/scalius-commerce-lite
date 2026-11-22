@@ -9,6 +9,7 @@ export { computedChoicesFit, isAttributeDate } from "./checkout-attribute-values
 import { pluginKeySchema } from "./manifest-patterns";
 import { APP_LINE_INPUT_TEXT_LIMITS, CUSTOMIZATION_LIMITS, LINE_INPUT_CONFIRM_LIMITS, LINE_INPUT_FIELD_TYPES, LINE_INPUT_SURFACES } from "../line-properties";
 import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES } from "../buyer-uploads";
+import { MAX_ORDER_LINES } from "../order-limits";
 
 /** A checkout attribute key: snake_case (it is stored on the order). */
 const key = pluginKeySchema();
@@ -180,6 +181,10 @@ export const lineInputDeclarationSchema = z.object({
   if (field.surfaces && new Set(field.surfaces).size !== field.surfaces.length) ctx.addIssue({ code: "custom", path: ["surfaces"], message: "Name each surface once." });
   // A file is uploaded on the product page: the cart cannot ask for it.
   if (field.type === "file" && field.surfaces && !field.surfaces.includes("product")) ctx.addIssue({ code: "custom", path: ["surfaces"], message: "A file input is answered on the product page: keep \"product\" in surfaces." });
+  // A decision the store does not ask on the cart line must be one it can take at Place order.
+  if (field.decision && field.surfaces && !field.surfaces.includes("cart") && field.decision.proceedWith === undefined) {
+    ctx.addIssue({ code: "custom", path: ["decision"], message: "A decision on an input the store does not draw in the cart needs proceedWith: keep \"cart\" in surfaces, or name the choice the store can set at Place order." });
+  }
   // The bulk actions are the cart's own controls.
   if (field.bulk && field.surfaces && !field.surfaces.includes("cart")) ctx.addIssue({ code: "custom", path: ["bulk"], message: "Bulk actions are drawn in the cart: keep \"cart\" in surfaces, or draw your own with set_line_input buttons." });
   if (field.type !== "checkbox" && field.label.length > APP_LINE_INPUT_TEXT_LIMITS.label) ctx.addIssue({ code: "custom", path: ["label"], message: `A label holds at most ${APP_LINE_INPUT_TEXT_LIMITS.label} characters; only a checkbox's (what the buyer agrees to) holds ${APP_LINE_INPUT_TEXT_LIMITS.agreement}.` });
@@ -216,8 +221,20 @@ export const checkoutAttributesSchema = z.record(z.string().max(160), z.string()
   "Checkout attributes exceed 8 KiB.",
 );
 
-/** What a storefront extension answers: a buyer-surface document, or null to show nothing. */
-export const buyerUiOutputSchema = z.object({ ui: pluginUiDocumentSchema("buyer").nullable() }).strict();
+/** The most bytes a per-line slot's answer holds, over all its lines. */
+export const BUYER_UI_LINES_MAX_BYTES = 128 * 1024;
+/**
+ * What a storefront extension answers: a buyer-surface document, or null to
+ * show nothing. A per-line slot (`cart.line.after`) answers `ui: null` and a
+ * block per line it draws under (`lines`, by `input.lines[].lineKey`; a line
+ * left out draws nothing), at most `BUYER_UI_LINES_MAX_BYTES` in all.
+ */
+export const buyerUiOutputSchema = z.object({
+  ui: pluginUiDocumentSchema("buyer").nullable(),
+  lines: z.array(z.object({ lineKey: z.string().min(1).max(256), ui: pluginUiDocumentSchema("buyer").nullable() }).strict()).max(MAX_ORDER_LINES)
+    .refine((lines) => new TextEncoder().encode(JSON.stringify(lines)).byteLength <= BUYER_UI_LINES_MAX_BYTES, `A per-line answer is at most ${BUYER_UI_LINES_MAX_BYTES / 1024} KiB.`)
+    .optional(),
+}).strict();
 export type BuyerUiOutput = z.infer<typeof buyerUiOutputSchema>;
 
 /**
@@ -235,9 +252,11 @@ export const buyerUiBlockSchema: z.ZodType<BuyerUiBlock> = z.object({
   attributes: z.array(checkoutAttributeSchema).max(10), values: checkoutAttributesSchema, media: z.record(z.string(), z.string().url()).optional(),
   lineKey: z.string().min(1).max(256).optional(),
 }).strict();
-/** Blocks one answer carries at most: one per slot app, and one per line of a per-line slot. */
+/** Blocks one answer carries at most: one per slot app, and the per-line slot's blocks under the lines. */
 export const BUYER_UI_BLOCKS_MAX = 12;
-export const BUYER_UI_LINE_BLOCKS_MAX = 50;
+export const BUYER_UI_LINE_BLOCKS_MAX = 2 * MAX_ORDER_LINES;
+/** The most bytes of blocks one cart check or quote answers: past it, later blocks are left out (the per-line ones first). */
+export const BUYER_UI_RESPONSE_MAX_BYTES = 256 * 1024;
 
 /** Strict reads of the private stored map, also used by order representations. */
 export function readCheckoutAttributes(serialized: string | null | undefined): Record<string, string> {

@@ -21,7 +21,7 @@ import type { CartValidationIssue, CartValidationResult } from "@/lib/api/orders
 import { cartItemVariantLabel } from "./item-options";
 import { purchaseOptionsField } from "./purchase-option";
 import { cartLineInputFacts, confirmedChoice, lineAnswerFor, sameAnswer, lineAnswer, undecidedLineInputs, withLineAnswer, type CartLineInputFacts } from "./line-inputs";
-import { cartLinePropertyInputs } from "@/store/cart";
+import { cartLineCheckPrice, cartLinePropertyInputs } from "@/store/cart";
 import { isLineInputChange } from "@scalius/shared/plugins/line-input-change";
 
 /** The store's check of the cart as it is now: which line takes which input, in the buyer's language. */
@@ -38,7 +38,7 @@ async function checkCart(items: Readonly<Record<string, VariantCartItem>>): Prom
         productId: item.id,
         variantId: item.variantId,
         quantity: item.quantity,
-        price: item.price,
+        ...cartLineCheckPrice(item),
         productName: item.name,
         variantLabel: cartItemVariantLabel(item.options),
         ...(item.properties?.length ? { properties: cartLinePropertyInputs(item) } : {}),
@@ -87,19 +87,23 @@ export async function islandCartLines(pluginId: string): Promise<StorefrontCartL
  * bulk actions do: an island's `setLineInput` and a buyer UI `set_line_input`
  * button. The store's cart check names the lines the input applies to; a
  * choice that needs confirmation is asked for in the host's dialog and keeps
- * the agreement's revision; the edited lines are priced by the store; and
- * checkout checks every answer again whatever this allowed.
+ * the agreement's revision; the edited lines take the store's price from the
+ * cart's next check; and checkout checks every answer again whatever this
+ * allowed. A page that holds its last check's facts (`known`: the cart page,
+ * the drawer) passes them, so a click costs that one next check; an island
+ * asks the store first.
  */
-export async function setAppLineInput(pluginId: string, change: unknown): Promise<StorefrontLineInputResult> {
+export async function setAppLineInput(pluginId: string, change: unknown, known?: CartLineInputFacts): Promise<StorefrontLineInputResult> {
   if (!isLineInputChange(change)) return { ok: false, reason: "unknown_input" };
   hydrateCartFromStorage();
   const { items } = cartStore.get();
-  const facts = await checkCart(items);
+  const facts = known ?? await checkCart(items);
   if (!facts) return { ok: false, reason: "failed" };
   const key = `${pluginId}.${change.key}`;
   const view = facts.inputs.get(key);
   if (!view) return { ok: false, reason: "unknown_input" };
   const language = pageLanguage();
+  // An empty answer clears it, as `null` does.
   const answer = change.value ? lineAnswerFor(view, change.value, lineEntryWords(language).lineCheckedText) : null;
   if (change.value && !answer) return { ok: false, reason: "unknown_input" };
   const named = change.lineKeys !== undefined ? [...new Set(change.lineKeys)] : null;

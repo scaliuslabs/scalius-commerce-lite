@@ -93,6 +93,7 @@ import {
 import type { AppObjectCommit } from "@scalius/shared/checkout-app-facts";
 import {
   PLUGIN_EXTENSION_RUN,
+  buyerUiLinesSchema,
   functionInputProtectedPaths,
   pluginRunSchemas,
   pluginRunSource,
@@ -354,6 +355,12 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
     deadline?: number;
     /** With `deadline`: an app's share of the budget (`checkoutAppShare`). */
     budgetShare?: number;
+    /**
+     * A run outside the order's own path (an offer price for a cart line):
+     * never blocking, never marked in flight, and neither its failures nor
+     * its successes touch the app's failure circuit.
+     */
+    uncounted?: boolean;
 
   } = {},
 ): Promise<Array<PluginFunctionResult<P>>> {
@@ -363,7 +370,9 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
     .filter((registration) => registration.name === point && grantAllows(registration.installation, point)));
   if (registered.length === 0) return [];
 
-  const checked = pluginRunSchemas(point).input.safeParse(input);
+  // The cart's line facts carry every app's inputs: each app's own are checked after they are scoped to it.
+  const { lines: lineFacts, ...unscoped } = input as Record<string, unknown> & { lines?: unknown };
+  const checked = pluginRunSchemas(point).input.safeParse(point === PLUGIN_EXTENSION_RUN ? unscoped : input);
   if (!checked.success) {
     throw new TypeError(`runPluginFunctions(${point}) received an input that does not match the point's schema.`);
   }
@@ -404,7 +413,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
       const { installation, priority } = registration;
       const declaration = installation.manifest.functions.find((fn) => fn.point === point);
       // Only an approved grant lets an app pause checkout.
-      const blocking = declaration?.onError === "block" && Boolean(installation.grant?.blockingFunctions.some((blockingPoint) => blockingPoint === point));
+      const blocking = !options.uncounted && declaration?.onError === "block" && Boolean(installation.grant?.blockingFunctions.some((blockingPoint) => blockingPoint === point));
       const fail = () => {
         if (blocking) blocked.push(installation.pluginId);
       };
@@ -416,8 +425,9 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         fail();
         settle(host.incident(installation, `function:${point}`, `Not called: this checkout's ${CHECKOUT_APP_BUDGET_MS} ms for apps was spent by the apps before it.${blocking ? " It is approved as blocking, so checkout was refused." : " Checkout went on without it."}`));
       };
-      // One more failed answer toward the circuit.
+      // One more failed answer toward the circuit (never for a run outside the order's path).
       const count = () => {
+        if (options.uncounted) return;
         settle(recordFunctionFailure(db, { pluginId: installation.pluginId, point }).then((state) => (
           state.opened ? noticeOpenCircuit(db, env, host, installation, point, state, blocking) : undefined
         )));
@@ -440,10 +450,20 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         const prefix = `${installation.pluginId}.`;
         const own = ownAttributes(buyer.attributes, installation.pluginId);
         scopedInput = { ...scopedInput, attributes: Object.fromEntries(Object.entries(own).map(([key, value]) => [key.slice(prefix.length), value])) };
-        // The cart's lines: of the apps' inputs, only this app's own, by its own keys.
-        const ownLine = (line: NonNullable<typeof buyer.line>) => ({ ...line, inputs: line.inputs.filter((input) => input.key.startsWith(prefix)).map((input) => ({ ...input, key: input.key.slice(prefix.length) })) });
-        if (buyer.line) scopedInput = { ...scopedInput, line: ownLine(buyer.line) };
-        if (buyer.lines) scopedInput = { ...scopedInput, lines: buyer.lines.map(ownLine) };
+        // The cart's lines: of the apps' inputs, only this app's own, by its own keys, held to the
+        // bounds one app's facts keep. Facts that do not fit leave out this app's blocks alone, logged.
+        if (Array.isArray(lineFacts)) {
+          const own = buyerUiLinesSchema.safeParse(lineFacts.map((line: { inputs?: Array<{ key: string }> }) => ({
+            ...line,
+            inputs: (line.inputs ?? []).filter((each) => each.key.startsWith(prefix)).map((each) => ({ ...each, key: each.key.slice(prefix.length) })),
+          })));
+          if (!own.success) {
+            const issue = own.error.issues[0];
+            settle(host.incident(installation, pluginRunSource(point, checked.data), `The cart's line facts for this app do not fit (${issue?.path.join(".") || "lines"}: ${issue?.message ?? "invalid"}); its blocks were left out.`));
+            continue;
+          }
+          scopedInput = { ...scopedInput, lines: own.data };
+        }
       }
       // A run alone that never returned (it held its thread): stop the app rather than freeze the store again.
       // A stopped app neither answers nor blocks, so it is left out here too.
@@ -490,10 +510,11 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
       })() : await sandboxRuns.run(suspect, async (shared) => {
         // The wait for a slot may have spent the budget: no mark, no run.
         if (budgetSpentForApp()) return null;
-        await markFunctionInflight(db, { pluginId: installation.pluginId, point, shared });
+        // A run outside the order's path writes no mark: it never decides whether the app is hung.
+        if (!options.uncounted) await markFunctionInflight(db, { pluginId: installation.pluginId, point, shared });
         if (appDeadline !== undefined) hadAtStart = appDeadline - Date.now();
         const answer = await invoke();
-        await clearFunctionInflight(db, { pluginId: installation.pluginId, point }).catch(() => console.warn("[plugins] function in-flight clear failed"));
+        if (!options.uncounted) await clearFunctionInflight(db, { pluginId: installation.pluginId, point }).catch(() => console.warn("[plugins] function in-flight clear failed"));
         return answer;
       });
       if (!outcome) {
@@ -509,7 +530,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         else fail();
         continue;
       }
-      if (functionCircuitDirty(registration.circuit)) settle(recordFunctionSuccess(db, { pluginId: installation.pluginId, point }));
+      if (!options.uncounted && functionCircuitDirty(registration.circuit)) settle(recordFunctionSuccess(db, { pluginId: installation.pluginId, point }));
       // A buyer's checkout the app refused counts (at most once every few minutes); one it accepted ends the streak.
       if (options.countRefusals && point === "cart.validate") {
         const refusal = (outcome.value as { errors?: Array<{ message?: unknown }> }).errors?.[0];

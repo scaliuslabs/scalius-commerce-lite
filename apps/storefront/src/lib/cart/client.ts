@@ -25,6 +25,7 @@ import {
   getEffectiveCartShippingFee,
   cartShippedSubtotal,
   cartLinePropertyInputs,
+  cartLineCheckPrice,
   type CartItem,
   type VariantCartItem,
 } from "@/store/cart";
@@ -544,7 +545,7 @@ function cartValidationPayload(items: Record<string, VariantCartItem>) {
       productId: item.id,
       variantId: item.variantId,
       quantity: item.quantity,
-      price: item.price,
+      ...cartLineCheckPrice(item),
       productName: item.name,
       variantLabel: cartItemVariantLabel(item),
       ...(properties.length > 0 ? { properties } : {}),
@@ -1231,7 +1232,7 @@ export async function validateCartSnapshot(
       latestLineInputs = cartLineInputFacts(json.data, issues);
       updateCartQuantityLimits(json.data, issues, cartStore.get().items);
       latestCartBuyerUi = Array.isArray(json.data.buyerUi) ? json.data.buyerUi : [];
-      void renderBuyerUiWhenNeeded(json.data.buyerUi, { onChange: refreshBuyerUi });
+      void renderBuyerUiWhenNeeded(json.data.buyerUi, { onChange: refreshBuyerUi, lineInputs: () => latestLineInputs });
     }
     setCartValidationIssues(issues, cartStore.get().items, summaryMessage);
     const deliveryRateRefused =
@@ -1458,7 +1459,7 @@ async function refreshTotals() {
     updateCheckoutButtonState();
     renderAuthoritativeCartQuote(quote, elements);
     setQuotedLineDiscounts(quote);
-    void renderBuyerUiWhenNeeded(quote.buyerUi, { onChange: refreshBuyerUi, targets: QUOTE_SLOTS });
+    void renderBuyerUiWhenNeeded(quote.buyerUi, { onChange: refreshBuyerUi, targets: QUOTE_SLOTS, lineInputs: () => latestLineInputs });
   } catch (error) {
     if (quoteSequence !== cartTaxQuoteSequence) return;
     // An item that changed is shown on its line and a refused delivery rate
@@ -1597,7 +1598,7 @@ function paintCartLines(): void {
 function paintLineInputs(): void {
   const root = document.getElementById("cartPageRoot") ?? document;
   // The apps' blocks under each line, drawn again into the lines just drawn.
-  if (latestCartBuyerUi.length > 0) void renderBuyerUiWhenNeeded(latestCartBuyerUi, { onChange: refreshBuyerUi, targets: LINE_SLOTS });
+  if (latestCartBuyerUi.length > 0) void renderBuyerUiWhenNeeded(latestCartBuyerUi, { onChange: refreshBuyerUi, targets: LINE_SLOTS, lineInputs: () => latestLineInputs });
   const facts = latestLineInputs;
   if (facts.inputs.size === 0) {
     for (const mount of root.querySelectorAll<HTMLElement>("[data-cart-line-input-bulk]")) mount.hidden = true;

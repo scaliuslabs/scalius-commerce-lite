@@ -66,11 +66,13 @@ import {
   defineManifest,
   definePlugin,
   moneyFor,
+  perLine,
   PLUGIN_API_VERSION,
   textFor,
   ui,
   type BuyerUiLine,
   type PluginExtensionHandler,
+  type PluginFunctionRunInput,
   type PluginSettingsOf,
   type OrderRepresentation,
   type OrderRepresentationLine,
@@ -80,7 +82,7 @@ import {
   type RefundRepresentation,
   type ReturnRepresentation,
 } from "@scalius/plugin-sdk";
-import { APP_ID, DECLINE_TEXT, DECLINED, isPlan, PLAN_KEY, PLAN_TERMS, planPercent, planSells, PLANS, parsePriceTiers, tierPrice, type PlanId } from "./plans";
+import { APP_ID, DECLINE_TEXT, DECLINED, isPlan, PLAN_KEY, PLAN_TERMS, planPercent, planSells, PLANS, parsePriceTiers, policyPath, tierPrice, type PlanId } from "./plans";
 
 export * from "./plans";
 
@@ -117,7 +119,7 @@ export const manifest = defineManifest({
       key: "require_decision", label: "Buyers must choose a plan or decline it", type: "boolean", default: false,
       help: "Checkout asks for a plan or the decline agreement on every item that offers plans before the order is placed.",
     },
-    { key: "policy_url", label: "Protection policy link", type: "url", public: true, help: "Where \"Learn more\" goes on the product page." },
+    { key: "policy_url", label: "Protection policy page", type: "text", maxLength: 200, public: true, help: "A page on your store, such as /pages/protection: \"Learn more\" under each item that offers a plan and on the product page goes there." },
   ],
   customFields: [
     {
@@ -238,7 +240,7 @@ export const manifest = defineManifest({
           label: "প্রোটেকশন না নেওয়ার সম্মতি",
           help: "প্রোটেকশন না নিলে ক্রেতা যাতে সম্মত হন। বদলালে যাঁরা আগে না করেছেন তাঁদের আবার সম্মতি দিতে হবে। খালি রাখলে অ্যাপের নিজের লেখা দেখাবে।",
         },
-        policy_url: { label: "প্রোটেকশন নীতির লিংক", help: "প্রোডাক্ট পেজে \"আরও জানুন\" যেখানে নিয়ে যায়।" },
+        policy_url: { label: "প্রোটেকশন নীতির পেজ", help: "আপনার স্টোরের একটি পেজ, যেমন /pages/protection: প্ল্যান থাকা প্রতিটি পণ্যের নিচে ও প্রোডাক্ট পেজে \"আরও জানুন\" সেখানে নিয়ে যায়।" },
         require_decision: {
           label: "ক্রেতাকে প্ল্যান বেছে নিতে বা না করতে হবে",
           help: "অর্ডার দেওয়ার আগে চেকআউট প্ল্যান অফার করা প্রতিটি পণ্যে একটি প্ল্যান অথবা না করার সম্মতি চায়।",
@@ -673,6 +675,7 @@ export const CART_COPY = {
     summary: "Protection · {price}",
     unit: "{item}: {plan}, {price}",
     note: "Each protected item gets a Protection ID once the order is complete.",
+    learnMore: "Learn more",
   },
   bn: {
     plans: { one_year: "১ বছরের প্ল্যান", two_years: "২ বছরের প্ল্যান", lifetime: "আজীবন প্ল্যান" },
@@ -691,6 +694,7 @@ export const CART_COPY = {
     summary: "প্রোটেকশন · {price}",
     unit: "{item}: {plan}, {price}",
     note: "অর্ডার সম্পন্ন হলে প্রতিটি সুরক্ষিত পণ্য একটি প্রোটেকশন আইডি পায়।",
+    learnMore: "আরও জানুন",
   },
 };
 
@@ -705,27 +709,28 @@ const soldPlans = (settings: Parameters<typeof planPercent>[1]) => (Object.keys(
 /**
  * Under each line that takes a plan: the plans with what each adds to the
  * line (this app's own `cart.line_prices` answer, as checkout will charge
- * it) and an Add button, and "No thanks" (the store asks for the decline
- * agreement first); once a plan is on, the plan with Remove.
+ * it) and an Add button, "No thanks" (the store asks for the decline
+ * agreement first) and "Learn more" (the merchant's policy page); once a
+ * plan is on, the plan with Remove. One line at a time (`perLine`): the store
+ * runs it once for the whole cart.
  */
-export const lineOffer: PluginExtensionHandler<PluginSettingsOf<typeof manifest>> = ({ line, language, currency }) => {
-  const plan = line ? planOf(line) : undefined;
-  if (!line || !plan?.eligible) return { ui: null };
+export function lineOffer(line: BuyerUiLine, { language, currency }: Pick<PluginFunctionRunInput<"buyer.ui">, "language" | "currency">, settings: { policy_url?: string | null }) {
+  const plan = planOf(line);
+  if (!plan?.eligible) return null;
   const copy = textFor(language, CART_COPY);
   const lineKeys = [line.lineKey];
   if (isPlan(plan.value)) {
-    return {
-      ui: ui.view([ui.stack([
-        ui.badge(fill(copy.added, { plan: copy.plans[plan.value] }), "success"),
-        ui.button(copy.remove, ui.cart.clearLineInput("plan", lineKeys), { tone: "secondary" }),
-      ], { direction: "horizontal", gap: "sm" })]),
-    };
+    return ui.view([ui.stack([
+      ui.badge(fill(copy.added, { plan: copy.plans[plan.value] }), "success"),
+      ui.button(copy.remove, ui.cart.clearLineInput("plan", lineKeys), { tone: "secondary" }),
+    ], { direction: "horizontal", gap: "sm" })]);
   }
   const offers = plan.offers.filter((offer) => isPlan(offer.value)).slice(0, 3);
-  if (offers.length === 0) return { ui: null };
+  if (offers.length === 0) return null;
   const declined = plan.value === DECLINED;
-  return {
-    ui: ui.view([ui.banner(declined ? "neutral" : "warning", declined ? copy.declinedText : copy.offerText, {
+  const policy = policyPath(settings.policy_url);
+  return ui.view([
+    ui.banner(declined ? "neutral" : "warning", declined ? copy.declinedText : copy.offerText, {
       title: copy.offerTitle,
       actions: [
         ...offers.map((offer, index) => ui.button(
@@ -735,9 +740,10 @@ export const lineOffer: PluginExtensionHandler<PluginSettingsOf<typeof manifest>
         )),
         ...(declined ? [] : [ui.button(copy.decline, ui.cart.setLineInput("plan", DECLINED, lineKeys), { tone: "secondary" })]),
       ],
-    })]),
-  };
-};
+    }),
+    ...(policy ? [ui.link(copy.learnMore, ui.to.store(policy))] : []),
+  ]);
+}
 
 /**
  * The cart's protection summary: recommended (with "Add a plan to all
@@ -780,7 +786,7 @@ export default definePlugin({
   manifest,
 
   extensions: {
-    "cart.line.after": lineOffer,
+    "cart.line.after": perLine(lineOffer),
     "cart.page.summary": cartSummary,
     "cart_drawer.footer": cartSummary,
   },

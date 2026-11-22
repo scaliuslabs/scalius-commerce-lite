@@ -1,16 +1,22 @@
-// The facts a per-line UI slot (`cart.line.after`) draws each cart line from
-// (`BuyerUiLine`): the buyer's line (an expanded bundle is one line), its
-// add-ons, and every app line input's state on it: whether it applies, the
-// answer, whether checkout needs one, and what each offered choice would add
-// to a unit. The offer prices are the apps' own `cart.line_prices` answers
-// for the line as if the buyer had chosen it, resolved exactly as checkout
-// resolves them (the store-currency conversion, a share of the item's price,
-// a bundle's fee once per bundle unit), so "Add for ৳350" is what the buyer
-// is then charged. One extra `cart.line_prices` run prices every offer of the
-// cart together, and only when some app draws the per-line slot; a failed or
-// refused run prices no offer (the line still shows its other facts).
+// The facts the cart's UI slots draw each cart line from (`BuyerUiLine`):
+// the buyer's line (an expanded bundle is one line), its add-ons, and every
+// app line input's state on it: whether it applies, the answer, whether
+// checkout needs one, and what each offered choice would add to a unit.
+// Built within the bounds one app's facts keep (`buyerUiLinesSchema`).
+//
+// The offer prices are each owning app's own `cart.line_prices` answer for
+// the line as if the buyer had chosen it, with the rest of the cart as it is
+// (the real lines ride along, so a price that depends on other lines sees
+// them), resolved exactly as checkout resolves add-ons (the store-currency
+// conversion, a share of the item's price, a bundle's fee once per bundle
+// unit). One run, of the apps that draw the per-line slot and offer a
+// priced choice alone, outside the order's path (`runOffers`: never
+// blocking, never counted toward a circuit); a failed or refused run prices
+// no offer and never changes the cart's own prices.
 import { addOnShareMinor } from "@scalius/shared/money";
-import { lineAddOnsOf } from "@scalius/shared/add-on-totals";
+import { aggregateLineAddOns, lineAddOnsOf } from "@scalius/shared/add-on-totals";
+import { MAX_ORDER_LINES } from "@scalius/shared/order-limits";
+import { CUSTOMIZATION_LIMITS } from "@scalius/shared/line-properties";
 import type { AppLineInputs } from "@scalius/shared/line-properties";
 import type { BuyerUiLine, FunctionCart, FunctionCartLine } from "@scalius/shared/plugins";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
@@ -24,7 +30,7 @@ const OFFER_LINES_MAX = 250;
 /** The choices an input offers on a line: a select's choices that need no confirmation, a checkbox's tick. */
 function offeredValues(input: AppLineInputs["inputs"][number]): string[] {
   if (input.type === "checkbox") return ["true"];
-  if (input.type === "select") return (input.options ?? []).filter((option) => !option.confirm).map((option) => option.value);
+  if (input.type === "select") return (input.options ?? []).filter((option) => !option.confirm).map((option) => option.value).slice(0, CUSTOMIZATION_LIMITS.selectOptions);
   return [];
 }
 
@@ -45,7 +51,7 @@ interface OfferGroup {
  * whose inputs get offer prices (the ones that draw the per-line slot).
  */
 export async function buyerUiCartLines(options: {
-  apps: Pick<CheckoutAppFunctions, "points" | "run">;
+  apps: Pick<CheckoutAppFunctions, "points" | "runOffers">;
   result: StorefrontCartValidationResult;
   buyer: Pick<StorefrontCartValidationResult, "items">;
   appCart: FunctionCart | null;
@@ -55,7 +61,7 @@ export async function buyerUiCartLines(options: {
   const { result, buyer, lineInputs } = options;
   const componentsOf = (buyerIndex: number) => result.items.filter((item) => item.sourceIndex === buyerIndex);
   const offers = await priceOffers(options, componentsOf);
-  return buyer.items.flatMap((item): BuyerUiLine[] => {
+  return buyer.items.slice(0, MAX_ORDER_LINES).flatMap((item): BuyerUiLine[] => {
     if (!item.cartKey) return [];
     const answers = new Map(item.properties.map((property) => [property.key, property.value]));
     const applies = new Set(item.lineInputs ?? []);
@@ -67,7 +73,7 @@ export async function buyerUiCartLines(options: {
       quantity: item.quantity,
       unitPriceMinor: item.unitPriceMinor,
       bundle: componentsOf(item.index).some((component) => component.bundle?.kind === "expand"),
-      addOns: lineAddOnsOf(item.adjustments).map((addOn) => ({ appId: addOn.appId ?? "", title: addOn.title.slice(0, 80), amountMinor: addOn.amountMinor })),
+      addOns: aggregateLineAddOns(lineAddOnsOf(item.adjustments)).map((addOn) => ({ appId: addOn.appId ?? "", title: addOn.title, amountMinor: addOn.amountMinor })),
       inputs: lineInputs.flatMap((app) => app.inputs.map((input) => {
         const key = `${app.appId}.${input.key}`;
         const eligible = applies.has(key);
@@ -93,7 +99,7 @@ async function priceOffers(
 ): Promise<Map<string, number>> {
   const priced = new Map<string, number>();
   const { apps, appCart, result, buyer, lineInputs, offerApps } = options;
-  if (!appCart || offerApps.size === 0 || !apps.points.has("cart.line_prices")) return priced;
+  if (!appCart || offerApps.size === 0 || !apps.points.has("cart.line_prices") || !apps.runOffers) return priced;
   const cartLines = new Map(appCart.lines.map((line) => [line.lineId, line]));
   const groups: OfferGroup[] = [];
   let lineCount = 0;
@@ -107,7 +113,7 @@ async function priceOffers(
         const key = `${app.appId}.${input.key}`;
         if (!applies.has(key)) continue;
         for (const value of offeredValues(input)) {
-          if (lineCount + components.length > OFFER_LINES_MAX) break;
+          if (appCart.lines.length + lineCount + components.length > OFFER_LINES_MAX) break;
           groups.push({ appId: app.appId, key, value, buyerIndex: line.index, items: components.map((item) => ({ item, position: lineCount++ })) });
         }
       }
@@ -147,10 +153,21 @@ async function priceOffers(
   }
   let adjustments: Map<number, AppLineAddOn[]>;
   try {
-    const answers = await apps.run("cart.line_prices", { cart: { ...appCart, lines: quoteLines }, lines: facts } as never);
-    // Only each app's own answer prices its own offers.
+    // The real cart rides along (a price may depend on the other lines); only the offer lines' answers are read.
     const owners = new Set(groups.map((group) => group.appId));
-    adjustments = resolveAppLineAdjustments(quoteItems, quoteIds, answers.filter((answer) => owners.has(answer.pluginId)), storeAmountConversionOf(result));
+    const realFacts = result.items.map((item) => ({
+      lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
+      source: item.priceSource === "app" ? "base" as const : item.priceSource,
+      ...(item.storeUnitPriceMinor !== undefined ? { storeUnitPrice: { amountMinor: item.storeUnitPriceMinor, currency: appCart.storeCurrency.code } } : {}),
+      bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300), ...(item.bundle.units ? { units: item.bundle.units } : {}) } : null,
+    }));
+    const answers = await apps.runOffers(owners, { cart: { ...appCart, lines: [...appCart.lines, ...quoteLines] }, lines: [...realFacts, ...facts] } as never);
+    const offerIds = new Set(quoteIds);
+    const own = answers.filter((answer) => owners.has(answer.pluginId)).map((answer) => ({
+      ...answer,
+      output: { ...answer.output, adjustments: (answer.output.adjustments ?? []).filter((entry) => offerIds.has(entry.lineId)) },
+    }));
+    adjustments = resolveAppLineAdjustments(quoteItems, quoteIds, own, storeAmountConversionOf(result));
   } catch {
     // A blocking app that could not answer, or an answer checkout would refuse: no offer is priced.
     return priced;

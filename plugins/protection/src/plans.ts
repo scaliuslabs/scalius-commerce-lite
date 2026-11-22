@@ -80,4 +80,14 @@ export function planPercent(plan: PlanId, settings: Settings): number {
   return Math.min(1_000, Math.round(percent * 100) / 100);
 }
 
-
+/**
+ * The protection policy page (`policy_url`): a path on the store
+ * ("/pages/protection"), the only link buyer UI draws; null otherwise.
+ */
+export function policyPath(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const path = value.trim();
+  if (!/^\/(?!\/)[^\\\s?#]*$/u.test(path) || path.length > 200) return null;
+  if (path.split("/").some((part) => part === "." || part === "..") || /%(?:2f|5c|2e)/iu.test(path)) return null;
+  return path;
+}

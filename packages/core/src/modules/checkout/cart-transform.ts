@@ -41,7 +41,8 @@ import { validateCheckoutAttributes } from "./attributes";
 import type { Database } from "@scalius/database/client";
 import { productVariants } from "@scalius/database/schema";
 import type { FunctionCart, PluginFunctionOutput } from "@scalius/shared/plugins";
-import { LINE_BUNDLE_PROPERTY_KEY, lineBundleProperty, type OrderLineBundle, type ResolvedLineProperty } from "@scalius/shared/line-properties";
+import { LINE_BUNDLE_PROPERTY_KEY, lineAdjustmentProperty, lineBundleProperty, type OrderLineBundle, type ResolvedLineProperty } from "@scalius/shared/line-properties";
+import { aggregateLineAddOns, lineAddOnsOf } from "@scalius/shared/add-on-totals";
 import { and, inArray, isNull } from "drizzle-orm";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
@@ -383,8 +384,10 @@ export function presentTransformedCartLines(
         positions.set(source, first.index);
         // The bundle's add-ons on each bundle unit: its anchor carries each at the fee over its units per
         // bundle unit, so the buyer's line shows the fee once ("Protection ৳350" on a box), whichever component is first.
-        const adjustments = components.flatMap((component) => (component.item!.adjustments ?? [])
-            .map((adjustment) => ({ ...adjustment, priceMinor: adjustment.priceMinor * component.perUnit })));
+        // Summed by app and title, never one entry per component, and within the one bound a line carries.
+        const adjustments = aggregateLineAddOns(components.flatMap((component) => lineAddOnsOf(component.item!.adjustments)
+            .map((addOn) => ({ ...addOn, perUnit: component.perUnit }))))
+            .map((addOn) => lineAdjustmentProperty(addOn.title, addOn.amountMinor, addOn.appId ?? undefined));
         const adjustmentsMinor = adjustments.reduce((sum, adjustment) => sum + adjustment.priceMinor, 0);
         items.push({
             ...first,

@@ -452,7 +452,8 @@ app.openapi(taxQuoteRoute, async (c) => {
     subtotalMinor: quote.subtotalMinor,
     subtotalAmount: toAmount(quote.subtotalMinor),
     // The apps' add-ons as their own rows, from the lines this quote charges (a bundle's once per bundle unit).
-    addOns: presentAddOnTotals(addOnTotals(cartValidation.items.map((item) => ({ quantity: item.quantity, addOns: lineAddOnsOf(item.adjustments) })), quote.subtotalMinor), quote.decimalPlaces),
+    addOns: presentAddOnTotals(addOnTotals(cartValidation.items.map((item) => ({ quantity: item.quantity, addOns: lineAddOnsOf(item.adjustments) })), quote.subtotalMinor,
+      (appId) => registrations.find((entry) => entry.installation.pluginId === appId)?.installation.manifest.name), quote.decimalPlaces),
     shippingMinor: quote.shippingMinor,
     shippingAmount: toAmount(quote.shippingMinor),
     discountMinor: quote.discountMinor,

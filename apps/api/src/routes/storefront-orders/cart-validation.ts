@@ -390,14 +390,17 @@ app.openapi(cartValidationRoute, async (c) => {
   const transform = result.transform;
   const buyerView = transform ? presentTransformedCartLines(result, transform, data.items) : null;
   const cartValid = buyerView ? buyerView.cart.valid : result.valid;
+  // An app's add-on rows fold into one under its name past the rows a summary shows.
+  const appName = (appId: string | null) => registrations.find((entry) => entry.installation.pluginId === appId)?.installation.manifest.name;
   const presentCart = (fulfilment: StorefrontCartFulfilmentSummary, hashes: readonly string[]) => buyerView
     ? presentStorefrontCartValidation(
       buyerView.cart,
       decimalPlaces,
       { ...fulfilment, lineTypes: buyerView.positions.map((position) => fulfilment.lineTypes[position] ?? null) },
       buyerView.positions.map((position) => hashes[position] ?? ""),
+      appName,
     )
-    : presentStorefrontCartValidation(result, decimalPlaces, fulfilment, hashes);
+    : presentStorefrontCartValidation(result, decimalPlaces, fulfilment, hashes, appName);
   const onBuyerLines = <T extends { index: number | null }>(errors: T[]): T[] => transform
     ? errors.map((error) => ({ ...error, index: error.index === null ? null : transform.items[error.index]?.sourceIndex ?? error.index }))
     : errors;

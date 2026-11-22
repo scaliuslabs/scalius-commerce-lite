@@ -9,6 +9,8 @@ import {
   cartLineKeyFor,
   restoreCart,
   cartLinePropertyInputs,
+  adoptCheckedLinePrices,
+  cartLineCheckPrice,
   type CartStore,
 } from "@/store/cart";
 import { writeCartLineEdit } from "@/lib/cart/line-edit";
@@ -206,15 +208,19 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   /** Bumped when a block changed what the check reads (an answer it set). */
   const [revision, setRevision] = useState(0);
   const recheck = useCallback(() => setRevision((value) => value + 1), []);
+  // What a check reads: the lines and their quantities. A line taking the store's price from the
+  // check (`adoptCheckedLinePrices`) changes neither, so it never asks for a second check.
+  const checkKey = useMemo(() => JSON.stringify(Object.entries(cart.items).map(([key, item]) => [key, item.quantity])), [cart.items]);
   useEffect(() => {
     const items = Object.entries(cart.items);
     if (!isOpen || items.length === 0) return;
     let current = true;
     // The cart page's discounts: the preview prices the lines its estimate counts
-    // (`cartPreviewLines`: a sold-out line left out), so it waits for the check.
-    const priced = cartPricingKey(cart);
+    // (`cartPreviewLines`: a sold-out line left out), so it waits for the check (and its prices).
     const preview = (issues: Record<string, CartValidationIssue[]>) => {
-      const lines = cartPreviewLines(cart.items, issues);
+      const fresh = cartStore.get();
+      const priced = cartPricingKey(fresh);
+      const lines = cartPreviewLines(fresh.items, issues);
       return previewCartDiscounts(cart.discountCodes, lines.map(([, item]) => item)).then((answer) => {
         if (!current) return;
         setDiscounts(answer.ok ? answer : null);
@@ -233,7 +239,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
             productId: item.id,
             variantId: item.variantId,
             quantity: item.quantity,
-            price: item.price,
+            ...cartLineCheckPrice(item),
             productName: item.name,
             variantLabel: cartItemVariantLabel(item.options),
             ...(item.properties?.length ? { properties: cartLinePropertyInputs(item) } : {}),
@@ -248,6 +254,8 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
         .then((response) => response.json())
         .then((json: { data?: CartValidationResult; details?: { itemIssues?: CartValidationIssue[] } }) => {
           if (!current) return;
+          // An edited line takes the store's price from this check.
+          if (json?.data?.items) adoptCheckedLinePrices(json.data.items);
           const found = json?.data?.issues ?? json?.details?.itemIssues ?? [];
           setLineInputs(json?.data ? cartLineInputFacts(json.data, found) : NO_LINE_INPUTS);
           setLimits(Object.fromEntries((json?.data?.items ?? []).flatMap((line) => {
@@ -271,7 +279,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
       current = false;
       window.clearTimeout(timer);
     };
-  }, [cart.items, cart.discountCodes, isOpen, revision]);
+  }, [checkKey, cart.discountCodes, isOpen, revision]);
   const hasItems = Object.keys(cart.items).length > 0;
   // The lines the cart still holds, regrouped against them: an "only N left" the line already follows
   // (capped after the add) is not shown again. A line's first issue is the one it shows.
@@ -307,12 +315,12 @@ function useDrawerLineInputs(root: React.RefObject<HTMLElement | null>, facts: C
  * (`cart.line.after`), again whenever the lines change. The renderer loads
  * only once there is something to draw.
  */
-function DrawerBuyerUi({ blocks, onChange, lines }: { blocks: unknown[]; onChange: () => void; lines: unknown }) {
+function DrawerBuyerUi({ blocks, onChange, lines, lineInputs }: { blocks: unknown[]; onChange: () => void; lines: unknown; lineInputs: CartLineInputFacts }) {
   const mount = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const element = mount.current?.closest<HTMLElement>("[data-buyer-ui-scope]") ?? mount.current;
-    if (element) void renderBuyerUiWhenNeeded(blocks, { root: element, onChange });
-  }, [blocks, onChange, lines]);
+    if (element) void renderBuyerUiWhenNeeded(blocks, { root: element, onChange, lineInputs: () => lineInputs });
+  }, [blocks, onChange, lines, lineInputs]);
   return <div ref={mount} data-buyer-ui-target="cart_drawer.footer" className="space-y-2 text-sm" hidden />;
 }
 
@@ -784,7 +792,7 @@ export default function CartFlyout({ onReady }: Props) {
                           )}
                           <div className="mt-1.5 grid gap-2" data-cart-line-inputs data-line-key={key} hidden />
                           {/* The apps' block for this line (`cart.line.after`), drawn by DrawerBuyerUi. */}
-                          <div className="mt-1.5 grid gap-2 text-sm" data-buyer-ui-target="cart.line.after" data-buyer-ui-line={key} hidden />
+                          <div className="mt-1.5 grid gap-2 text-sm" data-buyer-ui-target="cart.line.after" data-buyer-ui-line={key} data-buyer-ui-line-name={view.lineName} hidden />
                           {issues[key] && (
                             <div className="space-y-1" role="alert">
                               <p className="text-sm font-medium text-destructive" data-cart-line-stock={view.stock && view.stock.state !== "at-limit" ? view.stock.state : undefined}>
@@ -1018,7 +1026,7 @@ export default function CartFlyout({ onReady }: Props) {
               {checkoutBlocked && (
                 <p id="drawerCheckoutBlocked" className="text-sm text-destructive" role="status">{blockedText}</p>
               )}
-              <DrawerBuyerUi blocks={buyerUi} onChange={recheck} lines={cart.items} />
+              <DrawerBuyerUi blocks={buyerUi} onChange={recheck} lines={cart.items} lineInputs={lineInputs} />
               {/* One primary action (Shopify): Check out. The cart page is a link beside Continue shopping; Clear cart lives there. */}
               {checkoutBlocked ? (
                 <button

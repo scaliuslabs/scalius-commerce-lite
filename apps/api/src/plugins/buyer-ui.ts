@@ -6,6 +6,10 @@ import { computedChoicesFit, type BuyerUiBlock } from "@scalius/shared/plugins/b
 import { pluginUiNodes } from "@scalius/shared/plugins/ui";
 import { purchaseOptionId } from "@scalius/shared/plugins/ids";
 import type { RegisteredPlugin } from "@scalius/core/modules/plugins";
+import { STOREFRONT_UI_SLOT_PAGES, type StorefrontUiSlotPage } from "@scalius/shared/plugins/storefront-protocol";
+
+/** The page groups whose blocks may change the cart. */
+const CART_SURFACES: ReadonlySet<StorefrontUiSlotPage> = new Set(["checkout", "cart_drawer", "cart"]);
 
 /** Validate references against the app's approved declaration before exposing a tree. */
 export async function prepareBuyerUiBlocks(db: Database, blocks: BuyerUiBlock[], registrations: readonly RegisteredPlugin[], mediaBase?: string): Promise<BuyerUiBlock[]> {
@@ -25,9 +29,10 @@ export async function prepareBuyerUiBlocks(db: Database, blocks: BuyerUiBlock[],
       if (node.type === "button") {
         const action = node.action;
         if (action.kind === "cart" && action.op === "set_attribute" && !fields.has(action.key)) return false;
-        // An app sets only its own declared line inputs, and only on a cart surface's lines.
+        // An app sets only its own declared line inputs, and only from a cart surface (the cart page, the payment step, the drawer, a line).
         if (action.kind === "cart" && action.op === "set_line_input"
-          && !(installation.manifest.checkout?.lineInputs ?? []).some((input) => input.key === action.key)) return false;
+          && (!CART_SURFACES.has(STOREFRONT_UI_SLOT_PAGES[block.target])
+            || !(installation.manifest.checkout?.lineInputs ?? []).some((input) => input.key === action.key))) return false;
         // A line under a purchase option names one of the app's own declared options.
         if (action.kind === "cart" && action.op === "add_line" && action.purchaseOption
           && !(installation.manifest.checkout?.purchaseOptions ?? []).some((option) => purchaseOptionId(installation.pluginId, option.key) === action.purchaseOption)) return false;

@@ -120,8 +120,8 @@ function adminRouteRequest(overrides: Partial<PluginRouteRequest> = {}): PluginR
 type StorefrontExtensionInputOverrides = Partial<Omit<BuyerUiInput, "target" | "cart">> & { cart?: Partial<FunctionCart> | null };
 
 /**
- * One cart line's facts as a per-line slot (`cart.line.after`) gets them
- * (`input.line`) and the cart's slots get every line (`input.lines`): a
+ * One cart line's facts as the cart's slots get them (`input.lines`; a
+ * per-line slot's carry offer prices): a
  * 500.00 BDT T-shirt, one unit, no add-ons; `inputs` are your own line
  * inputs by bare key (the host shows each app only its own).
  */
@@ -144,7 +144,7 @@ function buyerUiLine(overrides: Partial<BuyerUiLine> = {}): BuyerUiLine {
  * The input of one storefront extension at a UI slot, as the host sends it
  * (pass it to `harness.extension`). By the slot's page: a checkout or cart
  * drawer slot gets a cart (see `cart`), a per-line slot (`cart.line.after`)
- * a cart and its line (`buyerUiLine`), an order slot (`order.confirmation`,
+ * a cart and one line (`lines: [buyerUiLine()]`), an order slot (`order.confirmation`,
  * `account.order`) a paid order of the cart fixture's line, and an `account.*`
  * slot a signed-in customer; the rest are null (a guest's thank-you page).
  * English, BDT, no answers and no reads unless overridden. `attributes` holds
@@ -168,7 +168,7 @@ function storefrontExtensionInput(target: StorefrontUiSlot, overrides: Storefron
       : null,
     customer: target.startsWith("account.") ? { id: "cust_test_1" } : null,
     reads: {},
-    ...(page === "cart" ? { line: buyerUiLine() } : {}),
+    ...(page === "cart" ? { lines: [buyerUiLine()] } : {}),
     ...rest,
   };
 }

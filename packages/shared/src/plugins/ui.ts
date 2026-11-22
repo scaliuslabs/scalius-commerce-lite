@@ -176,8 +176,8 @@ export type PluginUiRouteAction = z.input<typeof pluginUiRouteActionSchema>;
  * `checkout.lineInputs`) on cart lines: a buyer UI `set_line_input` button
  * and an island's `context.cart.setLineInput` send this one shape, and the
  * host runs one implementation for both. `key` is the input's key without
- * the app id (an app names only its own inputs); `value` null clears the
- * answer. `lineKeys` names the cart lines (a `cart.line.after` extension
+ * the app id (an app names only its own inputs); `value` null or "" clears
+ * the answer. `lineKeys` names the cart lines (a `cart.line.after` extension
  * reads its line's key in `input.line.lineKey`); without it, every line the
  * input applies to (clearing: every line that has an answer). The host
  * checks it as the cart's own controls do: the input applies to each named
@@ -187,7 +187,7 @@ export type PluginUiRouteAction = z.input<typeof pluginUiRouteActionSchema>;
  */
 export const lineInputChangeSchema = z.object({
   key: z.string().regex(LINE_INPUT_CHANGE_KEY_PATTERN, PLUGIN_KEY_RULE),
-  value: z.string().min(1).max(LINE_INPUT_CHANGE_LIMITS.value).nullable(),
+  value: z.string().max(LINE_INPUT_CHANGE_LIMITS.value).nullable(),
   lineKeys: z.array(z.string().min(1).max(LINE_INPUT_CHANGE_LIMITS.lineKey)).min(1).max(LINE_INPUT_CHANGE_LIMITS.lineKeys).optional(),
 }).strict();
 export type { LineInputChange } from "./line-input-change";

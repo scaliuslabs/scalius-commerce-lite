@@ -5,7 +5,7 @@ import {
   type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import { parseCheckoutAttributeValues } from "@/lib/buyer-ui/checkout-attributes";
-import type { AddOnTotalRow, AddOnTotals } from "@scalius/shared/add-on-totals";
+import { ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX, LINE_ADD_ONS_MAX, type AddOnTotalRow, type AddOnTotals } from "@scalius/shared/add-on-totals";
 import { LINE_PROPERTY_INPUT_LIMITS, linePropertyInputOf, normalizeLinePurchaseOptions, type LinePropertyInput } from "@scalius/shared/line-identity";
 import { APP_SCOPED_KEY_MAX_LENGTH, isAppScopedKey } from "@scalius/shared/plugins/ids";
 import { normalizeCartLinePurchaseOptions, type CartLinePurchaseOption } from "../cart/purchase-option";
@@ -413,10 +413,10 @@ export function parseRequestGiftCards(value: unknown): Array<{ handle: string }>
   return handles.length > 0 ? handles.map((handle) => ({ handle })) : undefined;
 }
 
-/** The apps' add-ons of a quote line (at most five, display only). */
+/** The apps' add-ons of a quote line (at most `LINE_ADD_ONS_MAX`, the bound the server keeps; display only). */
 function parseQuoteAdjustments(value: unknown): TaxQuoteItemProperty[] {
   if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > 5) fail();
+  if (!Array.isArray(value) || value.length > LINE_ADD_ONS_MAX) fail();
   return value.map((entry) => {
     if (!isRecord(entry)) fail();
     return {
@@ -781,11 +781,11 @@ function parseBundleDiscountLine(
  */
 export function parseAddOnTotals(value: unknown, subtotalMinor: number): AddOnTotals {
   if (value === undefined || value === null) return { itemsSubtotalMinor: subtotalMinor, rows: [] };
-  if (!isRecord(value) || !Array.isArray(value.rows) || value.rows.length > 50) fail();
+  if (!isRecord(value) || !Array.isArray(value.rows) || value.rows.length > ADD_ON_ROWS_MAX) fail();
   const rows = value.rows.map((row) => {
     if (!isRecord(row)) fail();
     const appId = row.appId === null ? null : requiredString(row.appId, MAX_ID_LENGTH);
-    return { appId, title: requiredString(row.title, 80), amountMinor: nonNegativeSafeInteger(row.amountMinor) };
+    return { appId, title: requiredString(row.title, ADD_ON_TITLE_MAX), amountMinor: nonNegativeSafeInteger(row.amountMinor) };
   });
   const itemsSubtotalMinor = nonNegativeSafeInteger(value.itemsSubtotalMinor);
   if (itemsSubtotalMinor + rows.reduce((sum, row) => sum + row.amountMinor, 0) !== subtotalMinor) fail();
