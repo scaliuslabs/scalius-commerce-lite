@@ -4,7 +4,9 @@
  * action that sets one of its inputs on lines. Both ask the store's cart
  * check (the authority on which input applies to which line), so an app
  * theme draws "Add protection to all eligible items" without reading or
- * touching the cart's markup. Loaded on an island's first call.
+ * touching the cart's markup. A buyer UI `set_line_input` button runs the
+ * same action (`setAppLineInput`): one implementation, one change shape.
+ * Loaded on the first call.
  */
 import type { StorefrontCartLine, StorefrontDecideResult, StorefrontLineInputResult } from "@scalius/shared/plugins/storefront-protocol";
 import { toMinor } from "@scalius/shared/money";
@@ -20,6 +22,7 @@ import { cartItemVariantLabel } from "./item-options";
 import { purchaseOptionsField } from "./purchase-option";
 import { cartLineInputFacts, confirmedChoice, lineAnswerFor, sameAnswer, lineAnswer, undecidedLineInputs, withLineAnswer, type CartLineInputFacts } from "./line-inputs";
 import { cartLinePropertyInputs } from "@/store/cart";
+import { isLineInputChange } from "@scalius/shared/plugins/line-input-change";
 
 /** The store's check of the cart as it is now: which line takes which input, in the buyer's language. */
 async function checkCart(items: Readonly<Record<string, VariantCartItem>>): Promise<CartLineInputFacts | null> {
@@ -79,12 +82,16 @@ export async function islandCartLines(pluginId: string): Promise<StorefrontCartL
   }));
 }
 
-/** Sets one of this app's inputs on lines, as the cart's own controls and bulk actions do. */
-export async function islandSetLineInput(
-  pluginId: string,
-  change: { key: string; value: string | null; lineKeys?: string[] },
-): Promise<StorefrontLineInputResult> {
-  if (typeof change?.key !== "string" || (change.value !== null && typeof change.value !== "string")) return { ok: false, reason: "unknown_input" };
+/**
+ * Sets one of this app's inputs on lines, as the cart's own controls and
+ * bulk actions do: an island's `setLineInput` and a buyer UI `set_line_input`
+ * button. The store's cart check names the lines the input applies to; a
+ * choice that needs confirmation is asked for in the host's dialog and keeps
+ * the agreement's revision; the edited lines are priced by the store; and
+ * checkout checks every answer again whatever this allowed.
+ */
+export async function setAppLineInput(pluginId: string, change: unknown): Promise<StorefrontLineInputResult> {
+  if (!isLineInputChange(change)) return { ok: false, reason: "unknown_input" };
   hydrateCartFromStorage();
   const { items } = cartStore.get();
   const facts = await checkCart(items);

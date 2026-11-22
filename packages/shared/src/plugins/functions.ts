@@ -205,6 +205,7 @@ export const functionCartSchema = z.object({
   attributes: checkoutAttributesSchema,
 }).strict();
 export type FunctionCart = z.infer<typeof functionCartSchema>;
+export type FunctionCartLine = z.infer<typeof functionCartLineSchema>;
 
 // ── cart.validate ─────────────────────────────────────────────────────────
 
@@ -568,9 +569,57 @@ export type PluginFunctionComposition = (typeof PLUGIN_FUNCTION_COMPOSITION)[Plu
 
 // ── Registry ──────────────────────────────────────────────────────────────
 
+/**
+ * One cart line as a per-line UI slot (`cart.line.after`) reads it: the
+ * buyer's line (an expanded bundle is one line), and of the apps' inputs
+ * only the extension's own app's. Money is in the cart's currency (`cart.currency`).
+ */
+export const buyerUiLineSchema = z.object({
+  /** The line's key in the buyer's cart: what a `set_line_input` button names in `lineKeys`. */
+  lineKey: z.string().min(1).max(256),
+  productId: id,
+  variantId: id,
+  title: z.string().max(300),
+  quantity: z.number().int().min(1),
+  /** One unit as the buyer pays it, every add-on included. */
+  unitPriceMinor: nonNegativeMinor,
+  /** A bundle the store sells as one line (`cart.transform` expands it): its add-ons are once per bundle unit. */
+  bundle: z.boolean(),
+  /** Every app's add-ons on each unit, with the app that added it ("Protection ৳350"). */
+  addOns: z.array(z.object({ appId: z.string().max(128), title: z.string().max(80), amountMinor: minor }).strict()).max(LINE_ADJUSTMENTS_ON_LINE_MAX * 4),
+  /**
+   * The app's own line inputs (`checkout.lineInputs`, keys without the app
+   * id), every one it declares: whether the line takes it (`eligible`, the
+   * rule checkout applies), the line's answer (null: none), whether checkout
+   * needs an answer on this line before a buyer's order (`decision`), and
+   * what each choice would add to one unit (`offers`: a select's choices
+   * that need no confirmation, a checkbox's `"true"`), priced by the app's
+   * own `cart.line_prices` as checkout would charge it, so a row can say
+   * "Add for ৳350" before the buyer adds it. A choice the app prices at
+   * nothing has `addOnMinor` 0; one it does not answer is left out.
+   */
+  inputs: z.array(z.object({
+    key: z.string().max(APP_SCOPED_KEY_MAX_LENGTH),
+    eligible: z.boolean(),
+    value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength).nullable(),
+    decision: z.boolean(),
+    offers: z.array(z.object({ value: z.string().max(64), addOnMinor: nonNegativeMinor }).strict()).max(20),
+  }).strict()).max(100),
+}).strict();
+export type BuyerUiLine = z.infer<typeof buyerUiLineSchema>;
+
 export const buyerUiInputSchema = z.object({
   target: z.enum(STOREFRONT_UI_SLOTS), language: z.string().min(1).max(35), locale: z.string().min(1).max(35), currency: z.string().length(3),
   cart: functionCartSchema.nullable(), attributes: checkoutAttributesSchema,
+  /** The line a per-line slot (`cart.line.after`) is drawn for; absent (or null) on every other slot. */
+  line: buyerUiLineSchema.nullable().optional(),
+  /**
+   * Every cart line's facts (`BuyerUiLine`, without offer prices) on the
+   * cart's own slots (the cart page's, the payment step's and the drawer's),
+   * so a summary can say which lines take the app's input and offer "Add to
+   * all" or "Remove". Absent elsewhere and on a per-line slot.
+   */
+  lines: z.array(buyerUiLineSchema).max(250).optional(),
   order: z.object({ orderId: id, status: z.string().max(64), paymentStatus: z.string().max(64), lines: z.array(z.object({ productId: id, variantId: id, quantity: z.number().int().min(1) }).strict()).max(250) }).strict().nullable(),
   customer: z.object({ id }).strict().nullable(), reads, now,
 }).strict();

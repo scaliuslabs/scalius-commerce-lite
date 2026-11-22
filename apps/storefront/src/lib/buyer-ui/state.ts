@@ -11,12 +11,12 @@ export function isCheckoutSlot(target: StorefrontUiSlot): boolean {
 }
 
 /**
- * Whether a UI slot is on a cart surface (the checkout form or the cart
- * drawer): cart operations (add a line, apply a code, set an answer) run
+ * Whether a UI slot is on a cart surface (the checkout form, the cart
+ * drawer or a cart line): cart operations (add a line, apply a code, set an answer) run
  * only there. The drawer shows a field's current answer, read-only.
  */
 export function isCartSlot(target: StorefrontUiSlot): boolean {
-  return isCheckoutSlot(target) || STOREFRONT_UI_SLOT_PAGES[target] === "cart_drawer";
+  return isCheckoutSlot(target) || STOREFRONT_UI_SLOT_PAGES[target] === "cart_drawer" || STOREFRONT_UI_SLOT_PAGES[target] === "cart";
 }
 
 const STORAGE_KEY = "scalius:buyer-attributes";

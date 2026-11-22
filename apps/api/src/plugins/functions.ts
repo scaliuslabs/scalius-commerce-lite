@@ -440,6 +440,10 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         const prefix = `${installation.pluginId}.`;
         const own = ownAttributes(buyer.attributes, installation.pluginId);
         scopedInput = { ...scopedInput, attributes: Object.fromEntries(Object.entries(own).map(([key, value]) => [key.slice(prefix.length), value])) };
+        // The cart's lines: of the apps' inputs, only this app's own, by its own keys.
+        const ownLine = (line: NonNullable<typeof buyer.line>) => ({ ...line, inputs: line.inputs.filter((input) => input.key.startsWith(prefix)).map((input) => ({ ...input, key: input.key.slice(prefix.length) })) });
+        if (buyer.line) scopedInput = { ...scopedInput, line: ownLine(buyer.line) };
+        if (buyer.lines) scopedInput = { ...scopedInput, lines: buyer.lines.map(ownLine) };
       }
       // A run alone that never returned (it held its thread): stop the app rather than freeze the store again.
       // A stopped app neither answers nor blocks, so it is left out here too.

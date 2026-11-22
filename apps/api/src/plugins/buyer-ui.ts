@@ -25,6 +25,9 @@ export async function prepareBuyerUiBlocks(db: Database, blocks: BuyerUiBlock[],
       if (node.type === "button") {
         const action = node.action;
         if (action.kind === "cart" && action.op === "set_attribute" && !fields.has(action.key)) return false;
+        // An app sets only its own declared line inputs, and only on a cart surface's lines.
+        if (action.kind === "cart" && action.op === "set_line_input"
+          && !(installation.manifest.checkout?.lineInputs ?? []).some((input) => input.key === action.key)) return false;
         // A line under a purchase option names one of the app's own declared options.
         if (action.kind === "cart" && action.op === "add_line" && action.purchaseOption
           && !(installation.manifest.checkout?.purchaseOptions ?? []).some((option) => purchaseOptionId(installation.pluginId, option.key) === action.purchaseOption)) return false;

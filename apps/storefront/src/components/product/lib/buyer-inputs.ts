@@ -20,6 +20,7 @@ import {
   normalizeLinePurchaseOptions,
   resolveLineProperties,
   withAnswerRevisions,
+  lineInputDrawnOn,
   withAppLineInputs,
   type AppLineInputs,
   type CanonicalLineProperty,
@@ -127,7 +128,9 @@ export function customizationSchemaFromView(
 /**
  * The buyer inputs the product's buy form asks, as the page draws them: the
  * product's own, then the active apps' line inputs (`withAppLineInputs`;
- * the layout's `lineInputs`), shown on this product, priced at nothing. An
+ * the layout's `lineInputs`) the buy form draws (`surfaces` names
+ * `product`, or none: a cart-only input is chosen in the cart, never here),
+ * shown on this product, priced at nothing. An
  * input shown by SKU (`variants`) is drawn when it applies to one of
  * `variants`, with the SKUs it applies to (`variantIds`) unless it applies
  * to all; pass the one SKU being bought to get exactly its inputs. A gift
@@ -144,9 +147,12 @@ export function productBuyerInputFields(
 ): ProductCustomizationField[] {
   if (product.customizationUnavailable) return [];
   const own = localizedGiftCardRecipientFields(product.customization?.fields ?? [], copy);
-  if (product.isGiftCard || !lineInputs?.length) return own;
+  const drawn = (lineInputs ?? [])
+    .map((app) => ({ ...app, inputs: app.inputs.filter((input) => lineInputDrawnOn(input, "product")) }))
+    .filter((app) => app.inputs.length > 0);
+  if (product.isGiftCard || drawn.length === 0) return own;
   const skus = new Map<string, string[] | null>();
-  const schema = withAppLineInputs(customizationSchemaFromView(product.customization), lineInputs, (appId, input) => {
+  const schema = withAppLineInputs(customizationSchemaFromView(product.customization), drawn, (appId, input) => {
     const ids = appLineInputVariantIds(appId, input, product, variants);
     skus.set(appScopedKey(appId, input.key), ids);
     return ids === null || ids.length > 0;

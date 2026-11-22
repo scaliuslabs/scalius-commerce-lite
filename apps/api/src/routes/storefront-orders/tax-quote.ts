@@ -1,4 +1,4 @@
-import { buyerUiBlockSchema, checkoutAttributesSchema } from "@scalius/shared/plugins";
+import { buyerUiBlockSchema, checkoutAttributesSchema, PLUGIN_EXTENSION_RUN } from "@scalius/shared/plugins";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { storefrontUiSlotsOn } from "@scalius/shared/plugins/storefront-protocol";
 // Authoritative checkout tax quote.
@@ -43,7 +43,10 @@ import {
     validateStorefrontDeliveryPreflight,
     validateStorefrontCartItems,
     presentQuoteFx,
+    presentAddOnTotals,
+    buyerUiCartLines,
 } from "@scalius/core/modules/checkout";
+import { addOnTotals, lineAddOnsOf } from "@scalius/shared/add-on-totals";
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
@@ -52,6 +55,7 @@ import { requestCourierProviders } from "../../plugins/providers/courier";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
+    addOnTotalsSchema,
     allowedPaymentMethodsSchema,
     deliveryMethodKindSchema,
     fulfillmentTypeSchema,
@@ -109,6 +113,7 @@ const taxQuoteResponseSchema = z.object({
   settingsVersion: z.number().int(),
   subtotalMinor: z.number().int(),
   subtotalAmount: z.number(),
+  addOns: addOnTotalsSchema,
   shippingMinor: z.number().int(),
   shippingAmount: z.number(),
   discountMinor: z.number().int(),
@@ -373,7 +378,11 @@ app.openapi(taxQuoteRoute, async (c) => {
       postalCode: data.shippingPostalCode,
     },
   });
-  const buyerUi = async () => await apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: TAX_QUOTE_UI_SLOTS, currency: pricing.taxQuote.currencyCode, cart: pricing.appCart, attributes, customer: sessionCustomer?.customerId ? { id: sessionCustomer.customerId } : null }) ?? [];
+  // Every line's facts, as the cart check gives the cart's slots (no offer prices here).
+  const quoteLines = async () => apps.points.has(PLUGIN_EXTENSION_RUN)
+    ? await buyerUiCartLines({ apps, result: cartValidation, buyer: buyerView?.cart ?? cartValidation, appCart: pricing.appCart, lineInputs: checkoutLineInputs(apps), offerApps: new Set() })
+    : [];
+  const buyerUi = async () => await apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: TAX_QUOTE_UI_SLOTS, currency: pricing.taxQuote.currencyCode, cart: pricing.appCart, attributes, lines: await quoteLines(), customer: sessionCustomer?.customerId ? { id: sessionCustomer.customerId } : null }) ?? [];
   const ruleErrors = ruleErrorsOnBuyerLines(pricing.ruleErrors, cartValidation);
   // A refusal carries the apps' blocks: the questions that answer it (a delivery day and window), so a
   // checkout without scripts (quick checkout) can draw them, as the script's checkout draws the cart page's.
@@ -442,6 +451,8 @@ app.openapi(taxQuoteRoute, async (c) => {
     settingsVersion: quote.settingsVersion,
     subtotalMinor: quote.subtotalMinor,
     subtotalAmount: toAmount(quote.subtotalMinor),
+    // The apps' add-ons as their own rows, from the lines this quote charges (a bundle's once per bundle unit).
+    addOns: presentAddOnTotals(addOnTotals(cartValidation.items.map((item) => ({ quantity: item.quantity, addOns: lineAddOnsOf(item.adjustments) })), quote.subtotalMinor), quote.decimalPlaces),
     shippingMinor: quote.shippingMinor,
     shippingAmount: toAmount(quote.shippingMinor),
     discountMinor: quote.discountMinor,

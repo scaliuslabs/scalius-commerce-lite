@@ -12,6 +12,7 @@
  */
 import type { LineEntryWords } from "@scalius/shared/line-entry-words";
 import { fromMinor, toMinor } from "@scalius/shared/money";
+import { addOnTotals, lineAddOnsOf, type AddOnTotals } from "@scalius/shared/add-on-totals";
 import { isFreeOrderLine } from "@scalius/shared/order-money-presentation";
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { pagePath } from "@/lib/presence-url";
@@ -240,6 +241,12 @@ export interface CartEstimate {
   discount: number;
   /** Subtotal less discounts, never below zero: delivery and tax are added at checkout. */
   total: number;
+  /**
+   * The apps' add-ons on the counted lines as their own summary rows (each
+   * line's add-ons as the store's last check priced them), and the items'
+   * subtotal without them (minor units): Subtotal + the rows is `subtotal`.
+   */
+  addOns: AddOnTotals;
 }
 
 export function cartEstimate(
@@ -250,7 +257,14 @@ export function cartEstimate(
   const estimable = estimableCartLines(items, issues);
   const subtotal = cartItemsSubtotal(estimable.items);
   const places = getDecimalPlaces(getCurrencyCode());
-  return { ...estimable, subtotal, discount, total: fromMinor(Math.max(0, toMinor(subtotal, places) - toMinor(discount, places)), places) };
+  const subtotalMinor = toMinor(subtotal, places);
+  let addOns: AddOnTotals = { itemsSubtotalMinor: subtotalMinor, rows: [] };
+  try {
+    addOns = addOnTotals(Object.values(estimable.items).map((item) => ({ quantity: item.quantity, addOns: lineAddOnsOf((item as VariantCartItem).adjustments) })), subtotalMinor);
+  } catch {
+    // Lines whose add-ons are not their price (an older stored cart): the subtotal alone.
+  }
+  return { ...estimable, subtotal, discount, total: fromMinor(Math.max(0, subtotalMinor - toMinor(discount, places)), places), addOns };
 }
 
 /**

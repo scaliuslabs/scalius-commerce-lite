@@ -13,6 +13,7 @@ import { CART_LINE_INPUT_LIMITS } from "@scalius/shared/line-identity";
 import {
   CUSTOMIZATION_FIELD_TYPES,
   LINE_INPUT_FIELD_TYPES,
+  LINE_INPUT_SURFACES,
   LINE_PROPERTY_INPUT_LIMITS,
   LINE_PROPERTY_REVISION_PATTERN,
   LINE_PURCHASE_OPTIONS_MAX,
@@ -109,6 +110,23 @@ export const orderLinePropertySchema = z.object({
 });
 
 /**
+ * The apps' add-ons as rows of the money summary (`@scalius/shared/add-on-totals`):
+ * one row per app and add-on title over every line's units, and the items'
+ * subtotal without them, so Subtotal + the rows is the subtotal checkout
+ * charges. A bundle's add-on counts once per bundle unit.
+ */
+export const addOnTotalsSchema = z.object({
+  itemsSubtotal: z.number(),
+  itemsSubtotalMinor: z.number().int(),
+  rows: z.array(z.object({
+    appId: z.string().nullable(),
+    title: z.string(),
+    amount: z.number(),
+    amountMinor: z.number().int(),
+  })),
+}).openapi({ description: "The apps' add-ons as their own summary rows (\"Protection ৳350\"), grouped by app and title, and `itemsSubtotal`: the subtotal less them. Draw Subtotal as `itemsSubtotal`, then each row: together they are the subtotal." });
+
+/**
  * One active app's line input as a buyer page draws it (`checkout.lineInputs`,
  * in the page's language): the layout's `lineInputs` and the cart check's.
  */
@@ -137,6 +155,7 @@ export const appLineInputViewSchema = z.object({
     apply: z.object({ label: z.string(), value: z.string().optional() }).optional(),
     clear: z.object({ label: z.string() }).optional(),
   }).optional().openapi({ description: "Cart-wide actions the host draws: set `apply.value` (a checkbox: \"true\") on every line the input applies to, or clear it from every line." }),
+  surfaces: z.array(z.enum(LINE_INPUT_SURFACES)).optional().openapi({ description: "Where the store draws its own control for the input: `product` (the buy form), `cart` (the cart line's control and bulk actions). Absent: both. Empty: the app draws it (its `cart.line.after` block or island)." }),
   textRevision: z.string().optional().openapi({ description: "Set when the merchant writes its words (a setting the app names) or a choice needs confirmation: the revision of the words shown. A line's answer sends it back as `revision`, so the app can tell an answer given to older words; a choice that needs confirmation is taken only at the current one." }),
 });
 

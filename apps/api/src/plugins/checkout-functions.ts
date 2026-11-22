@@ -36,6 +36,9 @@ import { ValidationError } from "@scalius/core/errors";
 import { PLUGIN_EXTENSION_RUN, PLUGIN_FUNCTION_POINTS, type PluginFunctionInput, type PluginFunctionPoint, type PluginRunPoint } from "@scalius/shared/plugins";
 import type { PluginHost, PluginHostOptions } from "./host";
 import { prepareBuyerUiBlocks } from "./buyer-ui";
+import { BUYER_UI_BLOCKS_MAX, BUYER_UI_LINE_BLOCKS_MAX, type BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
+import type { BuyerUiLine } from "@scalius/shared/plugins/functions";
+import { isStorefrontUiLineSlot, type StorefrontUiSlot } from "@scalius/shared/plugins/storefront-protocol";
 import { CHECKOUT_APP_BUDGET_MS, CHECKOUT_APP_CEILING_MS, checkoutAppShare, optionalAppBudget, PLUGIN_FUNCTION_WALL_MS, createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
@@ -238,20 +241,46 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
     readRequests(wanted) {
       return wanted.flatMap((point) => functionReadRequests(registrations.filter((registration) => registration.name === point), point));
     },
+    buyerUiApps(target) {
+      return registrations.filter((registration) => registration.name === PLUGIN_EXTENSION_RUN
+        && registration.installation.grant?.extensions.includes(target)
+        && registration.installation.manifest.storefront.extensions.some((extension) => extension.target === target))
+        .map((registration) => registration.installation.pluginId);
+    },
     async buyerUi(input) {
       if (!points.has(PLUGIN_EXTENSION_RUN)) return [];
-      const blocks = [];
-      for (const target of input.targets) {
-        const results = await runtime.run(PLUGIN_EXTENSION_RUN, { target, language: input.language ?? language, locale: input.locale ?? language, currency: input.currency, cart: input.cart ?? null, attributes: input.attributes ?? {}, order: input.order ?? null, customer: input.customer ?? (input.cart?.customer ? { id: input.cart.customer.id } : null) });
+      const slotBlocks: BuyerUiBlock[] = [];
+      const lineBlocks: BuyerUiBlock[] = [];
+      const render = async (target: StorefrontUiSlot, line: BuyerUiLine | null, into: BuyerUiBlock[]) => {
+        // A per-line run reads its line; the cart's other slots every line (without offer prices).
+        const facts = line ? { line } : input.lines ? { lines: input.lines.map((entry) => ({ ...entry, inputs: entry.inputs.map((each) => ({ ...each, offers: [] })) })) } : {};
+        const results = await runtime.run(PLUGIN_EXTENSION_RUN, { target, language: input.language ?? language, locale: input.locale ?? language, currency: input.currency, cart: input.cart ?? null, attributes: input.attributes ?? {}, ...facts, order: input.order ?? null, customer: input.customer ?? (input.cart?.customer ? { id: input.cart.customer.id } : null) });
         for (const result of results) {
           if (!result.output.ui) continue;
           const installation = registrations.find((entry) => entry.installation.pluginId === result.pluginId)!.installation;
           const prefix = `${result.pluginId}.`;
           const values = Object.fromEntries(Object.entries(input.attributes ?? {}).filter(([key]) => key.startsWith(prefix)).map(([key, value]) => [key.slice(prefix.length), value]));
-          blocks.push({ appId: result.pluginId, releaseId: installation.bundleSha256, target, ui: result.output.ui.root, attributes: attributeApps.get(result.pluginId)?.fields ?? [], values });
+          into.push({ appId: result.pluginId, releaseId: installation.bundleSha256, target, ui: result.output.ui.root, attributes: attributeApps.get(result.pluginId)?.fields ?? [], values, ...(line ? { lineKey: line.lineKey } : {}) });
         }
+      };
+      // A per-line slot runs only for an app that declares it, once per line (the runs share the request's budget).
+      const lineSlotDeclared = (target: StorefrontUiSlot) => runtime.buyerUiApps!(target).length > 0;
+      for (const target of input.targets) {
+        if (!isStorefrontUiLineSlot(target)) {
+          await render(target, null, slotBlocks);
+          continue;
+        }
+        if (!lineSlotDeclared(target)) continue;
+        // In the cart's order, whatever order the runs answer in.
+        const perLine = await Promise.all((input.lines ?? []).slice(0, BUYER_UI_LINE_BLOCKS_MAX).map(async (line) => {
+          const answered: BuyerUiBlock[] = [];
+          await render(target, line, answered);
+          return answered;
+        }));
+        lineBlocks.push(...perLine.flat());
       }
-      try { return await prepareBuyerUiBlocks(options.db, blocks.slice(0, 12), registrations, options.env.CDN_DOMAIN_URL); } catch { return []; }
+      const blocks = [...slotBlocks.slice(0, BUYER_UI_BLOCKS_MAX), ...lineBlocks.slice(0, BUYER_UI_LINE_BLOCKS_MAX)];
+      try { return await prepareBuyerUiBlocks(options.db, blocks, registrations, options.env.CDN_DOMAIN_URL); } catch { return []; }
     },
     run<P extends PluginRunPoint>(point: P, given: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>> {
       if (!points.has(point)) return Promise.resolve([]);

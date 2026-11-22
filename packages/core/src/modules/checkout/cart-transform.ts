@@ -381,6 +381,11 @@ export function presentTransformedCartLines(
             continue;
         }
         positions.set(source, first.index);
+        // The bundle's add-ons on each bundle unit: its anchor carries each at the fee over its units per
+        // bundle unit, so the buyer's line shows the fee once ("Protection ৳350" on a box), whichever component is first.
+        const adjustments = components.flatMap((component) => (component.item!.adjustments ?? [])
+            .map((adjustment) => ({ ...adjustment, priceMinor: adjustment.priceMinor * component.perUnit })));
+        const adjustmentsMinor = adjustments.reduce((sum, adjustment) => sum + adjustment.priceMinor, 0);
         items.push({
             ...first,
             index: source,
@@ -396,6 +401,7 @@ export function presentTransformedCartLines(
             properties: first.bundle?.properties ?? [],
             canonicalProperties: first.bundle?.canonicalProperties ?? [],
             lineInputs: first.bundle?.lineInputs ?? [],
+            ...(adjustments.length > 0 ? { adjustments, adjustmentsMinor } : { adjustments: undefined, adjustmentsMinor: undefined }),
             productName: expansion.title,
             variantLabel: null,
             availableQuantity: available,

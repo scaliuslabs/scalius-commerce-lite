@@ -8,6 +8,7 @@ import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { readStoreOriginCountry } from "@scalius/core/modules/tax";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import {
+  buyerUiCartLines,
   checkoutLineInputs,
   checkoutPurchaseOptions,
   checkStorefrontCartRules,
@@ -38,6 +39,7 @@ import { checkoutPaymentMethods } from "../../plugins/providers/payment";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import {
+  addOnTotalsSchema,
   allowedPaymentMethodsSchema,
   appLineInputViewSchema,
   deliveryMethodKindSchema,
@@ -74,10 +76,11 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 
 /**
  * The UI slots this check answers: the cart page's (checkout's first step)
- * and the cart drawer's, which both read their cart from it. An app runs only
+ * and the cart drawer's, which both read their cart from it, and the slot
+ * under each of their lines (`cart.line.after`, run once per line). An app runs only
  * for a slot it declares, so a slot no app fills costs nothing.
  */
-const CART_VALIDATION_UI_SLOTS = [...storefrontUiSlotsOn("checkout"), ...storefrontUiSlotsOn("cart_drawer")];
+const CART_VALIDATION_UI_SLOTS = [...storefrontUiSlotsOn("checkout"), ...storefrontUiSlotsOn("cart_drawer"), ...storefrontUiSlotsOn("cart")];
 
 // ─── POST / ──────────────────────────────────────────────────────────────────
 
@@ -228,6 +231,7 @@ const cartValidationRoute = createRoute({
               productImage: z.string().url().nullable(),
             })),
             subtotal: z.number(),
+            addOns: addOnTotalsSchema,
             /** The cart's currency: its market's (MARKETS-DESIGN step 6). Every amount here is in it. */
             currencyCode: z.string().optional(),
             decimalPlaces: z.number().int().optional(),
@@ -321,12 +325,18 @@ app.openapi(cartValidationRoute, async (c) => {
       .map((app) => ({
         appId: app.appId,
         inputs: app.inputs.filter((input) => shown.has(`${app.appId}.${input.key}`))
-          .map(({ options, accept, ...input }) => ({ ...input, ...(options ? { options: [...options] } : {}), ...(accept ? { accept: [...accept] } : {}) })),
+          .map(({ options, accept, surfaces, ...input }) => ({ ...input, ...(options ? { options: [...options] } : {}), ...(accept ? { accept: [...accept] } : {}), ...(surfaces ? { surfaces: [...surfaces] } : {}) })),
       }))
       .filter((app) => app.inputs.length > 0);
   };
   let appCart: FunctionCart | null = null;
-  const buyerUi = () => apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: CART_VALIDATION_UI_SLOTS, currency: money.currencyCode, cart: appCart, attributes }) ?? [];
+  // Each line's facts for the apps' blocks; offers are priced only for the apps that draw under the lines.
+  const cartLines = async () => {
+    if (!apps.points.has(PLUGIN_EXTENSION_RUN)) return [];
+    const lineApps = new Set(storefrontUiSlotsOn("cart").flatMap((slot) => apps.buyerUiApps?.(slot) ?? []));
+    return buyerUiCartLines({ apps, result, buyer: buyerView?.cart ?? result, appCart, lineInputs: checkoutLineInputs(apps), offerApps: lineApps });
+  };
+  const buyerUi = async () => apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: CART_VALIDATION_UI_SLOTS, currency: money.currencyCode, cart: appCart, attributes, lines: await cartLines() }) ?? [];
   /** App rules, once the platform finds nothing to repair (the signed-in buyer's segments included). */
   const ruleErrorsFor = async (
     valid: boolean,

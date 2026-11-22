@@ -67,6 +67,13 @@ export const ui = {
   image: (src: PluginUiImageSource, alt: string, options: Options<"image", "src" | "alt"> = {}): PluginUiNode => ({ type: "image", src, alt, ...options }),
   link: (text: string, to: PluginUiTarget): PluginUiNode => ({ type: "link", text, to }),
   divider: (): PluginUiNode => ({ type: "divider" }),
+  /**
+   * A summary line the buyer opens to show `children` (buyer): the browser's
+   * own disclosure, so it opens with a click or the keyboard and without
+   * scripts. `open: true` draws it open.
+   */
+  disclosure: (summary: string, children: PluginUiNode[], options: Options<"disclosure", "summary" | "children"> = {}): PluginUiNode =>
+    ({ type: "disclosure", summary, ...options, children }),
   /** A button: `ui.route(…)`, `ui.navigate(…)` or a `ui.cart.*` operation. */
   button: (label: string, action: PluginUiAction, options: Omit<PluginUiButton, "type" | "label" | "action"> = {}): PluginUiButton =>
     ({ type: "button", label, action, ...options }),
@@ -107,6 +114,18 @@ export const ui = {
     applyCode: (code: string): PluginUiAction => ({ kind: "cart", op: "apply_code", code }),
     /** Sets one of the app's checkout attributes. */
     setAttribute: (key: string, value: string): PluginUiAction => ({ kind: "cart", op: "set_attribute", key, value }),
+    /**
+     * Sets one of the app's own line inputs (`checkout.lineInputs` key) to
+     * `value` on the named cart lines (`input.line.lineKey` in a
+     * `cart.line.after` extension), or on every line it applies to. The store
+     * checks it as its own cart controls do: a choice that needs confirmation
+     * asks in the store's dialog, and the line is priced again.
+     */
+    setLineInput: (key: string, value: string, lineKeys?: string[]): PluginUiAction =>
+      ({ kind: "cart", op: "set_line_input", key, value, ...(lineKeys ? { lineKeys } : {}) }),
+    /** Clears one of the app's own line inputs from the named lines, or from every line that has an answer. */
+    clearLineInput: (key: string, lineKeys?: string[]): PluginUiAction =>
+      ({ kind: "cart", op: "set_line_input", key, value: null, ...(lineKeys ? { lineKeys } : {}) }),
   },
   /** Where links go: a Scalius resource page, one of this app's pages or an https site (admin); a path on the store (buyer). */
   to: {

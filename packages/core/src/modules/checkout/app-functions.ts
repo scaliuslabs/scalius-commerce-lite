@@ -53,6 +53,7 @@ import {
   type CheckoutAttribute,
   type BuyerUiBlock,
   type BuyerUiInput,
+  type BuyerUiLine,
   type StorefrontUiSlot,
   type PluginFunctionInput,
   type PluginFunctionOutput,
@@ -109,7 +110,15 @@ export interface CheckoutAppFunctions {
    * and every run hears it (`input.language`).
    */
   readonly language?: string;
-  buyerUi?(input: Partial<Omit<BuyerUiInput, "target">> & { targets: readonly StorefrontUiSlot[]; currency: string }): Promise<BuyerUiBlock[]>;
+  /**
+   * The apps' buyer UI blocks for `targets`. A per-line slot
+   * (`STOREFRONT_UI_LINE_SLOTS`) runs once per entry of `lines` (its facts in
+   * `input.line`, every app's inputs: each app sees its own), and each of its
+   * blocks names its line.
+   */
+  /** The apps approved to draw a UI slot (an extension for it, in their grant). */
+  buyerUiApps?(target: StorefrontUiSlot): string[];
+  buyerUi?(input: Partial<Omit<BuyerUiInput, "target" | "line">> & { targets: readonly StorefrontUiSlot[]; currency: string; lines?: readonly BuyerUiLine[] }): Promise<BuyerUiBlock[]>;
   /** `reads` is the platform's: each app gets its own declared reads. */
   run<P extends PluginRunPoint>(point: P, input: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>>;
   /** The declared reads of the apps at these points (none: no read). */

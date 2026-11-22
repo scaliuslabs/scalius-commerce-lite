@@ -23,6 +23,7 @@ import { z } from "zod";
 import { PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE } from "./manifest-patterns";
 import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "./ids";
 import { ADMIN_UPLOAD_TYPES, BUYER_UPLOAD_DECLARATION_LIMITS } from "../buyer-uploads";
+import { LINE_INPUT_CHANGE_KEY_PATTERN, LINE_INPUT_CHANGE_LIMITS } from "./line-input-change";
 
 export const PLUGIN_UI_VERSION = 1 as const;
 
@@ -58,22 +59,23 @@ export const PLUGIN_UI_INPUT_TYPES = ["text-field", "textarea", "number-field", 
 
 const NODE_TYPES = [
   "page", "section", "card", "stack", "columns", "heading", "text", "badge", "banner", "key-value", "stat", "table",
-  "empty-state", "image", "link", "divider", "button", "form", ...PLUGIN_UI_INPUT_TYPES, "field", "progress",
+  "empty-state", "image", "link", "divider", "button", "form", ...PLUGIN_UI_INPUT_TYPES, "field", "progress", "disclosure",
 ] as const;
 export type PluginUiNodeType = (typeof NODE_TYPES)[number];
 
 /**
- * What each surface allows. `admin`: every node but `field` (`progress`
- * only here), route and
+ * What each surface allows. `admin`: every node but `field` and
+ * `disclosure` (`progress` only here), route and
  * navigate actions, links to app pages, resources and https sites, https
- * images. `buyer`: content nodes, buttons and checkout `field`s (no pages,
- * forms or tables), route, cart and navigate actions, links to store paths,
+ * images. `buyer`: content nodes, buttons, checkout `field`s and
+ * `disclosure`s (no pages, forms or tables), route, cart and navigate
+ * actions, links to store paths,
  * images from the store's media or the app's public files. A tree is also
  * held to its surface's node count, depth and size.
  */
 export const PLUGIN_UI_SURFACES = {
   admin: {
-    nodes: NODE_TYPES.filter((type) => type !== "field"),
+    nodes: NODE_TYPES.filter((type) => type !== "field" && type !== "disclosure"),
     actions: ["route", "navigate"],
     targets: ["app-page", "resource", "external"],
     images: "url",
@@ -82,7 +84,7 @@ export const PLUGIN_UI_SURFACES = {
     maxBytes: 256 * 1024,
   },
   buyer: {
-    nodes: ["stack", "columns", "heading", "text", "badge", "banner", "key-value", "image", "link", "divider", "button", "field"],
+    nodes: ["stack", "columns", "heading", "text", "badge", "banner", "key-value", "image", "link", "divider", "button", "field", "disclosure"],
     actions: ["route", "cart", "navigate"],
     targets: ["store"],
     images: "asset",
@@ -168,11 +170,34 @@ export const pluginUiRouteActionSchema = z.object({
 }).strict();
 export type PluginUiRouteAction = z.input<typeof pluginUiRouteActionSchema>;
 
+
+/**
+ * A change to one of the calling app's own line inputs (manifest
+ * `checkout.lineInputs`) on cart lines: a buyer UI `set_line_input` button
+ * and an island's `context.cart.setLineInput` send this one shape, and the
+ * host runs one implementation for both. `key` is the input's key without
+ * the app id (an app names only its own inputs); `value` null clears the
+ * answer. `lineKeys` names the cart lines (a `cart.line.after` extension
+ * reads its line's key in `input.line.lineKey`); without it, every line the
+ * input applies to (clearing: every line that has an answer). The host
+ * checks it as the cart's own controls do: the input applies to each named
+ * line, a choice that needs confirmation is asked for in the host's dialog
+ * and carries the agreement's revision, and the store prices the line again;
+ * checkout checks every answer again.
+ */
+export const lineInputChangeSchema = z.object({
+  key: z.string().regex(LINE_INPUT_CHANGE_KEY_PATTERN, PLUGIN_KEY_RULE),
+  value: z.string().min(1).max(LINE_INPUT_CHANGE_LIMITS.value).nullable(),
+  lineKeys: z.array(z.string().min(1).max(LINE_INPUT_CHANGE_LIMITS.lineKey)).min(1).max(LINE_INPUT_CHANGE_LIMITS.lineKeys).optional(),
+}).strict();
+export type { LineInputChange } from "./line-input-change";
+
 /**
  * What a button does: its app's route, a cart operation (buyer: add a line,
- * apply a code, set a checkout attribute), or open a page. `add_line` may name
- * one of the app's own purchase options (`<app id>.<key>`): the line is bought
- * under it and the app prices it.
+ * apply a code, set a checkout attribute, set or clear one of the app's own
+ * line inputs), or open a page. `add_line` may name one of the app's own
+ * purchase options (`<app id>.<key>`): the line is bought under it and the
+ * app prices it.
  */
 export const pluginUiActionSchema = z.union([
   pluginUiRouteActionSchema,
@@ -184,6 +209,8 @@ export const pluginUiActionSchema = z.union([
   z.object({ kind: z.literal("cart"), op: z.literal("apply_code"), code: z.string().min(1).max(64) }).strict(),
   /** `key` is one of the app's `checkout.attributes`. */
   z.object({ kind: z.literal("cart"), op: z.literal("set_attribute"), key: attributeKey, value: z.string().max(500) }).strict(),
+  /** One of the app's own `checkout.lineInputs` on cart lines (`lineInputChangeSchema`): value null clears it. */
+  z.object({ kind: z.literal("cart"), op: z.literal("set_line_input"), ...lineInputChangeSchema.shape }).strict(),
 ]);
 export type PluginUiAction = z.input<typeof pluginUiActionSchema>;
 export type PluginUiCartAction = Extract<PluginUiAction, { kind: "cart" }>;
@@ -292,7 +319,14 @@ export type PluginUiNode =
    * (admin). `live: true` makes the dashboard read the surface again every
    * few seconds while a live progress is shown (for at most 10 minutes).
    */
-  | { type: "progress"; label: string; value: number; max: number; help?: string; live?: boolean };
+  | { type: "progress"; label: string; value: number; max: number; help?: string; live?: boolean }
+  /**
+   * A summary line the buyer opens to show its children (buyer): drawn as the
+   * browser's own disclosure (`<details>`), so it opens with a click, Enter or
+   * Space and without scripts. `open` draws it open at first. Its nodes count
+   * toward the tree's limit like any other.
+   */
+  | { type: "disclosure"; summary: string; open?: boolean; children: PluginUiNode[] };
 
 const buttonSchema = z.object({
   type: z.literal("button"),
@@ -469,6 +503,7 @@ const nodeUnion = z.discriminatedUnion("type", [
     live: z.boolean().optional(),
   }).strict(),
   fileFieldSchema,
+  z.object({ type: z.literal("disclosure"), summary: label, open: z.boolean().optional(), children }).strict(),
 ]);
 
 /**
@@ -492,6 +527,7 @@ function childNodes(node: PluginUiNode): readonly PluginUiNode[] {
     case "stack":
     case "columns":
     case "form":
+    case "disclosure":
       return node.children;
     default:
       return [];

@@ -26,7 +26,8 @@ import {
   ChevronDown,
 } from "lucide-react";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { formatMoney } from "@/lib/currency";
+import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
+import { fromMinor } from "@scalius/shared/money";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
 import { cartLineCopy, isLongAnswer } from "@/lib/cart-line-copy";
@@ -300,17 +301,19 @@ function useDrawerLineInputs(root: React.RefObject<HTMLElement | null>, facts: C
 
 /**
  * The drawer's own buyer UI mount (`cart_drawer.footer`): hidden until a
- * block lands, so a drawer without one never shifts. It is its own scope, so
- * the page's renders (the cart page's) never clear it, nor it theirs. The
- * renderer loads only once there is something to draw.
+ * block lands, so a drawer without one never shifts. The drawer is its own
+ * scope, so the page's renders (the cart page's) never clear its mounts, nor
+ * it theirs; one render draws the footer and the blocks under each line
+ * (`cart.line.after`), again whenever the lines change. The renderer loads
+ * only once there is something to draw.
  */
-function DrawerBuyerUi({ blocks, onChange }: { blocks: unknown[]; onChange: () => void }) {
+function DrawerBuyerUi({ blocks, onChange, lines }: { blocks: unknown[]; onChange: () => void; lines: unknown }) {
   const mount = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const element = mount.current;
+    const element = mount.current?.closest<HTMLElement>("[data-buyer-ui-scope]") ?? mount.current;
     if (element) void renderBuyerUiWhenNeeded(blocks, { root: element, onChange });
-  }, [blocks, onChange]);
-  return <div ref={mount} data-buyer-ui-scope="" data-buyer-ui-target="cart_drawer.footer" className="space-y-2 text-sm" hidden />;
+  }, [blocks, onChange, lines]);
+  return <div ref={mount} data-buyer-ui-target="cart_drawer.footer" className="space-y-2 text-sm" hidden />;
 }
 
 /**
@@ -400,6 +403,7 @@ export default function CartFlyout({ onReady }: Props) {
   // the discounts listed above, and the total net of them.
   const discountTotal = discounts?.totalDiscount ?? 0;
   const estimate = cartEstimate(cart.items, issueLists, discountTotal);
+  const moneyPlaces = getDecimalPlaces(getCurrencyCode());
   const [undo, setUndo] = useState<{ message: string; snapshot: CartStore } | null>(null);
   const undoTimer = useRef<number | null>(null);
   /** Removals are undoable for 10 seconds instead of silent. */
@@ -564,6 +568,7 @@ export default function CartFlyout({ onReady }: Props) {
       <Dialog.Portal>
       <Dialog.Overlay className={DRAWER_OVERLAY} />
       <Dialog.Content
+        data-buyer-ui-scope=""
         role="dialog"
         aria-modal="true"
         onCloseAutoFocus={(event) => {
@@ -778,6 +783,8 @@ export default function CartFlyout({ onReady }: Props) {
                             </p>
                           )}
                           <div className="mt-1.5 grid gap-2" data-cart-line-inputs data-line-key={key} hidden />
+                          {/* The apps' block for this line (`cart.line.after`), drawn by DrawerBuyerUi. */}
+                          <div className="mt-1.5 grid gap-2 text-sm" data-buyer-ui-target="cart.line.after" data-buyer-ui-line={key} hidden />
                           {issues[key] && (
                             <div className="space-y-1" role="alert">
                               <p className="text-sm font-medium text-destructive" data-cart-line-stock={view.stock && view.stock.state !== "at-limit" ? view.stock.state : undefined}>
@@ -979,13 +986,19 @@ export default function CartFlyout({ onReady }: Props) {
         {cart.totalItems > 0 && (
           <div className="border-t border-border bg-card p-3 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb">
             <div className="space-y-3 sm:space-y-4">
-              {/* The one order of money rows on every surface (lib/money-summary-order.ts): subtotal, discounts, total. */}
-              {discountTotal > 0 && (
+              {/* The one order of money rows on every surface (lib/money-summary-order.ts): subtotal, the apps' add-ons, discounts, total. */}
+              {(discountTotal > 0 || estimate.addOns.rows.length > 0) && (
                 <div className="space-y-1 text-sm">
                   <div className="flex items-center justify-between gap-3 text-muted-foreground" data-cart-subtotal-row data-summary-row="subtotal">
-                    <span>{copy.subtotal}</span>
-                    <span className="tabular-nums" data-cart-subtotal>{formatMoney(estimate.subtotal)}</span>
+                    <span>{estimate.addOns.rows.length > 0 ? copy.items : copy.subtotal}</span>
+                    <span className="tabular-nums" data-cart-subtotal>{formatMoney(fromMinor(estimate.addOns.itemsSubtotalMinor, moneyPlaces))}</span>
                   </div>
+                  {estimate.addOns.rows.map((row) => (
+                    <div key={`${row.appId ?? ""}:${row.title}`} className="flex items-center justify-between gap-3 text-muted-foreground" data-summary-row="add-on">
+                      <span className="min-w-0">{row.title}</span>
+                      <span className="shrink-0 tabular-nums">{formatMoney(fromMinor(row.amountMinor, moneyPlaces))}</span>
+                    </div>
+                  ))}
                   {discounts?.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
                     <div key={key} className="flex justify-between gap-3 text-primary" data-discount-line={key} data-summary-row="discount">
                       <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>
@@ -1005,7 +1018,7 @@ export default function CartFlyout({ onReady }: Props) {
               {checkoutBlocked && (
                 <p id="drawerCheckoutBlocked" className="text-sm text-destructive" role="status">{blockedText}</p>
               )}
-              <DrawerBuyerUi blocks={buyerUi} onChange={recheck} />
+              <DrawerBuyerUi blocks={buyerUi} onChange={recheck} lines={cart.items} />
               {/* One primary action (Shopify): Check out. The cart page is a link beside Continue shopping; Clear cart lives there. */}
               {checkoutBlocked ? (
                 <button

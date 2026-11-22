@@ -17,6 +17,7 @@
 import { cartLineKeyFor, cartLinePropertyInputs, cartStore, normalizeCartLineAdjustments, replaceCartLines, type CartLineProperty, type VariantCartItem } from "@/store/cart";
 import { cartLineInputCopy, type CartLineInputCopy } from "@/lib/cart-line-input-copy";
 import { lineEntryWords } from "@scalius/shared/line-entry-words";
+import { lineInputDrawnOn } from "@scalius/shared/line-input-surfaces";
 import { formatCount, pageLanguage } from "@/lib/store-time-zone";
 import { cartItemVariantLabel, cartLineName } from "./item-options";
 import { isCartLineRefusal, validateCartLinesInBrowser } from "./new-line";
@@ -280,10 +281,15 @@ function inputControl(
 export function mountCartLineInputs(root: ParentNode, facts: CartLineInputFacts): void {
   const { copy, checked } = words();
   const { items } = cartStore.get();
+  // The host draws an input's control in the cart unless its app draws it itself (`surfaces` without `cart`).
+  const drawn = (key: string) => {
+    const view = facts.inputs.get(key);
+    return view !== undefined && lineInputDrawnOn(view.input, "cart");
+  };
   // Phones fold the lines into the order summary: a line that needs the buyer (an undecided
   // input, a refused answer) shows above it too, editable without unfolding.
   for (const panel of root.querySelectorAll<HTMLElement>("[data-cart-line-decisions]")) {
-    const lines = linesNeedingDecision(items, facts);
+    const lines = linesNeedingDecision(items, facts).filter((lineKey) => (facts.byLine.get(lineKey) ?? []).some(drawn));
     panel.replaceChildren();
     panel.hidden = lines.length === 0;
     if (lines.length === 0) continue;
@@ -309,7 +315,7 @@ export function mountCartLineInputs(root: ParentNode, facts: CartLineInputFacts)
   for (const mount of root.querySelectorAll<HTMLElement>("[data-cart-line-inputs]")) {
     const lineKey = mount.dataset.lineKey ?? "";
     const item = items[lineKey];
-    const keys = item ? facts.byLine.get(lineKey) ?? [] : [];
+    const keys = item ? (facts.byLine.get(lineKey) ?? []).filter(drawn) : [];
     mount.replaceChildren();
     mount.hidden = keys.length === 0;
     if (!item) continue;
@@ -334,7 +340,7 @@ export function mountCartLineInputs(root: ParentNode, facts: CartLineInputFacts)
   }
   for (const bar of root.querySelectorAll<HTMLElement>("[data-cart-line-input-bulk]")) {
     bar.replaceChildren();
-    const actions = bulkActions(items, facts, checked);
+    const actions = bulkActions(items, facts, checked).filter(({ view }) => drawn(view.key));
     bar.hidden = actions.length === 0;
     for (const { view, apply, clear } of actions) {
       for (const [action, shown, label] of [["apply", apply, view.input.bulk?.apply?.label], ["clear", clear, view.input.bulk?.clear?.label]] as const) {

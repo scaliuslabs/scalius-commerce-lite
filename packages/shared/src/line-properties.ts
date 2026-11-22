@@ -58,6 +58,9 @@ export type CustomizationFieldType = (typeof CUSTOMIZATION_FIELD_TYPES)[number];
 export const LINE_INPUT_FIELD_TYPES = [...CUSTOMIZATION_FIELD_TYPES, "file"] as const;
 export type LineInputFieldType = (typeof LINE_INPUT_FIELD_TYPES)[number];
 
+export { LINE_INPUT_SURFACES, lineInputDrawnOn, type LineInputSurface } from "./line-input-surfaces";
+import type { LineInputSurface } from "./line-input-surfaces";
+
 export const CUSTOMIZATION_LIMITS = {
   fields: 10,
   keyPattern: /^[a-z0-9_]{1,40}$/,
@@ -608,6 +611,8 @@ export interface AppLineInputDeclaration {
   options?: ReadonlyArray<{ value: string; label: string; confirm?: LineInputConfirm }>;
   /** Cart-wide apply and clear actions the host draws. */
   bulk?: LineInputBulk;
+  /** Where the host draws its control (`LINE_INPUT_SURFACES`); absent: the buy form and the cart. */
+  surfaces?: readonly LineInputSurface[];
   /** `file`: the types, size and count it takes (`withBuyerUploadBounds` applies the plan's bounds). */
   accept?: readonly BuyerUploadType[];
   maxBytes?: number;

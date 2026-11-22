@@ -4,6 +4,7 @@ import { BACKUP_MARKET_ID, DEFAULT_SHIPPING_PROFILE_ID, products, productVariant
 import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { addOnShareMinor, discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
+import { addOnTotals, lineAddOnsOf, type AddOnTotals } from "@scalius/shared/add-on-totals";
 import { isLineAmountInRange } from "@scalius/shared/order-limits";
 import { lineAdjustmentProperty, mapCustomizationPrices, NO_PROPERTIES_HASH } from "@scalius/shared/line-properties";
 import { isForeignPresentment, shopPresentment, type PresentmentMoney } from "@scalius/shared/presentment";
@@ -1342,6 +1343,16 @@ export function presentStorefrontCartValidation(
             fulfillmentType: fulfilment.lineTypes[position] ?? null,
         })),
         subtotal: fromMinor(subtotalMinor, decimalPlaces),
+        addOns: presentAddOnTotals(addOnTotals(items.map((item) => ({ quantity: item.quantity, addOns: lineAddOnsOf(item.adjustments) })), subtotalMinor), decimalPlaces),
+    };
+}
+
+/** The apps' add-on rows of a money summary (`addOnTotals`) with their amounts in major units too. */
+export function presentAddOnTotals(totals: AddOnTotals, decimalPlaces: number) {
+    return {
+        itemsSubtotal: fromMinor(totals.itemsSubtotalMinor, decimalPlaces),
+        itemsSubtotalMinor: totals.itemsSubtotalMinor,
+        rows: totals.rows.map((row) => ({ ...row, amount: fromMinor(row.amountMinor, decimalPlaces) })),
     };
 }
 

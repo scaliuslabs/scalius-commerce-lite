@@ -3,6 +3,7 @@ import { checkoutText } from "@/lib/checkout-text";
 import { buyerApiErrorTextNow, loadBuyerApiErrors } from "../buyer-api-error-text-later";
 import { readBuyerAttributes } from "@/lib/buyer-ui/state";
 import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
+import { storefrontUiSlotsOn } from "@scalius/shared/plugins/storefront-protocol";
 import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
 import { emitBuyerEvent } from "@/lib/buyer-events/bus";
 import { buyerCheckout, buyerMoney, cartLines, eventText } from "@/lib/buyer-events/lines";
@@ -47,6 +48,7 @@ import {
 } from "./browser-api";
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
+import type { AddOnTotals } from "@scalius/shared/add-on-totals";
 
 import { numberLocale } from "@scalius/shared/locale-format";
 import { formatList } from "@scalius/shared/locale-words";
@@ -206,6 +208,11 @@ let latestDiscountFacts: CheckoutDiscountFacts | null = null;
 let latestAllowedPaymentMethods: string[] | null = null;
 /** The apps' line inputs each line takes, from the last cart check (drawn by line-input-controls.ts). */
 let latestLineInputs: CartLineInputFacts = NO_LINE_INPUTS;
+/** The apps' blocks from the last cart check: its per-line blocks are drawn again whenever the lines are. */
+let latestCartBuyerUi: unknown[] = [];
+const LINE_SLOTS = storefrontUiSlotsOn("cart");
+/** The quote answers checkout's slots only: the lines keep the cart check's blocks. */
+const QUOTE_SLOTS = storefrontUiSlotsOn("checkout");
 /**
  * The names of the validated lines paid only online (digital items, gift
  * cards), and whether every line is one: the cash-on-delivery refusal names them.
@@ -750,12 +757,38 @@ function renderFreeDeliveryProgress(
   progress.classList.toggle("hidden", shortfall <= 0);
 }
 
+/**
+ * The apps' add-ons as their own summary rows ("Protection ৳350") after the
+ * subtotal, which then counts the items alone: together they are the
+ * subtotal the total is built from. Amounts are the store's (the quote's, or
+ * each line's add-ons as the last check priced them).
+ */
+function renderAddOnRows(subtotal: HTMLElement, addOns: AddOnTotals, decimalPlaces: number): void {
+  subtotal.textContent = formatMoney(fromMinor(addOns.itemsSubtotalMinor, decimalPlaces));
+  const container = document.getElementById("addOnRows");
+  if (!container) return;
+  container.replaceChildren(...addOns.rows.map((row) => {
+    const line = document.createElement("div");
+    line.className = "flex justify-between gap-3 text-sm text-muted-foreground";
+    line.dataset.summaryRow = "add-on";
+    const label = document.createElement("span");
+    label.className = "min-w-0";
+    label.textContent = row.title;
+    const amount = document.createElement("span");
+    amount.className = "shrink-0 font-medium tabular-nums text-foreground";
+    amount.textContent = formatMoney(fromMinor(row.amountMinor, decimalPlaces));
+    line.append(label, amount);
+    return line;
+  }));
+  container.hidden = addOns.rows.length === 0;
+}
+
 function renderAuthoritativeCartQuote(
   quote: CheckoutTaxQuote,
   elements: TotalsElements,
 ): void {
   elements.taxRow?.classList.toggle("hidden", quote.taxMinor === 0);
-  elements.subtotal.textContent = formatMoney(quote.subtotalAmount);
+  renderAddOnRows(elements.subtotal, quote.addOns, quote.decimalPlaces);
   latestAllowedPaymentMethods = quote.allowedPaymentMethods;
   latestQuotedTotal = { amountMinor: quote.totalMinor, currency: quote.currencyCode };
   // The cart page drops the payment step when these leave cash alone (lib/checkout/payment-step.ts).
@@ -1115,6 +1148,7 @@ export async function validateCartSnapshot(
   cartValidationAbort = controller;
 
   if (payloadItems.length === 0) {
+    latestCartBuyerUi = [];
     void renderBuyerUiWhenNeeded([]);
     cartValidationRetryable = false;
     cartValidationIssues = {};
@@ -1196,6 +1230,7 @@ export async function validateCartSnapshot(
       latestOnlineOnlyLines = onlineOnlyLines(json.data.items);
       latestLineInputs = cartLineInputFacts(json.data, issues);
       updateCartQuantityLimits(json.data, issues, cartStore.get().items);
+      latestCartBuyerUi = Array.isArray(json.data.buyerUi) ? json.data.buyerUi : [];
       void renderBuyerUiWhenNeeded(json.data.buyerUi, { onChange: refreshBuyerUi });
     }
     setCartValidationIssues(issues, cartStore.get().items, summaryMessage);
@@ -1365,7 +1400,7 @@ async function refreshTotals() {
     taxRow: document.getElementById("taxRow"),
   };
 
-  subtotalEl.textContent = formatMoney(totalAmount);
+  renderAddOnRows(subtotalEl, estimable.addOns, getDecimalPlaces(getCurrencyCode()));
   renderEstimateNote(estimable.leftOut);
   // Before a delivery option applies to the address, shipping isn't known yet.
   const estimateShipping = (discounts: CheckoutDiscountFacts["discounts"]) =>
@@ -1423,7 +1458,7 @@ async function refreshTotals() {
     updateCheckoutButtonState();
     renderAuthoritativeCartQuote(quote, elements);
     setQuotedLineDiscounts(quote);
-    void renderBuyerUiWhenNeeded(quote.buyerUi, { onChange: refreshBuyerUi });
+    void renderBuyerUiWhenNeeded(quote.buyerUi, { onChange: refreshBuyerUi, targets: QUOTE_SLOTS });
   } catch (error) {
     if (quoteSequence !== cartTaxQuoteSequence) return;
     // An item that changed is shown on its line and a refused delivery rate
@@ -1561,6 +1596,8 @@ function paintCartLines(): void {
  */
 function paintLineInputs(): void {
   const root = document.getElementById("cartPageRoot") ?? document;
+  // The apps' blocks under each line, drawn again into the lines just drawn.
+  if (latestCartBuyerUi.length > 0) void renderBuyerUiWhenNeeded(latestCartBuyerUi, { onChange: refreshBuyerUi, targets: LINE_SLOTS });
   const facts = latestLineInputs;
   if (facts.inputs.size === 0) {
     for (const mount of root.querySelectorAll<HTMLElement>("[data-cart-line-input-bulk]")) mount.hidden = true;

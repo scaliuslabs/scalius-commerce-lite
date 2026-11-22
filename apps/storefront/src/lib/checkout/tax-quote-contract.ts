@@ -5,6 +5,7 @@ import {
   type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import { parseCheckoutAttributeValues } from "@/lib/buyer-ui/checkout-attributes";
+import type { AddOnTotals } from "@scalius/shared/add-on-totals";
 import { LINE_PROPERTY_INPUT_LIMITS, linePropertyInputOf, normalizeLinePurchaseOptions, type LinePropertyInput } from "@scalius/shared/line-identity";
 import { APP_SCOPED_KEY_MAX_LENGTH, isAppScopedKey } from "@scalius/shared/plugins/ids";
 import { normalizeCartLinePurchaseOptions, type CartLinePurchaseOption } from "../cart/purchase-option";
@@ -212,6 +213,8 @@ export interface CheckoutTaxQuote extends CheckoutDiscountFacts, CheckoutGiftCar
   settingsVersion: number;
   subtotalMinor: number;
   subtotalAmount: number;
+  /** The apps' add-ons as their own rows and the items' subtotal without them: they add up to `subtotalMinor`. */
+  addOns: AddOnTotals;
   shippingMinor: number;
   shippingAmount: number;
   discountMinor: number;
@@ -602,6 +605,7 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     return sum + lineSubtotalMinor;
   }, 0);
   if (itemSubtotalMinor !== subtotalMinor) fail();
+  const addOns = parseAddOnTotals(data.addOns, subtotalMinor);
   const buyerUi = uncheckedBuyerUi(data.buyerUi);
 
   return {
@@ -616,6 +620,7 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     settingsVersion,
     subtotalMinor,
     subtotalAmount,
+    addOns,
     shippingMinor,
     shippingAmount,
     discountMinor,
@@ -769,3 +774,20 @@ function parseBundleDiscountLine(
   return bundleDiscountLine(data.bundles, amount);
 }
 
+/**
+ * The apps' add-on rows of a quote: absent (an older API) is none; rows that
+ * do not add up to the subtotal with the items' own refuse the quote, so the
+ * summary never shows rows that disagree with the total.
+ */
+export function parseAddOnTotals(value: unknown, subtotalMinor: number): AddOnTotals {
+  if (value === undefined || value === null) return { itemsSubtotalMinor: subtotalMinor, rows: [] };
+  if (!isRecord(value) || !Array.isArray(value.rows) || value.rows.length > 50) fail();
+  const rows = value.rows.map((row) => {
+    if (!isRecord(row)) fail();
+    const appId = row.appId === null ? null : requiredString(row.appId, MAX_ID_LENGTH);
+    return { appId, title: requiredString(row.title, 80), amountMinor: nonNegativeSafeInteger(row.amountMinor) };
+  });
+  const itemsSubtotalMinor = nonNegativeSafeInteger(value.itemsSubtotalMinor);
+  if (itemsSubtotalMinor + rows.reduce((sum, row) => sum + row.amountMinor, 0) !== subtotalMinor) fail();
+  return { itemsSubtotalMinor, rows };
+}

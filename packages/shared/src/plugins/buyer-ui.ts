@@ -7,7 +7,7 @@ import { pluginUiDocumentSchema, pluginUiNodes, pluginUiTreeSchema, type PluginU
 import { computedChoicesFit } from "./checkout-attribute-values";
 export { computedChoicesFit, isAttributeDate } from "./checkout-attribute-values";
 import { pluginKeySchema } from "./manifest-patterns";
-import { APP_LINE_INPUT_TEXT_LIMITS, CUSTOMIZATION_LIMITS, LINE_INPUT_CONFIRM_LIMITS, LINE_INPUT_FIELD_TYPES } from "../line-properties";
+import { APP_LINE_INPUT_TEXT_LIMITS, CUSTOMIZATION_LIMITS, LINE_INPUT_CONFIRM_LIMITS, LINE_INPUT_FIELD_TYPES, LINE_INPUT_SURFACES } from "../line-properties";
 import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES } from "../buyer-uploads";
 
 /** A checkout attribute key: snake_case (it is stored on the order). */
@@ -167,8 +167,21 @@ export const lineInputDeclarationSchema = z.object({
   }).strict().refine((bulk) => bulk.apply || bulk.clear, "Declare apply, clear or both.").optional(),
   /** Checkout needs an answer on every line it applies to (`lineInputDecisionSchema`). */
   decision: lineInputDecisionSchema.optional(),
+  /**
+   * Where the host draws its own control (`LINE_INPUT_SURFACES`): `product`,
+   * the buy form; `cart`, the cart line's control and the bulk actions.
+   * Absent: both. `["cart"]` is chosen in the cart only; `[]` is drawn by
+   * the app itself (a `cart.line.after` extension with `set_line_input`
+   * buttons, or an island). Checkout checks it the same wherever it is set.
+   */
+  surfaces: z.array(z.enum(LINE_INPUT_SURFACES)).max(LINE_INPUT_SURFACES.length).optional(),
 }).strict().superRefine((field, ctx) => {
   refineFileDeclaration(field, ctx);
+  if (field.surfaces && new Set(field.surfaces).size !== field.surfaces.length) ctx.addIssue({ code: "custom", path: ["surfaces"], message: "Name each surface once." });
+  // A file is uploaded on the product page: the cart cannot ask for it.
+  if (field.type === "file" && field.surfaces && !field.surfaces.includes("product")) ctx.addIssue({ code: "custom", path: ["surfaces"], message: "A file input is answered on the product page: keep \"product\" in surfaces." });
+  // The bulk actions are the cart's own controls.
+  if (field.bulk && field.surfaces && !field.surfaces.includes("cart")) ctx.addIssue({ code: "custom", path: ["bulk"], message: "Bulk actions are drawn in the cart: keep \"cart\" in surfaces, or draw your own with set_line_input buttons." });
   if (field.type !== "checkbox" && field.label.length > APP_LINE_INPUT_TEXT_LIMITS.label) ctx.addIssue({ code: "custom", path: ["label"], message: `A label holds at most ${APP_LINE_INPUT_TEXT_LIMITS.label} characters; only a checkbox's (what the buyer agrees to) holds ${APP_LINE_INPUT_TEXT_LIMITS.agreement}.` });
   if (field.type === "select" ? !field.options?.length : field.options !== undefined) ctx.addIssue({ code: "custom", path: ["options"], message: field.type === "select" ? "A select needs options." : "Only a select has options." });
   if (field.options && new Set(field.options.map((option) => option.value)).size !== field.options.length) ctx.addIssue({ code: "custom", path: ["options"], message: "Option values must be unique." });
@@ -207,15 +220,24 @@ export const checkoutAttributesSchema = z.record(z.string().max(160), z.string()
 export const buyerUiOutputSchema = z.object({ ui: pluginUiDocumentSchema("buyer").nullable() }).strict();
 export type BuyerUiOutput = z.infer<typeof buyerUiOutputSchema>;
 
-/** One app's tree for one UI slot, as the API hands it to the storefront (references checked, media resolved). */
+/**
+ * One app's tree for one UI slot, as the API hands it to the storefront
+ * (references checked, media resolved). A per-line slot's block names its
+ * line (`lineKey`, the cart line's key) and is drawn under that line only.
+ */
 export interface BuyerUiBlock {
   appId: string; releaseId: string; target: StorefrontUiSlot; ui: PluginUiNode;
   attributes: CheckoutAttribute[]; values: Record<string, string>; media?: Record<string, string>;
+  lineKey?: string;
 }
 export const buyerUiBlockSchema: z.ZodType<BuyerUiBlock> = z.object({
   appId: z.string(), releaseId: z.string(), target: z.enum(STOREFRONT_UI_SLOTS), ui: pluginUiTreeSchema("buyer"),
   attributes: z.array(checkoutAttributeSchema).max(10), values: checkoutAttributesSchema, media: z.record(z.string(), z.string().url()).optional(),
+  lineKey: z.string().min(1).max(256).optional(),
 }).strict();
+/** Blocks one answer carries at most: one per slot app, and one per line of a per-line slot. */
+export const BUYER_UI_BLOCKS_MAX = 12;
+export const BUYER_UI_LINE_BLOCKS_MAX = 50;
 
 /** Strict reads of the private stored map, also used by order representations. */
 export function readCheckoutAttributes(serialized: string | null | undefined): Record<string, string> {

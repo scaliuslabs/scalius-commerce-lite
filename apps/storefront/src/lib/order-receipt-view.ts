@@ -26,6 +26,7 @@ import { presentCheckoutAttributes } from "@scalius/shared/plugins/checkout-attr
 import { storeRegion } from "@/lib/store-time-zone";
 import { fromMinor } from "@scalius/shared/money";
 import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
+import { frozenAddOnTotals } from "@scalius/shared/add-on-totals";
 
 /** An order as the receipt read returns it. */
 export type ReceiptOrder = NonNullable<Awaited<ReturnType<typeof getOrderReceipt>>>;
@@ -71,6 +72,10 @@ export function orderReceiptView({ order, copy, languageCode, configuredCurrency
         tax: 0,
         total: order.totalAmount,
       };
+  // The apps' add-ons as their own rows, from what the order's lines froze (never an app's answer now).
+  const receiptAddOns = savedMoneySummary ? frozenAddOnTotals(order.items ?? [], savedMoneySummary.subtotalMinor) : null;
+  const receiptAddOnRows = (receiptAddOns?.rows ?? []).map((row) => ({ title: row.title, amount: toMajor(row.amountMinor) }));
+  const receiptItemsSubtotal = receiptAddOns && receiptAddOnRows.length > 0 ? toMajor(receiptAddOns.itemsSubtotalMinor) : receiptMoney.subtotal;
   const receiptDiscounts = summarizeOrderDiscounts({
     discounts: order.discounts,
     shipping: receiptMoney.shipping,
@@ -147,6 +152,8 @@ export function orderReceiptView({ order, copy, languageCode, configuredCurrency
     formatReceiptAmount,
     formatReceiptMinor,
     receiptMoney,
+    receiptAddOnRows,
+    receiptItemsSubtotal,
     receiptDiscounts,
     receiptDeliveryRow,
     showsLineDiscounts,
