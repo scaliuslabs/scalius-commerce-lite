@@ -1390,6 +1390,10 @@ async function payForSelection(pressInitVersion: number): Promise<void> {
         // A card's balance, status or expiry moved since the quote: price it again.
         paySubmit.move("fail", { reason: "gift_card_changed" });
         const requoted = await requoteForGiftCards();
+        if (submitInitVersion !== initVersion) return;
+        // Priced or not, the methods and the cards can be chosen again (a failed price leaves Pay saying why).
+        setPaymentControlsDisabled(!checkoutData);
+        setGiftCardControlsDisabled(!checkoutData);
         if (requoted) showError(giftCopy.giftCardChangedText);
         return;
       }
