@@ -17,7 +17,6 @@ import { useIsMobile } from "~/hooks/use-mobile";
 import { formatNumber, useMessages } from "~/i18n";
 import { purchasingMessages } from "~/i18n/purchasing";
 import { useTransferCommand, type Transfer } from "~/lib/api-query-options/purchasing";
-import { useOperationKeys } from "./operation-key";
 import { formatDay, formatMoment, lineName } from "./purchasing-format";
 import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem } from "./purchasing-problem";
 import { isOpenTransfer, TransferStatusBadge } from "./purchasing-status";
@@ -35,7 +34,6 @@ export function TransferDetail({ transfer, onReload }: { transfer: Transfer; onR
   const { inventory: { canManageOperations: canEdit } } = useCatalogActionPermissions();
   const unitsText = useUnitsText();
   const command = useTransferCommand();
-  const keys = useOperationKeys();
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [problem, setProblem] = useState<PurchasingProblem | null>(null);
   const [reloading, setReloading] = useState(false);
@@ -44,10 +42,8 @@ export function TransferDetail({ transfer, onReload }: { transfer: Transfer; onR
   const progress = shipped > 0 ? Math.round((transfer.receivedQuantity / shipped) * 100) : 0;
 
   const cancel = () => {
-    const operationKey = keys.keyFor(JSON.stringify({ action: "cancel", id: transfer.id, revision: transfer.revision }));
-    command.mutate({ id: transfer.id, revision: transfer.revision, operationKey, action: "cancel" }, {
+    command.mutate({ id: transfer.id, revision: transfer.revision, action: "cancel" }, {
       onSuccess: () => {
-        keys.reset();
         setConfirmCancel(false);
         setProblem(null);
         toast.success(t("transferCancelled"));

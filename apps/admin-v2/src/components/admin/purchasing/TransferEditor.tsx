@@ -33,7 +33,6 @@ import {
   useTransferCommand,
   type Transfer,
 } from "~/lib/api-query-options/purchasing";
-import { useOperationKeys } from "./operation-key";
 import { lineName } from "./purchasing-format";
 import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem } from "./purchasing-problem";
 import { TransferStatusBadge } from "./purchasing-status";
@@ -68,7 +67,6 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
   const navigate = useNavigate();
   const unitsText = useUnitsText();
   const isMobile = useIsMobile();
-  const keys = useOperationKeys();
   const locationsQuery = useQuery(inventoryLocationsQueryOptions());
   const activeLocations = useMemo(
     () => locationsQuery.data?.filter((location) => location.status === "active") ?? [],
@@ -196,9 +194,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
         current = result.revision;
         if (!transfer) createdId = result.id;
       }
-      const operationKey = keys.keyFor(JSON.stringify({ action: "ship", id, revision: current }));
-      await command.mutateAsync({ id: id!, revision: current!, operationKey, action: "ship" });
-      keys.reset();
+      await command.mutateAsync({ id: id!, revision: current!, action: "ship" });
       setDialog(null);
       toast.success(t("shipped"));
       if (!transfer) await openDetail(id!);
@@ -512,7 +508,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
       />
       <ConfirmDialog
         open={dialog === "delete"}
-        onOpenChange={(open) => { if (!open && !remove.isPending) setDialog(null); }}
+        onOpenChange={remove.guardClose((open) => { if (!open) setDialog(null); })}
         title={t("deleteTitle", { number: transfer?.displayNumber ?? "" })}
         description={t("deleteBody")}
         confirmLabel={t("deleteDraft")}

@@ -11,7 +11,6 @@ import { Card, CardContent } from "~/components/ui/card";
 import { useMessages } from "~/i18n";
 import { purchasingMessages } from "~/i18n/purchasing";
 import { useReceiveTransfer, type Transfer } from "~/lib/api-query-options/purchasing";
-import { receiptFingerprint, useOperationKeys } from "./operation-key";
 import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem } from "./purchasing-problem";
 import { isOpenTransfer, TransferStatusBadge } from "./purchasing-status";
 import { ReceiveLines, readReceipt, type ReceivableLine, type ReceiveQuantities } from "./ReceiveLines";
@@ -38,7 +37,6 @@ export function TransferReceive({ transfer, onReload }: { transfer: Transfer; on
   const t = useMessages(purchasingMessages);
   const navigate = useNavigate();
   const receive = useReceiveTransfer();
-  const keys = useOperationKeys();
   const [quantities, setQuantities] = useState<ReceiveQuantities>({});
   const [problem, setProblem] = useState<PurchasingProblem | null>(null);
   const [touched, setTouched] = useState(false);
@@ -53,10 +51,8 @@ export function TransferReceive({ transfer, onReload }: { transfer: Transfer; on
     setTouched(true);
     if (!canSubmit) return;
     setProblem(null);
-    const operationKey = keys.keyFor(receiptFingerprint(transfer.id, receipt.lines));
-    receive.mutate({ id: transfer.id, operationKey, lines: receipt.lines }, {
+    receive.mutate({ id: transfer.id, lines: receipt.lines }, {
       onSuccess: () => {
-        keys.reset();
         // Rendered before leaving, so the unsaved-count guard lets the page go.
         flushSync(() => setQuantities({}));
         toast.success(t("itemsReceived"));

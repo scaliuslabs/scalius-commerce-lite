@@ -399,7 +399,7 @@ export function PurchaseOrderEditor({ order, onReload }: {
 
       <ConfirmDialog
         open={confirmDelete}
-        onOpenChange={(open) => { if (!open && !remove.isPending) setConfirmDelete(false); }}
+        onOpenChange={remove.guardClose((open) => { if (!open) setConfirmDelete(false); })}
         title={t("deleteTitle", { number: order?.displayNumber ?? "" })}
         description={t("deleteBody")}
         confirmLabel={t("deleteDraft")}

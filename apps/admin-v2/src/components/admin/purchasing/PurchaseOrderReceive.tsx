@@ -13,7 +13,6 @@ import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissi
 import { useMessages } from "~/i18n";
 import { purchasingMessages } from "~/i18n/purchasing";
 import { useReceivePurchaseOrder, type PurchaseOrder } from "~/lib/api-query-options/purchasing";
-import { receiptFingerprint, useOperationKeys } from "./operation-key";
 import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem } from "./purchasing-problem";
 import { isOpenPurchaseOrder, PurchaseOrderStatusBadge } from "./purchasing-status";
 import { ReceiveLines, readReceipt, type ReceivableLine, type ReceiveQuantities } from "./ReceiveLines";
@@ -45,7 +44,6 @@ export function PurchaseOrderReceive({ order, onReload }: { order: PurchaseOrder
   const t = useMessages(purchasingMessages);
   const navigate = useNavigate();
   const receive = useReceivePurchaseOrder();
-  const keys = useOperationKeys();
   // Moving costs to the average writes them: only for staff who can see costs.
   const { inventory: { canViewCosts } } = useCatalogActionPermissions();
   const [quantities, setQuantities] = useState<ReceiveQuantities>({});
@@ -64,12 +62,10 @@ export function PurchaseOrderReceive({ order, onReload }: { order: PurchaseOrder
     setTouched(true);
     if (!canSubmit) return;
     setProblem(null);
-    const operationKey = keys.keyFor(receiptFingerprint(order.id, receipt.lines, { updateCost }));
     receive.mutate(
-      { id: order.id, operationKey, body: { lines: receipt.lines, updateCost } },
+      { id: order.id, body: { lines: receipt.lines, updateCost } },
       {
         onSuccess: () => {
-          keys.reset();
           // Rendered before leaving, so the unsaved-count guard lets the page go.
           flushSync(() => setQuantities({}));
           toast.success(t("itemsReceived"));
