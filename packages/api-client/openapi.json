@@ -6799,6 +6799,67 @@
           "status"
         ]
       },
+      "BuyerOrderView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "order_placed",
+              "order_updated",
+              "payment_pending",
+              "payment_issue",
+              "checkout_expired"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "awaiting_payment",
+              "checkout_expired",
+              "placed",
+              "confirmed",
+              "shipped",
+              "ready_for_pickup",
+              "preparing",
+              "delivered",
+              "picked_up",
+              "completed",
+              "cancelled",
+              "returned",
+              "refunded"
+            ],
+            "description": "The order's one status word key, by where it is and how it reaches the buyer."
+          },
+          "payment": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "unpaid",
+              "partial",
+              "paid",
+              "partially_refunded",
+              "refunded",
+              "failed",
+              "dueOnDelivery",
+              "dueAtPickup",
+              "dueOnService",
+              "nothingDue",
+              "disputeOpen",
+              "lostToDispute",
+              "partlyLostToDispute",
+              "partlyLostRestRefunded",
+              null
+            ],
+            "description": "The shared payment word key (`orderPaymentWord`); null for a payment status the platform does not write. A lookup never sees a dispute."
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "payment"
+        ]
+      },
       "NullableTimestamp": {
         "type": "string",
         "nullable": true,
@@ -10557,6 +10618,101 @@
           "voided",
           "openClaimId",
           "claim"
+        ]
+      },
+      "BuyerPaymentRecovery": {
+        "type": "object",
+        "properties": {
+          "eligible": {
+            "type": "boolean"
+          },
+          "gateway": {
+            "type": "string",
+            "nullable": true,
+            "description": "The method a payment starts first."
+          },
+          "gateways": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Every method a session would be accepted for, the order's own first."
+          },
+          "paymentType": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "full",
+              "deposit",
+              "balance",
+              null
+            ]
+          },
+          "amountDue": {
+            "type": "number"
+          },
+          "refusal": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "not_payable",
+              "checkout_expired",
+              "payment_attempts_exhausted",
+              "payment_window_ended",
+              "method_not_accepted",
+              "payment_in_progress",
+              "order_busy",
+              "method_unavailable",
+              null
+            ],
+            "description": "Why no session would start, a code the storefront words; null exactly when eligible."
+          },
+          "requiresCardForm": {
+            "type": "boolean"
+          },
+          "hostedRedirect": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "eligible",
+          "gateway",
+          "gateways",
+          "paymentType",
+          "amountDue",
+          "refusal",
+          "requiresCardForm",
+          "hostedRedirect"
+        ]
+      },
+      "BuyerOrderDetailView": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BuyerOrderView"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "refundOnItsWay": {
+                "type": "boolean",
+                "description": "A refund to the buyer is in flight, one its provider accepted and is completing included."
+              },
+              "paymentAction": {
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  "retry",
+                  "pay_balance",
+                  null
+                ],
+                "description": "The payment the buyer may make now: `retry` a pending or failed payment, `pay_balance` the rest of a placed order early; null when the session route would start none."
+              }
+            },
+            "required": [
+              "refundOnItsWay",
+              "paymentAction"
+            ]
+          }
         ]
       },
       "OrderGiftCardTender": {
@@ -54939,6 +55095,9 @@
                               "statusLabel": {
                                 "type": "string"
                               },
+                              "buyerView": {
+                                "$ref": "#/components/schemas/BuyerOrderView"
+                              },
                               "openSupportRequestType": {
                                 "type": "string",
                                 "nullable": true
@@ -55200,6 +55359,7 @@
                               "orderNumber",
                               "status",
                               "statusLabel",
+                              "buyerView",
                               "openSupportRequestType",
                               "currencyCode",
                               "totalAmount",
@@ -60899,60 +61059,10 @@
                           }
                         },
                         "paymentRecovery": {
-                          "type": "object",
-                          "properties": {
-                            "eligible": {
-                              "type": "boolean"
-                            },
-                            "gateway": {
-                              "type": "string",
-                              "nullable": true
-                            },
-                            "paymentType": {
-                              "type": "string",
-                              "nullable": true,
-                              "enum": [
-                                "full",
-                                "deposit",
-                                "balance",
-                                null
-                              ]
-                            },
-                            "amountDue": {
-                              "type": "number"
-                            },
-                            "label": {
-                              "type": "string",
-                              "nullable": true
-                            },
-                            "reason": {
-                              "type": "string",
-                              "nullable": true
-                            },
-                            "blockType": {
-                              "type": "string",
-                              "enum": [
-                                "validation",
-                                "unavailable"
-                              ]
-                            },
-                            "requiresCardForm": {
-                              "type": "boolean"
-                            },
-                            "hostedRedirect": {
-                              "type": "boolean"
-                            }
-                          },
-                          "required": [
-                            "eligible",
-                            "gateway",
-                            "paymentType",
-                            "amountDue",
-                            "label",
-                            "reason",
-                            "requiresCardForm",
-                            "hostedRedirect"
-                          ]
+                          "$ref": "#/components/schemas/BuyerPaymentRecovery"
+                        },
+                        "buyerView": {
+                          "$ref": "#/components/schemas/BuyerOrderDetailView"
                         },
                         "giftCardTenders": {
                           "type": "array",
@@ -60981,6 +61091,7 @@
                         "timeline",
                         "discounts",
                         "paymentRecovery",
+                        "buyerView",
                         "giftCardTenders"
                       ]
                     }
@@ -86853,6 +86964,9 @@
                                   "destination"
                                 ]
                               }
+                            },
+                            "buyerView": {
+                              "$ref": "#/components/schemas/BuyerOrderView"
                             }
                           },
                           "required": [
@@ -86876,7 +86990,8 @@
                             "balanceDue",
                             "items",
                             "tracking",
-                            "codeOptions"
+                            "codeOptions",
+                            "buyerView"
                           ]
                         }
                       },
@@ -87482,6 +87597,20 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "include",
+                "omit"
+              ],
+              "description": "`omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind."
+            },
+            "required": false,
+            "description": "`omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind.",
+            "name": "paymentRecovery",
+            "in": "query"
           },
           {
             "schema": {
@@ -91842,6 +91971,17 @@
                             },
                             "supportRequestIntro": {
                               "type": "string"
+                            },
+                            "buyerView": {
+                              "$ref": "#/components/schemas/BuyerOrderDetailView"
+                            },
+                            "paymentRecovery": {
+                              "allOf": [
+                                {
+                                  "$ref": "#/components/schemas/BuyerPaymentRecovery"
+                                },
+                                {}
+                              ]
                             }
                           },
                           "required": [
@@ -91907,7 +92047,9 @@
                             "items",
                             "supportRequests",
                             "supportRequestActions",
-                            "supportRequestIntro"
+                            "supportRequestIntro",
+                            "buyerView",
+                            "paymentRecovery"
                           ]
                         }
                       },
@@ -242636,10 +242778,10 @@
                 "disputes",
                 "refunds_to_resolve"
               ],
-              "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window)."
+              "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back: a cancelled order's, a late payment's, or what a refund that failed did not return), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, unanswered past its window, or its status check needs a person)."
             },
             "required": false,
-            "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).",
+            "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back: a cancelled order's, a late payment's, or what a refund that failed did not return), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, unanswered past its window, or its status check needs a person).",
             "name": "view",
             "in": "query"
           },
@@ -244294,10 +244436,10 @@
                 "disputes",
                 "refunds_to_resolve"
               ],
-              "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window)."
+              "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back: a cancelled order's, a late payment's, or what a refund that failed did not return), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, unanswered past its window, or its status check needs a person)."
             },
             "required": false,
-            "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).",
+            "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back: a cancelled order's, a late payment's, or what a refund that failed did not return), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, unanswered past its window, or its status check needs a person).",
             "name": "view",
             "in": "query"
           },
@@ -247836,7 +247978,7 @@
                               "disputes",
                               "refunds_to_resolve"
                             ],
-                            "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window)."
+                            "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back: a cancelled order's, a late payment's, or what a refund that failed did not return), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, unanswered past its window, or its status check needs a person)."
                           },
                           "openRequest": {
                             "type": "boolean"

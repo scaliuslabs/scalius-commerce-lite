@@ -1463,6 +1463,18 @@ export type GiftCardBalance = {
     status: 'active' | 'disabled' | 'expired';
 };
 
+export type BuyerOrderView = {
+    kind: 'order_placed' | 'order_updated' | 'payment_pending' | 'payment_issue' | 'checkout_expired';
+    /**
+     * The order's one status word key, by where it is and how it reaches the buyer.
+     */
+    status: 'awaiting_payment' | 'checkout_expired' | 'placed' | 'confirmed' | 'shipped' | 'ready_for_pickup' | 'preparing' | 'delivered' | 'picked_up' | 'completed' | 'cancelled' | 'returned' | 'refunded';
+    /**
+     * The shared payment word key (`orderPaymentWord`); null for a payment status the platform does not write. A lookup never sees a dispute.
+     */
+    payment: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed' | 'dueOnDelivery' | 'dueAtPickup' | 'dueOnService' | 'nothingDue' | 'disputeOpen' | 'lostToDispute' | 'partlyLostToDispute' | 'partlyLostRestRefunded' | null;
+};
+
 export type NullableTimestamp = string | number | null;
 
 export type PluginUiJson = string | number | boolean | unknown | Array<PluginUiJson & unknown> | {
@@ -2139,6 +2151,37 @@ export type OrderLineWarrantyExtra = {
         status: 'open' | 'in_progress' | 'resolved' | 'rejected';
         resolution: 'repair' | 'replacement' | 'refund' | 'other' | null;
     } | null;
+};
+
+export type BuyerPaymentRecovery = {
+    eligible: boolean;
+    /**
+     * The method a payment starts first.
+     */
+    gateway: string | null;
+    /**
+     * Every method a session would be accepted for, the order's own first.
+     */
+    gateways: Array<string>;
+    paymentType: 'full' | 'deposit' | 'balance' | null;
+    amountDue: number;
+    /**
+     * Why no session would start, a code the storefront words; null exactly when eligible.
+     */
+    refusal: 'not_payable' | 'checkout_expired' | 'payment_attempts_exhausted' | 'payment_window_ended' | 'method_not_accepted' | 'payment_in_progress' | 'order_busy' | 'method_unavailable' | null;
+    requiresCardForm: boolean;
+    hostedRedirect: boolean;
+};
+
+export type BuyerOrderDetailView = BuyerOrderView & {
+    /**
+     * A refund to the buyer is in flight, one its provider accepted and is completing included.
+     */
+    refundOnItsWay: boolean;
+    /**
+     * The payment the buyer may make now: `retry` a pending or failed payment, `pay_balance` the rest of a placed order early; null when the session route would start none.
+     */
+    paymentAction: 'retry' | 'pay_balance' | null;
 };
 
 export type OrderGiftCardTender = {
@@ -14483,6 +14526,7 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 invoiceNumber?: number | null;
                 status: string;
                 statusLabel: string;
+                buyerView: BuyerOrderView;
                 openSupportRequestType: string | null;
                 currencyCode: string;
                 totalAmount: number;
@@ -15746,17 +15790,8 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                  */
                 kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
             }>;
-            paymentRecovery: {
-                eligible: boolean;
-                gateway: string | null;
-                paymentType: 'full' | 'deposit' | 'balance' | null;
-                amountDue: number;
-                label: string | null;
-                reason: string | null;
-                blockType?: 'validation' | 'unavailable';
-                requiresCardForm: boolean;
-                hostedRedirect: boolean;
-            };
+            paymentRecovery: BuyerPaymentRecovery;
+            buyerView: BuyerOrderDetailView;
             giftCardTenders: Array<OrderGiftCardTender>;
         };
     };
@@ -23450,6 +23485,7 @@ export type PostApiV1OrdersLookupStatusResponses = {
                      */
                     destination: string;
                 }>;
+                buyerView: BuyerOrderView;
             };
         };
     };
@@ -23618,7 +23654,12 @@ export type GetApiV1OrdersReceiptByIdData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind.
+         */
+        paymentRecovery?: 'include' | 'omit';
+    };
     url: '/api/v1/orders/receipt/{id}';
 };
 
@@ -24442,6 +24483,8 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     }>;
                 }>;
                 supportRequestIntro: string;
+                buyerView: BuyerOrderDetailView;
+                paymentRecovery: BuyerPaymentRecovery & unknown;
             };
         };
     };
@@ -69623,7 +69666,7 @@ export type GetApiV1AdminOrdersData = {
          */
         status?: string;
         /**
-         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).
+         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back: a cancelled order's, a late payment's, or what a refund that failed did not return), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, unanswered past its window, or its status check needs a person).
          */
         view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes' | 'refunds_to_resolve';
         /**
@@ -70101,7 +70144,7 @@ export type GetApiV1AdminOrdersExportData = {
          */
         status?: string;
         /**
-         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).
+         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back: a cancelled order's, a late payment's, or what a refund that failed did not return), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, unanswered past its window, or its status check needs a person).
          */
         view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes' | 'refunds_to_resolve';
         openRequest?: 'true' | 'false';
@@ -71138,7 +71181,7 @@ export type PostApiV1AdminOrdersArchiveData = {
                 search?: string;
                 status?: string;
                 /**
-                 * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, or unanswered past its window).
+                 * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, ready_for_pickup (marked ready, not collected yet), money_to_return (money the store holds and must give back, none of it already going back: a cancelled order's, a late payment's, or what a refund that failed did not return), disputes (orders with a payment dispute), or refunds_to_resolve (a refund in flight that waits on staff: accepted by the provider but not recorded on the order, unanswered past its window, or its status check needs a person).
                  */
                 view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue' | 'money_to_return' | 'disputes' | 'refunds_to_resolve';
                 openRequest?: boolean;
