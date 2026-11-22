@@ -268,6 +268,8 @@ export interface LayoutData {
   };
   /** Merchant CSP sources (Settings -> Security), comma-separated. */
   cspAllowedDomains?: string;
+  /** Merchant image hosts (Settings -> Security), comma-separated: img-src only. */
+  cspImageSources?: string;
   /** The store's IANA time zone (Settings -> Store details): buyer-facing dates use it. */
   timeZone?: string;
   /** Published policy pages linked in Settings -> Policies, in kind order. */

@@ -152,22 +152,23 @@ export function TrustedWebsitesCard() {
   const t = useMessages(advancedSettingsMessages);
   const common = useMessages(settingsMessages);
   const canEdit = useCanEdit();
-  const { values, setValue, isLoadError, refetch } = useSettingsForm<{ sources: string[] }>({
+  const { values, setValue, isLoadError, refetch } = useSettingsForm<{ sources: string[]; images: string[] }>({
     label: t("trustedTitle"),
     queryKey: trustedWebsitesQuery.queryKey,
     fetchFn: trustedWebsitesQuery.queryFn,
     saveFn: (draft, expectedRevision) =>
       apiData(postApiV1AdminSettingsSecurity({
-        body: { cspAllowedDomains: serializeMerchantCspSources(draft.sources), expectedRevision },
+        body: { cspAllowedDomains: serializeMerchantCspSources(draft.sources), imageSources: serializeMerchantCspSources(draft.images), expectedRevision },
       })),
-    defaultValues: { sources: [] },
+    defaultValues: { sources: [], images: [] },
     errorMessage: common("saveFailed"),
     canEdit,
-    fields: { cspAllowedDomains: "trusted-website" },
+    fields: { cspAllowedDomains: "trusted-website", imageSources: "image-host" },
   });
-  // Hosts the catalogue's images come from that the store's private pages do not allow yet.
+  // Hosts the catalogue's images come from that a buyer's private pages do not allow yet.
+  // Allowing one adds it as an image host: images only, never scripts, styles, frames or requests.
   const imageHosts = useQuery(catalogueImageHostsQuery);
-  const blocked = (imageHosts.data ?? []).filter((host) => !cspSourcesAllowOrigin(host, values.sources));
+  const blocked = (imageHosts.data ?? []).filter((host) => !cspSourcesAllowOrigin(host, values.images));
   if (isLoadError) return <SettingsLoadFailure title={t("trustedLoad")} onRetry={refetch} />;
   return (
     <SettingsCard id="trustedWebsites" title={t("trustedTitle")} description={t("trustedDescription")}>
@@ -179,6 +180,14 @@ export function TrustedWebsitesCard() {
         normalize={normalizeMerchantCspSource}
         onChange={(sources) => setValue("sources", sources)}
       />
+      <OriginList
+        id="image-host"
+        label={t("imageHostsLabel")}
+        origins={values.images}
+        disabled={!canEdit}
+        normalize={normalizeMerchantCspSource}
+        onChange={(images) => setValue("images", images)}
+      />
       {blocked.length > 0 ? (
         <div className="space-y-2" data-blocked-image-hosts>
           <p className="text-body font-medium">{t("imageHostsTitle")}</p>
@@ -187,7 +196,7 @@ export function TrustedWebsitesCard() {
             {blocked.map((host) => (
               <li key={host} className="flex min-h-11 items-center justify-between gap-3">
                 <span className="min-w-0 truncate text-body">{host}</span>
-                <Button type="button" variant="outline" disabled={!canEdit} aria-label={`${t("imageHostsAllow")} ${host}`} onClick={() => setValue("sources", [...values.sources, host])}>
+                <Button type="button" variant="outline" disabled={!canEdit} aria-label={`${t("imageHostsAllow")} ${host}`} onClick={() => setValue("images", [...values.images, host])}>
                   {t("imageHostsAllow")}
                 </Button>
               </li>

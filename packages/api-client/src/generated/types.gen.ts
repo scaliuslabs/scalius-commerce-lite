@@ -1348,6 +1348,13 @@ export type StorefrontPrivatePages = {
             };
         };
     };
+    tokens: {
+        [key: string]: {
+            [key: string]: {
+                [key: string]: unknown;
+            };
+        };
+    };
     css: string;
     labels: {
         'cart.heading'?: {
@@ -10833,6 +10840,7 @@ export type GetApiV1StorefrontLayoutResponses = {
             };
             timeZone: string;
             cspAllowedDomains: string;
+            cspImageSources: string;
             policies: Array<{
                 kind: 'refund' | 'privacy' | 'terms' | 'shipping' | 'contact';
                 title: string;
@@ -61822,6 +61830,10 @@ export type GetApiV1AdminSettingsSecurityResponses = {
         success: true;
         data: {
             cspAllowedDomains: string;
+            /**
+             * Hosts the storefront loads images from and nothing else (img-src), on every page, private and payment pages included; comma-separated.
+             */
+            imageSources: string;
             revision: number;
         };
     };
@@ -61833,6 +61845,7 @@ export type PostApiV1AdminSettingsSecurityData = {
     body: {
         expectedRevision: number;
         cspAllowedDomains?: string;
+        imageSources?: string;
     };
     path?: never;
     query?: never;

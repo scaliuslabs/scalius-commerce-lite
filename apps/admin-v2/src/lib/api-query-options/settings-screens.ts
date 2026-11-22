@@ -353,6 +353,7 @@ export const trustedWebsitesQuery = {
     const platform = new Set(inherited.map((source) => source.source).filter(Boolean));
     return {
       sources: parseMerchantCspSources(security.cspAllowedDomains).filter((source) => !platform.has(source)),
+      images: parseMerchantCspSources(security.imageSources).filter((source) => !platform.has(source)),
       revision: security.revision,
     };
   },

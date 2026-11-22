@@ -6314,6 +6314,16 @@
             },
             "additionalProperties": false
           },
+          "tokens": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            }
+          },
           "css": {
             "type": "string",
             "maxLength": 24576
@@ -6514,7 +6524,7 @@
               },
               "sanitizer": {
                 "type": "integer",
-                "minimum": 1
+                "minimum": 0
               },
               "css": {
                 "type": "string",
@@ -6532,6 +6542,7 @@
         "required": [
           "chrome",
           "pages",
+          "tokens",
           "css",
           "labels",
           "icons",
@@ -43539,6 +43550,9 @@
                         "cspAllowedDomains": {
                           "type": "string"
                         },
+                        "cspImageSources": {
+                          "type": "string"
+                        },
                         "policies": {
                           "type": "array",
                           "items": {
@@ -44340,6 +44354,7 @@
                         "platform",
                         "timeZone",
                         "cspAllowedDomains",
+                        "cspImageSources",
                         "policies",
                         "storefrontCopy",
                         "appScripts",
@@ -216505,6 +216520,11 @@
                           "type": "string",
                           "maxLength": 51299
                         },
+                        "imageSources": {
+                          "type": "string",
+                          "maxLength": 51299,
+                          "description": "Hosts the storefront loads images from and nothing else (img-src), on every page, private and payment pages included; comma-separated."
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -216512,6 +216532,7 @@
                       },
                       "required": [
                         "cspAllowedDomains",
+                        "imageSources",
                         "revision"
                       ]
                     }
@@ -216638,6 +216659,10 @@
                     "minimum": 0
                   },
                   "cspAllowedDomains": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "imageSources": {
                     "type": "string",
                     "maxLength": 65536
                   }
@@ -217004,7 +217029,7 @@
           "Admin - Settings"
         ],
         "summary": "Image hosts the catalogue uses beyond the platform's",
-        "description": "The other https hosts the catalogue's images come from. A buyer's private page (cart, checkout, receipt, account) loads images only from the platform's origins and the trusted websites saved here; an image from any other host is drawn as the store's placeholder there.",
+        "description": "The other https hosts the catalogue's images come from (category images: every other catalogue image is one of the store's files). A buyer's private page (cart, checkout, payment, receipt, account) loads images only from the platform's origins and the image hosts saved here (and, but on a payment page, the trusted websites); an image from any other host is drawn as the store's placeholder there.",
         "operationId": "dashboard.security.image_hosts",
         "responses": {
           "200": {

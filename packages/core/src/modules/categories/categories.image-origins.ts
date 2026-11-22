@@ -1,32 +1,48 @@
-// The other hosts the catalogue's images come from. A category image may be
-// a URL on any https host (product photos are the store's own files), and a
-// buyer's private page loads images only from the store's own origins and
-// the hosts the merchant allows (Settings → Security): the dashboard lists
-// these so the merchant can allow one instead of seeing a placeholder there.
+// The other hosts the catalogue's images come from. Every product, brand,
+// variant and order image is one of the store's own files (a media id); the
+// one catalogue image that may be a URL on any https host is a category's.
+// A buyer's private page loads images only from the store's own origins and
+// the image hosts the merchant allows (Settings → Security): the dashboard
+// lists these so the merchant can allow one instead of a placeholder there.
 import { categories } from "@scalius/database/schema";
-import { and, isNull, like } from "drizzle-orm";
+import { and, asc, gt, isNull, like } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 
-/** At most this many category images are read, and this many hosts returned. */
-export const CATEGORY_IMAGE_ORIGINS_SCAN = 500;
+/** Category images read per query, the most queries one listing makes, and the most hosts returned. */
+export const CATEGORY_IMAGE_ORIGINS_PAGE = 500;
+export const CATEGORY_IMAGE_ORIGINS_PAGES = 10;
 export const CATEGORY_IMAGE_ORIGINS_MAX = 50;
 
-/** The distinct https origins of the live categories' image URLs, sorted. */
+function originOf(url: string | null): string | null {
+  try {
+    const parsed = new URL(url ?? "");
+    return parsed.protocol === "https:" && !parsed.username && !parsed.password ? parsed.origin.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The distinct https origins of the live categories' image URLs, sorted:
+ * every category (in id order, a page at a time, up to the bound of queries).
+ */
 export async function categoryImageOrigins(db: Database): Promise<string[]> {
-  const rows = await db
-    .select({ url: categories.imageUrl })
-    .from(categories)
-    .where(and(isNull(categories.deletedAt), like(categories.imageUrl, "https://%")))
-    .limit(CATEGORY_IMAGE_ORIGINS_SCAN)
-    .all();
   const origins = new Set<string>();
-  for (const { url } of rows) {
-    try {
-      const parsed = new URL(url ?? "");
-      if (parsed.protocol === "https:" && !parsed.username && !parsed.password) origins.add(parsed.origin.toLowerCase());
-    } catch {
-      // Not a URL: nothing to allow.
+  let after = "";
+  for (let page = 0; page < CATEGORY_IMAGE_ORIGINS_PAGES; page += 1) {
+    const rows = await db
+      .select({ id: categories.id, url: categories.imageUrl })
+      .from(categories)
+      .where(and(isNull(categories.deletedAt), like(categories.imageUrl, "https://%"), gt(categories.id, after)))
+      .orderBy(asc(categories.id))
+      .limit(CATEGORY_IMAGE_ORIGINS_PAGE)
+      .all();
+    for (const row of rows) {
+      const origin = originOf(row.url);
+      if (origin) origins.add(origin);
     }
+    if (rows.length < CATEGORY_IMAGE_ORIGINS_PAGE || origins.size > CATEGORY_IMAGE_ORIGINS_MAX) break;
+    after = rows[rows.length - 1]!.id;
   }
   return [...origins].sort().slice(0, CATEGORY_IMAGE_ORIGINS_MAX);
 }

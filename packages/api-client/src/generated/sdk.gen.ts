@@ -5975,7 +5975,7 @@ export const getApiV1AdminSettingsSecurityRuntimeSources = <ThrowOnError extends
 /**
  * Image hosts the catalogue uses beyond the platform's
  *
- * The other https hosts the catalogue's images come from. A buyer's private page (cart, checkout, receipt, account) loads images only from the platform's origins and the trusted websites saved here; an image from any other host is drawn as the store's placeholder there.
+ * The other https hosts the catalogue's images come from (category images: every other catalogue image is one of the store's files). A buyer's private page (cart, checkout, payment, receipt, account) loads images only from the platform's origins and the image hosts saved here (and, but on a payment page, the trusted websites); an image from any other host is drawn as the store's placeholder there.
  */
 export const getApiV1AdminSettingsSecurityImageHosts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSecurityImageHostsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSecurityImageHostsResponses, GetApiV1AdminSettingsSecurityImageHostsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSecurityImageHostsResponses, GetApiV1AdminSettingsSecurityImageHostsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/security/image-hosts', ...options });
 

@@ -627,7 +627,11 @@ const getSecurityRoute = createRoute({
     summary: "Get security settings",
     operationId: "dashboard.security.policy_get",
     responses: {
-        200: { description: "Security settings", content: { "application/json": { schema: successEnvelope(z.object({ cspAllowedDomains: z.string().max(MERCHANT_CSP_OUTPUT_MAX_LENGTH), revision: revisionSchema })) } } },
+        200: { description: "Security settings", content: { "application/json": { schema: successEnvelope(z.object({
+            cspAllowedDomains: z.string().max(MERCHANT_CSP_OUTPUT_MAX_LENGTH),
+            imageSources: z.string().max(MERCHANT_CSP_OUTPUT_MAX_LENGTH).describe("Hosts the storefront loads images from and nothing else (img-src), on every page, private and payment pages included; comma-separated."),
+            revision: revisionSchema,
+        })) } } },
         ...errorResponses,
     }
 });
@@ -644,6 +648,7 @@ app.openapi(getSecurityRoute, async (c) => {
             stored.cspAllowedDomains,
             c.env as Record<string, unknown>,
         ),
+        imageSources: normalizeStoredMerchantCspSources(stored.imageSources, c.env as Record<string, unknown>),
         revision,
     });
 });
@@ -680,7 +685,7 @@ const getSecurityImageHostsRoute = createRoute({
     path: "/security/image-hosts",
     tags: ["Admin - Settings"],
     summary: "Image hosts the catalogue uses beyond the platform's",
-    description: "The other https hosts the catalogue's images come from. A buyer's private page (cart, checkout, receipt, account) loads images only from the platform's origins and the trusted websites saved here; an image from any other host is drawn as the store's placeholder there.",
+    description: "The other https hosts the catalogue's images come from (category images: every other catalogue image is one of the store's files). A buyer's private page (cart, checkout, payment, receipt, account) loads images only from the platform's origins and the image hosts saved here (and, but on a payment page, the trusted websites); an image from any other host is drawn as the store's placeholder there.",
     operationId: "dashboard.security.image_hosts",
     responses: {
         200: {
@@ -701,6 +706,8 @@ app.openapi(getSecurityImageHostsRoute, async (c) => {
 const saveSecuritySchema = z.object({
     expectedRevision: revisionSchema,
     cspAllowedDomains: z.string().max(MERCHANT_CSP_INPUT_MAX_LENGTH).optional(),
+    /** Hosts allowed for images only (img-src), comma-separated. */
+    imageSources: z.string().max(MERCHANT_CSP_INPUT_MAX_LENGTH).optional(),
 });
 
 const saveSecurityRoute = createRoute({
@@ -724,17 +731,17 @@ const saveSecurityRoute = createRoute({
 
 app.openapi(saveSecurityRoute, async (c) => {
     const db = c.get("db");
-    const { cspAllowedDomains, expectedRevision } = c.req.valid("json");
+    const { cspAllowedDomains, imageSources, expectedRevision } = c.req.valid("json");
     let revision = expectedRevision;
+    const env = c.env as Record<string, unknown>;
 
-        if (typeof cspAllowedDomains === "string") {
-            assertMerchantCspSourcesValid(cspAllowedDomains);
+        if (typeof cspAllowedDomains === "string" || typeof imageSources === "string") {
+            if (typeof cspAllowedDomains === "string") assertMerchantCspSourcesValid(cspAllowedDomains);
+            if (typeof imageSources === "string") assertMerchantCspSourcesValid(imageSources);
             // Writing through refreshes the mirror the Partytown proxy reads.
             ({ revision } = await securityDocument.write(db, {
-                cspAllowedDomains: normalizeStoredMerchantCspSources(
-                    cspAllowedDomains,
-                    c.env as Record<string, unknown>,
-                ),
+                ...(typeof cspAllowedDomains === "string" ? { cspAllowedDomains: normalizeStoredMerchantCspSources(cspAllowedDomains, env) } : {}),
+                ...(typeof imageSources === "string" ? { imageSources: normalizeStoredMerchantCspSources(imageSources, env) } : {}),
             }, { kv: settingsMirror(c.env) }, { expectedRevision }));
 
         }

@@ -54,17 +54,19 @@ const jsonRecord = z.record(z.string(), z.unknown());
 
 // ─────────────────────────────────────────
 // Storefront security policy (merchant CSP sources, comma-separated). The API
-// Partytown proxy reads the mirror.
+// Partytown proxy reads the mirror. `imageSources` are hosts allowed for
+// images only (img-src on every page, private and payment pages included).
 // ─────────────────────────────────────────
 
 export interface SecuritySettings {
   cspAllowedDomains: string;
+  imageSources: string;
 }
 
 export const securityDocument = defineSettingsDocument<SecuritySettings>({
   key: "security",
-  schema: z.object({ cspAllowedDomains: z.string() }),
-  defaults: { cspAllowedDomains: "" },
+  schema: z.object({ cspAllowedDomains: z.string(), imageSources: z.string() }),
+  defaults: { cspAllowedDomains: "", imageSources: "" },
   cacheKey: "settings:security",
 });
 

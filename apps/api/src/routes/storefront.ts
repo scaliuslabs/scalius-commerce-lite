@@ -397,6 +397,8 @@ const layoutDataSchema = z.object({
   timeZone: z.string().max(64),
   /** Merchant CSP sources (Settings -> Security), comma-separated. */
   cspAllowedDomains: z.string(),
+  /** Merchant image hosts (Settings -> Security), comma-separated: images only, on every page. */
+  cspImageSources: z.string(),
   /**
    * Store policies linked in Settings -> Policies whose pages are published,
    * in this order: refund, privacy, terms, shipping, contact. For the footer
