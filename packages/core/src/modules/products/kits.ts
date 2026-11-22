@@ -200,3 +200,57 @@ export function parseVariantOptionValues(value: unknown): Array<{ name: string; 
         return [];
     }
 }
+
+/**
+ * Why a kit or a page's offers can't be saved (`details.reason`), with words
+ * a merchant reads and an agent can act on: each says what is allowed.
+ */
+export const KIT_REFUSALS = {
+    kit_component_limit: `A kit holds at most ${KIT_COMPONENTS_MAX} different items. Remove one, or sell the rest as another kit.`,
+    kit_component_duplicate: "An item is in this kit twice. Keep it once and set its quantity instead.",
+    kit_component_self: "A kit can't contain itself. Choose items of other SKUs.",
+    kit_component_missing: "An item you chose is no longer sold (it was deleted). Choose a live SKU.",
+    kit_component_gift_card: "A gift card can't be part of a kit. Sell it on its own.",
+    kit_component_nested: "A kit can't contain another kit. Add that kit's items instead.",
+    kit_is_component: "This SKU is part of another kit, so it can't be a kit itself. Remove it from that kit first.",
+    kit_gift_card: "A gift card can't be a kit.",
+    kit_has_stock: "A kit has no stock of its own: its items carry it. Set this SKU's stock to 0 first.",
+    kit_stock_movement: "This SKU is a kit, so its stock comes from its items. Change the items' stock instead.",
+    kit_variant_not_found: "That SKU is not a live SKU of this product.",
+    page_offer_limit: `A product page shows at most ${PRODUCT_PAGE_OFFERS_MAX} offers of other products.`,
+    page_offer_duplicate: "An offer is listed twice. Keep it once.",
+    page_offer_missing: "An offer you chose is no longer sold (it was deleted). Choose a live SKU.",
+    page_offer_own_sku: "This product's own SKUs already show on its page. Choose SKUs of other products.",
+} as const;
+export type KitRefusalReason = keyof typeof KIT_REFUSALS;
+
+/** A refusal with its reason (and the SKU it is about, when one). */
+export function kitRefusal(reason: KitRefusalReason, extra: { field?: string; variantId?: string } = {}) {
+    return { message: KIT_REFUSALS[reason], details: { reason, field: extra.field ?? "components", ...(extra.variantId ? { variantId: extra.variantId } : {}) } };
+}
+
+/** The guard trigger messages of migration 0224, by the refusal each stands for. */
+const KIT_GUARD_REASONS: ReadonlyArray<[string, KitRefusalReason]> = [
+    ["variant_components_component_missing", "kit_component_missing"],
+    ["variant_components_nested", "kit_component_nested"],
+    ["variant_components_gift_card", "kit_component_gift_card"],
+    ["variant_components_limit", "kit_component_limit"],
+    ["variant_components_kit_stock", "kit_has_stock"],
+    ["variant_components_not_self", "kit_component_self"],
+    ["inventory_movements_kit", "kit_stock_movement"],
+    ["product_page_offers_variant_invalid", "page_offer_own_sku"],
+    ["product_page_offers_limit", "page_offer_limit"],
+];
+
+function errorText(error: unknown, depth = 0): string {
+    if (depth > 3 || error === null || error === undefined) return "";
+    if (error instanceof Error) return `${error.message} ${errorText((error as Error & { cause?: unknown }).cause, depth + 1)}`;
+    return typeof error === "string" ? error : "";
+}
+
+/** The refusal a 0224 guard trigger raised (a write that raced the checks before it), or null. */
+export function kitGuardRefusal(error: unknown): ReturnType<typeof kitRefusal> | null {
+    const text = errorText(error);
+    const match = KIT_GUARD_REASONS.find(([marker]) => text.includes(marker));
+    return match ? kitRefusal(match[1], { field: match[1] === "kit_stock_movement" ? "stock" : match[1].startsWith("page_offer") ? "variantIds" : "components" }) : null;
+}

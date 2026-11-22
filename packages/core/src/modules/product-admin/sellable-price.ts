@@ -8,7 +8,7 @@ import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/data
 import type { BatchItem } from "drizzle-orm/batch";
 import { sql, type SQL } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
-import { buildGiftCardProductRulesGuard, rethrowGiftCardProductRuleViolation } from "../products";
+import { buildGiftCardProductRulesGuard, kitGuardRefusal, rethrowGiftCardProductRuleViolation } from "../products";
 
 export const SELLABLE_PRICE_MESSAGE = "An active product needs a price above 0 on the product and every SKU.";
 
@@ -69,4 +69,7 @@ export function productRuleGuards(db: Database, productId: string): BatchItem<"s
 export function rethrowProductRuleViolation(error: unknown): void {
     rethrowGiftCardProductRuleViolation(error);
     rethrowSellablePriceViolation(error);
+    // A kit's guard triggers (0224): a kit's stock, or a component that changed under the write.
+    const kit = kitGuardRefusal(error);
+    if (kit) throw new ValidationError(kit.message, kit.details);
 }

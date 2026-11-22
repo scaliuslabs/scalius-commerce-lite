@@ -55,6 +55,14 @@ import {
 } from "../products";
 import { isSalesChannelId } from "@scalius/shared/sales-channels";
 import { executeProductAggregateMutationBatch } from "./aggregate-revision";
+import {
+    buildProductKitReplaceStatements,
+    buildProductPageOffersReplaceStatements,
+    productKitPatchFields,
+    productPageOffersPatchFields,
+    readProductKitsSection,
+    readProductPageOffersSection,
+} from "./kits";
 import { planProductMediaSection, productMediaFromMediaIds, updateProductMediaSection } from "./write";
 import { createFreeShippingProfileStatement, resolveProductShippingProfile } from "./shipping-profile";
 import {
@@ -86,6 +94,8 @@ export const productSemanticSectionSchema = z.enum([
     "content_block",
     "template",
     "bundles",
+    "kits",
+    "page_offers",
 ]);
 
 export const productSemanticSectionQuerySchema = z.object({
@@ -245,6 +255,16 @@ export const productSemanticSectionPatchSchema = z.discriminatedUnion("section",
         expectedAggregateRevision: z.number().int().min(1),
         /** Every tier, in display order; an empty list removes them all. */
         tiers: productBundleTierInputListSchema,
+    }),
+    z.object({
+        section: z.literal("kits"),
+        expectedAggregateRevision: z.number().int().min(1),
+        ...productKitPatchFields,
+    }),
+    z.object({
+        section: z.literal("page_offers"),
+        expectedAggregateRevision: z.number().int().min(1),
+        ...productPageOffersPatchFields,
     }),
 ]);
 
@@ -425,6 +445,16 @@ export async function getProductSemanticSection(
 
     if (section === "bundles") {
         const result = await readProductBundleSection(db, productId);
+        return result ? assertBoundedResult(result) : null;
+    }
+
+    if (section === "kits") {
+        const result = await readProductKitsSection(db, productId);
+        return result ? assertBoundedResult(result) : null;
+    }
+
+    if (section === "page_offers") {
+        const result = await readProductPageOffersSection(db, productId);
         return result ? assertBoundedResult(result) : null;
     }
 
@@ -1037,6 +1067,14 @@ export async function updateProductSemanticSection(
     }
     if (patch.section === "bundles") {
         const statements = await buildProductBundleReplaceStatements(db, productId, patch.tiers);
+        return statements ? commitSectionStatements(db, productId, patch.expectedAggregateRevision, statements) : null;
+    }
+    if (patch.section === "kits") {
+        const statements = await buildProductKitReplaceStatements(db, productId, patch);
+        return statements ? commitSectionStatements(db, productId, patch.expectedAggregateRevision, statements) : null;
+    }
+    if (patch.section === "page_offers") {
+        const statements = await buildProductPageOffersReplaceStatements(db, productId, patch.variantIds);
         return statements ? commitSectionStatements(db, productId, patch.expectedAggregateRevision, statements) : null;
     }
     return updateAdditionalInfoTextSection(db, productId, patch);
