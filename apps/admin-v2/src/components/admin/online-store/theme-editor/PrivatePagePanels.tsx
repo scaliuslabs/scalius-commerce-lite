@@ -1,8 +1,10 @@
 /**
  * The buyer's own pages as the editor's blocks: the cart page and the cart
- * drawer, the payment step, the order confirmation and the account. Each is
- * a few choices from closed lists (`blocks.cart`, `cartDrawer`, `checkout`,
- * `receipt`, `account`); the store draws the pages and keeps everything a
+ * drawer, the payment step, the order confirmation and the account. The cart
+ * page and the drawer are arranged from their parts (`privatePages`): the
+ * panel offers ready-made arrangements and says when the theme set its own.
+ * The others are a few choices from closed lists (`blocks.checkout`,
+ * `receipt`, `account`). The store draws the pages and keeps everything a
  * buyer must see and do there whatever is chosen, so nothing here hides a
  * part. This module loads only when one of these parts is selected.
  */
@@ -10,13 +12,20 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import {
   STOREFRONT_ACCOUNT_NAVIGATION_STYLES,
-  STOREFRONT_CART_DRAWER_WIDTHS,
   STOREFRONT_PAYMENT_CHOICE_STYLES,
   STOREFRONT_PRIVATE_SUMMARY_PLACEMENTS,
   STOREFRONT_RECEIPT_LAYOUTS,
   type StorefrontPrivatePageBlock,
   type StorefrontReceiptSection,
 } from "@scalius/shared/storefront-theme";
+import {
+  PRIVATE_CART_PRESETS,
+  privateCartPreset,
+  privateCartPresetArrangement,
+  privateDrawerChoices,
+  privateDrawerWith,
+  type PrivatePageArrangement,
+} from "@scalius/shared/storefront-theme/private-arrangement";
 import { Button } from "~/components/ui/button";
 import { ChoiceField, FieldSet } from "~/components/ui/field";
 import { Switch } from "~/components/ui/switch";
@@ -112,39 +121,53 @@ function MandatoryNote() {
   return <p className="text-body text-muted-foreground">{t("mandatoryNote")}</p>;
 }
 
-/** The cart page's layout and the cart drawer. */
+/** One private page's arrangement replaced (undefined: the store's own page). */
+function usePrivatePage(key: "cart" | "cartDrawer", setDraft: SetTheme) {
+  return (arrangement: PrivatePageArrangement | undefined) => setDraft((current) => {
+    const { [key]: _old, ...pages } = current.privatePages.pages;
+    return { ...current, privatePages: { ...current.privatePages, pages: arrangement ? { ...pages, [key]: arrangement } : pages } };
+  });
+}
+
+const DRAWER_WIDTHS = ["standard", "wide"] as const;
+
+/** The cart page's layout and the cart drawer: ready-made arrangements of their parts. */
 export function CartPresentationSettings({ theme, setDraft }: { theme: Theme; setDraft: SetTheme }) {
   const t = useMessages(themeEditorPrivatePageMessages);
-  const setCart = useBlock("cart", setDraft);
-  const setDrawer = useBlock("cartDrawer", setDraft);
+  const setCart = usePrivatePage("cart", setDraft);
+  const setDrawer = usePrivatePage("cartDrawer", setDraft);
+  const preset = privateCartPreset(theme.privatePages.pages.cart);
+  const drawer = privateDrawerChoices(theme.privatePages.pages.cartDrawer);
   return (
     <div className="space-y-5" data-private-page-settings="cart">
       <WideScreensNote />
       <VisualChoice
         label={t("cartLayout")}
         showLabel
-        value={theme.blocks.cart.summary}
+        value={preset === "custom" ? "" : preset}
         className="grid-cols-2"
-        options={STOREFRONT_PRIVATE_SUMMARY_PLACEMENTS.map((value) => ({
+        options={PRIVATE_CART_PRESETS.map((value) => ({
           value,
           label: t(`cartSummary_${value}`),
           help: t(`cartSummary_${value}Help`),
           sketch: <SummarySketch placement={value} theme={theme} />,
         }))}
-        onChange={(summary) => setCart({ summary })}
+        onChange={(value) => setCart(privateCartPresetArrangement(value))}
       />
+      {/* A theme that arranged the cart itself: a ready-made layout replaces its arrangement. */}
+      {preset === "custom" && <p className="text-body text-muted-foreground" data-cart-arranged-by-theme>{t("cartCustom")}</p>}
       <VisualChoice
         label={t("drawerWidth")}
         showLabel
-        value={theme.blocks.cartDrawer.width}
+        value={drawer.width}
         className="grid-cols-2"
-        options={STOREFRONT_CART_DRAWER_WIDTHS.map((value) => ({
+        options={DRAWER_WIDTHS.map((value) => ({
           value,
           label: t(`drawerWidth_${value}`),
           help: t(`drawerWidth_${value}Help`),
           sketch: <ColumnsSketch columns={value === "wide" ? 2 : 1} theme={theme} />,
         }))}
-        onChange={(width) => setDrawer({ width })}
+        onChange={(width) => setDrawer(privateDrawerWith(theme.privatePages.pages.cartDrawer, { width }))}
       />
       <ChoiceField
         id="cart-drawer-recommendations"
@@ -155,8 +178,8 @@ export function CartPresentationSettings({ theme, setDraft }: { theme: Theme; se
           <Switch
             id="cart-drawer-recommendations"
             aria-describedby="cart-drawer-recommendations-help"
-            checked={theme.blocks.cartDrawer.recommendations === "shown"}
-            onCheckedChange={(checked) => setDrawer({ recommendations: checked ? "shown" : "hidden" })}
+            checked={drawer.recommendations}
+            onCheckedChange={(checked) => setDrawer(privateDrawerWith(theme.privatePages.pages.cartDrawer, { recommendations: checked }))}
           />
         )}
       />
