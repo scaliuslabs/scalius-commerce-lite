@@ -255,6 +255,7 @@ export function parseVariantOptionValues(
  */
 export const KIT_REFUSALS = {
     kit_component_limit: `A kit holds at most ${KIT_COMPONENTS_MAX} different items. Remove one, or sell the rest as another kit.`,
+    kit_needs_single_item: "A kit needs at least one item it holds once, so its price splits exactly over its items. Add one, or use a quantity bundle for several of one item.",
     kit_component_duplicate: "An item is in this kit twice. Keep it once and set its quantity instead.",
     kit_component_self: "A kit can't contain itself. Choose items of other SKUs.",
     kit_component_missing: "An item you chose is no longer sold (it was deleted). Choose a live SKU.",

@@ -121,6 +121,7 @@ export async function buildProductKitReplaceStatements(
     const duplicate = ids.find((id, index) => ids.indexOf(id) !== index);
     if (duplicate) refuse("kit_component_duplicate", { variantId: duplicate });
     if (ids.includes(input.variantId)) refuse("kit_component_self", { variantId: input.variantId });
+    if (components.length > 0 && !components.some((component) => component.quantity === 1)) refuse("kit_needs_single_item");
     const facts = await readSkuFacts(db, [input.variantId, ...ids]);
     const kit = facts.get(input.variantId);
     if (!kit || kit.deleted || kit.productId !== productId) refuse("kit_variant_not_found", { field: "variantId", variantId: input.variantId });
