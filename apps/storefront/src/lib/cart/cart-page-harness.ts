@@ -33,6 +33,7 @@ import {
   decideUndecidedCartLines,
   emitCheckoutFormSubmitted,
   hasUndecidedCartLines,
+  holdCheckoutButtonWhile,
   initCartFunctionality,
   isDiscountValidationPending,
   refreshCartBlockingState,
@@ -84,16 +85,16 @@ import {
   enhanceCheckoutFields,
   setFieldError,
 } from "../checkout/field-validation";
-import {
-  hideCheckoutLoadingOverlay,
-  showCheckoutLoadingOverlay,
-} from "../checkout/loading-overlay";
+import { createSubmit, onHistoryRestore, submitBusy } from "../checkout/submit-machine";
 import { loadLazyScript } from "@/scripts/lazy-script";
 
 /** The real export behind every value the page script imports. */
 const realImports: Record<string, unknown> = {
   onTextEdit,
   codPaymentStep,
+  createSubmit,
+  onHistoryRestore,
+  submitBusy,
   BILLING_ADDRESS_FIELDS,
   loadLazyScript,
   addressAutocompleteService,
@@ -127,7 +128,7 @@ const realImports: Record<string, unknown> = {
   formatMoney,
   getCustomerSession,
   getEffectiveCartShippingFee,
-  hideCheckoutLoadingOverlay,
+  holdCheckoutButtonWhile,
   initCartFunctionality,
   initCheckoutPhoneField,
   isDiscountValidationPending,
@@ -148,7 +149,6 @@ const realImports: Record<string, unknown> = {
   resumeCartPageFromHistory,
   setFieldError,
   shippingCountryName,
-  showCheckoutLoadingOverlay,
   syncCheckoutTransferSession,
   updateCheckoutButtonState,
   updateTotals,

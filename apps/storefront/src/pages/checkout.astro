@@ -80,20 +80,7 @@ markPaymentPage(Astro.locals);
 
 <WindowGlobals values={{ __CHECKOUT_CONFIG__: checkoutConfig, __CHECKOUT_LANGUAGE__: checkoutLanguage }} />
 <script>
-  import {
-    initCheckoutPage,
-    resumeCheckoutPageFromHistory,
-  } from "@/lib/checkout";
+  import { startCheckoutPage } from "@/lib/checkout";
 
-  const startCheckout = () => void initCheckoutPage();
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", startCheckout, { once: true });
-  } else {
-    startCheckout();
-  }
-  window.addEventListener("pageshow", (event) => {
-    if ((event as PageTransitionEvent).persisted) {
-      void resumeCheckoutPageFromHistory();
-    }
-  });
+  startCheckoutPage();
 </script>

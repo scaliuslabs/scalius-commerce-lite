@@ -1660,11 +1660,22 @@ export function refreshCartBlockingState() {
   updateCheckoutButtonState();
 }
 
+/** Whether a press of the checkout button is under way (the cart page's submit machine answers). */
+let checkoutSubmitBusy = (): boolean => false;
+export function holdCheckoutButtonWhile(busy: () => boolean): void {
+  checkoutSubmitBusy = busy;
+}
+
 export function updateCheckoutButtonState() {
   const submitButton = document.getElementById(
     "submitButton",
   ) as HTMLButtonElement;
   if (!submitButton) return;
+  // A press holds the button until it ends; the press's end draws it again.
+  if (checkoutSubmitBusy()) {
+    submitButton.disabled = true;
+    return;
+  }
   const meta = document.getElementById("checkout-meta") as HTMLElement | null;
   const checkoutUnavailable = meta?.dataset.checkoutUnavailable === "true";
   const unavailableMessage =
