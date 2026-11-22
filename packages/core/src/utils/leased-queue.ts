@@ -38,7 +38,7 @@ export const QUEUE_MOVES = {
   cancel: { from: ["running", "waiting", "retrying"], to: "cancelled" },
   /** The platform, not the work, was not ready: the attempt is given back and it retries. */
   release: { from: ["running"], to: "retrying" },
-  /** The attempt is given back and the row waits with no next attempt until released. */
+  /** The attempt is given back and the row waits as not yet started (with no next attempt, or until a set time). */
   hold: { from: ["running"], to: "waiting" },
   /** A producer records the same work again before it runs: due again, its attempts kept. */
   requeue: { from: ["waiting", "retrying"], to: "waiting" },
@@ -211,9 +211,14 @@ export function leasedQueue<T extends QueueTable, S extends string>(table: T, de
       const where = claim ? and(held(row, claim), eq(table.status, states.running)) : and(row, inArray(table.status, [states.waiting, states.retrying]));
       return write(db, "cancel", where, { ...ended, lastError: error(reason), nextAttemptAt: NEVER_DUE });
     },
-    /** Gives the claim's attempt back: due again in `delaySeconds`, or held with no next attempt (`null`). */
-    release(db: Database, row: SQL | undefined, claim: SQL, reason: unknown, delaySeconds: number | null) {
-      return write(db, delaySeconds === null ? "hold" : "release", held(row, claim), {
+    /**
+     * Gives the claim's attempt back, due again in `delaySeconds` (null: no
+     * next attempt). `waiting` holds it as not yet started (`hold`), else it
+     * retries (`release`).
+     */
+    release(db: Database, row: SQL | undefined, claim: SQL, reason: unknown, options: { delaySeconds: number | null; waiting?: boolean }) {
+      const { delaySeconds } = options;
+      return write(db, options.waiting ? "hold" : "release", held(row, claim), {
         ...ended,
         attempts: sql`CASE WHEN ${table.attempts} > 0 THEN ${table.attempts} - 1 ELSE 0 END`,
         lastError: error(reason),

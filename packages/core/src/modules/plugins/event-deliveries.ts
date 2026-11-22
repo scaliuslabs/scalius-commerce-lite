@@ -262,7 +262,7 @@ export async function holdPluginEventDelivery(
   delivery: PluginEventDeliveryRow,
   claimId: string,
 ): Promise<void> {
-  await PLUGIN_DELIVERY_QUEUE.release(db, byId(delivery), PLUGIN_DELIVERY_QUEUE.heldBy(claimId), HELD_REASON, null);
+  await PLUGIN_DELIVERY_QUEUE.release(db, byId(delivery), PLUGIN_DELIVERY_QUEUE.heldBy(claimId), HELD_REASON, { delaySeconds: null, waiting: true });
 }
 
 /**
@@ -275,7 +275,7 @@ export async function releasePluginEventDelivery(
   claimId: string,
   options: { delaySeconds: number; reason: string },
 ): Promise<void> {
-  await PLUGIN_DELIVERY_QUEUE.release(db, byId(delivery), PLUGIN_DELIVERY_QUEUE.heldBy(claimId), options.reason, options.delaySeconds);
+  await PLUGIN_DELIVERY_QUEUE.release(db, byId(delivery), PLUGIN_DELIVERY_QUEUE.heldBy(claimId), options.reason, { delaySeconds: options.delaySeconds });
 }
 
 // ── Scheduled drain and retention ─────────────────────────────────────────
