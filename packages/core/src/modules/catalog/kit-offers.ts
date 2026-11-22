@@ -34,9 +34,9 @@ import {
 } from "../price-lists";
 import {
     applyTranslation,
-    foldedTranslationChain,
+    foldedProductChains,
     localizedSlugSql,
-    translationRowsSql,
+    productTranslationRowsSql,
     type TranslationScope,
 } from "../translations";
 import { deps } from "./declare-deps";
@@ -108,7 +108,8 @@ export function selectProductPageKitRows(db: Database, productId: string, pricin
         isKit: sql<number>`EXISTS (SELECT 1 FROM variant_components AS placed_kit WHERE placed_kit.kit_variant_id = page_sku.variant_id)`.as("pk_is_kit"),
         ...(pricing ? { listPrices: marketListPricesSql(variantId, { presence: pricing.presence }).as("pk_list_prices") } : {}),
         ...(translation ? {
-            trRows: translationRowsSql(translation, "product", product, ["name"]).as("pk_tr_rows"),
+            // The item's product and its options and values, in the page's language.
+            trRows: productTranslationRowsSql(translation, product).as("pk_tr_rows"),
             trSlug: localizedSlugSql(translation, "product", product).as("pk_tr_slug"),
         } : {}),
     }).from(sql`${pageSkuSourceSql(productId)} AS page_sku
@@ -236,11 +237,23 @@ export function resolveProductPageKits(
     const money = (minor: number) => fromMinor(minor, context.decimalPlaces);
     // Every product a kit or offer shows: its price, band, status and pictures reach this page.
     for (const row of rows) if (row.productId) deps.product(row.productId);
+    const chainsOf = (row: ProductPageKitRow) => context.translation && row.trRows !== undefined
+        ? foldedProductChains(context.translation, row.trRows)
+        : null;
     const named = (row: ProductPageKitRow) => {
         const source = { name: row.productName ?? "", slug: row.productSlug ?? "" };
-        return context.translation && row.trRows !== undefined
-            ? applyTranslation(source, foldedTranslationChain(context.translation, row.trRows), { name: "name" }, row.trSlug ?? null)
+        const chains = chainsOf(row);
+        return chains && row.productId
+            ? applyTranslation(source, chains.get(`product:${row.productId}`) ?? [], { name: "name" }, row.trSlug ?? null)
             : source;
+    };
+    // Option names and values in the page's language (the item's product's own translations).
+    const optionsOf = (row: ProductPageKitRow) => {
+        const chains = chainsOf(row);
+        return parseVariantOptionValues(row.options, chains ? {
+            option: (id, name) => applyTranslation({ name }, chains.get(`product_option:${id}`) ?? [], { name: "name" }).name,
+            value: (id, text) => applyTranslation({ value: text }, chains.get(`product_option_value:${id}`) ?? [], { value: "value" }).value,
+        } : undefined);
     };
     const image = (row: ProductPageKitRow) => row.productId ? resolveSkuImageRepresentation(media.get(row.productId) ?? [], row.imageId) : null;
     const sellable = (row: ProductPageKitRow) => kitComponentProblem({
@@ -284,7 +297,7 @@ export function resolveProductPageKits(
                 imageUrl: picture?.url ?? null,
                 imageMediaId: picture?.mediaId ?? null,
                 imageAlt: picture?.altText ?? null,
-                options: parseVariantOptionValues(part.options),
+                options: optionsOf(part),
                 quantity: part.quantity,
                 delivery: parseKitComponentDelivery(part.delivery),
                 price: money(prices[index]!),
@@ -326,7 +339,7 @@ export function resolveProductPageKits(
             productName: name.name,
             productSlug: name.slug,
             sku: row.sku ?? "",
-            options: parseVariantOptionValues(row.options),
+            options: optionsOf(row),
             imageUrl: picture?.url ?? null,
             imageMediaId: picture?.mediaId ?? null,
             imageAlt: picture?.altText ?? null,

@@ -211,11 +211,11 @@ export function parseKitComponentDelivery(value: unknown): KitComponentDelivery 
     return value === "service" || value === "digital_key" || value === "digital_file" ? value : "physical";
 }
 
-/** A SKU's chosen option values (`[{ name, value }]`, in option order) as one JSON text. */
+/** A SKU's chosen option values (`[{ name, value }]` with their ids, in option order) as one JSON text. */
 export function variantOptionValuesSql(variantId: SQLWrapper): SQL<string | null> {
-    return sql<string | null>`(SELECT '[' || group_concat(json_object('n', kit_option.name, 'v', kit_option.value), ',') || ']'
+    return sql<string | null>`(SELECT '[' || group_concat(json_object('n', kit_option.name, 'v', kit_option.value, 'd', kit_option.definition_id, 'i', kit_option.value_id), ',') || ']'
         FROM (
-            SELECT pod.name AS name, pov.value AS value
+            SELECT pod.name AS name, pov.value AS value, pod.id AS definition_id, pov.id AS value_id
             FROM product_variant_option_values AS pvov
             JOIN product_option_definitions AS pod ON pod.id = pvov.option_definition_id
             JOIN product_option_values AS pov ON pov.id = pvov.option_value_id
@@ -224,13 +224,26 @@ export function variantOptionValuesSql(variantId: SQLWrapper): SQL<string | null
         ) AS kit_option)`;
 }
 
-export function parseVariantOptionValues(value: unknown): Array<{ name: string; value: string }> {
+/**
+ * The SQL of `variantOptionValuesSql`, parsed; `translate` (a page's
+ * language) gives an option's name and a value's text by their ids.
+ */
+export function parseVariantOptionValues(
+    value: unknown,
+    translate?: { option(id: string, name: string): string; value(id: string, text: string): string },
+): Array<{ name: string; value: string }> {
     if (typeof value !== "string" || value === "") return [];
     try {
         const parsed = JSON.parse(value) as unknown;
         if (!Array.isArray(parsed)) return [];
-        return parsed.flatMap((entry: { n?: unknown; v?: unknown }) =>
-            typeof entry.n === "string" && typeof entry.v === "string" ? [{ name: entry.n, value: entry.v }] : []);
+        return parsed.flatMap((entry: { n?: unknown; v?: unknown; d?: unknown; i?: unknown }) => {
+            if (typeof entry.n !== "string" || typeof entry.v !== "string") return [];
+            if (!translate) return [{ name: entry.n, value: entry.v }];
+            return [{
+                name: typeof entry.d === "string" ? translate.option(entry.d, entry.n) : entry.n,
+                value: typeof entry.i === "string" ? translate.value(entry.i, entry.v) : entry.v,
+            }];
+        });
     } catch {
         return [];
     }

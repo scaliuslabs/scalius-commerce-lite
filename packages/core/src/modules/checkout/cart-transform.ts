@@ -530,7 +530,10 @@ export function issuesOnBuyerLines(
         const buyer = buyerItems[source];
         if (perUnit === undefined || !buyer) return { ...issue, index: source };
         const { availableQuantity: componentAvailable, ...rest } = issue;
-        const available = componentAvailable === undefined ? undefined : Math.floor(componentAvailable / perUnit);
+        // The same SKU on the cart's other lines draws on the same units first.
+        const elsewhere = transform.items.reduce((sum, line, position) =>
+            position !== issue.index && line.variantId === issue.variantId ? sum + line.quantity : sum, 0);
+        const available = componentAvailable === undefined ? undefined : Math.floor(Math.max(0, componentAvailable - elsewhere) / perUnit);
         return {
             ...rest,
             index: source,
