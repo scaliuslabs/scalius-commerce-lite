@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type RefObject } from "react";
+import { useCallback, useState, type RefObject } from "react";
 import { toast } from "~/lib/toast";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { orderErrorMessage, useRestoreOrder, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
@@ -29,14 +29,12 @@ export function useOrderActions(
   const bulkRun = useOrderBulkRun();
   const archiveMutation = useArchiveOrdersWithUndo({ canUndo: permissions.canRestoreOrders });
 
-  const [updatingStatusIds, setUpdatingStatusIds] = useState<ReadonlySet<string>>(new Set());
   const [cancelOrder, setCancelOrder] = useState<OrderListItem | null>(null);
   const [dialog, setDialog] = useState<{
     action: OrderBulkAction;
     orders: OrderListItem[] | null;
     requestKey: string;
   } | null>(null);
-  const runningRef = useRef(false);
   const [outcome, setOutcome] = useState<OrderBulkOutcome | null>(null);
 
   const changeStatus = useCallback(
@@ -49,7 +47,6 @@ export function useOrderActions(
         setCancelOrder(order);
         return;
       }
-      setUpdatingStatusIds((prev) => new Set(prev).add(order.id));
       statusMutation.mutate(
         {
           orderId: order.id,
@@ -60,12 +57,6 @@ export function useOrderActions(
         {
           // The list has no order banner, so a refused change is said here.
           onError: (error) => toast.error(orderErrorMessage(error)),
-          onSettled: () =>
-            setUpdatingStatusIds((prev) => {
-              const next = new Set(prev);
-              next.delete(order.id);
-              return next;
-            }),
         },
       );
     },
@@ -76,7 +67,7 @@ export function useOrderActions(
   const archive = useCallback(
     (orders: readonly OrderListItem[], onDone?: () => void, onSettled?: () => void) => {
       const plan = planOrderBulkAction(orders, "archive");
-      if (!permissions.canDeleteOrders || archiveMutation.isPending || plan.eligible.length === 0) {
+      if (!permissions.canDeleteOrders || plan.eligible.length === 0) {
         onSettled?.();
         return;
       }
@@ -105,24 +96,22 @@ export function useOrderActions(
     setDialog({ action, orders, requestKey: crypto.randomUUID() });
   }, []);
 
-  const closeBulk = useCallback(() => {
-    if (!runningRef.current) setDialog(null);
-  }, []);
+  // Neither a bulk run nor an archive closes its dialog while it runs.
+  const closeBulk = useCallback(
+    () => bulkRun.guardClose(archiveMutation.guardClose(() => setDialog(null)))(false),
+    [archiveMutation, bulkRun],
+  );
 
   const runBulk = useCallback(
     (eligible: OrderListItem[], extras: BulkRunExtras) => {
-      // A ref, not isPending: a double click lands before React re-renders the disabled button.
-      if (!dialog || eligible.length === 0 || runningRef.current) return;
-      runningRef.current = true;
-      const settle = () => {
-        runningRef.current = false;
-      };
+      // A double click is dropped by the command itself, before React re-renders the disabled button.
+      if (!dialog || eligible.length === 0) return;
       if (dialog.action === "archive") {
         // Pass every loaded order so the toast can say how many were skipped.
         archive(dialog.orders ?? eligible, () => {
           selection.current.clear();
           setDialog(null);
-        }, settle);
+        });
         return;
       }
       const { action, requestKey } = dialog;
@@ -134,7 +123,6 @@ export function useOrderActions(
           : { action: "ship" as const, orderIds, providerId: extras.providerId ?? "" };
       const skipped = Math.max(0, (dialog.orders?.length ?? orderIds.length) - orderIds.length);
       bulkRun.mutate(input, {
-        onSettled: settle,
         onSuccess: (result) => {
           if (result.failures.length === 0) {
             selection.current.clear();
@@ -161,7 +149,7 @@ export function useOrderActions(
   );
 
   return {
-    updatingStatusIds,
+    updatingStatusIds: statusMutation.pending,
     changeStatus,
     restore,
     archive,

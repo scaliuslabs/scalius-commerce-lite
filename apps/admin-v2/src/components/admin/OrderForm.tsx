@@ -870,9 +870,9 @@ function OrderEditor({
       </Form>
       <AlertDialog
         open={confirmOpen}
-        onOpenChange={(open) => {
-          if (!open && !amendMutation.isPending) closeConfirm(false);
-        }}
+        onOpenChange={amendMutation.guardClose((open) => {
+          if (!open) closeConfirm(false);
+        })}
       >
         <AlertDialogContent>
           <AlertDialogHeader>

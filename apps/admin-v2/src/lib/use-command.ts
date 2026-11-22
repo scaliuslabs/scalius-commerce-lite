@@ -1,0 +1,217 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { IntentRequestKey } from "./intent-request-key";
+
+/** The callbacks of one call: they run when that call settles, while its screen is still there. */
+export interface CommandCallbacks<TData, TInput> {
+  onSuccess?: (data: TData, input: TInput) => unknown;
+  onError?: (error: Error, input: TInput) => unknown;
+  onSettled?: (data: TData | undefined, error: Error | null, input: TInput) => unknown;
+}
+
+export interface CommandOptions<TInput, TData> extends CommandCallbacks<TData, TInput> {
+  /** Sends the request. A server that takes a request key gets `requestKey`; others ignore it. */
+  mutationFn: (input: TInput, requestKey: string) => Promise<TData>;
+  /**
+   * Names a command whose key must outlive the screen that sent it (money,
+   * stock): a dialog closed after a lost answer and opened again keeps the
+   * key, so the retry replays the request that may have landed.
+   */
+  name?: string;
+  /** What a call acts on (default: its `orderId`, else `id`, else a string input, else the whole command). */
+  subject?: (input: TInput) => string;
+  /** Makes a request key (default a UUID). */
+  createKey?: () => string;
+}
+
+export interface Command<TInput, TData> {
+  /** Runs the command, unless one for the same subject is running: then nothing is sent and nothing changes. */
+  mutate: (input: TInput, callbacks?: CommandCallbacks<TData, TInput>) => void;
+  /** As `mutate`; a repeat while one runs returns the running call. */
+  mutateAsync: (input: TInput) => Promise<TData>;
+  /** A call of this command is running. */
+  isPending: boolean;
+  /** The subjects with a call running (rows of a list). */
+  pending: ReadonlySet<string>;
+  /** The last failure, until the next attempt or `reset`. */
+  error: Error | null;
+  isError: boolean;
+  /** The last call succeeded (until the next attempt or `reset`). */
+  isSuccess: boolean;
+  data: TData | undefined;
+  /** What the latest call was sent with. */
+  variables: TInput | undefined;
+  /** An earlier send for this subject got no definite answer: it may have gone through. */
+  mayHaveLanded: (input: TInput) => boolean;
+  reset: () => void;
+  /** A dialog's `onOpenChange` that cannot close it while a call runs. */
+  guardClose: (onOpenChange: (open: boolean) => void) => (open: boolean) => void;
+}
+
+const WHOLE_COMMAND = "*";
+
+function defaultSubject(input: unknown): string {
+  if (typeof input === "string" || typeof input === "number") return String(input);
+  const subject = input as { orderId?: unknown; id?: unknown } | null;
+  if (typeof subject?.orderId === "string") return subject.orderId;
+  if (typeof subject?.id === "string") return subject.id;
+  return WHOLE_COMMAND;
+}
+
+/** Keys of named commands: they live as long as the tab, so a reopened dialog finds an open one. */
+const namedKeys = new Map<string, IntentRequestKey>();
+
+interface CommandState<TInput, TData> {
+  pending: ReadonlySet<string>;
+  error: Error | null;
+  succeeded: boolean;
+  data: TData | undefined;
+  variables: TInput | undefined;
+  /** Bumped when a key's state changes, so `mayHaveLanded` is read again. */
+  keysSeen: number;
+}
+
+// A callback that throws is reported, never left as an unhandled rejection, and the next still runs.
+function report(run: (() => unknown) | undefined): void {
+  if (!run) return;
+  try {
+    run();
+  } catch (error) {
+    globalThis.reportError?.(error);
+  }
+}
+
+async function settle(run: (() => unknown) | undefined): Promise<void> {
+  if (!run) return;
+  try {
+    await run();
+  } catch (error) {
+    globalThis.reportError?.(error);
+  }
+}
+
+/**
+ * The one way the dashboard sends a command that writes. Per subject (an
+ * order, a record), one call is in flight: a repeat while it runs (a double
+ * click before React re-renders the disabled button) sends nothing and
+ * leaves no loading state behind, while another subject's call runs. Each
+ * call gets the request key of its intent (`IntentRequestKey`: the same
+ * input reuses it, a changed one or a retry after a refusal gets a new one,
+ * and a key whose outcome is open is never renewed). Each call's own
+ * callbacks run when it settles; the command's own run even after the
+ * screen is gone, as cache refreshes and toasts must.
+ */
+export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInput, TData>): Command<TInput, TData> {
+  const latest = useRef(options);
+  useEffect(() => {
+    latest.current = options;
+  });
+  const running = useRef(new Map<string, Promise<TData>>());
+  const ownKeys = useRef(new Map<string, IntentRequestKey>());
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const [state, setState] = useState<CommandState<TInput, TData>>({
+    pending: new Set(), error: null, succeeded: false, data: undefined, variables: undefined, keysSeen: 0,
+  });
+
+  const keyHolder = useCallback((subject: string, create: boolean): IntentRequestKey | undefined => {
+    const { name, createKey } = latest.current;
+    const holders = name ? namedKeys : ownKeys.current;
+    const id = name ? `${name}\u0000${subject}` : subject;
+    let holder = holders.get(id);
+    if (!holder && create) {
+      holder = new IntentRequestKey(createKey ? () => createKey() : undefined);
+      holders.set(id, holder);
+    }
+    return holder;
+  }, []);
+
+  const start = useCallback((input: TInput, callbacks?: CommandCallbacks<TData, TInput>): Promise<TData> => {
+    const subject = (latest.current.subject ?? defaultSubject)(input);
+    const already = running.current.get(subject);
+    if (already) return already;
+    const holder = keyHolder(subject, true)!;
+    const requestKey = holder.get("command", input);
+    const update = (change: (state: CommandState<TInput, TData>) => Partial<CommandState<TInput, TData>>) => {
+      if (mounted.current) setState((current) => ({ ...current, ...change(current) }));
+    };
+    update((current) => ({
+      pending: new Set(current.pending).add(subject), error: null, succeeded: false, variables: input,
+    }));
+    // As React Query does: the command's own callbacks (cache refreshes) finish before
+    // the call stops being pending and before the call's own callbacks (close the dialog).
+    const finish = async (data: TData | undefined, error: Error | null) => {
+      holder.settled(error ?? undefined);
+      const own = latest.current;
+      await settle(error ? own.onError && (() => own.onError!(error, input)) : own.onSuccess && (() => own.onSuccess!(data as TData, input)));
+      await settle(own.onSettled && (() => own.onSettled!(data, error, input)));
+      running.current.delete(subject);
+      update((current) => {
+        const pending = new Set(current.pending);
+        pending.delete(subject);
+        return { pending, keysSeen: current.keysSeen + 1, ...(error ? { error } : { data, succeeded: true }) };
+      });
+      const local = mounted.current ? callbacks : undefined;
+      report(error ? local?.onError && (() => local.onError!(error, input)) : local?.onSuccess && (() => local.onSuccess!(data as TData, input)));
+      report(local?.onSettled && (() => local.onSettled!(data, error, input)));
+    };
+    const call = Promise.resolve()
+      .then(() => latest.current.mutationFn(input, requestKey))
+      .then(
+        async (data) => {
+          await finish(data, null);
+          return data;
+        },
+        async (reason: unknown) => {
+          const error = reason as Error;
+          await finish(undefined, error);
+          throw error;
+        },
+      );
+    running.current.set(subject, call);
+    return call;
+  }, [keyHolder]);
+
+  const mutate = useCallback((input: TInput, callbacks?: CommandCallbacks<TData, TInput>) => {
+    const subject = (latest.current.subject ?? defaultSubject)(input);
+    if (running.current.has(subject)) return;
+    // The failure is the command's state (`error`) and its callbacks', never an unhandled rejection.
+    start(input, callbacks).catch(() => undefined);
+  }, [start]);
+
+  const mutateAsync = useCallback((input: TInput) => start(input), [start]);
+  const reset = useCallback(() => setState((current) => ({ ...current, error: null, succeeded: false, data: undefined, variables: undefined })), []);
+  const isPending = state.pending.size > 0;
+  // Read from the ref: a close in the same tick as the submit is refused too.
+  const guardClose = useCallback(
+    (onOpenChange: (open: boolean) => void) => (open: boolean) => {
+      if (!open && running.current.size > 0) return;
+      onOpenChange(open);
+    },
+    [],
+  );
+  const { keysSeen } = state;
+  const mayHaveLanded = useCallback((input: TInput) => {
+    void keysSeen;
+    return keyHolder((latest.current.subject ?? defaultSubject)(input), false)?.mayHaveLanded ?? false;
+  }, [keyHolder, keysSeen]);
+
+  return useMemo(() => ({
+    mutate,
+    mutateAsync,
+    isPending,
+    pending: state.pending,
+    error: state.error,
+    isError: state.error !== null,
+    isSuccess: state.succeeded,
+    data: state.data,
+    variables: state.variables,
+    mayHaveLanded,
+    reset,
+    guardClose,
+  }), [guardClose, isPending, mayHaveLanded, mutate, mutateAsync, reset, state]);
+}

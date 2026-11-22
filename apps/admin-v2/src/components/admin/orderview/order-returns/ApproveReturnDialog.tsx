@@ -1,5 +1,4 @@
-import { IntentRequestKey } from "~/lib/intent-request-key";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
@@ -18,7 +17,7 @@ import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useApproveOrderReturn } from "~/lib/api-mutations/orders";
 import type { OrderReturnDto } from "~/lib/order-return-workflow";
 import type { OrderItem } from "../types";
-import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./shared";
+import { getOrderItemName, clampQuantity } from "./shared";
 import { Field } from "~/components/ui/field";
 
 /** Approve or reject each requested unit. The decision never changes stock. */
@@ -41,7 +40,6 @@ export function ApproveReturnDialog({
   );
   const [notes, setNotes] = useState("");
   const mutation = useApproveOrderReturn();
-  const commandKey = useRef(new IntentRequestKey(createReturnCommandKey));
   if (!orderReturn) return <Dialog open={false} onOpenChange={onOpenChange} />;
   const lines = orderReturn.lines.map((line) => ({
     lineId: line.id,
@@ -53,10 +51,9 @@ export function ApproveReturnDialog({
   const submit = () => {
     const intent = { expectedVersion: orderReturn.version, notes: notes.trim() || null, lines };
     mutation.mutate(
-      { orderId: orderReturn.orderId, returnId: orderReturn.id, commandKey: commandKey.current.get("approve", intent), ...intent },
+      { orderId: orderReturn.orderId, returnId: orderReturn.id, ...intent },
       {
         onSuccess: () => {
-          commandKey.current.clear();
           onOpenChange(false);
         },
       },
@@ -67,7 +64,7 @@ export function ApproveReturnDialog({
   const rejectedCount = lines.reduce((sum, line) => sum + line.rejectedQuantity, 0);
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
+    <Dialog open={open} onOpenChange={mutation.guardClose(onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("returns.reviewTitle")}</DialogTitle>

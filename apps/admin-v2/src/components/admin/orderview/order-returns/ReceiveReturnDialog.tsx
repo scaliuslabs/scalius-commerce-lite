@@ -1,5 +1,4 @@
-import { IntentRequestKey } from "~/lib/intent-request-key";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { seededName } from "~/lib/seeded-names";
 import { useQuery } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "~/components/ui/alert";
@@ -31,7 +30,7 @@ import {
   type OrderReturnLineDto,
 } from "~/lib/order-return-workflow";
 import type { OrderItem } from "../types";
-import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./shared";
+import { getOrderItemName, clampQuantity } from "./shared";
 import { Field, ReadOnlyValue } from "~/components/ui/field";
 
 interface ReceiptDraft { received: number; restock: number }
@@ -108,7 +107,6 @@ export function ReceiveReturnDialog({
   const [draft, setDraft] = useState<Record<string, ReceiptDraft>>(() => defaultReceiptDraft(orderReturn?.lines ?? []));
   const [notes, setNotes] = useState("");
   const mutation = useReceiveOrderReturn();
-  const commandKey = useRef(new IntentRequestKey(createReturnCommandKey));
   // With several locations the merchant picks where restocked units go; by
   // default they go back to where they were sent from.
   const [restockChoice, setRestockChoice] = useState(RESTOCK_WHERE_SENT_FROM);
@@ -147,10 +145,9 @@ export function ReceiveReturnDialog({
       ...(restockLocationId ? { restockLocationId } : {}),
     };
     mutation.mutate(
-      { orderId: orderReturn.orderId, returnId: orderReturn.id, commandKey: commandKey.current.get("receive", intent), ...intent },
+      { orderId: orderReturn.orderId, returnId: orderReturn.id, ...intent },
       {
         onSuccess: () => {
-          commandKey.current.clear();
           onOpenChange(false);
         },
       },
@@ -158,7 +155,7 @@ export function ReceiveReturnDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
+    <Dialog open={open} onOpenChange={mutation.guardClose(onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("returns.receiveTitle")}</DialogTitle>

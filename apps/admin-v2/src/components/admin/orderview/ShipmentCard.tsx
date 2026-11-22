@@ -90,7 +90,6 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
   const recovery = order.shipmentRecovery;
   const repairMutation = useReconcileShipment();
   const lookupMutation = useLookupUnknownShipment();
-  const lookupKey = useRef<string | null>(null);
   const copy = recovery ? shipmentRecoveryCopy(t, recovery.reason) : null;
   if (!recovery || recovery.state === "none" || !copy) return null;
 
@@ -102,13 +101,7 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
   // A courier that finds a booking by the order number can confirm a lost answer itself.
   const recoveryCourier = order.deliveryProviders?.find((provider) => provider.type === recovery.providerType);
 
-  const lookup = () => {
-    lookupKey.current ??= crypto.randomUUID();
-    lookupMutation.mutate(
-      { orderId: order.id, shipmentId, expectedOrderVersion: order.version, operationKey: lookupKey.current },
-      { onSuccess: () => { lookupKey.current = null; } },
-    );
-  };
+  const lookup = () => lookupMutation.mutate({ orderId: order.id, shipmentId, expectedOrderVersion: order.version });
 
   return (
     <div role="status" className="space-y-2">

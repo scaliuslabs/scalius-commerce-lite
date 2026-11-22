@@ -17,14 +17,16 @@ export type OrderReturnStatus = OrderReturnDto["status"];
 export type OrderReturnLineDto = OrderReturnDto["lines"][number];
 export type OrderReturnCommandResult = ApiData<PostApiV1AdminOrdersByIdReturnsByReturnIdApproveResponse>;
 
+// The command hook adds each request's `commandKey`.
+type Command<T> = Omit<T, "commandKey">;
 export type CreateOrderReturnInput = { orderId: string } &
-  ApiBody<PostApiV1AdminOrdersByIdReturnsData>;
+  Command<ApiBody<PostApiV1AdminOrdersByIdReturnsData>>;
 export type ApproveOrderReturnInput = { orderId: string; returnId: string } &
-  ApiBody<PostApiV1AdminOrdersByIdReturnsByReturnIdApproveData>;
+  Command<ApiBody<PostApiV1AdminOrdersByIdReturnsByReturnIdApproveData>>;
 export type ReceiveOrderReturnInput = { orderId: string; returnId: string } &
-  ApiBody<PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveData>;
+  Command<ApiBody<PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveData>>;
 export type CancelOrderReturnInput = { orderId: string; returnId: string } &
-  ApiBody<PostApiV1AdminOrdersByIdReturnsByReturnIdCancelData>;
+  Command<ApiBody<PostApiV1AdminOrdersByIdReturnsByReturnIdCancelData>>;
 
 export interface ReconcileOrderReturnInput {
   orderId: string;

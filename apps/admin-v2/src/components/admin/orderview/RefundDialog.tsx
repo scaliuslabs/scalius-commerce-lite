@@ -1,6 +1,6 @@
 // The refund dialog of the Payment card, loaded the first time it opens so the
 // order page's first render carries no refund form.
-import { useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -25,7 +25,6 @@ import { orderDetailLabel } from "~/i18n/order-detail";
 import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
 import { invalidateOrder, orderErrorMessage, useRefundOrder } from "~/lib/api-mutations/orders";
-import { IntentRequestKey } from "~/lib/intent-request-key";
 import { toast } from "~/lib/toast";
 import { readAdminApiError } from "~/lib/admin-api-error";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
@@ -138,11 +137,9 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
       Number(order.refundedAmount ?? 0),
     ));
   const lineChoices = refundableLines(order.items);
-  // One key per refund intent, renewed once the server has answered (see IntentRequestKey).
-  const requestKey = useRef(new IntentRequestKey());
-  // An earlier send got no definite answer: the refund may have gone through, so the key stays and staff check first.
-  const [mayHaveLanded, setMayHaveLanded] = useState(false);
   const mutation = useRefundOrder();
+  // An earlier send got no definite answer: the refund may have gone through, so the key stays and staff check first.
+  const mayHaveLanded = mutation.mayHaveLanded({ orderId: order.id });
   // The most the server said this refund can be (gift cards the order sold were spent).
   const decimalPlaces = order.currencyDecimalPlaces ?? 2;
   const refusal = giftCardRefundLimit(mutation.error, decimalPlaces);
@@ -196,25 +193,20 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
       ...refundSettlementBody(settlement),
     };
     mutation.mutate(
-      { orderId: order.id, requestKey: requestKey.current.get("refund", intent), ...intent },
+      { orderId: order.id, ...intent },
       {
         onSuccess: (result) => {
-          requestKey.current.settled();
           // Accepted by the provider and still completing: a success, its amount on its way.
           const processingMinor = result.processingAmountMinor ?? 0;
           if (processingMinor > 0) toast.success(t("refund.onItsWay", { amount: money(processingMinor / 10 ** decimalPlaces) }));
           onOpenChange(false);
-        },
-        onError: (error) => {
-          requestKey.current.settled(error);
-          setMayHaveLanded(requestKey.current.mayHaveLanded);
         },
       },
     );
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
+    <Dialog open={open} onOpenChange={mutation.guardClose(onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t(recordOnly ? "refund.recordManual" : "refund.issue")}</DialogTitle>

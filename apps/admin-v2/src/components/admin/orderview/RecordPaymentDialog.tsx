@@ -48,7 +48,6 @@ export function RecordPaymentDialog({
   const t = useMessages(orderPaymentDialogMessages);
   const r = useMessages(resourceMessages);
   const mutation = useRecordOrderPayment();
-  const [requestKey] = useState(() => `record-payment-${crypto.randomUUID()}`);
   const [amount, setAmount] = useState<number | null>(balanceDue);
   const [amountError, setAmountError] = useState<string | null>(null);
   const [via, setVia] = useState<RecordedPaymentVia>("bank_transfer");
@@ -71,7 +70,6 @@ export function RecordPaymentDialog({
     }
     mutation.mutate({
       orderId,
-      requestKey,
       amountMinor: typedMinor(amount!, currencyCode),
       via,
       ...(reference.trim() ? { reference: reference.trim() } : {}),
@@ -85,7 +83,7 @@ export function RecordPaymentDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next && !mutation.isPending) onClose(); }}>
+    <Dialog open={open} onOpenChange={mutation.guardClose((next) => { if (!next) onClose(); })}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("netTerms.recordTitle")}</DialogTitle>

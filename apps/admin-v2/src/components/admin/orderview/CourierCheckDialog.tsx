@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
@@ -50,7 +50,6 @@ export function CourierCheckDialog({
   const [externalId, setExternalId] = useState("");
   const [trackingId, setTrackingId] = useState("");
   const [confirmed, setConfirmed] = useState(false);
-  const operationKey = useRef<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -60,21 +59,14 @@ export function CourierCheckDialog({
     setExternalId("");
     setTrackingId("");
     setConfirmed(false);
-    operationKey.current = null;
     mutation.reset();
     // Every opening starts clean.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Any edit after ticking the box needs a fresh confirmation and key.
-  const edited = () => {
-    setConfirmed(false);
-    operationKey.current = null;
-  };
-  const close = () => {
-    operationKey.current = null;
-    onOpenChange(false);
-  };
+  // Any edit after ticking the box needs a fresh confirmation (and is a new intent, so a new key).
+  const edited = () => setConfirmed(false);
+  const close = () => onOpenChange(false);
   // "Not created" and "cancelled" rest on the staff's own search of the
   // courier (a lookup can only veto them), so the note names the order ID searched.
   const needsOrderNumber = outcome !== "confirmed_existing";
@@ -84,12 +76,10 @@ export function CourierCheckDialog({
     && (outcome !== "confirmed_existing" || externalId.trim().length > 0);
   const submit = () => {
     if (!ready) return;
-    operationKey.current ??= crypto.randomUUID();
     mutation.mutate({
       orderId: order.id,
       shipmentId,
       expectedOrderVersion: order.version,
-      operationKey: operationKey.current,
       outcome,
       evidenceSource,
       evidenceNote: evidenceNote.trim(),
@@ -101,7 +91,7 @@ export function CourierCheckDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
+    <Dialog open={open} onOpenChange={mutation.guardClose(onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("courier.checkTitle")}</DialogTitle>

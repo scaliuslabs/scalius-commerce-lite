@@ -66,8 +66,6 @@ function OrderTimeline({ order }: { order: Order }) {
   const hydrated = useHydrated();
   const canComment = useOrderActionPermissions().canEditOrders;
   const [comment, setComment] = useState("");
-  // One key per draft: a double Post adds the comment once; a new draft gets a new key.
-  const requestKey = useRef<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const client = useQueryClient();
   const [windows, setWindows] = useState<Array<string | null>>([null]);
@@ -147,12 +145,11 @@ function OrderTimeline({ order }: { order: Order }) {
 
   const post = () => {
     const body = comment.trim();
-    if (!body || mutation.isPending) return;
-    requestKey.current ??= crypto.randomUUID();
-    mutation.mutate({ orderId: order.id, body, requestKey: requestKey.current }, {
+    if (!body) return;
+    // One key per draft (the command's key per intent): a double Post adds the comment once.
+    mutation.mutate({ orderId: order.id, body }, {
       onSuccess: () => {
         setComment("");
-        requestKey.current = null;
         request.current += 1;
         running.current = false;
         setBusy(null);
@@ -190,7 +187,6 @@ function OrderTimeline({ order }: { order: Order }) {
               onKeyDown={postOnShortcut}
               onChange={(event) => {
                 setComment(event.target.value);
-                requestKey.current = null;
                 if (mutation.isError) mutation.reset();
               }}
             />
@@ -257,7 +253,7 @@ function OrderTimeline({ order }: { order: Order }) {
         </div>
         </div>
       </CardContent>
-      <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && !deleteMutation.isPending && setDeleting(null)}>
+      <AlertDialog open={deleting !== null} onOpenChange={deleteMutation.guardClose((open) => { if (!open) setDeleting(null); })}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("timeline.deleteTitle")}</AlertDialogTitle>

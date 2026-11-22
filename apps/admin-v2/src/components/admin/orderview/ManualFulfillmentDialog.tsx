@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -60,8 +60,6 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
   const [note, setNote] = useState("");
   const [cashTaken, setCashTaken] = useState(true);
   const [errors, setErrors] = useState<FieldErrors>({});
-  // One key per opened dialog: a double click or retry replays the first fulfilment.
-  const requestKey = useRef("");
   const mutation = useCreateFulfillment();
   const saved = resolveSavedOrderMoneySummary(order);
   const cashDue = kind === "ship" || !canRecordCash ? null : counterCashDue(order);
@@ -78,7 +76,6 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
     setNote("");
     setCashTaken(true);
     setErrors({});
-    requestKey.current = crypto.randomUUID();
     mutation.reset();
     // Every opening starts from what is left to hand over.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -123,7 +120,6 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
     mutation.mutate(
       {
         orderId: order.id,
-        requestKey: requestKey.current,
         kind,
         lines,
         ...(kind === "ship" && Object.keys(tracking).length > 0 ? { tracking } : {}),
@@ -144,7 +140,7 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
 
   return (
     // A sheet: the items plus courier, tracking, link, cost and note are more than a dialog's five fields (DESIGN O2).
-    <Sheet open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
+    <Sheet open={open} onOpenChange={mutation.guardClose(onOpenChange)}>
       <SheetContent className="flex flex-col">
         <SheetHeader closeDisabled={mutation.isPending}>
           <SheetTitle>{t(copy.title)}</SheetTitle>

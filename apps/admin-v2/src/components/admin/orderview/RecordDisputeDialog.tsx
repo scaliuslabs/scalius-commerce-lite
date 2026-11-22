@@ -56,7 +56,6 @@ export function RecordDisputeDialog({
   const t = useMessages(orderDisputeMessages);
   const r = useMessages(resourceMessages);
   const mutation = useRecordOrderDispute();
-  const [requestKey] = useState(() => `record-dispute-${crypto.randomUUID()}`);
   const [paymentId, setPaymentId] = useState(payments[0]?.id ?? "");
   // The last list that held a payment: a refetch that empties it never leaves the form without one.
   const [shown, setShown] = useState(payments);
@@ -110,7 +109,6 @@ export function RecordDisputeDialog({
     mutation.mutate({
       orderId,
       paymentId: payment.id,
-      requestKey,
       amountMinor: typedMinor(amount!, payment.currency),
       reason: reason.trim(),
       fundsWithdrawn: withdrawn || lost,
@@ -120,7 +118,7 @@ export function RecordDisputeDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next && !mutation.isPending) onClose(); }}>
+    <Dialog open={open} onOpenChange={mutation.guardClose((next) => { if (!next) onClose(); })}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("recordTitle")}</DialogTitle>
