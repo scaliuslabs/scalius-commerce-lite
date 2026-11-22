@@ -17,6 +17,7 @@ import {
   normalizePlatformOriginUrl,
 } from "@scalius/shared/platform-config";
 import {
+  cspSourcesAllowOrigin,
   normalizeMerchantCspSource,
   serializeMerchantCspSources,
   type CspSourceProblem,
@@ -29,6 +30,7 @@ import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiResult } from "~/lib/api";
 import {
+  catalogueImageHostsQuery,
   mediaQuery,
   platformQuery,
   trustedWebsitesQuery,
@@ -163,6 +165,9 @@ export function TrustedWebsitesCard() {
     canEdit,
     fields: { cspAllowedDomains: "trusted-website" },
   });
+  // Hosts the catalogue's images come from that the store's private pages do not allow yet.
+  const imageHosts = useQuery(catalogueImageHostsQuery);
+  const blocked = (imageHosts.data ?? []).filter((host) => !cspSourcesAllowOrigin(host, values.sources));
   if (isLoadError) return <SettingsLoadFailure title={t("trustedLoad")} onRetry={refetch} />;
   return (
     <SettingsCard id="trustedWebsites" title={t("trustedTitle")} description={t("trustedDescription")}>
@@ -174,6 +179,22 @@ export function TrustedWebsitesCard() {
         normalize={normalizeMerchantCspSource}
         onChange={(sources) => setValue("sources", sources)}
       />
+      {blocked.length > 0 ? (
+        <div className="space-y-2" data-blocked-image-hosts>
+          <p className="text-body font-medium">{t("imageHostsTitle")}</p>
+          <p className="text-body text-muted-foreground">{t("imageHostsHelp")}</p>
+          <ul className="divide-y divide-border border-y border-border">
+            {blocked.map((host) => (
+              <li key={host} className="flex min-h-11 items-center justify-between gap-3">
+                <span className="min-w-0 truncate text-body">{host}</span>
+                <Button type="button" variant="outline" disabled={!canEdit} aria-label={`${t("imageHostsAllow")} ${host}`} onClick={() => setValue("sources", [...values.sources, host])}>
+                  {t("imageHostsAllow")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </SettingsCard>
   );
 }

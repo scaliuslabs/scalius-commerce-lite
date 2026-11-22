@@ -6484,10 +6484,35 @@
               }
             }
           },
+          "assets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "app": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$"
+                },
+                "file": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._/-]{0,200}$"
+                }
+              },
+              "required": [
+                "app",
+                "file"
+              ],
+              "additionalProperties": false
+            }
+          },
           "compiled": {
             "type": "object",
             "properties": {
               "anatomy": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "sanitizer": {
                 "type": "integer",
                 "minimum": 1
               },
@@ -6498,6 +6523,7 @@
             },
             "required": [
               "anatomy",
+              "sanitizer",
               "css"
             ],
             "additionalProperties": false
@@ -6509,6 +6535,7 @@
           "css",
           "labels",
           "icons",
+          "assets",
           "compiled"
         ],
         "additionalProperties": false
@@ -216971,6 +216998,150 @@
         }
       }
     },
+    "/api/v1/admin/settings/security/image-hosts": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Image hosts the catalogue uses beyond the platform's",
+        "description": "The other https hosts the catalogue's images come from. A buyer's private page (cart, checkout, receipt, account) loads images only from the platform's origins and the trusted websites saved here; an image from any other host is drawn as the store's placeholder there.",
+        "operationId": "dashboard.security.image_hosts",
+        "responses": {
+          "200": {
+            "description": "Image hosts outside the platform's origins",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "hosts": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 2048
+                          },
+                          "maxItems": 50
+                        }
+                      },
+                      "required": [
+                        "hosts"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when catalogue images show as placeholders on the cart, checkout or account pages.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      }
+    },
     "/api/v1/admin/settings/email": {
       "get": {
         "operationId": "dashboard.settings.email_get",
@@ -340797,6 +340968,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.search.global"
+          ]
+        },
+        {
+          "operationId": "dashboard.security.image_hosts",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.security.image_hosts"
           ]
         },
         {

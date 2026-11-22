@@ -22,6 +22,7 @@ import {
   getApiV1AdminSettingsProviders,
   getApiV1AdminSettingsSecurity,
   getApiV1AdminSettingsSecurityRuntimeSources,
+  getApiV1AdminSettingsSecurityImageHosts,
   getApiV1AdminSettingsSms,
   getApiV1AdminSettingsStripe,
 } from "@scalius/api-client/sdk";
@@ -355,6 +356,12 @@ export const trustedWebsitesQuery = {
       revision: security.revision,
     };
   },
+};
+
+/** The other hosts the catalogue's images come from (a private page draws them only when allowed). */
+export const catalogueImageHostsQuery = {
+  queryKey: queryKeys.settings.securityImageHosts(),
+  queryFn: async () => (await apiData(getApiV1AdminSettingsSecurityImageHosts())).hosts,
 };
 
 export interface MediaValues {

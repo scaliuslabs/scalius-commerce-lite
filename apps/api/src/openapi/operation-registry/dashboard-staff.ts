@@ -193,6 +193,7 @@ export const DASHBOARD_STAFF_OPERATIONS = {
     limits: { request: 131_072, response: 8_192 },
   },
   "dashboard.security.runtime_sources": { limits: { request: 16_384, response: 16_384 } },
+  "dashboard.security.image_hosts": { limits: { request: 16_384, response: 16_384 } },
   "dashboard.team.permission_overrides.remove": {
     risk: "security",
     batch: "forbidden",

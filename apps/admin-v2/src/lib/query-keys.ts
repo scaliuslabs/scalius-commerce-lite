@@ -244,6 +244,7 @@ export const queryKeys = {
     storeSetup: () => ["settings", "store-setup"] as const,
     seo: () => ["settings", "seo"] as const,
     security: () => ["settings", "security"] as const,
+    securityImageHosts: () => ["settings", "security", "image-hosts"] as const,
     auth: () => ["settings", "auth"] as const,
     checkoutFlow: () => ["settings", "checkout-flow"] as const,
     checkoutReadiness: () => ["settings", "checkout-readiness"] as const,

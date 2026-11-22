@@ -1406,8 +1406,15 @@ export type StorefrontPrivatePages = {
             file: string;
         };
     };
+    assets: {
+        [key: string]: {
+            app: string;
+            file: string;
+        };
+    };
     compiled: {
         anatomy: number;
+        sanitizer: number;
         css: string;
     };
 };
@@ -61944,6 +61951,56 @@ export type GetApiV1AdminSettingsSecurityRuntimeSourcesResponses = {
 };
 
 export type GetApiV1AdminSettingsSecurityRuntimeSourcesResponse = GetApiV1AdminSettingsSecurityRuntimeSourcesResponses[keyof GetApiV1AdminSettingsSecurityRuntimeSourcesResponses];
+
+export type GetApiV1AdminSettingsSecurityImageHostsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/security/image-hosts';
+};
+
+export type GetApiV1AdminSettingsSecurityImageHostsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsSecurityImageHostsError = GetApiV1AdminSettingsSecurityImageHostsErrors[keyof GetApiV1AdminSettingsSecurityImageHostsErrors];
+
+export type GetApiV1AdminSettingsSecurityImageHostsResponses = {
+    /**
+     * Image hosts outside the platform's origins
+     */
+    200: {
+        success: true;
+        data: {
+            hosts: Array<string>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSecurityImageHostsResponse = GetApiV1AdminSettingsSecurityImageHostsResponses[keyof GetApiV1AdminSettingsSecurityImageHostsResponses];
 
 export type GetApiV1AdminSettingsEmailData = {
     body?: never;

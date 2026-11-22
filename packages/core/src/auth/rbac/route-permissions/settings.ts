@@ -212,6 +212,9 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/settings/security/runtime-sources": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },
+  "/api/v1/admin/settings/security/image-hosts": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  },
   "/api/v1/admin/settings/platform": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },

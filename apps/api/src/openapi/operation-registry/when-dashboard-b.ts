@@ -296,6 +296,7 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.security.policy_get": "Use when reading store security settings.",
   "dashboard.security.policy_update": "Use when changing store security settings.",
   "dashboard.security.runtime_sources": "Use when checking the storefront's allowed security origins.",
+  "dashboard.security.image_hosts": "Use when catalogue images show as placeholders on the cart, checkout or account pages.",
   "dashboard.seo.feed_diagnostics": "Use when asked why products are missing from the Google or Meta product feed.",
   "dashboard.seo.feed_files_register": "Use when the merchant says they added product feed file links to Google Merchant Center and Meta Commerce Manager.",
   "dashboard.seo.feed_row_preview": "Use when checking exactly what one product sends to the Google/Meta feed.",

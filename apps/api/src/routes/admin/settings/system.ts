@@ -56,10 +56,12 @@ import { buildClearNotificationProviderBlocksStatement } from "@scalius/core/mod
 import {
     normalizeMerchantCspSource,
     normalizePlatformOrigin,
+    cspSourcesAllowOrigin,
     parseMerchantCspSources,
     serializeMerchantCspSources,
     type CspSourceProblem,
 } from "@scalius/shared/security-csp";
+import { categoryImageOrigins, CATEGORY_IMAGE_ORIGINS_MAX } from "@scalius/core/modules/categories";
 
 import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
@@ -671,6 +673,29 @@ app.openapi(getSecurityRuntimeSourcesRoute, async (c) => {
         c,
         getInheritedSecuritySources(c.env as unknown as Record<string, unknown>),
     );
+});
+
+const getSecurityImageHostsRoute = createRoute({
+    method: "get",
+    path: "/security/image-hosts",
+    tags: ["Admin - Settings"],
+    summary: "Image hosts the catalogue uses beyond the platform's",
+    description: "The other https hosts the catalogue's images come from. A buyer's private page (cart, checkout, receipt, account) loads images only from the platform's origins and the trusted websites saved here; an image from any other host is drawn as the store's placeholder there.",
+    operationId: "dashboard.security.image_hosts",
+    responses: {
+        200: {
+            description: "Image hosts outside the platform's origins",
+            content: { "application/json": { schema: successEnvelope(z.object({ hosts: z.array(z.string().max(INHERITED_SECURITY_ORIGIN_MAX_LENGTH)).max(CATEGORY_IMAGE_ORIGINS_MAX) })) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(getSecurityImageHostsRoute, async (c) => {
+    c.header("Cache-Control", "private, no-store");
+    const platform = getInheritedSecuritySources(c.env as unknown as Record<string, unknown>).flatMap((entry) => entry.source ? [entry.source] : []);
+    const hosts = (await categoryImageOrigins(c.get("db"))).filter((origin) => !cspSourcesAllowOrigin(origin, platform));
+    return ok(c, { hosts });
 });
 
 const saveSecuritySchema = z.object({
