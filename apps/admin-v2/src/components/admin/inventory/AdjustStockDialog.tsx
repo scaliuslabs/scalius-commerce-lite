@@ -28,6 +28,7 @@ import { formatNumber, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
 import { Field } from "~/components/ui/field";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 type AdjustmentMode = "relative" | "stocktake";
 type ProblemField = "quantity" | "reason" | "alertLevel" | "location";
@@ -218,7 +219,11 @@ export function AdjustStockDialog({
         const first = (["location", "quantity", "reason", "alertLevel"] as const).find((field) => fields.includes(field))!;
         fieldRefs[first].current?.focus();
       } else {
-        toast.error(t(saved.alertLevel ? "stockNotUpdated" : alertLevelChanged ? "alertLevelFailed" : "adjustFailed"));
+        // A stock change whose outcome is open, or that the server says landed, is the notice's to word: never "nothing changed".
+        const stockSent = saved.alertLevel || !alertLevelChanged;
+        if (!(stockSent && stockChange.notice({ variantId: variant.id }))) {
+          toast.error(t(saved.alertLevel ? "stockNotUpdated" : alertLevelChanged ? "alertLevelFailed" : "adjustFailed"));
+        }
       }
     }
   };
@@ -253,6 +258,7 @@ export function AdjustStockDialog({
               void handleSubmit();
             }}
           >
+            <CommandKeyNotice notice={stockChange.notice({ variantId: variant.id })} target="stock" />
             {pickLocation ? (
               <Field id="inventory-adjustment-location" label={t("location")} error={errors.location}>
                 <SearchableSelect

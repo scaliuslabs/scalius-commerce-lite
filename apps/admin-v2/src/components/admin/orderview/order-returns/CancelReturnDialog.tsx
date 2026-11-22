@@ -15,6 +15,7 @@ import { orderReturnMessages } from "~/i18n/order-returns";
 import { orderErrorMessage, useCancelOrderReturn } from "~/lib/api-mutations/orders";
 import type { OrderReturnDto } from "~/lib/order-return-workflow";
 import { Field } from "~/components/ui/field";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 export function CancelReturnDialog({
   orderReturn,
@@ -49,6 +50,7 @@ export function CancelReturnDialog({
           <DialogTitle>{t("returns.cancelTitle")}</DialogTitle>
           <DialogDescription>{t("returns.cancelHelp")}</DialogDescription>
         </DialogHeader>
+        <CommandKeyNotice notice={mutation.notice({ returnId: orderReturn.id })} target="order" />
         {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
         <Field id={`cancel-return-notes-${orderReturn.id}`} label={t("returns.reason")}>
           <Textarea id={`cancel-return-notes-${orderReturn.id}`} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />

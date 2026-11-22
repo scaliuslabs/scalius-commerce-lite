@@ -69,6 +69,8 @@ export function ChangePasswordForm() {
         if (failure.key === "wrongCurrentPassword") setWrongCurrent(true);
         else setError(failure);
       },
+      // The passwords sent are the command's last input: never kept once it answered.
+      onSettled: () => change.reset(),
     });
   };
 

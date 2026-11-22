@@ -22,6 +22,7 @@ import { LineProperties } from "./LineProperties";
 import type { Order } from "./types";
 import { Field, FieldRow } from "~/components/ui/field";
 import { Label } from "~/components/ui/label";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 // The helpers the page decides with live in fulfilment-groups.ts: this dialog loads on demand.
 export { canSendWithOwnCourier, remainingToSend, type ManualFulfillmentKind } from "./fulfilment-groups";
@@ -147,6 +148,7 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
           <SheetDescription>{t(copy.help)}</SheetDescription>
         </SheetHeader>
         <form id="manual-fulfillment" method="post" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4" onSubmit={handleSubmit} noValidate>
+          <CommandKeyNotice notice={mutation.notice({ orderId: order.id })} target="order" />
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <div role="group" aria-labelledby="fulfill-items-label" className="space-y-2">
             <div className="flex items-center justify-between gap-2">

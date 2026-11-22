@@ -55,9 +55,8 @@ export function useArchiveWarrantyPolicy() {
 export function useUpdateWarrantyClaim(claimId: string) {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "warranty.claim.update",
     subject: () => claimId,
-    mutationFn: async (body: Omit<WarrantyClaimUpdate, "requestKey">, requestKey) =>
+    mutationFn: async (body: Omit<WarrantyClaimUpdate, "requestKey">, requestKey: string) =>
       (await apiData(patchApiV1AdminWarrantyClaimsById({ path: { id: claimId }, body: { ...body, requestKey } }))).claim,
     onSuccess: (claim) => queryClient.setQueryData(warrantyKeys.claim(claimId), claim),
     onSettled: () => Promise.all([
@@ -71,7 +70,6 @@ export function useUpdateWarrantyClaim(claimId: string) {
 export function useOpenWarrantyClaim(orderId: string) {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "warranty.claim.open",
     subject: ({ warrantyId }) => warrantyId,
     mutationFn: async (body: Omit<ApiBody<typeof postApiV1AdminOrdersByIdWarrantyClaims>, "requestKey">, requestKey: string) =>
       (await apiData(postApiV1AdminOrdersByIdWarrantyClaims({ path: { id: orderId }, body: { ...body, requestKey } }))).claim,

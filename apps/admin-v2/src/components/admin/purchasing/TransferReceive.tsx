@@ -15,6 +15,7 @@ import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem 
 import { isOpenTransfer, TransferStatusBadge } from "./purchasing-status";
 import { ReceiveLines, readReceipt, type ReceivableLine, type ReceiveQuantities } from "./ReceiveLines";
 import { Page } from "~/components/admin/resource/Page";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 export function transferReceivableLines(transfer: Transfer): ReceivableLine[] {
   return transfer.lines.map((line) => ({
@@ -92,6 +93,7 @@ export function TransferReceive({ transfer, onReload }: { transfer: Transfer; on
           {" · "}
           {t("receivingAt", { location: seededName(transfer.destination) })}
         </p>
+        <CommandKeyNotice notice={receive.notice({ id: transfer.id })} target="document" />
         <PurchasingProblemBanner
           problem={problem}
           staleText={t("transferChanged")}

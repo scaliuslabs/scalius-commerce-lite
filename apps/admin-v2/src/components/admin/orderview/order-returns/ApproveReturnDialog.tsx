@@ -19,6 +19,7 @@ import type { OrderReturnDto } from "~/lib/order-return-workflow";
 import type { OrderItem } from "../types";
 import { getOrderItemName, clampQuantity } from "./shared";
 import { Field } from "~/components/ui/field";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 /** Approve or reject each requested unit. The decision never changes stock. */
 export function ApproveReturnDialog({
@@ -71,6 +72,7 @@ export function ApproveReturnDialog({
           <DialogDescription>{t("returns.reviewHelp")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          <CommandKeyNotice notice={mutation.notice({ returnId: orderReturn.id })} target="order" />
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <ul className="divide-y rounded-md border">
             {orderReturn.lines.map((line) => {

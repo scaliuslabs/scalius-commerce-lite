@@ -25,6 +25,7 @@ import type { OrderPaymentsPayload } from "~/lib/api-query-options/orders";
 import { formatSavedMinorAmount } from "~/lib/order-money-format";
 import { typedMinor } from "~/lib/typed-money";
 import { MoneyInput } from "../shared/MoneyInput";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 /** A payment and what it still holds: the most a chargeback on it may take. */
 type Payment = OrderPaymentsPayload["payments"][number] & { heldMinor: number };
@@ -125,6 +126,7 @@ export function RecordDisputeDialog({
           <DialogDescription>{t("recordHelp")}</DialogDescription>
         </DialogHeader>
         <form id="order-record-dispute" method="post" className="space-y-4" onSubmit={submit} noValidate>
+          <CommandKeyNotice notice={mutation.notice({ paymentId: payment.id })} target="order" />
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           {list.length > 1 ? (
             <Field id="disputePayment" label={t("payment")}>

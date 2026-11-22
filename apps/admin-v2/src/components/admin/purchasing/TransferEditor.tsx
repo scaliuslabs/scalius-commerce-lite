@@ -51,6 +51,8 @@ import {
 import { DateInput } from "~/components/ui/date-input";
 import { Field } from "~/components/ui/field";
 import { Page } from "~/components/admin/resource/Page";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
+import { keyAlreadyUsed } from "~/lib/intent-request-key";
 
 type Busy = "save" | "ship" | null;
 /** Per-line on-hand at the origin is read per product; past this many products it isn't shown. */
@@ -200,6 +202,8 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
       if (!transfer) await openDetail(id!);
     } catch (error) {
       setDialog(null);
+      // The server says this key's earlier ship went through: the notice says so.
+      if (keyAlreadyUsed(error)) return;
       const next = readPurchasingProblem(error);
       if (createdId) {
         toast.error(next.kind === "refused" ? next.message : t("shipFailed"));
@@ -322,6 +326,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
         </div>
       ) : null}
       {kept.offer ? <div className="mb-4">{kept.offer}</div> : null}
+      {transfer ? <CommandKeyNotice notice={command.notice({ id: transfer.id })} target="document" /> : null}
       {problem ? (
         <div className="mb-4">
           <PurchasingProblemBanner

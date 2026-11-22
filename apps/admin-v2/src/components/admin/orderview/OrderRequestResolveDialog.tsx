@@ -23,6 +23,7 @@ import { resolutionsFor, type Resolution } from "./request-resolutions";
 import { inboxKeys } from "~/lib/api-query-options/inbox";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import { Field } from "~/components/ui/field";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 const EMPTY_RETURNS: readonly OrderReturnDto[] = [];
 
@@ -115,6 +116,7 @@ export function ResolveDialog({
           <DialogDescription>{request.reason}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          <CommandKeyNotice notice={mutation.notice({ requestId: request.id })} target="order" />
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <RadioGroup
             value={selected ?? ""}

@@ -37,6 +37,7 @@ import { refundSettlementTotals } from "@scalius/shared/refund-sources";
 import { toMinor } from "@scalius/shared/money";
 import { refundRecordedByHand } from "@scalius/shared/order-payment-methods";
 import { orderCurrencyCode, typedMinor } from "~/lib/typed-money";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 const REFUND_REASONS = ["requested_by_customer", "returned_items", "duplicate", "fraudulent", "out_of_stock"] as const;
 
@@ -139,7 +140,7 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   const lineChoices = refundableLines(order.items);
   const mutation = useRefundOrder();
   // An earlier send got no definite answer: the refund may have gone through, so the key stays and staff check first.
-  const mayHaveLanded = mutation.mayHaveLanded({ orderId: order.id });
+  const notice = mutation.notice({ orderId: order.id });
   // The most the server said this refund can be (gift cards the order sold were spent).
   const decimalPlaces = order.currencyDecimalPlaces ?? 2;
   const refusal = giftCardRefundLimit(mutation.error, decimalPlaces);
@@ -223,18 +224,11 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
           </DialogDescription>
         </DialogHeader>
         <form id="order-refund" method="post" className="space-y-4" onSubmit={submit} noValidate>
-          {mayHaveLanded ? (
-            <Alert>
-              <AlertDescription>
-                <div className="flex flex-col items-start gap-2">
-                  <p>{t("refund.mayHaveGoneThrough")}</p>
-                  <Button type="button" variant="outline" size="sm" onClick={() => void invalidateOrder(queryClient, order.id)}>
-                    {t("refund.checkOrder")}
-                  </Button>
-                </div>
-              </AlertDescription>
-            </Alert>
-          ) : null}
+          <CommandKeyNotice notice={notice} target="order">
+            <Button type="button" variant="outline" size="sm" onClick={() => void invalidateOrder(queryClient, order.id)}>
+              {t("refund.checkOrder")}
+            </Button>
+          </CommandKeyNotice>
           {mutation.isError ? (
             <Alert variant="destructive">
               <AlertDescription>

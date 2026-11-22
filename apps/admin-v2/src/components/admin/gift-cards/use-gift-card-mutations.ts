@@ -43,7 +43,7 @@ export function useIssueGiftCard() {
   const queryClient = useQueryClient();
   return useCommand({
     name: "gift-cards.issue",
-    mutationFn: (input: IssueGiftCardInput, requestKey) => apiData(postApiV1AdminGiftCards({ body: { ...input, requestKey } })),
+    mutationFn: (input: IssueGiftCardInput, requestKey: string) => apiData(postApiV1AdminGiftCards({ body: { ...input, requestKey } })),
     onSuccess: () => invalidate(queryClient),
   });
 }
@@ -53,7 +53,7 @@ export function useAdjustGiftCard(id: string) {
   return useCommand({
     name: "gift-cards.adjust",
     subject: () => id,
-    mutationFn: (input: AdjustGiftCardInput, requestKey) =>
+    mutationFn: (input: AdjustGiftCardInput, requestKey: string) =>
       apiData(postApiV1AdminGiftCardsByGiftCardIdAdjust({ path: { giftCardId: id }, body: { ...input, requestKey } })),
     onSuccess: ({ giftCard }) => announceSave(presenceKey("gift-card", id), giftCard.version),
     // A refusal (balance changed) reloads the card too.

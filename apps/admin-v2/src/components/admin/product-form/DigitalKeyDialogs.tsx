@@ -41,6 +41,7 @@ import { digitalMessages } from "~/i18n/digital";
 import { resourceMessages } from "~/i18n/resource";
 import { Field } from "~/components/ui/field";
 import { useCommand } from "~/lib/use-command";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 const REJECT_TEXT: Record<LicenceKeyRejectReason, "rejectTooLong" | "rejectInvalid" | "rejectDuplicate"> = {
   too_long: "rejectTooLong",
@@ -163,6 +164,7 @@ export function KeyImportDialog({ productId, target, onOpenChange, onChanged }: 
               </ul>
             </div>
           ) : null}
+          {target ? <CommandKeyNotice notice={importKeys.notice({ variantId: target.variantId })} target="keys" /> : null}
           {error ? <p role="alert" className="text-body text-destructive">{error}</p> : null}
         </div>
         <DialogFooter>
@@ -202,7 +204,7 @@ export function KeyRevokeDialog({ productId, poolId, onOpenChange, onChanged }: 
   const run = useCommand({
     name: "digital.licence-keys.revoke",
     subject: () => poolId ?? "",
-    mutationFn: (keyIds: string[], requestKey) => apiData(postApiV1AdminDigitalAssetsByIdLicenceKeysRevoke({
+    mutationFn: (keyIds: string[], requestKey: string) => apiData(postApiV1AdminDigitalAssetsByIdLicenceKeysRevoke({
       path: { id: poolId! },
       body: { requestKey, keyIds },
     })),
@@ -272,6 +274,7 @@ export function KeyRevokeDialog({ productId, poolId, onOpenChange, onChanged }: 
             ) : null}
           </div>
         )}
+        <CommandKeyNotice notice={run.notice([])} target="keys" />
         {run.isError ? <p role="alert" className="text-body text-destructive">{getServerFnError(run.error)}</p> : null}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={run.isPending}>{r("cancel")}</AlertDialogCancel>

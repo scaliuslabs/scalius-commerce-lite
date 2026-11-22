@@ -36,6 +36,7 @@ import {
 } from "./gift-card-format";
 import { useAdjustGiftCard, useUpdateGiftCard } from "./use-gift-card-mutations";
 import { DateInput } from "~/components/ui/date-input";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 /**
  * What a failed gift-card write says. A 409 is the version check: someone
@@ -150,6 +151,7 @@ export function AdjustBalanceDialog({ card, open, onOpenChange }: {
       submitLabel={t("save")}
       onSubmit={submit}
     >
+      <CommandKeyNotice notice={mutation.notice({})} target="giftCard" />
       <FieldRow>
         <Field id="gift-card-adjust-direction" label={t("direction")}>
           <SearchableSelect

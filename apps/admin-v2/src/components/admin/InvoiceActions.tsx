@@ -8,6 +8,7 @@ import { orderInvoiceMessages as orderDetailMessages } from "~/i18n/order-invoic
 import { apiData, type ApiResult } from "~/lib/api";
 import { orderErrorMessage } from "~/lib/api-mutations/orders";
 import { useCommand } from "~/lib/use-command";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 export type IssuedInvoiceDocument = ApiResult<typeof postApiV1AdminOrdersByIdInvoice>;
 
@@ -40,7 +41,7 @@ export function InvoiceActions({
   const command = useCommand({
     name: "orders.invoice",
     createKey: () => `invoice:${crypto.randomUUID()}`,
-    mutationFn: (input: { orderId: string; expectedOrderVersion: number }, operationKey) =>
+    mutationFn: (input: { orderId: string; expectedOrderVersion: number }, operationKey: string) =>
       apiData(postApiV1AdminOrdersByIdInvoice({ path: { id: input.orderId }, body: { operationKey, expectedOrderVersion: input.expectedOrderVersion } })),
   });
   const issuing = command.isPending;
@@ -61,6 +62,7 @@ export function InvoiceActions({
           <Button onClick={() => window.print()}>{t("invoice.print")}</Button>
         </div>
         {issued || packingSlip ? null : <p className="w-full text-body text-muted-foreground">{t("invoice.issueHelp")}</p>}
+        <CommandKeyNotice notice={command.notice({ orderId })} target="order" />
         {error ? <p role="alert" className="w-full text-body text-destructive">{error}</p> : null}
         {businessNameMissing ? (
           <Alert variant="warning">

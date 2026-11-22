@@ -32,6 +32,7 @@ import {
 import type { OrderItem } from "../types";
 import { getOrderItemName, clampQuantity } from "./shared";
 import { Field, ReadOnlyValue } from "~/components/ui/field";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 interface ReceiptDraft { received: number; restock: number }
 
@@ -162,6 +163,7 @@ export function ReceiveReturnDialog({
           <DialogDescription>{t("returns.receiveHelp")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          <CommandKeyNotice notice={mutation.notice({ returnId: orderReturn.id })} target="order" />
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <ul className="divide-y rounded-lg border">
             {orderReturn.lines.map((line) => {

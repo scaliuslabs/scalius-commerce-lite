@@ -240,7 +240,7 @@ export function useReceivePurchaseOrder() {
   const queryClient = useQueryClient();
   return useCommand({
     name: "purchasing.purchase-order.receive",
-    mutationFn: (input: { id: string; body: Omit<PurchaseOrderReceiveBody, "operationKey"> }, operationKey) =>
+    mutationFn: (input: { id: string; body: Omit<PurchaseOrderReceiveBody, "operationKey"> }, operationKey: string) =>
       apiData(postApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceive({
         path: { purchaseOrderId: input.id },
         body: { ...input.body, operationKey },
@@ -290,7 +290,7 @@ export function useTransferCommand() {
   const queryClient = useQueryClient();
   return useCommand({
     name: "purchasing.transfer.command",
-    mutationFn: (input: { id: string; revision: number; action: "ship" | "cancel" }, operationKey) => {
+    mutationFn: (input: { id: string; revision: number; action: "ship" | "cancel" }, operationKey: string) => {
       const options = {
         path: { transferId: input.id },
         body: { expectedRevision: input.revision, operationKey },
@@ -308,7 +308,7 @@ export function useReceiveTransfer() {
   const queryClient = useQueryClient();
   return useCommand({
     name: "purchasing.transfer.receive",
-    mutationFn: (input: { id: string; lines: Array<{ lineId: string; quantity: number }> }, operationKey) =>
+    mutationFn: (input: { id: string; lines: Array<{ lineId: string; quantity: number }> }, operationKey: string) =>
       apiData(postApiV1AdminInventoryTransfersByTransferIdReceive({
         path: { transferId: input.id },
         body: { lines: input.lines, operationKey },

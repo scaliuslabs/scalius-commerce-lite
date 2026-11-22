@@ -22,34 +22,78 @@ export function commandIntent(action: string, payload: unknown): string {
   return `${action}:${JSON.stringify(canonicalize(payload))}`;
 }
 
+/** A short digest of an intent: the holder compares intents without keeping their inputs (licence keys, passwords). */
+function digest(text: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    h1 = Math.imul(h1 ^ code, 2654435761);
+    h2 = Math.imul(h2 ^ code, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return `${(h2 >>> 0).toString(36)}${(h1 >>> 0).toString(36)}:${text.length}`;
+}
+
 /**
  * Answers that say the server refused this request and did nothing. A key
  * every send of which got one of these is abandoned: the next submit is a
  * new request. Any other answer (no answer, a 5xx, 408, 409, 425, 429)
- * leaves the outcome open, and from then on the key stays until a success:
- * a later refusal may be the replay of a request that moved money.
+ * leaves the outcome open, and from then on the key stays until the server
+ * settles it: a later refusal may be the replay of a request that moved money.
  */
 const REFUSED_AND_UNDONE = new Set([400, 401, 403, 404, 410, 413, 422]);
 
 /**
+ * The server's machine-readable answer to a different request under a used
+ * key: the key's request was recorded. Read here only, by code or
+ * `details.reason`, never by the message's words.
+ */
+const KEY_USED_CODES = new Set(["idempotency_key_reused"]);
+const KEY_USED_REASONS = new Set(["request_key_reused"]);
+
+export function keyAlreadyUsed(error: unknown): boolean {
+  const answer = readAdminApiError(error);
+  const reason = (answer?.details as { reason?: unknown } | undefined)?.reason;
+  return KEY_USED_CODES.has(answer?.code ?? "") || (typeof reason === "string" && KEY_USED_REASONS.has(reason));
+}
+
+/** How a send settled, for the screen: done, the earlier request landed, refused with nothing done, or open. */
+export type KeyOutcome = "done" | "landed" | "refused" | "open";
+
+/**
  * One request key per intent (the action and its canonical payload): a
  * double submit of the same intent sends the same key, so the server replays
- * the first answer; a changed intent is a new request, unless an earlier
- * send's outcome is open, when the key stays (`mayHaveLanded`). A success
- * ends the key.
+ * the first answer; a changed intent is a new request. After an open outcome
+ * the next send reuses the key whatever its body, so the server either
+ * replays the request that landed, refuses the different one as already used
+ * (`keyAlreadyUsed`: the key ends and the screen says the earlier attempt went
+ * through), or runs it because nothing was recorded. A key is never renewed
+ * while a send of it is out, and it ends when every send has answered and the
+ * server settled it.
  */
 export class IntentRequestKey {
   private current: { intent: string; key: string } | null = null;
   private open = false;
+  private sending = 0;
+  private finished = false;
+  private landed = false;
 
   constructor(private readonly createKey: (action: string) => string = newRequestKey) {}
 
   get(action: string, payload: unknown): string {
-    const intent = commandIntent(action, payload);
-    if (this.current && (this.open || this.current.intent === intent)) return this.current.key;
-    const key = this.createKey(action);
-    this.current = { intent, key };
-    return key;
+    const intent = digest(commandIntent(action, payload));
+    this.landed = false;
+    if (this.current && (this.sending > 0 || this.open || this.current.intent === intent) && !(this.finished && this.sending === 0)) {
+      this.sending += 1;
+      return this.current.key;
+    }
+    this.current = { intent, key: this.createKey(action) };
+    this.open = false;
+    this.finished = false;
+    this.sending = 1;
+    return this.current.key;
   }
 
   /** An earlier send of this key got no definite answer: it may have gone through. */
@@ -57,19 +101,45 @@ export class IntentRequestKey {
     return this.open;
   }
 
+  /** The server said the key's earlier request was recorded (until the next send). */
+  get landedEarlier(): boolean {
+    return this.landed;
+  }
+
   clear(): void {
     this.current = null;
     this.open = false;
+    this.finished = false;
   }
 
   /** After the call settled: `error` absent on success. */
-  settled(error?: unknown): void {
-    if (error === undefined) return this.clear();
-    const status = readAdminApiError(error)?.status ?? null;
-    if (status !== null && REFUSED_AND_UNDONE.has(status)) {
-      if (!this.open) this.clear();
-      return;
+  settled(error?: unknown): KeyOutcome {
+    this.sending = Math.max(0, this.sending - 1);
+    let outcome: KeyOutcome;
+    if (error === undefined) {
+      outcome = "done";
+      this.finished = true;
+      this.open = false;
+    } else if (keyAlreadyUsed(error)) {
+      outcome = "landed";
+      this.finished = true;
+      this.open = false;
+      this.landed = true;
+    } else {
+      const status = readAdminApiError(error)?.status ?? null;
+      if (status !== null && REFUSED_AND_UNDONE.has(status)) {
+        outcome = this.open ? "open" : "refused";
+        if (!this.open && this.sending === 0) this.finished = true;
+      } else {
+        outcome = "open";
+        this.open = true;
+      }
     }
-    this.open = true;
+    if (this.finished && this.sending === 0) {
+      this.current = null;
+      this.open = false;
+      this.finished = false;
+    }
+    return outcome;
   }
 }

@@ -66,6 +66,7 @@ import {
 } from "./fulfilment-groups";
 import type { OrderActionRequest } from "./primary-action";
 import type { Order, OrderFulfillment } from "./types";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 // The hand-over dialog loads the first time a card opens it.
 const ManualFulfillmentDialog = lazy(() => import("./ManualFulfillmentDialog").then((module) => ({ default: module.ManualFulfillmentDialog })));
@@ -485,6 +486,7 @@ export function VoidFulfillmentDialog({ order, fulfillment, units, open, onOpenC
               : units === 1 ? t("void.bodyOne") : t("void.body", { count: units })}
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <CommandKeyNotice notice={mutation.notice({ fulfillmentId: fulfillment.id })} target="order" />
         {mutation.isError ? <p role="alert" className="text-body text-destructive">{orderErrorMessage(mutation.error)}</p> : null}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={mutation.isPending}>{r("cancel")}</AlertDialogCancel>

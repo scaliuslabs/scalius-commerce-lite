@@ -29,6 +29,7 @@ import {
 import { maskedGiftCard, todayStoreDay } from "./gift-card-format";
 import { useIssueGiftCard } from "./use-gift-card-mutations";
 import { DateInput } from "~/components/ui/date-input";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 /** The first API field error the dialog can place on a field (`recipient.phone` → the contact field). */
 function serverFieldIssue(error: unknown): { field: IssueField; message: string } | null {
@@ -168,6 +169,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
               <SheetDescription>{t("issueHelp")}</SheetDescription>
             </SheetHeader>
             <form id="issue-gift-card" method="post" noValidate className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4" onSubmit={submit}>
+              <CommandKeyNotice notice={mutation.notice({})} target="giftCard" />
               {mutation.isError && !serverIssue ? (
                 <Alert variant="destructive"><AlertDescription>{getServerFnError(mutation.error, t("issueFailed"))}</AlertDescription></Alert>
               ) : null}

@@ -21,6 +21,7 @@ import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
 import { isOrderConflict, orderErrorMessage, useRecordOrderPayment } from "~/lib/api-mutations/orders";
 import { MoneyInput } from "../shared/MoneyInput";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 /**
  * Money received against an invoice (net terms). Each opening mounts it fresh
@@ -90,6 +91,7 @@ export function RecordPaymentDialog({
           <DialogDescription>{t("netTerms.recordHelp")}</DialogDescription>
         </DialogHeader>
         <form id="order-record-payment" method="post" className="space-y-4" onSubmit={submit} noValidate>
+          <CommandKeyNotice notice={mutation.notice({ orderId })} target="order" />
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <Field
             id="recordPaymentAmount"

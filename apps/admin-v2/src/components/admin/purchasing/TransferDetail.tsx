@@ -23,6 +23,7 @@ import { isOpenTransfer, TransferStatusBadge } from "./purchasing-status";
 import { Fact, LineProduct, useUnitsText } from "./purchasing-ui";
 import { Page } from "~/components/admin/resource/Page";
 import { PurchasingLines } from "./PurchasingLines";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 /**
  * A transfer once shipped (or a draft for staff who can't edit): what left,
@@ -86,6 +87,7 @@ export function TransferDetail({ transfer, onReload }: { transfer: Transfer; onR
       {!canEdit ? (
         <ReadOnlyNotice />
       ) : null}
+      <CommandKeyNotice notice={command.notice({ id: transfer.id })} target="document" />
       {problem ? (
         <div className="mb-4">
           <PurchasingProblemBanner

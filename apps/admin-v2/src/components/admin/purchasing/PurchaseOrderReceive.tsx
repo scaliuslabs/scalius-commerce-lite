@@ -18,6 +18,7 @@ import { isOpenPurchaseOrder, PurchaseOrderStatusBadge } from "./purchasing-stat
 import { ReceiveLines, readReceipt, type ReceivableLine, type ReceiveQuantities } from "./ReceiveLines";
 import { ChoiceField } from "~/components/ui/field";
 import { Page } from "~/components/admin/resource/Page";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 export function receivableLines(order: PurchaseOrder): ReceivableLine[] {
   return order.lines.map((line) => ({
@@ -102,6 +103,7 @@ export function PurchaseOrderReceive({ order, onReload }: { order: PurchaseOrder
       />
       <div className="space-y-4">
         <p className="text-body text-muted-foreground">{t("receivingAt", { location: seededName(order.destination) })}</p>
+        <CommandKeyNotice notice={receive.notice({ id: order.id })} target="document" />
         <PurchasingProblemBanner
           problem={problem}
           staleText={t("purchaseOrderChanged")}

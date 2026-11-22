@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IntentRequestKey } from "./intent-request-key";
 
+/** What a screen says about its command's key: an earlier attempt may have landed, or did. */
+export type KeyNotice = "may-have-landed" | "landed";
+
 /** The callbacks of one call: they run when that call settles, while its screen is still there. */
 export interface CommandCallbacks<TData, TInput> {
   onSuccess?: (data: TData, input: TInput) => unknown;
@@ -45,8 +48,12 @@ export interface Command<TInput, TData> {
   data: TData | undefined;
   /** What the latest call was sent with. */
   variables: TInput | undefined;
-  /** An earlier send for this subject got no definite answer: it may have gone through. */
-  mayHaveLanded: (input: TInput) => boolean;
+  /**
+   * For this subject: an earlier send got no definite answer (`may-have-landed`),
+   * or the server refused a different request under its key because the earlier
+   * one was recorded (`landed`, until the next send; the failure is not `error`).
+   */
+  notice: (input: Partial<TInput>) => KeyNotice | null;
   reset: () => void;
   /** A dialog's `onOpenChange` that cannot close it while a call runs. */
   guardClose: (onOpenChange: (open: boolean) => void) => (open: boolean) => void;
@@ -72,7 +79,7 @@ interface CommandState<TInput, TData> {
   succeeded: boolean;
   data: TData | undefined;
   variables: TInput | undefined;
-  /** Bumped when a key's state changes, so `mayHaveLanded` is read again. */
+  /** Bumped when a key's state changes, so `notice` is read again. */
   keysSeen: number;
 }
 
@@ -153,7 +160,8 @@ export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInp
     // As React Query does: the command's own callbacks (cache refreshes) finish before
     // the call stops being pending and before the call's own callbacks (close the dialog).
     const finish = async (data: TData | undefined, error: Error | null) => {
-      holder.settled(error ?? undefined);
+      // The earlier request landed: the screen says so through `notice`, not as this call's error.
+      const landed = holder.settled(error ?? undefined) === "landed";
       const own = latest.current;
       await settle(error ? own.onError && (() => own.onError!(error, input)) : own.onSuccess && (() => own.onSuccess!(data as TData, input)));
       await settle(own.onSettled && (() => own.onSettled!(data, error, input)));
@@ -161,10 +169,11 @@ export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInp
       update((current) => {
         const pending = new Set(current.pending);
         pending.delete(subject);
-        return { pending, keysSeen: current.keysSeen + 1, ...(error ? { error } : { data, succeeded: true }) };
+        return { pending, keysSeen: current.keysSeen + 1, ...(error ? { error: landed ? null : error } : { data, succeeded: true }) };
       });
       const local = mounted.current ? callbacks : undefined;
-      report(error ? local?.onError && (() => local.onError!(error, input)) : local?.onSuccess && (() => local.onSuccess!(data as TData, input)));
+      // A screen words its own failures; the earlier request having landed is the notice's to say.
+      report(error ? !landed && local?.onError && (() => local.onError!(error, input)) : local?.onSuccess && (() => local.onSuccess!(data as TData, input)));
       report(local?.onSettled && (() => local.onSettled!(data, error, input)));
     };
     const call = Promise.resolve()
@@ -207,9 +216,10 @@ export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInp
     [],
   );
   const { keysSeen } = state;
-  const mayHaveLanded = useCallback((input: TInput) => {
+  const notice = useCallback((input: Partial<TInput>): KeyNotice | null => {
     void keysSeen;
-    return keyHolder((latest.current.subject ?? subjectOf)(input), false)?.mayHaveLanded ?? false;
+    const holder = keyHolder((latest.current.subject ?? subjectOf)(input as TInput), false);
+    return holder?.landedEarlier ? "landed" : holder?.mayHaveLanded ? "may-have-landed" : null;
   }, [keyHolder, keysSeen]);
 
   return useMemo(() => ({
@@ -222,8 +232,8 @@ export function useCommand<TInput, TData = unknown>(options: CommandOptions<TInp
     isSuccess: state.succeeded,
     data: state.data,
     variables: state.variables,
-    mayHaveLanded,
+    notice,
     reset,
     guardClose,
-  }), [guardClose, isPending, mayHaveLanded, mutate, mutateAsync, reset, state]);
+  }), [guardClose, isPending, notice, mutate, mutateAsync, reset, state]);
 }

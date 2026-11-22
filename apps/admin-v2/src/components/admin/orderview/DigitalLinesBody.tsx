@@ -60,7 +60,7 @@ export function DigitalLinesBody({ orderId, delivery }: { orderId: string; deliv
   });
   // The command's key: a retry after a lost answer replays it; a success ends it.
   const resend = useCommand({
-    mutationFn: (_input: { orderId: string }, requestKey) =>
+    mutationFn: (_input: { orderId: string }, requestKey: string) =>
       apiData(postApiV1AdminOrdersByIdDigitalResend({ path: { id: orderId }, body: { requestKey } })),
     onSuccess: () => done(t("resent")),
     onError: failed,

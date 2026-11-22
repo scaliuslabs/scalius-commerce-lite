@@ -221,8 +221,7 @@ export function useUpdateOrderDetails() {
 export function useAddOrderComment() {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "orders.comment",
-    mutationFn: ({ orderId, ...body }: { orderId: string } & ApiBody<typeof postApiV1AdminOrdersByIdTimeline>, requestKey) =>
+    mutationFn: ({ orderId, ...body }: { orderId: string } & ApiBody<typeof postApiV1AdminOrdersByIdTimeline>, requestKey: string) =>
       apiData(postApiV1AdminOrdersByIdTimeline({ path: { id: orderId }, body, headers: { "idempotency-key": requestKey } })),
     onSuccess: (_result, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["orders", "timeline", variables.orderId] });
@@ -316,7 +315,7 @@ export function useCreateFulfillment() {
   const queryClient = useQueryClient();
   return useCommand({
     name: "orders.fulfillment",
-    mutationFn: ({ orderId, ...body }: CreateFulfillmentInput, requestKey) =>
+    mutationFn: ({ orderId, ...body }: CreateFulfillmentInput, requestKey: string) =>
       apiData(postApiV1AdminOrdersByIdFulfillments({ path: { id: orderId }, body: { ...body, requestKey } })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
@@ -339,7 +338,8 @@ export function useVoidFulfillment() {
   const queryClient = useQueryClient();
   return useCommand({
     name: "orders.fulfillment.void",
-    mutationFn: ({ orderId, fulfillmentId }: { orderId: string; fulfillmentId: string }, requestKey) =>
+    subject: ({ fulfillmentId }) => fulfillmentId,
+    mutationFn: ({ orderId, fulfillmentId }: { orderId: string; fulfillmentId: string }, requestKey: string) =>
       apiData(postApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoid({
         path: { id: orderId, fulfillmentId },
         body: {},
@@ -372,8 +372,7 @@ export function useSetOrderFulfillmentLocation() {
 export function useMarkPickupReady() {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "orders.pickup-ready",
-    mutationFn: ({ orderId }: { orderId: string }, requestKey) =>
+    mutationFn: ({ orderId }: { orderId: string }, requestKey: string) =>
       apiData(postApiV1AdminOrdersByIdPickupReady({ path: { id: orderId }, body: {}, headers: { "idempotency-key": requestKey } })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
@@ -422,7 +421,7 @@ export function useRefundOrder() {
     // `lines` names the order lines the refund is for (the amount stays the money);
     // the intersection keeps this compiling before and after the SDK carries the field.
     mutationFn: ({ orderId, ...body }: { orderId: string; lines?: Array<{ orderItemId: string; quantity: number }> } &
-      Omit<ApiBody<typeof postApiV1AdminOrdersByIdRefund>, "requestKey">, requestKey) =>
+      Omit<ApiBody<typeof postApiV1AdminOrdersByIdRefund>, "requestKey">, requestKey: string) =>
       apiData(postApiV1AdminOrdersByIdRefund({ path: { id: orderId }, body: { ...body, requestKey } })),
     onSuccess: (result, variables) => {
       invalidateOrder(queryClient, variables.orderId);
@@ -496,9 +495,9 @@ export function useReconcileShipment() {
 export function useLookupUnknownShipment() {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "orders.shipment.lookup",
+    subject: ({ shipmentId }) => shipmentId,
     mutationFn: ({ orderId, shipmentId, expectedOrderVersion }: OrderShipmentRef &
-      Omit<ApiBody<typeof postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup>, "operationKey">, operationKey) =>
+      Omit<ApiBody<typeof postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup>, "operationKey">, operationKey: string) =>
       apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup({
         path: { id: orderId, shipmentId },
         body: { expectedOrderVersion, operationKey },
@@ -515,8 +514,8 @@ export function useLookupUnknownShipment() {
 export function useResolveUnknownShipment() {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "orders.shipment.resolve",
-    mutationFn: ({ orderId, shipmentId, ...body }: ResolveUnknownShipmentInput, operationKey) =>
+    subject: ({ shipmentId }) => shipmentId,
+    mutationFn: ({ orderId, shipmentId, ...body }: ResolveUnknownShipmentInput, operationKey: string) =>
       apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknown({
         path: { id: orderId, shipmentId },
         body: { ...body, operationKey } as ResolveUnknownShipmentBody,
@@ -562,7 +561,7 @@ export function useRecordOrderPayment() {
   return useCommand({
     name: "orders.payment",
     mutationFn: ({ orderId, ...body }: { orderId: string } &
-      ApiBody<typeof postApiV1AdminResourcesOrdersByIdPayments>, requestKey) =>
+      ApiBody<typeof postApiV1AdminResourcesOrdersByIdPayments>, requestKey: string) =>
       apiData(postApiV1AdminResourcesOrdersByIdPayments({ path: { id: orderId }, headers: { "idempotency-key": requestKey }, body })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
@@ -580,8 +579,9 @@ export function useRecordOrderDispute() {
   const queryClient = useQueryClient();
   return useCommand({
     name: "orders.dispute",
+    subject: ({ paymentId }) => paymentId,
     mutationFn: ({ orderId, paymentId, ...body }: { orderId: string; paymentId: string } &
-      ApiBody<typeof postApiV1AdminOrdersByIdPaymentsByPaymentIdDisputes>, requestKey) =>
+      ApiBody<typeof postApiV1AdminOrdersByIdPaymentsByPaymentIdDisputes>, requestKey: string) =>
       apiData(postApiV1AdminOrdersByIdPaymentsByPaymentIdDisputes({ path: { id: orderId, paymentId }, headers: { "idempotency-key": requestKey }, body })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
@@ -626,7 +626,6 @@ export function useRetryOrderNotification() {
 export function useResendOrderNotification() {
   const queryClient = useQueryClient();
   return useCommand({
-    name: "orders.notification.resend",
     subject: ({ outboxId }) => outboxId,
     mutationFn: ({ orderId, outboxId }: { orderId: string; outboxId: string }, resendRequestId: string) =>
       apiData(postApiV1AdminOrdersByIdNotificationsByOutboxIdResend({
@@ -646,12 +645,13 @@ export function useResolveOrderSupportRequest() {
   const queryClient = useQueryClient();
   return useCommand({
     name: "orders.support-request",
+    subject: ({ requestId }) => requestId,
     createKey: () => returnCommandKey("support-request"),
     mutationFn: ({ orderId, requestId, status, note, returnRequest }: {
       orderId: string;
       requestId: string;
       returnRequest?: Omit<SupportReturnRequest, "commandKey">;
-    } & Omit<ApiBody<typeof putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus>, "returnRequest">, commandKey) =>
+    } & Omit<ApiBody<typeof putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus>, "returnRequest">, commandKey: string) =>
       apiData(putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus({
         path: { id: orderId, requestId },
         body: { status, note: note ?? null, returnRequest: returnRequest && { ...returnRequest, commandKey } },
@@ -679,6 +679,8 @@ function useOrderReturnMutation<Input extends { orderId: string }, Result>(
   const queryClient = useQueryClient();
   return useCommand({
     name: `orders.return.${action}`,
+    // A new return belongs to its order; a command on one acts on that return.
+    subject: (input) => (input as { returnId?: string }).returnId ?? input.orderId,
     createKey: () => returnCommandKey(action),
     mutationFn,
     onSuccess: (result: Result, input: Input) => {
@@ -693,7 +695,7 @@ function useOrderReturnMutation<Input extends { orderId: string }, Result>(
 export function useCreateOrderReturn() {
   return useOrderReturnMutation(
     "create",
-    ({ orderId, ...body }: CreateOrderReturnInput, commandKey) =>
+    ({ orderId, ...body }: CreateOrderReturnInput, commandKey: string) =>
       apiData(postApiV1AdminOrdersByIdReturns({ path: { id: orderId }, body: { ...body, commandKey } })),
     () => toast.success(msg("toast.returnRequested")),
   );
@@ -702,7 +704,7 @@ export function useCreateOrderReturn() {
 export function useApproveOrderReturn() {
   return useOrderReturnMutation(
     "approve",
-    ({ orderId, returnId, ...body }: ApproveOrderReturnInput, commandKey) =>
+    ({ orderId, returnId, ...body }: ApproveOrderReturnInput, commandKey: string) =>
       apiData(postApiV1AdminOrdersByIdReturnsByReturnIdApprove({ path: { id: orderId, returnId }, body: { ...body, commandKey } })),
     (_client, result) => toast.success(msg(result.status === "rejected" ? "toast.returnRejected" : "toast.returnApproved")),
   );
@@ -711,7 +713,7 @@ export function useApproveOrderReturn() {
 export function useReceiveOrderReturn() {
   return useOrderReturnMutation(
     "receive",
-    ({ orderId, returnId, ...body }: ReceiveOrderReturnInput, commandKey) =>
+    ({ orderId, returnId, ...body }: ReceiveOrderReturnInput, commandKey: string) =>
       apiData(postApiV1AdminOrdersByIdReturnsByReturnIdReceive({ path: { id: orderId, returnId }, body: { ...body, commandKey } })),
     (queryClient, result, input) => {
       if (input.lines.some((line) => line.restockQuantity > 0)) invalidateOrderInventoryQueries(queryClient);
@@ -723,7 +725,7 @@ export function useReceiveOrderReturn() {
 export function useCancelOrderReturn() {
   return useOrderReturnMutation(
     "cancel",
-    ({ orderId, returnId, ...body }: CancelOrderReturnInput, commandKey) =>
+    ({ orderId, returnId, ...body }: CancelOrderReturnInput, commandKey: string) =>
       apiData(postApiV1AdminOrdersByIdReturnsByReturnIdCancel({ path: { id: orderId, returnId }, body: { ...body, commandKey } })),
     () => toast.success(msg("toast.returnCancelled")),
   );

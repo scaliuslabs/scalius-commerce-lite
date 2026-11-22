@@ -23,6 +23,7 @@ import {
 import type { Order } from "../types";
 import { getOrderItemName, clampQuantity } from "./shared";
 import { Field } from "~/components/ui/field";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
 
 /** Request a return. This never refunds money or changes stock. */
 export function CreateReturnDialog({
@@ -84,6 +85,7 @@ export function CreateReturnDialog({
           <DialogDescription>{t("returns.newHelp")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          <CommandKeyNotice notice={mutation.notice({ orderId: order.id })} target="order" />
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <Field id="return-reason" label={t("returns.reason")} error={errors.reason ? errors.reason : undefined}>
             <Input

@@ -33,6 +33,8 @@ import {
   type ReceiveLine,
   type ReceiveTally,
 } from "./receive-tally";
+import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
+import { keyAlreadyUsed } from "~/lib/intent-request-key";
 
 const tr = (key: keyof typeof scannerMessages.en, vars?: Record<string, string | number>) =>
   translate(scannerMessages, key, vars);
@@ -202,7 +204,7 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
   const receive = useCommand({
     name: "scanner.receive",
     createKey: () => `invop_${crypto.randomUUID()}`,
-    mutationFn: (intent: { kind: ReceiveDocument["kind"]; id: string; revision: number; lines: Array<{ lineId: string; quantity: number }>; updateCost: boolean }, operationKey) =>
+    mutationFn: (intent: { kind: ReceiveDocument["kind"]; id: string; revision: number; lines: Array<{ lineId: string; quantity: number }>; updateCost: boolean }, operationKey: string) =>
       postReceive(intent, intent.lines, intent.updateCost, operationKey),
   });
 
@@ -321,6 +323,8 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
         setReceiving(latest);
       }
     } catch (error) {
+      // The server says this key's earlier receipt was booked: the notice says so, the next tap is a new receipt.
+      if (keyAlreadyUsed(error)) return;
       if (error instanceof AdminApiResponseError && error.status < 500) {
         // Refused: nothing was booked. Changed meanwhile (another receipt, a cancel): reload and keep what still fits.
           if (error.status === 409 || error.status === 404) {
@@ -364,6 +368,7 @@ export function useReceiveSession({ locationId, feedback, onReceived }: {
     submit,
     problem,
     notice,
+    keyNotice: receiving ? receive.notice({ id: receiving.id }) : null,
   };
 }
 
@@ -482,6 +487,7 @@ export function ReceiveMode({ session, showDestination }: {
       </div>
 
       <div className="shrink-0 space-y-2 border-t bg-card px-3 py-3">
+        <CommandKeyNotice notice={session.keyNotice} target="document" />
         {session.problem ? (
           <div role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-body text-destructive">{session.problem}</div>
         ) : null}
