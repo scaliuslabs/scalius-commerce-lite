@@ -5,6 +5,8 @@
 -- inside a kit, never a gift card, at most 20, and a kit holds no stock of its
 -- own and never gets a stock movement (its components do). A component
 -- deleted later keeps its row, so the kit reads unavailable and says why.
+-- A change of a kit's components advances its product's checkout fence
+-- (checkout prices a kit from them).
 -- `product_page_offers` is the ordered list of other products' SKUs a
 -- product page shows under its own. Both tables are new: nothing is rebuilt.
 CREATE TABLE `product_page_offers` (
@@ -115,6 +117,25 @@ BEGIN
   SELECT RAISE(ABORT, 'product_page_offers_identity_immutable');
 END;
 --> statement-breakpoint
+CREATE TRIGGER `variant_components_checkout_fence_insert`
+AFTER INSERT ON `variant_components`
+BEGIN
+  INSERT INTO `checkout_fences` (`scope`, `revision`) SELECT DISTINCT 'product:' || `fence_source`.`product_id`, 1 FROM `product_variants` AS `fence_source` WHERE `fence_source`.`id` = NEW.`kit_variant_id` ON CONFLICT (`scope`) DO UPDATE SET `revision` = `checkout_fences`.`revision` + 1;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `variant_components_checkout_fence_update`
+AFTER UPDATE ON `variant_components`
+WHEN NEW.`quantity` IS NOT OLD.`quantity` OR NEW.`position` IS NOT OLD.`position`
+BEGIN
+  INSERT INTO `checkout_fences` (`scope`, `revision`) SELECT DISTINCT 'product:' || `fence_source`.`product_id`, 1 FROM `product_variants` AS `fence_source` WHERE `fence_source`.`id` IN (NEW.`kit_variant_id`, OLD.`kit_variant_id`) ON CONFLICT (`scope`) DO UPDATE SET `revision` = `checkout_fences`.`revision` + 1;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `variant_components_checkout_fence_delete`
+AFTER DELETE ON `variant_components`
+BEGIN
+  INSERT INTO `checkout_fences` (`scope`, `revision`) SELECT DISTINCT 'product:' || `fence_source`.`product_id`, 1 FROM `product_variants` AS `fence_source` WHERE `fence_source`.`id` = OLD.`kit_variant_id` ON CONFLICT (`scope`) DO UPDATE SET `revision` = `checkout_fences`.`revision` + 1;
+END;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_variant_components_ins` AFTER INSERT ON `variant_components`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
@@ -191,4 +212,4 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (224, '0224_kits_and_page_offers', '16201aca1d7b85f95f38171bcda4ca6538de70c124863e9d42e177f6b5ecfca7');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (224, '0224_kits_and_page_offers', 'b87b09108250971575ed722524af06049a8c7eea7c3016e978273b0fac2b1605');

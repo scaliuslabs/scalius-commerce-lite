@@ -197,6 +197,48 @@ CREATE TRIGGER "product_page_offers_identity_immutable"
 BEFORE UPDATE OF "product_id", "variant_id" ON "product_page_offers"
 FOR EACH ROW EXECUTE FUNCTION scalius_compat."product_page_offers_identity_immutable_fn"();
 --> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."variant_components_checkout_fence_insert_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  INSERT INTO "checkout_fences" ("scope", "revision") SELECT DISTINCT 'product:' || "fence_source"."product_id", 1 FROM "product_variants" AS "fence_source" WHERE "fence_source"."id" = NEW."kit_variant_id" ON CONFLICT ("scope") DO UPDATE SET "revision" = "checkout_fences"."revision" + 1;
+  RETURN NEW;
+END
+$trigger_function$;
+CREATE TRIGGER "variant_components_checkout_fence_insert"
+AFTER INSERT ON "variant_components"
+FOR EACH ROW EXECUTE FUNCTION scalius_compat."variant_components_checkout_fence_insert_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."variant_components_checkout_fence_update_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((NEW."quantity" IS DISTINCT FROM OLD."quantity" OR NEW."position" IS DISTINCT FROM OLD."position"), false) THEN
+    RETURN NEW;
+  END IF;
+  INSERT INTO "checkout_fences" ("scope", "revision") SELECT DISTINCT 'product:' || "fence_source"."product_id", 1 FROM "product_variants" AS "fence_source" WHERE "fence_source"."id" IN (NEW."kit_variant_id", OLD."kit_variant_id") ON CONFLICT ("scope") DO UPDATE SET "revision" = "checkout_fences"."revision" + 1;
+  RETURN NEW;
+END
+$trigger_function$;
+CREATE TRIGGER "variant_components_checkout_fence_update"
+AFTER UPDATE ON "variant_components"
+FOR EACH ROW EXECUTE FUNCTION scalius_compat."variant_components_checkout_fence_update_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."variant_components_checkout_fence_delete_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  INSERT INTO "checkout_fences" ("scope", "revision") SELECT DISTINCT 'product:' || "fence_source"."product_id", 1 FROM "product_variants" AS "fence_source" WHERE "fence_source"."id" = OLD."kit_variant_id" ON CONFLICT ("scope") DO UPDATE SET "revision" = "checkout_fences"."revision" + 1;
+  RETURN OLD;
+END
+$trigger_function$;
+CREATE TRIGGER "variant_components_checkout_fence_delete"
+AFTER DELETE ON "variant_components"
+FOR EACH ROW EXECUTE FUNCTION scalius_compat."variant_components_checkout_fence_delete_fn"();
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_variant_components_ins_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -321,4 +363,4 @@ FOR EACH ROW
 WHEN ((OLD."product_id" IS DISTINCT FROM NEW."product_id"))
 EXECUTE FUNCTION scalius_compat."cdep_product_page_offers_upd_old_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (224, '0224_kits_and_page_offers', '16201aca1d7b85f95f38171bcda4ca6538de70c124863e9d42e177f6b5ecfca7');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (224, '0224_kits_and_page_offers', 'b87b09108250971575ed722524af06049a8c7eea7c3016e978273b0fac2b1605');

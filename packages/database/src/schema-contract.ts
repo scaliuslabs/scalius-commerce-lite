@@ -900,7 +900,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 224,
     name: "0224_kits_and_page_offers",
-    sourceSha256: "16201aca1d7b85f95f38171bcda4ca6538de70c124863e9d42e177f6b5ecfca7",
+    sourceSha256: "b87b09108250971575ed722524af06049a8c7eea7c3016e978273b0fac2b1605",
   },
 ] as const;
 
