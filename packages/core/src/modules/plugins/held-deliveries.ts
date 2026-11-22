@@ -3,9 +3,10 @@
 import type { Database } from "@scalius/database/client";
 import { pluginEventDeliveries } from "@scalius/database/schema";
 import { and, eq, gte, sql } from "drizzle-orm";
+import { NEVER_DUE } from "../../utils/leased-queue";
 
 /** A held delivery's next attempt: none until its app runs again. */
-export const HELD_UNTIL = 253_402_300_799;
+export const HELD_UNTIL = NEVER_DUE;
 
 /**
  * The statement that makes an app's held deliveries due, for the batch that
