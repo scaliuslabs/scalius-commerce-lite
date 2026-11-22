@@ -1,3 +1,5 @@
+import { formatMoney as formatStoreMoney, getDecimalPlaces } from "@scalius/shared/currency";
+
 /**
  * Your words in a reader's language: `texts[language]`, else its base
  * language (`pt-BR` → `pt`), else English. In a checkout function or a
@@ -15,4 +17,15 @@ export function textFor<T>(language: string | null | undefined, texts: { readonl
     }
   }
   return texts.en;
+}
+
+/**
+ * An amount (integer minor units of its ISO currency) in a reader's language,
+ * as the store writes money on its pages ("৳350.00", "৳৩৫০.০০" in Bangla).
+ * In a storefront extension pass `input.language` and money in `input.currency`.
+ *
+ *   ui.text(textFor(input.language, { en: "Add for {price}" }).replace("{price}", moneyFor(input.language, { amountMinor: 35_000, currency: input.currency })))
+ */
+export function moneyFor(language: string | null | undefined, money: { amountMinor: number; currency: string }): string {
+  return formatStoreMoney(money.amountMinor / 10 ** getDecimalPlaces(money.currency), { code: money.currency, language: language || "en" });
 }

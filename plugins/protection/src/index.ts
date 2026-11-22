@@ -6,16 +6,24 @@
 // warranty (COMMERCE-HOOKS H21). The app keeps no coverage store of its own.
 //
 // - The plan is the app's own line input (`checkout.lineInputs`, a select
-//   under `scaliuslabs.protection.plan`), shown on products whose `eligible`
-//   flag is on, a SKU's own `eligible` flag over its product's (one offer of
-//   a product takes plans, another does not). Checkout refuses a plan on a
+//   under `scaliuslabs.protection.plan`) on lines whose `eligible` flag is
+//   on, a SKU's own `eligible` flag over its product's (one offer of a
+//   product takes plans, another does not). Checkout refuses a plan on a
 //   line it does not apply to. It shares the line with any other app's
 //   input or purchase option.
+// - It is chosen in the cart only, and drawn by the app (`surfaces: []`):
+//   under each eligible line (`cart.line.after`) an offer row names each
+//   plan with what it adds to the line, priced by this app's own
+//   `cart.line_prices` (`input.line.inputs[].offers`), and an Add button
+//   (`ui.cart.setLineInput`); a protected line says so with Remove. The
+//   cart's summary (`cart.page.summary`, `cart_drawer.footer`) says whether
+//   protection is recommended or every item is protected, adds a plan to
+//   every eligible item or removes them all, and folds the protected items
+//   into a disclosure. The store's totals show the plan as its own row.
 // - A buyer may decline a plan ("No protection"): the store asks them to
 //   agree to the decline agreement first (the choice's `confirm`) and the
 //   order line keeps the agreement; a declined line is priced and covered
-//   like no plan. The cart offers "Add a 1-year plan to all eligible items"
-//   and "Remove all protection" (the input's `bulk`).
+//   like no plan.
 // - The merchant writes the decline agreement (`decline_text`, per store
 //   language; the choice's `confirm.textSetting`). Changing the words changes
 //   the input's revision, so a decline given to older words (a cart kept
@@ -57,9 +65,13 @@ import {
   adminLocale,
   defineManifest,
   definePlugin,
+  moneyFor,
   PLUGIN_API_VERSION,
   textFor,
   ui,
+  type BuyerUiLine,
+  type PluginExtensionHandler,
+  type PluginSettingsOf,
   type OrderRepresentation,
   type OrderRepresentationLine,
   type PluginAdminLocale,
@@ -75,7 +87,7 @@ export * from "./plans";
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Protection Plans",
-  version: "1.4.0",
+  version: "1.5.0",
   apiVersion: PLUGIN_API_VERSION,
   description: "Sell one-year, two-year and lifetime protection plans on the products and offers you choose, priced as a share of the item. Every plan sold is your store's own warranty, with a protection ID buyers claim.",
   author: { name: "Scalius Labs" },
@@ -154,10 +166,8 @@ export const manifest = defineManifest({
         },
       ],
       help: "Covers accidental damage and defects. Leave it empty for no plan.",
-      bulk: {
-        apply: { label: "Add a 1-year plan to all eligible items", value: "one_year" },
-        clear: { label: "Remove all protection" },
-      },
+      // Chosen in the cart only, where the app draws it (an offer row under each line, the summary's add and remove).
+      surfaces: [],
       products: { customField: "eligible" },
       variants: { customField: "eligible" },
       // With `require_decision` on, every eligible line needs a plan or the decline before checkout;
@@ -172,6 +182,12 @@ export const manifest = defineManifest({
       targets: ["product.buy_box.after"],
       settings: [],
     }],
+    // The cart's offer row under each eligible line, and the summary on the cart page and in the drawer.
+    extensions: [
+      { target: "cart.line.after", reads: [] },
+      { target: "cart.page.summary", reads: [] },
+      { target: "cart_drawer.footer", reads: [] },
+    ],
   },
   routes: {
     admin: [
@@ -250,7 +266,6 @@ export const manifest = defineManifest({
                 agree: "আমি সম্মত এবং চালিয়ে যেতে চাই",
               },
             },
-            bulk: { apply: "সব যোগ্য পণ্যে ১ বছরের প্ল্যান যোগ করুন", clear: "সব প্রোটেকশন সরান" },
           },
         },
       },
@@ -639,8 +654,136 @@ export const BUYER_COPY = {
   },
 };
 
+/** What the buyer reads in the cart, in their language (`input.language`). */
+export const CART_COPY = {
+  en: {
+    plans: { one_year: "1-year plan", two_years: "2-year plan", lifetime: "Lifetime plan" },
+    offerTitle: "Protect this item",
+    offerText: "Get it repaired or replaced if it is damaged or stops working.",
+    declinedText: "You chose no protection for this item.",
+    add: "Add {plan} for {price}",
+    decline: "No thanks",
+    added: "{plan} added",
+    remove: "Remove",
+    recommended: "Protection recommended",
+    unprotected: "{count} of {total} eligible items have no protection.",
+    addAll: "Add a {plan} to all eligible items",
+    protectedTitle: "Your items are protected",
+    removeAll: "Remove all protection",
+    summary: "Protection · {price}",
+    unit: "{item}: {plan}, {price}",
+    note: "Each protected item gets a Protection ID once the order is complete.",
+  },
+  bn: {
+    plans: { one_year: "১ বছরের প্ল্যান", two_years: "২ বছরের প্ল্যান", lifetime: "আজীবন প্ল্যান" },
+    offerTitle: "এই পণ্যটি সুরক্ষিত করুন",
+    offerText: "ক্ষতিগ্রস্ত হলে বা কাজ না করলে মেরামত বা বদলে নিন।",
+    declinedText: "এই পণ্যে আপনি প্রোটেকশন নেননি।",
+    add: "{price}-এ {plan} যোগ করুন",
+    decline: "দরকার নেই",
+    added: "{plan} যোগ হয়েছে",
+    remove: "সরান",
+    recommended: "প্রোটেকশন নেওয়ার পরামর্শ দেওয়া হচ্ছে",
+    unprotected: "{total}টি যোগ্য পণ্যের {count}টিতে প্রোটেকশন নেই।",
+    addAll: "সব যোগ্য পণ্যে {plan} যোগ করুন",
+    protectedTitle: "আপনার পণ্যগুলো সুরক্ষিত",
+    removeAll: "সব প্রোটেকশন সরান",
+    summary: "প্রোটেকশন · {price}",
+    unit: "{item}: {plan}, {price}",
+    note: "অর্ডার সম্পন্ন হলে প্রতিটি সুরক্ষিত পণ্য একটি প্রোটেকশন আইডি পায়।",
+  },
+};
+
+const fill = (text: string, values: Record<string, string>) => text.replace(/\{(\w+)\}/gu, (match, name: string) => values[name] ?? match);
+/** The line's plan input as its extension reads it (keys without the app id). */
+const planOf = (line: BuyerUiLine) => line.inputs.find((input) => input.key === "plan");
+/** What this app adds to each unit of the line now (its plan's add-on). */
+const planAddOnMinor = (line: BuyerUiLine) => line.addOns.filter((addOn) => addOn.appId === APP_ID).reduce((total, addOn) => total + addOn.amountMinor, 0);
+/** The plans the merchant sells, in their order (a share above 0). */
+const soldPlans = (settings: Parameters<typeof planPercent>[1]) => (Object.keys(PLANS) as PlanId[]).filter((plan) => planPercent(plan, settings) > 0);
+
+/**
+ * Under each line that takes a plan: the plans with what each adds to the
+ * line (this app's own `cart.line_prices` answer, as checkout will charge
+ * it) and an Add button, and "No thanks" (the store asks for the decline
+ * agreement first); once a plan is on, the plan with Remove.
+ */
+export const lineOffer: PluginExtensionHandler<PluginSettingsOf<typeof manifest>> = ({ line, language, currency }) => {
+  const plan = line ? planOf(line) : undefined;
+  if (!line || !plan?.eligible) return { ui: null };
+  const copy = textFor(language, CART_COPY);
+  const lineKeys = [line.lineKey];
+  if (isPlan(plan.value)) {
+    return {
+      ui: ui.view([ui.stack([
+        ui.badge(fill(copy.added, { plan: copy.plans[plan.value] }), "success"),
+        ui.button(copy.remove, ui.cart.clearLineInput("plan", lineKeys), { tone: "secondary" }),
+      ], { direction: "horizontal", gap: "sm" })]),
+    };
+  }
+  const offers = plan.offers.filter((offer) => isPlan(offer.value)).slice(0, 3);
+  if (offers.length === 0) return { ui: null };
+  const declined = plan.value === DECLINED;
+  return {
+    ui: ui.view([ui.banner(declined ? "neutral" : "warning", declined ? copy.declinedText : copy.offerText, {
+      title: copy.offerTitle,
+      actions: [
+        ...offers.map((offer, index) => ui.button(
+          fill(copy.add, { plan: copy.plans[offer.value as PlanId], price: moneyFor(language, { amountMinor: offer.addOnMinor * line.quantity, currency }) }),
+          ui.cart.setLineInput("plan", offer.value, lineKeys),
+          { tone: index === 0 ? "primary" : "secondary" },
+        )),
+        ...(declined ? [] : [ui.button(copy.decline, ui.cart.setLineInput("plan", DECLINED, lineKeys), { tone: "secondary" })]),
+      ],
+    })]),
+  };
+};
+
+/**
+ * The cart's protection summary: recommended (with "Add a plan to all
+ * eligible items") while an eligible item has none, else protected (with
+ * "Remove all protection"), and the protected items folded into a
+ * disclosure with what each plan costs.
+ */
+export const cartSummary: PluginExtensionHandler<PluginSettingsOf<typeof manifest>> = ({ lines, language, currency }, settings) => {
+  const eligible = (lines ?? []).filter((line) => planOf(line)?.eligible);
+  if (eligible.length === 0) return { ui: null };
+  const copy = textFor(language, CART_COPY);
+  const protectedLines = eligible.filter((line) => isPlan(planOf(line)?.value));
+  const unprotected = eligible.length - protectedLines.length;
+  const first = soldPlans(settings)[0];
+  const money = (amountMinor: number) => moneyFor(language, { amountMinor, currency });
+  const status = unprotected > 0
+    ? ui.banner("warning", fill(copy.unprotected, { count: String(unprotected), total: String(eligible.length) }), {
+      title: copy.recommended,
+      ...(first ? { actions: [ui.button(fill(copy.addAll, { plan: copy.plans[first] }), ui.cart.setLineInput("plan", first), { tone: "primary" })] } : {}),
+    })
+    : ui.banner("success", "", { title: copy.protectedTitle, actions: [ui.button(copy.removeAll, ui.cart.clearLineInput("plan"), { tone: "secondary" })] });
+  if (protectedLines.length === 0) return { ui: ui.view([status]) };
+  const total = protectedLines.reduce((sum, line) => sum + planAddOnMinor(line) * line.quantity, 0);
+  return {
+    ui: ui.view([
+      status,
+      ui.disclosure(fill(copy.summary, { price: money(total) }), [
+        ...protectedLines.map((line) => ui.text(fill(copy.unit, {
+          item: line.quantity > 1 ? `${line.title} × ${line.quantity}` : line.title,
+          plan: copy.plans[planOf(line)!.value as PlanId],
+          price: money(planAddOnMinor(line) * line.quantity),
+        }))),
+        ui.text(copy.note, { size: "sm" }),
+      ]),
+    ]),
+  };
+};
+
 export default definePlugin({
   manifest,
+
+  extensions: {
+    "cart.line.after": lineOffer,
+    "cart.page.summary": cartSummary,
+    "cart_drawer.footer": cartSummary,
+  },
 
   functions: {
     // The plan is a share of each unit as checkout prices it (any app's price, any currency). Checkout
