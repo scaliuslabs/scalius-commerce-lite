@@ -109,7 +109,9 @@ export const META_PURCHASE_QUEUE = leasedQueue(metaCapiPurchaseOutbox, {
     maxAttempts: 180,
     backoff: [60, 120, 240, 480, 960, 1_920, 3_600],
     doneAt: "sentAt",
+    givenUpAt: "skippedAt",
     errorLength: 500,
+    capReason: "attempt_limit",
     clearErrorOnClaim: true,
 });
 
@@ -370,20 +372,9 @@ async function processMetaPurchaseOutboxById(
             // A purchase per order: every success is logged.
             successLog: "every",
         });
-        await markMetaPurchaseOutboxAfterSend(db, claim.row.id, claim.claimId, claim.row.attempts, result);
-        return {
-            processed: true,
-            status: result.success ? "sent" : result.retryable === false ? "skipped" : "failed",
-        };
+        return { processed: true, status: await markMetaPurchaseOutboxAfterSend(db, claim.row.id, claim.claimId, claim.row.attempts, result) };
     } catch (error) {
-        await markMetaPurchaseOutboxFailed(
-            db,
-            claim.row.id,
-            claim.claimId,
-            claim.row.attempts,
-            error,
-        );
-        return { processed: true, status: "failed" };
+        return { processed: true, status: await markMetaPurchaseOutboxFailed(db, claim.row.id, claim.claimId, claim.row.attempts, error) };
     }
 }
 
@@ -477,32 +468,36 @@ async function claimMetaPurchaseOutbox(
     return { claimed: false, reason: "busy" };
 }
 
+/** Records a send's outcome and returns the state it left the row in. */
 async function markMetaPurchaseOutboxAfterSend(
     db: Database,
     outboxId: string,
     claimId: string,
     attempts: number,
     result: SendCapiEventResult,
-): Promise<void> {
+): Promise<"sent" | "failed" | "skipped"> {
     if (result.success) {
         await META_PURCHASE_QUEUE.finish(db, eq(metaCapiPurchaseOutbox.id, outboxId), META_PURCHASE_QUEUE.heldBy(claimId));
-        return;
+        return "sent";
     }
 
     if (result.retryable === false) {
         await markMetaPurchaseOutboxSkipped(db, outboxId, claimId, result.error ?? "Meta CAPI event skipped.");
-        return;
+        return "skipped";
     }
 
-    await markMetaPurchaseOutboxFailed(db, outboxId, claimId, attempts, result.error ?? "Meta CAPI send failed.");
+    return await markMetaPurchaseOutboxFailed(db, outboxId, claimId, attempts, result.error ?? "Meta CAPI send failed.");
 }
 
 async function markMetaPurchaseOutboxSkipped(db: Database, outboxId: string, claimId: string, reason: string): Promise<void> {
-    await META_PURCHASE_QUEUE.giveUp(db, eq(metaCapiPurchaseOutbox.id, outboxId), META_PURCHASE_QUEUE.heldBy(claimId), reason, { skippedAt: sql`unixepoch()` });
+    await META_PURCHASE_QUEUE.giveUp(db, eq(metaCapiPurchaseOutbox.id, outboxId), META_PURCHASE_QUEUE.heldBy(claimId), reason);
 }
 
-async function markMetaPurchaseOutboxFailed(db: Database, outboxId: string, claimId: string, attempts: number, error: unknown): Promise<void> {
-    await META_PURCHASE_QUEUE.fail(db, eq(metaCapiPurchaseOutbox.id, outboxId), META_PURCHASE_QUEUE.heldBy(claimId), attempts, error).statement;
+/** Retried after its backoff, or skipped on its last attempt. */
+async function markMetaPurchaseOutboxFailed(db: Database, outboxId: string, claimId: string, attempts: number, error: unknown): Promise<"failed" | "skipped"> {
+    const failed = META_PURCHASE_QUEUE.fail(db, eq(metaCapiPurchaseOutbox.id, outboxId), META_PURCHASE_QUEUE.heldBy(claimId), attempts, error);
+    await failed.statement;
+    return failed.gaveUp ? "skipped" : "failed";
 }
 
 async function selectOutboxById(db: Database, outboxId: string): Promise<PurchaseOutboxRow | undefined> {
