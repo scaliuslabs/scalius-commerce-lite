@@ -26,23 +26,6 @@ CREATE TABLE "variant_components" (
 --> statement-breakpoint
 CREATE INDEX "variant_components_component_idx" ON "variant_components" ("component_variant_id");
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION scalius_compat."variant_components_a_serialize_fn"()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $trigger_function$
-BEGIN
-  -- PostgreSQL only (SQLite runs one writer at a time): concurrent writes to
-  -- one kit, or to two kits naming each other, take both SKU rows in one
-  -- order first, so the guards below (each a new READ COMMITTED snapshot)
-  -- see the other write's rows: no nesting and no 21st item under concurrency.
-  PERFORM 1 FROM "product_variants" WHERE "id" IN (NEW."kit_variant_id", NEW."component_variant_id") ORDER BY "id" FOR UPDATE;
-  RETURN NEW;
-END
-$trigger_function$;
-CREATE TRIGGER "variant_components_a_serialize"
-BEFORE INSERT ON "variant_components"
-FOR EACH ROW EXECUTE FUNCTION scalius_compat."variant_components_a_serialize_fn"();
---> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."variant_components_component_live_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
