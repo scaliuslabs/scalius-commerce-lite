@@ -358,22 +358,39 @@ async function readOrderForFulfilment(db: Database, orderId: string) {
 
 /**
  * A request key names one hand-over: a repeat replays it only when it asks the
- * same thing (its kind, its lines when it names them, cash taken or not); a
+ * same thing in every field the server stored (its kind; its lines when it
+ * names them; the cash taken at the counter; the own-rider parcel's courier,
+ * tracking, note and collect amount, normalized as they were written). A
  * different hand-over under the key is refused as already used, never answered
- * as done. The parcel's details and the cash amount are not stored with the
- * fulfilment, so they are not compared.
+ * as done.
  */
-function assertSameHandOver(
+async function assertSameHandOver(
+    db: Database,
+    orderId: string,
     replay: NonNullable<Awaited<ReturnType<typeof findFulfilmentByRequestKey>>>,
     input: RecordOrderFulfilmentInput,
-): void {
+): Promise<void> {
     const asked = (lines: ReadonlyArray<{ id: string; quantity: number }>) =>
         JSON.stringify([...lines].sort((left, right) => left.id.localeCompare(right.id)).map((line) => [line.id, line.quantity]));
     const sameLines = input.lines === undefined
         || asked(input.lines.map((line) => ({ id: line.itemId, quantity: line.quantity })))
             === asked(replay.lines.map((line) => ({ id: line.orderItemId, quantity: line.quantity })));
-    const sameCash = (input.cashReceivedMinor !== undefined) === (replay.cashCollectedMinor !== null);
-    if (replay.kind !== input.kind || !sameLines || !sameCash) {
+    const currency = resolveOrderCurrencySnapshot(await readOrderForFulfilment(db, orderId));
+    const asMinor = (value: number | null | undefined) => (value == null ? null : onCashOnDeliveryIncrementMinor(value, currency));
+    const sameCash = asMinor(input.cashReceivedMinor) === replay.cashCollectedMinor;
+    let sameParcel = input.parcel === undefined || replay.shipmentId === null;
+    if (!sameParcel && replay.shipmentId) {
+        const parcel = await db.select({
+            courierName: deliveryShipments.courierName, trackingId: deliveryShipments.trackingId,
+            trackingUrl: deliveryShipments.trackingUrl, note: deliveryShipments.note, shipmentAmountMinor: deliveryShipments.shipmentAmountMinor,
+        }).from(deliveryShipments).where(eq(deliveryShipments.id, replay.shipmentId)).get();
+        const text = (value: string | undefined) => value?.trim() || null;
+        sameParcel = parcel !== undefined
+            && parcel.courierName === text(input.parcel?.courierName) && parcel.trackingId === text(input.parcel?.trackingId)
+            && parcel.trackingUrl === text(input.parcel?.trackingUrl) && parcel.note === text(input.parcel?.note)
+            && parcel.shipmentAmountMinor === asMinor(input.parcel?.shipmentAmountMinor);
+    }
+    if (replay.kind !== input.kind || !sameLines || !sameCash || !sameParcel) {
         throw new AppError(422, "idempotency_key_reused", "This request key was already used for another hand-over. Start a new one.");
     }
 }
@@ -422,7 +439,7 @@ export async function recordOrderFulfilment(
     const requestKey = normalizeRequestKey(input.requestKey);
     const replay = await findFulfilmentByRequestKey(db, orderId, requestKey);
     if (replay) {
-        assertSameHandOver(replay, input);
+        await assertSameHandOver(db, orderId, replay, input);
         return replayResult(db, orderId, replay);
     }
 
@@ -544,7 +561,7 @@ export async function recordOrderFulfilment(
     } catch (error) {
         const raced = await findFulfilmentByRequestKey(db, orderId, requestKey).catch(() => null);
         if (raced) {
-            assertSameHandOver(raced, input);
+            await assertSameHandOver(db, orderId, raced, input);
             return replayResult(db, orderId, raced);
         }
         if (isBatchGuardError(error, FULFILMENT_CLAIM_GUARD) || isLedgerBoundsError(error)) {
