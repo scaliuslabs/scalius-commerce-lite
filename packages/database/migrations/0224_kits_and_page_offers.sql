@@ -3,7 +3,9 @@
 -- components and their quantities. Guard triggers keep every kit legal: each
 -- component a live SKU when added, never the kit itself (CHECK), never a kit
 -- inside a kit, never a gift card, at most 20, and a kit holds no stock of its
--- own and never gets a stock movement (its components do). A component
+-- own (insert and update), never gets a stock movement, is never an order
+-- line (checkout and staff orders sell it as its components), and a product
+-- whose SKU is a kit or a component never becomes a gift card. A component
 -- deleted later keeps its row, so the kit reads unavailable and says why.
 -- A change of a kit's components advances its product's checkout fence
 -- (checkout prices a kit from them).
@@ -117,6 +119,40 @@ BEGIN
   SELECT RAISE(ABORT, 'product_page_offers_identity_immutable');
 END;
 --> statement-breakpoint
+CREATE TRIGGER `product_variants_kit_holds_no_stock`
+BEFORE UPDATE OF `stock`, `reserved_stock`, `preorder_stock`, `track_inventory` ON `product_variants`
+WHEN (NEW.`stock` <> 0 OR NEW.`reserved_stock` <> 0 OR NEW.`preorder_stock` <> 0 OR NEW.`track_inventory` = 1)
+  AND EXISTS (SELECT 1 FROM `variant_components` AS kit_part WHERE kit_part.`kit_variant_id` = NEW.`id`)
+BEGIN
+  SELECT RAISE(ABORT, 'product_variants_kit_stock');
+END;
+--> statement-breakpoint
+CREATE TRIGGER `products_kit_never_a_gift_card`
+BEFORE UPDATE OF `is_gift_card` ON `products`
+WHEN NEW.`is_gift_card` = 1 AND OLD.`is_gift_card` = 0 AND EXISTS (
+  SELECT 1 FROM `product_variants` AS kit_sku
+  WHERE kit_sku.`product_id` = NEW.`id`
+    AND (EXISTS (SELECT 1 FROM `variant_components` AS as_kit WHERE as_kit.`kit_variant_id` = kit_sku.`id`)
+      OR EXISTS (SELECT 1 FROM `variant_components` AS as_part WHERE as_part.`component_variant_id` = kit_sku.`id`))
+)
+BEGIN
+  SELECT RAISE(ABORT, 'products_kit_gift_card');
+END;
+--> statement-breakpoint
+CREATE TRIGGER `order_items_never_a_kit`
+BEFORE INSERT ON `order_items`
+WHEN NEW.`variant_id` IS NOT NULL AND EXISTS (SELECT 1 FROM `variant_components` AS kit_part WHERE kit_part.`kit_variant_id` = NEW.`variant_id`)
+BEGIN
+  SELECT RAISE(ABORT, 'order_items_kit');
+END;
+--> statement-breakpoint
+CREATE TRIGGER `order_items_never_become_a_kit`
+BEFORE UPDATE OF `variant_id` ON `order_items`
+WHEN NEW.`variant_id` IS NOT NULL AND EXISTS (SELECT 1 FROM `variant_components` AS kit_part WHERE kit_part.`kit_variant_id` = NEW.`variant_id`)
+BEGIN
+  SELECT RAISE(ABORT, 'order_items_kit');
+END;
+--> statement-breakpoint
 CREATE TRIGGER `variant_components_checkout_fence_insert`
 AFTER INSERT ON `variant_components`
 BEGIN
@@ -212,4 +248,4 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (224, '0224_kits_and_page_offers', 'b87b09108250971575ed722524af06049a8c7eea7c3016e978273b0fac2b1605');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (224, '0224_kits_and_page_offers', '7cf0ae3969ac5b4c4d44cbbde92afe44811afba46d73ef5c4d38c0ffa7ea1562');

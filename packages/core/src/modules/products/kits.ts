@@ -247,7 +247,9 @@ export const KIT_REFUSALS = {
     kit_is_component: "This SKU is part of another kit, so it can't be a kit itself. Remove it from that kit first.",
     kit_gift_card: "A gift card can't be a kit.",
     kit_has_stock: "A kit has no stock of its own: its items carry it. Set this SKU's stock to 0 first.",
-    kit_stock_movement: "This SKU is a kit, so its stock comes from its items. Change the items' stock instead.",
+    kit_stock_movement: "This SKU is a kit, so it holds no stock and doesn't track it: its items carry it. Change the items' stock instead.",
+    kit_product_gift_card: "This product's SKU is a kit or part of one, so it can't become a gift card. Take it out of the kit first.",
+    kit_order_line: "A kit is sold as its items, never as one order line. Add the kit through checkout or a staff order, which list its items.",
     kit_variant_not_found: "That SKU is not a live SKU of this product.",
     page_offer_limit: `A product page shows at most ${PRODUCT_PAGE_OFFERS_MAX} offers of other products.`,
     page_offer_duplicate: "An offer is listed twice. Keep it once.",
@@ -270,6 +272,9 @@ const KIT_GUARD_REASONS: ReadonlyArray<[string, KitRefusalReason]> = [
     ["variant_components_kit_stock", "kit_has_stock"],
     ["variant_components_not_self", "kit_component_self"],
     ["inventory_movements_kit", "kit_stock_movement"],
+    ["product_variants_kit_stock", "kit_stock_movement"],
+    ["products_kit_gift_card", "kit_product_gift_card"],
+    ["order_items_kit", "kit_order_line"],
     ["product_page_offers_variant_invalid", "page_offer_own_sku"],
     ["product_page_offers_limit", "page_offer_limit"],
 ];
@@ -284,5 +289,5 @@ function errorText(error: unknown, depth = 0): string {
 export function kitGuardRefusal(error: unknown): ReturnType<typeof kitRefusal> | null {
     const text = errorText(error);
     const match = KIT_GUARD_REASONS.find(([marker]) => text.includes(marker));
-    return match ? kitRefusal(match[1], { field: match[1] === "kit_stock_movement" ? "stock" : match[1].startsWith("page_offer") ? "variantIds" : "components" }) : null;
+    return match ? kitRefusal(match[1], { field: match[1] === "kit_stock_movement" ? "stock" : match[1] === "kit_product_gift_card" ? "isGiftCard" : match[1].startsWith("page_offer") ? "variantIds" : "components" }) : null;
 }

@@ -34,6 +34,7 @@ import {
   productPublishedToChannelSql,
   type ProductBundleRow,
   productBundleTiersByProduct,
+  kitComponentProblem,
   kitComponentsSql,
   kitPrice,
   KitWithoutSingleItemError,
@@ -880,6 +881,18 @@ export function resolveStorefrontCartValidationFromRows(
             ? variant.fulfillmentKind
             : "physical";
         const isGiftCard = product.isGiftCard === true;
+        // A kit's item is sold only while it can be (the one rule the product page reads too, `kitComponentProblem`):
+        // the rows already hold only live, active, published products, so what is left to judge is a gift card.
+        if (item.bundle?.kit && kitComponentProblem({ variantLive: true, productActive: product.isActive, productDeleted: false, productPublished: true, productGiftCard: isGiftCard }) !== null) {
+            addIssue(issues, item, index, {
+                code: "product_unavailable",
+                action: "remove",
+                message: `${item.bundle.title} can't be sold right now: one of its items can't be part of a kit.`,
+                productName: product.name,
+                variantLabel: requestedVariantLabel,
+            });
+            return;
+        }
         const knownType: FulfillmentType | null = resolveLineFulfillmentType(
             { fulfillmentKind, isGiftCard },
             null,

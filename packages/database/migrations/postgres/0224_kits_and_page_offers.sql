@@ -26,6 +26,23 @@ CREATE TABLE "variant_components" (
 --> statement-breakpoint
 CREATE INDEX "variant_components_component_idx" ON "variant_components" ("component_variant_id");
 --> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."variant_components_a_serialize_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  -- PostgreSQL only (SQLite runs one writer at a time): concurrent writes to
+  -- one kit, or to two kits naming each other, take both SKU rows in one
+  -- order first, so the guards below (each a new READ COMMITTED snapshot)
+  -- see the other write's rows: no nesting and no 21st item under concurrency.
+  PERFORM 1 FROM "product_variants" WHERE "id" IN (NEW."kit_variant_id", NEW."component_variant_id") ORDER BY "id" FOR UPDATE;
+  RETURN NEW;
+END
+$trigger_function$;
+CREATE TRIGGER "variant_components_a_serialize"
+BEFORE INSERT ON "variant_components"
+FOR EACH ROW EXECUTE FUNCTION scalius_compat."variant_components_a_serialize_fn"();
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."variant_components_component_live_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -197,6 +214,76 @@ CREATE TRIGGER "product_page_offers_identity_immutable"
 BEFORE UPDATE OF "product_id", "variant_id" ON "product_page_offers"
 FOR EACH ROW EXECUTE FUNCTION scalius_compat."product_page_offers_identity_immutable_fn"();
 --> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."product_variants_kit_holds_no_stock_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce(((NEW."stock" <> 0 OR NEW."reserved_stock" <> 0 OR NEW."preorder_stock" <> 0 OR NEW."track_inventory" = 1)
+  AND EXISTS (SELECT 1 FROM "variant_components" AS kit_part WHERE kit_part."kit_variant_id" = NEW."id")), false) THEN
+    RETURN NEW;
+  END IF;
+  RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'product_variants_kit_stock';
+  RETURN NEW;
+END
+$trigger_function$;
+CREATE TRIGGER "product_variants_kit_holds_no_stock"
+BEFORE UPDATE OF "stock", "reserved_stock", "preorder_stock", "track_inventory" ON "product_variants"
+FOR EACH ROW EXECUTE FUNCTION scalius_compat."product_variants_kit_holds_no_stock_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."products_kit_never_a_gift_card_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((NEW."is_gift_card" = 1 AND OLD."is_gift_card" = 0 AND EXISTS (
+  SELECT 1 FROM "product_variants" AS kit_sku
+  WHERE kit_sku."product_id" = NEW."id"
+    AND (EXISTS (SELECT 1 FROM "variant_components" AS as_kit WHERE as_kit."kit_variant_id" = kit_sku."id")
+      OR EXISTS (SELECT 1 FROM "variant_components" AS as_part WHERE as_part."component_variant_id" = kit_sku."id"))
+)), false) THEN
+    RETURN NEW;
+  END IF;
+  RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'products_kit_gift_card';
+  RETURN NEW;
+END
+$trigger_function$;
+CREATE TRIGGER "products_kit_never_a_gift_card"
+BEFORE UPDATE OF "is_gift_card" ON "products"
+FOR EACH ROW EXECUTE FUNCTION scalius_compat."products_kit_never_a_gift_card_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."order_items_never_a_kit_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((NEW."variant_id" IS NOT NULL AND EXISTS (SELECT 1 FROM "variant_components" AS kit_part WHERE kit_part."kit_variant_id" = NEW."variant_id")), false) THEN
+    RETURN NEW;
+  END IF;
+  RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'order_items_kit';
+  RETURN NEW;
+END
+$trigger_function$;
+CREATE TRIGGER "order_items_never_a_kit"
+BEFORE INSERT ON "order_items"
+FOR EACH ROW EXECUTE FUNCTION scalius_compat."order_items_never_a_kit_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."order_items_never_become_a_kit_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((NEW."variant_id" IS NOT NULL AND EXISTS (SELECT 1 FROM "variant_components" AS kit_part WHERE kit_part."kit_variant_id" = NEW."variant_id")), false) THEN
+    RETURN NEW;
+  END IF;
+  RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'order_items_kit';
+  RETURN NEW;
+END
+$trigger_function$;
+CREATE TRIGGER "order_items_never_become_a_kit"
+BEFORE UPDATE OF "variant_id" ON "order_items"
+FOR EACH ROW EXECUTE FUNCTION scalius_compat."order_items_never_become_a_kit_fn"();
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."variant_components_checkout_fence_insert_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -363,4 +450,4 @@ FOR EACH ROW
 WHEN ((OLD."product_id" IS DISTINCT FROM NEW."product_id"))
 EXECUTE FUNCTION scalius_compat."cdep_product_page_offers_upd_old_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (224, '0224_kits_and_page_offers', 'b87b09108250971575ed722524af06049a8c7eea7c3016e978273b0fac2b1605');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (224, '0224_kits_and_page_offers', '7cf0ae3969ac5b4c4d44cbbde92afe44811afba46d73ef5c4d38c0ffa7ea1562');

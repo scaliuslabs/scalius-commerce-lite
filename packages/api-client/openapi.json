@@ -17263,7 +17263,28 @@
                       "type": "string",
                       "enum": [
                         "expand",
-                        "merge"
+                        "merge",
+                        "kit"
+                      ]
+                    },
+                    "kit": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "variantId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "productId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        }
+                      },
+                      "required": [
+                        "variantId",
+                        "productId"
                       ]
                     },
                     "anchor": {
@@ -17286,6 +17307,7 @@
                     "id",
                     "title",
                     "kind",
+                    "kit",
                     "anchor",
                     "units",
                     "perUnit"
@@ -40434,11 +40456,6 @@
                           "maxLength": 100,
                           "description": "Product id"
                         },
-                        "price": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 9000000000000
-                        },
                         "quantity": {
                           "type": "integer",
                           "minimum": 0,
@@ -40449,19 +40466,13 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 100
-                        },
-                        "basePrice": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 9000000000000,
-                          "description": "Unit price before buyer-input surcharges, which quantity bundles price from; defaults to `price`."
                         }
                       },
                       "required": [
                         "id",
-                        "price",
                         "quantity"
-                      ]
+                      ],
+                      "description": "A cart line. Prices are the catalogue's, as checkout charges them (a kit at its price), never the client's."
                     },
                     "maxItems": 99,
                     "description": "Cart items"

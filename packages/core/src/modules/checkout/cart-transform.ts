@@ -382,7 +382,7 @@ export function orderLineBundles(items: ReadonlyArray<Pick<StorefrontCartValidat
         if (!bundle) continue;
         if (bundle.kind === "merge") {
             if (!firstMerged.has(bundle.id)) firstMerged.set(bundle.id, item.index);
-            bundles.set(item.index, { id: bundle.id, title: bundle.title, kind: "merge", anchor: firstMerged.get(bundle.id) === item.index, units: null, perUnit: null });
+            bundles.set(item.index, { id: bundle.id, title: bundle.title, kind: "merge", kit: null, anchor: firstMerged.get(bundle.id) === item.index, units: null, perUnit: null });
             continue;
         }
         // Each component holds `perUnit × units` (applyCartTransform), so the division is exact.
@@ -390,7 +390,10 @@ export function orderLineBundles(items: ReadonlyArray<Pick<StorefrontCartValidat
         const perUnit = units ? item.quantity / units : null;
         const whole = units !== null && perUnit !== null && Number.isSafeInteger(perUnit) && perUnit > 0;
         bundles.set(item.index, {
-            id: bundle.id, title: bundle.title, kind: "expand", anchor: anchors.get(bundle.id)?.index === item.index,
+            // A store kit names itself: its kind and its own SKU and product.
+            id: bundle.id, title: bundle.title, kind: bundle.kit ? "kit" : "expand",
+            kit: bundle.kit ? { variantId: bundle.kit.variantId, productId: bundle.kit.productId } : null,
+            anchor: anchors.get(bundle.id)?.index === item.index,
             units: whole ? units : null, perUnit: whole ? perUnit : null,
         });
     }

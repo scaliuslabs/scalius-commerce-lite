@@ -22,7 +22,10 @@ import {
     withAppLineInputs,
     appLineInputApplies,
     parseAppLineInputFlags,
+    lineBundleProperty,
+    readOrderLineProperties,
     type AppLineInputs,
+    type OrderLineBundle,
 } from "@scalius/shared/line-properties";
 import { discountedPriceMinor, isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
 import { isLineAmountInRange } from "@scalius/shared/order-limits";
@@ -51,9 +54,14 @@ import { buildStorefrontTaxAllocationLineId, calculateStorefrontTaxQuote, taxAdd
 import { billingTaxLocation } from "../billing-address";
 import { type TaxQuote, type TaxQuoteCustomer } from "../../tax/browser";
 import {
+  kitComponentsSql,
+  kitPrice,
+  KitWithoutSingleItemError,
   loadProductMediaProjections,
+  parseKitComponents,
   resolveSkuImageRepresentation,
   variantOptionLabelSql,
+  type KitComponentRef,
 } from "../../products";
 import { resolveActiveDeliveryLocationNames } from "../../delivery";
 import type {
@@ -81,6 +89,10 @@ type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     customizationSchema: string | null;
     /** The product's and the SKU's app flags (`appFlagsSql`): which app line inputs the line takes. */
     appFlags: { product: string | null; variant: string | null };
+    /** A kit SKU's components (`kitComponentsSql`): a staff order sells it as them (`expandAdminOrderKits`). */
+    kitComponents: KitComponentRef[] | null;
+    /** A kit's component line: its kit's membership, frozen on the order line. */
+    bundle?: OrderLineBundle;
 };
 type AdminOrderSkuIssueCode =
     | "sku_required"
@@ -235,6 +247,8 @@ export interface PreparedManualOrderQuote {
     /** Bangladesh's City/Thana/Area destination, stored and taxed; null when nothing ships or outside Bangladesh. */
     address: { city: string; zone: string; area: string | null } | null;
     trackedItems: PreparedManualOrderLine[];
+    /** The order's lines as asked for, aligned with `trackedItems`: a kit's line is its items (`expandAdminOrderKits`). */
+    inputItems: QuoteManualOrderInput["items"];
     allocationLineIds: string[];
     taxQuote: TaxQuote;
     quote: ManualOrderQuote;
@@ -484,7 +498,10 @@ export async function prepareManualOrderQuote(
         // A pickup ships nothing: the backup market, as the order is placed in.
         pickup: chosenKind === "pickup",
     };
-    const resolvedItems = await resolveAdminOrderItemInventory(db, data.items, marketSignals);
+    // A kit is sold as its items, here as at checkout (catalog.kits-sell-as-components).
+    const { items: inputItems, resolved: resolvedItems } = await expandAdminOrderKits(
+        db, data.items, await resolveAdminOrderItemInventory(db, data.items, marketSignals), marketSignals, currency.priceIncrementMinor,
+    );
     // The country of that market, for the apps' hooks: priced, hooked and placed in one market.
     const marketCountry = normalizeMarketCountry(checkoutMarketCountry(
         resolvedItems.map((item) => ({ productId: item.productId, variantId: item.variantId })),
@@ -531,7 +548,7 @@ export async function prepareManualOrderQuote(
 
     const lineProperties = resolveManualOrderLineProperties(
         resolvedItems.map((item, index) => {
-            const submitted = data.items[index] as { orderItemId?: string | null; unitPriceMinor?: number; purchaseOptions?: readonly string[] | null } | undefined;
+            const submitted = inputItems[index] as { orderItemId?: string | null; unitPriceMinor?: number; purchaseOptions?: readonly string[] | null } | undefined;
             const override = submitted?.unitPriceMinor;
             if (override !== undefined && !isIncrementMultipleMinor(override, currency.priceIncrementMinor)) {
                 throw new ValidationError(priceIncrementMessage(currency.code, currency.priceIncrementMinor), {
@@ -555,6 +572,8 @@ export async function prepareManualOrderQuote(
     const trackedItems: PreparedManualOrderLine[] = resolvedItems.map((item, index) => ({
         ...item,
         ...lineProperties[index]!,
+        // A kit's item names its kit on the order line (apps.order-lines-name-their-bundle).
+        ...(item.bundle ? { properties: serializeOrderLineProperties([...readOrderLineProperties(lineProperties[index]!.properties), lineBundleProperty(item.bundle)]) } : {}),
         fulfillmentType: plan.lineTypes[index]!,
     }));
     const outOfRange = trackedItems.findIndex((item) => !isLineAmountInRange(item.unitPriceMinor, item.quantity));
@@ -647,6 +666,7 @@ export async function prepareManualOrderQuote(
         shippingCountryCode,
         address,
         trackedItems,
+        inputItems,
         allocationLineIds,
         taxQuote,
         quote: projectManualOrderQuote(taxQuote, trackedItems, appPricing.appDiscounts),
@@ -716,6 +736,94 @@ function assertAdminOrderItemsUseSkus(items: AdminOrderSkuItem[]) {
     }
 }
 
+/**
+ * A staff order's kits sold as their items, the way checkout sells them: each
+ * kit line becomes its components (quantity × kits), each charged its exact
+ * share of the kit's price (`kitPrice`; a price staff set by hand on the kit
+ * line is the kit's price) and naming its kit. One more read, only when the
+ * order holds a kit. A kit with an item that can't be sold, with buyer
+ * inputs, or without an item it holds once is refused, with its reason.
+ */
+async function expandAdminOrderKits<T extends QuoteManualOrderInput["items"][number]>(
+    db: Database,
+    items: readonly T[],
+    resolved: Array<AdminOrderItemWithInventory<T>>,
+    market: CheckoutMarketSignals,
+    priceIncrementMinor: number,
+): Promise<{ items: T[]; resolved: Array<AdminOrderItemWithInventory<T>> }> {
+    if (!resolved.some((item) => item.kitComponents)) return { items: [...items], resolved };
+    const issues: AdminOrderSkuIssue[] = [];
+    const componentInputs: Array<{ kitIndex: number; perKit: number; input: T }> = [];
+    resolved.forEach((item, index) => {
+        if (!item.kitComponents) return;
+        const asked = items[index] as T & { properties?: unknown; orderItemId?: string | null };
+        if (asked.orderItemId) {
+            addAdminOrderSkuIssue(issues, item, index, "product_unavailable", "This line is a kit, which is sold as its items. Remove it and add the kit again.");
+            return;
+        }
+        if (Array.isArray(asked.properties) && asked.properties.length > 0) {
+            addAdminOrderSkuIssue(issues, item, index, "properties_invalid", "A kit takes no buyer inputs on a staff order. Send it without them.");
+            return;
+        }
+        const gone = item.kitComponents.find((component) => component.productId === null);
+        if (gone) {
+            addAdminOrderSkuIssue(issues, item, index, "product_unavailable", "One of this kit's items is no longer sold. Fix the kit on its product first.");
+            return;
+        }
+        for (const component of item.kitComponents) {
+            componentInputs.push({
+                kitIndex: index,
+                perKit: component.quantity,
+                input: { productId: component.productId!, variantId: component.variantId, quantity: (item.quantity ?? 1) * component.quantity } as T,
+            });
+        }
+    });
+    if (issues.length > 0) throwAdminOrderSkuIssues(issues);
+    const parts = await resolveAdminOrderItemInventory(db, componentInputs.map((part) => part.input), market);
+    const outItems: T[] = [];
+    const outResolved: Array<AdminOrderItemWithInventory<T>> = [];
+    resolved.forEach((item, index) => {
+        if (!item.kitComponents) {
+            outItems.push(items[index]!);
+            outResolved.push(item);
+            return;
+        }
+        const members = componentInputs.flatMap((part, position) => (part.kitIndex === index ? [{ ...part, resolved: parts[position]! }] : []));
+        const problem = members.find((member) => member.resolved.isGiftCard || member.resolved.kitComponents);
+        if (problem) {
+            addAdminOrderSkuIssue(issues, item, index, "product_unavailable", "One of this kit's items can't be part of a kit (a gift card or another kit). Fix the kit on its product first.");
+            return;
+        }
+        const handPrice = (items[index] as { unitPriceMinor?: number }).unitPriceMinor;
+        let price: ReturnType<typeof kitPrice>;
+        try {
+            price = kitPrice(handPrice ?? item.catalogUnitPriceMinor,
+                members.map((member) => ({ unitPriceMinor: member.resolved.catalogUnitPriceMinor, quantity: member.perKit })), priceIncrementMinor);
+        } catch (error) {
+            if (!(error instanceof KitWithoutSingleItemError)) throw error;
+            addAdminOrderSkuIssue(issues, item, index, "product_unavailable", "This kit can't be sold until it has an item it holds once. Fix the kit on its product first.");
+            return;
+        }
+        const units = item.quantity ?? 1;
+        const fewest = Math.min(...members.map((member) => member.perKit));
+        const anchor = members.findIndex((member) => member.perKit === fewest);
+        const title = item.variantLabel ? `${item.productName} (${item.variantLabel})` : item.productName;
+        members.forEach((member, position) => {
+            outItems.push(member.input);
+            outResolved.push({
+                ...member.resolved,
+                catalogUnitPriceMinor: price.componentUnitPricesMinor[position]!,
+                bundle: {
+                    id: `kit:${index}:${item.variantId}`, title, kind: "kit", kit: { variantId: item.variantId, productId: item.productId },
+                    anchor: position === anchor, units, perUnit: member.perKit,
+                },
+            });
+        });
+    });
+    if (issues.length > 0) throwAdminOrderSkuIssues(issues);
+    return { items: outItems, resolved: outResolved };
+}
+
 export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem>(
     db: Database,
     items: T[],
@@ -746,6 +854,8 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             taxClassId: sql<string | null>`coalesce(${productVariants.taxClassId}, ${products.taxClassId})`,
             variantLabel: variantOptionLabelSql(productVariants.id),
             variantDeletedAt: productVariants.deletedAt,
+            // A kit's components (null for any other SKU): the order sells it as them.
+            kitComponents: kitComponentsSql(sql`${productVariants.id}`),
             productActive: products.isActive,
             productDeletedAt: products.deletedAt,
             fulfillmentKind: productVariants.fulfillmentKind,
@@ -875,6 +985,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             isGiftCard: sku.isGiftCard === true,
             customizationSchema: sku.customizationSchema,
             appFlags: { product: sku.productAppFlags ?? null, variant: sku.variantAppFlags ?? null },
+            kitComponents: parseKitComponents(sku.kitComponents),
         });
     });
 

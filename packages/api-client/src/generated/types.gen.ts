@@ -3466,7 +3466,11 @@ export type OrderResource = {
         bundle?: {
             id: string;
             title: string;
-            kind: 'expand' | 'merge';
+            kind: 'expand' | 'merge' | 'kit';
+            kit: {
+                variantId: string;
+                productId: string;
+            } | null;
             anchor: boolean;
             units: number | null;
             perUnit: number | null;
@@ -10011,13 +10015,8 @@ export type PostApiV1DiscountsValidateData = {
              * Product id
              */
             id: string;
-            price: number;
             quantity: number;
             variantId?: string;
-            /**
-             * Unit price before buyer-input surcharges, which quantity bundles price from; defaults to `price`.
-             */
-            basePrice?: number;
         }>;
         /**
          * Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.
