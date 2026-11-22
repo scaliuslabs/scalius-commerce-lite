@@ -38,30 +38,30 @@ export const PRIVATE_CONTENT_TONES = ["neutral", "info", "success", "warning", "
 export type PrivateContentTone = (typeof PRIVATE_CONTENT_TONES)[number];
 
 /** Words in each language the theme writes them in, keyed by base language (`en`, `bn`). */
-export type PrivateWords = Readonly<Record<string, string>>;
+export type PrivateWords = Record<string, string>;
 
 /** A file the theme's app ships in `public/` (served from the store's own origin). */
 export interface PrivateAssetRef {
-  readonly app: string;
-  readonly file: string;
+  app: string;
+  file: string;
 }
 
 /** A theme's own script-free content (the buyer UI's building blocks, drawn by the host). */
 export type PrivateContentBlock =
-  | { readonly kind: "heading"; readonly text: PrivateWords; readonly level?: 2 | 3 }
-  | { readonly kind: "text"; readonly text: PrivateWords; readonly tone?: PrivateContentTone }
-  | { readonly kind: "link"; readonly text: PrivateWords; readonly href: string }
-  | { readonly kind: "image"; readonly image: PrivateAssetRef; readonly alt: PrivateWords; readonly width: number; readonly height: number }
-  | { readonly kind: "banner"; readonly tone: PrivateContentTone; readonly title?: PrivateWords; readonly text?: PrivateWords }
-  | { readonly kind: "disclosure"; readonly summary: PrivateWords; readonly text: PrivateWords }
-  | { readonly kind: "divider" };
+  | { kind: "heading"; text: PrivateWords; level?: 2 | 3 }
+  | { kind: "text"; text: PrivateWords; tone?: PrivateContentTone }
+  | { kind: "link"; text: PrivateWords; href: string }
+  | { kind: "image"; image: PrivateAssetRef; alt: PrivateWords; width: number; height: number }
+  | { kind: "banner"; tone: PrivateContentTone; title?: PrivateWords; text?: PrivateWords }
+  | { kind: "disclosure"; summary: PrivateWords; text: PrivateWords }
+  | { kind: "divider" };
 
 /** One node of an arrangement. */
 export type PrivateNode =
-  | { readonly type: "layout"; readonly layout: PrivateLayoutKind; readonly hook?: string; readonly children: readonly PrivateNode[] }
-  | { readonly type: "part"; readonly part: string; readonly variant?: string }
-  | { readonly type: "target"; readonly target: string }
-  | { readonly type: "content"; readonly content: PrivateContentBlock; readonly hook?: string };
+  | { type: "layout"; layout: PrivateLayoutKind; hook?: string; children: PrivateNode[] }
+  | { type: "part"; part: string; variant?: string }
+  | { type: "target"; target: string }
+  | { type: "content"; content: PrivateContentBlock; hook?: string };
 
 export interface PrivatePartSpec {
   /** A buyer must see it (or use it): every arrangement holds it exactly once. */

@@ -144,7 +144,7 @@ const MARKUP = /<[A-Za-z!/?]/;
 
 function wordsIssues(words: PrivateWords | undefined, path: Array<string | number>, max: number): PrivatePagesIssue[] {
   if (!words) return [];
-  return Object.entries(words).flatMap(([lang, text]) => {
+  return Object.entries(words).flatMap(([lang, text]): PrivatePagesIssue[] => {
     if (MARKUP.test(text)) return [{ path: [...path, lang], reason: "markup" as const, message: "Plain text only: no HTML." }];
     if (text.length > max) return [{ path: [...path, lang], reason: "label_too_long" as const, message: `At most ${max} characters.` }];
     return [];

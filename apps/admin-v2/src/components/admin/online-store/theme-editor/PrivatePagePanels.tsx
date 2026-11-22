@@ -144,7 +144,7 @@ export function CartPresentationSettings({ theme, setDraft }: { theme: Theme; se
       <VisualChoice
         label={t("cartLayout")}
         showLabel
-        value={preset === "custom" ? "" : preset}
+        value={preset === "custom" ? null : preset}
         className="grid-cols-2"
         options={PRIVATE_CART_PRESETS.map((value) => ({
           value,

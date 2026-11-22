@@ -169,8 +169,8 @@ function fillUnit(spec: PrivateUnitSpec, nodes: readonly PrivateNode[]): Private
       if (depth >= PRIVATE_ARRANGEMENT_LIMITS.depth || !spec.layouts.includes(node.layout)) return [];
       return [{ ...node, children: keep(node.children, depth + 1) }];
     }
-    const key = leafKey(node);
-    if (key === null) return [node];
+    if (node.type === "content") return [node];
+    const key = leafKey(node)!;
     const known = node.type === "part" ? Object.hasOwn(spec.parts, node.part) : spec.targets.includes(node.target);
     if (!known || seen.has(key)) return [];
     seen.add(key);
@@ -307,7 +307,7 @@ export function privateCartTopArrangement(): PrivatePageArrangement {
 export function privateCartPreset(arrangement: PrivatePageArrangement | undefined): PrivateCartPreset | "custom" {
   if (privateArrangementIsDefault("cart", arrangement)) return "side";
   const top = privateCartTopArrangement();
-  return arrangement?.frame === top.frame && sameNodes(arrangement.layout ?? [], top.layout!) && privateItemIsDefault("cart", "line", arrangement) ? "top" : "custom";
+  return arrangement !== undefined && arrangement.frame === top.frame && sameNodes(arrangement.layout ?? [], top.layout!) && privateItemIsDefault("cart", "line", arrangement) ? "top" : "custom";
 }
 
 /** The arrangement of a cart preset (undefined: the default). */

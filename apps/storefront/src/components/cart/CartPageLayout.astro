@@ -14,6 +14,7 @@ import {
   type PrivateAssetUrl,
 } from "@/lib/private-pages/html";
 import type { PrivatePagePlan } from "@/lib/private-pages/plan";
+import type { PrivateNode } from "@scalius/shared/storefront-theme";
 
 interface Props {
   plan: PrivatePagePlan;
@@ -43,7 +44,7 @@ if (custom) {
   };
   const rendered = new Map<string, string>();
   const names = new Set<string>();
-  const collect = (nodes: NonNullable<PrivatePagePlan["layout"]>) => {
+  const collect = (nodes: readonly PrivateNode[]) => {
     for (const node of nodes) {
       if (node.type === "part") names.add(node.part);
       else if (node.type === "layout") collect(node.children);

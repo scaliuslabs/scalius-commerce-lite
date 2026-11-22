@@ -10,6 +10,8 @@
  * Nothing here renders: the real pages do, with the fixture API (`api.ts`).
  */
 import {
+  PRIVATE_CART_PRESETS,
+  privateCartPresetArrangement,
   STOREFRONT_ACCOUNT_NAVIGATION_STYLES,
   STOREFRONT_BLOCK_REGISTRY,
   STOREFRONT_PAYMENT_CHOICE_STYLES,
@@ -641,15 +643,21 @@ function privatePageEntries(): GalleryEntry[] {
     theme.blocks = { ...theme.blocks, ...blocks } as StorefrontThemeDocument["blocks"];
     return theme;
   };
-  const entries: GalleryEntry[] = STOREFRONT_PRIVATE_SUMMARY_PLACEMENTS.map((summary) => ({
-    id: entryId("private", "cart", `summary=${summary}`),
-    family: "private:cart",
-    title: `Cart page, the cart ${summary === "side" ? "beside" : "above"} the form`,
-    page: "cart" as const,
-    theme: withBlocks({ cart: { summary } }),
-    focus: MAIN,
-    scenario: { cart: "three" as const },
-  }));
+  // The cart page in each of the dashboard's ready-made arrangements (privatePages).
+  const entries: GalleryEntry[] = PRIVATE_CART_PRESETS.map((preset) => {
+    const theme = clone(base);
+    const arrangement = privateCartPresetArrangement(preset);
+    if (arrangement) theme.privatePages = { ...theme.privatePages, pages: { ...theme.privatePages.pages, cart: arrangement } };
+    return {
+      id: entryId("private", "cart", `summary=${preset}`),
+      family: "private:cart",
+      title: `Cart page, the cart ${preset === "side" ? "beside" : "above"} the form`,
+      page: "cart" as const,
+      theme,
+      focus: MAIN,
+      scenario: { cart: "three" as const },
+    };
+  });
   for (const summary of STOREFRONT_PRIVATE_SUMMARY_PLACEMENTS) {
     for (const paymentChoices of STOREFRONT_PAYMENT_CHOICE_STYLES) {
       entries.push({
