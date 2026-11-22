@@ -1522,5 +1522,11 @@
   "from": "0164e015d705eec6",
   "change": "sdk.packages/plugin-sdk/src/fixtures.d.ts#FunctionDeclaration:event: an existing signature changed or gained a required member.",
   "reason": "Pre-lock (state-machine audit, 2026-11-17): fixtures.event's overrides take the topic's facts, partial, each one a test names type-checked, now that PluginEvent<T>.facts is the topic's EventFacts<T>."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b95605b6892e628",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (issue #5, store kits, 2026-11-22): an order line's bundle names the kit it was bought as, kind \"kit\" and kit: { variantId, productId } (null for an app's bundle), so an app counts a kit like an expanded bundle and can tell which kit was sold."
  }
 ]

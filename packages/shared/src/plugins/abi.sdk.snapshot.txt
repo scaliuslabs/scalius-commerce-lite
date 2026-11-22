@@ -4598,7 +4598,12 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
                 kind: z.ZodEnum<{
                     expand: "expand";
                     merge: "merge";
+                    kit: "kit";
                 }>;
+                kit: z.ZodNullable<z.ZodObject<{
+                    variantId: z.ZodString;
+                    productId: z.ZodString;
+                }, z.core.$strip>>;
                 anchor: z.ZodBoolean;
                 units: z.ZodNullable<z.ZodNumber>;
                 perUnit: z.ZodNullable<z.ZodNumber>;
