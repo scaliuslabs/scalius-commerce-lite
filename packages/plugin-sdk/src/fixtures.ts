@@ -9,7 +9,7 @@
 
 import type { EventFacts, EventTopic } from "@scalius/shared/events";
 import { STOREFRONT_UI_SLOT_PAGES, type StorefrontUiSlot } from "@scalius/shared/plugins/storefront-protocol";
-import type { BuyerUiInput, BuyerUiLine, FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
+import type { BuyerUiInput, BuyerUiLine, BuyerUiOrderLine, FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
 import type { BuyerEvent, BuyerEventData, BuyerLine, BuyerMerchandise, PixelEventName } from "@scalius/shared/plugins/buyer-events";
 import type { PluginEvent, PluginMoney, PluginRouteRequest } from "./context";
 
@@ -141,11 +141,34 @@ function buyerUiLine(overrides: Partial<BuyerUiLine> = {}): BuyerUiLine {
 }
 
 /**
+ * One order row's facts as the order's slots get them (`input.orderLines`):
+ * two units of the cart fixture's 500.00 BDT T-shirt on order line
+ * `item_1`, no bundle, no add-ons; `inputs` are your own line answers by
+ * bare key (the host shows each app only its own).
+ */
+function buyerUiOrderLine(overrides: Partial<BuyerUiOrderLine> = {}): BuyerUiOrderLine {
+  return {
+    lineKey: "item_1",
+    lineIds: ["item_1"],
+    productId: "prod_1",
+    variantId: "var_1",
+    title: "T-shirt",
+    quantity: 2,
+    unitsTotalMinor: 100_000,
+    bundle: null,
+    addOns: [],
+    inputs: [],
+    ...overrides,
+  };
+}
+
+/**
  * The input of one storefront extension at a UI slot, as the host sends it
  * (pass it to `harness.extension`). By the slot's page: a checkout or cart
  * drawer slot gets a cart (see `cart`), a per-line slot (`cart.line.after`)
  * a cart and one line (`lines: [buyerUiLine()]`), an order slot (`order.confirmation`,
- * `account.order`) a paid order of the cart fixture's line, and an `account.*`
+ * `account.order`, `order.line.after`) a paid order of the cart fixture's line and
+ * its row (`orderLines: [buyerUiOrderLine()]`), and an `account.*`
  * slot a signed-in customer; the rest are null (a guest's thank-you page).
  * English, BDT, no answers and no reads unless overridden. `attributes` holds
  * the buyer's answers to your own checkout attributes by bare key
@@ -169,6 +192,7 @@ function storefrontExtensionInput(target: StorefrontUiSlot, overrides: Storefron
     customer: target.startsWith("account.") ? { id: "cust_test_1" } : null,
     reads: {},
     ...(page === "cart" ? { lines: [buyerUiLine()] } : {}),
+    ...(page === "order" ? { orderLines: [buyerUiOrderLine()] } : {}),
     ...rest,
   };
 }
@@ -229,4 +253,4 @@ function buyerEvent<N extends PixelEventName>(name: N, data: DeepPartial<BuyerEv
   };
 }
 
-export const fixtures = { event, cartLine, cart, checkoutDiscountsInput, storefrontExtensionInput, buyerUiLine, money, readRecord, adminRouteRequest, buyerEvent };
+export const fixtures = { event, cartLine, cart, checkoutDiscountsInput, storefrontExtensionInput, buyerUiLine, buyerUiOrderLine, money, readRecord, adminRouteRequest, buyerEvent };

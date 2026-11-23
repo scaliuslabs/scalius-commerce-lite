@@ -9,6 +9,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { cashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { dateLocale, formatDateTime, formatNumber, localeDigits, numberLocale } from "@scalius/shared/locale-format";
 import { presentLineEntry, type LineEntryWords } from "@scalius/shared/line-entry-words";
+import { buyerLineAddOnRows } from "@scalius/shared/buyer-line-add-on-text";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
 import { formatOrderNumberIn } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
@@ -455,7 +456,11 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
           // A folded row with no whole unit price shows its quantity and line total.
           unitPrice: money && item.unitPriceMinor !== null ? money(item.unitPriceMinor) : null,
           subtotal: money ? money(item.lineSubtotalMinor) : null,
-          properties: linePropertiesText(item.properties, money, messageLineWords(order, lang), (value) => formatNumber(value, lang === "bn" ? "bn-BD" : "en-US")),
+          properties: [
+            ...linePropertiesText(item.properties, money, messageLineWords(order, lang), (value) => formatNumber(value, lang === "bn" ? "bn-BD" : "en-US")),
+            // What the apps charged on the row: its `addOns`, the one place a row says it.
+            ...(money ? buyerLineAddOnRows(item.addOns, { label: messageLineWords(order, lang).lineAddOnText, money, language: lang }).map((row) => row.text) : []),
+          ],
         })),
         appAnswers: presentCheckoutAttributes(appAnswerValues, attributeApps, {
           locale: lang, defaultLocale: store.language, words: messageLineWords(order, lang),

@@ -2,6 +2,7 @@ import { countryDisplayName } from "@scalius/shared/address";
 import { formatOrderShippingAddress } from "../shipping-address";
 import { formatOrderBillingAddress } from "../billing-display";
 import type { InvoiceDocument, InvoiceOrderItemSnapshot } from "./snapshot";
+import { buyerLineAddOnRows } from "@scalius/shared/buyer-line-add-on-text";
 import { formatOrderNumberIn } from "@scalius/shared/order-utils";
 import { ServiceUnavailableError } from "../../../errors";
 import { paymentMethodLabel } from "../../payments";
@@ -76,7 +77,12 @@ function itemProperties(
       ? ` (+${formatMoney(property.priceMinor, currencyCode, decimalPlaces, true, language)})`
       : "";
     return `<small>${html(property.label)}: ${html(printedPropertyValue(property.displayValue))}${surcharge}</small>`;
-  }).join("");
+  }).join("") + buyerLineAddOnRows(item.addOns, {
+    // What the apps charged on the line: its one place (an older snapshot keeps them among its properties).
+    label: words.lineAddOnText,
+    money: (minor) => formatMoney(minor, currencyCode, decimalPlaces, true, language),
+    language,
+  }).map((row) => `<small>${html(row.label)}: ${html(printedPropertyValue(row.value))}</small>`).join("");
 }
 
 export function renderPrintableInvoice(

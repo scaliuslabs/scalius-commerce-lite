@@ -46,6 +46,8 @@ import { listOrderRefundAttempts, summarizeActiveRefundOperation } from "../paym
 import { CUSTOMER_REQUEST_ACTION_COPY, getCustomerRequestPolicy } from "../settings";
 import { orderMoneyAmounts, orderMoneySelection } from "./money";
 import {
+    buyerOrderAddOnTotals,
+    presentBuyerLineAddOns,
     presentOrderLineFulfilment,
     presentOrderPickup,
     presentShippingMethodKind,
@@ -735,7 +737,7 @@ export async function getCustomerOrders(
         latestShipment: latestShipmentByOrder.get(order.id) ?? null,
         // A kit's item split into two lines is one row (`foldBuyerOrderLines`).
         items: foldBuyerOrderLines(itemsByOrder.get(order.id) || []).map(({
-            id: _id, orderId: _orderId, properties: _properties, lineIds: _lineIds, bundle: _bundle, unitPriceMinor, unitsTotalMinor, ...item
+            id: _id, orderId: _orderId, properties: _properties, lineIds: _lineIds, bundle: _bundle, addOns: _addOns, unitPriceMinor, unitsTotalMinor, ...item
         }) => ({
             ...item,
             price: buyerLineUnitPrice({ unitPriceMinor, unitsTotalMinor, quantity: item.quantity }, order.currencyDecimalPlaces),
@@ -946,6 +948,8 @@ export async function getCustomerOrderDetail(
 export async function getCustomerOrderDetailForOrder(
     db: Database,
     order: CustomerOwnedOrderForDetail,
+    /** The reader's language: add-on rows folded past the summary's bound read the neutral label in it. */
+    language: string | null = null,
 ) {
     const orderId = order.id;
 
@@ -1132,23 +1136,30 @@ export async function getCustomerOrderDetailForOrder(
         baseUnitPriceMinor,
         unitsTotalMinor,
         bundle,
+        addOns,
         ...item
-    }) => ({
-        ...item,
-        ...presentOrderLineFulfilment({
+    }) => {
+        const facts = presentOrderLineFulfilment({
             fulfillmentType,
             fulfilledQuantity,
             properties,
             propertiesPriceMinor,
             baseUnitPriceMinor,
-        }, order.currencyDecimalPlaces),
+        }, order.currencyDecimalPlaces);
+        return {
+        ...item,
+        ...facts,
         bundle,
+        // What the apps charged on this row ("Protection ৳350"), a bundle's once per bundle unit.
+        addOns: presentBuyerLineAddOns(addOns, order.currencyDecimalPlaces),
         price: buyerLineUnitPrice({ ...item, unitsTotalMinor }, order.currencyDecimalPlaces),
         unitPrice: buyerLineUnitPrice({ ...item, unitsTotalMinor }, order.currencyDecimalPlaces),
         lineTotal: amount(unitsTotalMinor),
+        unitsTotalMinor,
         productImage: historicalOrderImageUrl(productImageObjectKey, productImageStatus),
         createdAt: timestampToIso(item.createdAt),
-    }));
+        };
+    });
 
     const formattedShipments = shipments.map(({ shipmentAmountMinor, ...shipment }) => ({
         ...shipment,
@@ -1273,6 +1284,8 @@ export async function getCustomerOrderDetailForOrder(
         },
         fulfillments,
         items: formattedItems,
+        // The add-on summary rows from the real lines (never the folded rows' entries).
+        addOns: buyerOrderAddOnTotals(items, order.subtotalAmountMinor ?? 0, language),
         shipments: formattedShipments,
         payments: formattedPayments,
         refundAttempts: refundAttemptViews,
