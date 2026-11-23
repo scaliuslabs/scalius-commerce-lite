@@ -365,6 +365,9 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "checkout-20-commit": { d1Calls: 14, d1Statements: 123, externalFetches: 0, rowsWritten: 173, rowsRead: 193, fullScans: 36 },
     "checkout-99-quote": { d1Calls: 11, d1Statements: 18, externalFetches: 0, rowsWritten: 0, rowsRead: 206, fullScans: 3 },
     "checkout-99-commit": { d1Calls: 14, d1Statements: 382, externalFetches: 0, rowsWritten: 726, rowsRead: 827, fullScans: 133 },
+    // Two kits of three tracked items beside two plain lines: the same 14 calls as any commit
+    // (the order route's one read holds the counters of the kits' items too).
+    "checkout-kit-commit": { d1Calls: 14, d1Statements: 74, externalFetches: 0, rowsWritten: 71, rowsRead: 78, fullScans: 18 },
     "admin-order-list": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 0, rowsRead: 54, fullScans: 0 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 0, rowsRead: 53, fullScans: 0 },
     "admin-order-list-gift-cards": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 0, rowsRead: 53, fullScans: 0 },
@@ -439,6 +442,9 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "checkout-20-commit": { d1Calls: 14, d1Statements: 123, externalFetches: 0, rowsWritten: 173, rowsRead: 193, fullScans: 36 },
     "checkout-99-quote": { d1Calls: 11, d1Statements: 18, externalFetches: 0, rowsWritten: 0, rowsRead: 206, fullScans: 3 },
     "checkout-99-commit": { d1Calls: 14, d1Statements: 382, externalFetches: 0, rowsWritten: 726, rowsRead: 827, fullScans: 133 },
+    // Two kits of three tracked items beside two plain lines: the same 14 calls as any commit
+    // (the order route's one read holds the counters of the kits' items too).
+    "checkout-kit-commit": { d1Calls: 14, d1Statements: 74, externalFetches: 0, rowsWritten: 71, rowsRead: 78, fullScans: 18 },
     "admin-order-list": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 0, rowsRead: 54, fullScans: 0 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 0, rowsRead: 53, fullScans: 0 },
     "admin-order-list-gift-cards": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 0, rowsRead: 53, fullScans: 0 },

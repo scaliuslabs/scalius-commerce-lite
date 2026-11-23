@@ -128,6 +128,11 @@ export interface AgentStorefrontCheckoutSubmitInput {
   paymentMethod: string;
   shippingRateToken?: string | null;
   attributes?: Record<string, string>;
+  /**
+   * The buyer agreed to the store's terms, which the agent showed them.
+   * Required when the store asks for it (checkout/terms-acceptance.ts).
+   */
+  termsAccepted?: boolean;
 }
 
 /** The billing fields an agent submit sent, trimmed (only those sent, so earlier hashes are unchanged). */
@@ -525,6 +530,7 @@ export async function submitAgentStorefrontCheckout(
     shippingMethodId,
     paymentMethod: input.paymentMethod,
     inventoryPool: InventoryPool.REGULAR,
+    ...(input.termsAccepted === undefined ? {} : { termsAccepted: input.termsAccepted }),
   };
   const attemptIdentity = {
     ...await withCheckoutStage("AGENT_CHECKOUT_IDENTITY", () => buildCheckoutAttemptIdentity(data)),
@@ -561,6 +567,7 @@ export async function submitAgentStorefrontCheckout(
       contactFields: authority.contactFields,
       shippingCountries: authority.shippingCountries,
       requireFullBillingAddress: authority.checkoutSettings.requireFullBillingAddress,
+      requireTermsAcceptance: authority.checkoutSettings.requireTermsAcceptance,
     }),
     authority.taxAuthority,
     {},

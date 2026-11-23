@@ -61,6 +61,8 @@ export function checkoutOrderFailureText(
     case "appUnavailable": return copy.checkoutAppUnavailableText;
     case "paymentWindowExpired": return copy.paymentRateExpiredText;
     case "priceChanged": return copy.totalChangedReviewText;
+    // The store asks for the terms box: the merchant's own words for it.
+    case "termsRequired": return copy.termsRequiredText;
     case "stock": case "notFound": return copy.cartItemChangedText;
     default: return copy.orderProcessingFailedText;
   }

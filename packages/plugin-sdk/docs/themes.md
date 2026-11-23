@@ -109,7 +109,9 @@ Right: a handle for a category or collection, and a product source for products.
 How handles resolve:
 
 - Three forms, anywhere in a template's or page preset's sections: a product source `{ "kind": "category" | "collection", "handle": "<handle>" }`, a string `@category:<handle>` or `@collection:<handle>` in an id list (`categoryIds`, `collectionIds`), and a link `/categories/@<handle>` or `/collections/@<handle>` (with an optional `?query` or `#fragment`).
-- When the merchant applies the template, the store replaces each handle with its own record. **A section naming a handle the store lacks is left out**, and the rest of the template applies. Keep one category per section where you can, so one missing category costs one section, not a row of tiles.
+- Write the product source the same way in a core section's `source` and in your own section's or skin's `products` setting. The store writes what that place takes: `{ "kind": "category", "categoryId": "…" }` in a core section, `"category:<id>"` in a `products` setting.
+- When the merchant applies the template, the store replaces each handle with its own record. **A section naming a handle the store lacks is left out**, and the rest of the template applies. The apply answer lists each one in `unresolved` (`{ kind, handle, sectionId }`), in the app API's `theme.apply_template` and in the dashboard's template switch. Keep one category per section where you can, so one missing category costs one section, not a row of tiles.
+- Categories and collections have handles here. Brands do not: no product source or section setting names a brand.
 - Outside the homepage sections (skin values, blocks) a missing handle makes the whole template unusable on that store. Do not put catalogue links there.
 - Setting defaults are never resolved: a default `/categories/@xbox` is a dead link everywhere. Leave link defaults empty.
 

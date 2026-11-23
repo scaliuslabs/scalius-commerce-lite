@@ -1,5 +1,5 @@
-import "@hono/zod-openapi";
-import { buildStorefrontThemeDocumentSchemas, storeShapeSchema } from "@scalius/shared/storefront-theme";
+import { z } from "@hono/zod-openapi";
+import { STOREFRONT_HANDLE_KINDS, buildStorefrontThemeDocumentSchemas, storeShapeSchema } from "@scalius/shared/storefront-theme";
 import { namedSharedSchema } from "./responses";
 
 /**
@@ -25,3 +25,14 @@ export const storefrontLandingPageApiSchema = themeDocumentParts.landingPage;
  * created after it.
  */
 export const storeShapeApiSchema = namedSharedSchema(storeShapeSchema, "StorefrontStoreShape");
+
+/**
+ * A catalogue handle an app template names that this store lacks, and the
+ * homepage section left out for it (null: outside the sections). Applying a
+ * template answers these, so a merchant or an agent sees what matched nothing.
+ */
+export const themeUnresolvedHandleApiSchema = z.object({
+  kind: z.enum(STOREFRONT_HANDLE_KINDS),
+  handle: z.string(),
+  sectionId: z.string().nullable(),
+}).openapi("ThemeUnresolvedHandle");

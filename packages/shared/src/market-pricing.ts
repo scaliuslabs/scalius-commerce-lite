@@ -522,6 +522,12 @@ export function resolvedPriceAsCatalogPrice(resolved: ResolvedPrice): {
   };
 }
 
+/** At one price, the higher regular price (the deeper saving), then the lower SKU id. */
+function cardTiebreak(left: CardSkuPrice, right: CardSkuPrice): number {
+  const regular = (sku: CardSkuPrice) => sku.resolved.compareAtMinor ?? sku.resolved.amountMinor;
+  return regular(right) - regular(left) || (left.skuId < right.skuId ? -1 : left.skuId > right.skuId ? 1 : 0);
+}
+
 /** One SKU of a product for its card: its resolved price and whether a buyer can take it now. */
 export interface CardSkuPrice {
   skuId: string;
@@ -532,8 +538,9 @@ export interface CardSkuPrice {
 /**
  * The card price of a product from its buyer SKUs, by the projection's rule
  * (`buildBuyerCatalogPricingProjection`): the buyable pool when one SKU can
- * be bought now, else every SKU; the lowest price in the pool (then the SKU
- * id) is the card SKU, and the pool's highest price says whether it varies.
+ * be bought now, else every SKU; the lowest price in the pool (then the
+ * highest regular price, the deepest saving at that price, then the SKU id)
+ * is the card SKU, and the pool's highest price says whether it varies.
  */
 export function cardPriceOf(skus: readonly CardSkuPrice[]): { card: CardSkuPrice; maxAmountMinor: number } | null {
   if (skus.length === 0) return null;
@@ -542,7 +549,7 @@ export function cardPriceOf(skus: readonly CardSkuPrice[]): { card: CardSkuPrice
   let maxAmountMinor = card.resolved.amountMinor;
   for (const sku of pool) {
     const amount = sku.resolved.amountMinor;
-    if (amount < card.resolved.amountMinor || (amount === card.resolved.amountMinor && sku.skuId < card.skuId)) card = sku;
+    if (amount < card.resolved.amountMinor || (amount === card.resolved.amountMinor && cardTiebreak(sku, card) < 0)) card = sku;
     if (amount > maxAmountMinor) maxAmountMinor = amount;
   }
   return { card, maxAmountMinor };

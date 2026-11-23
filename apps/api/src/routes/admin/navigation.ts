@@ -2,6 +2,7 @@
 // Admin OpenAPI routes for navigation.
 
 import { createRoute, z } from "@hono/zod-openapi";
+import { NAVIGATION_SYSTEM_KEYS } from "@scalius/shared/navigation-system-targets";
 import { adminRouter } from "./admin-router";
 import {
     createNavigationMenu,
@@ -93,7 +94,7 @@ const menuTargetSchema = z.discriminatedUnion("type", [
     }),
     z.object({
         type: z.literal("system"),
-        key: z.enum(["home", "catalog", "search", "account", "cart", "checkout", "order_lookup"]),
+        key: z.enum(NAVIGATION_SYSTEM_KEYS),
     }),
     z.object({ type: z.literal("internal_path"), path: z.string().trim().min(1).max(2048) }),
     z.object({ type: z.literal("external_url"), url: z.string().trim().min(1).max(2048) }),

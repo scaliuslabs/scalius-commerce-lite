@@ -989,15 +989,13 @@ function updatePrice() {
       ? checkoutText(element.dataset.fromTemplate || "{price}", { price })
       : price;
   });
-  // One rule with the product card: beside a "From" price no struck price or percent.
-  const claim = priceLineClaim({ current: pricing.finalPrice, regular: pricing.originalPrice, from: starting });
+  // One rule with the product card: the struck price and percent are the shown SKU's own.
+  const claim = priceLineClaim({ current: pricing.finalPrice, regular: pricing.originalPrice });
   cache.originalPriceElements.forEach((element) => {
     element.textContent = formatPrice(pricing.originalPrice);
     element.classList.toggle("hidden", claim.compareAt === null);
   });
-  const badge = claim.percentOff !== null
-    ? formatDiscountBadge(pricing.originalPrice, pricing.finalPrice)
-    : claim.onSale ? cache.discountBadge?.dataset.saleText || null : null;
+  const badge = claim.percentOff !== null ? formatDiscountBadge(pricing.originalPrice, pricing.finalPrice) : null;
   if (cache.discountBadge) {
     cache.discountBadge.textContent = badge ?? "";
     cache.discountBadge.classList.toggle("hidden", !badge);

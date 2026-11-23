@@ -22,6 +22,7 @@ import {
 import { markRenderUncacheable } from "@/lib/cache-policy";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { giftCardCheckoutCopy } from "@/lib/checkout/gift-cards";
+import { termsAgreement } from "@/lib/checkout/terms-text";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 
@@ -49,6 +50,8 @@ const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse ?? {
 };
 const copy = checkoutLanguage.languageData;
 const giftCopy = giftCardCheckoutCopy(copy);
+// The store's terms beside Pay: the sentence, or the required box (public settings only, like the rest of this shell).
+const agreement = termsAgreement({ required: checkoutConfig.requireTermsAcceptance, policies: layoutData?.policies, copy });
 // The theme's checkout block (the request's one theme resolution: no read of its own).
 const checkoutBlock = (await resolveRequestTheme(Astro, layoutData)).resolved.blocks.checkout;
 // A payment page: only the payment provider's scripts run here, none of the store's (lib/analytics-csp.ts).
@@ -70,7 +73,7 @@ markPaymentPage(Astro.locals);
       below is parsed, the script makes a checkout in progress (or an order
       just placed, whose link the page script builds) "loading", and sends a
       buyer with neither to the cart, the step they skipped. */}
-  <CheckoutPaymentStep copy={copy} giftCopy={giftCopy} block={checkoutBlock} />
+  <CheckoutPaymentStep copy={copy} giftCopy={giftCopy} block={checkoutBlock} agreement={agreement} />
 </Layout>
 
 <CheckoutLoadingOverlay

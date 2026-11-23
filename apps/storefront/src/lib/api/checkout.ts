@@ -43,6 +43,8 @@ export interface CheckoutConfig {
   partialPaymentAmount?: number;
   /** Settings → Checkout: every order asks for a full billing address (absent: off). */
   requireFullBillingAddress?: boolean;
+  /** Settings → Checkout: the buyer ticks "I agree to the terms" before the order is placed (absent: off). */
+  requireTermsAcceptance?: boolean;
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
   currency?: {
@@ -130,6 +132,19 @@ export function takesOnlinePayment(config: CheckoutConfig | null | undefined): b
   if (!config || config.unavailable) return true;
   // Paying later by invoice is not paying online: it reaches only some signed-in buyers.
   return config.gateways.some((gateway) => gateway.id !== "cod" && gateway.flow !== "cod" && gateway.flow !== "deferred");
+}
+
+/**
+ * Whether nothing these SKUs sell can be bought here: every one is paid only
+ * online (core's `paidOnlineOnly`: a key, a download, a gift card, a kit
+ * holding one) and checkout takes no online payment. The server decides the
+ * same at checkout; the page only says so first.
+ */
+export function paidOnlineOnlyHere(
+  variants: ReadonlyArray<{ paidOnlineOnly?: boolean | null }>,
+  config: CheckoutConfig | null | undefined,
+): boolean {
+  return variants.length > 0 && variants.every((variant) => variant.paidOnlineOnly === true) && !takesOnlinePayment(config);
 }
 
 /**

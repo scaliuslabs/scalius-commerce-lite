@@ -2,7 +2,9 @@
 // The same card as every listing, so prices ("From ৳2,200"), badges and
 // labels read identically everywhere. `data-recs-part` (`root`, `title`,
 // `list`) and `data-recs-reason` are permanent styling hooks a product_main
-// skin's `<Recommendations />` styles by (packages/plugin-sdk docs).
+// skin's `<Recommendations />` styles by (packages/plugin-sdk docs). Placed
+// by a skin (`placed`), it takes the skin's column: no band of its own and no
+// page container, so its grid fills the room the skin gave it.
 import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
 import Container from "@/components/ui/Container.astro";
@@ -14,25 +16,29 @@ interface Props {
   recommendations: ProductRecommendations;
   currencySymbol?: string;
   currencyCode?: string;
+  /** A skin placed it: no band background, spacing or page container. */
+  placed?: boolean;
 }
 
 const {
   recommendations,
   currencySymbol = DEFAULT_CURRENCY.symbol,
   currencyCode = DEFAULT_CURRENCY.code,
+  placed = false,
 } = Astro.props;
+const Frame = placed ? "div" : Container;
 ---
 
 {
   recommendations.products.length > 0 && (
     <section
-      class="bg-muted/50 py-6 mt-4"
+      class={placed ? undefined : "bg-muted/50 py-6 mt-4"}
       id="related-products"
       aria-labelledby="related-products-title"
       data-recs-part="root"
       data-recs-reason={recommendations.reason}
     >
-      <Container>
+      <Frame>
         <h2 id="related-products-title" class="section-heading text-foreground mb-4" data-recs-part="title">
           {recommendationTitle(recommendations.reason)}
         </h2>
@@ -47,7 +53,7 @@ const {
             ))}
           </ProductGrid>
         </div>
-      </Container>
+      </Frame>
     </section>
   )
 }

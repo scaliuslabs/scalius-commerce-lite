@@ -367,7 +367,12 @@ export function storefrontKitOf(kit: ProductKit, page: StorefrontPageMoney): Sto
 }
 
 /** A placed offer as a skin gets it (`StorefrontPlacedOffer`): what it is, its price and band, and its contents when a kit. */
-export function storefrontPlacedOfferOf(offer: ProductPlacedOffer, page: StorefrontPageMoney): StorefrontPlacedOffer {
+/**
+ * A placed offer as a theme gets it. `available` judges its buy action as its
+ * own page does: in stock, and payable here (one paid only online is off
+ * where checkout takes no online payment, core's `paidOnlineOnly`).
+ */
+export function storefrontPlacedOfferOf(offer: ProductPlacedOffer, page: StorefrontPageMoney, takesOnlinePayment = true): StorefrontPlacedOffer {
   // A host page's offer is a summary: its kit's first items (its own page lists them all).
   const kit = offer.kit ? storefrontKitOf({ ...offer.kit, components: offer.kit.components.slice(0, STOREFRONT_PLACED_KIT_ITEMS_MAX) }, page) : null;
   return {
@@ -380,7 +385,7 @@ export function storefrontPlacedOfferOf(offer: ProductPlacedOffer, page: Storefr
     image: offer.imageUrl ? storefrontImageOf({ url: offer.imageUrl, alt: offer.imageAlt || offer.productName }) : null,
     price: pageAmount(offer.price, page),
     compareAt: offer.compareAtPrice !== null && offer.compareAtPrice > offer.price ? pageAmount(offer.compareAtPrice, page) : null,
-    available: offer.availabilityBand !== "out_of_stock",
+    available: offer.availabilityBand !== "out_of_stock" && (takesOnlinePayment || offer.paidOnlineOnly !== true),
     needsChoices: offer.requiresCustomization,
     availability: offer.availabilityBand,
     kit,
@@ -396,7 +401,7 @@ function fieldValue(value: unknown, page: StorefrontPageMoney): unknown {
 /** A product as an app card gets it, from the core card model (same prices, photo and quick-add rules). */
 export function productCardData(product: ProductCardProduct, model: ProductCardModel, page: StorefrontPageMoney): StorefrontProductCard {
   // The core card's price rule (priceLineClaim), so a skin's "-13%" matches the store's own.
-  const claim = priceLineClaim({ current: product.discountedPrice, regular: product.price, from: model.price.from });
+  const claim = priceLineClaim({ current: product.discountedPrice, regular: product.price });
   const image = model.image
     ? { url: model.image.src, srcset: model.image.srcset ?? null, width: null, height: null, alt: model.image.alt }
     : null;
@@ -503,6 +508,8 @@ export function productPageData(input: {
   /** One SKU's buyer price (the page's price engine). */
   variantPrice: (variant: ProductVariant) => number;
   page: StorefrontPageMoney;
+  /** Checkout takes an online payment (`takesOnlinePayment`); without one a placed offer paid only online is off. Default true. */
+  takesOnlinePayment?: boolean;
   /** The page's checkout-language copy: the warranty row's words (English without it). */
   warrantyCopy?: Partial<CheckoutLanguageData>;
   /** The buy form's buyer inputs (`productBuyerInputFields`: the product's, then the apps' line inputs); the product's own without it. */
@@ -524,8 +531,8 @@ export function productPageData(input: {
     summary: warrantySummaryText(warrantyTerms(view), warrantyWords),
   }));
   const amount = (value: number): StorefrontMoney => pageAmount(value, page);
-  const compare = (current: number, regular: number, from: boolean) => {
-    const { compareAt } = priceLineClaim({ current, regular, from });
+  const compare = (current: number, regular: number) => {
+    const { compareAt } = priceLineClaim({ current, regular });
     return compareAt === null ? null : amount(compareAt);
   };
   // The gallery's items in its order: a photo, or a video's poster with its file (a video without a poster is left out).
@@ -552,7 +559,7 @@ export function productPageData(input: {
       descriptionHtml: product.description ? sanitizeHtml(product.description) : "",
       media,
       price: amount(input.price.current),
-      compareAt: compare(input.price.current, input.price.regular, input.price.from),
+      compareAt: compare(input.price.current, input.price.regular),
       priceVaries: input.price.from,
       sku: only?.sku?.trim() || null,
       installments: emi && emi.monthlyMinor > 0 && emi.months > 0
@@ -577,8 +584,8 @@ export function productPageData(input: {
           title: variant.selectedOptions.map((option) => option.value).join(" / ") || product.name,
           options: input.options.map((option) => variant.selectedOptions.find((each) => each.optionDefinitionId === option.id)?.value ?? ""),
           price: amount(price),
-          // One SKU's own price: a single price, never "From".
-          compareAt: compare(price, variant.price ?? product.price, false),
+          // The SKU's own price and regular price.
+          compareAt: compare(price, variant.price ?? product.price),
           available: isVariantAvailable(variant),
           image,
           warrantyId: perSku.byVariant[variant.id] ?? null,
@@ -587,7 +594,7 @@ export function productPageData(input: {
           kit: variant.kit ? storefrontKitOf(variant.kit, page) : null,
         };
       }),
-      placedOffers: (product.placedOffers ?? []).map((offer) => storefrontPlacedOfferOf(offer, page)),
+      placedOffers: (product.placedOffers ?? []).map((offer) => storefrontPlacedOfferOf(offer, page, input.takesOnlinePayment ?? true)),
       warranties,
       fields: storefrontFieldValues(product.customFields, page),
       breadcrumbs: input.breadcrumbs,

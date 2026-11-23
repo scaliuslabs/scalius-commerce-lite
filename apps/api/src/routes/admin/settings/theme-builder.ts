@@ -39,7 +39,7 @@ import { offeredAppTemplateHome, readOfferedAppTemplate } from "../theme-app-tem
 import { requestAppProviders } from "../../../plugins/providers/app-providers";
 import { ok } from "../../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
-import { storefrontSectionListApiSchema } from "../../../schemas/storefront-theme";
+import { storefrontSectionListApiSchema, themeUnresolvedHandleApiSchema } from "../../../schemas/storefront-theme";
 import { boundedThemeStatus, themeDraftReceipt, themeDraftReceiptSchema, themeStatusSchema, themeIso } from "./theme-contract";
 import { requestActorId } from "../request-actor";
 
@@ -69,7 +69,7 @@ app.openapi(createRoute({
   path: "/theme/template",
   tags: ["Admin - Settings"],
   summary: "Switch the theme draft to another template (it goes live only when the draft is published)",
-  description: "The design the store last had on that template comes back if there is one; otherwise the template's look and homepage take the merchant's content by section type, and a section it has no place for stays on the homepage, hidden. The draft it replaces is kept as a restore point (reason `template`) and as the design of the template it leaves. `plan` says which sections moved, stayed hidden or left the homepage.",
+  description: "The design the store last had on that template comes back if there is one; otherwise the template's look and homepage take the merchant's content by section type, and a section it has no place for stays on the homepage, hidden. The draft it replaces is kept as a restore point (reason `template`) and as the design of the template it leaves. `plan` says which sections moved, stayed hidden or left the homepage. An app template's catalogue handles resolve against the store; a homepage section naming one the store lacks is left out and listed in `unresolved`.",
   operationId: "dashboard.theme.template_switch",
   request: {
     body: {
@@ -79,8 +79,8 @@ app.openapi(createRoute({
   },
   responses: {
     200: {
-      description: "The draft's new revision and what the switch did",
-      content: { "application/json": { schema: successEnvelope(themeDraftReceiptSchema.extend({ plan: templateSwitchPlanSchema })) } },
+      description: "The draft's new revision, what the switch did and the template's handles the store lacks",
+      content: { "application/json": { schema: successEnvelope(themeDraftReceiptSchema.extend({ plan: templateSwitchPlanSchema, unresolved: z.array(themeUnresolvedHandleApiSchema).max(200) })) } },
     },
     409: conflictResponse,
     ...errorResponses,
@@ -90,6 +90,7 @@ app.openapi(createRoute({
   const db = c.get("db");
   const installations = await listPluginInstallations(db);
   let choice: StorefrontTemplateChoice;
+  let unresolved: Array<z.infer<typeof themeUnresolvedHandleApiSchema>> = [];
   if ((STOREFRONT_TEMPLATE_IDS as readonly string[]).includes(body.template)) {
     choice = { kind: "core", key: body.template as StorefrontTemplateId };
   } else {
@@ -97,6 +98,7 @@ app.openapi(createRoute({
     if (!read.ok && read.reason === "missing") throw new NotFoundError("No active app offers that template.");
     if (!read.ok) throw new AppError(422, "template_unavailable", `This template does not fit the store's theme: ${read.problem}`);
     choice = { kind: "app", key: body.template, theme: read.theme };
+    unresolved = read.unresolved.slice(0, 200);
   }
   const switched = await switchThemeTemplate(db, choice, body.expectedDraftRevision, body.basePublishedRevision, requestActorId(c), {
     fromHome: (template) => offeredAppTemplateHome(db, template, installations),
@@ -104,6 +106,7 @@ app.openapi(createRoute({
   return ok(c, {
     ...themeDraftReceipt({ revision: switched.revision, basePublishedRevision: switched.basePublishedRevision, updatedAt: switched.updatedAt }),
     plan: switched.plan,
+    unresolved,
   });
 });
 

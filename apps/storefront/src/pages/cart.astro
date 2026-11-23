@@ -56,7 +56,8 @@ import {
   createOrderReceiptFinalizeCookieHeader,
 } from "@/lib/order-receipt-cookie";
 import { MIN_SHIPPING_ADDRESS_LENGTH } from "@/lib/checkout/shipping-address";
-import { termsSegments } from "@/lib/checkout/terms-text";
+import { termsAgreement } from "@/lib/checkout/terms-text";
+import CheckoutTermsAgreement from "@/components/checkout/CheckoutTermsAgreement.astro";
 import { giftCardCheckoutCopy } from "@/lib/checkout/gift-cards";
 import { hashCheckoutCartFingerprint } from "@/lib/checkout/session-state";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
@@ -152,13 +153,8 @@ const lang: CheckoutLanguageData = checkoutLanguageResponse || {
 };
 const copy = lang.languageData;
 const giftCopy = giftCardCheckoutCopy(copy);
-const policyPath = (kind: "terms" | "privacy") =>
-  layoutData?.policies?.find((policy) => policy.kind === kind)?.path ?? null;
-const hasAgreementPolicies = Boolean(policyPath("terms") && policyPath("privacy"));
-const agreement = termsSegments(copy.termsText, {
-  terms: { label: copy.termsLinkText, href: policyPath("terms") },
-  privacy: { label: copy.privacyLinkText, href: policyPath("privacy") },
-});
+// The store's terms where this page places the order (cash): the sentence, or the required box.
+const agreement = termsAgreement({ required: checkoutConfig.requireTermsAcceptance, policies: layoutData?.policies, copy });
 const [existingCheckoutMessageBefore, existingCheckoutMessageAfter = ""] =
   copy.existingCheckoutMessage.split("{orderId}", 2);
 
@@ -1084,17 +1080,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               }
 
               {
-                // Buyers are only asked to agree to policies the store has published.
-                codPlaceable && hasAgreementPolicies && (
-                  <p id={codOnly ? undefined : "cashAgreement"} class="mt-3 text-center text-sm text-muted-foreground" hidden={!codOnly}>
-                    {agreement.map((segment) =>
-                      segment.href ? (
-                        <a href={segment.href} target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-foreground">{segment.text}</a>
-                      ) : (
-                        segment.text
-                      ),
-                    )}
-                  </p>
+                // Where cash is placed here; the payment step draws it beside Pay for every other way.
+                codPlaceable && (
+                  <CheckoutTermsAgreement agreement={agreement} errorText={copy.termsRequiredText} id="cartTermsAccepted" wrapperId={codOnly ? undefined : "cashAgreement"} inactive={!codOnly} />
                 )
               }
             </div>
@@ -1153,6 +1141,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
 <script>
   import { readBuyerAttributes } from "@/lib/buyer-ui/state";
+  import { checkTermsAgreement } from "@/lib/checkout/terms-text";
   import { onTextEdit } from "@/lib/text-edits";
   import { buyerUiDrawn, buyerUiPending } from "@/lib/buyer-ui/lazy";
   import { checkoutText } from "@/lib/checkout-text";
@@ -1999,7 +1988,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       if (meta) meta.dataset.codOnly = placesCash ? "true" : "false";
       if (paymentStepInput) paymentStepInput.value = placesCash && !storeCodOnly ? "skipped" : "";
       if (giftCardStep) giftCardStep.hidden = !placesCash;
-      document.getElementById("cashAgreement")?.toggleAttribute("hidden", !placesCash);
+      const cashAgreement = document.getElementById("cashAgreement");
+      cashAgreement?.toggleAttribute("hidden", !placesCash);
+      cashAgreement?.querySelector("input")?.toggleAttribute("disabled", !placesCash);
       document.querySelectorAll<HTMLElement>("[data-checkout-payment-step]").forEach((step) => step.toggleAttribute("hidden", placesCash));
       refreshCartBlockingState();
       submitLabel = placesCash ? checkoutCopy.placeOrderText : checkoutCopy.continueToPaymentText;
@@ -2184,6 +2175,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       persistCheckoutFormDraftNow(true);
 
       if (!validateInformation()) return fail("information");
+      // Cash placed here: the required terms box first (the payment step asks for every other way).
+      if (codOnly && !checkTermsAgreement(form)) return fail("terms");
       const phoneValidation = checkoutPhoneResult();
 
       const quoted = () => /^taxq_[A-Za-z0-9_-]{22}$/.test(quoteFingerprint?.value ?? "");

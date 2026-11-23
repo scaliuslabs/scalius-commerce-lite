@@ -17180,7 +17180,12 @@
             "nullable": true
           },
           "fulfillmentKind": {
-            "type": "string"
+            "type": "string",
+            "description": "What it sells; a kit's from its items."
+          },
+          "paidOnlineOnly": {
+            "type": "boolean",
+            "description": "Paid only online (a key, a download, or a kit holding one): where checkout takes no online payment, its buy action is off, as on its own page."
           },
           "price": {
             "type": "number",
@@ -17231,6 +17236,7 @@
           "imageMediaId",
           "imageAlt",
           "fulfillmentKind",
+          "paidOnlineOnly",
           "price",
           "compareAtPrice",
           "requiresCustomization",
@@ -17367,6 +17373,19 @@
               "in_stock"
             ],
             "description": "From its items: as many kits as the scarcest item allows; `out_of_stock` when an item can't be sold."
+          },
+          "fulfillmentKind": {
+            "type": "string",
+            "enum": [
+              "physical",
+              "digital",
+              "service"
+            ],
+            "description": "What it sells, from all its items (never the kit SKU's own setting): physical when any item ships, else digital when any item is, else a service."
+          },
+          "paidOnlineOnly": {
+            "type": "boolean",
+            "description": "One of its items is paid only online (a key, a download): no cash on delivery or at the service buys it."
           }
         },
         "required": [
@@ -17377,7 +17396,9 @@
           "compareAtPrice",
           "saving",
           "savingPercent",
-          "availabilityBand"
+          "availabilityBand",
+          "fulfillmentKind",
+          "paidOnlineOnly"
         ],
         "description": "A SKU made of other SKUs: checkout sells it as them."
       },
@@ -48041,6 +48062,10 @@
                       "maxLength": 500
                     }
                   },
+                  "termsAccepted": {
+                    "type": "boolean",
+                    "description": "The buyer read and agreed to the store's terms (the storefront's terms page), which you showed them. Required (true) when the store's checkout config says `requireTermsAcceptance`: without it submit is refused with `details.reason: terms_acceptance_required`. The order records the agreement and this agent."
+                  },
                   "shippingRateToken": {
                     "type": "string",
                     "nullable": true,
@@ -53949,6 +53974,9 @@
                         "requireFullBillingAddress": {
                           "type": "boolean"
                         },
+                        "requireTermsAcceptance": {
+                          "type": "boolean"
+                        },
                         "allowedCountries": {
                           "type": "array",
                           "items": {
@@ -54118,6 +54146,7 @@
                         "partialPaymentEnabled",
                         "partialPaymentAmount",
                         "requireFullBillingAddress",
+                        "requireTermsAcceptance",
                         "allowedCountries",
                         "allowedCountriesMode",
                         "currency",
@@ -83305,6 +83334,10 @@
                                     ],
                                     "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                                   },
+                                  "paidOnlineOnly": {
+                                    "type": "boolean",
+                                    "description": "Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it."
+                                  },
                                   "createdAt": {
                                     "type": "string",
                                     "nullable": true
@@ -83329,6 +83362,7 @@
                                   "discountPercentage",
                                   "discountAmount",
                                   "fulfillmentKind",
+                                  "paidOnlineOnly",
                                   "createdAt"
                                 ]
                               },
@@ -84631,6 +84665,10 @@
                                 ],
                                 "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                               },
+                              "paidOnlineOnly": {
+                                "type": "boolean",
+                                "description": "Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it."
+                              },
                               "customFields": {
                                 "type": "array",
                                 "items": {
@@ -84682,6 +84720,7 @@
                               "discountPercentage",
                               "discountAmount",
                               "fulfillmentKind",
+                              "paidOnlineOnly",
                               "customFields",
                               "warrantyId",
                               "createdAt",
@@ -105726,6 +105765,10 @@
                       "channels"
                     ],
                     "additionalProperties": false
+                  },
+                  "termsAccepted": {
+                    "type": "boolean",
+                    "description": "The buyer ticked \"I agree to the terms\". Required (true) when the store asks for it (checkout config `requireTermsAcceptance`): without it the order is refused with `details.reason: terms_acceptance_required`. The order records the agreement."
                   },
                   "trackingSignals": {
                     "type": "object",
@@ -212692,7 +212735,7 @@
           "Admin - Settings"
         ],
         "summary": "Switch the theme draft to another template (it goes live only when the draft is published)",
-        "description": "The design the store last had on that template comes back if there is one; otherwise the template's look and homepage take the merchant's content by section type, and a section it has no place for stays on the homepage, hidden. The draft it replaces is kept as a restore point (reason `template`) and as the design of the template it leaves. `plan` says which sections moved, stayed hidden or left the homepage.",
+        "description": "The design the store last had on that template comes back if there is one; otherwise the template's look and homepage take the merchant's content by section type, and a section it has no place for stays on the homepage, hidden. The draft it replaces is kept as a restore point (reason `template`) and as the design of the template it leaves. `plan` says which sections moved, stayed hidden or left the homepage. An app template's catalogue handles resolve against the store; a homepage section naming one the store lacks is left out and listed in `unresolved`.",
         "operationId": "dashboard.theme.template_switch",
         "requestBody": {
           "required": true,
@@ -212726,7 +212769,7 @@
         },
         "responses": {
           "200": {
-            "description": "The draft's new revision and what the switch did",
+            "description": "The draft's new revision, what the switch did and the template's handles the store lacks",
             "content": {
               "application/json": {
                 "schema": {
@@ -212756,13 +212799,21 @@
                         },
                         "plan": {
                           "$ref": "#/components/schemas/ThemeTemplateSwitchPlan"
+                        },
+                        "unresolved": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ThemeUnresolvedHandle"
+                          },
+                          "maxItems": 200
                         }
                       },
                       "required": [
                         "revision",
                         "basePublishedRevision",
                         "updatedAt",
-                        "plan"
+                        "plan",
+                        "unresolved"
                       ]
                     }
                   },
@@ -217134,6 +217185,9 @@
                         "requireFullBillingAddress": {
                           "type": "boolean"
                         },
+                        "requireTermsAcceptance": {
+                          "type": "boolean"
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -217146,6 +217200,7 @@
                         "partialPaymentAmount",
                         "autoFulfilMode",
                         "requireFullBillingAddress",
+                        "requireTermsAcceptance",
                         "revision"
                       ]
                     }
@@ -217299,6 +217354,9 @@
                   "requireFullBillingAddress": {
                     "type": "boolean"
                   },
+                  "requireTermsAcceptance": {
+                    "type": "boolean"
+                  },
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 0
@@ -217365,6 +217423,9 @@
                         "requireFullBillingAddress": {
                           "type": "boolean"
                         },
+                        "requireTermsAcceptance": {
+                          "type": "boolean"
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -217377,6 +217438,7 @@
                         "partialPaymentAmount",
                         "autoFulfilMode",
                         "requireFullBillingAddress",
+                        "requireTermsAcceptance",
                         "revision"
                       ]
                     }
@@ -253318,7 +253380,8 @@
                                   "stock_held",
                                   "late_payment",
                                   "payment_dispute",
-                                  "delivery_message"
+                                  "delivery_message",
+                                  "terms_accepted"
                                 ]
                               },
                               "body": {
@@ -253534,7 +253597,8 @@
                             "stock_held",
                             "late_payment",
                             "payment_dispute",
-                            "delivery_message"
+                            "delivery_message",
+                            "terms_accepted"
                           ]
                         },
                         "body": {
@@ -261736,7 +261800,7 @@
           "Admin - Orders"
         ],
         "summary": "Show a line's delivery message to edit it",
-        "description": "The text and link of the line's delivery message, for staff who may write it. Never cached.",
+        "description": "The text and link of the line's delivery message, for staff who may write it. Never cached; the order timeline records who read it, never the text.",
         "parameters": [
           {
             "schema": {

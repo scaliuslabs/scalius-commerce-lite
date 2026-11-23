@@ -1,11 +1,14 @@
-// /account: the signed-in buyer's own phone, not yet verified. The buyer proves
-// it with two codes, both for this one change: one to how the account signs in
-// now (`confirmWith`: its proven email, else its proven phone) and one texted
-// to the phone. The server then moves the orders placed with that phone onto
-// the account, signs out every session and sets a new cookie, so the page
-// reloads. The page never says anything about orders or other people until
-// the phone is proven. The server reads the phone from the session: only the
-// codes are sent, in a request body, never in a URL.
+// A sign-in phone proven by two codes, both for this one change: one to how
+// the account signs in now (`confirmWith`: its proven email, else its proven
+// phone) and one texted to the number. Two entries share the flow:
+// - /account, the account's own phone not yet verified (`renderPhoneVerification`):
+//   the server reads the phone from the session; on success the orders placed
+//   with it join and the page reloads.
+// - Profile, a new number the buyer types (`renderPhoneChange`): on success
+//   the profile reloads with "Phone number changed".
+// Either way the server signs out every session and sets a new cookie. The
+// page never says anything about orders or other people until the phone is
+// proven. Numbers and codes travel only in a request body, never in a URL.
 
 import { pagePhone } from "@/lib/checkout-text";
 import {
@@ -88,6 +91,12 @@ interface TwoCodeWords {
   expiredCode: string;
   noSignInToConfirm: string;
   phoneOnAnotherAccount: string;
+  /** The change flow's number field: empty, already the account's, or not a number the store takes. */
+  enterNumber: string;
+  sameNumber: string;
+  invalidNumber: string;
+  bdMobileRequired: string;
+  countryNotAccepted: string;
 }
 
 const TWO_CODE_WORDS: Readonly<Record<StorefrontLanguage, TwoCodeWords>> = {
@@ -101,6 +110,11 @@ const TWO_CODE_WORDS: Readonly<Record<StorefrontLanguage, TwoCodeWords>> = {
     expiredCode: "These codes can't be used anymore. Send new codes.",
     noSignInToConfirm: "We can't send a code to how you sign in now. Ask the store to verify your phone for you.",
     phoneOnAnotherAccount: "This phone number is verified on another account. Sign in with it instead.",
+    enterNumber: "Enter the new phone number.",
+    sameNumber: "This is already your phone number.",
+    invalidNumber: "Enter a valid phone number.",
+    bdMobileRequired: "Enter a Bangladesh mobile number, like 01712-345678.",
+    countryNotAccepted: "This store doesn't take phone numbers from that country.",
   },
   bn: {
     targets: { email: "আপনার ইমেইলে", phone: "আপনার বর্তমান ফোনে", number: (phone) => `${phone} নম্বরে` },
@@ -112,6 +126,11 @@ const TWO_CODE_WORDS: Readonly<Record<StorefrontLanguage, TwoCodeWords>> = {
     expiredCode: "এই কোডগুলো আর ব্যবহার করা যাবে না। নতুন কোড পাঠান।",
     noSignInToConfirm: "আপনি এখন যেভাবে সাইন ইন করেন সেখানে কোড পাঠানো যাচ্ছে না। আপনার ফোন নম্বর যাচাই করে দিতে স্টোরকে বলুন।",
     phoneOnAnotherAccount: "এই ফোন নম্বরটি অন্য একটি অ্যাকাউন্টে যাচাই করা আছে। বরং এই নম্বর দিয়ে সাইন ইন করুন।",
+    enterNumber: "নতুন ফোন নম্বরটি লিখুন।",
+    sameNumber: "এটি আগে থেকেই আপনার ফোন নম্বর।",
+    invalidNumber: "সঠিক ফোন নম্বর লিখুন।",
+    bdMobileRequired: "বাংলাদেশের মোবাইল নম্বর লিখুন, যেমন ০১৭১২-৩৪৫৬৭৮।",
+    countryNotAccepted: "এই স্টোর ওই দেশের ফোন নম্বর নেয় না।",
   },
 };
 
@@ -136,8 +155,20 @@ export function phoneCodeRefusalText(refusal: PhoneCodeRefusal | undefined, fall
     case "wrong_code": return words.wrongCode;
     case "expired_code": return words.expiredCode;
     case "codes_unavailable": return buyerApiErrorCopy(pageLanguage()).codesUnavailable;
+    case "invalid_phone": return words.invalidNumber;
+    case "bd_mobile_required": return words.bdMobileRequired;
+    case "country_not_accepted": return words.countryNotAccepted;
     default: return fallback;
   }
+}
+
+/** The number refusals that point at the change flow's number field. */
+const NUMBER_REFUSALS: ReadonlySet<PhoneCodeRefusal | undefined> = new Set(["invalid_phone", "bd_mobile_required", "country_not_accepted", "phone_on_another_account"]);
+
+/** Whether a typed number is the account's phone (both read as digits; a leading 0 is the country's trunk prefix). */
+export function isSamePhone(typed: string, phone: string | null): boolean {
+  const digits = typed.replace(/\D/g, "").replace(/^0+/, "");
+  return Boolean(phone) && digits.length >= 7 && phone!.replace(/\D/g, "").endsWith(digits);
 }
 
 /** After the phone is proven the session cookie is a new one: the page loads again with it. */
@@ -172,18 +203,44 @@ function codeField(id: string, name: string, statusId: string): { wrap: HTMLDivE
   return { wrap, label, input };
 }
 
-function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificationOptions): HTMLElement {
+/** A change of the account's phone to a number the buyer types. */
+export interface PhoneChange {
+  /** The account's phone now, or null without one. */
+  phone: string | null;
+  verified: boolean;
+  /** Where the confirming code will go (the account's proven email, else its proven phone), until a send names it. */
+  confirmWith: PhoneCodeConfirmWith;
+}
+
+const primaryButton = "inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50";
+
+function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificationOptions, change: PhoneChange | null = null): HTMLElement {
   const words = accountCopy().phone;
   const codeWords = twoCodeWords();
-  const VERIFY_LABEL = words.verify;
+  const VERIFY_LABEL = change ? words.sendCodes : words.verify;
   const RESEND_LABEL = words.resend;
   const SUBMIT_LABEL = words.submit;
-  const notice = element("section", "rounded-xl border border-border bg-card p-4");
-  notice.dataset.phoneVerification = "";
-  notice.append(element("p", "text-sm text-foreground", phoneVerificationNotice(prompt.phone)));
+  const notice = element("section", change ? "" : "rounded-xl border border-border bg-card p-4");
+  notice.dataset.phoneVerification = change ? "change" : "";
+  notice.append(element("p", change ? "text-sm text-muted-foreground" : "text-sm text-foreground", change ? words.changeIntro : phoneVerificationNotice(prompt.phone)));
 
   const statusId = "phoneVerificationCodeStatus";
-  const verify = element("button", `${linkButton} mt-1`, VERIFY_LABEL);
+  // The change flow's number: typed, then held while its codes are out.
+  const number = change ? codeField("phoneChangeNumber", "phone", statusId) : null;
+  if (number) {
+    number.label.textContent = words.newNumber;
+    number.input.type = "tel";
+    number.input.inputMode = "tel";
+    number.input.autocomplete = "tel";
+    number.input.maxLength = 32;
+    number.input.classList.remove("max-w-48");
+    number.wrap.className = "mt-3";
+    notice.append(number.wrap);
+  }
+  const otherNumber = element("button", linkButton, words.otherNumber);
+  otherNumber.type = "button";
+  otherNumber.hidden = true;
+  const verify = element("button", change ? `${primaryButton} mt-3` : `${linkButton} mt-1`, VERIFY_LABEL);
   verify.type = "button";
 
   const form = element("form", "mt-3 hidden space-y-3");
@@ -192,14 +249,16 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
   // The code to how the account signs in now, then the one texted to the phone (the order the sent message names them).
   const current = codeField("phoneVerificationCurrentCode", "currentCode", statusId);
   const proof = codeField("phoneVerificationCode", "code", statusId);
-  const phoneTarget = codeWords.targets.number(pagePhone(prompt.phone));
-  proof.label.textContent = codeWords.codeSentTo(phoneTarget);
+  // The number the codes go to: the prompt's, or the one typed when they were sent.
+  let target = prompt.phone;
+  const phoneTarget = () => codeWords.targets.number(pagePhone(target));
+  proof.label.textContent = codeWords.codeSentTo(phoneTarget());
   const actions = element("div", "flex flex-wrap items-center gap-x-4 gap-y-1");
-  const submit = element("button", "inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50", SUBMIT_LABEL);
+  const submit = element("button", primaryButton, SUBMIT_LABEL);
   submit.type = "submit";
   const resend = element("button", linkButton, RESEND_LABEL);
   resend.type = "button";
-  actions.append(submit, resend);
+  actions.append(submit, resend, otherNumber);
   form.append(current.wrap, proof.wrap, actions);
 
   const status = element("p", "mt-2 text-sm text-muted-foreground empty:hidden");
@@ -218,7 +277,7 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
 
   // The account's own phone is unproven, so the account signs in with its proven email:
   // a send refused as too soon (which names no `confirmWith`) still labels that field.
-  let confirmWith: PhoneCodeConfirmWith = "email";
+  let confirmWith: PhoneCodeConfirmWith = change?.confirmWith ?? "email";
   const currentTarget = () => codeWords.targets[confirmWith];
 
   const say = (message: string, tone: "info" | "error" = "info") => {
@@ -240,6 +299,11 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
 
   const openForm = (message: string, resendAfterSeconds: number) => {
     current.label.textContent = codeWords.codeSentTo(currentTarget());
+    proof.label.textContent = codeWords.codeSentTo(phoneTarget());
+    if (number) {
+      number.input.readOnly = true;
+      otherNumber.hidden = false;
+    }
     say(message);
     verify.hidden = true;
     form.classList.remove("hidden");
@@ -249,16 +313,22 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
 
   const send = async (trigger: HTMLButtonElement, idleLabel: string) => {
     if (trigger.disabled) return;
+    if (number && !number.input.readOnly) {
+      const typed = number.input.value.trim();
+      if (!typed) return refuse(codeWords.enterNumber, [number.input]);
+      if (change?.verified && isSamePhone(typed, change.phone)) return refuse(codeWords.sameNumber, [number.input]);
+      target = typed;
+    }
     stopWait();
     trigger.disabled = true;
     trigger.textContent = words.sending;
     say("");
-    const result = await sendPhoneVerificationCode();
+    const result = await (number ? sendPhoneVerificationCode(target) : sendPhoneVerificationCode());
     trigger.textContent = idleLabel;
     if (result.success) {
       confirmWith = result.confirmWith;
       trigger.disabled = false;
-      openForm(phoneCodesSentText(confirmWith, prompt.phone), result.resendAfterSeconds);
+      openForm(phoneCodesSentText(confirmWith, target), result.resendAfterSeconds);
       return;
     }
     if (result.refusal === "codes_still_valid") {
@@ -278,15 +348,13 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
       return;
     }
     trigger.disabled = false;
+    if (number && NUMBER_REFUSALS.has(result.refusal)) return refuse(message, [number.input]);
     say(message, "error");
     // Codes can't be sent, or only the store can verify the phone: the buyer can still reach the store.
     if (contact && (result.refusal === "codes_unavailable" || result.refusal === "no_sign_in_to_confirm")) contact.hidden = false;
   };
 
-  verify.addEventListener("click", () => void send(verify, VERIFY_LABEL));
-  resend.addEventListener("click", () => void send(resend, RESEND_LABEL));
-
-  const refuse = (message: string, invalid: HTMLInputElement[]) => {
+  function refuse(message: string, invalid: HTMLInputElement[]) {
     for (const input of invalid) input.setAttribute("aria-invalid", "true");
     say(message, "error");
     const first = invalid[0];
@@ -294,7 +362,27 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
       first.select();
       first.focus();
     }
-  };
+  }
+
+  verify.addEventListener("click", () => void send(verify, VERIFY_LABEL));
+  resend.addEventListener("click", () => void send(resend, RESEND_LABEL));
+  // Another number: the codes sent are for the old one, so the flow starts again.
+  otherNumber.addEventListener("click", () => {
+    if (!number) return;
+    stopWait();
+    stopTimers();
+    form.classList.add("hidden");
+    otherNumber.hidden = true;
+    verify.hidden = false;
+    resend.disabled = false;
+    resend.textContent = RESEND_LABEL;
+    current.input.value = "";
+    proof.input.value = "";
+    number.input.readOnly = false;
+    say("");
+    number.input.select();
+    number.input.focus();
+  });
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -302,14 +390,15 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
     const currentCode = current.input.value.replace(/\s+/g, "");
     const code = proof.input.value.replace(/\s+/g, "");
     if (!currentCode) return refuse(codeWords.enterCodeSentTo(currentTarget()), [current.input]);
-    if (!code) return refuse(codeWords.enterCodeSentTo(phoneTarget), [proof.input]);
+    if (!code) return refuse(codeWords.enterCodeSentTo(phoneTarget()), [proof.input]);
     submit.disabled = true;
     submit.textContent = words.verifying;
     say("");
-    const result = await verifyPhone({ code, currentCode });
+    const result = await verifyPhone(number ? { code, currentCode, phone: target } : { code, currentCode });
     if (result.success) {
       stopWait();
-      reloadVerified();
+      if (change) window.location.assign(pagePath("/account/profile?saved=phone"));
+      else reloadVerified();
       return;
     }
     submit.disabled = false;
@@ -317,11 +406,18 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
     const message = phoneCodeRefusalText(result.refusal, result.error, confirmWith);
     if (result.refusal === "current_sign_in_code_required") return refuse(message, [current.input]);
     if (result.refusal === "wrong_code" || result.refusal === "expired_code") return refuse(message, [current.input, proof.input]);
+    if (number && NUMBER_REFUSALS.has(result.refusal)) return refuse(message, [number.input]);
     say(message, "error");
     if (contact && result.refusal === "no_sign_in_to_confirm") contact.hidden = false;
   });
 
   return notice;
+}
+
+/** Profile's phone change: a number field, then the two codes; on success the profile reloads. */
+export function renderPhoneChange(container: HTMLElement, change: PhoneChange, options: PhoneVerificationOptions): void {
+  stopTimers();
+  container.replaceChildren(renderNotice({ phone: change.phone ?? "" }, options, change));
 }
 
 /** The notice above the order list when the API asks for it; null clears it. */

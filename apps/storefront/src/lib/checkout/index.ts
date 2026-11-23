@@ -85,6 +85,7 @@ import {
   type StoredGiftCard,
 } from "./gift-cards";
 import { logicalPathname, pagePath } from "@/lib/presence-url";
+import { checkTermsAgreement, TERMS_ACCEPTED_FIELD } from "./terms-text";
 import { createSubmit, onHistoryRestore, submitBusy, withinStepLimit } from "./submit-machine";
 import { checkoutLineGroups, showsOrderLineGroupHeadings } from "../order-line-groups";
 
@@ -1233,7 +1234,14 @@ async function payForSelection(pressInitVersion: number): Promise<void> {
     if (await recoverExistingCheckout(existingRecovery)) return;
   }
   if (giftCardBusy) return stop("gift_card_busy");
-  const submittedCheckoutData: Record<string, unknown> = { ...checkoutData, attributes: readBuyerAttributes() };
+  // The store asks for the terms box beside Pay: an order goes only once it is ticked.
+  const actionHost = document.getElementById("paymentActionHost");
+  if (actionHost && !checkTermsAgreement(actionHost)) return stop("terms");
+  const submittedCheckoutData: Record<string, unknown> = {
+    ...checkoutData,
+    attributes: readBuyerAttributes(),
+    [TERMS_ACCEPTED_FIELD]: actionHost?.querySelector<HTMLInputElement>(`input[name="${TERMS_ACCEPTED_FIELD}"]`)?.checked === true,
+  };
   const submitInitVersion = initVersion;
   hideError();
   // A press the page no longer holds (it started again) asks for no order.

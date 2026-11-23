@@ -26,7 +26,7 @@ import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders, resolveAppPaymentUsa
 import { checkoutLineInputs, checkoutPurchaseOptions, NO_CHECKOUT_APP_FUNCTIONS, type CheckoutAppFunctions } from "./app-functions";
 import type { AppLinePricer } from "./app-line-prices";
 import { issuesOnBuyerLines, presentTransformedCart, type CartTransformer, type TransformedCart } from "./cart-transform";
-import type { StorefrontCartItemIssue, StorefrontCartValidationItem } from "./cart-validation";
+import { cartVariantIdsSql, type StorefrontCartItemIssue, type StorefrontCartValidationItem } from "./cart-validation";
 import { ValidationError } from "@scalius/core/errors";
 import {
     createStorefrontCheckoutAuthorityReadPlan,
@@ -228,7 +228,8 @@ async function readCheckoutOnce<TResponse>(
         ...plan.statements,
         selectCheckoutAttemptByKey(db, identity.requestKey),
         selectContactCustomerCandidates(db, contact),
-        selectReservationVariantStates(db, variantIds),
+        // What the order reserves: the cart's SKUs and its kits' items (a kit has no stock of its own).
+        selectReservationVariantStates(db, cartVariantIdsSql(variantIds)),
         selectActiveCheckoutRegistrations(db),
         ...(session && "tokenHash" in session ? [selectSessionCustomer(db, session.tokenHash)] : []),
     ];

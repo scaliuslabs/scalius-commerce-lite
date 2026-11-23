@@ -782,13 +782,19 @@ function parseBundleDiscountLine(
  */
 export function parseAddOnTotals(value: unknown, subtotalMinor: number): AddOnTotals {
   if (value === undefined || value === null) return { itemsSubtotalMinor: subtotalMinor, rows: [] };
-  if (!isRecord(value) || !Array.isArray(value.rows) || value.rows.length > ADD_ON_ROWS_MAX) fail();
-  const rows = value.rows.map((row) => {
+  // A parsed quote carries the rows alone. The storefront's own endpoint answers a parsed quote and
+  // the browser reads it with this same parser, so the row list is read as well as the API's object:
+  // a quote always parses again from its own parse.
+  const listed = Array.isArray(value) ? value : isRecord(value) && Array.isArray(value.rows) ? value.rows : fail();
+  if (listed.length > ADD_ON_ROWS_MAX) fail();
+  const rows = listed.map((row) => {
     if (!isRecord(row)) fail();
     const appId = row.appId === null ? null : requiredString(row.appId, MAX_ID_LENGTH);
     return { appId, title: requiredString(row.title, ADD_ON_TITLE_MAX), amountMinor: nonNegativeSafeInteger(row.amountMinor) };
   });
-  const itemsSubtotalMinor = nonNegativeSafeInteger(value.itemsSubtotalMinor);
-  if (itemsSubtotalMinor + rows.reduce((sum, row) => sum + row.amountMinor, 0) !== subtotalMinor) fail();
+  const rowsMinor = rows.reduce((sum, row) => sum + row.amountMinor, 0);
+  if (!Number.isSafeInteger(rowsMinor) || rowsMinor > subtotalMinor) fail();
+  const itemsSubtotalMinor = Array.isArray(value) ? subtotalMinor - rowsMinor : nonNegativeSafeInteger((value as Record<string, unknown>).itemsSubtotalMinor);
+  if (itemsSubtotalMinor + rowsMinor !== subtotalMinor) fail();
   return { itemsSubtotalMinor, rows };
 }

@@ -15,6 +15,7 @@ import {
   checkStorefrontCartRules,
   validateCheckoutAttributes,
   presentTransformedCartLines,
+  presentedLineTypes,
   type StorefrontCartFulfilmentSummary,
   presentStorefrontCartValidation,
   presentStorefrontDeliveryPreflight,
@@ -403,7 +404,8 @@ app.openapi(cartValidationRoute, async (c) => {
     ? presentStorefrontCartValidation(
       buyerView.cart,
       decimalPlaces,
-      { ...fulfilment, lineTypes: buyerView.positions.map((position) => fulfilment.lineTypes[position] ?? null) },
+      // A kit's line takes the strictest of its items' types (a key makes it paid online).
+      { ...fulfilment, lineTypes: presentedLineTypes(buyerView, fulfilment.lineTypes) },
       buyerView.positions.map((position) => hashes[position] ?? ""),
       folding,
     )

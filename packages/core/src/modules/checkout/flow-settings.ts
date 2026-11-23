@@ -20,6 +20,8 @@ export interface SaveCheckoutFlowSettingsInput {
     autoFulfilMode?: AutoFulfilMode;
     /** Omitted = keep the saved choice. */
     requireFullBillingAddress?: boolean;
+    /** Omitted = keep the saved choice. */
+    requireTermsAcceptance?: boolean;
     expectedRevision: number;
     availablePaymentMethods: readonly string[];
     /** The request's gateways, for app gateways' amount limits. */
@@ -61,6 +63,7 @@ export async function saveCheckoutFlowSettingsDocument(
         partialPaymentAmount: input.partialPaymentAmount,
         ...(input.autoFulfilMode === undefined ? {} : { autoFulfilMode: input.autoFulfilMode }),
         ...(input.requireFullBillingAddress === undefined ? {} : { requireFullBillingAddress: input.requireFullBillingAddress }),
+        ...(input.requireTermsAcceptance === undefined ? {} : { requireTermsAcceptance: input.requireTermsAcceptance }),
     }, {}, { expectedRevision: input.expectedRevision });
     return { ...value, revision };
 }

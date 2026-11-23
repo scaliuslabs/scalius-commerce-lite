@@ -39,7 +39,7 @@ import { reconcileCheckoutAfterSignIn } from "../checkout/session-state";
 interface AuthApiEnvelope<T = unknown> {
   success: boolean;
   data?: T;
-  error?: string | { code?: string; message?: string; details?: { retryAfterSeconds?: number; attemptsLeft?: number; reason?: string } };
+  error?: string | { code?: string; message?: string; details?: { retryAfterSeconds?: number; attemptsLeft?: number; reason?: string; field?: string } };
 }
 
 interface SendOtpData {
@@ -215,7 +215,7 @@ async function readEnvelope<T>(res: Response): Promise<AuthApiEnvelope<T>> {
   }
 }
 
-function errorDetails(raw: AuthApiEnvelope): { retryAfterSeconds?: number; attemptsLeft?: number; reason?: string } {
+function errorDetails(raw: AuthApiEnvelope): { retryAfterSeconds?: number; attemptsLeft?: number; reason?: string; field?: string } {
   return typeof raw.error === "object" && raw.error.details ? raw.error.details : {};
 }
 
@@ -282,6 +282,10 @@ export interface CustomerInfo {
   email: string;
   name: string;
   phone?: string;
+  /** The WhatsApp number when it is not the phone (null: the phone). */
+  whatsapp?: string | null;
+  /** The account signs in with its phone (proven by code). */
+  phoneVerified?: boolean;
   customerId?: string;
   /** The address book's default address (checkout prefills it), or null. */
   defaultAddress?: CustomerAddress | null;
@@ -873,6 +877,7 @@ export type PhoneCodeConfirmWith = "email" | "phone";
  * - `codes_still_valid`: too soon for new codes; the codes already sent still work.
  * - `wrong_code` / `expired_code`: one of the two codes is wrong, or can't be used anymore.
  * - `codes_unavailable`: the store can't send text codes right now.
+ * - `invalid_phone` / `bd_mobile_required` / `country_not_accepted`: the new number can't be read, isn't a Bangladesh mobile, or is from a country the store doesn't take.
  */
 export type PhoneCodeRefusal =
   | "no_sign_in_to_confirm"
@@ -881,7 +886,10 @@ export type PhoneCodeRefusal =
   | "codes_still_valid"
   | "wrong_code"
   | "expired_code"
-  | "codes_unavailable";
+  | "codes_unavailable"
+  | "invalid_phone"
+  | "bd_mobile_required"
+  | "country_not_accepted";
 
 export type SendPhoneVerificationCodeResult =
   | { success: true; resendAfterSeconds: number; confirmWith: PhoneCodeConfirmWith }
@@ -892,11 +900,16 @@ export type VerifyPhoneResult =
   | { success: false; error: string; status: number; attemptsLeft?: number; refusal?: PhoneCodeRefusal };
 
 const NAMED_PHONE_REFUSALS: ReadonlySet<string> = new Set(["no_sign_in_to_confirm", "phone_on_another_account", "current_sign_in_code_required"]);
+/** How the API reads a typed number (`parseContactPhone`'s reasons) on the `phone` field. */
+const PHONE_NUMBER_REFUSALS: Readonly<Record<string, PhoneCodeRefusal>> = {
+  too_short: "invalid_phone", invalid: "invalid_phone", bd_mobile_required: "bd_mobile_required", country_not_accepted: "country_not_accepted",
+};
 
 /** The API's refusal of a phone route as the prompt words it, from machine fields only. */
 function phoneCodeRefusal(res: Response, raw: AuthApiEnvelope): PhoneCodeRefusal | undefined {
-  const reason = errorDetails(raw).reason;
+  const { reason, field } = errorDetails(raw);
   if (reason && NAMED_PHONE_REFUSALS.has(reason)) return reason as PhoneCodeRefusal;
+  if (reason && field === "phone" && Object.hasOwn(PHONE_NUMBER_REFUSALS, reason)) return PHONE_NUMBER_REFUSALS[reason];
   if (isCodeStillValidRefusal(reason)) return "codes_still_valid";
   const kind = buyerApiErrorKind(raw, res.status);
   if (kind === "wrongCode") return "wrong_code";
@@ -905,14 +918,17 @@ function phoneCodeRefusal(res: Response, raw: AuthApiEnvelope): PhoneCodeRefusal
 }
 
 /**
- * Start proving this account's own phone. No body: the server reads the phone
- * from the session. Two codes go out: one to `confirmWith`, one to the phone.
+ * Start proving a sign-in phone: without `phone`, the account's own (the
+ * server reads it from the session, no body); with it, a new number the
+ * account's phone moves to (in the body, never a URL). Two codes go out: one
+ * to `confirmWith`, one to the number.
  */
-export async function sendPhoneVerificationCode(): Promise<SendPhoneVerificationCodeResult> {
+export async function sendPhoneVerificationCode(phone?: string): Promise<SendPhoneVerificationCodeResult> {
   try {
     const res = await customerAuthFetch(authUrl("phone/send-code"), {
       method: "POST",
       credentials: "include",
+      ...(phone ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone }) } : {}),
     }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
     const raw = await readEnvelope<{ resendAfterSeconds?: number; confirmWith?: string }>(res);
     const data = raw.data;
@@ -935,17 +951,18 @@ export async function sendPhoneVerificationCode(): Promise<SendPhoneVerification
 }
 
 /**
- * Prove the account's own phone with both codes: `code` sent to the phone,
- * `currentCode` sent to `confirmWith`. On success the API has signed out every
- * session of the account and set a new session cookie: the caller reloads.
+ * Prove the phone with both codes: `code` sent to the number (the account's
+ * own, or `phone` when it moves to a new one), `currentCode` sent to
+ * `confirmWith`. On success the API has signed out every session of the
+ * account and set a new session cookie: the caller reloads.
  */
-export async function verifyPhone(codes: { code: string; currentCode: string }): Promise<VerifyPhoneResult> {
+export async function verifyPhone(codes: { code: string; currentCode: string; phone?: string }): Promise<VerifyPhoneResult> {
   try {
     const res = await customerAuthFetch(authUrl("phone/verify"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ code: codes.code, currentCode: codes.currentCode }),
+      body: JSON.stringify({ code: codes.code, currentCode: codes.currentCode, ...(codes.phone ? { phone: codes.phone } : {}) }),
     }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
     const raw = await readEnvelope<{ movedOrders?: number }>(res);
     const data = raw.data;

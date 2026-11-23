@@ -78,6 +78,12 @@ export interface AccountCopy {
     inputsNotCarried: (lines: string, one: boolean) => string;
     /** One line: the details' labels (joined by `priceChangedSeparator`) and the line's name. */
     inputsNotCarriedLine: (inputs: string, name: string) => string;
+    /** The account's numbers over the list: its name for a screen reader, then each figure's label. */
+    summary: string;
+    statOrders: string;
+    statSpent: string;
+    statConversations: string;
+    statUnread: (count: string) => string;
   };
   order: {
     pageTitle: string;
@@ -87,6 +93,8 @@ export interface AccountCopy {
     trackThis: string;
     loading: string;
     backToOrders: string;
+    /** The order's receipt (the order-success page, printable). */
+    receipt: string;
     status: string;
     updates: string;
     items: string;
@@ -206,6 +214,13 @@ export interface AccountCopy {
     verifying: string;
     enterCode: string;
     tryAgainIn: (error: string, wait: string) => string;
+    /** The phone change dialog: its title, what it does, the number field and its send button. */
+    changeTitle: string;
+    addTitle: string;
+    changeIntro: string;
+    newNumber: string;
+    sendCodes: string;
+    otherNumber: string;
   };
   profile: {
     title: string;
@@ -214,8 +229,16 @@ export interface AccountCopy {
     details: string;
     name: string;
     edit: string;
-    editName: string;
+    editDetails: string;
     fullName: string;
+    whatsapp: string;
+    /** Under the WhatsApp field: an empty one means the phone. */
+    whatsappHint: string;
+    sameAsPhone: string;
+    verified: string;
+    notVerified: string;
+    changePhone: string;
+    addPhone: string;
     cancel: string;
     save: string;
     email: string;
@@ -238,12 +261,15 @@ export interface AccountCopy {
     removeNote: string;
     removeAddress: string;
     wentWrong: string;
-    savedName: string;
+    savedDetails: string;
+    phoneChanged: string;
     savedAddress: string;
     removed: string;
     defaultChanged: string;
     billingChanged: string;
     enterName: string;
+    whatsappInvalid: string;
+    whatsappNotCollected: string;
     enterAddress: string;
     enterDeliveryAddress: string;
     completeAddress: (min: string) => string;
@@ -313,6 +339,11 @@ const EN: AccountCopy = {
     priceChangedSeparator: "; ",
     inputsNotCarried: (lines, one) => `Added without what you chose last time: ${lines}. Open the item in your cart to add ${one ? "it" : "them"} again.`,
     inputsNotCarriedLine: (inputs, name) => `${inputs} for ${name}`,
+    summary: "Your account",
+    statOrders: "Orders",
+    statSpent: "Total spent",
+    statConversations: "Open conversations",
+    statUnread: (count) => `${count} unread`,
   },
   order: {
     pageTitle: "Order",
@@ -322,6 +353,7 @@ const EN: AccountCopy = {
     trackThis: "Track this order",
     loading: "Loading your order",
     backToOrders: "Back to your orders",
+    receipt: "View receipt",
     status: "Status",
     updates: "Updates",
     items: "Items",
@@ -447,6 +479,12 @@ const EN: AccountCopy = {
     verifying: "Verifying…",
     enterCode: "Enter the code we sent.",
     tryAgainIn: (error, wait) => `${error} Try again in ${wait}.`,
+    changeTitle: "Change your phone number",
+    addTitle: "Add a phone number",
+    changeIntro: "We'll send a code to how you sign in now and one to the new number. Changing it signs you out on other devices.",
+    newNumber: "New phone number",
+    sendCodes: "Send codes",
+    otherNumber: "Use another number",
   },
   profile: {
     title: "Profile",
@@ -455,8 +493,15 @@ const EN: AccountCopy = {
     details: "Your details",
     name: "Name",
     edit: "Edit",
-    editName: "Edit name",
+    editDetails: "Edit your details",
     fullName: "Full name",
+    whatsapp: "WhatsApp",
+    whatsappHint: "Leave it empty to use your phone number.",
+    sameAsPhone: "Same as your phone",
+    verified: "Verified",
+    notVerified: "Not verified",
+    changePhone: "Change",
+    addPhone: "Add",
     cancel: "Cancel",
     save: "Save",
     email: "Email",
@@ -479,12 +524,15 @@ const EN: AccountCopy = {
     removeNote: "Checkout will ask for your delivery address again next time.",
     removeAddress: "Remove address",
     wentWrong: "Something went wrong. Try again.",
-    savedName: "Name saved.",
+    savedDetails: "Your details are saved.",
+    phoneChanged: "Phone number changed. You were signed out on other devices.",
     savedAddress: "Address saved.",
     removed: "Address removed.",
     defaultChanged: "Default address changed.",
     billingChanged: "Billing address changed.",
     enterName: "Enter your full name.",
+    whatsappInvalid: "Enter a valid WhatsApp number.",
+    whatsappNotCollected: "This store doesn't ask for a separate WhatsApp number. Your phone is used instead.",
     enterAddress: "Enter your address.",
     enterDeliveryAddress: "Enter your delivery address.",
     completeAddress: (min) => `Enter a complete delivery address (at least ${min} characters).`,
@@ -554,6 +602,11 @@ const BN: AccountCopy = {
     priceChangedSeparator: "; ",
     inputsNotCarried: (lines) => `আগেরবার যা বেছেছিলেন তা ছাড়া যোগ হয়েছে: ${lines}। কার্টে পণ্যটি খুলে আবার যোগ করুন।`,
     inputsNotCarriedLine: (inputs, name) => `${name}-এর ${inputs}`,
+    summary: "আপনার অ্যাকাউন্ট",
+    statOrders: "অর্ডার",
+    statSpent: "মোট খরচ",
+    statConversations: "চলমান কথোপকথন",
+    statUnread: (count) => `${count}টি অপঠিত`,
   },
   order: {
     pageTitle: "অর্ডার",
@@ -563,6 +616,7 @@ const BN: AccountCopy = {
     trackThis: "অর্ডারটি ট্র্যাক করুন",
     loading: "আপনার অর্ডার লোড হচ্ছে",
     backToOrders: "আপনার অর্ডারে ফিরুন",
+    receipt: "রসিদ দেখুন",
     status: "অবস্থা",
     updates: "আপডেট",
     items: "পণ্য",
@@ -688,6 +742,12 @@ const BN: AccountCopy = {
     verifying: "যাচাই করা হচ্ছে…",
     enterCode: "আমাদের পাঠানো কোডটি লিখুন।",
     tryAgainIn: (error, wait) => `${error} ${wait} পরে আবার চেষ্টা করুন।`,
+    changeTitle: "ফোন নম্বর বদলান",
+    addTitle: "ফোন নম্বর যোগ করুন",
+    changeIntro: "আপনি এখন যেভাবে সাইন ইন করেন সেখানে একটি কোড এবং নতুন নম্বরে আরেকটি কোড পাঠানো হবে। নম্বর বদলালে অন্য সব ডিভাইস থেকে সাইন আউট হয়ে যাবে।",
+    newNumber: "নতুন ফোন নম্বর",
+    sendCodes: "কোড পাঠান",
+    otherNumber: "অন্য নম্বর দিন",
   },
   profile: {
     title: "প্রোফাইল",
@@ -696,8 +756,15 @@ const BN: AccountCopy = {
     details: "আপনার তথ্য",
     name: "নাম",
     edit: "বদলান",
-    editName: "নাম বদলান",
+    editDetails: "আপনার তথ্য বদলান",
     fullName: "পুরো নাম",
+    whatsapp: "হোয়াটসঅ্যাপ",
+    whatsappHint: "ফোন নম্বরটিই ব্যবহার করতে খালি রাখুন।",
+    sameAsPhone: "ফোন নম্বরটিই",
+    verified: "যাচাই করা",
+    notVerified: "যাচাই করা হয়নি",
+    changePhone: "বদলান",
+    addPhone: "যোগ করুন",
     cancel: "বাতিল",
     save: "সেভ করুন",
     email: "ইমেইল",
@@ -720,12 +787,15 @@ const BN: AccountCopy = {
     removeNote: "পরের বার চেকআউটে আবার ডেলিভারির ঠিকানা চাওয়া হবে।",
     removeAddress: "ঠিকানা মুছুন",
     wentWrong: "কিছু একটা সমস্যা হয়েছে। আবার চেষ্টা করুন।",
-    savedName: "নাম সেভ হয়েছে।",
+    savedDetails: "আপনার তথ্য সেভ হয়েছে।",
+    phoneChanged: "ফোন নম্বর বদলানো হয়েছে। অন্য সব ডিভাইস থেকে আপনাকে সাইন আউট করা হয়েছে।",
     savedAddress: "ঠিকানা সেভ হয়েছে।",
     removed: "ঠিকানা মুছে ফেলা হয়েছে।",
     defaultChanged: "ডিফল্ট ঠিকানা বদলানো হয়েছে।",
     billingChanged: "বিলিংয়ের ঠিকানা বদলানো হয়েছে।",
     enterName: "আপনার পুরো নাম লিখুন।",
+    whatsappInvalid: "সঠিক হোয়াটসঅ্যাপ নম্বর লিখুন।",
+    whatsappNotCollected: "এই স্টোর আলাদা হোয়াটসঅ্যাপ নম্বর নেয় না। আপনার ফোন নম্বরটিই ব্যবহার হয়।",
     enterAddress: "আপনার ঠিকানা লিখুন।",
     enterDeliveryAddress: "ডেলিভারির ঠিকানা লিখুন।",
     completeAddress: (min) => `ডেলিভারির পুরো ঠিকানা লিখুন (কমপক্ষে ${min} অক্ষর)।`,

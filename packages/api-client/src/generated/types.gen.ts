@@ -3429,7 +3429,14 @@ export type StorefrontPlacedOffer = {
     imageUrl: string | null;
     imageMediaId: string | null;
     imageAlt: string | null;
+    /**
+     * What it sells; a kit's from its items.
+     */
     fulfillmentKind: string;
+    /**
+     * Paid only online (a key, a download, or a kit holding one): where checkout takes no online payment, its buy action is off, as on its own page.
+     */
+    paidOnlineOnly: boolean;
     /**
      * One unit's price in the page's currency (a kit's: its own price).
      */
@@ -3513,6 +3520,14 @@ export type StorefrontKit = {
      * From its items: as many kits as the scarcest item allows; `out_of_stock` when an item can't be sold.
      */
     availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
+    /**
+     * What it sells, from all its items (never the kit SKU's own setting): physical when any item ships, else digital when any item is, else a service.
+     */
+    fulfillmentKind: 'physical' | 'digital' | 'service';
+    /**
+     * One of its items is paid only online (a key, a download): no cash on delivery or at the service buys it.
+     */
+    paidOnlineOnly: boolean;
 };
 
 export type PublicReviewSummary = {
@@ -12268,6 +12283,10 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
         attributes?: {
             [key: string]: string;
         };
+        /**
+         * The buyer read and agreed to the store's terms (the storefront's terms page), which you showed them. Required (true) when the store's checkout config says `requireTermsAcceptance`: without it submit is refused with `details.reason: terms_acceptance_required`. The order records the agreement and this agent.
+         */
+        termsAccepted?: boolean;
         shippingRateToken?: string | null;
         expectedRevision: number;
         /**
@@ -14108,6 +14127,7 @@ export type GetApiV1CheckoutConfigResponses = {
             partialPaymentEnabled: boolean;
             partialPaymentAmount: number;
             requireFullBillingAddress: boolean;
+            requireTermsAcceptance: boolean;
             allowedCountries: Array<string>;
             allowedCountriesMode: 'include' | 'exclude';
             currency: {
@@ -22298,6 +22318,10 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                  * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
+                /**
+                 * Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it.
+                 */
+                paidOnlineOnly: boolean;
                 createdAt: string | null;
             }>;
             total: number;
@@ -22645,6 +22669,10 @@ export type GetApiV1ProductsBySlugResponses = {
                  * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
+                /**
+                 * Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it.
+                 */
+                paidOnlineOnly: boolean;
                 /**
                  * Storefront-visible custom fields with a value, in the merchant's order.
                  */
@@ -27443,6 +27471,10 @@ export type PostApiV1OrdersData = {
             language: string | null;
             channels: Array<'email' | 'sms' | 'whatsapp'>;
         } | null;
+        /**
+         * The buyer ticked "I agree to the terms". Required (true) when the store asks for it (checkout config `requireTermsAcceptance`): without it the order is refused with `details.reason: terms_acceptance_required`. The order records the agreement.
+         */
+        termsAccepted?: boolean;
         /**
          * The buyer's consent choice and first-party tracking ids, read by the storefront from its own cookies. Never required; stored only when a server tracking destination is on.
          */
@@ -60789,7 +60821,7 @@ export type PostApiV1AdminSettingsThemeTemplateError = PostApiV1AdminSettingsThe
 
 export type PostApiV1AdminSettingsThemeTemplateResponses = {
     /**
-     * The draft's new revision and what the switch did
+     * The draft's new revision, what the switch did and the template's handles the store lacks
      */
     200: {
         success: true;
@@ -60798,6 +60830,7 @@ export type PostApiV1AdminSettingsThemeTemplateResponses = {
             basePublishedRevision: number;
             updatedAt: string | null;
             plan: ThemeTemplateSwitchPlan;
+            unresolved: Array<ThemeUnresolvedHandle>;
         };
     };
 };
@@ -62042,6 +62075,7 @@ export type GetApiV1AdminSettingsCheckoutFlowResponses = {
             partialPaymentAmount: number;
             autoFulfilMode: 'after_payment' | 'after_confirmation';
             requireFullBillingAddress: boolean;
+            requireTermsAcceptance: boolean;
             revision: number;
         };
     };
@@ -62060,6 +62094,7 @@ export type PutApiV1AdminSettingsCheckoutFlowData = {
         partialPaymentAmount: number;
         autoFulfilMode?: 'after_payment' | 'after_confirmation';
         requireFullBillingAddress?: boolean;
+        requireTermsAcceptance?: boolean;
         expectedRevision: number;
     };
     path?: never;
@@ -62127,6 +62162,7 @@ export type PutApiV1AdminSettingsCheckoutFlowResponses = {
             partialPaymentAmount: number;
             autoFulfilMode: 'after_payment' | 'after_confirmation';
             requireFullBillingAddress: boolean;
+            requireTermsAcceptance: boolean;
             revision: number;
         };
     };
@@ -72605,7 +72641,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message' | 'terms_accepted';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -72689,7 +72725,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message' | 'terms_accepted';
             body: string | null;
             data: {
                 [key: string]: unknown;

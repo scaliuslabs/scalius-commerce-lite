@@ -5793,7 +5793,7 @@ export const putApiV1AdminSettingsAllowedCountries = <ThrowOnError extends boole
 /**
  * Switch the theme draft to another template (it goes live only when the draft is published)
  *
- * The design the store last had on that template comes back if there is one; otherwise the template's look and homepage take the merchant's content by section type, and a section it has no place for stays on the homepage, hidden. The draft it replaces is kept as a restore point (reason `template`) and as the design of the template it leaves. `plan` says which sections moved, stayed hidden or left the homepage.
+ * The design the store last had on that template comes back if there is one; otherwise the template's look and homepage take the merchant's content by section type, and a section it has no place for stays on the homepage, hidden. The draft it replaces is kept as a restore point (reason `template`) and as the design of the template it leaves. `plan` says which sections moved, stayed hidden or left the homepage. An app template's catalogue handles resolve against the store; a homepage section naming one the store lacks is left out and listed in `unresolved`.
  */
 export const postApiV1AdminSettingsThemeTemplate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsThemeTemplateData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsThemeTemplateResponses, PostApiV1AdminSettingsThemeTemplateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsThemeTemplateResponses, PostApiV1AdminSettingsThemeTemplateErrors, ThrowOnError>({
     url: '/api/v1/admin/settings/theme/template',
@@ -7228,7 +7228,7 @@ export const putApiV1AdminOrdersByIdItemsByItemIdDeliveryMessage = <ThrowOnError
 /**
  * Show a line's delivery message to edit it
  *
- * The text and link of the line's delivery message, for staff who may write it. Never cached.
+ * The text and link of the line's delivery message, for staff who may write it. Never cached; the order timeline records who read it, never the text.
  */
 export const postApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageReveal = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealResponses, PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealResponses, PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/items/{itemId}/delivery-message/reveal', ...options });
 

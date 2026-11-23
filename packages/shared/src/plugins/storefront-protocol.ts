@@ -468,11 +468,13 @@ export interface StorefrontProductCard {
   id: string;
   title: string;
   url: string;
+  /** What the buyer pays: one SKU's price, the cheapest buyable SKU's when `priceVaries`. */
   price: StorefrontMoney;
-  /** The regular price while discounted. */
+  /** That same SKU's regular price while it is discounted, never another SKU's. */
   compareAt: StorefrontMoney | null;
   /** The price varies by option ("From …"). */
   priceVaries: boolean;
+  /** That same SKU's whole percent off ("-50%"), rounded down; null without a discount. */
   percentOff: number | null;
   image: StorefrontImage | null;
   /** The second photo when the product has one; the component decides whether to show it (on hover, in a gallery). */
@@ -791,6 +793,11 @@ export interface StorefrontPlacedOffer {
   price: StorefrontMoney;
   /** A kit's items at their current prices, or a SKU's regular price while it is on sale; null otherwise. */
   compareAt: StorefrontMoney | null;
+  /**
+   * Its buy action works here, judged as on its own page: in stock, and
+   * payable (one paid only online, a key or a kit holding one, is off where
+   * checkout takes no online payment). `availability` is its stock band.
+   */
   available: boolean;
   /**
    * Its product asks the buyer for inputs (an engraving) before buying: link
