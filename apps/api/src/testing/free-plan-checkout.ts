@@ -25,16 +25,17 @@ export async function taxQuote(store: FreePlanStore, lines: number): Promise<{ q
   return body.data;
 }
 
-let orderCounter = 0;
-
-/** Commit an order of `lines` single-SKU lines at a quote's fingerprint; returns its id. */
+/**
+ * Commit an order of `lines` single-SKU lines at a quote's fingerprint; returns its id. Each buyer's
+ * phone is new, numbered from the store's own orders, so a store rewound to a checkpoint numbers them alike.
+ */
 export async function placeOrder(store: FreePlanStore, lines: number, quote: string): Promise<string> {
-  orderCounter += 1;
+  const { orders } = store.sqlite.prepare("SELECT count(*) AS orders FROM orders").get() as { orders: number };
   const response = await store.worker.fetch(jsonRequest(`${STORE.api}/api/v1/orders`, {
     checkoutRequestId: `budget_${crypto.randomUUID()}`,
     expectedQuoteFingerprint: quote,
     customerName: "Budget Buyer",
-    customerPhone: `+88017${String(10000000 + orderCounter)}`,
+    customerPhone: `+88017${String(10000000 + orders)}`,
     customerEmail: "buyer@shop.test",
     shippingAddress: "House 1, Road 2, Gulshan",
     city: "city_1",

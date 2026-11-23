@@ -6,7 +6,13 @@
 import { eq } from "drizzle-orm";
 import type { DatabaseSync } from "node:sqlite";
 import { getDb, type Database } from "@scalius/database/client";
-import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import {
+  createMigratedSqlite,
+  createSqliteD1Database,
+  openSqliteImage,
+  replaceableSqlite,
+  sqliteImage,
+} from "@scalius/database/testing/sqlite-d1";
 import { user as userTable } from "@scalius/database/schema";
 import { createAuth } from "@scalius/core/auth";
 import { autoSeedRbacIfNeeded } from "@scalius/core/auth/rbac/auto-seed";
@@ -46,12 +52,24 @@ export interface FreePlanStore {
   ownerCookie(): Promise<string>;
   /** An authenticated dashboard-origin request as the owner. */
   admin(path: string, init?: RequestInit): Promise<Response>;
+  /**
+   * Remember the store as it is now (its database, Cache API entries and R2 objects); the
+   * returned function puts it back, so each measured case starts from the same store. The
+   * database is a new connection behind `sqlite`: register SQL functions (a clock) again.
+   */
+  checkpoint(): () => void;
   close(): void;
 }
 
 export interface CreateFreePlanStoreOptions {
   /** Extra bindings merged over the defaults (EMAIL, ...). */
   bindings?: Record<string, unknown>;
+  /**
+   * Run every invocation inside the meter, a setup's too (its counters dropped): the same Cache
+   * API and external `fetch` answer it, and its after-response work finishes before the next step,
+   * as it does between a merchant's clicks, so setup never races the work its own requests started.
+   */
+  meterEveryInvocation?: boolean;
 }
 
 /** The email binding Cloudflare Email Service offers: accepts and counts a send. */
@@ -60,8 +78,8 @@ export function emailBinding(sent: Array<unknown> = []) {
 }
 
 export async function createFreePlanStore(options: CreateFreePlanStoreOptions = {}): Promise<FreePlanStore> {
-  const { sqlite, binding, db: shimDb } = createSqliteD1Database({ foreignKeys: true });
-  void shimDb;
+  const connection = replaceableSqlite(createMigratedSqlite({ foreignKeys: true }));
+  const { sqlite, binding } = createSqliteD1Database({ sqlite: connection.sqlite });
   const meter = createFreePlanMeter({ d1: binding, sqlite });
   const emails: unknown[] = [];
   const env = {
@@ -90,6 +108,11 @@ export async function createFreePlanStore(options: CreateFreePlanStoreOptions = 
   const worker = new (ApiWorker as unknown as new () => TestWorker)();
   worker.env = env;
   worker.ctx = meter.ctx;
+  for (const entry of options.meterEveryInvocation ? ["fetch", "scheduled"] as const : []) {
+    const handle = (worker[entry] as (input: never) => Promise<unknown>).bind(worker);
+    (worker as unknown as Record<string, unknown>)[entry] = async (input: never) =>
+      meter.measuring ? handle(input) : (await meter.measure(() => handle(input))).value;
+  }
 
   const composed = () => composeApiRuntimeEnv(env);
   let cookie: string | null = null;
@@ -129,6 +152,14 @@ export async function createFreePlanStore(options: CreateFreePlanStoreOptions = 
       headers.set("Origin", STORE.dashboard);
       if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
       return worker.fetch(new Request(`${STORE.dashboard}${path}`, { ...init, headers }));
+    },
+    checkpoint() {
+      const image = sqliteImage(sqlite);
+      const bindings = meter.checkpoint();
+      return () => {
+        connection.replace(openSqliteImage(image));
+        bindings();
+      };
     },
     close: () => sqlite.close(),
   };
