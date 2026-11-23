@@ -230,6 +230,62 @@ jobs:
       - name: Working tree cleanliness
         run: git diff --exit-code
 
+  private-pages:
+    name: Private pages, rendered
+    # The buyer's private pages drawn in headless Chromium on the fixture gallery (pnpm test:private-pages,
+    # apps/storefront/test-support/private-pages.properties.browser.mjs): the named cases and the fast seed
+    # set, about 5 minutes, when a push reaches the storefront, the theme model, the apps' buyer UI or Noor.
+    # Weekly and on demand it also runs a longer seed set and the gate's own mutations (each known-bad
+    # change must fail it).
+    needs: plan
+    if: ${{ github.event.repository.private }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CHANGE_BASE: ${{ needs.plan.outputs.base }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Reaches the private pages
+        id: reach
+        run: |
+          if [ -z "${CHANGE_BASE:-}" ] || git diff --name-only "$CHANGE_BASE" HEAD | grep -qE '^(apps/storefront/|packages/shared/src/(storefront-theme|plugins|line-properties)|plugins/noor/|package\.json|pnpm-lock\.yaml)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        if: ${{ steps.reach.outputs.run == 'true' }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: ${{ steps.reach.outputs.run == 'true' }}
+        with:
+          node-version: 24.21
+          cache: pnpm
+
+      - name: Install dependencies
+        if: ${{ steps.reach.outputs.run == 'true' }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Chromium for Playwright
+        if: ${{ steps.reach.outputs.run == 'true' }}
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Private pages, rendered (named cases and the fast seed set)
+        if: ${{ steps.reach.outputs.run == 'true' }}
+        run: pnpm test:private-pages
+
+      - name: Private pages, a longer seed set
+        if: ${{ steps.reach.outputs.run == 'true' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+        run: pnpm test:private-pages --seeds 30 --from 100 --no-named
+
+      - name: Private pages, the gate's mutations
+        if: ${{ steps.reach.outputs.run == 'true' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+        run: pnpm test:private-pages --mutations
+
   full-suite:
     name: Full test suite (${{ matrix.shard }}/4)
     # The private suite outgrows one runner; four shards finish it in parallel. Weekly, on demand,

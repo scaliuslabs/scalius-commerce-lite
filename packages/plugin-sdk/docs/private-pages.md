@@ -7,7 +7,7 @@ The cart, checkout, payment, receipt and account pages are a buyer's own pages: 
 - you style **your own regions** freely with one stylesheet: your content blocks and your header and footer;
 - you **choose** the store's words for its actions and amounts, **reword** its headings and empty states, and swap its icons.
 
-The store never lets a stylesheet select one of its parts. Rendered property tests (`pnpm test:private-pages`) draw generated themes at 320, 390 and 1280 px, light and dark, and check that every part a buyer must reach stays on screen, uncovered and readable.
+The store never lets a stylesheet select one of its parts. A rendered gate (`pnpm test:private-pages`, [below](#the-rendered-gate)) draws generated themes in a real browser and fails when anything a buyer must read or use is lost.
 
 This page covers the cart page, which is private, and the cart drawer. The drawer opens over public pages and is part of each of them: its arrangement, words and icons come from here, and its look comes from your public stylesheet through the same hooks. No store check compiles that public stylesheet. The checkout, the receipt and the account follow the same model as they move to it; until then they take the closed choices in [themes.md](themes.md#templates).
 
@@ -121,13 +121,13 @@ A page with no token at all is drawn exactly as the store draws it.
 | `ring` | A colour | The focus ring of what is inside it; a field's or a button's own |
 | `placeholder`, `invalid` | A colour | A field's placeholder and error border |
 | `border-width`, `radius` | Whole pixels: 0–4, 0–32 | Those properties |
-| `padding`, `gap` | 0–48 px | Those, scaled down to 4% of the screen's width on a phone |
+| `padding`, `gap` | 0–48 px | Those, scaled down to 4% of the screen's width on a phone; a padding is never under 4px nor under 30% of the radius, so focus rings and rounded corners stay on the box's surface |
 | `border-style` | `solid`, `dashed`, `dotted`, `none` | `border-style` |
 | `shadow` | `none`, `sm`, `md`, `lg` | A fixed `box-shadow` |
 | `font` | `body`, `heading` (the theme's typography) | `font-family` |
-| `size` | 12–40 px | `font-size`, at most 8% of the screen's width (never under 12 px) |
+| `size` | 12–40 px | `font-size`, at most 7% of the box it sits in (a line, a layout node, else the screen; never under 12 px) |
 | `weight`, `case`, `tracking`, `align` | `400`–`800`; `none`/`uppercase`; `normal`/`wide`/`wider`; `start`/`center`/`end` | Those properties |
-| `clamp` | `none`, `2`, `3` (lines of a title) | A line clamp |
+| `clamp` | `none`, `2`, `3` (lines of a title) | A line clamp on the title's link (so its focus ring is never clipped) |
 | `columns`, `columns-wide` | 1 to 4 tracks: `auto`, `min-content`, `1fr`–`4fr`, or 24–480 px | A layout node's columns, **only where the box holding it fits them** (`columns-wide` from 40rem); a share is at least 6rem and a pixel track may shrink; else the store's one column |
 | `width`, `height`, `width-wide`, `height-wide` | 40–240 px (at most 30% of the screen), 40–320 px | An image's size |
 | `fit` | `contain`, `cover` | The image's `object-fit` |
@@ -135,7 +135,7 @@ A page with no token at all is drawn exactly as the store draws it.
 
 A layout node takes `background`, `gradient`, `border`, `border-width`, `border-style`, `radius`, `shadow`, `padding`, `gap`, `columns` and `columns-wide` through its hook: `"@studio-grid": { "columns": [64, "1fr", 88] }`. A hook with a colour is a row of the table. The store's own layouts split into columns by the width of the box they sit in, never the screen's.
 
-`action` is every filled button the store draws without a target of its own, `input` every field on the page and in its dialogs, `dialog` the store's dialogs (the confirmation an app's choice asks for, sign-in) with `dialog-back` and `dialog-confirm` their buttons, and `search` the store's search in your header (see `search` above).
+`action` is every filled button the store draws without a target of its own, `input` every field on the page and in its dialogs, `dialog` the store's dialogs (the confirmation an app's choice asks for, sign-in) with `dialog-back` and `dialog-confirm` their buttons, `chrome` the store's own header (`chrome: core`), and `search` the store's search in your header (see `search` above).
 
 **Apps' blocks.** The store draws an app's block from typed nodes, so it is one of the store's parts: you give it a look by node kind, under `ui.<kind>`, narrowed by tone, app and target: `"ui.banner.warning@acme.protection/cart.page.summary": { "background": "#3a2a0a", "text": "#fde68a" }`. Every kind and tone has a row at each of the page's targets (`cart.page.summary`, `cart.page.below`, `cart.line.after`), on whatever that target sits on, whether you name it or not.
 
@@ -169,7 +169,7 @@ Your stylesheet styles **free regions** only, and only what is inside them:
 
 A selector starts at one wrapper (written as just that attribute), then a space or `>`, then what it selects inside. A root state may come first: `:root[data-color-scheme="dark"] [data-free="header"] .logo`. The wrapper itself is the store's: you never select it, and a selector that starts anywhere else is refused (`unscoped_selector`). Nothing of the store's is ever inside a region: its search sits beside your header and takes the `search` tokens. Class names and ids are your region's own: `.logo` matches what your header skin wrote as `class="logo"` (both are written `tc-logo`), so they never meet a store or utility class.
 
-Inside a region you may use what CSS offers for a design: layout, colour, gradients, transforms, absolute positioning, animations, pseudo-elements, `@media`, `@supports`, `@container` and `@keyframes`. The store **seals** every region: it is its own containing block and stacking context; its size, layout and paint are contained, its width included, so nothing inside widens the page or a column; what is painted inside is clipped to it; and its height is bounded (a content block 30rem, the header 24rem, the footer 80rem).
+Inside a region you may use what CSS offers for a design: layout, colour, gradients, transforms, absolute positioning, animations, pseudo-elements, `@media`, `@supports`, `@container` and `@keyframes`. The store **seals** every region: it is its own containing block and stacking context; its layout and paint are contained and it is never wider than its column, so nothing inside widens the page or a column; what is painted inside is clipped to it; and its height is bounded (a content block 30rem, the header 24rem, the footer 80rem).
 
 ```css
 [data-hook="cart-intro"] p { color: #b9b0d6; margin: 0 }
@@ -205,7 +205,36 @@ The stylesheet is parsed by a CSS Syntax 3 parser and written back from what was
 | Every row of the table reads at its floor: words at 4.5:1, a field's marks and focus rings at 3:1. | The drawer's look on public pages (your public stylesheet). |
 | A buyer's request never compiles; a look an older checker wrote is not served. | Re-saving after a store update if you want your look before the next maintenance run. |
 
-What is proven by rendering, not only by the save: `pnpm test:private-pages` draws seeded legal themes (and every reviewed break) on the real cart page and fails if a part a buyer must reach is off screen, too far down, covered by a region, unreadable against the pixels behind it, or if the page scrolls sideways. It checks the cart page with its lines and apps' blocks drawn by the fixture gallery, not every store's data.
+## The rendered gate
+
+What the save proves is checked again by drawing. `pnpm test:private-pages` (`apps/storefront/test-support/private-pages.properties.browser.mjs`) compiles each theme with the store's compiler and draws the real cart page in headless Chromium on the fixture gallery: a store that delivers (Place order is on), two lines, and an app block of every node kind and tone in the summary, below the cart and under a line. CI runs it when a push reaches the storefront, the theme model, the apps' buyer UI or Noor.
+
+**What it draws.** The reviews' named breaks, then seeded legal themes: the default arrangement (tokens only) and generated ones; tokens for every style target, `ui.<kind>` with tone, app and target; labels, icons, image, link, disclosure and divider blocks; gradients, every palette, light, dark and system schemes, the narrow frame; and `chrome: theme` with Noor's real header skin (its region is drawn). Each in its states: the base cart, a line asking for a decision with an add-on line and a sold-out line, an empty cart, long Bangla titles, an Arabic right-to-left presence; with field errors showing, the sign-in dialog open and the confirmation dialog open. At 320, 390 and 1280 px, light and dark.
+
+**What fails it.**
+
+| Check | Fails when |
+| --- | --- |
+| Mandatory parts | One (with `chrome: theme`, your header's region and the store's search too) is missing, under 8px, outside the viewport, more than 9000px down, or covered by a free region; the page scrolls sideways; anything of the store's sits inside a free region. |
+| Coverage walk | A text or a focusable control belongs to no row of the colour table (token mode: its words are none of its row's colours, its row's element paints something other than the row's paint, or a surface the table does not know lies between it and its row), or, with no tokens, to no surface the anatomy names. |
+| Contrast | Any text, with no budget, reads under 4.5:1 (3:1 large) against the pixels behind it (every text hidden, the page photographed). |
+| Whole text | A text is cut off at the side, a glyph is cut by its box, or a word breaks inside itself. |
+| Controls | A click at a control's centre lands elsewhere; Tab does not reach it, or reaches it out of document order; its focus ring changes under three quarters of its perimeter at 3:1. |
+| Touch | On a phone, swiping from the top does not reach Place order. |
+| Server | Any request answers 5xx. |
+
+**How to run it.**
+
+| Run | Command |
+| --- | --- |
+| The gate (named cases and the fast seed set, about 2.5 minutes) | `pnpm test:private-pages` |
+| A longer run | `pnpm test:private-pages --seeds 30 --from 100` (`--no-named` for seeds only, `--all-states` for every state of each) |
+| One seed or case | `--seed 7`, `--case "B4"` (a failing seed prints its document) |
+| The gate's own test | `pnpm test:private-pages --mutations`: every known-bad change in `private-pages.mutations.mjs` must fail it |
+
+A mutation rewrites one source file as the test gallery serves it (never the store's code, never in production): each review's fix reverted, the region seal without clipping, a stylesheet allowed to select a host part, the search inside the theme's region, a row's contrast skipped, the surface reset off, the store's header outside token mode, every row leaving out its parent's cells, a title's clamp on its heading, screen-sized text and unfitted columns. Paint containment clips on its own, so the seal's overflow clip is a second guard (the mutation that drops clipping drops both). The seal no longer holds `contain: inline-size`: without it no case failed, and `min-inline-size: 0` with `max-inline-size: 100%` is what keeps a block from widening its column (dropping those fails the gate).
+
+The gate checks the cart page with the fixture gallery's data, not every store's data.
 
 ## Words and icons
 
@@ -315,6 +344,7 @@ cart style legal <root> [data-part="legal"] tokens=text,size,align
 cart style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow
 cart style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=background,text,border,border-width,radius,ring,weight
 cart style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,font,weight,size,case,tracking
+cart style chrome [data-private="core-header"] tokens=background,gradient,text,muted,link,border,border-width
 cart style search [data-host="search"] tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 cart.line root data-part=line
 cart.line part image hooks=line-image

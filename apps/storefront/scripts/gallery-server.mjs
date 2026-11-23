@@ -14,7 +14,7 @@
  * No secrets, no API, no Wrangler: it never runs in a deployed Worker and
  * nothing in the production build imports it (docs/STOREFRONT-QUALITY.md).
  *
- *   pnpm gallery:storefront [--port 4799]
+ *   pnpm gallery:storefront [--port 4799] [--quiet]
  */
 import { createServer as createHttpServer } from "node:http";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -130,6 +130,18 @@ function sendJson(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
+/** The cart page's colour table per palette, as the save resolved it: each row's key, selector, kind and paint, and the scheme. */
+function galleryTables(shared, privatePages, context) {
+  const arrangement = shared.privatePageArrangement(privatePages, "cart");
+  const spec = shared.PRIVATE_PAGES.cart;
+  const compiled = shared.compilePrivateTokens("cart", privatePages.tokens.cart, {
+    layout: arrangement?.layout ?? spec.layout,
+    items: Object.fromEntries(Object.keys(spec.items).map((item) => [item, arrangement?.items?.[item] ?? spec.items[item].layout])),
+    palettes: context.palettes,
+  });
+  return compiled.tables.map((table) => ({ scheme: table.palette.scheme, rows: table.rows.map((row) => ({ key: row.key, selector: row.selector, kind: row.kind, paint: row.paint, gradient: row.gradient })) }));
+}
+
 /**
  * Starts the gallery server. Resolves to `{ url, close }`. Refuses to run
  * with NODE_ENV=production: the gallery is never part of a deployment.
@@ -138,6 +150,11 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
   if (process.env.NODE_ENV === "production") {
     throw new Error("The storefront gallery is dev and test only; it does not run with NODE_ENV=production.");
   }
+  // The private pages' gate tests itself (test-support/private-pages.mutations.mjs): a named
+  // mutation rewrites one source file as Vite serves it, so the gate must fail. Test only.
+  const mutation = process.env.SCALIUS_GALLERY_MUTATION
+    ? await import("../test-support/private-pages.mutations.mjs").then((module) => module.galleryMutation(process.env.SCALIUS_GALLERY_MUTATION))
+    : null;
   // The HTTP server comes first: Vite's client connects its socket to it.
   let handle = (_request, response) => {
     response.writeHead(503);
@@ -170,6 +187,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       server: { middlewareMode: true, hmr: { server: http }, watch: null },
       appType: "custom",
       plugins: [
+        ...(mutation ? [mutation.plugin] : []),
         {
           name: "storefront-gallery-virtual-modules",
           resolveId: (id) => (id in VIRTUAL_MODULES ? `\0storefront-gallery:${id}` : undefined),
@@ -247,6 +265,12 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       // Production's gateway owns this route before Astro. Use its real
       // bundled-file handler so packed CSS and islands run in the gallery.
       if (url.pathname.startsWith("/_x/")) {
+        // The private pages' rendered tests name theme files (an icon, an image block): the gallery draws them.
+        const fixture = /^\/_x\/[a-z0-9.-]+\/[A-Za-z0-9_-]+\/public\/pp\/([a-z0-9-]+)\.svg$/.exec(url.pathname);
+        if (fixture) {
+          response.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "no-store" });
+          return response.end(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" rx="12" fill="#7c3aed"/><circle cx="48" cy="44" r="22" fill="#f4f1ff"/></svg>`);
+        }
         const asset = await serveExtensionFile(new Request(url.href, { method: request.method }), {});
         response.writeHead(asset.status, Object.fromEntries(asset.headers));
         return response.end(Buffer.from(await asset.arrayBuffer()));
@@ -271,18 +295,35 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         return response.end(Buffer.from(await answered.arrayBuffer()));
       }
       // The private pages' rendered property tests: a generated theme compiled with the store's own
-      // compiler (a refusal answers its issues, as a save would) and drawn on the buyer UI cart entry.
+      // compiler (a refusal answers its issues, as a save would) and drawn on the buyer UI cart entry in
+      // one of its states, under a palette and colour scheme, with Noor's chrome when asked. The answer
+      // carries the page's colour table (each row's key, selector and kind) for the coverage walk.
       if (url.pathname === `${GALLERY_PREFIX}/private-theme` && request.method === "POST") {
         const body = JSON.parse(await readBody(request) || "{}");
         const shared = await vite.ssrLoadModule("@scalius/shared/storefront-theme");
         const { entryId: makeId, registerPrivatePagesEntry, galleryEntry: findEntry } = await vite.ssrLoadModule("/src/gallery/entries.ts");
-        const base = findEntry(makeId("app", "buyer-ui")).theme;
-        const tokens = { ...base.tokens, colorScheme: "system", colorSchemeToggle: false, darkColors: shared.storefrontDarkPalette(base.tokens.colors) };
+        const { noorTheme } = await vite.ssrLoadModule("/src/gallery/noor.ts");
+        const found = findEntry(makeId("app", "buyer-ui")).theme;
+        const base = body.noor ? noorTheme(structuredClone(found)) : found;
+        const colors = body.palette && shared.STOREFRONT_THEME_PALETTES[body.palette] ? { ...shared.STOREFRONT_THEME_PALETTES[body.palette] } : base.tokens.colors;
+        const tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors: shared.storefrontDarkPalette(colors) };
         const theme = { ...base, tokens };
-        const compiled = shared.compileStorefrontPrivatePages({ ...shared.storefrontPrivatePagesDefault(), ...body.privatePages }, shared.privatePagesContextOf(theme));
+        const document = { ...shared.storefrontPrivatePagesDefault(), ...body.privatePages };
+        const context = shared.privatePagesContextOf(theme);
+        const compiled = mutation?.compile ? mutation.compile(shared, document, context) : shared.compileStorefrontPrivatePages(document, context);
         if (!compiled.ok) return sendJson(response, 422, { issues: compiled.issues.slice(0, 5) });
-        const entry = registerPrivatePagesEntry(String(body.id), { ...theme, privatePages: compiled.value });
-        return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {} });
+        const entry = registerPrivatePagesEntry(String(body.id), { ...theme, privatePages: compiled.value }, body.state ?? "base", { noor: body.noor === true });
+        const tables = shared.privatePageTokenMode(compiled.value, "cart") ? galleryTables(shared, compiled.value, context) : [];
+        return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables });
+      }
+      // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens).
+      if (url.pathname === `${GALLERY_PREFIX}/private-anatomy`) {
+        const shared = await vite.ssrLoadModule("@scalius/shared/storefront-theme");
+        return sendJson(response, 200, { styles: shared.PRIVATE_PAGES.cart.styles });
+      }
+      // Whether the mutation this gallery runs under was applied to a module it served.
+      if (url.pathname === `${GALLERY_PREFIX}/mutation`) {
+        return sendJson(response, 200, { name: mutation?.name ?? null, files: mutation?.files ?? [], applied: mutation ? [...mutation.applied] : [], missed: mutation ? [...mutation.missed] : [] });
       }
       if (url.pathname === `${GALLERY_PREFIX}/index.json`) {
         return sendJson(response, 200, { entries: gallery.galleryIndex(origin) });
@@ -388,7 +429,7 @@ const invokedDirectly = process.argv[1] && fileURLToPath(import.meta.url) === pr
 if (invokedDirectly) {
   const portIndex = process.argv.indexOf("--port");
   const port = portIndex > 0 ? Number(process.argv[portIndex + 1]) : DEFAULT_GALLERY_PORT;
-  const { url, close } = await startStorefrontGallery({ port });
+  const { url, close } = await startStorefrontGallery({ port, quiet: process.argv.includes("--quiet") });
   console.log(`Storefront gallery: ${url}${GALLERY_PREFIX}/`);
   const stop = async () => {
     await close();

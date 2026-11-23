@@ -253,7 +253,11 @@ function listing(entry: GalleryEntry, search: URLSearchParams) {
 /** Buyer UI travels with the private cart answer, just as it does in production. */
 function checkoutApps(entry: GalleryEntry) {
   if (!entry.scenario.checkoutBuyerUi) return [];
+  const kinds = entry.scenario.buyerUiKinds
+    ? [everyKindBlock("acme.kinds", "cart.page.summary"), everyKindBlock("acme.kinds", "cart.page.below"), everyKindBlock("acme.kinds", "cart.line.after", "line:v3:prod_1:variant:var_1:p:none")]
+    : [];
   return [
+    ...kinds,
     {
       appId: "acme.notes", releaseId: "gallery", target: "checkout.contact.after",
       attributes: [{ key: "gift_note", type: "multiline", label: "Gift message", maxLength: 500 }], values: {},
@@ -271,6 +275,50 @@ function checkoutApps(entry: GalleryEntry) {
   ];
 }
 
+/** A store that delivers in Bangladesh: two delivery rates whose zone serves every address there. */
+function deliveringMethods() {
+  return fixtureShippingMethods().map((method) => ({ ...method, kind: "delivery" as const, countries: [{ code: "BD", entire: true }] }));
+}
+
+const TONES = ["neutral", "info", "success", "warning", "critical"] as const;
+
+/**
+ * Every buyer UI node kind and tone an app may draw, as one block per target
+ * (`buyerUiKinds`): the rendered tests check each against the colour table.
+ */
+function everyKindBlock(appId: string, target: string, lineKey?: string) {
+  return {
+    appId, releaseId: "gallery", target, attributes: [], values: {}, ...(lineKey ? { lineKey } : {}),
+    ui: {
+      type: "stack", children: [
+        { type: "heading", text: "Protection for this order" },
+        { type: "text", text: "Covers accidental damage for a year." },
+        { type: "stack", direction: "horizontal", children: TONES.map((tone) => ({ type: "badge", tone, text: `${tone} badge` })) },
+        ...TONES.map((tone) => ({ type: "banner", tone, title: `A ${tone} banner`, text: "Read this before you place the order." })),
+        { type: "key-value", items: [{ label: "Plan", value: "One year" }, { label: "Price", value: 350 }] },
+        { type: "link", text: "Read the terms", to: { kind: "store", path: "/pages/terms" } },
+        { type: "button", label: "Add protection", action: { kind: "navigate", to: { kind: "store", path: "/pages/protection" } } },
+        { type: "disclosure", summary: "What is covered", children: [{ type: "text", text: "Screens, water and drops." }] },
+        { type: "divider" },
+      ],
+    },
+  };
+}
+
+/** A protection app's line input: checkout needs a decision, and declining asks for the buyer's agreement (`lineStates`). */
+const PROTECTION_INPUTS = {
+  appId: "acme.protect",
+  inputs: [{
+    key: "plan", label: "Protection plan", type: "select",
+    options: [
+      { value: "one_year", label: "1 year" },
+      { value: "declined", label: "No protection", confirm: { title: "Continue without protection?", text: "I accept the risk of damage in transit.", agree: "I agree and continue" } },
+    ],
+    textRevision: "0123456789abcdef",
+    decision: { proceedWith: "declined" },
+  }],
+};
+
 /** Recorded reads nothing answered (gallery index "missing reads"). */
 export const unansweredReads = new Map<string, Set<string>>();
 
@@ -287,8 +335,12 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
     const kind = template[1] as keyof StorefrontThemeDocument["pages"]["templates"];
     return { sections: sectionData(entry, theme.pages.templates[kind]?.sections ?? []) };
   }
-  if (path === "/api/v1/shipping-methods") return { shippingMethods: fixtureShippingMethods() };
-  if (path === "/api/v1/checkout/config") return { gateways: entry.scenario.checkout === "no-cod" ? [] : [{ id: "cod", name: "Cash on delivery", countries: ["BD"] }] };
+  if (path === "/api/v1/shipping-methods") return { shippingMethods: entry.scenario.delivering ? deliveringMethods() : fixtureShippingMethods() };
+  if (path === "/api/v1/checkout/config") {
+    const gateways = entry.scenario.checkout === "no-cod" ? [] : [{ id: "cod", name: "Cash on delivery", countries: ["BD"] }];
+    // A store that delivers: a Bangladesh zone serves every address and a city has its thanas, so Place order is on.
+    return entry.scenario.delivering ? { gateways, checkoutReadiness: { status: "ready", issues: [], hasActiveShippingMethod: true, hasActiveDeliveryHierarchy: true } } : { gateways };
+  }
   if (path === "/api/v1/products/recommendations") {
     const limit = Math.min(positiveInteger(search.get("limit"), 8), 20);
     const sources = new Set((search.get("productIds") ?? "").split(",").filter(Boolean));
@@ -358,6 +410,8 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
   if (path === "/api/v1/products/search/suggestions" || path === "/api/v1/search/suggestions") return { suggestions: [], categories: [] };
   const page = /^\/api\/v1\/(?:storefront\/)?pages\/(?:slug\/)?([^/]+)$/.exec(path);
   if (page) return { page: fixturePage(decodeURIComponent(page[1]!), entry.scenario.locale === "bn") };
+  if (path === "/api/v1/locations/zones") return [{ id: "dhanmondi", name: "Dhanmondi" }, { id: "gulshan", name: "Gulshan" }];
+  if (path === "/api/v1/locations/areas") return [];
   if (path === "/api/v1/locations/cities") return [{ id: "dhaka", name: "Dhaka" }, { id: "chattogram", name: "Chattogram" }, { id: "sylhet", name: "Sylhet" }];
   if (path === "/api/v1/checkout-languages/active") return { language: null };
   if (path === "/api/v1/navigation/categories") return fixtureCategoryTree();
@@ -382,16 +436,21 @@ function record(entry: GalleryEntry, path: string) {
 }
 
 /** The cart check for a seeded cart: every line is priced as sent and in stock, except the fixture's sold-out products. */
-async function cartValidation(request: Request) {
+async function cartValidation(entry: GalleryEntry, request: Request) {
   const body = (await request.clone().json().catch(() => null)) as { items?: Array<{ cartKey?: string | null; productId: string; variantId: string; quantity: number; price: number; productName?: string | null; variantLabel?: string | null }> } | null;
   const items = body?.items ?? [];
   const issues = items.flatMap((item, index) => fixtureProductSoldOut(item.productId)
     ? [{ index, cartKey: item.cartKey ?? null, productId: item.productId, variantId: item.variantId, code: "OUT_OF_STOCK", message: `${item.productName ?? "This item"} is sold out.`, requestedQuantity: item.quantity, availableQuantity: 0 }]
     : []);
+  const lineStates = entry.scenario.lineStates === true;
   return {
     valid: issues.length === 0,
     issues,
+    ...(lineStates ? { lineInputs: [PROTECTION_INPUTS] } : {}),
     items: items.map((item, index) => ({
+      ...(lineStates && item.productId === "prod_0" ? { lineInputs: ["acme.protect.plan"] } : {}),
+      // An app's add-on priced into the line (a bundle's gift wrap).
+      ...(lineStates && item.productId === "prod_1" ? { adjustments: [{ key: "_adjustment", label: "Gift wrap", displayValue: "Gold paper and a card", price: 100, priceMinor: 10_000, appId: "acme.wrap" }] } : {}),
       index, cartKey: item.cartKey ?? null, productId: item.productId, variantId: item.variantId, quantity: item.quantity,
       unitPrice: item.price, productName: item.productName ?? "", variantLabel: item.variantLabel ?? null, freeDelivery: false,
       availableQuantity: fixtureProductSoldOut(item.productId) ? 0 : 12, productImageMediaId: null, productImage: null, fulfillmentKind: "physical", fulfillmentType: null,
@@ -450,7 +509,7 @@ export async function answerFixtureApi(entry: GalleryEntry, request: Request): P
   url.pathname = apiPath(url.pathname);
   const json = { "Content-Type": "application/json" };
   if (url.pathname === "/api/v1/orders/cart-validation" && request.method === "POST") {
-    return new Response(envelope({ ...await cartValidation(request), buyerUi: checkoutApps(entry) }), { headers: json });
+    return new Response(envelope({ ...await cartValidation(entry, request), buyerUi: checkoutApps(entry) }), { headers: json });
   }
   if (url.pathname === "/api/v1/orders/tax-quote" && request.method === "POST") {
     return new Response(envelope(await taxQuote(entry, request)), { headers: json });

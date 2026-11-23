@@ -44,7 +44,7 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { ARABIC_TEXT, BANGLA_LONG, cardProduct, type ProductScenario } from "./fixtures";
-import type { GalleryCartSeed } from "./cart-seed";
+import { fixtureProductSoldOut, galleryCartSeed, type GalleryCartSeed } from "./cart-seed";
 import { SECTION_CONTENT } from "./section-content";
 import { settingVariants, settingChoices, settingWith, type SettingsSchema } from "./variants";
 import { noorLandingSections, noorTheme } from "./noor";
@@ -95,6 +95,12 @@ export interface GalleryScenario {
   logo?: boolean;
   /** The cart page opens with these lines in the browser's cart (none: an empty cart). */
   cart?: GalleryCartSeed;
+  /** The store delivers in Bangladesh (a zone for every address, a city with its thanas): Place order is on. */
+  delivering?: boolean;
+  /** With `checkoutBuyerUi`: an app draws every node kind and tone in the summary, below the cart and under a line. */
+  buyerUiKinds?: boolean;
+  /** The cart check asks for a protection decision on the first line (declining needs agreement) and prices an add-on into the second. */
+  lineStates?: boolean;
 }
 
 /** Required state setup: a closed drawer is not evidence of an open drawer. */
@@ -914,15 +920,47 @@ export function galleryEntry(id: string): GalleryEntry | null {
   return registered.get(id) ?? galleryEntries().find((entry) => entry.id === id) ?? null;
 }
 
+/** The states the private pages' rendered tests draw a theme in (each a cart the buyer can hold). */
+export const PRIVATE_PAGES_STATES = ["base", "lines", "empty", "bn", "ar"] as const;
+export type PrivatePagesState = (typeof PRIVATE_PAGES_STATES)[number];
+
+/** Long Bangla titles: a line's words at their longest in the store's second language. */
+const BANGLA_LONG_CART = JSON.stringify({
+  items: {
+    "line:v3:prod_0:variant:var_0:p:none": { id: "prod_0", slug: "jamdani", name: "হাতে বোনা ঢাকাই জামদানি শাড়ি, বোতল সবুজ জমিনে সোনালি পাড় ও আনস্টিচড ব্লাউজ পিস", price: 6500, quantity: 1, variantId: "var_0", propertiesHash: "none", options: [{ name: "রং", value: "বোতল সবুজ" }] },
+    "line:v3:prod_1:variant:var_1:p:none": { id: "prod_1", slug: "panjabi", name: "সুতির পাঞ্জাবি, হাতের কাজ করা কলার ও বোতাম, ঈদের বিশেষ সংগ্রহ", price: 1490, quantity: 2, variantId: "var_1", propertiesHash: "none" },
+  },
+});
+
+/** A cart with a line that asks for a decision, a line with an add-on and a sold-out line. */
+function linesCart(): string {
+  const soldOut = galleryCartSeed("sold-out").items;
+  const extra = Object.values(soldOut).find((item) => fixtureProductSoldOut((item as { id: string }).id)) as { id: string; slug: string; name: string; price: number } | undefined;
+  const cart = JSON.parse(GALLERY_CART) as { items: Record<string, unknown> };
+  if (extra) cart.items[`line:v3:${extra.id}:variant:var_${extra.id}:p:none`] = { id: extra.id, slug: extra.slug, name: extra.name, price: extra.price, quantity: 1, variantId: `var_${extra.id}`, propertiesHash: "none" };
+  return JSON.stringify(cart);
+}
+
 /**
  * Registers a cart page drawn with a theme's private pages (a test's
- * generated document, compiled by the caller with the store's compiler):
- * the buyer UI cart entry, its lines and its apps' blocks, with that theme.
+ * generated document, compiled by the caller with the store's compiler) in
+ * one state: the buyer UI cart entry of a store that delivers, its lines and
+ * every kind of app block (`base`); a line asking for a decision, a line with
+ * an add-on and a sold-out line (`lines`); no cart (`empty`); long Bangla
+ * titles (`bn`); an Arabic, right-to-left presence (`ar`). With `noor`, the
+ * store has Noor installed, so a theme from it draws its header and footer.
  */
-export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument): GalleryEntry {
+export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean } = {}): GalleryEntry {
   const base = galleryEntry(entryId("app", "buyer-ui"))!;
-  const entry: GalleryEntry = { ...base, id, family: "private-pages:property", title: `Private pages property ${id}`, theme };
+  const cart: Record<string, string> = state === "empty" ? {} : { "cart:v3": state === "bn" ? BANGLA_LONG_CART : state === "lines" ? linesCart() : GALLERY_CART };
+  const scenario: GalleryScenario = {
+    ...base.scenario, delivering: true, buyerUiKinds: true, storage: cart,
+    // Noor installed and active: its header and footer skins draw the theme's chrome.
+    ...(options.noor ? { noor: "active" as const, menu: "compact" as const } : {}),
+    ...(state === "lines" ? { lineStates: true } : {}),
+    ...(state === "bn" ? { locale: "bn" as const, product: "bangla" as const } : state === "ar" ? { locale: "ar" as const } : {}),
+  };
+  const entry: GalleryEntry = { ...base, id, family: "private-pages:property", title: `Private pages property ${id} (${state})`, theme, scenario };
   registered.set(id, entry);
   return entry;
 }
-
