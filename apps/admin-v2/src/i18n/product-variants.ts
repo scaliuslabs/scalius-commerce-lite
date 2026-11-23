@@ -9,6 +9,7 @@ const variantEditorCopy = defineMessages({
   en: {
     variantCount: "{count, plural, one {# variant} other {# variants}}",
     trackQuantity: "Track quantity",
+    bundleStock: "Bundle: its items carry the stock",
     quantity: "Quantity",
     soldOutWhenActive: "With 0 on hand, buyers see this product as Sold out.",
     soldOutWhenActiveVariants: "Every variant has 0 on hand, so buyers see this product as Sold out.",
@@ -155,6 +156,7 @@ const variantEditorCopy = defineMessages({
   bn: {
     variantCount: "{count}টি ভ্যারিয়েন্ট",
     trackQuantity: "স্টকের হিসাব রাখুন",
+    bundleStock: "বান্ডেল: স্টক থাকে এর আইটেমগুলোর",
     quantity: "পরিমাণ",
     soldOutWhenActive: "হাতে ০ থাকলে ক্রেতারা এই প্রোডাক্টটি স্টক শেষ হিসেবে দেখেন।",
     soldOutWhenActiveVariants: "প্রতিটি ভ্যারিয়েন্টের স্টক ০, তাই ক্রেতারা এই প্রোডাক্টটি স্টক শেষ হিসেবে দেখেন।",

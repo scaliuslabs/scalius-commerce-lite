@@ -2,6 +2,7 @@
 import { WeightInput, useWeightUnit } from "./WeightInput";
 import { formatWeight } from "./weight-format";
 import React from "react";
+import { useIsKitSku } from "../kits/kit-sku-ids";
 import { ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -280,6 +281,7 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
   // What the product kind allows: a gift card has no discount, weight or quantity tracking.
   const kindRules = useProductKindRules();
   const { showDiscount, showWeight, showInventory, giftCard } = kindRules;
+  const bundle = useIsKitSku(variant.id);
   const warrantyField = warranty && !giftCard ? (
     // The field's code is small and loads fast: its place stays empty meanwhile.
     <React.Suspense fallback={<div className="h-9" aria-hidden="true" />}>
@@ -297,7 +299,7 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
           <ReadOnlyValue mono label={t("barcode")} value={variant.barcode} />
           <ReadOnlyValue label={t("barcodeType")} value={variant.barcodeType ? barcodeNames[variant.barcodeType] : t("noBarcode")} />
           {showWeight ? <ReadOnlyValue label={t("weightGrams")} value={variant.weight === null ? null : formatWeight(variant.weight, weightUnit)} /> : null}
-          {showInventory ? <ReadOnlyValue label={t("trackQuantity")} value={t(variant.trackInventory ? "quantityTracked" : "notTracked")} /> : null}
+          {showInventory ? <ReadOnlyValue label={t("trackQuantity")} value={t(bundle ? "bundleStock" : variant.trackInventory ? "quantityTracked" : "notTracked")} /> : null}
           {warrantyField}
         </FieldRow>
       </div>
@@ -359,8 +361,8 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
       ) : null}
       {warrantyField}
     </FieldRow>
-      {/* A digital SKU's tracking follows its licence keys (the quantity cell says which). */}
-      {showInventory && !isDigitalSku(kindRules, variant) ? (
+      {/* A digital SKU's tracking follows its licence keys (the quantity cell says which); a bundle tracks none. */}
+      {showInventory && !isDigitalSku(kindRules, variant) && !bundle ? (
         <label className="flex min-h-11 items-center gap-2 text-body md:pointer-fine:min-h-8">
           <Switch checked={variant.trackInventory} onCheckedChange={(trackInventory) => onChange({ trackInventory })} />
           {t("trackQuantity")}

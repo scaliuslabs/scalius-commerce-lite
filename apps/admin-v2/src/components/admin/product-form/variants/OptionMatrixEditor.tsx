@@ -1,4 +1,5 @@
 import React from "react";
+import { KitSkuIdsContext, useKitSkuIds } from "../kits/kit-sku-ids";
 import { seededName } from "~/lib/seeded-names";
 import { WeightInput, useWeightUnit } from "./WeightInput";
 import { formatWeight } from "./weight-format";
@@ -248,12 +249,15 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   }, [digitalAssets.data, productId]);
   // One constrained row per draft row and rules, so an edit re-renders only the edited row.
   // A digital SKU's stock is its licence keys: a saved one shows (and saves) its recorded stock, never a typed one.
+  // A bundle (a SKU made of other SKUs) holds no stock of its own: never tracked, its quantity not shown.
+  const kitIds = useKitSkuIds(productId);
   const constrained = React.useMemo(() => ({
     rules: kindRules,
     rows: new WeakMap<DraftVariant, DraftVariant>(),
     saved: new Map(savedVariants.map((variant) => [variant.id, variant])),
     hasKeyPool,
-  }), [kindRules, savedVariants, hasKeyPool]);
+    kitIds,
+  }), [kindRules, savedVariants, hasKeyPool, kitIds]);
   const shownVariants = React.useMemo(() => variants.map((variant) => {
     let shown = constrained.rows.get(variant);
     if (!shown) {
@@ -264,12 +268,15 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
         const tracks = digitalSkuTracks(saved ?? null, constrained.hasKeyPool(variant.id));
         if (shown.trackInventory !== tracks) shown = { ...shown, trackInventory: tracks };
       }
+      if (constrained.kitIds.has(variant.id) && shown.trackInventory) shown = { ...shown, trackInventory: false };
       constrained.rows.set(variant, shown);
     }
     return shown;
   }), [constrained, variants]);
+  const simpleKit = defaultSku !== undefined && kitIds.has(defaultSku.id);
   const shownSimpleSku = React.useMemo(() => {
     const shown = constrainSkuForKind(simpleSku, kindRules, Boolean(defaultSku));
+    if (simpleKit) return { ...shown, trackInventory: false };
     if (!digitalSimple) return shown;
     const tracks = digitalSkuTracks(defaultSku ?? null, hasKeyPool(defaultSku?.id));
     return {
@@ -277,7 +284,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
       trackInventory: tracks,
       ...(defaultSku && shown.stock !== defaultSku.stock ? { stock: defaultSku.stock } : {}),
     };
-  }, [defaultSku, digitalSimple, hasKeyPool, kindRules, simpleSku]);
+  }, [defaultSku, digitalSimple, hasKeyPool, kindRules, simpleKit, simpleSku]);
   const slots = useProductEditorSlots();
   const keepsTracking = digitalSimple && hasKeyPool(defaultSku?.id) === true;
   const savedOptionDraft = React.useMemo(() => initialOptions(savedOptions), [savedOptions]);
@@ -798,7 +805,9 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   const simpleInventory = (
     <>
       {/* Untracked kinds (gift cards) have no quantity to track. */}
-      {kindRules.showInventory ? (
+      {simpleKit ? (
+        <p className="text-body text-muted-foreground" data-bundle-stock>{t("bundleStock")}</p>
+      ) : kindRules.showInventory ? (
         <div className="space-y-1">
           {/* A digital SKU's tracking follows its licence keys: no switch to get wrong. */}
           {digitalSimple ? null : readOnly ? <ReadOnlyValue label={t("trackQuantity")} value={t(simpleSku.trackInventory ? "quantityTracked" : "notTracked")} /> : (
@@ -879,6 +888,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   ) : null;
 
   return (
+    <KitSkuIdsContext.Provider value={kitIds}>
     <section data-option-matrix data-variant-editor tabIndex={-1} className="space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
       {simpleMode && slots?.inventory ? createPortal(
         // The product page's Inventory card (after Pricing), as in Shopify.
@@ -1026,6 +1036,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
         }}
       />
     </section>
+    </KitSkuIdsContext.Provider>
   );
 });
 

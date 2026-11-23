@@ -94,6 +94,7 @@ import type {
   VariantPriceRange,
 } from "./product-form/variants/option-matrix-editor-model";
 import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
+import type { ProductRevisionHandle, ProductSkuSummary } from "./product-form/kits/kit-types";
 import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 import { useTranslateMenuItem } from "./translations/TranslateMenuItem";
 import { richTextOrNull } from "~/lib/rich-text-value";
@@ -105,6 +106,9 @@ const loadCards = () => import("./product-form/merchandising/cards");
 const ContentBlocksCard = React.lazy(() => loadCards().then((cards) => ({ default: cards.ContentBlocksCard })));
 const BundlesCard = React.lazy(() => loadCards().then((cards) => ({ default: cards.BundlesCard })));
 const ProductPageCard = React.lazy(() => loadCards().then((cards) => ({ default: cards.ProductPageCard })));
+const loadKitCards = () => import("./product-form/kits/cards");
+const BundleOffersCard = React.lazy(() => loadKitCards().then((cards) => ({ default: cards.BundleOffersCard })));
+const PageOffersCard = React.lazy(() => loadKitCards().then((cards) => ({ default: cards.PageOffersCard })));
 
 interface ProductFormProps {
   relatedObjects?: RelatedObjectRecord[];
@@ -143,6 +147,10 @@ interface ProductFormProps {
   optionMatrixSaving?: boolean;
   /** Saved SKUs, for printing their labels from the page's menu. */
   variantIds?: string[];
+  /** The saved, live SKUs: each may be made a bundle (Bundle offers). */
+  skus?: ProductSkuSummary[];
+  /** A section that saves on its own (bundle offers, page offers) moved the revision. */
+  onSectionSaved?: (revision: number) => void;
   /** Reads and rebases the mounted draft after a conflict. */
   draftRef?: React.MutableRefObject<ProductDraftReader | null>;
   /** Throws away the product and variant drafts (the route remounts them from the last save). */
@@ -217,6 +225,8 @@ function ProductEditor({
   optionMatrixNavigationDirty = optionMatrixDirty,
   optionMatrixSaving = false,
   variantIds = [],
+  skus = [],
+  onSectionSaved,
   draftRef,
   onDiscard,
   customizationSchemaInvalid = false,
@@ -242,6 +252,18 @@ function ProductEditor({
   const shippingProfiles = useQuery({ ...shippingProfilesQuery, enabled: canViewShippingProfiles }).data;
   // Content blocks, bundles and the page template save on their own, under the same revision.
   const sections = useProductSections();
+  // Bundle offers and page offers write on their own, at the page's revision, and meet a
+  // stale one the way the variant editor's own save does (the conflict dialog).
+  const latestRevision = React.useRef({ aggregateRevision, onAggregateRevisionChange, onSectionSaved, onRevisionConflict });
+  latestRevision.current = { aggregateRevision, onAggregateRevisionChange, onSectionSaved, onRevisionConflict };
+  const sectionRevision = React.useMemo<ProductRevisionHandle>(() => ({
+    current: () => latestRevision.current.aggregateRevision,
+    saved: (revision) => {
+      latestRevision.current.onAggregateRevisionChange?.(revision);
+      latestRevision.current.onSectionSaved?.(revision);
+    },
+    conflict: (conflict) => latestRevision.current.onRevisionConflict?.(conflict),
+  }), []);
   // The old Additional sections tabs were saved as blocks: this save removes the originals.
   const tabsMoved = React.useRef(false);
 
@@ -557,6 +579,21 @@ function ProductEditor({
                 </React.Suspense>
               ) : (
                 <AfterSaveCard title={t("bundles")} />
+              )}
+              {isEdit && productId ? (
+                <>
+                  <React.Suspense fallback={<LoadingFallback height="h-20" />}>
+                    <BundleOffersCard productId={productId} skus={skus} readOnly={readOnly} revision={sectionRevision} />
+                  </React.Suspense>
+                  <React.Suspense fallback={<LoadingFallback height="h-20" />}>
+                    <PageOffersCard productId={productId} readOnly={readOnly} revision={sectionRevision} />
+                  </React.Suspense>
+                </>
+              ) : (
+                <>
+                  <AfterSaveCard title={t("bundleOffers")} />
+                  <AfterSaveCard title={t("pageOffers")} />
+                </>
               )}
               <React.Suspense fallback={<LoadingFallback height="h-20" />}>
                 <BuyerInputsCard
