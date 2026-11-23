@@ -270,6 +270,20 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         response.writeHead(answered.status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
         return response.end(Buffer.from(await answered.arrayBuffer()));
       }
+      // The private pages' rendered property tests: a generated theme compiled with the store's own
+      // compiler (a refusal answers its issues, as a save would) and drawn on the buyer UI cart entry.
+      if (url.pathname === `${GALLERY_PREFIX}/private-theme` && request.method === "POST") {
+        const body = JSON.parse(await readBody(request) || "{}");
+        const shared = await vite.ssrLoadModule("@scalius/shared/storefront-theme");
+        const { entryId: makeId, registerPrivatePagesEntry, galleryEntry: findEntry } = await vite.ssrLoadModule("/src/gallery/entries.ts");
+        const base = findEntry(makeId("app", "buyer-ui")).theme;
+        const tokens = { ...base.tokens, colorScheme: "system", colorSchemeToggle: false, darkColors: shared.storefrontDarkPalette(base.tokens.colors) };
+        const theme = { ...base, tokens };
+        const compiled = shared.compileStorefrontPrivatePages({ ...shared.storefrontPrivatePagesDefault(), ...body.privatePages }, shared.privatePagesContextOf(theme));
+        if (!compiled.ok) return sendJson(response, 422, { issues: compiled.issues.slice(0, 5) });
+        const entry = registerPrivatePagesEntry(String(body.id), { ...theme, privatePages: compiled.value });
+        return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {} });
+      }
       if (url.pathname === `${GALLERY_PREFIX}/index.json`) {
         return sendJson(response, 200, { entries: gallery.galleryIndex(origin) });
       }

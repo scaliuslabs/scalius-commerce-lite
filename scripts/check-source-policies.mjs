@@ -292,7 +292,6 @@ export const policies = [
       "apps/admin-v2/src/routes/invoice.$orderId.tsx": "a constant print stylesheet",
       "apps/admin-v2/test-support/polish.browser.mjs": "a browser test harness page, not shipped",
       "apps/admin-v2/test-support/tiptap.browser.mjs": "a browser test harness page, not shipped",
-      "apps/storefront/test-support/private-free-region.browser.mjs": "a browser test harness page, not shipped",
       "packages/plugin-sdk/src/storefront/jsx-runtime.ts": "an app's JSX becomes a string the storefront sanitizes with sanitizePluginHtml before it renders it",
       "apps/storefront/src/components/apps/AppComponent.astro": "app markup written by sanitizePluginHtml (the shared HTML writer)",
       "apps/storefront/src/layouts/Layout.astro": "the merchant's own head and body scripts (Settings, custom scripts), a deliberate feature; the theme's private-page look, its token rules and free-region stylesheet compiled on save (compileStorefrontPrivatePages); its other sinks are script elements",

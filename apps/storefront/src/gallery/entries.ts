@@ -907,7 +907,22 @@ export function galleryEntries(): GalleryEntry[] {
   return entries;
 }
 
+/** Entries a test registers while the gallery runs (the private pages' rendered property tests), by id. */
+const registered = new Map<string, GalleryEntry>();
+
 export function galleryEntry(id: string): GalleryEntry | null {
-  return galleryEntries().find((entry) => entry.id === id) ?? null;
+  return registered.get(id) ?? galleryEntries().find((entry) => entry.id === id) ?? null;
+}
+
+/**
+ * Registers a cart page drawn with a theme's private pages (a test's
+ * generated document, compiled by the caller with the store's compiler):
+ * the buyer UI cart entry, its lines and its apps' blocks, with that theme.
+ */
+export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument): GalleryEntry {
+  const base = galleryEntry(entryId("app", "buyer-ui"))!;
+  const entry: GalleryEntry = { ...base, id, family: "private-pages:property", title: `Private pages property ${id}`, theme };
+  registered.set(id, entry);
+  return entry;
 }
 
