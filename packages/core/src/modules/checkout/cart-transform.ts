@@ -54,6 +54,7 @@ import { aggregateLineAddOns, lineAddOnsOf } from "@scalius/shared/add-on-foldin
 import { and, inArray, isNull, sql } from "drizzle-orm";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
+import { qualifiedColumn } from "../../utils/qualified-column";
 import { bundleAnchors } from "./app-line-prices";
 import {
     appCartMarketCountry,
@@ -166,7 +167,7 @@ export function createCartTransformer(
             const rows = await db.select({
                 id: productVariants.id,
                 productId: productVariants.productId,
-                isKit: sql<number>`EXISTS (SELECT 1 FROM variant_components AS app_kit WHERE app_kit.kit_variant_id = ${productVariants.id})`,
+                isKit: sql<number>`EXISTS (SELECT 1 FROM variant_components AS app_kit WHERE app_kit.kit_variant_id = ${qualifiedColumn(productVariants.id)})`,
             })
                 .from(productVariants)
                 .where(and(inArray(productVariants.id, componentIds.slice(start, start + 90)), isNull(productVariants.deletedAt)))
