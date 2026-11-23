@@ -25,6 +25,7 @@
 // colour never decides a colour there.
 import { z } from "zod";
 import { STOREFRONT_THEME_COLOR_KEYS, storefrontThemeContrast, type StorefrontThemeColors } from "./contrast";
+import { storefrontPagePaintColors, storefrontPagePaintCss, type StorefrontPagePaint } from "./tokens";
 import {
   PRIVATE_BUYER_UI_STYLES,
   PRIVATE_HOOK_PATTERN,
@@ -160,12 +161,15 @@ export interface PrivatePalettesInput {
   darkColors?: StorefrontThemeColors | null;
   colorScheme: "light" | "dark" | "system";
   colorSchemeToggle: boolean;
+  /** The theme's page paint (`tokens.pagePaint`): what the page row stands on when its tokens paint nothing. */
+  pagePaint?: StorefrontPagePaint | undefined;
 }
 
-/** A palette buyers can see, and the scheme it is drawn under (`<html data-color-scheme>`). */
+/** A palette buyers can see, the scheme it is drawn under (`<html data-color-scheme>`) and the page's paint. */
 export interface PrivatePalette {
   scheme: "light" | "dark";
   colors: StorefrontThemeColors;
+  pagePaint?: StorefrontPagePaint | undefined;
 }
 
 /** What a page's tokens are checked against: its arrangement (layout hooks and where each part sits) and the palettes. */
@@ -497,6 +501,11 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
       surface = parent?.surface ?? [colors.background];
       paint = surface.length === 1 ? surface[0]! : null;
       from.surface = parent?.from.surface;
+    } else if (place.parent === null && palette.pagePaint) {
+      // The page row with no surface token stands on the theme's page paint, in this palette's colours.
+      surface = storefrontPagePaintColors(palette.pagePaint, colors);
+      paint = surface[0]!;
+      gradient = palette.pagePaint.kind === "color" ? null : storefrontPagePaintCss(palette.pagePaint, (key) => colors[key]);
     } else {
       paint = colors[place.surface];
       surface = [paint];
@@ -656,9 +665,10 @@ export function privateTableCss(tables: readonly PrivateTokenTable[]): string {
 export function privatePalettes(theme: PrivatePalettesInput, dark: (colors: StorefrontThemeColors) => StorefrontThemeColors): PrivatePalette[] {
   const light = theme.colorScheme !== "dark" || theme.colorSchemeToggle;
   const showsDark = theme.colorScheme !== "light" || theme.colorSchemeToggle;
+  const paint = theme.pagePaint ? { pagePaint: theme.pagePaint } : {};
   return [
-    ...(light ? [{ scheme: "light" as const, colors: theme.colors }] : []),
-    ...(showsDark ? [{ scheme: "dark" as const, colors: theme.darkColors ?? dark(theme.colors) }] : []),
+    ...(light ? [{ scheme: "light" as const, colors: theme.colors, ...paint }] : []),
+    ...(showsDark ? [{ scheme: "dark" as const, colors: theme.darkColors ?? dark(theme.colors), ...paint }] : []),
   ];
 }
 

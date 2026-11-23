@@ -265,7 +265,7 @@ export interface PrivatePagesCompileContext {
 
 /** The compile context of a theme document: its palettes and the app its look came from. */
 export function privatePagesContextOf(theme: {
-  tokens: Pick<StorefrontThemeTokens, "colors" | "darkColors" | "colorScheme" | "colorSchemeToggle">;
+  tokens: Pick<StorefrontThemeTokens, "colors" | "darkColors" | "colorScheme" | "colorSchemeToggle"> & Partial<Pick<StorefrontThemeTokens, "pagePaint">>;
   apps?: { template?: string } | undefined;
 }): PrivatePagesCompileContext {
   return {

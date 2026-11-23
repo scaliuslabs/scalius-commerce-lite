@@ -560,9 +560,12 @@ export function storefrontTokensWithReadablePaint<Tokens extends Pick<Storefront
   return rest as Tokens;
 }
 
-/** The paint's CSS: only palette variables, constants and a whole angle. */
-export function storefrontPagePaintCss(paint: StorefrontPagePaint): string {
-  const color = (key: string) => `var(--${key})`;
+/**
+ * The paint's CSS: only palette colours, constants and a whole angle. A colour
+ * is its palette variable, or what `color` names (a private page's table
+ * writes one colour set's own colours).
+ */
+export function storefrontPagePaintCss(paint: StorefrontPagePaint, color: (key: StorefrontThemeColorKey) => string = (key) => `var(--${key})`): string {
   switch (paint.kind) {
     case "color": return color(paint.color);
     case "linear": return `linear-gradient(${paint.angle}deg, ${paint.stops.map(color).join(", ")})`;

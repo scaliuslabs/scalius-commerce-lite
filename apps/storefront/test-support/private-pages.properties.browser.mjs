@@ -252,6 +252,7 @@ function generate(seed) {
 
 const LEGAL_COLUMNS = [{ type: "part", part: "notices" }, { type: "layout", layout: "columns", children: [{ type: "layout", layout: "stack", children: [{ type: "layout", layout: "fold", children: [{ type: "part", part: "lines" }, { type: "part", part: "summary" }, { type: "target", target: "cart.page.summary" }] }, { type: "target", target: "cart.page.below" }] }, { type: "part", part: "details" }] }];
 const DARK = { background: "#111111", text: "#ffffff", muted: "#d4d4d4", link: "#c4b5fd", error: "#fca5a5" };
+const PAINT = { kind: "linear", angle: 160, stops: ["background", "muted", "secondary"] };
 
 /**
  * The reviews' concrete breaks: each must hold when drawn (in the states it
@@ -277,9 +278,15 @@ const REGRESSIONS = {
   "review 4: every node kind under a dark summary and a dark line, in every state": { states: "all", privatePages: { tokens: { cart: { summary: DARK, lines: DARK, "ui.banner.warning/cart.line.after": { background: "#3a2a0a", text: "#fde68a", border: "#f59e0b" } } } } },
   "the store's own header under dark tokens": { privatePages: { tokens: { cart: { chrome: { background: "#111111", text: "#ffffff", muted: "#d4d4d4", link: "#c4b5fd" } } } } },
   "the store's own page, no theme, in every state": { states: "all", privatePages: {} },
+  // The theme's page paint (tokens.pagePaint) shows on private pages: behind the store's own page, and under tokens
+  // that paint no page surface, where the table checks every word along the gradient.
+  "the theme's page paint behind the store's own page": { request: { paint: PAINT }, privatePages: {} },
+  "the theme's page paint under a dark summary": { request: { paint: PAINT, scheme: "light" }, privatePages: { tokens: { cart: { summary: DARK, page: { text: "#000000" } } } } },
   // What the save must refuse (under a mutation that lets one through, the drawing must fail).
   "a stylesheet hiding a host part": { refused: "unscoped_selector", privatePages: { css: '[data-part="summary"] * { display: none } [data-part="details-submit"] * { visibility: hidden }' } },
   "summary rows that do not read on their summary": { refused: "contrast", privatePages: { tokens: { cart: { "summary-rows": { text: "#eeeeee" }, summary: { background: "#ffffff" } } } } },
+  // #757575 reads on retail's white page (4.6:1) but not where the paint reaches its muted colour (3.9:1).
+  "page words that do not read on the theme's page paint": { refused: "contrast", request: { palette: "retail", scheme: "light", paint: PAINT }, privatePages: { tokens: { cart: { page: { text: "#757575" } } } } },
 };
 
 // ─── PNG pixels (Chromium's 8-bit RGB or RGBA screenshots) ────────────────

@@ -128,6 +128,11 @@ export const MUTATIONS = {
     rewrites: [rewrite(PLAN, "min-inline-size:0;max-inline-size:100%;", "")],
     cases: [WIDE],
   },
+  "P1 the page row ignores the theme's page paint": {
+    why: "the table checks the page's words on its page colour while the body shows the theme's gradient",
+    rewrites: [rewrite(TOKENS, "} else if (place.parent === null && palette.pagePaint) {", "} else if (false) {")],
+    cases: ["page words that do not read on the theme's page paint"],
+  },
 };
 
 /**

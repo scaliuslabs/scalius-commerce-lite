@@ -296,7 +296,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       }
       // The private pages' rendered property tests: a generated theme compiled with the store's own
       // compiler (a refusal answers its issues, as a save would) and drawn on the buyer UI cart entry in
-      // one of its states, under a palette and colour scheme, with Noor's chrome when asked. The answer
+      // one of its states, under a palette, colour scheme and page paint, with Noor's chrome when asked. The answer
       // carries the page's colour table (each row's key, selector and kind) for the coverage walk.
       if (url.pathname === `${GALLERY_PREFIX}/private-theme` && request.method === "POST") {
         const body = JSON.parse(await readBody(request) || "{}");
@@ -306,7 +306,9 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const found = findEntry(makeId("app", "buyer-ui")).theme;
         const base = body.noor ? noorTheme(structuredClone(found)) : found;
         const colors = body.palette && shared.STOREFRONT_THEME_PALETTES[body.palette] ? { ...shared.STOREFRONT_THEME_PALETTES[body.palette] } : base.tokens.colors;
-        const tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors: shared.storefrontDarkPalette(colors) };
+        const tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors: shared.storefrontDarkPalette(colors), ...(body.paint ? { pagePaint: body.paint } : {}) };
+        // A page paint the palette cannot read on is dropped by a save: a case that asks for one names a readable paint.
+        if (body.paint && !shared.storefrontTokensWithReadablePaint(tokens).pagePaint) return sendJson(response, 400, { error: "The page paint does not read on this palette." });
         const theme = { ...base, tokens };
         const document = { ...shared.storefrontPrivatePagesDefault(), ...body.privatePages };
         const context = shared.privatePagesContextOf(theme);

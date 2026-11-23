@@ -107,6 +107,7 @@ Each page names its **style targets**, the elements of its parts that take a loo
 - the table has a row for every style target at every place your arrangement puts it (each app node kind and tone at each of the page's targets, the store's dialogs, every field and button), for each palette a buyer can see (light, dark or both);
 - a row holds a solid surface (or a gradient's points), the colour of the target's own words, its muted, link and error words, its border and focus ring, and for a field its placeholder and error border;
 - each is your token where you set one, else a default that reads on the surface beneath: a dark box gives its untouched children readable words, and a field keeps its own surface;
+- the page itself stands on the theme's page paint (`tokens.pagePaint`, [themes](themes.md)) unless your `page` tokens give it a surface, so the page's words are checked along the whole paint;
 - the store writes exactly those rows as CSS, and checks exactly those rows: **every text at 4.5:1** on its surface, **a field's border and error border and every focus ring at 3:1** on what is around them. A gradient counts at every point;
 - inside the page, the store's own palette classes read the nearest row: no translucent tint and no palette colour decides a colour there. The page is drawn from its arrangement (the store's default one if you set none), so the table's places are the page's.
 
