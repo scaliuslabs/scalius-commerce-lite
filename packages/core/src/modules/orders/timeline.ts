@@ -66,6 +66,14 @@ export const ORDER_EVENT_KINDS = [
      */
     "payment_dispute",
     /**
+     * Staff added, changed, removed or read a line's delivery message
+     * (fulfilment/line-messages.ts), or an order edit removed its line.
+     * `data`: `orderItemId`, `change` (`added`, `changed`, `removed`,
+     * `read`), `hasLink`, and `reason: "line_removed"` for an edit; never
+     * its text or link.
+     */
+    "delivery_message",
+    /**
      * The buyer ticked "I agree to the terms" when placing the order (the
      * store requires it, checkout/terms-acceptance.ts). Written with the
      * order in its commit batch; its time is when they agreed.

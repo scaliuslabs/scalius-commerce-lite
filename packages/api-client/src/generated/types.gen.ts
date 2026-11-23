@@ -2149,6 +2149,7 @@ export type OrderLineExtras = {
     licenceKeys?: Array<OrderLineLicenceKeyExtra>;
     giftCards?: Array<OrderLineGiftCardExtra>;
     warranty?: Array<OrderLineWarrantyExtra>;
+    message?: OrderLineMessageExtra;
 };
 
 export type OrderLineReviewExtra = {
@@ -2224,6 +2225,26 @@ export type OrderLineWarrantyExtra = {
         status: 'open' | 'in_progress' | 'resolved' | 'rejected';
         resolution: 'repair' | 'replacement' | 'refund' | 'other' | null;
     } | null;
+};
+
+/**
+ * A delivery message the store wrote for this line. Never its text or link: the signed-in buyer reveals those with a POST; staff with the digital-access permission reveal them from the order.
+ */
+export type OrderLineMessageExtra = {
+    messageId: string;
+    /**
+     * The message carries a link besides its text.
+     */
+    hasLink: boolean;
+    updatedAt: string;
+    /**
+     * Staff reads only: the revision a write names (`expectedRevision`).
+     */
+    revision?: number;
+    /**
+     * Staff reads only: the line the message is stored on (a split kit item's first line).
+     */
+    orderItemId?: string;
 };
 
 /**
@@ -3073,6 +3094,18 @@ export type RevealedLicenceKey = {
     keyId: string;
     key: string;
     last4: string;
+};
+
+export type RevealedDeliveryMessage = {
+    messageId: string;
+    /**
+     * Plain text with line breaks; draw it as text, never HTML.
+     */
+    text: string;
+    /**
+     * An https:// address; draw it as a plain external link.
+     */
+    link: string | null;
 };
 
 export type BuyerGiftCard = {
@@ -14834,6 +14867,18 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                     productSlug: string | null;
                     productImage: string | null;
                     variantLabel: string | null;
+                    bundle: {
+                        id: string;
+                        title: string;
+                        kind: 'expand' | 'merge' | 'kit';
+                        kit: {
+                            variantId: string;
+                            productId: string;
+                        } | null;
+                        anchor: boolean;
+                        units: number | null;
+                        perUnit: number | null;
+                    } | null;
                     [key: string]: unknown;
                 }>;
                 [key: string]: unknown;
@@ -18637,6 +18682,60 @@ export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses = {
 };
 
 export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponse = PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses[keyof PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses];
+
+export type PostApiV1CustomerAuthDeliveryMessagesByMessageIdRevealData = {
+    body?: never;
+    path: {
+        messageId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/delivery-messages/{messageId}/reveal';
+};
+
+export type PostApiV1CustomerAuthDeliveryMessagesByMessageIdRevealErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1CustomerAuthDeliveryMessagesByMessageIdRevealError = PostApiV1CustomerAuthDeliveryMessagesByMessageIdRevealErrors[keyof PostApiV1CustomerAuthDeliveryMessagesByMessageIdRevealErrors];
+
+export type PostApiV1CustomerAuthDeliveryMessagesByMessageIdRevealResponses = {
+    /**
+     * The message
+     */
+    200: {
+        success: true;
+        data: RevealedDeliveryMessage;
+    };
+};
+
+export type PostApiV1CustomerAuthDeliveryMessagesByMessageIdRevealResponse = PostApiV1CustomerAuthDeliveryMessagesByMessageIdRevealResponses[keyof PostApiV1CustomerAuthDeliveryMessagesByMessageIdRevealResponses];
 
 export type GetApiV1CustomerAuthGiftCardsData = {
     body?: never;
@@ -72542,7 +72641,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'terms_accepted';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message' | 'terms_accepted';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -72626,7 +72725,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'terms_accepted';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message' | 'terms_accepted';
             body: string | null;
             data: {
                 [key: string]: unknown;
@@ -74740,6 +74839,174 @@ export type PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeResponses = {
 };
 
 export type PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeResponse = PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeResponses[keyof PostApiV1AdminOrdersByIdDisputesByDisputeIdOutcomeResponses];
+
+export type PutApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageData = {
+    body: {
+        /**
+         * The message, or null to remove it.
+         */
+        message: {
+            /**
+             * Plain text; line breaks are kept.
+             */
+            text: string;
+            /**
+             * An https:// address, or null for none.
+             */
+            link?: string | null;
+        } | null;
+        /**
+         * The message's revision you read; 0 when the line has none.
+         */
+        expectedRevision: number;
+    };
+    path: {
+        id: string;
+        itemId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/items/{itemId}/delivery-message';
+};
+
+export type PutApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * line_message_revision_conflict: the message changed since it was read
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PutApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageError = PutApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageErrors[keyof PutApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageErrors];
+
+export type PutApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageResponses = {
+    /**
+     * The message as staff see it (null once removed)
+     */
+    200: {
+        success: true;
+        data: {
+            message: {
+                id: string;
+                /**
+                 * The line it is stored on: a split kit item's two lines share their first line's message.
+                 */
+                orderItemId: string;
+                revision: number;
+                hasLink: boolean;
+                updatedAt: string;
+            } | null;
+            changed: boolean;
+        };
+    };
+};
+
+export type PutApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageResponse = PutApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageResponses[keyof PutApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageResponses];
+
+export type PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealData = {
+    body?: never;
+    path: {
+        id: string;
+        itemId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/items/{itemId}/delivery-message/reveal';
+};
+
+export type PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealError = PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealErrors[keyof PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealErrors];
+
+export type PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealResponses = {
+    /**
+     * The message
+     */
+    200: {
+        success: true;
+        data: {
+            message: {
+                id: string;
+                /**
+                 * The line it is stored on: a split kit item's two lines share their first line's message.
+                 */
+                orderItemId: string;
+                revision: number;
+                hasLink: boolean;
+                updatedAt: string;
+            };
+            text: string;
+            link: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealResponse = PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealResponses[keyof PostApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageRevealResponses];
 
 export type GetApiV1AdminConversationsData = {
     body?: never;

@@ -20,6 +20,7 @@ import {
     paymentPlans,
     orderDiscountAllocations,
     orderEvents,
+    orderLineMessages,
     OrderStatus,
     PaymentMethod,
     PaymentStatus,
@@ -49,7 +50,7 @@ import type {
     PreviewManualOrderAmendmentInput,
 } from "../validation";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
-import { recordOrderEvent } from "../timeline";
+import { buildOrderEventInsert, newOrderEventId, recordOrderEvent } from "../timeline";
 import { currentWarrantyRevisionSql } from "../commit-order";
 import { resolveOrderCurrencySnapshot } from "../../payments";
 import { validateCustomerPhoneCountry } from "../../settings";
@@ -665,6 +666,20 @@ export async function confirmManualOrderAmendment(
         .filter((item) => !retainedIds.has(item.id))
         .map((item) => item.id);
     if (removedIds.length > 0) {
+        // A removed line takes its delivery message with it (sealed to that line, it cannot move):
+        // the timeline says so, in the same batch, so staff can write it again on the row's other line.
+        const lostMessages = await db.select({ orderItemId: orderLineMessages.orderItemId }).from(orderLineMessages)
+            .where(and(eq(orderLineMessages.orderId, orderId), inArray(orderLineMessages.orderItemId, removedIds), isNull(orderLineMessages.removedAt)))
+            .all();
+        for (const message of lostMessages) {
+            statements.push(buildOrderEventInsert(db, {
+                id: newOrderEventId(),
+                orderId,
+                kind: "delivery_message",
+                actorId,
+                data: { orderItemId: message.orderItemId, change: "removed", hasLink: false, reason: "line_removed" },
+            }, sql`1 = 1`) as unknown as SQLiteBatchItem);
+        }
         statements.push(db.delete(orderItems).where(and(
             eq(orderItems.orderId, orderId),
             inArray(orderItems.id, removedIds),

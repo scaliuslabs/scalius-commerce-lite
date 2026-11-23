@@ -15,6 +15,7 @@ import { adminOrderDetailRoutes } from "./detail";
 import { adminOrderDigitalRoutes } from "./digital";
 import { adminOrderDisputeRoutes } from "./disputes";
 import { adminOrderFulfilmentRoutes } from "./fulfilments";
+import { adminOrderLineMessageRoutes } from "./line-messages";
 import { adminOrderListRoutes } from "./list";
 import { adminOrderWarrantyClaimRoutes } from "./warranty-claims";
 import { adminOrderUploadRoutes } from "./uploads";
@@ -36,5 +37,6 @@ app.route("/", adminOrderDigitalRoutes);
 app.route("/", adminOrderWarrantyClaimRoutes);
 app.route("/", adminOrderUploadRoutes);
 app.route("/", adminOrderDisputeRoutes);
+app.route("/", adminOrderLineMessageRoutes);
 
 export { app as adminOrdersRoutes };

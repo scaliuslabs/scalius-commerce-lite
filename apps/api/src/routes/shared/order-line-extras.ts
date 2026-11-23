@@ -1,8 +1,8 @@
 // Per-order-line "extras" (Wave B design §7.1, §14 decision 29): the review
-// state, downloads, licence keys, issued gift cards and warranty records of
-// each order item, composed here at the API layer from the four feature
-// domains' public entries. Composing them inside `orders` would pull those
-// domains into the order cycle group.
+// state, downloads, licence keys, issued gift cards, warranty records and
+// delivery message of each order item, composed here at the API layer from
+// the feature domains' public entries. Composing them inside `orders` would
+// pull those domains into the order cycle group.
 //
 // Callers have already proven access to the order (receipt proof, account
 // ownership or staff permission) and pass its item ids. An item gets an
@@ -12,6 +12,7 @@ import { z } from "@hono/zod-openapi";
 import { WARRANTY_DURATION_KINDS } from "@scalius/shared/warranty";
 import type { Database } from "@scalius/database/client";
 import { listLineDeliveries } from "@scalius/core/modules/digital";
+import { listLineMessages } from "@scalius/core/modules/fulfilment";
 import { listLineIssuedCards, listOrderGiftCardTenders } from "@scalius/core/modules/gift-cards";
 import { listLineReviewStates, type LineExtrasInput } from "@scalius/core/modules/reviews";
 import { listLineWarranties } from "@scalius/core/modules/warranty";
@@ -82,12 +83,23 @@ export const orderLineWarrantyExtraSchema = z.object({
   }).nullable().openapi({ description: "The latest claim on this warranty (an open one first)" }),
 }).openapi("OrderLineWarrantyExtra");
 
+export const orderLineMessageExtraSchema = z.object({
+  messageId: z.string(),
+  hasLink: z.boolean().openapi({ description: "The message carries a link besides its text." }),
+  updatedAt: isoTimestamp,
+  revision: z.number().int().positive().optional().openapi({ description: "Staff reads only: the revision a write names (`expectedRevision`)." }),
+  orderItemId: z.string().optional().openapi({ description: "Staff reads only: the line the message is stored on (a split kit item's first line)." }),
+}).openapi("OrderLineMessageExtra", {
+  description: "A delivery message the store wrote for this line. Never its text or link: the signed-in buyer reveals those with a POST; staff with the digital-access permission reveal them from the order.",
+});
+
 export const orderLineExtrasSchema = z.object({
   review: orderLineReviewExtraSchema.optional(),
   downloads: z.array(orderLineDownloadExtraSchema).optional(),
   licenceKeys: z.array(orderLineLicenceKeyExtraSchema).optional(),
   giftCards: z.array(orderLineGiftCardExtraSchema).optional(),
   warranty: z.array(orderLineWarrantyExtraSchema).optional(),
+  message: orderLineMessageExtraSchema.optional(),
 }).openapi("OrderLineExtras");
 
 /** Spread into an order item object schema: the item may carry `extras`. */
@@ -118,7 +130,15 @@ function lineExtras(map: Map<string, OrderLineExtras>, orderItemId: string): Ord
  */
 export async function composeOrderLineExtras(
   db: Database,
-  input: LineExtrasInput & { currencyDecimalPlaces: number },
+  input: LineExtrasInput & {
+    currencyDecimalPlaces: number;
+    /**
+     * Read the lines' delivery messages (ids and dates only): the staff order
+     * and the signed-in buyer's own order. Never a receipt, which a link
+     * opens: it learns nothing of a message, not even that one exists.
+     */
+    deliveryMessages?: true;
+  },
 ): Promise<ReadonlyMap<string, OrderLineExtras>> {
   const composed = new Map<string, OrderLineExtras>();
   if (input.orderItemIds.length === 0) return composed;
@@ -159,6 +179,12 @@ export async function composeOrderLineExtras(
     }));
   }
 
+  if (input.deliveryMessages) {
+    for (const [orderItemId, message] of await listLineMessages(db, lines)) {
+      lineExtras(composed, orderItemId).message = { ...message, updatedAt: isoFromEpochSeconds(message.updatedAt) };
+    }
+  }
+
   for (const [orderItemId, extras] of composed) {
     if (Object.keys(extras).length === 0) composed.delete(orderItemId);
   }
@@ -168,7 +194,8 @@ export async function composeOrderLineExtras(
 /**
  * The item with `extras` added only when its lines have any. A buyer's row
  * of several lines (`lineIds`, a kit's split item) shows all their files,
- * keys, cards and warranties, and the review of whichever line has one.
+ * keys, cards and warranties, the review of whichever line has one, and the
+ * row's one delivery message.
  */
 export function withOrderLineExtras<T extends { id: string; lineIds?: readonly string[] }>(
   item: T,
@@ -188,6 +215,8 @@ export function withOrderLineExtras<T extends { id: string; lineIds?: readonly s
   if (licenceKeys.length > 0) merged.licenceKeys = licenceKeys;
   if (giftCards.length > 0) merged.giftCards = giftCards;
   if (warranty.length > 0) merged.warranty = warranty;
+  const message = found.find((entry) => entry.message)?.message;
+  if (message) merged.message = message;
   return { ...item, extras: merged };
 }
 

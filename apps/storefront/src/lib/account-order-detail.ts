@@ -65,7 +65,8 @@ import {
   showsOrderLineGroupHeadings,
   supportActionDescription,
 } from "@/lib/order-line-groups";
-import { buyerLineAddOnRows } from "@scalius/shared/buyer-line-add-on-text";
+import { buyerLineAddOnRows, readBuyerLineAddOns } from "@scalius/shared/buyer-line-add-on-text";
+import { orderEntries, rowItemsOnly, withoutBundleEntry, type OrderEntry } from "@/lib/order-bundles";
 import { pagePath } from "@/lib/presence-url";
 import { longAnswerHtml, longAnswerWords } from "@/lib/long-answer";
 import type { MoneySummaryRow } from "@/lib/money-summary-order";
@@ -572,56 +573,123 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   // An order-level promotion is one line in the summary, never a discount on each item.
   const showsLineDiscounts = orderShowsLineDiscounts(detail.discounts);
   const words = accountCopy().order;
+  // The apps' add-ons as their own summary rows (the server's, from the order's frozen lines): the rows then show the items alone.
+  const addOns = addOnRowsOver(order.subtotalAmountMinor ?? 0, readAddOnRows(detail.addOns));
+  const addOnsInSummary = addOns.rows.length > 0;
   if (items) {
-    const lineMarkup = (item: AccountOrderDetail["items"][number]) => {
-      // A kit's item charged as two lines is one row here, its unit price null when its total does not divide.
-      const hasMinor = item.lineSubtotalMinor != null;
-      const amounts = hasMinor
-        ? { grossSubtotalMinor: item.lineSubtotalMinor!, discountMinor: item.discountAmountMinor ?? 0 }
-        : null;
-      const lineTotal = amounts
-        ? minor(presentedLineTotalMinor(amounts, showsLineDiscounts))
-        : accountMoney(item.lineTotal, order.currencyCode);
-      // A free gift reads its full price struck, then zero.
-      const struck = amounts && isFreeOrderLine(amounts)
-        ? `<s class="me-1.5 text-muted-foreground">${escapeHtml(minor(amounts.grossSubtotalMinor))}</s>`
-        : "";
-      const unit = item.unitPriceMinor != null ? minor(item.unitPriceMinor) : accountMoney(item.unitPrice, order.currencyCode);
+    type Row = AccountOrderDetail["items"][number];
+    const answerWords = longAnswerWords(pageLanguage());
+    /** A row's own amounts: what the apps charged on it is a summary row, never part of its price. */
+    const amountsOf = (item: Row) => rowItemsOnly(item.lineSubtotalMinor != null
+      ? { unitPriceMinor: item.unitPriceMinor ?? null, grossSubtotalMinor: item.lineSubtotalMinor, discountMinor: item.discountAmountMinor ?? 0 }
+      : null, item, addOnsInSummary);
+    const rowsMarkup = (rows: ReturnType<typeof orderLinePropertyRows>) => rows.length > 0
+      ? `<ul class="text-muted-foreground">${rows.map((row) => `<li class="break-words">${longAnswerHtml(row.text, answerWords, `<span class="text-foreground">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}${row.surcharge ? ` (${escapeHtml(row.surcharge)})` : ""}`)}</li>`).join("")}</ul>`
+      : "";
+    const addOnRowsOf = (rows: readonly Row[]) => buyerLineAddOnRows(
+      rows.flatMap((row) => readBuyerLineAddOns((row as { addOns?: unknown }).addOns)),
+      { label: copy.lineAddOnText, money: minor, language: pageLanguage() },
+    );
+    const nameMarkup = (item: Row) => {
       const name = escapeHtml(item.productName || words.product);
-      // Buyer inputs: display only, escaped, never in links or data attributes.
+      return item.productSlug
+        ? `<a href="${escapeHtml(pagePath(`/products/${encodeURIComponent(item.productSlug)}`))}" class="font-medium text-foreground hover:underline">${name}</a>`
+        : `<p class="font-medium text-foreground">${name}</p>`;
+    };
+    const image = (item: Row) => `<img src="${escapeHtml(getProductImageUrl(item.productImage, 128))}" alt="" class="h-16 w-16 shrink-0 rounded-lg border border-border bg-card object-contain" loading="lazy" />`;
+    // Files, keys, card codes, the store's message and the review form get the line's full width.
+    const extrasOf = (item: Row) => lineExtrasMarkup(item, { orderId: order.id, access: "account", languageData: copy });
+    const priceMarkup = (amounts: ReturnType<typeof amountsOf>, fallback: number) => {
+      const total = amounts ? minor(presentedLineTotalMinor(amounts, showsLineDiscounts)) : accountMoney(fallback, order.currencyCode);
+      // A free gift reads its full price struck, then zero.
+      const struck = amounts && isFreeOrderLine(amounts) ? `<s class="me-1.5 text-muted-foreground">${escapeHtml(minor(amounts.grossSubtotalMinor))}</s>` : "";
+      return `<p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${struck}${escapeHtml(total)}</p>`;
+    };
+    const lineMarkup = (item: Row) => {
+      // A kit's item charged as two lines is one row here, its unit price null when its total does not divide.
+      const amounts = amountsOf(item);
+      const unit = amounts?.unitPriceMinor != null ? minor(amounts.unitPriceMinor) : amounts
+        ? minor(Math.round(amounts.grossSubtotalMinor / Math.max(1, item.quantity)))
+        : accountMoney(item.unitPrice, order.currencyCode);
+      // Buyer inputs (display only, escaped), then what the apps charged on the row: its `addOns`, the one place a row says it.
       const properties = [
         ...orderLinePropertyRows(item.properties, (property) => minor(property.priceMinor), copy),
-        // What the apps charged on the row: its `addOns`, the one place a row says it.
-        ...buyerLineAddOnRows((item as { addOns?: unknown }).addOns, { label: copy.lineAddOnText, money: minor, language: pageLanguage() }),
+        ...addOnRowsOf([item]),
       ];
-      const answerWords = longAnswerWords(pageLanguage());
-      // Files, keys, card codes and the review form get the line's full width.
-      const extras = lineExtrasMarkup(item, { orderId: order.id, access: "account", languageData: copy });
+      const extras = extrasOf(item);
       return `<li class="py-4 first:pt-0 last:pb-0"><div class="flex gap-3">
-        <img src="${escapeHtml(getProductImageUrl(item.productImage, 128))}" alt="" class="h-16 w-16 shrink-0 rounded-lg border border-border bg-card object-contain" loading="lazy" />
+        ${image(item)}
         <div class="min-w-0 flex-1 text-sm">
-          ${item.productSlug ? `<a href="${escapeHtml(pagePath(`/products/${encodeURIComponent(item.productSlug)}`))}" class="font-medium text-foreground hover:underline">${name}</a>` : `<p class="font-medium text-foreground">${name}</p>`}
+          ${nameMarkup(item)}
           ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
-          ${properties.length > 0 ? `<ul class="text-muted-foreground">${properties.map((row) => `<li class="break-words">${longAnswerHtml(row.text, answerWords, `<span class="text-foreground">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}${row.surcharge ? ` (${escapeHtml(row.surcharge)})` : ""}`)}</li>`).join("")}</ul>` : ""}
+          ${rowsMarkup(properties)}
           <p class="text-muted-foreground">${escapeHtml(words.quantity(formatCount(item.quantity), unit))}</p>
           ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">${escapeHtml(words.lineDiscount(minor(item.discountAmountMinor!)))}</p>` : ""}
         </div>
-        <p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${struck}${escapeHtml(lineTotal)}</p>
+        ${priceMarkup(amounts, item.lineTotal)}
       </div>${extras ? `<div class="text-sm sm:ps-[4.75rem]">${extras}</div>` : ""}</li>`;
     };
+    /**
+     * One bundle as the buyer bought it: its name, sets and price once, the
+     * add-ons charged on it once, then each item with what only it has (how
+     * many each set holds, its inputs, its delivery state, its keys, the
+     * store's message, its review).
+     */
+    const bundleMarkup = (entry: Extract<OrderEntry<Row>, { kind: "bundle" }>) => {
+      const rows = entry.rows;
+      const amounts = rows.map(amountsOf);
+      const exact = amounts.every((amount) => amount !== null);
+      const totalMinor = exact ? amounts.reduce((sum, amount) => sum + presentedLineTotalMinor(amount!, showsLineDiscounts), 0) : null;
+      const total = totalMinor ?? rows.reduce((sum, row) => sum + row.lineTotal, 0);
+      const units = entry.units;
+      const perSet = units && totalMinor !== null && totalMinor % units === 0 ? minor(totalMinor / units) : null;
+      const quantity = units ? (perSet ? words.quantity(formatCount(units), perSet) : words.sets(formatCount(units))) : "";
+      const itemMarkup = (item: Row) => {
+        const status = orderLineGroupStatusText(groupOrderLines([item], order, copy)[0] ?? { statusLabel: null, progressLabel: null });
+        // How many each set holds; the row's units when the sets are not known.
+        const each = item.bundle?.perUnit && entry.units ? words.perSet(formatCount(item.bundle.perUnit)) : words.sets(formatCount(item.quantity));
+        const extras = extrasOf(item);
+        return `<li class="py-3 first:pt-0 last:pb-0" data-bundle-item><div class="flex gap-3">
+          ${image(item)}
+          <div class="min-w-0 flex-1 text-sm">
+            ${nameMarkup(item)}
+            ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
+            ${rowsMarkup(orderLinePropertyRows(withoutBundleEntry(item.properties), (property) => minor(property.priceMinor), copy))}
+            <p class="text-muted-foreground">${escapeHtml([each, status].filter(Boolean).join(" · "))}</p>
+          </div>
+        </div>${extras ? `<div class="text-sm sm:ps-[4.75rem]">${extras}</div>` : ""}</li>`;
+      };
+      return `<li class="py-4 first:pt-0 last:pb-0" data-order-bundle="${escapeHtml(entry.bundle.id)}">
+        <div class="flex gap-3">
+          <div class="min-w-0 flex-1 text-sm">
+            <p class="font-medium text-foreground">${escapeHtml(entry.bundle.title)}</p>
+            ${rowsMarkup(addOnRowsOf(rows))}
+            ${quantity ? `<p class="text-muted-foreground">${escapeHtml(quantity)}</p>` : ""}
+          </div>
+          <p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${escapeHtml(totalMinor !== null ? minor(totalMinor) : accountMoney(total, order.currencyCode))}</p>
+        </div>
+        <ul class="mt-3 divide-y divide-border border-s-2 border-border ps-3">${rows.map(itemMarkup).join("")}</ul>
+      </li>`;
+    };
+    const entryMarkup = (entry: OrderEntry<Row>) => entry.kind === "row" ? lineMarkup(entry.row) : bundleMarkup(entry);
+    const entries = orderEntries(detail.items);
     const groups = groupOrderLines(detail.items, order, copy);
+    // A bundle sits whole in the group of its first item, never split across groups.
+    const typeOf = (entry: OrderEntry<Row>) => groupOrderLines([entry.kind === "row" ? entry.row : entry.rows[0]!], order, copy)[0]?.type;
     items.innerHTML = showsOrderLineGroupHeadings(groups)
-      ? groups.map((group) => {
+      ? groups.flatMap((group) => {
+          const members = entries.filter((entry) => typeOf(entry) === group.type);
+          if (members.length === 0) return [];
           const status = orderLineGroupStatusText(group);
-          return `<li class="py-4 first:pt-0 last:pb-0" data-order-line-group="${escapeHtml(group.type)}">
+          return [`<li class="py-4 first:pt-0 last:pb-0" data-order-line-group="${escapeHtml(group.type)}">
         <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <h3 class="text-sm font-semibold text-foreground">${escapeHtml(group.heading)}</h3>
           ${status ? `<p class="text-sm text-muted-foreground">${escapeHtml(status)}</p>` : ""}
         </div>
-        <ul class="divide-y divide-border">${group.items.map(lineMarkup).join("")}</ul>
-      </li>`;
+        <ul class="divide-y divide-border">${members.map(entryMarkup).join("")}</ul>
+      </li>`];
         }).join("")
-      : detail.items.map(lineMarkup).join("");
+      : entries.map(entryMarkup).join("");
   }
 
   const summary = byId("orderSummary");
@@ -646,8 +714,6 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
     // Nothing to deliver and nothing charged: no delivery row.
     const showsDeliveryRow = !(deliveryMode === "none" && !order.shippingMethodName && delivery.charged === 0 && delivery.fee === 0);
     const deliveryRow = orderDeliveryRow({ mode: deliveryMode, methodName: order.shippingMethodName, ...delivery }, copy, money);
-    // The apps' add-ons as their own rows, as the server folded them from the order's frozen lines: Subtotal is the items alone, as on the receipt.
-    const addOns = addOnRowsOver(order.subtotalAmountMinor ?? 0, readAddOnRows(detail.addOns));
     summary.innerHTML = [
       row(words.subtotal, cell(minor(addOns.itemsSubtotalMinor)), "subtotal"),
       ...addOns.rows.map((addOn) => row(addOn.title, cell(minor(addOn.amountMinor)), "add-on")),

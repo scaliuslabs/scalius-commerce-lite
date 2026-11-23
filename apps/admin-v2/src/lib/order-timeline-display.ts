@@ -108,6 +108,17 @@ export function describeTimelineEvent(
     }
     case "refund_kept":
       return { text: t("timeline.refundKept", { amount: money(count(data.amount)) }), detail: null };
+    case "delivery_message": {
+      // Never the text: only that a line's message was added, changed or removed.
+      const change = text(data.change);
+      return {
+        text: t(change === "changed" ? "timeline.deliveryMessageChanged"
+          : change === "removed" ? "timeline.deliveryMessageRemoved"
+            : change === "read" ? "timeline.deliveryMessageRead" : "timeline.deliveryMessageAdded"),
+        detail: text(data.reason) === "line_removed" ? t("timeline.deliveryMessageLineRemoved")
+          : data.hasLink === true && change !== "removed" && change !== "read" ? t("timeline.deliveryMessageLink") : null,
+      };
+    }
     case "stock_held": {
       // A refund cancelled the order; why the location refused, worded here (its server words stay in `body`).
       const reason = ["location_short", "stock_changed", "refused"].includes(text(data.reason) ?? "") ? text(data.reason)! : "refused";

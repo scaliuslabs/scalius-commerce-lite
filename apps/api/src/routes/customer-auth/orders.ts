@@ -107,12 +107,8 @@ app.openapi(claimCustomerOrderReceiptRoute, async (c) => {
   const receiptToken = c.req.valid("header")["x-receipt-token"];
   const db = c.get("db");
   await validateReceiptToken(db, orderId, receiptToken);
-  const result = await claimGuestOrderToAccount(db, {
-    orderId,
-    customerId: session.customerId,
-    customerEmail: session.email,
-    customerPhone: session.phone,
-  });
+  // The account's PROVEN contacts decide, read from its row: never the session's copy of what was typed.
+  const result = await claimGuestOrderToAccount(db, { orderId, customerId: session.customerId });
 
   return ok(c, {
     orderId: result.orderId,
@@ -391,6 +387,8 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
     orderItemIds: detail.items.map((item) => item.id),
     audience: "buyer",
     currencyDecimalPlaces: order.currencyDecimalPlaces,
+    // The signed-in buyer's own order: a message they may read shows (ids only); the receipt never does.
+    deliveryMessages: true,
   });
   const giftCardTenders = await presentOrderGiftCardTenders(c.get("db"), orderId, order.currencyDecimalPlaces);
   const db = c.get("db");

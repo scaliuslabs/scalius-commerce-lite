@@ -8666,6 +8666,7 @@
             "stock_held",
             "late_payment",
             "payment_dispute",
+            "delivery_message",
             "terms_accepted"
            ]
           },

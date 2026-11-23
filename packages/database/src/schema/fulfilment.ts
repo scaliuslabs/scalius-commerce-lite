@@ -74,5 +74,38 @@ export const orderFulfillmentLines = sqliteTable("order_fulfillment_lines", {
     // update/delete blocks.
 ]);
 
+/**
+ * A delivery message staff write for the buyer of one order line (an
+ * account's sign-in, an instruction, an optional https link): one per line,
+ * its text and link sealed together like a licence key
+ * (rules/orders/buyer-line-delivery-message.md). Removing it destroys the
+ * ciphertext and keeps the row, so the revision never repeats.
+ */
+export const orderLineMessages = sqliteTable("order_line_messages", {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    orderItemId: text("order_item_id")
+        .notNull()
+        .references(() => orderItems.id, { onDelete: "cascade" }),
+    /** `v1:<iv>:<sealed>` of `{"text","link"}`; null once removed. */
+    bodyCiphertext: text("body_ciphertext"),
+    hasLink: integer("has_link", { mode: "boolean" }).notNull().default(false),
+    /** Moves on every write, removal included. */
+    revision: integer("revision").notNull().default(1),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+    removedAt: integer("removed_at"),
+}, (table) => [
+    uniqueIndex("order_line_messages_item_unique").on(table.orderItemId),
+    index("order_line_messages_order_idx").on(table.orderId),
+    check("order_line_messages_id_shape", sql`substr(${table.id}, 1, 4) = 'olm_' AND length(${table.id}) BETWEEN 8 AND 64`),
+    check("order_line_messages_body_shape", sql`(${table.removedAt} IS NULL) = (${table.bodyCiphertext} IS NOT NULL) AND (${table.bodyCiphertext} IS NULL OR (substr(${table.bodyCiphertext}, 1, 3) = 'v1:' AND length(${table.bodyCiphertext}) <= 24576)) AND (${table.removedAt} IS NULL OR ${table.hasLink} = 0)`),
+    check("order_line_messages_has_link_bool", sql`${table.hasLink} IN (0, 1)`),
+    check("order_line_messages_revision_positive", sql`${table.revision} >= 1`),
+]);
+
 export type OrderFulfillment = InferSelectModel<typeof orderFulfillments>;
 export type OrderFulfillmentLine = InferSelectModel<typeof orderFulfillmentLines>;
+export type OrderLineMessage = InferSelectModel<typeof orderLineMessages>;

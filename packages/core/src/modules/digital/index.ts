@@ -29,6 +29,7 @@ export type {
 export { importLicenceKeys, listLicenceKeys, revokeLicenceKeys } from "./licence-keys";
 export type { ImportLicenceKeysResult, LicenceKeyAdminView } from "./licence-keys";
 export {
+    digitalBuyerAccessCondition,
     listBuyerDownloads,
     mintDownloadTicket,
     openDownloadTicket,
@@ -55,4 +56,5 @@ export {
 export type { DigitalAccessView, DigitalDeliveryContent } from "./entitlements";
 export { DIGITAL_KEYS_EXHAUSTED, fileEntitlementRow, planDigitalDelivery } from "./fulfiller";
 export type { DigitalDeliveryLine, DigitalDeliveryPlan, DigitalShortPool } from "./fulfiller";
-export { LICENCE_KEYS_UNAVAILABLE } from "./secrets";
+export { LICENCE_KEYS_UNAVAILABLE, ORDER_LINE_MESSAGES_UNAVAILABLE, orderLineMessageBinding, orderLineMessageCrypto } from "./secrets";
+export type { SecretSealer } from "./secrets";

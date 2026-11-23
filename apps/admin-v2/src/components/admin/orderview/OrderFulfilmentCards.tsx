@@ -51,6 +51,7 @@ import { LineProperties } from "./LineProperties";
 import { OrderFulfillmentLocation } from "./OrderFulfillmentLocation";
 import { returnedQuantities } from "./OrderItemsCard";
 import { BookCourier } from "./ShipmentCard";
+import { DeliveryMessagesCard } from "./DeliveryMessagesCard";
 import { DigitalLinesCard } from "./DigitalLinesCard";
 import { formatCurrencyAmount, formatOrderTimestamp } from "./formatters";
 import {
@@ -146,6 +147,7 @@ export function OrderFulfilmentCards({ order, request, onRecordPayment }: {
         />
       ))}
       <DigitalLinesCard order={order} />
+      <DeliveryMessagesCard order={order} />
       {hasIssuedGiftCards(order) && (
         <Suspense fallback={null}>
           <GiftCardLinesCard order={order} />
