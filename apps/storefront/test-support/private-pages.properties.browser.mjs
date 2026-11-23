@@ -1303,6 +1303,8 @@ async function drawDrawer({ context, id, width, problems, server5xx }) {
   const drawer = await page.waitForSelector('[data-private="cart-drawer"]', { state: "visible", timeout: 10_000 }).catch(() => null);
   if (!drawer) at("drawer", ["the drawer did not open"]);
   else {
+    // The drawer reads its suggestions once open: their rail lands before anything is measured, so no line moves under a reading.
+    await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
     await settle(page);
     const scope = '[data-private="cart-drawer"]';
     const walked = await page.evaluate(walk, { rows: [], anatomy: [{ name: "the drawer", selector: scope }], uiKinds: UI_KINDS, mandatory: DRAWER_MANDATORY, scope, exempt: EXEMPT });
