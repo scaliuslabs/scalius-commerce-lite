@@ -13,6 +13,11 @@ export type ProductSectionPatchOf<S extends SectionPatch["section"]> = Extract<S
 export type ContentBlockItem = ProductSectionOf<"content_blocks">["items"][number];
 export type ContentBlockMedia = ProductSectionOf<"content_blocks">["media"][number];
 export type BundleItem = ProductSectionOf<"bundles">["items"][number];
+export type ProductKitsSection = ProductSectionOf<"kits">;
+export type ProductKit = ProductKitsSection["items"][number];
+export type ProductKitComponent = ProductKit["components"][number];
+export type ProductPageOffersSection = ProductSectionOf<"page_offers">;
+export type ProductPageOffer = ProductPageOffersSection["items"][number];
 
 export const productSectionKey = (productId: string, section: string) =>
   [...queryKeys.products.detail(productId), "section", section] as const;
@@ -41,6 +46,22 @@ export const productBundlesQueryOptions = (productId: string) =>
   queryOptions({
     queryKey: productSectionKey(productId, "bundles"),
     queryFn: () => readSection(productId, "bundles"),
+    staleTime: 0,
+  });
+
+/** The product's bundle SKUs (kits) with their items and the outcome the server prices. */
+export const productKitsQueryOptions = (productId: string) =>
+  queryOptions({
+    queryKey: productSectionKey(productId, "kits"),
+    queryFn: () => readSection(productId, "kits"),
+    staleTime: 0,
+  });
+
+/** The SKUs of other products this product's page shows under its own offers, in order. */
+export const productPageOffersQueryOptions = (productId: string) =>
+  queryOptions({
+    queryKey: productSectionKey(productId, "page_offers"),
+    queryFn: () => readSection(productId, "page_offers"),
     staleTime: 0,
   });
 

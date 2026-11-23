@@ -1,7 +1,7 @@
 import { buyerUiBlockSchema, checkoutAttributesSchema, PLUGIN_EXTENSION_RUN, type FunctionCart } from "@scalius/shared/plugins";
 import { MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { storefrontUiSlotsOn } from "@scalius/shared/plugins/storefront-protocol";
-import { addOnFoldLabel } from "@scalius/shared/add-on-totals";
+import { addOnFoldLabel } from "@scalius/shared/add-on-folding";
 // Authoritative cart validation preflight.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { InventoryPool } from "@scalius/database/schema";

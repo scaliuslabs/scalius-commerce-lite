@@ -5,7 +5,8 @@ import { BACKUP_MARKET_ID, DEFAULT_SHIPPING_PROFILE_ID, products, productVariant
 import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { addOnShareMinor, discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
-import { addOnFoldLabel, addOnTotals, lineAddOnsOf, type AddOnFolding, type AddOnTotals } from "@scalius/shared/add-on-totals";
+import { addOnFoldLabel, addOnTotals, lineAddOnsOf, type AddOnFolding } from "@scalius/shared/add-on-folding";
+import type { AddOnTotals } from "@scalius/shared/add-on-totals";
 import { isLineAmountInRange } from "@scalius/shared/order-limits";
 import { lineAdjustmentProperty, mapCustomizationPrices, NO_PROPERTIES_HASH } from "@scalius/shared/line-properties";
 import { isForeignPresentment, shopPresentment, type PresentmentMoney } from "@scalius/shared/presentment";

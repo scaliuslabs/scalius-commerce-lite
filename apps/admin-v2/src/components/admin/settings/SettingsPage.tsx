@@ -175,6 +175,7 @@ export function SettingsField({
   help,
   error,
   optional,
+  showNow,
   children,
 }: {
   id: string;
@@ -183,6 +184,8 @@ export function SettingsField({
   error?: ReactNode;
   /** Adds "(optional)" after the label. */
   optional?: boolean;
+  /** Shows `error` at once, before the merchant touches the field (a value already saved that is no longer accepted). */
+  showNow?: boolean;
   children: ReactNode;
 }) {
   // Inline errors appear once the merchant leaves the field (or presses Save),
@@ -196,7 +199,7 @@ export function SettingsField({
     setEdited(true);
     if (server.error) server.clear();
   };
-  const clientShown = error && (left || server.revealed) ? error : null;
+  const clientShown = error && (showNow || left || server.revealed) ? error : null;
   const shown = clientShown ?? server.error;
   // A control that does not read its `Field` (a plain button, a switch) still gets the state.
   const isControl = isValidElement<{ id?: string }>(children) && children.props.id === id;

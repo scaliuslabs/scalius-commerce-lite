@@ -3,6 +3,7 @@
 // bulk edits on the selection, and arrow keys between the price and quantity
 // fields. Rows are memoised, so typing re-renders only the row being edited.
 import React from "react";
+import { useIsKitSku } from "../kits/kit-sku-ids";
 import { useNavigate } from "@tanstack/react-router";
 import { Blocks, ChevronDown, ChevronRight, Database, PenLine, Printer, Search, Tag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -635,6 +636,8 @@ const VariantRow = React.memo(function VariantRow({
   const t = useMessages(productVariantMessages);
   const r = useMessages(resourceMessages);
   const cf = useMessages(customFieldMessages);
+  // A bundle holds no stock of its own: its items carry it.
+  const bundle = useIsKitSku(variant.id);
   const errorOf = (field: DraftIssue["field"]) => (issue && issue.field === field ? issue.message : undefined);
   const issueFor: IssueFor = (_variantId, field) => errorOf(field);
   const priceError = errorOf("price");
@@ -719,7 +722,9 @@ const VariantRow = React.memo(function VariantRow({
         {layout.quantity ? (
           <div className="min-w-0">
             <span className="block text-body text-muted-foreground md:hidden">{quantityLabel ?? t("quantity")}</span>
-            {digital ? (
+            {bundle ? (
+              <p className="py-2 text-body text-muted-foreground" data-bundle-stock>{t("bundleStock")}</p>
+            ) : digital ? (
               <DigitalStockCell productId={productId} variantId={variant.id} tracked={variant.trackInventory} />
             ) : variant.trackInventory ? (
               <InventoryQuantityInput

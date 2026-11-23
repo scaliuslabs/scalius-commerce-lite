@@ -5,7 +5,8 @@ import {
   type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import { parseCheckoutAttributeValues } from "@/lib/buyer-ui/checkout-attributes";
-import { ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX, LINE_ADD_ONS_MAX, type AddOnTotalRow, type AddOnTotals } from "@scalius/shared/add-on-totals";
+import { ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX, type AddOnTotalRow, type AddOnTotals } from "@scalius/shared/add-on-totals";
+import { LINE_ADD_ONS_MAX } from "@scalius/shared/line-identity";
 import { LINE_PROPERTY_INPUT_LIMITS, linePropertyInputOf, normalizeLinePurchaseOptions, type LinePropertyInput } from "@scalius/shared/line-identity";
 import { APP_SCOPED_KEY_MAX_LENGTH, isAppScopedKey } from "@scalius/shared/plugins/ids";
 import { normalizeCartLinePurchaseOptions, type CartLinePurchaseOption } from "../cart/purchase-option";

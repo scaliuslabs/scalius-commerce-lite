@@ -3,6 +3,7 @@
 // the body Save sends. A secret is never read back: its draft starts empty,
 // and the body carries it only when it changes (a typed value sets it, null
 // clears it, leaving it out keeps the saved one).
+import { isStorePagePath } from "@scalius/shared/plugins/store-page-path";
 import { isEmailAddress } from "@scalius/shared/text-scan";
 import type { AppDetail, AppSettingField, AppSettingValue } from "~/lib/api-query-options/apps";
 import { sameFormValue } from "~/lib/form-values";
@@ -16,6 +17,9 @@ export interface SettingsDraft {
   translations: Record<string, Record<string, string>>;
 }
 
+/** A stored value the API reports as no longer accepted: why (worded here) and its English message (for a reason this form has no words for). */
+export type StoredIssue = AppDetail["settings"]["invalid"][string];
+
 export type SettingProblem =
   | { kind: "required" }
   | { kind: "tooLong"; max: number }
@@ -24,11 +28,15 @@ export type SettingProblem =
   | { kind: "atLeast"; min: number }
   | { kind: "atMost"; max: number }
   | { kind: "https" }
+  | { kind: "storePage" }
+  | { kind: "stored"; issue: StoredIssue }
   | { kind: "email" }
   | { kind: "color" };
 
 const COLOR = /^#[0-9a-f]{6}$/;
 const SECRET_MAX = 4096;
+/** An example of what a store-page setting takes (a path on this store, never another site's address). */
+export const STORE_PAGE_EXAMPLE = "/pages/shipping-policy";
 
 export function draftFromSettings(settings: AppDetail["settings"]): SettingsDraft {
   const values: SettingsDraft["values"] = {};
@@ -105,6 +113,7 @@ export function checkSetting(field: AppSettingField, draft: SettingsDraft, secre
       return null;
     }
     case "url":
+      if (field.store) return isStorePagePath(value) ? null : { kind: "storePage" };
       try {
         new URL(value);
       } catch {
@@ -123,11 +132,23 @@ export function checkSetting(field: AppSettingField, draft: SettingsDraft, secre
 /** The key a translation's problem is filed under (and its control's id suffix). */
 export const translationProblemKey = (key: string, locale: string) => `${key}.${locale}`;
 
-/** Every field's problem, by key; a translation's under `<key>.<language>`. */
-export function checkSettings(fields: readonly AppSettingField[], draft: SettingsDraft, secrets: Record<string, boolean>): Record<string, SettingProblem> {
+/**
+ * Every field's problem, by key; a translation's under `<key>.<language>`.
+ * `stored`: the values the API reports as no longer accepted (`settings.invalid`,
+ * key → its reason and message) against `saved`, the draft as last saved. Such
+ * a field keeps its stored value and the problem until the merchant changes it.
+ */
+export function checkSettings(
+  fields: readonly AppSettingField[],
+  draft: SettingsDraft,
+  secrets: Record<string, boolean>,
+  stored?: { invalid: Record<string, StoredIssue>; saved: SettingsDraft },
+): Record<string, SettingProblem> {
   const problems: Record<string, SettingProblem> = {};
   for (const field of fields) {
-    const problem = checkSetting(field, draft, secrets[field.key] === true);
+    const issue = stored?.invalid[field.key];
+    const unchanged = stored !== undefined && issue !== undefined && sameFormValue(draft.values[field.key], stored.saved.values[field.key]);
+    const problem: SettingProblem | null = unchanged ? { kind: "stored", issue } : checkSetting(field, draft, secrets[field.key] === true);
     if (problem) problems[field.key] = problem;
     if (!field.translatable || field.maxLength === null) continue;
     for (const [locale, texts] of Object.entries(draft.translations)) {

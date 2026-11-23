@@ -26,7 +26,11 @@ export const storefrontKitSchema = z.object({
     quantity: z.number().int().min(1),
     delivery: deliverySchema,
     price: z.number().openapi({ description: "One unit's price in the page's currency." }),
-  })).max(20),
+  })).max(20).openapi({
+    description: "Its items a buyer may read, in order: none whose product is a draft, archived or deleted (counted in `unavailableItems`); a host page's placed offer lists its first 6 (`componentCount` says how many it holds; its own page lists them all).",
+  }),
+  componentCount: z.number().int().min(1).max(20).openapi({ description: "How many items it holds, whatever `components` lists." }),
+  unavailableItems: z.number().int().min(0).max(20).openapi({ description: "Items withheld because their product is not for sale; the kit is out of stock then." }),
   price: z.number().openapi({ description: "What one kit costs: its own price, never more than `compareAtPrice`. Send it as the cart line's price." }),
   compareAtPrice: z.number().openapi({ description: "Its items at their current prices, summed (computed on read)." }),
   saving: z.number(),
@@ -48,7 +52,8 @@ export const storefrontPlacedOfferSchema = z.object({
   imageAlt: z.string().nullable(),
   fulfillmentKind: z.string(),
   price: z.number().openapi({ description: "One unit's price in the page's currency (a kit's: its own price)." }),
-  compareAtPrice: z.number().nullable().openapi({ description: "A kit's items summed; null for a SKU that is not a kit." }),
+  compareAtPrice: z.number().nullable().openapi({ description: "A kit's items summed, or a SKU's regular price while it is on sale; null otherwise." }),
+  requiresCustomization: z.boolean().openapi({ description: "Its product asks the buyer for inputs before buying: offer a link to its page, never a bare add." }),
   availabilityBand: z.enum(BUYER_AVAILABILITY_BANDS),
   kit: z.union([storefrontKitSchema, z.null()]),
 }).openapi("StorefrontPlacedOffer", { description: "A SKU of another product shown under this page's own offers." });
@@ -102,4 +107,23 @@ export const productPageOffersSectionSchema = z.object({
     price: z.number().nullable(),
     problem: problemSchema.nullable(),
   })).max(20),
+});
+
+/** A page of the SKU picker (`dashboard.products.sku_options`). */
+export const productSkuOptionsSchema = z.object({
+  items: z.array(z.object({
+    variantId: z.string(),
+    productId: z.string(),
+    productName: z.string(),
+    productActive: z.boolean().openapi({ description: "False for a draft or archived product: a bundle holding it can't be sold." }),
+    sku: z.string(),
+    options: optionValuesSchema,
+    imageUrl: z.string().nullable().openapi({ description: "The SKU's picture, else its product's." }),
+    price: z.number().openapi({ description: "One unit's price in the store's currency, its discount applied." }),
+    available: z.number().int().nullable().openapi({ description: "Units on hand less reserved; null when it does not track stock." }),
+    isKit: z.boolean().openapi({ description: "It is a bundle (a SKU made of other SKUs): it can't be an item of another." }),
+    isGiftCard: z.boolean().openapi({ description: "A gift card: it can't be in a bundle." }),
+  })).max(20),
+  page: z.number().int().min(1),
+  hasMore: z.boolean(),
 });

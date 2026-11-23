@@ -40,6 +40,16 @@ import {
     type TranslationScope,
 } from "../translations";
 import { deps } from "./declare-deps";
+import { hasRequiredCustomization, parseStoredCustomizationSchema } from "@scalius/shared/line-properties";
+import { STOREFRONT_PLACED_KIT_ITEMS_MAX } from "@scalius/shared/plugins/storefront-protocol";
+
+/**
+ * The items a placed offer's kit lists on its host page, at most: a summary
+ * (`componentCount` says how many it holds), the full list being on the
+ * kit's own page, so twenty placed twenty-item kits stay inside a page's and
+ * a theme's render bounds.
+ */
+export const PLACED_KIT_ITEMS_MAX = STOREFRONT_PLACED_KIT_ITEMS_MAX;
 
 /** Whether a product page has kits or placed offers (a column of the page's product row). */
 export function productPageHasKitsSql(productId: SQL): SQL<number> {
@@ -85,6 +95,7 @@ export function selectProductPageKitRows(db: Database, productId: string, pricin
         productActive: sql<number | null>`page_product.is_active`.as("pk_product_active"),
         productDeleted: sql<number | null>`page_product.deleted_at IS NOT NULL`.as("pk_product_deleted"),
         productGiftCard: sql<number | null>`page_product.is_gift_card`.as("pk_product_gift_card"),
+        productCustomization: sql<string | null>`page_product.customization_schema`.as("pk_product_customization"),
         productPublished: sql<number | null>`${productPublishedToChannelSql(product)}`.as("pk_product_published"),
         productPriceMinor: sql<number | null>`page_product.price_minor`.as("pk_product_price_minor"),
         productDiscountType: sql<string | null>`page_product.discount_type`.as("pk_product_discount_type"),
@@ -151,13 +162,19 @@ interface PricedSkuRow {
  * one unit.
  */
 export function pageSkuBuyerMinor(row: PricedSkuRow, market: MarketPriceContext | null, storeIncrementMinor: number): number {
+    return pageSkuBuyerPrice(row, market, storeIncrementMinor).amountMinor;
+}
+
+/** A SKU's buyer price and, while it is on sale, its regular price (the struck one), both in the page's market. */
+export function pageSkuBuyerPrice(row: PricedSkuRow, market: MarketPriceContext | null, storeIncrementMinor: number): { amountMinor: number; compareAtMinor: number | null } {
     const priceMinor = Number(row.priceMinor ?? 0);
     const own = (row.discountType === "percentage" && Number(row.discountBps) > 0) || (row.discountType === "flat" && Number(row.discountAmountMinor) > 0);
     const effectiveMinor = own
         ? discountedPriceMinor(priceMinor, row.discountType, Number(row.discountBps ?? 0), Number(row.discountAmountMinor ?? 0), storeIncrementMinor)
         : discountedPriceMinor(priceMinor, row.productDiscountType, Number(row.productDiscountBps ?? 0), Number(row.productDiscountAmountMinor ?? 0), storeIncrementMinor);
-    if (!market || isNeutralMarketPricing(market)) return effectiveMinor;
-    return resolvePublicSkuPrice(market, { priceMinor, effectiveMinor }, parseMarketListPrices(row.listPrices)).amountMinor;
+    if (!market || isNeutralMarketPricing(market)) return { amountMinor: effectiveMinor, compareAtMinor: priceMinor > effectiveMinor ? priceMinor : null };
+    const resolved = resolvePublicSkuPrice(market, { priceMinor, effectiveMinor }, parseMarketListPrices(row.listPrices));
+    return { amountMinor: resolved.amountMinor, compareAtMinor: resolved.compareAtMinor };
 }
 
 /** One included item of a kit as a buyer reads it. */
@@ -182,7 +199,16 @@ export interface StorefrontKitComponent {
 
 /** A kit as a buyer reads it: its contents, its price against them, and a band. */
 export interface StorefrontKit {
+    /**
+     * Its items a buyer may read, in order: none whose product is a draft,
+     * archived or deleted (counted in `unavailableItems`); on a host page's
+     * placed offer the first `PLACED_KIT_ITEMS_MAX`.
+     */
     components: StorefrontKitComponent[];
+    /** How many items it holds, whatever `components` lists. */
+    componentCount: number;
+    /** Items withheld because their product is not for sale (the kit is out of stock then). */
+    unavailableItems: number;
     /** What one kit costs (its own price, never more than `compareAtPrice`). */
     price: number;
     /** Its components at their current prices. */
@@ -207,8 +233,10 @@ export interface StorefrontPlacedOffer {
     fulfillmentKind: string;
     /** One unit's price in the page's currency (a kit's: its own price). */
     price: number;
-    /** A kit's components summed; null for a SKU that is not a kit. */
+    /** A kit's components summed, or a SKU's regular price while it is on sale; null otherwise. */
     compareAtPrice: number | null;
+    /** Its product asks the buyer for inputs before buying: offer it as a link to its page, never a bare add. */
+    requiresCustomization: boolean;
     availabilityBand: BuyerAvailabilityBand;
     /** Its contents when it is a kit; null otherwise. */
     kit: StorefrontKit | null;
@@ -218,8 +246,9 @@ export interface StorefrontPlacedOffer {
  * The page's kits (by kit SKU id) and placed offers (in order) from the two
  * statements. `ownKitPrices` are the page's own kit SKUs' buyer prices. A
  * placed offer whose SKU or product can't be sold (deleted, a draft,
- * unpublished) is left out, and so is a placed kit with such a component;
- * a kit of the page's own with one reads `out_of_stock`.
+ * unpublished) is left out, and so is a placed kit with such a component
+ * and any placed offer out of stock (a kit's scarcest item gone); a kit of
+ * the page's own with one reads `out_of_stock`.
  */
 export function resolveProductPageKits(
     rows: readonly ProductPageKitRow[],
@@ -275,7 +304,18 @@ export function resolveProductPageKits(
         list.push(row);
         componentsByKit.set(row.kitVariantId, list);
     }
-    const kitOf = (kitVariantId: string, kitPriceMinor: number, lowStockThreshold: number | null): { kit: StorefrontKit; sellable: boolean } | null => {
+    // An item whose product is a draft, archived, deleted or a gift card is never named or pictured; an unpublished one is, without a link.
+    const withheld = (row: ProductPageKitRow) => {
+        const problem = kitComponentProblem({
+            variantLive: Number(row.variantLive) === 1,
+            productActive: row.productActive === null ? null : Number(row.productActive) === 1,
+            productDeleted: row.productDeleted === null ? null : Number(row.productDeleted) === 1,
+            productPublished: row.productPublished === null ? null : Number(row.productPublished) === 1,
+            productGiftCard: row.productGiftCard === null ? null : Number(row.productGiftCard) === 1,
+        });
+        return problem !== null && problem !== "component_unpublished";
+    };
+    const kitOf = (kitVariantId: string, kitPriceMinor: number, lowStockThreshold: number | null, listed = Number.POSITIVE_INFINITY): { kit: StorefrontKit; sellable: boolean } | null => {
         const parts = (componentsByKit.get(kitVariantId) ?? []).sort((a, b) => a.position - b.position || a.variantId.localeCompare(b.variantId));
         if (parts.length === 0) return null;
         const allSellable = parts.every(sellable);
@@ -286,7 +326,7 @@ export function resolveProductPageKits(
             ? "out_of_stock"
             : count === null ? "untracked" : resolveTrackedBuyerAvailabilityBand(count, lowStockThreshold);
         const components = parts.flatMap((part, index): StorefrontKitComponent[] => {
-            if (!part.productId) return [];
+            if (!part.productId || withheld(part)) return [];
             const picture = image(part);
             const name = named(part);
             return [{
@@ -306,7 +346,9 @@ export function resolveProductPageKits(
         return {
             sellable: allSellable,
             kit: {
-                components,
+                components: components.slice(0, listed),
+                componentCount: parts.length,
+                unavailableItems: parts.filter((part) => !part.productId || withheld(part)).length,
                 price: money(price.priceMinor),
                 compareAtPrice: money(price.compareAtMinor),
                 saving: money(price.savingMinor),
@@ -325,14 +367,21 @@ export function resolveProductPageKits(
     const placedOffers: StorefrontPlacedOffer[] = [];
     for (const row of [...rows].filter((candidate) => candidate.role === "offer").sort((a, b) => a.position - b.position)) {
         if (!row.productId || !sellable(row)) continue;
-        const unitMinor = buyerMinor(row);
+        const unit = pageSkuBuyerPrice(row, context.market, context.storeIncrementMinor);
+        const unitMinor = unit.amountMinor;
         const threshold = row.lowStockThreshold === null ? null : Number(row.lowStockThreshold);
-        const kit = Number(row.isKit) === 1 ? kitOf(row.variantId, unitMinor, threshold) : null;
+        // A host page lists a placed kit's first items; its own page lists them all.
+        const kit = Number(row.isKit) === 1 ? kitOf(row.variantId, unitMinor, threshold, PLACED_KIT_ITEMS_MAX) : null;
         // A placed kit with a component that can't be sold is not offered.
         if (Number(row.isKit) === 1 && (!kit || !kit.sellable)) continue;
+        const own = available(row);
+        const availabilityBand: BuyerAvailabilityBand = kit
+            ? kit.kit.availabilityBand
+            : own === null ? "untracked" : resolveTrackedBuyerAvailabilityBand(own, threshold);
+        // Nor is one that can't be bought now (a kit whose scarcest item is gone): the host offers what sells.
+        if (availabilityBand === "out_of_stock") continue;
         const picture = image(row);
         const name = named(row);
-        const own = available(row);
         placedOffers.push({
             variantId: row.variantId,
             productId: row.productId,
@@ -345,12 +394,18 @@ export function resolveProductPageKits(
             imageAlt: picture?.altText ?? null,
             fulfillmentKind: row.fulfillmentKind ?? "physical",
             price: kit ? kit.kit.price : money(unitMinor),
-            compareAtPrice: kit ? kit.kit.compareAtPrice : null,
-            availabilityBand: kit
-                ? kit.kit.availabilityBand
-                : own === null ? "untracked" : resolveTrackedBuyerAvailabilityBand(own, threshold),
+            compareAtPrice: kit ? kit.kit.compareAtPrice : unit.compareAtMinor !== null ? money(unit.compareAtMinor) : null,
+            requiresCustomization: requiresBuyerInput(row.productCustomization),
+            availabilityBand,
             kit: kit?.kit ?? null,
         });
     }
     return { kits, placedOffers };
+}
+
+/** A product's stored buyer inputs ask for an answer (an unreadable set asks too: its page says why). */
+function requiresBuyerInput(stored: string | null | undefined): boolean {
+    if (!stored) return false;
+    const parsed = parseStoredCustomizationSchema(stored);
+    return !parsed.ok || hasRequiredCustomization(parsed.schema);
 }

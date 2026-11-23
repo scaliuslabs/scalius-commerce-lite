@@ -81,6 +81,14 @@ export const LINE_PURCHASE_OPTION_PROPERTY_KEY = "_purchase_option";
  * line-entry-words.ts, which words them, pulls in the upload parser.
  */
 export const LINE_ADJUSTMENT_KEY = "_adjustment";
+/**
+ * The most add-ons one line carries, everywhere: what checkout takes on a
+ * line (`LINE_ADJUSTMENTS_PER_LINE_MAX`, refusing past it), what the cart
+ * stores and what the page accepts from the cart check and the quote. One
+ * number, so the page never refuses a line checkout took. Here, beside the
+ * add-on key, so the cart store bounds a line without the summary modules.
+ */
+export const LINE_ADD_ONS_MAX = 5;
 export const LINE_BUNDLE_KEY = "_bundle";
 /** The most purchase options one line carries (one per app). */
 export const LINE_PURCHASE_OPTIONS_MAX = 5;

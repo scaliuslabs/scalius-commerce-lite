@@ -50,7 +50,7 @@ import type { Database } from "@scalius/database/client";
 import { productVariants } from "@scalius/database/schema";
 import type { FunctionCart, PluginFunctionOutput } from "@scalius/shared/plugins";
 import { LINE_BUNDLE_PROPERTY_KEY, lineAdjustmentProperty, lineBundleProperty, type OrderLineBundle, type ResolvedLineProperty } from "@scalius/shared/line-properties";
-import { aggregateLineAddOns, lineAddOnsOf } from "@scalius/shared/add-on-totals";
+import { aggregateLineAddOns, lineAddOnsOf } from "@scalius/shared/add-on-folding";
 import { and, inArray, isNull, sql } from "drizzle-orm";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { buildStorefrontTaxAllocationLineId } from "../tax";

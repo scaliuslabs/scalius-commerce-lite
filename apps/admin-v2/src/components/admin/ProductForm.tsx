@@ -94,6 +94,8 @@ import type {
   VariantPriceRange,
 } from "./product-form/variants/option-matrix-editor-model";
 import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
+import type { ProductRevisionHandle, ProductSkuSummary } from "./product-form/kits/kit-types";
+import { KitSkuIdsContext } from "./product-form/kits/kit-sku-ids";
 import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 import { useTranslateMenuItem } from "./translations/TranslateMenuItem";
 import { richTextOrNull } from "~/lib/rich-text-value";
@@ -105,6 +107,11 @@ const loadCards = () => import("./product-form/merchandising/cards");
 const ContentBlocksCard = React.lazy(() => loadCards().then((cards) => ({ default: cards.ContentBlocksCard })));
 const BundlesCard = React.lazy(() => loadCards().then((cards) => ({ default: cards.BundlesCard })));
 const ProductPageCard = React.lazy(() => loadCards().then((cards) => ({ default: cards.ProductPageCard })));
+const loadKitCards = () => import("./product-form/kits/cards");
+/** One empty list: a new array each render would change the bundle SKUs the variant editor reads, and loop. */
+const NO_SKUS: ProductSkuSummary[] = [];
+const BundleOffersCard = React.lazy(() => loadKitCards().then((cards) => ({ default: cards.BundleOffersCard })));
+const PageOffersCard = React.lazy(() => loadKitCards().then((cards) => ({ default: cards.PageOffersCard })));
 
 interface ProductFormProps {
   relatedObjects?: RelatedObjectRecord[];
@@ -143,6 +150,12 @@ interface ProductFormProps {
   optionMatrixSaving?: boolean;
   /** Saved SKUs, for printing their labels from the page's menu. */
   variantIds?: string[];
+  /** The saved, live SKUs: each may be made a bundle (Bundle offers). */
+  skus?: ProductSkuSummary[];
+  /** A section that saves on its own (bundle offers, page offers) moved the revision. */
+  onSectionSaved?: (revision: number) => void;
+  /** How many other products' offers the page shows (the product read), for the closed card. */
+  pageOfferCount?: number;
   /** Reads and rebases the mounted draft after a conflict. */
   draftRef?: React.MutableRefObject<ProductDraftReader | null>;
   /** Throws away the product and variant drafts (the route remounts them from the last save). */
@@ -217,6 +230,9 @@ function ProductEditor({
   optionMatrixNavigationDirty = optionMatrixDirty,
   optionMatrixSaving = false,
   variantIds = [],
+  skus = NO_SKUS,
+  onSectionSaved,
+  pageOfferCount = 0,
   draftRef,
   onDiscard,
   customizationSchemaInvalid = false,
@@ -242,6 +258,31 @@ function ProductEditor({
   const shippingProfiles = useQuery({ ...shippingProfilesQuery, enabled: canViewShippingProfiles }).data;
   // Content blocks, bundles and the page template save on their own, under the same revision.
   const sections = useProductSections();
+  // Bundle offers and page offers write on their own, at the page's revision, and meet a
+  // stale one the way the variant editor's own save does (the conflict dialog).
+  const latestRevision = React.useRef({ aggregateRevision, onAggregateRevisionChange, onSectionSaved, onRevisionConflict });
+  latestRevision.current = { aggregateRevision, onAggregateRevisionChange, onSectionSaved, onRevisionConflict };
+  // Which SKUs are bundles: the product read, then what the bundle card saves (the variant editor follows).
+  const [kitChanges, setKitChanges] = React.useState<ReadonlyMap<string, boolean>>(() => new Map());
+  const kitIds = React.useMemo<ReadonlySet<string>>(() => new Set(
+    skus.filter((sku) => kitChanges.get(sku.id) ?? sku.isKit).map((sku) => sku.id),
+  ), [skus, kitChanges]);
+  // A section's own write and the page's Save never race at one revision: each waits for the other.
+  const [sectionWrites, setSectionWrites] = React.useState(0);
+  const sectionWriting = React.useRef(0);
+  const sectionRevision = React.useMemo<ProductRevisionHandle>(() => ({
+    current: () => latestRevision.current.aggregateRevision,
+    saved: (revision) => {
+      latestRevision.current.onAggregateRevisionChange?.(revision);
+      latestRevision.current.onSectionSaved?.(revision);
+    },
+    conflict: (conflict) => latestRevision.current.onRevisionConflict?.(conflict),
+    writing: (on) => {
+      sectionWriting.current += on ? 1 : -1;
+      setSectionWrites(sectionWriting.current);
+    },
+    kitSaved: (variantId, isKit) => setKitChanges((current) => new Map(current).set(variantId, isKit)),
+  }), []);
   // The old Additional sections tabs were saved as blocks: this save removes the originals.
   const tabsMoved = React.useRef(false);
 
@@ -347,6 +388,7 @@ function ProductEditor({
 
   const save = async () => {
     if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly")).as("refused");
+    if (sectionWriting.current > 0) throw new SaveNotCompleted(t("waitForSectionSave"));
     if (revisionConflict) {
       onOpenRevisionConflict?.();
       throw new SaveConflict(t("changedElsewhere"));
@@ -396,7 +438,7 @@ function ProductEditor({
   useSaveBar({
     dirty: !readOnly && (productFormDirty || optionMatrixDirty || sections.dirty || revisionConflict !== null),
     navigationDirty: productFormDirty || optionMatrixNavigationDirty || sections.navigationDirty || revisionConflict !== null,
-    saving: isSubmitting || optionMatrixSaving,
+    saving: isSubmitting || optionMatrixSaving || sectionWrites > 0,
     save,
     discard: () => {
       if (revisionConflict) onOpenRevisionConflict?.();
@@ -513,6 +555,7 @@ function ProductEditor({
           <ProductKindRulesProvider form={form}>
           <ProductSectionsProvider registry={sections.registry}>
           <ProductEditorSlotsContext.Provider value={slots}>
+          <KitSkuIdsContext.Provider value={kitIds}>
           {/* Shopify's product page: what every product needs in the main column, in its order
               (title, media, pricing, inventory, shipping, variants), then the advanced cards, each
               always listed by title and closed while empty. The side column holds status,
@@ -557,6 +600,29 @@ function ProductEditor({
                 </React.Suspense>
               ) : (
                 <AfterSaveCard title={t("bundles")} />
+              )}
+              {isEdit && productId ? (
+                <>
+                  <React.Suspense fallback={<LoadingFallback height="h-20" />}>
+                    <BundleOffersCard
+                      productId={productId}
+                      productName={productName}
+                      skus={skus}
+                      kitIds={kitIds}
+                      readOnly={readOnly}
+                      pageSaving={isSubmitting || optionMatrixSaving}
+                      revision={sectionRevision}
+                    />
+                  </React.Suspense>
+                  <React.Suspense fallback={<LoadingFallback height="h-20" />}>
+                    <PageOffersCard productId={productId} count={pageOfferCount} readOnly={readOnly} pageSaving={isSubmitting || optionMatrixSaving} revision={sectionRevision} />
+                  </React.Suspense>
+                </>
+              ) : (
+                <>
+                  <AfterSaveCard title={t("bundleOffers")} />
+                  <AfterSaveCard title={t("pageOffers")} />
+                </>
               )}
               <React.Suspense fallback={<LoadingFallback height="h-20" />}>
                 <BuyerInputsCard
@@ -604,6 +670,7 @@ function ProductEditor({
               </fieldset>
             </div>
           </div>
+          </KitSkuIdsContext.Provider>
           </ProductEditorSlotsContext.Provider>
           </ProductSectionsProvider>
           </ProductKindRulesProvider>

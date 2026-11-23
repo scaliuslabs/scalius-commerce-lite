@@ -74,8 +74,17 @@ import type {
 import { manualOrderAppLines } from "./app-lines";
 import { appFlagsSql } from "../../../utils/app-flags";
 
-/** `kitLine`: a kit's item, whose issues speak for the kit's line (its index, SKU and product) and name the item. */
-type AdminOrderSkuItem = { productId: string; variantId: string | null; quantity?: number; kitLine?: AdminOrderKitLine };
+/**
+ * `kitLine`: a kit's item, whose issues speak for the kit's line (its index, SKU and product) and name the item.
+ * `row`: the request's line this item came from, once kits are split into their items (`expandAdminOrderKits`):
+ * every line and problem the quote reports names it, never a position in the split list.
+ */
+type AdminOrderSkuItem = { productId: string; variantId: string | null; quantity?: number; kitLine?: AdminOrderKitLine; row?: number };
+/** The request's line an item came from (its own position before kits are split). */
+const requestRow = (item: object, index: number) => {
+    const { row, kitLine } = item as { row?: number; kitLine?: AdminOrderKitLine };
+    return kitLine?.index ?? row ?? index;
+};
 interface AdminOrderKitLine { index: number; productId: string; variantId: string }
 type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     variantId: string;
@@ -434,8 +443,9 @@ function projectManualOrderQuote(
         pricesIncludeTax: taxQuote.pricesIncludeTax,
         taxEnabled: taxQuote.enabled,
         settingsVersion: taxQuote.settingsVersion,
+        // Each line names the request's line it came from: a kit's items all name the kit's line.
         lines: trackedItems.map((item, index) => ({
-            index,
+            index: requestRow(item, index),
             productId: item.productId,
             variantId: item.variantId,
             quantity: item.quantity,
@@ -558,7 +568,7 @@ export async function prepareManualOrderQuote(
             const override = submitted?.unitPriceMinor;
             if (override !== undefined && !isIncrementMultipleMinor(override, currency.priceIncrementMinor)) {
                 throw new ValidationError(priceIncrementMessage(currency.code, currency.priceIncrementMinor), {
-                    issues: [{ index, field: "unitPriceMinor", code: "price_increment" }],
+                    issues: [{ index: requestRow(item, index), field: "unitPriceMinor", code: "price_increment" }],
                 });
             }
             return {
@@ -585,7 +595,7 @@ export async function prepareManualOrderQuote(
     const outOfRange = trackedItems.findIndex((item) => !isLineAmountInRange(item.unitPriceMinor, item.quantity));
     if (outOfRange >= 0) {
         throw new ValidationError("That line comes to more than one order can hold. Lower its quantity.", {
-            issues: [{ index: (trackedItems[outOfRange] as { kitLine?: AdminOrderKitLine }).kitLine?.index ?? outOfRange, code: "quantity_unavailable" }],
+            issues: [{ index: requestRow(trackedItems[outOfRange]!, outOfRange), code: "quantity_unavailable" }],
         });
     }
     const money = calculateManualOrderMoney(
@@ -720,7 +730,7 @@ function addAdminOrderSkuIssue(
     const kit = item.kitLine;
     issues.push(kit
         ? { index: kit.index, productId: kit.productId, variantId: kit.variantId, code, message, componentVariantId: item.variantId ?? undefined }
-        : { index, productId: item.productId, variantId: item.variantId ?? null, code, message });
+        : { index: requestRow(item, index), productId: item.productId, variantId: item.variantId ?? null, code, message });
 }
 
 function assertAdminOrderItemsUseSkus(items: AdminOrderSkuItem[]) {
@@ -798,8 +808,8 @@ async function expandAdminOrderKits<T extends QuoteManualOrderInput["items"][num
     const outResolved: Array<AdminOrderItemWithInventory<T>> = [];
     resolved.forEach((item, index) => {
         if (!item.kitComponents) {
-            outItems.push(items[index]!);
-            outResolved.push(item);
+            outItems.push({ ...items[index]!, row: index } as T);
+            outResolved.push({ ...item, row: index });
             return;
         }
         const members = componentInputs.flatMap((part, position) => (part.kitIndex === index ? [{ ...part, resolved: parts[position]! }] : []));

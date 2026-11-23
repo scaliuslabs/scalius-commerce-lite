@@ -16,7 +16,8 @@
 // path (`runOffers`: never blocking, its own backoff, its own budget); a
 // failed or refused run prices no offer and never changes a price.
 import { addOnShareMinor } from "@scalius/shared/money";
-import { aggregateLineAddOns, LINE_ADD_ONS_MAX, lineAddOnsOf } from "@scalius/shared/add-on-totals";
+import { aggregateLineAddOns, lineAddOnsOf } from "@scalius/shared/add-on-folding";
+import { LINE_ADD_ONS_MAX } from "@scalius/shared/line-identity";
 import { MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { CUSTOMIZATION_LIMITS } from "@scalius/shared/line-properties";
 import type { AppLineInputs } from "@scalius/shared/line-properties";

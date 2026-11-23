@@ -41,7 +41,7 @@ export interface StorefrontPortabilityNote {
 /** The core routes every store has, by their first path segment (`/account/orders` is under `account`). */
 export const STOREFRONT_CORE_ROUTE_SEGMENTS = [
   "search", "cart", "checkout", "account", "categories", "collections", "blog",
-  "track-order", "compare", "gift-card-balance", "warranty-claims", "newsletter",
+  "track-order", "compare", "gift-card-balance", "newsletter",
 ] as const;
 /** Core routes that are a listing at their first segment only: a second segment names one store's record. */
 const RECORD_ROUTES = new Set(["categories", "collections", "blog"]);

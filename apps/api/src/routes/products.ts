@@ -521,7 +521,7 @@ const productDetailDataSchema = z.object({
     }).nullable(),
     ...productPageMerchandisingFields,
     placedOffers: z.array(storefrontPlacedOfferSchema).max(20).openapi({
-      description: "SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be sold is left out.",
+      description: "SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be bought now (out of stock, a draft, unpublished) is left out.",
     }),
     ...productPageReviewFields,
     customFields: storefrontCustomFieldsSchema,

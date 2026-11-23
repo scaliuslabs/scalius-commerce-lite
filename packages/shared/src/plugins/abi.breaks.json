@@ -1738,5 +1738,35 @@
   "from": "20196407e0e2685c",
   "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
   "reason": "Pre-release (issue #5 third review, 2026-11-23): a function cart line's bundle may be a store kit, kind \"kit\" with kit: { variantId, productId, sku }; to the functions that read what the buyer chose and pays a kit is one line (its lineId the buyer's kit line), and shipping rates see its item lines naming it. Apps can now price, discount and limit per kit; an answer for an item's SKU never reaches inside a kit."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d621e0f07489d52c",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontHeaderData: an existing signature changed or gained a required member.",
+  "reason": "The header's routes are the shared StorefrontRoutes (the same set as before plus optional inbox and warrantyClaims): a renamed type, no member removed (wave 3, theme gaps item 7)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d621e0f07489d52c",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontFooterData: an existing signature changed or gained a required member.",
+  "reason": "The footer's routes are StorefrontRoutes and newsletter: the footer gains the store's own pages (search, cart, account, orders, trackOrder, inbox, warrantyClaims) beside home and newsletter, so a theme links them without writing a path (wave 3, theme gaps item 7)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d621e0f07489d52c",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontProductPage: an existing signature changed or gained a required member.",
+  "reason": "The product page gains placedOffers and a variant's kit (issue 5), media items say their kind and carry a video's file (StorefrontProductMedia extends StorefrontImage), and availability is the named StorefrontAvailability union: every old reader keeps working."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e729a7e1579ba015",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontKit: an existing signature changed or gained a required member.",
+  "reason": "Unreleased (same branch, review of wave 3): a kit says how many items it holds (componentCount) and how many it withholds as not for sale (unavailableItems), so a placed offer lists a summary of its first items and a draft item is never named."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e729a7e1579ba015",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontPlacedOffer: an existing signature changed or gained a required member.",
+  "reason": "Unreleased (same branch, review of wave 3): a placed offer says when its product asks for inputs first (needsChoices), so a theme links its page instead of adding a bare line."
  }
 ]

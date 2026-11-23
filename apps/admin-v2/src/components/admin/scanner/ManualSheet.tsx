@@ -14,6 +14,7 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { formatNumber, useMessages } from "~/i18n";
+import { readKitLineRefusal } from "~/i18n/kit-line-refusals";
 import { scannerMessages } from "~/i18n/scanner";
 import type { ScannedProduct } from "./ScannerApp";
 
@@ -120,7 +121,8 @@ export function ManualSheet({
         product,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("changeFailed"));
+      // A bundle holds no stock: the dashboard's sentence, in its language, not the server's text.
+      setError(readKitLineRefusal(err)?.message ?? (err instanceof Error ? err.message : t("changeFailed")));
     } finally {
       setIsSubmitting(false);
     }

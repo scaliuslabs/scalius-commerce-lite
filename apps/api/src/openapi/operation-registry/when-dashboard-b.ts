@@ -164,6 +164,7 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.products.get_section": "Use when reading one part of a product (details, pricing, SEO, media, variants) before editing it.",
   "dashboard.products.list_summaries": "Use when finding products by name, SKU, status, category or brand.",
   "dashboard.products.lookup_barcode": "Use when finding a product SKU by its barcode.",
+  "dashboard.products.sku_options": "Use when choosing SKUs of any product for a bundle's items or a product page's offers.",
   "dashboard.products.publications_bulk": "Use when publishing or unpublishing up to 90 products on sales channels (online store, Google, Meta, agents).",
   "dashboard.products.publications_set": "Use when choosing exactly which sales channels one product is published to.",
   "dashboard.products.restore": "Use when bringing one trashed product back.",

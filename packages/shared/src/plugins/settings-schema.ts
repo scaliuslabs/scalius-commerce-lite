@@ -5,6 +5,7 @@
 // bridge. Part of the versioned plugin API.
 
 import { z } from "zod";
+import { isStorePagePath, STORE_PAGE_RULE, URL_SETTING_MAX } from "./store-page-path";
 import { PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE } from "./manifest-patterns";
 
 export const PLUGIN_SETTING_TYPES = [
@@ -118,17 +119,13 @@ const selectField = z.object({ ...base, type: z.literal("select"), options: z.ar
 const urlField = z.object({ ...base, type: z.literal("url"), store: z.boolean().optional(), default: z.string().max(2048).optional() }).strict()
   .superRefine((field, ctx) => {
     if (field.default !== undefined && !urlValue(field.store === true).safeParse(field.default).success) {
-      ctx.addIssue({ code: "custom", path: ["default"], message: field.store ? STORE_PAGE_RULE : "Use an https:// address." });
+      ctx.addIssue({ code: "custom", path: ["default"], message: field.store ? STORE_PAGE_RULE : HTTPS_RULE });
     }
   });
-/** What a store-page setting takes, in the merchant's words. */
-export const STORE_PAGE_RULE = "Use a page on this store, a path such as /pages/protection, not another site's address.";
+const HTTPS_RULE = "Use an https:// address.";
 function urlValue(store: boolean): z.ZodType<string> {
-  if (store) {
-    return z.string().max(2048).regex(/^\/(?!\/)[^\\\s?#]*$/u, STORE_PAGE_RULE)
-      .refine((path) => !path.split("/").some((part) => part === "." || part === "..") && !/%(?:2f|5c|2e)/iu.test(path), STORE_PAGE_RULE);
-  }
-  return z.string().url().max(2048).refine((value) => value.startsWith("https://"), "Use an https:// address.");
+  if (store) return z.string().refine(isStorePagePath, STORE_PAGE_RULE);
+  return z.string().max(URL_SETTING_MAX, HTTPS_RULE).url(HTTPS_RULE).refine((value) => value.startsWith("https://"), HTTPS_RULE);
 }
 const colorField = z.object({ ...base, type: z.literal("color"), default: z.string().regex(/^#[0-9a-f]{6}$/).optional() }).strict();
 /** A media library image; the component gets its URLs, size and alt text. */
@@ -317,19 +314,34 @@ export function validatePluginSettingValues(
 }
 
 /**
+ * Why a stored value is no longer taken, for a client to word in its own
+ * language: `store_page` (a store-page url given another site's address or
+ * anything but a path of this store), `https` (an https url that is not
+ * one), `invalid` (anything else: the message says).
+ */
+export type PluginSettingIssueReason = "store_page" | "https" | "invalid";
+export interface PluginSettingIssue {
+  reason: PluginSettingIssueReason;
+  /** The English message a save gives. */
+  message: string;
+}
+
+/**
  * The stored values the schema no longer takes (a setting whose kind changed,
- * an https address where a store page is wanted), by key, with the message a
- * save would give: the settings screen shows them as invalid instead of
+ * an https address where a store page is wanted), by key, with a reason code
+ * and the message a save would give: the settings screen shows them as invalid instead of
  * dropping them. Secrets and empty values are never reported.
  */
-export function pluginSettingIssues(schema: PluginSettingsSchema, stored: unknown): Record<string, string> {
+export function pluginSettingIssues(schema: PluginSettingsSchema, stored: unknown): Record<string, PluginSettingIssue> {
   const values = typeof stored === "object" && stored !== null && !Array.isArray(stored) ? stored as Record<string, unknown> : {};
-  const issues: Record<string, string> = {};
+  const issues: Record<string, PluginSettingIssue> = {};
   for (const field of schema) {
     const raw = values[field.key];
     if (field.type === "secret" || raw === undefined || raw === null || raw === "") continue;
     const parsed = valueSchema(field).safeParse(raw);
-    if (!parsed.success) issues[field.key] = parsed.error.issues[0]?.message ?? "Invalid value.";
+    if (parsed.success) continue;
+    const message = parsed.error.issues[0]?.message ?? "Invalid value.";
+    issues[field.key] = { reason: message === STORE_PAGE_RULE ? "store_page" : message === HTTPS_RULE ? "https" : "invalid", message };
   }
   return issues;
 }

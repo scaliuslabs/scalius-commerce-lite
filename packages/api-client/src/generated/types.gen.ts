@@ -515,6 +515,18 @@ export type StorefrontThemeDocument = {
         imageFit: 'contain' | 'cover';
         headerTone: 'light' | 'dark' | 'brand';
         container: '1200' | '1290' | '1360' | '1440' | 'full';
+        pagePaint?: {
+            kind: 'color';
+            color: 'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring';
+        } | {
+            kind: 'linear';
+            angle: number;
+            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring'>;
+        } | {
+            kind: 'radial';
+            at: 'top' | 'center' | 'bottom';
+            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring'>;
+        };
     };
     brand: {
         logo: string | null;
@@ -3311,9 +3323,13 @@ export type StorefrontPlacedOffer = {
      */
     price: number;
     /**
-     * A kit's items summed; null for a SKU that is not a kit.
+     * A kit's items summed, or a SKU's regular price while it is on sale; null otherwise.
      */
     compareAtPrice: number | null;
+    /**
+     * Its product asks the buyer for inputs before buying: offer a link to its page, never a bare add.
+     */
+    requiresCustomization: boolean;
     availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
     kit: StorefrontKit | null;
 };
@@ -3322,6 +3338,9 @@ export type StorefrontPlacedOffer = {
  * A SKU made of other SKUs: checkout sells it as them.
  */
 export type StorefrontKit = {
+    /**
+     * Its items a buyer may read, in order: none whose product is a draft, archived or deleted (counted in `unavailableItems`); a host page's placed offer lists its first 6 (`componentCount` says how many it holds; its own page lists them all).
+     */
     components: Array<{
         variantId: string;
         productId: string;
@@ -3350,6 +3369,14 @@ export type StorefrontKit = {
          */
         price: number;
     }>;
+    /**
+     * How many items it holds, whatever `components` lists.
+     */
+    componentCount: number;
+    /**
+     * Items withheld because their product is not for sale; the kit is out of stock then.
+     */
+    unavailableItems: number;
     /**
      * What one kit costs: its own price, never more than `compareAtPrice`. Send it as the cart line's price.
      */
@@ -7085,10 +7112,19 @@ export type AppDetail = AppSummary & {
          */
         missing: Array<string>;
         /**
-         * Stored values the setting no longer takes (an https address where a store page is wanted), by key, with the message a save gives: show the value as invalid, never drop it.
+         * Stored values the setting no longer takes (an https address where a store page is wanted), by key: show the value as invalid with its reason, never drop it.
          */
         invalid: {
-            [key: string]: string;
+            [key: string]: {
+                /**
+                 * Why: store_page (a store-page address given another site's address or anything but a path of this store), https (an https address that is not one), invalid (anything else; the message says). Word each reason in your own language.
+                 */
+                reason: 'store_page' | 'https' | 'invalid';
+                /**
+                 * The English message a save gives.
+                 */
+                message: string;
+            };
         };
         /**
          * The app-wide settings in their sections, in order (group null: general). Provider fields show with their provider.
@@ -15831,6 +15867,14 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
             paymentRecovery: BuyerPaymentRecovery;
             buyerView: BuyerOrderDetailView;
             giftCardTenders: Array<OrderGiftCardTender>;
+            addOns: {
+                itemsSubtotalMinor: number;
+                rows: Array<{
+                    appId: string | null;
+                    title: string;
+                    amountMinor: number;
+                }>;
+            };
         };
     };
 };
@@ -21980,7 +22024,7 @@ export type GetApiV1ProductsBySlugResponses = {
                     monthlyMinor: number;
                 } | null;
                 /**
-                 * SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be sold is left out.
+                 * SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be bought now (out of stock, a draft, unpublished) is left out.
                  */
                 placedOffers: Array<StorefrontPlacedOffer>;
                 /**
@@ -73426,6 +73470,17 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                             text: string;
                         };
                     }>;
+                    /**
+                     * The store bundle (kit) this line was sold in, as frozen at checkout; null for any other line. A bundle's lines change together, in whole bundles (`kit_amended_in_part`).
+                     */
+                    bundle: {
+                        id: string;
+                        title: string;
+                        /**
+                         * This line's units in one bundle: the line holds `quantity / perUnit` bundles.
+                         */
+                        perUnit: number;
+                    } | null;
                 }>;
                 [key: string]: unknown;
             };
@@ -75997,6 +76052,107 @@ export type GetApiV1AdminProductsLookupBarcodeResponses = {
 
 export type GetApiV1AdminProductsLookupBarcodeResponse = GetApiV1AdminProductsLookupBarcodeResponses[keyof GetApiV1AdminProductsLookupBarcodeResponses];
 
+export type GetApiV1AdminProductsSkuOptionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Product name, SKU code or option value
+         */
+        search?: string;
+        /**
+         * Page number, up to 50: search to narrow past it
+         */
+        page?: number;
+        /**
+         * SKUs per page
+         */
+        limit?: number;
+    };
+    url: '/api/v1/admin/products/sku-options';
+};
+
+export type GetApiV1AdminProductsSkuOptionsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminProductsSkuOptionsError = GetApiV1AdminProductsSkuOptionsErrors[keyof GetApiV1AdminProductsSkuOptionsErrors];
+
+export type GetApiV1AdminProductsSkuOptionsResponses = {
+    /**
+     * A page of SKUs
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                variantId: string;
+                productId: string;
+                productName: string;
+                /**
+                 * False for a draft or archived product: a bundle holding it can't be sold.
+                 */
+                productActive: boolean;
+                sku: string;
+                /**
+                 * The SKU's chosen option values (platform, format), in option order.
+                 */
+                options: Array<{
+                    name: string;
+                    value: string;
+                }>;
+                /**
+                 * The SKU's picture, else its product's.
+                 */
+                imageUrl: string | null;
+                /**
+                 * One unit's price in the store's currency, its discount applied.
+                 */
+                price: number;
+                /**
+                 * Units on hand less reserved; null when it does not track stock.
+                 */
+                available: number | null;
+                /**
+                 * It is a bundle (a SKU made of other SKUs): it can't be an item of another.
+                 */
+                isKit: boolean;
+                /**
+                 * A gift card: it can't be in a bundle.
+                 */
+                isGiftCard: boolean;
+            }>;
+            page: number;
+            hasMore: boolean;
+        };
+    };
+};
+
+export type GetApiV1AdminProductsSkuOptionsResponse = GetApiV1AdminProductsSkuOptionsResponses[keyof GetApiV1AdminProductsSkuOptionsResponses];
+
 export type GetApiV1AdminProductsData = {
     body?: never;
     path?: never;
@@ -78244,6 +78400,10 @@ export type GetApiV1AdminProductsByIdResponses = {
                 deletedAt?: NullableTimestamp;
                 stockVersion?: number;
                 version?: number;
+                /**
+                 * This SKU is a bundle (kit): made of other SKUs, it holds no stock of its own (`sections/kits`).
+                 */
+                isKit: boolean;
             }>;
             media: Array<{
                 id: string;
@@ -78284,6 +78444,10 @@ export type GetApiV1AdminProductsByIdResponses = {
                 displayName: string;
             }>;
             warrantyPolicyId: string | null;
+            /**
+             * How many SKUs of other products this product's page shows under its own (`sections/page_offers`).
+             */
+            pageOfferCount: number;
         };
     };
 };

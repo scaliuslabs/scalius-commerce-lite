@@ -32,6 +32,7 @@ import { apiData, type ApiResult } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
+import { kitLineRefusalMessage } from "~/i18n/kit-line-refusals";
 import { productBulkEditMessages } from "~/i18n/product-bulk-edit";
 import { productListMessages } from "~/i18n/product-list";
 import { realtimeMergeMessages } from "~/i18n/realtime-merge";
@@ -359,7 +360,8 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
         }
         problems[result.id] = result.code === "product_revision_conflict" ? t("bulkEditRowChanged")
           : result.code === "stock_changed" ? t("bulkEditStockChanged")
-            : result.message || t("bulkEditRowFailed");
+            // A count on a bundle: the dashboard's sentence, in its language, not the server's.
+            : kitLineRefusalMessage(result.code) ?? (result.message || t("bulkEditRowFailed"));
       }
       const remaining = new Set(outcome.remaining);
       const next = pending.filter((row) => remaining.has(row.id));

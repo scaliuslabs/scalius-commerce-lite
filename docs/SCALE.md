@@ -48,6 +48,8 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `admin-order-list` | 3 | 7 | 0 | 54 | 0 | - |
 | `admin-order-list-deep` | 3 | 7 | 0 | 53 | 0 | - |
 | `admin-order-list-gift-cards` | 3 | 7 | 0 | 53 | 0 | - |
+| `admin-sku-picker` | 4 | 4 | 0 | 23 | 0 | - |
+| `admin-sku-picker-search` | 4 | 4 | 0 | 212 | 2 | - |
 | `admin-bulk-edit-20` | 19 | 64 | 974 | 528 | 32 | - |
 | `admin-product-save` | 18 | 60 | 30 | 178 | 24 | - |
 | `order-status-change` | 16 | 32 | 8 | 31 | 1 | - |

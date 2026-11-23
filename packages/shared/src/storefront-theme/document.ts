@@ -31,6 +31,8 @@ import { storefrontSettingBindingsSchema } from "./bindings";
 import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf, storefrontPageTemplateSchemaOf, storefrontPageTemplatesSchemaOf } from "./pages";
 import {
   buildStorefrontTokenCss,
+  listStorefrontPagePaintContrastProblems,
+  storefrontTokensWithReadablePaint,
   storefrontDarkColorsMissing,
   storefrontDarkPalette,
   storefrontThemeColorsSchema,
@@ -101,14 +103,16 @@ export function listStorefrontThemeDocumentContrastProblems(document: {
  * colours, so applying a template never opens a draft with a setting to fix.
  */
 export function storefrontThemeWithReadableDarkColors<Document extends {
-  tokens: Pick<StorefrontThemeTokens, "colors" | "headerTone" | "colorScheme" | "darkColors" | "colorSchemeToggle">;
+  tokens: Pick<StorefrontThemeTokens, "colors" | "headerTone" | "colorScheme" | "darkColors" | "colorSchemeToggle"> & Partial<Pick<StorefrontThemeTokens, "pagePaint">>;
   blocks: StorefrontThemeBlocks;
 }>(document: Document): Document {
   const { darkColors } = document.tokens;
-  if (!darkColors || !storefrontThemeShowsDarkColors(document.tokens)) return document;
-  const readable = listStorefrontThemeDocumentContrastProblems(document, "darkColors").length === 0
-    && listStorefrontThemeSemanticColorProblems(darkColors).length === 0;
-  return readable ? document : { ...document, tokens: { ...document.tokens, darkColors: storefrontDarkPalette(document.tokens.colors) } };
+  const readable = !darkColors || !storefrontThemeShowsDarkColors(document.tokens) || (listStorefrontThemeDocumentContrastProblems(document, "darkColors").length === 0
+    && listStorefrontThemeSemanticColorProblems(darkColors).length === 0);
+  const tokens = readable ? document.tokens : { ...document.tokens, darkColors: storefrontDarkPalette(document.tokens.colors) };
+  // A page paint the look's colours cannot read on goes: the page colour paints.
+  const painted = storefrontTokensWithReadablePaint(tokens);
+  return painted === document.tokens ? document : { ...document, tokens: painted };
 }
 
 /** The colour token behind a contrast role in one colour set (header roles follow the header tone). */
@@ -207,6 +211,14 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
       }
       for (const problem of listStorefrontThemeSemanticColorProblems(colors)) {
         context.addIssue({ code: "custom", path: ["tokens", set, "muted-foreground"], message: problem });
+      }
+      // The page's paint is the surface of the store's page text: it reads on every colour the paint shows.
+      for (const { text, surface, ratio } of listStorefrontPagePaintContrastProblems(value.tokens.pagePaint, colors)) {
+        context.addIssue({
+          code: "custom",
+          path: ["tokens", "pagePaint"],
+          message: `${text} on the page paint (${set === "darkColors" ? "dark colours, " : ""}${surface}) has contrast ${ratio.toFixed(2)}:1; it needs at least 4.5:1.`,
+        });
       }
     }
   });

@@ -45,3 +45,20 @@ export const PURCHASE_OPTION_FIELD = "purchaseOption";
 export function purchaseOptionFieldName(appId: string | null): string {
   return appId ? `${PURCHASE_OPTION_FIELD}.${appId}` : PURCHASE_OPTION_FIELD;
 }
+
+/**
+ * The one form a page's placed offers post with (another product's SKU,
+ * `product.placedOffers`): empty and hidden, each offer button joins it with
+ * `form=` and posts its own SKU (`name="variant"`) to its product's buy
+ * route (`formaction`), so an offer buys without JavaScript and never sends
+ * the page's own options, buyer inputs or quantity. product-controller.ts
+ * adds it in place with JavaScript. The id has the buy form's underscore,
+ * so no app markup can take it.
+ */
+export const OFFER_FORM_ID = "sx_offer-form";
+
+/** A placed offer's buy route, from its product page's path (`/products/<handle>`): `/buy/<handle>`. */
+export function offerBuyPath(productUrl: string): string | null {
+  const match = /^\/products\/([^/?#]+)$/.exec(productUrl);
+  return match ? `/buy/${match[1]}` : null;
+}

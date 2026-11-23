@@ -41,6 +41,7 @@ import {
   storefrontThemeShowsDarkColors,
   storefrontThemeLook,
   storefrontThemeWithContent,
+  storefrontTokensWithReadablePaint,
   type ResolvedStorefrontTheme,
   type StoreShape,
   type StorefrontAppTemplateTheme,
@@ -115,7 +116,7 @@ export function themeColorSets(theme: StorefrontThemeDocument): StorefrontThemeC
 function withDarkColorsStored(theme: StorefrontThemeDocument, tokens: Partial<StorefrontThemeTokens>): StorefrontThemeDocument {
   const next = { ...theme.tokens, ...tokens };
   const darkColors = next.darkColors ?? (storefrontThemeShowsDarkColors(next) ? storefrontDarkPalette(next.colors) : null);
-  return { ...theme, tokens: { ...next, darkColors } };
+  return { ...theme, tokens: storefrontTokensWithReadablePaint({ ...next, darkColors }) };
 }
 
 /** Whether the dark colours are the ones made from the colours: they follow the colours until the merchant edits them. */
@@ -370,7 +371,8 @@ export function setThemeColor(theme: StorefrontThemeDocument, role: ColorRole, v
   const darkColors = set === "colors" && darkColorsFollowColors(theme) && allThemeColorsValid(colors)
     ? storefrontDarkPalette(colors)
     : theme.tokens.darkColors;
-  return { ...theme, tokens: { ...theme.tokens, darkColors, [set]: colors } };
+  // A page paint the new colours cannot read on goes (the editor has no paint field to fix it with).
+  return { ...theme, tokens: storefrontTokensWithReadablePaint({ ...theme.tokens, darkColors, [set]: colors }) };
 }
 
 /** A single-variant block slot the Theme page offers as a picker. */
