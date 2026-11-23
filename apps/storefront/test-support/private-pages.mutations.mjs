@@ -19,6 +19,7 @@ const TOKENS = "packages/shared/src/storefront-theme/private-tokens.ts";
 const PLAN = "apps/storefront/src/lib/private-pages/plan.ts";
 const MARKUP = "apps/storefront/src/components/private/PrivateMarkup.astro";
 const INERT = "packages/shared/src/plugins/inert-html.ts";
+const CSS = "packages/shared/src/storefront-theme/private-css.ts";
 const SEAL = "overflow:hidden;overflow:clip;contain:layout paint style;";
 const ROW = "export function privateRowDeclarations(row: PrivateTokenRow, parent: PrivateTokenRow | null, also: ReadonlySet<string> = NONE): string {\n";
 /** A row of the table that writes only its paint: its words keep whatever colour reaches them. */
@@ -247,6 +248,16 @@ export const MUTATIONS = {
     ],
     cases: ["review 6, B1: the theme's header draws its own scheme switch and hides it"],
     expect: /^base: \[data-host="scheme"\] button: not visible/,
+  },
+  "R6-B2 a region's properties are a deny-list": {
+    why: "the stylesheet takes any property and any listed function in it: a view timeline shows a block by the cart's length",
+    rewrites: [
+      rewrite(CSS, "  if (!PROPERTY_FUNCTIONS.has(name)) {\n", "  if (!/^[a-z-]+$/.test(name)) {\n"),
+      rewrite(CSS, "functions: custom ? ANY_FUNCTION : PROPERTY_FUNCTIONS.get(name)!,", "functions: ANY_FUNCTION,"),
+      rewrite(CSS, 'if (name === "animation-timeline") checkWord(', 'if (name === "-") checkWord('),
+    ],
+    cases: ["a block whose look follows the page"],
+    expect: /the save took it; it must be refused \(unknown_property\)/,
   },
   "P2 a page paint with no tokens draws the store's own page": {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",

@@ -65,7 +65,7 @@ export const PRIVATE_CSS_SANITIZER_VERSION = 5 as const;
 
 export const PRIVATE_CSS_REASONS = [
   "too_large", "syntax", "null_byte", "bad_string", "bad_url", "comment", "unbalanced", "escape", "nested_rule",
-  "too_deep", "import", "unsupported_at_rule", "foreign_url", "forbidden_function", "custom_property",
+  "too_deep", "import", "unsupported_at_rule", "foreign_url", "forbidden_function", "custom_property", "unknown_property",
   "unknown_attribute", "state_selector", "unsupported_selector", "unscoped_selector",
   "positioning", "animation_name", "unsafe_output",
 ] as const;
@@ -110,21 +110,119 @@ const refuse = (reason: PrivateCssReason, message: string): never => { throw new
 
 // ─── Values ───────────────────────────────────────────────────────────────
 
-/** The functions a value may call (besides `url`, which names an asset). */
-const FUNCTIONS = new Set([
-  "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color", "color-mix", "light-dark",
-  "calc", "min", "max", "clamp", "round", "mod", "rem", "abs", "sign", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "pow", "sqrt", "hypot", "log", "exp",
-  "var", "env",
-  "linear-gradient", "radial-gradient", "conic-gradient", "repeating-linear-gradient", "repeating-radial-gradient", "repeating-conic-gradient",
-  "cubic-bezier", "steps", "linear",
-  "minmax", "repeat", "fit-content",
-  "blur", "brightness", "contrast", "drop-shadow", "grayscale", "hue-rotate", "invert", "opacity", "saturate", "sepia",
-  "inset", "circle", "ellipse", "polygon",
-  "counter", "counters",
+/**
+ * The functions a value may call, by family (besides `url`, which names an
+ * asset). A property takes the families its kind lists (`PRIVATE_CSS_PROPERTIES`).
+ */
+const FUNCTION_FAMILIES = {
+  math: ["calc", "min", "max", "clamp", "round", "mod", "rem", "abs", "sign", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "pow", "sqrt", "hypot", "log", "exp", "var"],
+  env: ["env"],
+  colour: ["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color", "color-mix", "light-dark"],
+  gradient: ["linear-gradient", "radial-gradient", "conic-gradient", "repeating-linear-gradient", "repeating-radial-gradient", "repeating-conic-gradient"],
+  easing: ["cubic-bezier", "steps", "linear"],
+  grid: ["minmax", "repeat", "fit-content"],
+  filter: ["blur", "brightness", "contrast", "drop-shadow", "grayscale", "hue-rotate", "invert", "opacity", "saturate", "sepia"],
+  shape: ["inset", "circle", "ellipse", "polygon"],
+  counter: ["counter", "counters"],
   // Transforms: a region is sealed, so they move nothing out of it.
-  "translate", "translatex", "translatey", "translatez", "translate3d", "scale", "scalex", "scaley", "scalez", "scale3d",
-  "rotate", "rotatex", "rotatey", "rotatez", "rotate3d", "skew", "skewx", "skewy", "matrix", "matrix3d", "perspective",
+  transform: ["translate", "translatex", "translatey", "translatez", "translate3d", "scale", "scalex", "scaley", "scalez", "scale3d",
+    "rotate", "rotatex", "rotatey", "rotatez", "rotate3d", "skew", "skewx", "skewy", "matrix", "matrix3d", "perspective"],
+} as const satisfies Record<string, readonly string[]>;
+type FunctionFamily = keyof typeof FUNCTION_FAMILIES;
+
+/** What a property's value is, as the function families it may call. */
+const VALUE_KINDS = {
+  /** Words and numbers (`display`, `z-index`, `font-weight`…). */
+  word: ["math"],
+  length: ["math", "env"],
+  colour: ["math", "colour"],
+  /** A painted surface: colours, gradients and the theme's assets (`url(<key>)`, image properties only). */
+  paint: ["math", "colour", "gradient"],
+  shadow: ["math", "colour"],
+  filter: ["math", "colour", "filter"],
+  transform: ["math", "transform"],
+  timing: ["math", "easing"],
+  grid: ["math", "grid"],
+  shape: ["math", "shape"],
+  content: ["math", "counter"],
+  /** The one value `auto` (a timeline is the document's time, never a scroll or a view). */
+  auto: [],
+} as const satisfies Record<string, readonly FunctionFamily[]>;
+type ValueKind = keyof typeof VALUE_KINDS;
+
+const sides = (base: string, after = "") => [`${base}${after}`, ...["top", "right", "bottom", "left", "inline", "block", "inline-start", "inline-end", "block-start", "block-end"].map((side) => `${base}-${side}${after}`)];
+const kinds = (kind: ValueKind, names: readonly string[]) => names.map((name) => [name, kind] as const);
+
+/**
+ * Every property a region's stylesheet may set, with its value's kind: the
+ * one table the compiler reads. A property not here is refused, so a new CSS
+ * feature is refused until it is listed. None reads anything of the host
+ * page: no scroll or view timeline (`animation-timeline` is `auto` only, and
+ * `view-timeline`, `scroll-timeline`, `timeline-scope` and `animation-range`
+ * are absent), no size container (`container-type` is `normal` or
+ * `inline-size`: a stretched region's height follows the host's row), no
+ * viewport attachment (`background-attachment`), no rendering skipped by
+ * where the page is scrolled (`content-visibility`), nothing that places a
+ * box against something outside its region (anchors, fixed or sticky).
+ */
+export const PRIVATE_CSS_PROPERTIES: Readonly<Record<string, ValueKind>> = Object.fromEntries([
+  ...kinds("word", [
+    "display", "box-sizing", "overflow", "overflow-x", "overflow-y", "overflow-wrap", "word-break", "white-space", "white-space-collapse",
+    "text-wrap", "text-wrap-mode", "text-wrap-style", "hyphens", "position", "z-index", "float", "clear", "visibility", "opacity", "isolation",
+    "flex-direction", "flex-wrap", "flex-flow", "flex-grow", "flex-shrink", "order", "justify-content", "justify-items", "justify-self",
+    "align-content", "align-items", "align-self", "place-content", "place-items", "place-self", "grid-auto-flow", "grid-template-areas",
+    "grid-area", "grid-column", "grid-row", "grid-column-start", "grid-column-end", "grid-row-start", "grid-row-end", "column-count", "column-span", "column-fill",
+    "font-family", "font-weight", "font-style", "font-variant", "font-variant-numeric", "font-variant-caps", "font-variant-ligatures",
+    "font-feature-settings", "font-stretch", "font-kerning", "font-optical-sizing", "font-synthesis", "text-align", "text-align-last", "text-transform",
+    "text-decoration-line", "text-decoration-style", "text-overflow", "text-rendering", "text-underline-position", "vertical-align", "direction",
+    "unicode-bidi", "writing-mode", "text-orientation", "quotes", "hanging-punctuation", "line-clamp", "-webkit-line-clamp", "-webkit-box-orient",
+    "list-style-type", "list-style-position", "counter-reset", "counter-increment", "counter-set",
+    "background-repeat", "background-clip", "background-origin", "background-blend-mode", "mix-blend-mode", "mask-repeat", "mask-mode",
+    "mask-clip", "mask-origin", "mask-composite", "border-style", ...sides("border", "-style"), "border-collapse", "border-image-repeat",
+    "outline-style", "transform-style", "backface-visibility", "pointer-events", "user-select", "cursor", "object-fit", "image-rendering",
+    "table-layout", "caption-side", "empty-cells", "break-before", "break-after", "break-inside", "orphans", "widows",
+    "animation-name", "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state", "animation-composition",
+    "transition-property", "transition-behavior", "fill-rule", "clip-rule", "stroke-linecap", "stroke-linejoin", "paint-order", "vector-effect",
+    "container-type", "container-name", "fill-opacity", "stroke-opacity", "stroke-miterlimit",
+  ]),
+  ...kinds("length", [
+    "width", "height", "min-width", "min-height", "max-width", "max-height", "inline-size", "block-size", "min-inline-size", "min-block-size",
+    "max-inline-size", "max-block-size", "aspect-ratio", ...sides("margin"), ...sides("padding"), "top", "right", "bottom", "left", "inset",
+    "inset-inline", "inset-block", "inset-inline-start", "inset-inline-end", "inset-block-start", "inset-block-end",
+    "flex", "flex-basis", "gap", "row-gap", "column-gap", "column-width", "columns", "column-rule-width",
+    "font-size", "font-size-adjust", "line-height", "letter-spacing", "word-spacing", "text-indent", "tab-size",
+    "text-decoration-thickness", "text-underline-offset", "border-width", ...sides("border", "-width"), "border-radius",
+    "border-top-left-radius", "border-top-right-radius", "border-bottom-left-radius", "border-bottom-right-radius",
+    "border-start-start-radius", "border-start-end-radius", "border-end-start-radius", "border-end-end-radius", "border-spacing",
+    "border-image-slice", "border-image-width", "border-image-outset", "outline-width", "outline-offset", "background-position",
+    "background-position-x", "background-position-y", "background-size", "mask-position", "mask-size", "object-position",
+    "transform-origin", "perspective-origin", "stroke-width", "stroke-dasharray", "stroke-dashoffset",
+  ]),
+  ...kinds("colour", [
+    "color", "background-color", "border-color", ...sides("border", "-color"), "outline-color", "text-decoration-color", "column-rule-color",
+    "accent-color", "fill", "stroke", "text-emphasis-color",
+  ]),
+  ...kinds("paint", [
+    "background", "background-image", "border-image", "border-image-source", "list-style", "list-style-image", "mask", "mask-image",
+    "border", ...sides("border"), "outline", "column-rule", "text-decoration", "text-emphasis", "text-emphasis-style",
+  ]),
+  ...kinds("shadow", ["box-shadow", "text-shadow"]),
+  ...kinds("filter", ["filter"]),
+  ...kinds("transform", ["transform", "translate", "rotate", "scale", "perspective"]),
+  ...kinds("timing", ["animation", "animation-duration", "animation-delay", "animation-timing-function", "transition", "transition-duration", "transition-delay", "transition-timing-function"]),
+  ...kinds("grid", ["grid", "grid-template", "grid-template-columns", "grid-template-rows", "grid-auto-columns", "grid-auto-rows"]),
+  ...kinds("shape", ["clip-path"]),
+  ...kinds("content", ["content"]),
+  ...kinds("auto", ["animation-timeline"]),
 ]);
+
+/** The functions each property may call. */
+const PROPERTY_FUNCTIONS: ReadonlyMap<string, ReadonlySet<string>> = new Map(Object.entries(PRIVATE_CSS_PROPERTIES)
+  .map(([name, kind]) => [name, new Set((VALUE_KINDS[kind] as readonly FunctionFamily[]).flatMap((family) => FUNCTION_FAMILIES[family]))]));
+/** A custom property's value may call any listed function: the property that reads it is checked again by the browser. */
+const ANY_FUNCTION: ReadonlySet<string> = new Set(Object.values(FUNCTION_FAMILIES).flat());
+/** Values of `container-type`: a size container's height would follow the host's row. */
+const CONTAINER_TYPES = new Set(["normal", "inline-size"]);
 const VALUE_DELIMS = new Set(["/", "+", "-", "*", ","]);
 const IDENT = /^-?(?:[A-Za-z_\u0080-￿]|-)[A-Za-z0-9_\u0080-￿-]*$/;
 
@@ -135,6 +233,9 @@ interface ValueContext {
   namesKeyframes: boolean;
   /** An asset may stand here: the top level of an image property's value (`IMAGE_PROPERTIES`). */
   image: boolean;
+  /** The property, and the functions its value may call (`PRIVATE_CSS_PROPERTIES`). */
+  property: string;
+  functions: ReadonlySet<string>;
 }
 
 /**
@@ -182,8 +283,10 @@ function checkValue(nodes: readonly CssNode[], context: ValueContext): CssNode[]
           return assetReference(args.length === 1 && args[0]!.type === "string" ? args[0].value : "\u0000", context);
         }
         const inner = { ...context, image: false };
-        if (!FUNCTIONS.has(name)) {
-          return refuse("forbidden_function", `${name}() is not allowed. A value may use colour, maths, gradient, var(), env() and the other listed functions; a file is url(<asset>).`);
+        if (!context.functions.has(name)) {
+          return refuse("forbidden_function", context.functions.size === 0
+            ? `${name}() is not allowed in ${context.property}: it takes a word only.`
+            : `${name}() is not allowed in ${context.property}. It may call ${[...context.functions].join(", ")}; a file is url(<asset>) in an image property.`);
         }
         if (name === "var") {
           const [first, ...rest] = trim(node.values);
@@ -214,10 +317,8 @@ function assetReference(key: string, context: ValueContext): CssNode {
 
 // ─── Properties ───────────────────────────────────────────────────────────
 
-/** Properties no rule may set: each places a box against something outside its region, or takes the page's scrolling. */
+/** Properties no rule may set, named for a plain refusal: each places a box against something outside its region, or takes the page's scrolling. */
 const ANCHORING = new Set(["touch-action", "overscroll-behavior", "overscroll-behavior-x", "overscroll-behavior-y", "overscroll-behavior-block", "overscroll-behavior-inline", "anchor-name", "anchor-scope", "position-anchor", "position-area", "position-try", "position-try-fallbacks", "position-try-order", "position-visibility", "view-transition-name", "view-transition-class", "overlay"]);
-/** Never: script-era or non-standard properties. */
-const FORBIDDEN = new Set(["behavior", "-moz-binding", "zoom"]);
 /** Words `animation` may hold besides the theme's own keyframes. */
 const ANIMATION_WORDS = new Set([
   "none", "infinite", "normal", "reverse", "alternate", "alternate-reverse", "forwards", "backwards", "both", "running", "paused",
@@ -232,8 +333,18 @@ function checkDeclarationName(name: string): void {
     if (!/^--t-[a-z0-9-]{1,40}$/.test(name)) refuse("custom_property", `${name}: the theme's own custom properties are named --t-<name>.`);
     return;
   }
-  if (!/^[a-z][a-z-]*$/.test(name) || FORBIDDEN.has(name)) refuse("syntax", `${name} is not a property this stylesheet may set.`);
   if (ANCHORING.has(name)) refuse("positioning", `${name} places a box against something outside its region.`);
+  if (!PROPERTY_FUNCTIONS.has(name)) {
+    refuse("unknown_property", `${name.slice(0, 60)} is not a property this stylesheet may set: a region takes layout, type, colour, borders, paint, transforms and time-based animation (packages/plugin-sdk/docs/private-pages.md lists them).`);
+  }
+}
+
+/** A property whose value is one word from a list, never read from a variable. */
+function checkWord(name: string, value: readonly CssNode[], allowed: ReadonlySet<string>, why: string): void {
+  const items = words(value);
+  if (items.length !== 1 || items[0]?.type !== "ident" || !allowed.has(items[0].value.toLowerCase())) {
+    refuse("unknown_property", `${name} is ${[...allowed].join(" or ")} only: ${why}.`);
+  }
 }
 
 /** `position` is a fixed word, never fixed or sticky: a box stays in its sealed region. */
@@ -624,14 +735,19 @@ class Compiler {
       try {
         const name = declaration.name.toLowerCase();
         checkDeclarationName(declaration.name.startsWith("--") ? declaration.name : name);
+        const custom = declaration.name.startsWith("--");
         const value = checkValue(declaration.value, {
           assets: this.context.assets,
           keyframes: this.keyframes,
           namesKeyframes: name === "animation" || name === "animation-name",
           image: IMAGE_PROPERTIES.has(name),
+          property: custom ? declaration.name : name,
+          functions: custom ? ANY_FUNCTION : PROPERTY_FUNCTIONS.get(name)!,
         });
         if (value.length === 0) refuse("syntax", `${name} has no value.`);
         if (name === "position") checkPosition(value);
+        if (name === "animation-timeline") checkWord(name, value, new Set(["auto"]), "an animation runs on the document's time, never on a scroll or a view of the page");
+        if (name === "container-type") checkWord(name, value, CONTAINER_TYPES, "a size container's height would follow the host's row");
         // A cursor image is painted by the system, outside any box: a cursor is keywords, never read from a variable.
         if (name === "cursor" && JSON.stringify(value).includes('"name":"var"')) refuse("forbidden_function", "cursor takes keywords only (pointer, default…), never var(): a cursor image paints outside its region.");
         if (name === "animation" || name === "animation-name") checkAnimation(name, value, this.prefixed);
