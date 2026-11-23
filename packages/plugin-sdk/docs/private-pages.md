@@ -187,7 +187,7 @@ The stylesheet is parsed by a CSS Syntax 3 parser and written back from what was
 
 | Reason | Means |
 | --- | --- |
-| `unscoped_selector` | A selector does not start at a region's wrapper, selects the wrapper itself, leaves it by `~` or `+`, or climbs out of it: `:is()`, `:where()` and `:not()` take compound selectors only (no combinator), `:has()` looks only down (` ` or `>`, never `~` or `+`), and `html`, `body` and `:root` appear only first, as the page's scheme, language or direction (`:root[data-color-scheme="dark"] [data-free="header"] p`). |
+| `unscoped_selector` | A selector does not start at a region's wrapper, selects the wrapper itself, leaves it by `~` or `+`, or climbs out of it: `:is()`, `:where()` and `:not()` take compound selectors only (no combinator), `:has()` looks only down (` ` or `>`, never `~` or `+`), and `html`, `body` and `:root` appear only first, as the page's scheme, language or direction (`:root[data-color-scheme="dark"] [data-free="header"] p`; a state goes on the root, never on `body`). |
 | `positioning` | `position: fixed` or `sticky`, a position read from a variable, anchor positioning or a view transition name. |
 | `animation_name` | An animation that names a keyframe that is not yours. |
 | `import`, `foreign_url`, `forbidden_function` | `@import`, a `url()` that is not one of your assets or stands anywhere but an image property's value, a cursor read from `var()`, `image()`, `image-set()`, `cross-fade()`, `element()`, `attr()` and other functions not on the list. |

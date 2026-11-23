@@ -513,6 +513,10 @@ function scopeSelector(complex: Complex): string {
     if (!first.every((simple) => (simple.kind === "attr" && ROOT_STATE_ATTRIBUTES.has(simple.name)) || (simple.kind === "type" && PAGE_TYPES.has(simple.name)) || (simple.kind === "pseudo" && simple.name === "root"))) {
       refuse("unscoped_selector", `The page root takes only its scheme, language or direction (${[...ROOT_STATE_ATTRIBUTES].map((name) => `[${name}]`).join(", ")}) before the region: :root[data-color-scheme="dark"] [data-free="header"] p.`);
     }
+    // The state is written on the page root (`:root[…]`): on body it would name an element that never carries it.
+    if (first.some((simple) => simple.kind === "type" && simple.name === "body") && first.some((simple) => simple.kind !== "type")) {
+      refuse("unscoped_selector", "body takes no state here: write the page's state on its root, :root[data-color-scheme=\"dark\"] [data-free=\"header\"] p (or html[…]).");
+    }
     if (combinators[0] !== " ") refuse("unscoped_selector", "A root state is followed by a space and a region.");
     state = first.filter((simple) => simple.kind !== "type" && !(simple.kind === "pseudo" && simple.name === "root")).map(writeSimple).join("");
     compounds = compounds.slice(1);
