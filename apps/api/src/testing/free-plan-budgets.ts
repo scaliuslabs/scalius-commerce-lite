@@ -311,6 +311,9 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1378, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
     "admin-order-list-gift-cards": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
+    // The SKU picker (2026-11-23): a page walks the products' name index (no scan); a search reads its matches and scans the option values (no text index).
+    "admin-sku-picker": { d1Calls: 4, d1Statements: 4, externalFetches: 0, rowsWritten: 0, rowsRead: 26, fullScans: 0 },
+    "admin-sku-picker-search": { d1Calls: 4, d1Statements: 4, externalFetches: 0, rowsWritten: 0, rowsRead: 224, fullScans: 2 },
     "admin-bulk-edit-20": { d1Calls: 19, d1Statements: 64, externalFetches: 0, rowsWritten: 1028, rowsRead: 458, fullScans: 34 },
     "admin-product-save": { d1Calls: 18, d1Statements: 60, externalFetches: 0, rowsWritten: 538, rowsRead: 188, fullScans: 26 },
     "order-status-change": { d1Calls: 17, d1Statements: 33, externalFetches: 0, rowsWritten: 10, rowsRead: 34, fullScans: 1 },
@@ -374,6 +377,9 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1378, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
     "admin-order-list-gift-cards": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
+    // The SKU picker (2026-11-23): a page walks the products' name index (no scan); a search reads its matches and scans the option values (no text index).
+    "admin-sku-picker": { d1Calls: 4, d1Statements: 4, externalFetches: 0, rowsWritten: 0, rowsRead: 26, fullScans: 0 },
+    "admin-sku-picker-search": { d1Calls: 4, d1Statements: 4, externalFetches: 0, rowsWritten: 0, rowsRead: 224, fullScans: 2 },
     "admin-bulk-edit-20": { d1Calls: 53, d1Statements: 326, externalFetches: 0, rowsWritten: 2843, rowsRead: 1542, fullScans: 174 },
     "admin-product-save": { d1Calls: 24, d1Statements: 112, externalFetches: 0, rowsWritten: 1244, rowsRead: 405, fullScans: 54 },
     "order-status-change": { d1Calls: 17, d1Statements: 33, externalFetches: 0, rowsWritten: 10, rowsRead: 34, fullScans: 1 },

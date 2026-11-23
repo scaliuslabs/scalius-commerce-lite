@@ -108,3 +108,22 @@ export const productPageOffersSectionSchema = z.object({
     problem: problemSchema.nullable(),
   })).max(20),
 });
+
+/** A page of the SKU picker (`dashboard.products.sku_options`). */
+export const productSkuOptionsSchema = z.object({
+  items: z.array(z.object({
+    variantId: z.string(),
+    productId: z.string(),
+    productName: z.string(),
+    productActive: z.boolean().openapi({ description: "False for a draft or archived product: a bundle holding it can't be sold." }),
+    sku: z.string(),
+    options: optionValuesSchema,
+    imageUrl: z.string().nullable().openapi({ description: "The SKU's picture, else its product's." }),
+    price: z.number().openapi({ description: "One unit's price in the store's currency, its discount applied." }),
+    available: z.number().int().nullable().openapi({ description: "Units on hand less reserved; null when it does not track stock." }),
+    isKit: z.boolean().openapi({ description: "It is a bundle (a SKU made of other SKUs): it can't be an item of another." }),
+    isGiftCard: z.boolean().openapi({ description: "A gift card: it can't be in a bundle." }),
+  })).max(20),
+  page: z.number().int().min(1),
+  hasMore: z.boolean(),
+});

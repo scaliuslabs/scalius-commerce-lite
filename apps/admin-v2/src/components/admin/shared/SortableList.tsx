@@ -11,6 +11,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  type DndContextProps,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
@@ -52,6 +53,8 @@ export interface SortableListProps<T extends { id: string }> {
   className?: string;
   /** Minimum distance (px) before drag activates. Default 5. */
   activationDistance?: number;
+  /** The handle's instructions and the drag announcements in the dashboard's language (dnd-kit's own are English). */
+  accessibility?: DndContextProps["accessibility"];
 }
 
 // ---------------------------------------------------------------------------
@@ -110,6 +113,7 @@ export function SortableList<T extends { id: string }>({
   strategy = "vertical",
   className,
   activationDistance = 5,
+  accessibility,
 }: SortableListProps<T>) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -144,6 +148,7 @@ export function SortableList<T extends { id: string }>({
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
+      accessibility={accessibility}
     >
       <SortableContext items={itemIds} strategy={sortingStrategy}>
         <div className={cn(strategy === "vertical" ? "space-y-2" : "grid gap-2", className)}>

@@ -65,6 +65,8 @@ export interface OrderItem {
   properties?: LinePropertyInput[];
   /** Display only: the inputs as the order will print them, with their surcharges. */
   propertiesDisplay?: ResolvedLineProperty[];
+  /** A saved line sold in a store bundle: the form shows the bundle's lines as one row, changed in whole bundles. Never sent. */
+  bundle?: { id: string; title: string; perUnit: number } | null;
 }
 
 /**
@@ -168,6 +170,7 @@ export const orderFormSchema = z.object({
         fulfillmentKind: z.enum(["physical", "digital", "service"]).optional(),
         properties: z.array(z.object({ key: z.string(), value: z.string(), revision: z.string().optional() })).max(10).optional(),
         propertiesDisplay: z.array(z.custom<ResolvedLineProperty>()).optional(),
+        bundle: z.object({ id: z.string(), title: z.string(), perUnit: z.number() }).nullable().optional(),
       }),
     )
     .min(1, msg("itemsRequired"))

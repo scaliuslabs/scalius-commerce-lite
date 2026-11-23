@@ -38,6 +38,9 @@ import {
     productSemanticSectionQuerySchema,
     productSemanticSectionSchema,
     updateProductSemanticSection,
+    searchProductSkuOptions,
+    SKU_OPTIONS_LIMIT_MAX,
+    SKU_OPTIONS_PAGE_MAX,
 } from "@scalius/core/modules/product-admin";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { setProductChannels, setProductPublications } from "@scalius/core/modules/sales-channels";
@@ -63,7 +66,7 @@ import {
     productOptionValueSwatchSchema,
 } from "../../schemas/entities";
 import { productMerchandisingSectionResponseSchemas } from "../../schemas/product-merchandising";
-import { productKitsSectionSchema, productPageOffersSectionSchema } from "../../schemas/kits";
+import { productKitsSectionSchema, productPageOffersSectionSchema, productSkuOptionsSchema } from "../../schemas/kits";
 
 import { refreshRecommendationsAfterWrite } from "../../background/catalog";
 import { assertCanWriteCosts, presentSkuCost, presentSkuCosts, productWriteSetsCosts } from "./cost-access";
@@ -92,6 +95,10 @@ const adminProductDetailSchema = productDetailSchema.extend({
     relatedObjects: z.array(relatedObjectRecordSchema),
     /** The product's warranty policy (wrp_…), or null. Checkout freezes its current revision onto order lines. */
     warrantyPolicyId: z.string().nullable(),
+    variants: z.array(productVariantSchema.extend({
+        isKit: z.boolean().openapi({ description: "This SKU is a bundle (kit): made of other SKUs, it holds no stock of its own (`sections/kits`)." }),
+    })),
+    pageOfferCount: z.number().int().nonnegative().openapi({ description: "How many SKUs of other products this product's page shows under its own (`sections/page_offers`)." }),
 });
 
 const productPickerSummarySchema = z.object({
@@ -458,6 +465,36 @@ app.openapi(barcodeLookupRoute, async (c) => {
         throw new NotFoundError("No variant found with this barcode");
     }
     return ok(c, result);
+});
+
+// ── SKU Options (the bundle and page-offer pickers) ──
+
+const skuOptionsRoute = createRoute({
+    method: "get",
+    path: "/sku-options",
+    operationId: "dashboard.products.sku_options",
+    tags: ["Admin - Products"],
+    summary: "Search SKUs of any product for a picker",
+    description: "Live SKUs of any product (drafts and untracked SKUs too) by product name, SKU code or option value, a bounded page at a time: what a bundle's items and a product page's offers are chosen from.",
+    request: {
+        query: z.object({
+            search: z.string().trim().max(120).optional().openapi({ description: "Product name, SKU code or option value" }),
+            page: z.coerce.number().int().min(1).max(SKU_OPTIONS_PAGE_MAX).default(1).openapi({ description: `Page number, up to ${SKU_OPTIONS_PAGE_MAX}: search to narrow past it` }),
+            limit: z.coerce.number().int().min(1).max(SKU_OPTIONS_LIMIT_MAX).default(10).openapi({ description: "SKUs per page" }),
+        }),
+    },
+    responses: {
+        200: {
+            description: "A page of SKUs",
+            content: { "application/json": { schema: successEnvelope(productSkuOptionsSchema) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(skuOptionsRoute, async (c) => {
+    const { search, page, limit } = c.req.valid("query");
+    return ok(c, await searchProductSkuOptions(c.get("db"), { search, page, limit }));
 });
 
 // ── List Products ──

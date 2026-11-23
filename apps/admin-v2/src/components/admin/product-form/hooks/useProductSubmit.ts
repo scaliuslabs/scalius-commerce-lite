@@ -26,6 +26,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import { useCommand } from "~/lib/use-command";
+import { readKitRefusal } from "~/lib/kit-refusal";
 
 const t = (key: ProductMessageKey, vars?: Record<string, string | number>) => translate(productMessages, key, vars);
 
@@ -201,6 +202,17 @@ export function useProductSubmit({
     };
   };
 
+  /** Turns a rejected save into field messages plus the banner's lines; a bundle's refusal in the dashboard's words. */
+  const explainAny = async (error: unknown, values: ProductFormValues): Promise<never> => {
+    const kit = await readKitRefusal(error);
+    if (kit) {
+      // A product whose SKU is a bundle (or in one) can't become a gift card: said at the switch.
+      if (kit.reason === "kit_product_gift_card") form.setError("isGiftCard", { type: "server", message: kit.message });
+      throw new SaveNotCompleted(kit.message, [kit.reason === "kit_product_gift_card" ? problemLine(t("giftCardProduct"), kit.message) : kit.message]);
+    }
+    return explain(error, values);
+  };
+
   /** Turns a rejected save into field messages plus the banner's lines. */
   const explain = (error: unknown, values: ProductFormValues): never => {
     const conflict = readProductRevisionConflict(error);
@@ -250,7 +262,7 @@ export function useProductSubmit({
       revision = (await mutation.mutateAsync({ values, expectedAggregateRevision, composition })).aggregateRevision;
     } catch (error) {
       const conflict = isEdit && resolveRevisionConflict ? readProductRevisionConflict(error) : null;
-      if (!conflict || !resolveRevisionConflict) return explain(error, values);
+      if (!conflict || !resolveRevisionConflict) return explainAny(error, values);
       // Someone saved first: combine the two saves and try once more at their revision.
       const next = await resolveRevisionConflict(conflict).catch(() => null);
       if (next === null) throw new SaveConflict(t("changedElsewhere"));
@@ -259,7 +271,7 @@ export function useProductSubmit({
         sent.current = copyValues(merged);
         revision = (await mutation.mutateAsync({ values: merged, expectedAggregateRevision: next, composition })).aggregateRevision;
       } catch (retryError) {
-        return explain(retryError, values);
+        return explainAny(retryError, values);
       }
       void import("~/lib/merge-document").then(({ mergedMessage }) => toast.success(mergedMessage()));
     }
@@ -288,7 +300,7 @@ export function useProductSubmit({
       toast.success(t("productSaved"));
     } catch (error) {
       try {
-        explain(error, pendingValues);
+        await explainAny(error, pendingValues);
       } catch (explained) {
         toast.error((explained as Error).message);
       }

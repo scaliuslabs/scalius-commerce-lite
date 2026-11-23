@@ -11,7 +11,7 @@ export type FormDataProduct = {
   variants: Array<{ id: string; fulfillmentKind?: FulfillmentKind }>;
   customizationSchema?: CustomizationView | null;
 };
-export type FormDataItem = Pick<OrderItem, "orderItemId" | "productId" | "variantId" | "quantity" | "price"> & {
+export type FormDataItem = Pick<OrderItem, "orderItemId" | "productId" | "variantId" | "quantity" | "price" | "bundle"> & {
   fulfillmentType?: FulfillmentType;
   properties?: Array<Pick<ResolvedLineProperty, "key" | "label" | "displayValue" | "priceMinor"> & Partial<ResolvedLineProperty>>;
 };

@@ -21,12 +21,13 @@ import { Textarea } from "~/components/ui/textarea";
 import { useLocale, useMessages } from "~/i18n";
 import { languageName } from "~/components/admin/translations/translation-form";
 import { storeLanguagesQueryOptions } from "~/lib/api-query-options/translations";
-import { installedAppsMessages } from "~/i18n/apps";
+import { installedAppsMessages, type InstalledAppsMessageKey } from "~/i18n/apps";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { type AppDetail, type AppSettingField } from "~/lib/api-query-options/apps";
 import { appSettingErrors, isAppChangedError, saveAppSettings } from "~/lib/api-mutations/apps";
 import { queryKeys } from "~/lib/query-keys";
 import {
+  STORE_PAGE_EXAMPLE,
   checkSettings,
   draftFromSettings,
   sameDraft,
@@ -35,6 +36,7 @@ import {
   translationsBody,
   translationText,
   type SettingProblem,
+  type StoredIssue,
   type SettingsDraft,
 } from "./app-settings-draft";
 
@@ -56,19 +58,52 @@ const PROVIDER_READINESS_KEYS = [
 /** A field's control id; a sheet uses its own prefix, so the app page under it never shares an id. */
 export const settingFieldId = (key: string, prefix = "app-setting") => `${prefix}-${key}`;
 
+type Words = (key: InstalledAppsMessageKey, vars?: Record<string, string | number>) => string;
+
+/** A stored value's problem in the dashboard's own words; the server's English only for a reason this form has none for. */
+function storedIssueText(t: Words, issue: StoredIssue): string {
+  switch (issue.reason) {
+    case "store_page":
+      return t("problem_storePage", { example: STORE_PAGE_EXAMPLE });
+    case "https":
+      return t("problem_https");
+    default:
+      return issue.message;
+  }
+}
+
+function settingProblemText(t: Words, problem: SettingProblem): string {
+  switch (problem.kind) {
+    case "tooLong":
+      return t("problem_tooLong", { max: problem.max });
+    case "atLeast":
+      return t("problem_atLeast", { min: problem.min });
+    case "atMost":
+      return t("problem_atMost", { max: problem.max });
+    case "storePage":
+      return t("problem_storePage", { example: STORE_PAGE_EXAMPLE });
+    case "stored":
+      return storedIssueText(t, problem.issue);
+    default:
+      return t(`problem_${problem.kind}`);
+  }
+}
+
 /** A multi-choice list: a fieldset with its own note, marked when the last save refused it. */
-function ChoiceList({ id, field, label, chosen, problem, help, disabled, onChange }: {
+function ChoiceList({ id, field, label, chosen, problem, showNow, help, disabled, onChange }: {
   id: string;
   field: AppSettingField;
   label: ReactNode;
   chosen: string[];
   problem: string | null;
+  /** The problem is a stored value no longer accepted: shown at once. */
+  showNow: boolean;
   help: string | null;
   disabled: boolean;
   onChange: (next: string[]) => void;
 }) {
   const server = useServerFieldError(id);
-  const shown = server.error ?? (server.revealed ? problem : null);
+  const shown = server.error ?? (showNow || server.revealed ? problem : null);
   const options = field.options ?? [];
   const toggle = (value: string, on: boolean) => {
     server.clear();
@@ -134,12 +169,18 @@ export function useAppSettingsDraft(app: AppDetail, options: { canManage: boolea
     setSaved(next);
     if (!dirty) setDraft(next);
   }
-  const problems = checkSettings(fields, draft, settings.secrets);
+  // A stored value the setting no longer takes stays marked, with the API's message, until it is changed.
+  const problems = checkSettings(fields, draft, settings.secrets, { invalid: settings.invalid, saved });
+  // One of another section's: this save would send it as stored and the API would refuse it, so say so before.
+  const outside = settings.fields
+    .filter((field) => !keySet.has(field.key) && settings.invalid[field.key] !== undefined)
+    .map((field) => ({ message: `${field.label}: ${storedIssueText(t, settings.invalid[field.key]!)}` }));
 
   useSaveBar({
     label: options.label ?? t("settingsTitle"),
     dirty,
     invalid: Object.keys(problems).length > 0,
+    problems: outside,
     fields: (path) => (keySet.has(path) || keySet.has(path.split(".")[0]!) ? settingFieldId(path, idPrefix) : undefined),
     save: async () => {
       // These fields as edited; every other field as last saved (never a stale copy).
@@ -169,7 +210,11 @@ export function useAppSettingsDraft(app: AppDetail, options: { canManage: boolea
         if (refused) {
           // Marked on the fields themselves by the save bar.
           throw new AdminApiResponseError(t("settingsRefused"), 400, "validation_error", {
-            issues: refused.map((issue) => ({ path: issue.key, message: issue.message === "Required." ? t("problem_required") : issue.message })),
+            // A field of another section is named by its label in the banner.
+            issues: refused.map((issue) => ({
+              path: keySet.has(issue.key) ? issue.key : settings.fields.find((field) => field.key === issue.key)?.label ?? issue.key,
+              message: issue.message === "Required." ? t("problem_required") : issue.message,
+            })),
           });
         }
         throw error;
@@ -250,22 +295,14 @@ export function AppSettingControl({ app, field, form, canManage, idPrefix }: {
 }) {
   const t = useMessages(installedAppsMessages);
   const { draft, problems, setValue, setSecret } = form;
-  const problemText = (problem: SettingProblem | undefined): string | null => {
-    if (!problem) return null;
-    switch (problem.kind) {
-      case "tooLong":
-        return t("problem_tooLong", { max: problem.max });
-      case "atLeast":
-        return t("problem_atLeast", { min: problem.min });
-      case "atMost":
-        return t("problem_atMost", { max: problem.max });
-      default:
-        return t(`problem_${problem.kind}`);
-    }
-  };
+  const problemText = (problem: SettingProblem | undefined): string | null => (problem ? settingProblemText(t, problem) : null);
   const id = settingFieldId(field.key, idPrefix);
   const disabled = !canManage;
   const error = problemText(problems[field.key]);
+  // A saved value that is no longer accepted is marked from the start, not once the merchant has left the field.
+  const showNow = problems[field.key]?.kind === "stored";
+  const storePage = field.type === "url" && field.store === true;
+  const helpText = field.help ?? (storePage ? t("storePageHelp", { example: STORE_PAGE_EXAMPLE }) : null);
   const label = (
     <>
       {field.label}
@@ -304,6 +341,7 @@ export function AppSettingControl({ app, field, form, canManage, idPrefix }: {
           label={label}
           chosen={Array.isArray(value) ? value : []}
           problem={error}
+          showNow={showNow}
           help={field.help}
           disabled={disabled}
           onChange={(next) => setValue(field.key, next)}
@@ -311,7 +349,7 @@ export function AppSettingControl({ app, field, form, canManage, idPrefix }: {
       );
     case "select":
       return (
-        <SettingsField id={id} label={label} help={field.help} error={error}>
+        <SettingsField id={id} label={label} help={helpText} error={error} showNow={showNow}>
           <SearchableSelect
             id={id}
             triggerClassName="w-full"
@@ -365,7 +403,7 @@ export function AppSettingControl({ app, field, form, canManage, idPrefix }: {
     case "color": {
       const valid = COLOR.test(textValue);
       return (
-        <SettingsField id={id} label={label} help={field.help} error={error}>
+        <SettingsField id={id} label={label} help={helpText} error={error} showNow={showNow}>
           <div className="flex items-center gap-2">
             <label
               style={{ "--swatch": valid ? textValue : "transparent" } as CSSProperties}
@@ -398,7 +436,7 @@ export function AppSettingControl({ app, field, form, canManage, idPrefix }: {
     case "textarea":
       return (
         <div className="space-y-3">
-          <SettingsField id={id} label={label} help={field.help} error={error}>
+          <SettingsField id={id} label={label} help={helpText} error={error} showNow={showNow}>
             <Textarea
               id={id}
               value={textValue}
@@ -414,20 +452,21 @@ export function AppSettingControl({ app, field, form, canManage, idPrefix }: {
     default:
       return (
         <div className="space-y-3">
-          <SettingsField id={id} label={label} help={field.help} error={error}>
+          <SettingsField id={id} label={label} help={helpText} error={error} showNow={showNow}>
             <Input
               id={id}
-              type={field.type}
-              inputMode={field.type === "number" ? (field.integer ? "numeric" : "decimal") : undefined}
+              // A page of this store is a path, which a browser's address box would not take as an address.
+              type={storePage ? "text" : field.type}
+              inputMode={field.type === "number" ? (field.integer ? "numeric" : "decimal") : storePage ? "url" : undefined}
               min={field.min ?? undefined}
               max={field.max ?? undefined}
               step={field.type === "number" ? (field.integer ? 1 : "any") : undefined}
               maxLength={field.maxLength ?? undefined}
-              placeholder={field.type === "url" ? "https://" : undefined}
+              placeholder={storePage ? STORE_PAGE_EXAMPLE : field.type === "url" ? "https://" : undefined}
               autoComplete="off"
               value={textValue}
               disabled={disabled}
-              {...described(field.help)}
+              {...described(helpText)}
               onChange={(event) => setValue(field.key, event.target.value)}
             />
           </SettingsField>

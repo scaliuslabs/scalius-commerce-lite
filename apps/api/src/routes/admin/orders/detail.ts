@@ -1,4 +1,5 @@
 // One order: detail, items, payments, timeline and comments, notifications, edits, restore, recovery links and form data.
+import { readOrderLineBundle } from "@scalius/shared/line-properties";
 import { checkoutAttributeAppsSchema } from "../../../schemas/checkout-attribute-apps";
 import { readCheckoutAttributeApps } from "@scalius/core/modules/order-kernel";
 import { createRoute, z } from "@hono/zod-openapi";
@@ -272,6 +273,13 @@ const formDataItemSchema = z.object({
      * only new lines resolve `properties` against today's schema.
      */
     properties: appOwnedField("items", z.array(orderLinePropertySchema)),
+    bundle: z.object({
+        id: z.string(),
+        title: z.string(),
+        perUnit: z.number().int().min(1).openapi({ description: "This line's units in one bundle: the line holds `quantity / perUnit` bundles." }),
+    }).nullable().openapi({
+        description: "The store bundle (kit) this line was sold in, as frozen at checkout; null for any other line. A bundle's lines change together, in whole bundles (`kit_amended_in_part`).",
+    }),
 });
 
 const formDataProductSchema = z.object({
@@ -1186,10 +1194,17 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
                     price: orderAmount(item.unitPriceMinor),
                     fulfillmentType: line.fulfillmentType,
                     properties: line.properties,
+                    bundle: kitBundleOf(item.properties, item.quantity),
                 };
             }),
         },
     });
 }) as unknown as AdminRouteHandler<typeof getFormDataRoute>);
+
+/** A line's store bundle (kit) for the edit form: its id, title and units per bundle; null otherwise. */
+function kitBundleOf(properties: string | null, quantity: number) {
+    const bundle = readOrderLineBundle(properties, quantity);
+    return bundle?.kind === "kit" && bundle.perUnit !== null ? { id: bundle.id, title: bundle.title, perUnit: bundle.perUnit } : null;
+}
 
 export { app as adminOrderDetailRoutes };
