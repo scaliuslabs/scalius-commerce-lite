@@ -179,6 +179,24 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_products_srch: "0219_search_plain_text_and_unicode_fold",
   cdep_categories_srch: "0219_search_plain_text_and_unicode_fold",
   cdep_pages_srch: "0219_search_plain_text_and_unicode_fold",
+  // Conversation topics (0225) rebuild translations (SQLite cannot widen its
+  // resource CHECK): its triggers go with the old table and are reinstalled unchanged.
+  cdep_translations_ins: "0225_account_data",
+  cdep_translations_del: "0225_account_data",
+  cdep_translations_upd: "0225_account_data",
+  cdep_translations_upd_old: "0225_account_data",
+  cdep_translations_sku_ins: "0225_account_data",
+  cdep_translations_sku_del: "0225_account_data",
+  cdep_translations_sku_upd: "0225_account_data",
+  cdep_translations_sku_upd_old: "0225_account_data",
+  cdep_translations_option_ins: "0225_account_data",
+  cdep_translations_option_del: "0225_account_data",
+  cdep_translations_option_upd: "0225_account_data",
+  cdep_translations_option_upd_old: "0225_account_data",
+  cdep_translations_value_ins: "0225_account_data",
+  cdep_translations_value_del: "0225_account_data",
+  cdep_translations_value_upd: "0225_account_data",
+  cdep_translations_value_upd_old: "0225_account_data",
 };
 
 /**

@@ -20,6 +20,12 @@ export const customers = sqliteTable("customers", {
      * record is keyed by email instead, and it is read back as null.
      */
     phone: contactPhone("phone").notNull(),
+    /**
+     * The buyer's WhatsApp number (E.164) when it is not their phone (null:
+     * the phone), as an order's `customer_whatsapp` (migration 0225). A
+     * contact, never a sign-in identity; the buyer edits it on their profile.
+     */
+    whatsapp: text("whatsapp"),
     // Addresses live in the address book (`customer_addresses`, migration 0113).
     accountClaimedAt: integer("account_claimed_at", { mode: "timestamp" }),
     phoneVerifiedAt: integer("phone_verified_at", { mode: "timestamp" }),

@@ -281,6 +281,31 @@ export const customerOrderStats = sqliteTable("customer_order_stats", {
 ]);
 
 /**
+ * A buyer account's orders and spend per currency (migration 0225): every
+ * live order the account owns (`orders.account_owner_customer_id`) that is
+ * not an unfinished checkout (`status <> 'incomplete'`), and what the store
+ * still holds of each (paid, which is net of refunds, less what banks took in
+ * disputes, never below zero), in the order's own currency. Kept by the
+ * triggers of @scalius/database/account-order-totals on every order write
+ * that moves an order in or out or changes its amount, so the account
+ * summary reads one row per currency, whatever the order count. A currency
+ * whose orders all left keeps its row at zero. Application code never
+ * writes it.
+ */
+export const accountOrderTotals = sqliteTable("account_order_totals", {
+    customerId: text("customer_id")
+        .notNull()
+        .references(() => customers.id, { onDelete: "cascade" }),
+    currencyCode: text("currency_code").notNull(),
+    ordersCount: integer("orders_count").notNull().default(0),
+    spentMinor: integer("spent_minor").notNull().default(0),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    primaryKey({ columns: [table.customerId, table.currencyCode] }),
+    check("account_order_totals_nonnegative", sql`${table.ordersCount} >= 0 AND ${table.spentMinor} >= 0`),
+]);
+
+/**
  * A promotion limited to customers in any of these segments (signed-in
  * accounts only). Part of the promotion rule: written through the promotion
  * revision batch, and buyer-visible (public offer reads skip targeted

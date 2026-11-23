@@ -4,7 +4,7 @@
 // contact rule (`orderContactNeeds`). This owns email, WhatsApp and that rule.
 import { isEmailAddress } from "@scalius/shared/text-scan";
 import { ValidationError } from "@scalius/core/errors";
-import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
+import { parseContactPhone } from "@scalius/shared/customer-utils";
 import {
   orderContactNeeds,
   orderPaymentKind,
@@ -80,11 +80,7 @@ export function resolveCheckoutContact(
 
   const rawWhatsapp = input.customerWhatsapp?.trim();
   if (settings?.whatsapp !== "separate" || !rawWhatsapp) return { customerEmail, customerWhatsapp: null };
-  let whatsapp: string;
-  try {
-    whatsapp = validateAndFormatPhone(rawWhatsapp);
-  } catch {
-    throw new ValidationError("Enter a valid WhatsApp number.", { field: "customerWhatsapp" });
-  }
-  return { customerEmail, customerWhatsapp: whatsapp === input.customerPhone ? null : whatsapp };
+  const whatsapp = parseContactPhone(rawWhatsapp);
+  if (!whatsapp.ok) throw new ValidationError("Enter a valid WhatsApp number.", { field: "customerWhatsapp", reason: whatsapp.reason });
+  return { customerEmail, customerWhatsapp: whatsapp.value === input.customerPhone ? null : whatsapp.value };
 }

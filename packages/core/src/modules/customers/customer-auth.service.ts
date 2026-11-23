@@ -38,7 +38,7 @@ import {
     OtpContactCeilingError,
 } from "./customer-auth-rate-limit";
 import { buildVerifiedContactOrderLink, signedUpHistory } from "./customer-identity";
-import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
+import { parseContactPhone, validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import { isQualifiedProviderId, type IdentityExchangeOutput } from "@scalius/shared/plugins/providers";
 import {
     newAccountPhoneNeed,
@@ -55,7 +55,6 @@ import {
     acceptedCustomerCountries,
     customerAuthDocument,
     customerCountriesDocument,
-    readAcceptedCustomerCountries,
     selectDocumentsWithSellingCountries,
 } from "../settings";
 import { formatAddressInline, usesDeliveryHierarchy } from "@scalius/shared/address";
@@ -315,6 +314,10 @@ export interface CustomerAuthProfile {
     name: string;
     email: string;
     phone?: string;
+    /** The WhatsApp number when it is not the phone (absent: the phone). */
+    whatsapp?: string;
+    /** The phone is proven by code: the account signs in with it, and changing it takes a code. */
+    phoneVerified: boolean;
     customerId?: string;
     /** The address book's default address (checkout prefills it), or null. */
     defaultAddress: CustomerAddress | null;
@@ -341,6 +344,8 @@ function buildCustomerAuthProfile(row: CustomerRow, addressRow: CustomerAddressR
         name: row.name,
         email: row.email ?? "",
         phone: phoneOrNull(row.phone) ?? undefined,
+        whatsapp: row.whatsapp ?? undefined,
+        phoneVerified: Boolean(row.phoneVerifiedAt),
         customerId: row.id,
         defaultAddress,
         profileComplete: isCompleteDeliveryAddress(defaultAddress),
@@ -782,17 +787,31 @@ export async function getAccountPhoneVerificationPrompt(
     return await phoneCodeChannel(db, identity, credentialEncryptionKey, appProviders) ? { phone } : null;
 }
 
-/** Sends a code to the signed-in account's own (unproven) phone. */
+/**
+ * The number an account phone code is for: the account's own phone, or a new
+ * number the buyer is moving their phone to (read as checkout reads it).
+ */
+function accountPhoneTarget(account: CustomerRow, typed: string | null | undefined, policy: PhoneCountryPolicy): { phone: string; changing: boolean } {
+    const own = phoneOrNull(account.phone);
+    const phone = typed?.trim() ? contactNumberOrThrow(typed, "phone", policy) : own;
+    if (!phone) throw new ValidationError("Add a phone number to your account first.");
+    return { phone, changing: phone !== own };
+}
+
+/**
+ * Sends a code to the signed-in account's own unproven phone, or to `phone`,
+ * a new number the account's phone moves to once the code proves it (the
+ * only way a proven phone changes).
+ */
 export async function sendAccountPhoneCode(
     db: Database,
-    input: Omit<SendOtpInput, "method" | "identifier" | "channel"> & { accountId: string },
+    input: Omit<SendOtpInput, "method" | "identifier" | "channel"> & { accountId: string; phone?: string | null },
 ): Promise<SendOtpResult> {
     const account = await getActiveCustomerById(db, input.accountId);
     if (!account?.accountClaimedAt) throw new UnauthorizedError("Please sign in again.");
-    if (account.phoneVerifiedAt) throw new ConflictError("Your phone number is already verified.");
-    const phone = phoneOrNull(account.phone);
-    if (!phone) throw new ValidationError("Add a phone number to your account first.");
-    const { identity } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    const { phone, changing } = accountPhoneTarget(account, input.phone, phoneCountryPolicy);
+    if (account.phoneVerifiedAt && !changing) throw new ConflictError("Your phone number is already verified.");
     const channel = await phoneCodeChannel(db, identity, input.credentialEncryptionKey, input.appProviders);
     if (!channel) throw new ServiceUnavailableError("Text message codes aren't available right now.");
     const sent = await sendOtp(db, { ...input, method: "phone", identifier: phone, channel });
@@ -812,14 +831,13 @@ function formatAccountPhone(phone: string): string {
  */
 export async function verifyAccountPhoneCode(
     db: Database,
-    input: { accountId: string; code: string; encryptionKey?: string; credentialEncryptionKey?: string },
+    input: { accountId: string; code: string; encryptionKey?: string; credentialEncryptionKey?: string; phone?: string | null },
 ): Promise<{ movedOrders: number }> {
     if (!input.code?.trim()) throw new ValidationError("Enter the 6-digit code.");
     const account = await getActiveCustomerById(db, input.accountId);
     if (!account?.accountClaimedAt) throw new UnauthorizedError("Please sign in again.");
-    const phone = phoneOrNull(account.phone);
-    if (!phone) throw new ValidationError("Add a phone number to your account first.");
-    const { identity } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    const { phone, changing } = accountPhoneTarget(account, input.phone, phoneCountryPolicy);
     const channel = resolveSignInChannel(identity.channels, "phone");
     if (!channel) throw new ValidationError("There's no active code. Send a new code.");
     const otpKey = await buildCustomerAuthOtpStorageKey(channel, phone, input.encryptionKey);
@@ -850,7 +868,10 @@ export async function verifyAccountPhoneCode(
     }
 
     const statements: SQLiteBatchItem[] = [
-        db.update(customers).set(proofUpdate("phone")).where(eq(customers.id, account.id)) as SQLiteBatchItem,
+        // A new number replaces the account's phone, proven now; the old one no longer signs in.
+        db.update(customers).set(changing
+            ? { phone, phoneVerifiedAt: sql`unixepoch()`, lastAuthenticatedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` }
+            : proofUpdate("phone")).where(eq(customers.id, account.id)) as SQLiteBatchItem,
         ...buildVerifiedContactOrderLink(db, { customerId: account.id, phone }) as SQLiteBatchItem[],
     ];
     try {
@@ -1191,14 +1212,25 @@ export async function deleteCustomerSession(
         ));
 }
 
+/** `details.reason` when a profile edit would change the phone the account signs in with. */
+export const PHONE_IS_SIGN_IN_REASON = "phone_is_sign_in";
+
 /**
- * Updates a customer's name and returns a fresh session projection from D1.
- * Addresses are the address book's (`createCustomerAddress` and friends).
+ * Updates the signed-in buyer's name, phone and WhatsApp number and returns
+ * a fresh session projection from D1. The numbers are read as checkout reads
+ * them (`parseContactPhone`; the phone from a country the store accepts).
+ * Identity rules (customer-identity.ts): a typed phone is a claim, so an
+ * unproven phone is replaced or cleared here, but a proven phone is how the
+ * account signs in and changes only by proving the new number with a code
+ * (`sendAccountPhoneCode` / `verifyAccountPhoneCode` with `phone`): a 409
+ * `phone_is_sign_in` says so. A WhatsApp number is a contact, never an
+ * identity: kept only when the store collects one apart from the phone, and
+ * null when it is the phone. Addresses are the address book's.
  */
 export async function updateCustomerProfile(
     db: Database,
     session: CustomerSession,
-    updates: { name?: string },
+    updates: { name?: string; phone?: string | null; whatsapp?: string | null },
 ): Promise<{ session: CustomerSession; customer: CustomerAuthProfile }> {
     if (!session.customerId) {
         throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
@@ -1209,14 +1241,6 @@ export async function updateCustomerProfile(
         throw new UnauthorizedError("Customer profile is no longer available. Please log in again.");
     }
 
-    const allowedCountriesConfig = await readAcceptedCustomerCountries(db);
-    if (existing.phone) {
-        normalizePhoneOrThrow(existing.phone, {
-            countries: allowedCountriesConfig.allowedCountries,
-            mode: allowedCountriesConfig.allowedCountriesMode,
-        });
-    }
-
     const nextName = updates.name !== undefined
         ? normalizeOptionalProfileText(updates.name)
         : existing.name;
@@ -1224,12 +1248,50 @@ export async function updateCustomerProfile(
         throw new ValidationError("Enter your name.");
     }
 
+    const changes: Partial<CustomerInsertRow> = { name: nextName };
+    const touchesNumbers = updates.phone !== undefined || updates.whatsapp !== undefined;
+    let phone = phoneOrNull(existing.phone);
+    if (touchesNumbers) {
+        const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+        if (updates.phone !== undefined) {
+            const typed = updates.phone?.trim() ? contactNumberOrThrow(updates.phone, "phone", phoneCountryPolicy) : null;
+            if (typed !== phone) {
+                if (existing.phoneVerifiedAt) {
+                    throw new ConflictError("You sign in with this phone number. Verify the new number with a code to change it.", {
+                        field: "phone",
+                        reason: PHONE_IS_SIGN_IN_REASON,
+                    });
+                }
+                if (!typed && newAccountPhoneNeed(identity, "email") === "required") {
+                    throw new ValidationError("Enter your phone number.", { field: "phone", reason: "phone_required" });
+                }
+                phone = typed;
+                changes.phone = storedPhone(typed);
+            }
+        }
+        const whatsapp = updates.whatsapp !== undefined
+            ? (updates.whatsapp?.trim() ? contactNumberOrThrow(updates.whatsapp, "whatsapp") : null)
+            : existing.whatsapp;
+        if (whatsapp && identity.whatsapp !== "separate") {
+            throw new ValidationError("This store doesn't ask for a separate WhatsApp number.", { field: "whatsapp", reason: "whatsapp_not_collected" });
+        }
+        // Null means "the phone", as on an order.
+        changes.whatsapp = whatsapp && whatsapp !== phone ? whatsapp : null;
+    }
+
     await db
         .update(customers)
-        .set({ name: nextName, updatedAt: sql`unixepoch()` })
+        .set({ ...changes, updatedAt: sql`unixepoch()` })
         .where(and(eq(customers.id, session.customerId), isNull(customers.deletedAt)));
 
     return readCustomerProfile(db, session);
+}
+
+/** A typed number in E.164 as checkout reads it, or a refusal naming the field and why. */
+function contactNumberOrThrow(value: string, field: "phone" | "whatsapp", policy?: PhoneCountryPolicy): string {
+    const parsed = parseContactPhone(value, { allowedCountries: policy });
+    if (parsed.ok) return parsed.value;
+    throw new ValidationError(field === "whatsapp" ? "Enter a valid WhatsApp number." : parsed.message, { field, reason: parsed.reason });
 }
 
 /** The signed-in customer's fresh profile (one statement, the default address joined). */

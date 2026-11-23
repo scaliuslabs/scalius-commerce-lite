@@ -16,6 +16,7 @@ import type { AnyMachine } from "@scalius/shared/machine";
 import { COD_MACHINE, ORDER_MACHINE } from "@scalius/shared/order-state";
 import { INVENTORY_TRANSFER_MACHINE, RETURN_MACHINE } from "@scalius/shared/record-lifecycles";
 import { REVIEW_MACHINE } from "@scalius/shared/reviews";
+import { CONVERSATION_MACHINE } from "@scalius/shared/conversation";
 import { INVITATION_MACHINE } from "./auth/invitation-state";
 import { META_PURCHASE_QUEUE } from "./integrations/meta/purchase-outbox";
 import { TRACKING_QUEUE } from "./integrations/tracking/deliveries";
@@ -34,6 +35,7 @@ export const MACHINES: Readonly<Record<StateColumn, AnyMachine>> = {
     "orders.status": ORDER_MACHINE,
     "cod_tracking.cod_status": COD_MACHINE,
     "product_reviews.status": REVIEW_MACHINE,
+    "conversations.status": CONVERSATION_MACHINE,
     "payment_disputes.status": DISPUTE_MACHINE,
     // The hosted sessions of the table. Its off-session command rows are below.
     "payment_session_attempts.status": SESSION_MACHINE,
@@ -112,7 +114,6 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "plugin_cron_runs.status": "insert-claim with a lease: running, succeeded, failed",
     "plugin_installations.status": "installed, active, disabled, failed; 8 writers with three kinds of guard",
     "webhook_subscriptions.status": "active, disabled with a reason",
-    "conversations.status": "open, pending, closed (conversations/threads.ts statusAfter)",
     "conversation_channel_messages.status": "receipts move by conversations/channels.ts RECEIPT_FROM",
     "marketing_runs.status": "declared with checks, never read or written",
     "marketing_run_recipients.status": "declared with checks, never read or written",

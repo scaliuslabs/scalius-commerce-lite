@@ -335,6 +335,7 @@ function scrubStatements(db: Database, subjectId: string, scope: ErasureScope): 
       name: erased,
       email: null,
       phone: NO_PHONE,
+      whatsapp: null,
       phoneVerifiedAt: null,
       emailVerifiedAt: null,
       lastAuthenticatedAt: null,

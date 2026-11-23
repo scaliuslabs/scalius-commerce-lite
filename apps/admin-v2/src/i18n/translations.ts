@@ -94,6 +94,7 @@ export const translationsMessages = defineMessages({
     typeMenu: "Menus",
     typeShippingMethod: "Delivery rates",
     typePaymentMethod: "Payment methods",
+    typeConversationTopic: "Message topics",
 
     // The editor
     editorLoadFailed: "Couldn't load this item",
@@ -227,6 +228,7 @@ export const translationsMessages = defineMessages({
     typeMenu: "মেনু",
     typeShippingMethod: "ডেলিভারি রেট",
     typePaymentMethod: "পেমেন্ট পদ্ধতি",
+    typeConversationTopic: "মেসেজের বিষয়",
 
     editorLoadFailed: "আইটেমটি লোড করা যায়নি",
     source: "{language} (ডিফল্ট)",

@@ -93,6 +93,8 @@ export const TRANSLATABLE_RESOURCES = {
   menu: { group: 4, slug: false, fields: [line("title", 120)], itemFields: { prefix: "item:", kind: "line", max: 120 } },
   shipping_method: { group: 5, slug: false, fields: [line("name", 100), text("description", 500), text("pickupHours", 500)] },
   payment_method: { group: 5, slug: false, fields: [line("name", 100), text("description", 500)] },
+  // The merchant's conversation topics (a settings list, id = the topic's key).
+  conversation_topic: { group: 5, slug: false, fields: [line("label", 60)] },
 } as const satisfies Record<string, TranslatableResourceSpec>;
 
 export type TranslatableResourceType = keyof typeof TRANSLATABLE_RESOURCES;

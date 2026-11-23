@@ -2,14 +2,46 @@ import type { Database } from "@scalius/database/client";
 import { user } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { staffPermissionSql } from "@scalius/core/auth/rbac/helpers";
-import { getBuyerThread, readConversationCartShare, type StaffConversationSummary, type StaffConversationThread, type ThreadRow } from "@scalius/core/modules/conversations";
+import type { Context } from "hono";
+import {
+  conversationTopicView,
+  getBuyerThread,
+  readConversationCartShare,
+  readConversationTopics,
+  type StaffConversationSummary,
+  type StaffConversationThread,
+  type ThreadRow,
+} from "@scalius/core/modules/conversations";
+import { applyTranslation, readTranslationChains, translationScope, type TranslationScope } from "@scalius/core/modules/translations";
+import type { ConversationTopic } from "@scalius/shared/conversation";
+import { MARKET_PRESENCE_QUERY_PARAM } from "@scalius/shared/markets";
 import { getPluginInstallation } from "@scalius/core/modules/plugins";
 import { parseCustomChannelId } from "@scalius/shared/plugins/providers";
 import { hydrateConversationProducts } from "./conversation-products";
 import { projectConversationCartShare } from "./conversation-cart-share";
 
-export async function getBuyerConversationView(db: Database, thread: ThreadRow, options: { beforeSeq?: number; afterSeq?: number } = {}) {
-  const view = await hydrateConversationProducts(db, await getBuyerThread(db, thread, options));
+/** A buyer read's language for merchant words (topics): the page's presence (`?presence=bn-bd`), else the source words. */
+export function buyerTranslation(c: Context): TranslationScope | null {
+  return translationScope(new URL(c.req.url).searchParams.get(MARKET_PRESENCE_QUERY_PARAM));
+}
+
+/** The merchant's topics named in the scope's language (one more statement at a presence, none at the root). */
+export async function buyerConversationTopics(db: Database, scope: TranslationScope | null): Promise<ConversationTopic[]> {
+  const topics = await readConversationTopics(db);
+  if (!scope || topics.length === 0) return topics;
+  const chains = await readTranslationChains(db, scope, "conversation_topic", topics.map((topic) => topic.key));
+  return topics.map((topic) => applyTranslation(topic, chains.get(topic.key) ?? [], { label: "label" }));
+}
+
+/** Threads' topic keys as readers see them (`{ key, label }`), labelled from one read of the merchant's list. */
+export async function withTopicViews<T extends { topic: string | null }>(db: Database, items: readonly T[], scope: TranslationScope | null, topics?: readonly ConversationTopic[]) {
+  const list = topics ?? (items.some((item) => item.topic) ? await buyerConversationTopics(db, scope) : []);
+  return items.map((item) => ({ ...item, topic: conversationTopicView(item.topic, list) }));
+}
+
+export async function getBuyerConversationView(db: Database, thread: ThreadRow, options: { beforeSeq?: number; afterSeq?: number; scope?: TranslationScope | null } = {}) {
+  const [threadView] = await withTopicViews(db, [await getBuyerThread(db, thread, options)], options.scope ?? null);
+  const view = await hydrateConversationProducts(db, threadView!);
   // Incremental polls need only newly arrived messages; sharing has its own
   // versioned endpoint and does not require repricing the whole cart each poll.
   if (options.afterSeq !== undefined) return view;

@@ -29,6 +29,7 @@ import {
   marketingConsentSettingsSchema,
   type MarketingConsentSettings,
 } from "@scalius/shared/customer-marketing";
+import { normalizeConversationTopics, type ConversationTopic } from "@scalius/shared/conversation";
 import {
   normalizeCustomerRequestPolicy,
   type CustomerRequestPolicy,
@@ -345,6 +346,30 @@ export const customerRequestsDocument = defineSettingsDocument<CustomerRequestPo
     jsonRecord,
   ) as unknown as z.ZodType<CustomerRequestPolicy>,
   defaults: normalizeCustomerRequestPolicy(undefined),
+});
+
+// ─────────────────────────────────────────
+// Conversation topics: the short list a buyer picks from when they write to
+// the store ("Payment", "Delivery"). Keys are kept on conversations; labels
+// are translated as `conversation_topic` resources (id = key). Empty by
+// default: no topic is offered or required.
+// ─────────────────────────────────────────
+
+export interface ConversationTopicSettings {
+  topics: ConversationTopic[];
+}
+
+export const conversationTopicsDocument = defineSettingsDocument<ConversationTopicSettings>({
+  key: "conversation_topics",
+  schema: z.object({ topics: z.unknown() }).transform((value, context) => {
+    const topics = normalizeConversationTopics(value.topics);
+    if (!topics.ok) {
+      context.addIssue({ code: "custom", path: ["topics", ...(topics.index === undefined ? [] : [topics.index])], message: topics.reason });
+      return z.NEVER;
+    }
+    return { topics: topics.value };
+  }) as unknown as z.ZodType<ConversationTopicSettings>,
+  defaults: { topics: [] },
 });
 
 // ─────────────────────────────────────────

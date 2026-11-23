@@ -11130,9 +11130,41 @@
           "amountMinor"
         ]
       },
+      "ConversationTopic": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ]
+      },
       "CustomerAccountSummary": {
         "type": "object",
         "properties": {
+          "orders": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Live orders the account owns that are not unfinished checkouts (any currency)."
+          },
+          "spent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomerAccountSpend"
+            },
+            "description": "Lifetime spend per currency the account bought in, by currency code. Empty before the first order."
+          },
+          "openConversations": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The account's conversations that are not closed (store threads and the threads of its orders)."
+          },
           "unreadInbox": {
             "type": "integer",
             "minimum": 0
@@ -14854,6 +14886,9 @@
           }
         },
         "required": [
+          "orders",
+          "spent",
+          "openConversations",
           "unreadInbox",
           "reviewsToWrite",
           "reviewsWritten",
@@ -14861,6 +14896,33 @@
           "giftCards",
           "activeWarranties",
           "buyerUi"
+        ]
+      },
+      "CustomerAccountSpend": {
+        "type": "object",
+        "properties": {
+          "currencyCode": {
+            "type": "string",
+            "description": "ISO 4217: the currency these orders were charged in."
+          },
+          "orders": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "amount": {
+            "type": "number",
+            "description": "What the store holds of these orders: paid (net of refunds) less what banks took back in disputes, in major units."
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "currencyCode",
+          "orders",
+          "amount",
+          "amountMinor"
         ]
       },
       "BuyerReviews": {
@@ -54346,6 +54408,13 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "whatsapp": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "phoneVerified": {
+                              "type": "boolean"
+                            },
                             "customerId": {
                               "type": "string",
                               "nullable": true
@@ -54486,6 +54555,7 @@
                           "required": [
                             "email",
                             "name",
+                            "phoneVerified",
                             "defaultAddress",
                             "profileComplete"
                           ]
@@ -54727,6 +54797,13 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "whatsapp": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "phoneVerified": {
+                              "type": "boolean"
+                            },
                             "customerId": {
                               "type": "string",
                               "nullable": true
@@ -54867,6 +54944,7 @@
                           "required": [
                             "email",
                             "name",
+                            "phoneVerified",
                             "defaultAddress",
                             "profileComplete"
                           ]
@@ -55119,7 +55197,7 @@
           "Customer Auth"
         ],
         "summary": "Update customer profile",
-        "description": "Changes the account name. Addresses are in the address book (/customer-auth/addresses).",
+        "description": "Changes the account's name, phone and WhatsApp number (each optional; an empty string clears a number). Numbers are read as checkout reads them. A phone the account signs in with (`phoneVerified`) changes only by proving the new number with a code (`POST /customer-auth/phone/send-code` and `/phone/verify` with `phone`): changing it here is a 409 with `details.reason` `phone_is_sign_in`. A WhatsApp number is kept only when the store collects one apart from the phone (else 400 `whatsapp_not_collected`); the same number as the phone is stored as none. Addresses are in the address book (/customer-auth/addresses).",
         "requestBody": {
           "content": {
             "application/json": {
@@ -55129,6 +55207,16 @@
                   "name": {
                     "type": "string",
                     "maxLength": 100
+                  },
+                  "phone": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 32
+                  },
+                  "whatsapp": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 32
                   }
                 }
               }
@@ -55164,6 +55252,13 @@
                             "phone": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "whatsapp": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "phoneVerified": {
+                              "type": "boolean"
                             },
                             "customerId": {
                               "type": "string",
@@ -55305,6 +55400,7 @@
                           "required": [
                             "email",
                             "name",
+                            "phoneVerified",
                             "defaultAddress",
                             "profileComplete"
                           ]
@@ -55355,6 +55451,16 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -55826,29 +55932,6 @@
                             "additionalProperties": {}
                           }
                         },
-                        "summary": {
-                          "type": "object",
-                          "properties": {
-                            "totalOrders": {
-                              "type": "number"
-                            },
-                            "totalSpent": {
-                              "type": "number"
-                            },
-                            "completedOrders": {
-                              "type": "number"
-                            },
-                            "pendingOrders": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "totalOrders",
-                            "totalSpent",
-                            "completedOrders",
-                            "pendingOrders"
-                          ]
-                        },
                         "pagination": {
                           "type": "object",
                           "properties": {
@@ -56039,7 +56122,6 @@
                       },
                       "required": [
                         "orders",
-                        "summary",
                         "pagination",
                         "phoneVerification",
                         "customer"
@@ -56153,7 +56235,25 @@
         "tags": [
           "Customer Auth"
         ],
-        "summary": "Send a code to the signed-in account's own phone",
+        "summary": "Send a code to the signed-in account's own phone, or to a new number its phone moves to",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "phone": {
+                    "type": "string",
+                    "maxLength": 32,
+                    "description": "A new number for the account's phone. Absent: the account's own unproven phone."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Code sent",
@@ -56242,6 +56342,44 @@
               }
             }
           },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -56307,7 +56445,7 @@
         "tags": [
           "Customer Auth"
         ],
-        "summary": "Prove the signed-in account's own phone and add orders placed with it",
+        "summary": "Prove the account's phone (or the new number it moves to) and add orders placed with it",
         "requestBody": {
           "content": {
             "application/json": {
@@ -56318,6 +56456,11 @@
                     "type": "string",
                     "minLength": 4,
                     "maxLength": 12
+                  },
+                  "phone": {
+                    "type": "string",
+                    "maxLength": 32,
+                    "description": "The new number the code was sent to: proving it makes it the account's phone."
                   }
                 },
                 "required": [
@@ -62803,7 +62946,7 @@
         "tags": [
           "Customer Auth"
         ],
-        "summary": "List the account's conversations, newest first",
+        "summary": "List the account's conversations, newest first, and the store's topics",
         "parameters": [
           {
             "schema": {
@@ -62813,11 +62956,22 @@
             "required": false,
             "name": "cursor",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "The page's presence (`bn-bd`): the store's topics are named in its language."
+            },
+            "required": false,
+            "description": "The page's presence (`bn-bd`): the store's topics are named in its language.",
+            "name": "presence",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Conversations (20 per page) and whether the account may start a store conversation",
+            "description": "Conversations (20 per page), whether the account may start a store conversation, and the topics a buyer may choose (in the presence's language)",
             "content": {
               "application/json": {
                 "schema": {
@@ -62854,6 +63008,23 @@
                                 "nullable": true,
                                 "x-scalius-buyer-text": true
                               },
+                              "topic": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label"
+                                ]
+                              },
                               "orderId": {
                                 "type": "string",
                                 "nullable": true
@@ -62883,6 +63054,7 @@
                               "id",
                               "subjectType",
                               "subject",
+                              "topic",
                               "orderId",
                               "orderNumber",
                               "status",
@@ -62897,12 +63069,19 @@
                         },
                         "canStartStoreConversation": {
                           "type": "boolean"
+                        },
+                        "topics": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ConversationTopic"
+                          }
                         }
                       },
                       "required": [
                         "items",
                         "nextCursor",
-                        "canStartStoreConversation"
+                        "canStartStoreConversation",
+                        "topics"
                       ]
                     }
                   },
@@ -63023,6 +63202,12 @@
                     "type": "string",
                     "maxLength": 5000
                   },
+                  "topic": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 40,
+                    "description": "One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it."
+                  },
                   "clientMessageKey": {
                     "type": "string",
                     "minLength": 1,
@@ -63075,6 +63260,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -63389,6 +63591,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -63727,6 +63930,17 @@
             "required": false,
             "name": "afterSeq",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "The page's presence (`bn-bd`): the topic is named in its language."
+            },
+            "required": false,
+            "description": "The page's presence (`bn-bd`): the topic is named in its language.",
+            "name": "presence",
+            "in": "query"
           }
         ],
         "responses": {
@@ -63765,6 +63979,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -64079,6 +64310,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -64194,12 +64426,14 @@
         "security": []
       }
     },
-    "/api/v1/customer-auth/conversations/{id}/messages": {
+    "/api/v1/customer-auth/conversations/{id}/close": {
       "post": {
+        "operationId": "storefront.customer_auth_conversation.close",
         "tags": [
           "Customer Auth"
         ],
-        "summary": "Post a message on a conversation",
+        "summary": "Close one of the account's conversations (the buyer's next message reopens it)",
+        "description": "Moves the conversation to `closed` by the machine's `close` move (from `open` or `pending`). Closing a closed conversation changes nothing. Posting a message later reopens it for the store.",
         "parameters": [
           {
             "schema": {
@@ -64211,43 +64445,9 @@
             "in": "path"
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "body": {
-                    "type": "string",
-                    "maxLength": 5000
-                  },
-                  "clientMessageKey": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 200
-                  },
-                  "attachmentIds": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "pattern": "^att_[A-Za-z0-9_-]{8,64}$"
-                    },
-                    "maxItems": 3
-                  }
-                },
-                "required": [
-                  "body",
-                  "clientMessageKey"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
         "responses": {
-          "201": {
-            "description": "Posted; the conversation after the post",
+          "200": {
+            "description": "The conversation, closed",
             "content": {
               "application/json": {
                 "schema": {
@@ -64281,6 +64481,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -64595,6 +64812,566 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
+                            "orderId",
+                            "orderNumber",
+                            "status",
+                            "lastMessageAt",
+                            "unread",
+                            "lastSeq",
+                            "readSeq",
+                            "messages",
+                            "hasMore"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "conversation"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "customer"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Buyer-to-store messages and images are the buyer's own words, sent from the hosted account or receipt page; agents never read or write them.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/customer-auth/conversations/{id}/messages": {
+      "post": {
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Post a message on a conversation",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^cnv_[A-Za-z0-9_-]{8,64}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "maxLength": 5000
+                  },
+                  "topic": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 40,
+                    "description": "One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it."
+                  },
+                  "clientMessageKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "attachmentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^att_[A-Za-z0-9_-]{8,64}$"
+                    },
+                    "maxItems": 3
+                  }
+                },
+                "required": [
+                  "body",
+                  "clientMessageKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Posted; the conversation after the post",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "conversation": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "subjectType": {
+                              "type": "string",
+                              "enum": [
+                                "order",
+                                "store",
+                                "warranty_claim",
+                                "review"
+                              ]
+                            },
+                            "subject": {
+                              "type": "string",
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
+                            },
+                            "orderId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "orderNumber": {
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "open",
+                                "pending",
+                                "closed"
+                              ]
+                            },
+                            "lastMessageAt": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "unread": {
+                              "type": "integer"
+                            },
+                            "lastSeq": {
+                              "type": "integer"
+                            },
+                            "readSeq": {
+                              "type": "integer"
+                            },
+                            "messages": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "products": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "productId": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                                        },
+                                        "skuId": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                                        },
+                                        "title": {
+                                          "type": "string"
+                                        },
+                                        "variantLabel": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "status": {
+                                          "type": "string",
+                                          "enum": [
+                                            "available",
+                                            "sold_out",
+                                            "unavailable"
+                                          ]
+                                        },
+                                        "price": {
+                                          "type": "object",
+                                          "nullable": true,
+                                          "properties": {
+                                            "amount": {
+                                              "type": "number"
+                                            },
+                                            "currency": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "amount",
+                                            "currency"
+                                          ]
+                                        },
+                                        "imageUrl": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "pdpUrl": {
+                                          "type": "string",
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "productId",
+                                        "skuId",
+                                        "title",
+                                        "variantLabel",
+                                        "status",
+                                        "price",
+                                        "imageUrl",
+                                        "pdpUrl"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "seq": {
+                                    "type": "integer"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "message",
+                                      "event"
+                                    ]
+                                  },
+                                  "from": {
+                                    "type": "string",
+                                    "enum": [
+                                      "buyer",
+                                      "store",
+                                      "system"
+                                    ]
+                                  },
+                                  "body": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
+                                  },
+                                  "eventKind": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "eventData": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "additionalProperties": {}
+                                  },
+                                  "createdAt": {
+                                    "type": "integer"
+                                  },
+                                  "attachments": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        },
+                                        "sizeBytes": {
+                                          "type": "integer"
+                                        },
+                                        "width": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        },
+                                        "height": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "mediaType",
+                                        "sizeBytes",
+                                        "width",
+                                        "height"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "seq",
+                                  "kind",
+                                  "from",
+                                  "body",
+                                  "eventKind",
+                                  "eventData",
+                                  "createdAt",
+                                  "attachments"
+                                ]
+                              }
+                            },
+                            "hasMore": {
+                              "type": "boolean"
+                            },
+                            "hasNewer": {
+                              "type": "boolean"
+                            },
+                            "cartShare": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "lines": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "productId": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                                      },
+                                      "skuId": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                                      },
+                                      "quantity": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 99
+                                      }
+                                    },
+                                    "required": [
+                                      "productId",
+                                      "skuId",
+                                      "quantity"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "sharedAt": {
+                                  "type": "integer"
+                                },
+                                "withdrawnAt": {
+                                  "type": "integer",
+                                  "nullable": true
+                                },
+                                "version": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "products": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "productId": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                                      },
+                                      "skuId": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                                      },
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "variantLabel": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "status": {
+                                        "type": "string",
+                                        "enum": [
+                                          "available",
+                                          "sold_out",
+                                          "unavailable"
+                                        ]
+                                      },
+                                      "price": {
+                                        "type": "object",
+                                        "nullable": true,
+                                        "properties": {
+                                          "amount": {
+                                            "type": "number"
+                                          },
+                                          "currency": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "amount",
+                                          "currency"
+                                        ]
+                                      },
+                                      "imageUrl": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "pdpUrl": {
+                                        "type": "string",
+                                        "nullable": true
+                                      }
+                                    },
+                                    "required": [
+                                      "productId",
+                                      "skuId",
+                                      "title",
+                                      "variantLabel",
+                                      "status",
+                                      "price",
+                                      "imageUrl",
+                                      "pdpUrl"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "lines",
+                                "sharedAt",
+                                "withdrawnAt",
+                                "version"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "subjectType",
+                            "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -65003,6 +65780,17 @@
             "required": false,
             "name": "afterSeq",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "The page's presence (`bn-bd`): the topic is named in its language."
+            },
+            "required": false,
+            "description": "The page's presence (`bn-bd`): the topic is named in its language.",
+            "name": "presence",
+            "in": "query"
           }
         ],
         "responses": {
@@ -65042,6 +65830,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -65356,6 +66161,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -65502,6 +66308,12 @@
                     "type": "string",
                     "maxLength": 5000
                   },
+                  "topic": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 40,
+                    "description": "One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it."
+                  },
                   "clientMessageKey": {
                     "type": "string",
                     "minLength": 1,
@@ -65561,6 +66373,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -65875,6 +66704,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -68672,7 +69502,7 @@
         "tags": [
           "Customer Auth"
         ],
-        "summary": "Counts behind the account tabs (inbox, reviews, downloads, gift cards, warranties)",
+        "summary": "The account's numbers: orders, spend per currency, open conversations, and the counts behind the account tabs",
         "parameters": [
           {
             "schema": {
@@ -104806,6 +105636,17 @@
           },
           {
             "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "The page's presence (`bn-bd`): the topic is named in its language."
+            },
+            "required": false,
+            "description": "The page's presence (`bn-bd`): the topic is named in its language.",
+            "name": "presence",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "string"
             },
             "required": false,
@@ -104850,6 +105691,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -105164,6 +106022,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -105314,6 +106173,12 @@
                     "type": "string",
                     "maxLength": 5000
                   },
+                  "topic": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 40,
+                    "description": "One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it."
+                  },
                   "clientMessageKey": {
                     "type": "string",
                     "minLength": 1,
@@ -105378,6 +106243,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -105692,6 +106574,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -109357,6 +110240,17 @@
           },
           {
             "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "The page's presence (`bn-bd`): the topic is named in its language."
+            },
+            "required": false,
+            "description": "The page's presence (`bn-bd`): the topic is named in its language.",
+            "name": "presence",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "string"
             },
             "required": false,
@@ -109403,6 +110297,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -109717,6 +110628,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -109879,6 +110791,12 @@
                     "type": "string",
                     "maxLength": 5000
                   },
+                  "topic": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 40,
+                    "description": "One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it."
+                  },
                   "clientMessageKey": {
                     "type": "string",
                     "minLength": 1,
@@ -109941,6 +110859,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -110255,6 +111190,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -193447,7 +194383,8 @@
                 "page",
                 "menu",
                 "shipping_method",
-                "payment_method"
+                "payment_method",
+                "conversation_topic"
               ]
             },
             "required": true,
@@ -194050,7 +194987,8 @@
                 "page",
                 "menu",
                 "shipping_method",
-                "payment_method"
+                "payment_method",
+                "conversation_topic"
               ]
             },
             "required": true,
@@ -194253,7 +195191,8 @@
                 "page",
                 "menu",
                 "shipping_method",
-                "payment_method"
+                "payment_method",
+                "conversation_topic"
               ]
             },
             "required": true,
@@ -194493,7 +195432,8 @@
                 "page",
                 "menu",
                 "shipping_method",
-                "payment_method"
+                "payment_method",
+                "conversation_topic"
               ]
             },
             "required": true,
@@ -234169,6 +235109,429 @@
         }
       }
     },
+    "/api/v1/admin/settings/conversation-topics": {
+      "get": {
+        "operationId": "dashboard.conversation_topics.get",
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get the topics buyers choose from when they write to the store",
+        "responses": {
+          "200": {
+            "description": "The topics and their revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "topics": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40,
+                                "description": "Stable id kept on conversations: lowercase letters, digits, - and _."
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 60
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "label"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 12
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "topics",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when asked which topics buyers can choose when they write to the store.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      },
+      "put": {
+        "operationId": "dashboard.conversation_topics.update",
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Replace the topics buyers choose from (at most 12)",
+        "description": "A conversation keeps its topic's key: a renamed topic reads its new name, a removed one reads no name. An invalid list is a 400 whose `details.reason` is `too_many`, `invalid_key`, `duplicate_key` or `invalid_label` (with `details.index`).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "topics": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40,
+                          "description": "Stable id kept on conversations: lowercase letters, digits, - and _."
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 60
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "label"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 12
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "topics",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved topics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "topics": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40,
+                                "description": "Stable id kept on conversations: lowercase letters, digits, - and _."
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 60
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "label"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 12
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "topics",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when adding, renaming, reordering or removing the topics buyers choose when they write to the store.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      }
+    },
     "/api/v1/admin/settings/policies": {
       "get": {
         "operationId": "dashboard.policies.get",
@@ -259807,6 +261170,10 @@
                                 "nullable": true,
                                 "x-scalius-buyer-text": true
                               },
+                              "topic": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "status": {
                                 "type": "string",
                                 "enum": [
@@ -259892,6 +261259,7 @@
                               "subjectType",
                               "subjectId",
                               "subject",
+                              "topic",
                               "status",
                               "orderId",
                               "orderNumber",
@@ -261112,6 +262480,10 @@
                                 "nullable": true,
                                 "x-scalius-buyer-text": true
                               },
+                              "topic": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "status": {
                                 "type": "string",
                                 "enum": [
@@ -261197,6 +262569,7 @@
                               "subjectType",
                               "subjectId",
                               "subject",
+                              "topic",
                               "status",
                               "orderId",
                               "orderNumber",
@@ -262610,6 +263983,10 @@
                               "nullable": true,
                               "x-scalius-buyer-text": true
                             },
+                            "topic": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "status": {
                               "type": "string",
                               "enum": [
@@ -262960,6 +264337,7 @@
                             "subjectType",
                             "subjectId",
                             "subject",
+                            "topic",
                             "status",
                             "orderId",
                             "orderNumber",
@@ -263221,6 +264599,10 @@
                               "nullable": true,
                               "x-scalius-buyer-text": true
                             },
+                            "topic": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "status": {
                               "type": "string",
                               "enum": [
@@ -263571,6 +264953,7 @@
                             "subjectType",
                             "subjectId",
                             "subject",
+                            "topic",
                             "status",
                             "orderId",
                             "orderNumber",
@@ -263835,6 +265218,10 @@
                               "nullable": true,
                               "x-scalius-buyer-text": true
                             },
+                            "topic": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "status": {
                               "type": "string",
                               "enum": [
@@ -264185,6 +265572,7 @@
                             "subjectType",
                             "subjectId",
                             "subject",
+                            "topic",
                             "status",
                             "orderId",
                             "orderNumber",
@@ -264414,6 +265802,10 @@
                               "nullable": true,
                               "x-scalius-buyer-text": true
                             },
+                            "topic": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "status": {
                               "type": "string",
                               "enum": [
@@ -264764,6 +266156,7 @@
                             "subjectType",
                             "subjectId",
                             "subject",
+                            "topic",
                             "status",
                             "orderId",
                             "orderNumber",
@@ -265072,6 +266465,10 @@
                               "nullable": true,
                               "x-scalius-buyer-text": true
                             },
+                            "topic": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "status": {
                               "type": "string",
                               "enum": [
@@ -265422,6 +266819,7 @@
                             "subjectType",
                             "subjectId",
                             "subject",
+                            "topic",
                             "status",
                             "orderId",
                             "orderNumber",
@@ -337248,6 +338646,22 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.page-publish"
+          ]
+        },
+        {
+          "operationId": "dashboard.conversation_topics.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.conversation_topics.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.conversation_topics.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.conversation_topics.update"
           ]
         },
         {

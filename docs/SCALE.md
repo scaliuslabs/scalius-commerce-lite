@@ -33,6 +33,8 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `staff-sign-up` | 5 | 5 | 3 | 8 | 17 | - |
 | `customer-otp-request` | 16 | 20 | 8 | 20 | 2 | - |
 | `customer-otp-verify` | 8 | 19 | 12 | 4 | 1 | - |
+| `account-summary` | 12 | 13 | 0 | 10 | 0 | - |
+| `account-summary-300` | 12 | 13 | 0 | 10 | 0 | - |
 | `page-home-miss` | 11 | 25 | 0 | 41 | 11 | - |
 | `page-home-hit` | 1 | 1 | 0 | 1 | 0 | - |
 | `page-product-miss` | 19 | 36 | 0 | 49 | 10 | - |

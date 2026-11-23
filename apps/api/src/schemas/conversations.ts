@@ -2,7 +2,7 @@
 // carry internal notes or staff identity (C4); staff shapes do.
 import { z } from "@hono/zod-openapi";
 import { characterText } from "./text";
-import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
+import { CONVERSATION_LIMITS, CONVERSATION_TOPIC_LIMITS } from "@scalius/shared/conversation";
 import { protectedField as pii } from "./protected";
 import { buyerText } from "@scalius/shared/buyer-text";
 
@@ -53,10 +53,23 @@ export const buyerConversationMessageSchema = z.object({
   attachments: z.array(conversationAttachmentSchema),
 });
 
+/** The merchant's topic a conversation is about: its key, and its name in the page's language while the merchant still lists it. */
+export const conversationTopicViewSchema = z.object({
+  key: z.string(),
+  label: z.string().nullable(),
+});
+
+/** One of the merchant's conversation topics a buyer may choose (`topic` on a new conversation or a first message). */
+export const conversationTopicSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+}).openapi("ConversationTopic");
+
 export const buyerConversationSummarySchema = z.object({
   id: z.string(),
   subjectType: subjectTypeSchema,
   subject: buyerText(z.string().nullable()),
+  topic: conversationTopicViewSchema.nullable(),
   orderId: z.string().nullable(),
   orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }),
   status: conversationStatusSchema,
@@ -78,6 +91,8 @@ export const staffConversationSummarySchema = z.object({
   subjectType: subjectTypeSchema,
   subjectId: z.string().nullable(),
   subject: buyerText(z.string().nullable()),
+  /** The merchant topic the buyer chose (its key; the inbox settings name it), or null. */
+  topic: z.string().nullable(),
   status: conversationStatusSchema,
   orderId: z.string().nullable(),
   orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }),
@@ -143,8 +158,12 @@ export const staffConversationThreadSchema = staffConversationSummarySchema.exte
 export const clientMessageKeySchema = z.string().trim().min(1).max(CONVERSATION_LIMITS.clientMessageKeyLength);
 
 /** A buyer post: text, an idempotency key and up to three staged images. No contact fields (§4.3). */
+export const conversationTopicKeySchema = z.string().trim().max(CONVERSATION_TOPIC_LIMITS.keyLength).nullable().optional()
+  .openapi({ description: "One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it." });
+
 export const buyerPostBodySchema = z.object({
   body: characterText(CONVERSATION_LIMITS.bodyLength),
+  topic: conversationTopicKeySchema,
   clientMessageKey: clientMessageKeySchema,
   attachmentIds: z.array(conversationAttachmentIdSchema).max(CONVERSATION_LIMITS.attachmentsPerMessage).optional(),
 }).strict();
@@ -162,6 +181,7 @@ export const staffMessagePageQuerySchema = beforeSeqQuerySchema.extend({
 /** Catch up in bounded ascending pages; a read never acknowledges messages. */
 export const buyerMessagePageQuerySchema = beforeSeqQuerySchema.extend({
   afterSeq: z.coerce.number().int().nonnegative().optional(),
+  presence: z.string().max(16).optional().openapi({ description: "The page's presence (`bn-bd`): the topic is named in its language." }),
 }).refine((value) => value.beforeSeq === undefined || value.afterSeq === undefined, {
   message: "Choose beforeSeq or afterSeq, not both.",
 });

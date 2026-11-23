@@ -26,7 +26,19 @@ const sendAccountPhoneCodeRoute = createRoute({
   method: "post",
   path: "/phone/send-code",
   tags: ["Customer Auth"],
-  summary: "Send a code to the signed-in account's own phone",
+  summary: "Send a code to the signed-in account's own phone, or to a new number its phone moves to",
+  request: {
+    body: {
+      required: false,
+      content: {
+        "application/json": {
+          schema: z.object({
+            phone: z.string().trim().max(32).optional().openapi({ description: "A new number for the account's phone. Absent: the account's own unproven phone." }),
+          }).strict(),
+        },
+      },
+    },
+  },
   responses: {
     200: {
       description: "Code sent",
@@ -48,8 +60,11 @@ app.openapi(sendAccountPhoneCodeRoute, async (c) => {
   if (!session.customerId) throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
   const db = c.get("db");
   const env = c.env as unknown as Record<string, unknown>;
+  // The body is optional: without one the code goes to the account's own phone.
+  const phone = (c.req.valid("json") as { phone?: string } | undefined)?.phone;
   const result = await sendAccountPhoneCode(db, {
     accountId: session.customerId,
+    phone,
     ip: getTrustedClientIp(c),
     emailEnv: env,
     encryptionKey: getCredentialEncryptionKey(env),
@@ -64,12 +79,15 @@ const verifyAccountPhoneCodeRoute = createRoute({
   method: "post",
   path: "/phone/verify",
   tags: ["Customer Auth"],
-  summary: "Prove the signed-in account's own phone and add orders placed with it",
+  summary: "Prove the account's phone (or the new number it moves to) and add orders placed with it",
   request: {
     body: {
       content: {
         "application/json": {
-          schema: z.object({ code: z.string().trim().min(4).max(12) }).strict(),
+          schema: z.object({
+            code: z.string().trim().min(4).max(12),
+            phone: z.string().trim().max(32).optional().openapi({ description: "The new number the code was sent to: proving it makes it the account's phone." }),
+          }).strict(),
         },
       },
     },
@@ -93,9 +111,11 @@ app.openapi(verifyAccountPhoneCodeRoute, async (c) => {
   const { session } = await requireCustomerSession(c);
   if (!session.customerId) throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
   const env = c.env as unknown as Record<string, unknown>;
+  const { code, phone } = c.req.valid("json");
   const { movedOrders } = await verifyAccountPhoneCode(c.get("db"), {
     accountId: session.customerId,
-    code: c.req.valid("json").code,
+    code,
+    phone,
     encryptionKey: getCredentialEncryptionKey(env),
     credentialEncryptionKey: getCredentialEncryptionKey(env),
   });

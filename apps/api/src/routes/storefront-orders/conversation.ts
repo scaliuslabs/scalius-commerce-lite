@@ -118,6 +118,7 @@ app.openapi(createRoute({
   const posted = await postBuyerOrderMessage(db, orderId, {
     actor,
     body: body.body,
+    topic: body.topic,
     clientMessageKey: body.clientMessageKey,
     attachmentIds: body.attachmentIds,
   }, { send: notificationSender(c) });

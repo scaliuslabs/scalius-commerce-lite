@@ -169,6 +169,8 @@ export const DASHBOARD_WHEN_A: Readonly<Record<string, string>> = {
   "dashboard.custom_fields.set_product_values": "Use when setting or clearing a product's custom field values.",
   "dashboard.custom_fields.set_variant_values": "Use when setting or clearing a SKU's custom field values.",
   "dashboard.customer_requests.policy_get": "Use when reading what buyers may request after ordering (cancel before shipping, return, refund) and the windows.",
+  "dashboard.conversation_topics.get": "Use when asked which topics buyers can choose when they write to the store.",
+  "dashboard.conversation_topics.update": "Use when adding, renaming, reordering or removing the topics buyers choose when they write to the store.",
   "dashboard.customer_requests.policy_update": "Use when changing whether buyers can ask to cancel, return or refund, and within how many days.",
   "dashboard.customers.addresses_create": "Use when adding an address to a customer's address book.",
   "dashboard.customers.addresses_delete": "Use when removing an address from a customer's address book.",

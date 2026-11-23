@@ -1576,6 +1576,13 @@
       "when": 1795367967598,
       "tag": "0224_kits_and_page_offers",
       "breakpoints": true
+    },
+    {
+      "idx": 225,
+      "version": "6",
+      "when": 1795419406186,
+      "tag": "0225_account_data",
+      "breakpoints": true
     }
   ]
 }

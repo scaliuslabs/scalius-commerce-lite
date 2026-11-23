@@ -62,6 +62,10 @@
  * its events dispatched and its messages sent before the measured write (a refund with 3 webhooks
  * on Paid drained them: 116 -> 89 calls).
  *
+ * Account summary (2026-11-23): a signed-in buyer's numbers read one row per currency
+ * (`account_order_totals`) and their threads, so 300 orders cost what one does: 12 calls, 13
+ * statements, 10 rows read on both plans (`account-summary`, `account-summary-300`).
+ *
  * order-lifecycle (2026-10-14, queue retirement): one 3-line order costs 34 D1
  * calls, the commit and its after-response work together; with the queue it
  * was 40 (13 for the commit, the rest in the queue consumer).
@@ -318,6 +322,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 3, rowsRead: 8, fullScans: 17 },
     "customer-otp-request": { d1Calls: 16, d1Statements: 20, externalFetches: 0, rowsWritten: 8, rowsRead: 20, fullScans: 2 },
     "customer-otp-verify": { d1Calls: 8, d1Statements: 19, externalFetches: 0, rowsWritten: 12, rowsRead: 4, fullScans: 1 },
+    "account-summary": { d1Calls: 12, d1Statements: 13, externalFetches: 0, rowsWritten: 0, rowsRead: 10, fullScans: 0 },
+    "account-summary-300": { d1Calls: 12, d1Statements: 13, externalFetches: 0, rowsWritten: 0, rowsRead: 10, fullScans: 0 },
     "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 0, rowsRead: 41, fullScans: 11 },
     "page-home-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
     "page-product-miss": { d1Calls: 19, d1Statements: 36, externalFetches: 0, rowsWritten: 0, rowsRead: 49, fullScans: 10 },
@@ -384,6 +390,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 3, rowsRead: 8, fullScans: 17 },
     "customer-otp-request": { d1Calls: 16, d1Statements: 20, externalFetches: 0, rowsWritten: 8, rowsRead: 20, fullScans: 2 },
     "customer-otp-verify": { d1Calls: 8, d1Statements: 19, externalFetches: 0, rowsWritten: 12, rowsRead: 4, fullScans: 1 },
+    "account-summary": { d1Calls: 12, d1Statements: 13, externalFetches: 0, rowsWritten: 0, rowsRead: 10, fullScans: 0 },
+    "account-summary-300": { d1Calls: 12, d1Statements: 13, externalFetches: 0, rowsWritten: 0, rowsRead: 10, fullScans: 0 },
     "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 0, rowsRead: 41, fullScans: 11 },
     "page-home-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
     "page-product-miss": { d1Calls: 19, d1Statements: 36, externalFetches: 0, rowsWritten: 0, rowsRead: 49, fullScans: 10 },
