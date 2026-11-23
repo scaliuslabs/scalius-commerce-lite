@@ -53,7 +53,11 @@ export const buyerConversationMessageSchema = z.object({
   attachments: z.array(conversationAttachmentSchema),
 });
 
-/** The merchant's topic a conversation is about: its key, and its name in the page's language while the merchant still lists it. */
+/**
+ * The merchant's topic a conversation is about: its key, and its name in the
+ * page's language while the merchant still lists it (null once removed, and
+ * on a poll that found nothing new: the reader has the name already).
+ */
 export const conversationTopicViewSchema = z.object({
   key: z.string(),
   label: z.string().nullable(),

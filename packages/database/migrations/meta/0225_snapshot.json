@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "75c21bf8-e759-47f3-b08f-097fb702c43f",
+  "id": "6b01c00a-6bec-4b4c-9fe9-396a0ee32f82",
   "prevId": "c2e416b4-6804-49cb-ae49-edda3a2316d8",
   "tables": {
     "account": {
@@ -13852,7 +13852,8 @@
         "orders_account_owner_customer_id_idx": {
           "name": "orders_account_owner_customer_id_idx",
           "columns": [
-            "account_owner_customer_id"
+            "account_owner_customer_id",
+            "currency_code"
           ],
           "isUnique": false,
           "where": "\"orders\".\"account_owner_customer_id\" IS NOT NULL"
@@ -34036,7 +34037,7 @@
         },
         "translations_resource_type_check": {
           "name": "translations_resource_type_check",
-          "value": "\"translations\".\"resource_type\" IN ('product', 'product_variant', 'product_option', 'product_option_value', 'collection', 'category', 'brand', 'page', 'menu', 'shipping_method', 'payment_method', 'conversation_topic')"
+          "value": "\"translations\".\"resource_type\" IN ('product', 'product_variant', 'product_option', 'product_option_value', 'collection', 'category', 'brand', 'page', 'menu', 'shipping_method', 'payment_method')"
         },
         "translations_resource_id_length": {
           "name": "translations_resource_id_length",

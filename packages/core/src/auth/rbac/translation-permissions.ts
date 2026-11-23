@@ -9,7 +9,7 @@ import type { PermissionName } from "./types";
 
 /** The kinds of resource Translate & adapt lists, in the order its tabs show them. */
 export const TRANSLATION_RESOURCE_TYPES = [
-  "product", "collection", "category", "brand", "page", "menu", "shipping_method", "payment_method", "conversation_topic",
+  "product", "collection", "category", "brand", "page", "menu", "shipping_method", "payment_method",
 ] as const;
 export type TranslationResourceType = (typeof TRANSLATION_RESOURCE_TYPES)[number];
 
@@ -22,8 +22,6 @@ export const TRANSLATION_TYPE_PERMISSIONS: Readonly<Record<TranslationResourceTy
   menu: { view: PERMISSIONS.SETTINGS_HEADER_EDIT, edit: PERMISSIONS.SETTINGS_HEADER_EDIT },
   shipping_method: { view: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW, edit: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
   payment_method: { view: PERMISSIONS.SETTINGS_GENERAL_VIEW, edit: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  // The topics are a Settings → Customer accounts list.
-  conversation_topic: { view: PERMISSIONS.SETTINGS_GENERAL_VIEW, edit: PERMISSIONS.SETTINGS_GENERAL_EDIT },
 };
 
 /** The kinds this role may read, in tab order: the tabs Translate & adapt shows it. */

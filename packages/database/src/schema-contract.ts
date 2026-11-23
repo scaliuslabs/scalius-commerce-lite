@@ -905,7 +905,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 225,
     name: "0225_account_data",
-    sourceSha256: "2791e86abc59b3355bc372fd0920e6fc0031d0ff840c11ba691e39497390a11c",
+    sourceSha256: "7ac043a3b2e6472df7a310462fc8eeb6c05440923676e2ca2bc4b17ab7fe617f",
   },
 ] as const;
 

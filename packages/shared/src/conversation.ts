@@ -167,8 +167,9 @@ export const CONVERSATION_MACHINE = defineMachine({
   initial: ["open"],
   final: [],
   moves: {
-    buyer_message: { from: ["open", "pending", "closed"], to: "open", by: ["buyer"] },
-    staff_reply: { from: ["open", "pending", "closed"], to: "pending", by: ["staff"] },
+    // A move's sources never include its target: a message to a thread already in it moves nothing.
+    buyer_message: { from: ["pending", "closed"], to: "open", by: ["buyer"] },
+    staff_reply: { from: ["open", "closed"], to: "pending", by: ["staff"] },
     await_buyer: { from: ["open", "closed"], to: "pending", by: ["staff"] },
     reopen: { from: ["pending", "closed"], to: "open", by: ["staff"] },
     close: { from: ["open", "pending"], to: "closed", by: ["staff", "buyer"] },
@@ -199,16 +200,23 @@ export function conversationStatusMove(move: ConversationStatusMove): { to: Conv
 
 /**
  * A topic the merchant lists for buyer conversations ("Payment", "Delivery"):
- * a stable key the conversation keeps and a label in the store's default
- * language, translated like other merchant words (resource
- * `conversation_topic`, id = key).
+ * a stable key the conversation keeps, a label in the store's default
+ * language, and its labels in the store's other languages (by two-letter
+ * code), edited with the list. A reader in a language with no label of its
+ * own reads `label`.
  */
 export interface ConversationTopic {
   key: string;
   label: string;
+  labels?: Record<string, string>;
 }
 
-export const CONVERSATION_TOPIC_LIMITS = { topics: 12, keyLength: 40, labelLength: 60 } as const;
+export const CONVERSATION_TOPIC_LIMITS = { topics: 12, keyLength: 40, labelLength: 60, languages: 20 } as const;
+
+/** A topic's label in `locale` (a two-letter language), else its default label. */
+export function conversationTopicLabel(topic: ConversationTopic, locale: string | null | undefined): string {
+  return (locale && topic.labels?.[locale]) || topic.label;
+}
 
 const TOPIC_KEY = /^[a-z0-9](?:[a-z0-9_-]{0,39})$/;
 
@@ -233,8 +241,18 @@ export function normalizeConversationTopics(input: unknown): ConversationTopicsR
     if (seen.has(key)) return { ok: false, reason: "duplicate_key", index };
     const label = normalizeText(record.label, CONVERSATION_TOPIC_LIMITS.labelLength, { multiline: false });
     if (!label.ok) return { ok: false, reason: "invalid_label", index };
+    const labels: Record<string, string> = {};
+    const given = record.labels && typeof record.labels === "object" && !Array.isArray(record.labels) ? Object.entries(record.labels as Record<string, unknown>) : [];
+    if (given.length > CONVERSATION_TOPIC_LIMITS.languages) return { ok: false, reason: "invalid_label", index };
+    for (const [locale, value] of given) {
+      if (!/^[a-z]{2}$/.test(locale)) return { ok: false, reason: "invalid_label", index };
+      if (typeof value === "string" && !value.trim()) continue;
+      const translated = normalizeText(value, CONVERSATION_TOPIC_LIMITS.labelLength, { multiline: false });
+      if (!translated.ok) return { ok: false, reason: "invalid_label", index };
+      labels[locale] = translated.value;
+    }
     seen.add(key);
-    topics.push({ key, label: label.value });
+    topics.push(Object.keys(labels).length ? { key, label: label.value, labels } : { key, label: label.value });
   }
   return { ok: true, value: topics };
 }

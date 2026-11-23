@@ -5,7 +5,6 @@
 // machine translation through an app's translation provider (no built-in
 // one). A save replaces the resource's translation in one batch; triggers
 // advance the resource's `tr:` cache key.
-import { readConversationTopics } from "@scalius/core/modules/conversations";
 import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
@@ -117,7 +116,6 @@ app.openapi(createRoute({
   const result = await listTranslatableResources(c.get("db"), query.type, {
     ...query,
     paymentMethods: query.type === "payment_method" ? await paymentMethodSources(c) : undefined,
-    conversationTopics: query.type === "conversation_topic" ? await readConversationTopics(c.get("db")) : undefined,
   });
   return ok(c, { ...result, items: result.items.map(presentResource) });
 });
@@ -211,7 +209,6 @@ app.openapi(createRoute({
   const view = await getResourceTranslations(c.get("db"), type, id, {
     ...c.req.valid("query"),
     paymentMethods: type === "payment_method" ? await paymentMethodSources(c) : undefined,
-    conversationTopics: type === "conversation_topic" ? await readConversationTopics(c.get("db")) : undefined,
   });
   return ok(c, { resource: presentResource(view.resource), parts: view.parts.map(presentResource) });
 });
@@ -242,12 +239,10 @@ app.openapi(createRoute({
   if (body.parts?.length && type !== "product") throw new ValidationError("Only a product has parts to translate with it.");
   const db = c.get("db");
   const paymentMethods = type === "payment_method" ? await paymentMethodSources(c) : undefined;
-  const conversationTopics = type === "conversation_topic" ? await readConversationTopics(db) : undefined;
   const committedRevisions = await saveTranslations(db, {
     locale: body.locale,
     marketId: body.marketId ?? null,
     paymentMethods,
-    conversationTopics,
     entries: [
       { type: type as TranslatableResourceType, id, fields: body.fields, sourceDigest: body.sourceDigest, revision: body.revision, ...(body.slug !== undefined ? { slug: body.slug } : {}) },
       ...(body.parts ?? []).map((part) => ({ type: part.type as TranslatableResourceType, id: part.id, fields: part.fields, sourceDigest: part.sourceDigest, revision: part.revision })),

@@ -35,6 +35,8 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `customer-otp-verify` | 8 | 19 | 12 | 4 | 1 | - |
 | `account-summary` | 12 | 13 | 0 | 10 | 0 | - |
 | `account-summary-300` | 12 | 13 | 0 | 10 | 0 | - |
+| `checkout-3-commit-signed-in` | 14 | 70 | 46 | 60 | 16 | - |
+| `order-refund-signed-in` | 24 | 44 | 20 | 26 | 3 | - |
 | `page-home-miss` | 11 | 25 | 0 | 41 | 11 | - |
 | `page-home-hit` | 1 | 1 | 0 | 1 | 0 | - |
 | `page-product-miss` | 19 | 36 | 0 | 49 | 10 | - |

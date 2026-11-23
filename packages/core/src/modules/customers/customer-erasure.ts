@@ -57,6 +57,7 @@ import {
   authOtpDeliveryReceipts,
   buyerUploads,
   conversationAttachments,
+  accountOrderTotals,
   conversationChannelContacts,
   conversationChannelMessages,
   conversationMessages,
@@ -351,6 +352,8 @@ function scrubStatements(db: Database, subjectId: string, scope: ErasureScope): 
     db.delete(customerAddresses).where(inIds(customerAddresses.customerId)),
     db.delete(customerIdentities).where(inIds(customerIdentities.customerId)),
     db.delete(customerSessions).where(inIds(customerSessions.customerId)),
+    // The account's order totals (an erased account keeps none: the triggers skip it after).
+    db.delete(accountOrderTotals).where(inIds(accountOrderTotals.customerId)),
     ...(scope.otpReceiptHashes.length > 0
       ? [db.delete(authOtpDeliveryReceipts).where(inJsonArray(authOtpDeliveryReceipts.identifierHash, scope.otpReceiptHashes))]
       : []),

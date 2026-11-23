@@ -33,7 +33,6 @@ import {
   type TranslationSource,
 } from "@scalius/shared/translations";
 import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import type { ConversationTopic } from "@scalius/shared/conversation";
 import {
   MENU_ITEM_PREFIX,
   pageTableSources,
@@ -57,7 +56,6 @@ export const EDITOR_RESOURCE_TYPES = [
   "menu",
   "shipping_method",
   "payment_method",
-  "conversation_topic",
 ] as const satisfies readonly TranslatableResourceType[];
 export type EditorResourceType = (typeof EDITOR_RESOURCE_TYPES)[number];
 
@@ -108,8 +106,6 @@ export interface TranslationContextInput {
   marketId?: string | null;
   /** Payment methods are code: the caller passes their source names. */
   paymentMethods?: readonly PaymentMethodSource[];
-  /** Conversation topics are a settings list: the caller passes them. */
-  conversationTopics?: readonly ConversationTopic[];
 }
 
 function cleanContext(input: TranslationContextInput): { locale: string; marketId: string | null } {
@@ -148,20 +144,6 @@ function paymentSources(paymentMethods: readonly PaymentMethodSource[] | undefin
     }));
 }
 
-/** The merchant's conversation topics (a settings list the caller passes): each is a resource whose id is its key. */
-function topicSources(topics: readonly ConversationTopic[] | undefined, ids?: readonly string[]): ResourceSource[] {
-  return (topics ?? [])
-    .filter((topic) => !ids || ids.includes(topic.key))
-    .map((topic) => ({
-      type: "conversation_topic" as const,
-      id: topic.key,
-      title: topic.label,
-      subtitle: topic.key,
-      fields: { label: topic.label },
-      slug: null,
-    }));
-}
-
 async function withMenuItems(db: Database, sources: ResourceSource[]): Promise<ResourceSource[]> {
   const result: ResourceSource[] = [];
   // A page may contain 100 menus; serialize their dependent reads within D1's connection cap.
@@ -175,15 +157,8 @@ async function withMenuItems(db: Database, sources: ResourceSource[]): Promise<R
   return result;
 }
 
-async function readSources(
-  db: Database,
-  type: TranslatableResourceType,
-  ids: readonly string[],
-  paymentMethods?: readonly PaymentMethodSource[],
-  conversationTopics?: readonly ConversationTopic[],
-): Promise<ResourceSource[]> {
+async function readSources(db: Database, type: TranslatableResourceType, ids: readonly string[], paymentMethods?: readonly PaymentMethodSource[]): Promise<ResourceSource[]> {
   if (type === "payment_method") return paymentSources(paymentMethods, ids);
-  if (type === "conversation_topic") return topicSources(conversationTopics, ids);
   return withMenuItems(db, await readTableSources(db, type, ids));
 }
 
@@ -289,8 +264,8 @@ export async function listTranslatableResources(
   const page = Math.max(Math.trunc(input.page ?? 1), 1);
   let sources: ResourceSource[];
   let total: number;
-  if (type === "payment_method" || type === "conversation_topic") {
-    const all = (type === "payment_method" ? paymentSources(input.paymentMethods) : topicSources(input.conversationTopics))
+  if (type === "payment_method") {
+    const all = paymentSources(input.paymentMethods)
       .filter((source) => !input.search?.trim() || source.title.toLowerCase().includes(input.search.trim().toLowerCase()));
     total = all.length;
     sources = all.slice((page - 1) * limit, page * limit);
@@ -322,7 +297,7 @@ export async function getResourceTranslations(
 ): Promise<ResourceTranslationsView> {
   if (!isEditorType(type)) throw new ValidationError("Choose a resource type to translate.");
   const context = cleanContext(input);
-  const [source] = await readSources(db, type, [id], input.paymentMethods, input.conversationTopics);
+  const [source] = await readSources(db, type, [id], input.paymentMethods);
   if (!source) throw new NotFoundError("Nothing to translate here: the resource does not exist or is in the trash.");
   const parts = type === "product" ? await readProductParts(db, id) : [];
   const partTypes = ["product_option", "product_option_value", "product_variant"];
@@ -401,7 +376,7 @@ export async function saveTranslations(
   // The source as it is now (live resources only): its digest marks what each field was translated from.
   const sources = new Map<string, ResourceSource>();
   for (const [type, ids] of byType) {
-    for (const source of await readSources(db, type, ids, input.paymentMethods, input.conversationTopics)) sources.set(`${type}:${source.id}`, source);
+    for (const source of await readSources(db, type, ids, input.paymentMethods)) sources.set(`${type}:${source.id}`, source);
   }
   const [currentTranslations, currentSlugs] = await readStored(db, null,
     input.entries.map((entry) => entry.id), context, [...byType.keys()]);

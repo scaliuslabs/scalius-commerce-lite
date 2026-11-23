@@ -55197,7 +55197,7 @@
           "Customer Auth"
         ],
         "summary": "Update customer profile",
-        "description": "Changes the account's name, phone and WhatsApp number (each optional; an empty string clears a number). Numbers are read as checkout reads them. A phone the account signs in with (`phoneVerified`) changes only by proving the new number with a code (`POST /customer-auth/phone/send-code` and `/phone/verify` with `phone`): changing it here is a 409 with `details.reason` `phone_is_sign_in`. A WhatsApp number is kept only when the store collects one apart from the phone (else 400 `whatsapp_not_collected`); the same number as the phone is stored as none. Addresses are in the address book (/customer-auth/addresses).",
+        "description": "Changes the account's name and WhatsApp number (an empty string clears it; read as checkout reads it). The WhatsApp number is kept only when the store collects one apart from the phone (else 400 `whatsapp_not_collected`; a stored one is dropped on the next save), and the phone's own number is stored as none. A session never changes the phone: a different `phone` is a 409 with `details.reason` `phone_change_needs_codes`. To change it, `POST /customer-auth/phone/send-code` with `phone` (a code to how the account signs in now, one to the new number), then `/phone/verify` with `phone`, `code` and `currentCode`; a buyer who cannot get the first code asks the store. Addresses are in the address book (/customer-auth/addresses).",
         "requestBody": {
           "content": {
             "application/json": {
@@ -56246,7 +56246,7 @@
                   "phone": {
                     "type": "string",
                     "maxLength": 32,
-                    "description": "A new number for the account's phone. Absent: the account's own unproven phone."
+                    "description": "A new number for the account's phone: a code goes to how the account signs in now (its proven phone, else its email) and one to the new number, both for this change only. Absent: the account's own unproven phone."
                   }
                 },
                 "additionalProperties": false
@@ -56276,11 +56276,22 @@
                         },
                         "resendAfterSeconds": {
                           "type": "integer"
+                        },
+                        "confirmWith": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "phone",
+                            "email",
+                            null
+                          ],
+                          "description": "For a change: where the code that confirms it went (send it back as `currentCode`); null for the account's own phone."
                         }
                       },
                       "required": [
                         "message",
-                        "resendAfterSeconds"
+                        "resendAfterSeconds",
+                        "confirmWith"
                       ]
                     }
                   },
@@ -56460,7 +56471,13 @@
                   "phone": {
                     "type": "string",
                     "maxLength": 32,
-                    "description": "The new number the code was sent to: proving it makes it the account's phone."
+                    "description": "The new number of a change: `code` is the one sent to it."
+                  },
+                  "currentCode": {
+                    "type": "string",
+                    "minLength": 4,
+                    "maxLength": 12,
+                    "description": "For a change: the code sent to how the account signs in now."
                   }
                 },
                 "required": [
@@ -64443,6 +64460,17 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "The page's presence (`bn-bd`): the store's topics are named in its language."
+            },
+            "required": false,
+            "description": "The page's presence (`bn-bd`): the store's topics are named in its language.",
+            "name": "presence",
+            "in": "query"
           }
         ],
         "responses": {
@@ -194383,8 +194411,7 @@
                 "page",
                 "menu",
                 "shipping_method",
-                "payment_method",
-                "conversation_topic"
+                "payment_method"
               ]
             },
             "required": true,
@@ -194987,8 +195014,7 @@
                 "page",
                 "menu",
                 "shipping_method",
-                "payment_method",
-                "conversation_topic"
+                "payment_method"
               ]
             },
             "required": true,
@@ -195191,8 +195217,7 @@
                 "page",
                 "menu",
                 "shipping_method",
-                "payment_method",
-                "conversation_topic"
+                "payment_method"
               ]
             },
             "required": true,
@@ -195432,8 +195457,7 @@
                 "page",
                 "menu",
                 "shipping_method",
-                "payment_method",
-                "conversation_topic"
+                "payment_method"
               ]
             },
             "required": true,
@@ -235133,7 +235157,7 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "topics": {
+                        "messageTopics": {
                           "type": "array",
                           "items": {
                             "type": "object",
@@ -235147,7 +235171,16 @@
                               "label": {
                                 "type": "string",
                                 "minLength": 1,
-                                "maxLength": 60
+                                "maxLength": 60,
+                                "description": "The name in the store's default language."
+                              },
+                              "labels": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string",
+                                  "maxLength": 60
+                                },
+                                "description": "The name in the store's other languages, by two-letter code. A language with none reads `label`."
                               }
                             },
                             "required": [
@@ -235164,7 +235197,7 @@
                         }
                       },
                       "required": [
-                        "topics",
+                        "messageTopics",
                         "revision"
                       ]
                     }
@@ -235279,7 +235312,7 @@
           "Admin - Settings"
         ],
         "summary": "Replace the topics buyers choose from (at most 12)",
-        "description": "A conversation keeps its topic's key: a renamed topic reads its new name, a removed one reads no name. An invalid list is a 400 whose `details.reason` is `too_many`, `invalid_key`, `duplicate_key` or `invalid_label` (with `details.index`).",
+        "description": "A conversation keeps its topic's key: a renamed topic reads its new name, a removed one reads no name (and its names in every language go with it). An invalid list is a 400 whose `details.reason` is `too_many`, `invalid_key`, `duplicate_key` or `invalid_label` (with `details.index`).",
         "requestBody": {
           "required": true,
           "content": {
@@ -235287,7 +235320,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "topics": {
+                  "messageTopics": {
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -235301,7 +235334,16 @@
                         "label": {
                           "type": "string",
                           "minLength": 1,
-                          "maxLength": 60
+                          "maxLength": 60,
+                          "description": "The name in the store's default language."
+                        },
+                        "labels": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string",
+                            "maxLength": 60
+                          },
+                          "description": "The name in the store's other languages, by two-letter code. A language with none reads `label`."
                         }
                       },
                       "required": [
@@ -235318,7 +235360,7 @@
                   }
                 },
                 "required": [
-                  "topics",
+                  "messageTopics",
                   "expectedRevision"
                 ],
                 "additionalProperties": false
@@ -235343,7 +235385,7 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "topics": {
+                        "messageTopics": {
                           "type": "array",
                           "items": {
                             "type": "object",
@@ -235357,7 +235399,16 @@
                               "label": {
                                 "type": "string",
                                 "minLength": 1,
-                                "maxLength": 60
+                                "maxLength": 60,
+                                "description": "The name in the store's default language."
+                              },
+                              "labels": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string",
+                                  "maxLength": 60
+                                },
+                                "description": "The name in the store's other languages, by two-letter code. A language with none reads `label`."
                               }
                             },
                             "required": [
@@ -235374,7 +235425,7 @@
                         }
                       },
                       "required": [
-                        "topics",
+                        "messageTopics",
                         "revision"
                       ]
                     }

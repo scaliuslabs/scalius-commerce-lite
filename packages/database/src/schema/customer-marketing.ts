@@ -286,7 +286,7 @@ export const customerOrderStats = sqliteTable("customer_order_stats", {
  * not an unfinished checkout (`status <> 'incomplete'`), and what the store
  * still holds of each (paid, which is net of refunds, less what banks took in
  * disputes, never below zero), in the order's own currency. Kept by the
- * triggers of @scalius/database/account-order-totals on every order write
+ * triggers of @scalius/database/buyer-account on every order write
  * that moves an order in or out or changes its amount, so the account
  * summary reads one row per currency, whatever the order count. A currency
  * whose orders all left keeps its row at zero. Application code never

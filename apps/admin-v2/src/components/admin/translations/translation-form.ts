@@ -39,7 +39,6 @@ export const TYPE_LABEL_KEYS: Record<TranslationEditorType, string> = {
   menu: "typeMenu",
   shipping_method: "typeShippingMethod",
   payment_method: "typePaymentMethod",
-  conversation_topic: "typeConversationTopic",
 };
 
 /** The type's web address (a resource with a localized handle). */

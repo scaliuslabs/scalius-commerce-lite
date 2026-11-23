@@ -14717,7 +14717,7 @@ export type GetApiV1CustomerAuthOrdersResponse = GetApiV1CustomerAuthOrdersRespo
 export type PostApiV1CustomerAuthPhoneSendCodeData = {
     body?: {
         /**
-         * A new number for the account's phone. Absent: the account's own unproven phone.
+         * A new number for the account's phone: a code goes to how the account signs in now (its proven phone, else its email) and one to the new number, both for this change only. Absent: the account's own unproven phone.
          */
         phone?: string;
     };
@@ -14783,6 +14783,10 @@ export type PostApiV1CustomerAuthPhoneSendCodeResponses = {
         data: {
             message: string;
             resendAfterSeconds: number;
+            /**
+             * For a change: where the code that confirms it went (send it back as `currentCode`); null for the account's own phone.
+             */
+            confirmWith: 'phone' | 'email' | null;
         };
     };
 };
@@ -14793,9 +14797,13 @@ export type PostApiV1CustomerAuthPhoneVerifyData = {
     body?: {
         code: string;
         /**
-         * The new number the code was sent to: proving it makes it the account's phone.
+         * The new number of a change: `code` is the one sent to it.
          */
         phone?: string;
+        /**
+         * For a change: the code sent to how the account signs in now.
+         */
+        currentCode?: string;
     };
     path?: never;
     query?: never;
@@ -16581,7 +16589,12 @@ export type PostApiV1CustomerAuthConversationsByIdCloseData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * The page's presence (`bn-bd`): the store's topics are named in its language.
+         */
+        presence?: string;
+    };
     url: '/api/v1/customer-auth/conversations/{id}/close';
 };
 
@@ -55428,7 +55441,7 @@ export type GetApiV1AdminTranslationsResourcesData = {
          * A market-specific translation (adapt); omit for every market.
          */
         marketId?: string;
-        type: 'product' | 'collection' | 'category' | 'brand' | 'page' | 'menu' | 'shipping_method' | 'payment_method' | 'conversation_topic';
+        type: 'product' | 'collection' | 'category' | 'brand' | 'page' | 'menu' | 'shipping_method' | 'payment_method';
         search?: string;
         page?: number;
         limit?: number;
@@ -55608,7 +55621,7 @@ export type PostApiV1AdminTranslationsMachineResponse = PostApiV1AdminTranslatio
 export type DeleteApiV1AdminTranslationsByTypeByIdData = {
     body?: never;
     path: {
-        type: 'product' | 'collection' | 'category' | 'brand' | 'page' | 'menu' | 'shipping_method' | 'payment_method' | 'conversation_topic';
+        type: 'product' | 'collection' | 'category' | 'brand' | 'page' | 'menu' | 'shipping_method' | 'payment_method';
         id: string;
     };
     query: {
@@ -55672,7 +55685,7 @@ export type DeleteApiV1AdminTranslationsByTypeByIdResponse = DeleteApiV1AdminTra
 export type GetApiV1AdminTranslationsByTypeByIdData = {
     body?: never;
     path: {
-        type: 'product' | 'collection' | 'category' | 'brand' | 'page' | 'menu' | 'shipping_method' | 'payment_method' | 'conversation_topic';
+        type: 'product' | 'collection' | 'category' | 'brand' | 'page' | 'menu' | 'shipping_method' | 'payment_method';
         id: string;
     };
     query: {
@@ -55732,7 +55745,7 @@ export type GetApiV1AdminTranslationsByTypeByIdResponse = GetApiV1AdminTranslati
 export type PutApiV1AdminTranslationsByTypeByIdData = {
     body: SaveTranslation;
     path: {
-        type: 'product' | 'collection' | 'category' | 'brand' | 'page' | 'menu' | 'shipping_method' | 'payment_method' | 'conversation_topic';
+        type: 'product' | 'collection' | 'category' | 'brand' | 'page' | 'menu' | 'shipping_method' | 'payment_method';
         id: string;
     };
     query?: never;
@@ -67230,12 +67243,21 @@ export type GetApiV1AdminSettingsConversationTopicsResponses = {
     200: {
         success: true;
         data: {
-            topics: Array<{
+            messageTopics: Array<{
                 /**
                  * Stable id kept on conversations: lowercase letters, digits, - and _.
                  */
                 key: string;
+                /**
+                 * The name in the store's default language.
+                 */
                 label: string;
+                /**
+                 * The name in the store's other languages, by two-letter code. A language with none reads `label`.
+                 */
+                labels?: {
+                    [key: string]: string;
+                };
             }>;
             revision: number;
         };
@@ -67246,12 +67268,21 @@ export type GetApiV1AdminSettingsConversationTopicsResponse = GetApiV1AdminSetti
 
 export type PutApiV1AdminSettingsConversationTopicsData = {
     body: {
-        topics: Array<{
+        messageTopics: Array<{
             /**
              * Stable id kept on conversations: lowercase letters, digits, - and _.
              */
             key: string;
+            /**
+             * The name in the store's default language.
+             */
             label: string;
+            /**
+             * The name in the store's other languages, by two-letter code. A language with none reads `label`.
+             */
+            labels?: {
+                [key: string]: string;
+            };
         }>;
         expectedRevision: number;
     };
@@ -67311,12 +67342,21 @@ export type PutApiV1AdminSettingsConversationTopicsResponses = {
     200: {
         success: true;
         data: {
-            topics: Array<{
+            messageTopics: Array<{
                 /**
                  * Stable id kept on conversations: lowercase letters, digits, - and _.
                  */
                 key: string;
+                /**
+                 * The name in the store's default language.
+                 */
                 label: string;
+                /**
+                 * The name in the store's other languages, by two-letter code. A language with none reads `label`.
+                 */
+                labels?: {
+                    [key: string]: string;
+                };
             }>;
             revision: number;
         };

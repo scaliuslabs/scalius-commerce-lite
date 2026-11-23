@@ -15,11 +15,11 @@ export function jsonRequest(url: string, body: unknown, headers: Record<string, 
   });
 }
 
-export async function taxQuote(store: FreePlanStore, lines: number): Promise<{ quoteFingerprint: string }> {
+export async function taxQuote(store: FreePlanStore, lines: number, headers: Record<string, string> = {}): Promise<{ quoteFingerprint: string }> {
   const response = await store.worker.fetch(jsonRequest(`${STORE.api}/api/v1/orders/tax-quote`, {
     items: cartItems(lines).map(({ productId, variantId, quantity }) => ({ productId, variantId, quantity })),
     city: "city_1", zone: "zone_1", shippingMethodId: "m_std", discountCodes: [],
-  }));
+  }, headers));
   const body = await response.json() as { data: { quoteFingerprint: string } };
   expect(response.status, JSON.stringify(body)).toBe(200);
   return body.data;
@@ -29,7 +29,7 @@ export async function taxQuote(store: FreePlanStore, lines: number): Promise<{ q
  * Commit an order of `lines` single-SKU lines at a quote's fingerprint; returns its id. Each buyer's
  * phone is new, numbered from the store's own orders, so a store rewound to a checkpoint numbers them alike.
  */
-export async function placeOrder(store: FreePlanStore, lines: number, quote: string): Promise<string> {
+export async function placeOrder(store: FreePlanStore, lines: number, quote: string, headers: Record<string, string> = {}): Promise<string> {
   const { orders } = store.sqlite.prepare("SELECT count(*) AS orders FROM orders").get() as { orders: number };
   const response = await store.worker.fetch(jsonRequest(`${STORE.api}/api/v1/orders`, {
     checkoutRequestId: `budget_${crypto.randomUUID()}`,
@@ -46,7 +46,7 @@ export async function placeOrder(store: FreePlanStore, lines: number, quote: str
     shippingCharge: 60,
     shippingMethodId: "m_std",
     paymentMethod: "cod",
-  }));
+  }, headers));
   const body = await response.json() as { data: { orderId: string } };
   expect(response.status, JSON.stringify(body)).toBe(201);
   return body.data.orderId;

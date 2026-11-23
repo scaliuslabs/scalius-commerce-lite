@@ -36,7 +36,6 @@ export const TRANSLATION_RESOURCE_TYPES = [
     "menu",
     "shipping_method",
     "payment_method",
-    "conversation_topic",
 ] as const;
 /** Mirrors `SLUGGED_RESOURCE_TYPES` in `@scalius/shared/translations`. */
 export const LOCALIZED_SLUG_RESOURCE_TYPES = ["product", "category", "brand", "page"] as const;

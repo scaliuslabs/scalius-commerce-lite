@@ -64,7 +64,10 @@
  *
  * Account summary (2026-11-23): a signed-in buyer's numbers read one row per currency
  * (`account_order_totals`) and their threads, so 300 orders cost what one does: 12 calls, 13
- * statements, 10 rows read on both plans (`account-summary`, `account-summary-300`).
+ * statements, 10 rows read on both plans (`account-summary`, `account-summary-300`). A signed-in
+ * buyer's order writes fire the account totals triggers, which the guest cases never do:
+ * `checkout-3-commit-signed-in` (the insert refreshes one totals row) and `order-refund-signed-in`
+ * (the refund's paid amount refreshes it again).
  *
  * order-lifecycle (2026-10-14, queue retirement): one 3-line order costs 34 D1
  * calls, the commit and its after-response work together; with the queue it
@@ -324,6 +327,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "customer-otp-verify": { d1Calls: 8, d1Statements: 19, externalFetches: 0, rowsWritten: 12, rowsRead: 4, fullScans: 1 },
     "account-summary": { d1Calls: 12, d1Statements: 13, externalFetches: 0, rowsWritten: 0, rowsRead: 10, fullScans: 0 },
     "account-summary-300": { d1Calls: 12, d1Statements: 13, externalFetches: 0, rowsWritten: 0, rowsRead: 10, fullScans: 0 },
+    "checkout-3-commit-signed-in": { d1Calls: 14, d1Statements: 70, externalFetches: 0, rowsWritten: 46, rowsRead: 60, fullScans: 16 },
+    "order-refund-signed-in": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 20, rowsRead: 26, fullScans: 3 },
     "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 0, rowsRead: 41, fullScans: 11 },
     "page-home-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
     "page-product-miss": { d1Calls: 19, d1Statements: 36, externalFetches: 0, rowsWritten: 0, rowsRead: 49, fullScans: 10 },
@@ -392,6 +397,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "customer-otp-verify": { d1Calls: 8, d1Statements: 19, externalFetches: 0, rowsWritten: 12, rowsRead: 4, fullScans: 1 },
     "account-summary": { d1Calls: 12, d1Statements: 13, externalFetches: 0, rowsWritten: 0, rowsRead: 10, fullScans: 0 },
     "account-summary-300": { d1Calls: 12, d1Statements: 13, externalFetches: 0, rowsWritten: 0, rowsRead: 10, fullScans: 0 },
+    "checkout-3-commit-signed-in": { d1Calls: 14, d1Statements: 70, externalFetches: 0, rowsWritten: 46, rowsRead: 60, fullScans: 16 },
+    "order-refund-signed-in": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 20, rowsRead: 26, fullScans: 3 },
     "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 0, rowsRead: 41, fullScans: 11 },
     "page-home-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
     "page-product-miss": { d1Calls: 19, d1Statements: 36, externalFetches: 0, rowsWritten: 0, rowsRead: 49, fullScans: 10 },

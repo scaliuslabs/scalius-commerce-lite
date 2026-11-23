@@ -787,7 +787,7 @@ export const postApiV1CustomerAuthLogout = <ThrowOnError extends boolean = false
 /**
  * Update customer profile
  *
- * Changes the account's name, phone and WhatsApp number (each optional; an empty string clears a number). Numbers are read as checkout reads them. A phone the account signs in with (`phoneVerified`) changes only by proving the new number with a code (`POST /customer-auth/phone/send-code` and `/phone/verify` with `phone`): changing it here is a 409 with `details.reason` `phone_is_sign_in`. A WhatsApp number is kept only when the store collects one apart from the phone (else 400 `whatsapp_not_collected`); the same number as the phone is stored as none. Addresses are in the address book (/customer-auth/addresses).
+ * Changes the account's name and WhatsApp number (an empty string clears it; read as checkout reads it). The WhatsApp number is kept only when the store collects one apart from the phone (else 400 `whatsapp_not_collected`; a stored one is dropped on the next save), and the phone's own number is stored as none. A session never changes the phone: a different `phone` is a 409 with `details.reason` `phone_change_needs_codes`. To change it, `POST /customer-auth/phone/send-code` with `phone` (a code to how the account signs in now, one to the new number), then `/phone/verify` with `phone`, `code` and `currentCode`; a buyer who cannot get the first code asks the store. Addresses are in the address book (/customer-auth/addresses).
  */
 export const putApiV1CustomerAuthProfile = <ThrowOnError extends boolean = false>(options?: Options<PutApiV1CustomerAuthProfileData, ThrowOnError>): RequestResult<PutApiV1CustomerAuthProfileResponses, PutApiV1CustomerAuthProfileErrors, ThrowOnError> => (options?.client ?? client).put<PutApiV1CustomerAuthProfileResponses, PutApiV1CustomerAuthProfileErrors, ThrowOnError>({
     url: '/api/v1/customer-auth/profile',
@@ -6502,7 +6502,7 @@ export const getApiV1AdminSettingsConversationTopics = <ThrowOnError extends boo
 /**
  * Replace the topics buyers choose from (at most 12)
  *
- * A conversation keeps its topic's key: a renamed topic reads its new name, a removed one reads no name. An invalid list is a 400 whose `details.reason` is `too_many`, `invalid_key`, `duplicate_key` or `invalid_label` (with `details.index`).
+ * A conversation keeps its topic's key: a renamed topic reads its new name, a removed one reads no name (and its names in every language go with it). An invalid list is a 400 whose `details.reason` is `too_many`, `invalid_key`, `duplicate_key` or `invalid_label` (with `details.index`).
  */
 export const putApiV1AdminSettingsConversationTopics = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsConversationTopicsData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsConversationTopicsResponses, PutApiV1AdminSettingsConversationTopicsErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsConversationTopicsResponses, PutApiV1AdminSettingsConversationTopicsErrors, ThrowOnError>({
     url: '/api/v1/admin/settings/conversation-topics',

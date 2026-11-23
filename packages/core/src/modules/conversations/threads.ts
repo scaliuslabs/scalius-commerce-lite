@@ -321,8 +321,11 @@ export function planConversationAppend(
       lastAuthorType: line.authorType,
       version: sql`${conversations.version} + 1`,
       updatedAt: now,
-      // The move's target; the WHERE names its source states (every state, for a message).
-      ...(status ? { status: status.to, closedAt: null } : {}),
+      // The move's target, written only from its source states (a thread already there keeps its status).
+      ...(status ? {
+        status: sql`CASE WHEN ${inArray(conversations.status, [...status.from])} THEN ${status.to} ELSE ${conversations.status} END`,
+        closedAt: null,
+      } : {}),
       ...(index === 0 && options.topic ? { topic: sql`coalesce(${conversations.topic}, ${options.topic})` } : {}),
       // Posting, including a reply or note, does not prove staff saw earlier incoming lines.
       ...(readBy.has("customer")
@@ -331,11 +334,7 @@ export function planConversationAppend(
         : internalNote
           ? { customerReadSeq: sql`CASE WHEN ${conversations.customerReadSeq} = ${seq - 1} THEN ${seq} ELSE ${conversations.customerReadSeq} END` }
           : {}),
-    }).where(and(
-      eq(conversations.id, thread.id),
-      eq(conversations.lastSeq, seq - 1),
-      status ? inArray(conversations.status, [...status.from]) : undefined,
-    )));
+    }).where(and(eq(conversations.id, thread.id), eq(conversations.lastSeq, seq - 1))));
 
     statements.push(db.insert(conversationMessages).values({
       id,
@@ -1377,30 +1376,33 @@ export async function updateStaffThread(
   input: { version: number; status?: ConversationStatus; assigneeUserId?: string | null },
 ): Promise<StaffConversationThread> {
   const now = nowSeconds();
-  // A status is written only as the staff move to it; a thread already there stays as it is.
+  // A status is written only as the staff move to it, from the move's sources.
   const move = input.status ? conversationStatusMove(staffStatusMove(input.status)) : null;
+  const assigning = input.assigneeUserId !== undefined;
   const rows = await db.update(conversations).set({
     ...(move ? {
-      status: move.to,
+      status: sql`CASE WHEN ${inArray(conversations.status, [...move.from])} THEN ${move.to} ELSE ${conversations.status} END`,
       closedAt: move.to === "closed"
         ? sql`CASE WHEN ${conversations.status} = 'closed' THEN ${conversations.closedAt} ELSE ${now} END`
         : null,
     } : {}),
-    ...(input.assigneeUserId !== undefined ? { assigneeUserId: input.assigneeUserId } : {}),
+    ...(assigning ? { assigneeUserId: input.assigneeUserId } : {}),
     version: sql`${conversations.version} + 1`,
     updatedAt: now,
   }).where(and(
     eq(conversations.id, conversationId),
     eq(conversations.version, input.version),
-    move ? inArray(conversations.status, [...move.from, move.to]) : undefined,
+    // Without an assignment the write is the move alone: a thread already in its target is not touched.
+    move && !assigning ? inArray(conversations.status, [...move.from]) : undefined,
     input.assigneeUserId ? staffPermissionSql(sql`${input.assigneeUserId}`, "conversations.reply") : undefined,
   )).returning({ id: conversations.id });
   if (rows.length === 0) {
     const exists = await readThread(db, conversationId);
     if (!exists) throw new NotFoundError("Conversation not found");
     if (exists.version !== input.version) throw new ConflictError("Someone else changed this conversation. Refresh and try again.");
-    if (move && input.status && ![...move.from, move.to].includes(exists.status)) {
-      throw new StateConflictError(CONVERSATION_MACHINE, exists.status, staffStatusMove(input.status));
+    if (move && exists.status === move.to) return getStaffThread(db, conversationId);
+    if (move && !move.from.includes(exists.status)) {
+      throw new StateConflictError(CONVERSATION_MACHINE, exists.status, staffStatusMove(input.status!));
     }
     if (input.assigneeUserId) throw new ValidationError("Choose an active teammate who can reply to conversations.");
     throw new ConflictError("Someone else changed this conversation. Refresh and try again.");

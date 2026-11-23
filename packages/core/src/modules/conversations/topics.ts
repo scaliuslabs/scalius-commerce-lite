@@ -1,8 +1,8 @@
-// The merchant's conversation topics (Settings → Inbox): the short list a
-// buyer picks from when they write to the store. A conversation keeps the
-// topic's key; its label is read from the current list in the page's
-// language (resource `conversation_topic`, id = key), so a renamed topic
-// reads its new name everywhere and a removed one reads no label.
+// The merchant's conversation topics (Settings → Customer accounts): the
+// short list a buyer picks from when they write to the store. A conversation
+// keeps the topic's key; its label is read from the current list in the
+// page's language (the topic's own labels), so a renamed topic reads its new
+// name everywhere and a removed one reads no label.
 import type { Database } from "@scalius/database/client";
 import {
   isConversationTopicKey,
@@ -18,11 +18,7 @@ export interface ConversationTopicView {
   label: string | null;
 }
 
-/**
- * The merchant's topics in the store's default language. A reader in another
- * language folds their translations (resource `conversation_topic`, id = key)
- * where it knows the page's presence (the API's buyer conversation view).
- */
+/** The merchant's topics, each with its labels in the store's languages. */
 export async function readConversationTopics(db: Database): Promise<ConversationTopic[]> {
   return (await conversationTopicsDocument.read(db)).topics;
 }

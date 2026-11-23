@@ -12,8 +12,8 @@ import {
   type StaffConversationThread,
   type ThreadRow,
 } from "@scalius/core/modules/conversations";
-import { applyTranslation, readTranslationChains, translationScope, type TranslationScope } from "@scalius/core/modules/translations";
-import type { ConversationTopic } from "@scalius/shared/conversation";
+import { translationScope, type TranslationScope } from "@scalius/core/modules/translations";
+import { conversationTopicLabel, type ConversationTopic } from "@scalius/shared/conversation";
 import { MARKET_PRESENCE_QUERY_PARAM } from "@scalius/shared/markets";
 import { getPluginInstallation } from "@scalius/core/modules/plugins";
 import { parseCustomChannelId } from "@scalius/shared/plugins/providers";
@@ -25,12 +25,9 @@ export function buyerTranslation(c: Context): TranslationScope | null {
   return translationScope(new URL(c.req.url).searchParams.get(MARKET_PRESENCE_QUERY_PARAM));
 }
 
-/** The merchant's topics named in the scope's language (one more statement at a presence, none at the root). */
+/** The merchant's topics named in the scope's language (their own labels; the default label where a language has none). */
 export async function buyerConversationTopics(db: Database, scope: TranslationScope | null): Promise<ConversationTopic[]> {
-  const topics = await readConversationTopics(db);
-  if (!scope || topics.length === 0) return topics;
-  const chains = await readTranslationChains(db, scope, "conversation_topic", topics.map((topic) => topic.key));
-  return topics.map((topic) => applyTranslation(topic, chains.get(topic.key) ?? [], { label: "label" }));
+  return (await readConversationTopics(db)).map((topic) => ({ key: topic.key, label: conversationTopicLabel(topic, scope?.locale) }));
 }
 
 /** Threads' topic keys as readers see them (`{ key, label }`), labelled from one read of the merchant's list. */
@@ -40,7 +37,12 @@ export async function withTopicViews<T extends { topic: string | null }>(db: Dat
 }
 
 export async function getBuyerConversationView(db: Database, thread: ThreadRow, options: { beforeSeq?: number; afterSeq?: number; scope?: TranslationScope | null } = {}) {
-  const [threadView] = await withTopicViews(db, [await getBuyerThread(db, thread, options)], options.scope ?? null);
+  const read = await getBuyerThread(db, thread, options);
+  // A poll that found nothing new reads no settings: the topic keeps its key, its name is the reader's already.
+  if (options.afterSeq !== undefined && read.messages.length === 0) {
+    return { ...read, topic: read.topic ? { key: read.topic, label: null } : null };
+  }
+  const [threadView] = await withTopicViews(db, [read], options.scope ?? null);
   const view = await hydrateConversationProducts(db, threadView!);
   // Incremental polls need only newly arrived messages; sharing has its own
   // versioned endpoint and does not require repricing the whole cart each poll.

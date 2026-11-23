@@ -1,6 +1,7 @@
 // Adding and verifying a phone number on the customer account.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
+  hashCustomerSessionToken,
   sendAccountPhoneCode,
   verifyAccountPhoneCode,
 } from "@scalius/core/modules/customers";
@@ -12,7 +13,7 @@ import {
   successEnvelope,
 } from "../../schemas/responses";
 import { ok } from "../../utils/api-response";
-import { getCredentialEncryptionKey } from "../../utils/encryption-key";
+import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../../utils/encryption-key";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { getTrustedClientIp } from "../../utils/client-ip";
 import { setPrivateNoStoreHeaders, requireCustomerSession } from "./shared";
@@ -33,7 +34,7 @@ const sendAccountPhoneCodeRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            phone: z.string().trim().max(32).optional().openapi({ description: "A new number for the account's phone. Absent: the account's own unproven phone." }),
+            phone: z.string().trim().max(32).optional().openapi({ description: "A new number for the account's phone: a code goes to how the account signs in now (its proven phone, else its email) and one to the new number, both for this change only. Absent: the account's own unproven phone." }),
           }).strict(),
         },
       },
@@ -44,7 +45,11 @@ const sendAccountPhoneCodeRoute = createRoute({
       description: "Code sent",
       content: {
         "application/json": {
-          schema: successEnvelope(z.object({ message: z.string(), resendAfterSeconds: z.number().int() })),
+          schema: successEnvelope(z.object({
+            message: z.string(),
+            resendAfterSeconds: z.number().int(),
+            confirmWith: z.enum(["phone", "email"]).nullable().openapi({ description: "For a change: where the code that confirms it went (send it back as `currentCode`); null for the account's own phone." }),
+          })),
         },
       },
     },
@@ -71,8 +76,8 @@ app.openapi(sendAccountPhoneCodeRoute, async (c) => {
     credentialEncryptionKey: getCredentialEncryptionKey(env),
     appProviders: requestAppProviders(c),
   });
-  if (result.otpDelivery) await sendAuthOtp(c, c.get("db"), result.otpDelivery);
-  return ok(c, { message: result.message, resendAfterSeconds: result.resendAfterSeconds });
+  for (const delivery of result.otpDeliveries) await sendAuthOtp(c, c.get("db"), delivery);
+  return ok(c, { message: result.message, resendAfterSeconds: result.resendAfterSeconds, confirmWith: result.confirmWith });
 });
 
 const verifyAccountPhoneCodeRoute = createRoute({
@@ -86,7 +91,8 @@ const verifyAccountPhoneCodeRoute = createRoute({
         "application/json": {
           schema: z.object({
             code: z.string().trim().min(4).max(12),
-            phone: z.string().trim().max(32).optional().openapi({ description: "The new number the code was sent to: proving it makes it the account's phone." }),
+            phone: z.string().trim().max(32).optional().openapi({ description: "The new number of a change: `code` is the one sent to it." }),
+            currentCode: z.string().trim().min(4).max(12).optional().openapi({ description: "For a change: the code sent to how the account signs in now." }),
           }).strict(),
         },
       },
@@ -108,14 +114,17 @@ const verifyAccountPhoneCodeRoute = createRoute({
 
 app.openapi(verifyAccountPhoneCodeRoute, async (c) => {
   setPrivateNoStoreHeaders(c);
-  const { session } = await requireCustomerSession(c);
+  const { session, token } = await requireCustomerSession(c);
   if (!session.customerId) throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
   const env = c.env as unknown as Record<string, unknown>;
-  const { code, phone } = c.req.valid("json");
+  const { code, phone, currentCode } = c.req.valid("json");
   const { movedOrders } = await verifyAccountPhoneCode(c.get("db"), {
     accountId: session.customerId,
     code,
     phone,
+    currentCode,
+    // A change signs out every other session of the account; this one stays.
+    currentSessionTokenHash: await hashCustomerSessionToken(token, getCustomerSessionHashKey(env)),
     encryptionKey: getCredentialEncryptionKey(env),
     credentialEncryptionKey: getCredentialEncryptionKey(env),
   });

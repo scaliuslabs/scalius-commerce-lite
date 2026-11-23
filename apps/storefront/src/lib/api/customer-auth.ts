@@ -62,7 +62,6 @@ interface ProfileData {
 interface OrdersData {
   orders: CustomerOrder[];
   customer?: CustomerInfo;
-  summary?: CustomerOrdersSummary;
   pagination?: CustomerOrdersPagination;
   phoneVerification?: unknown;
 }
@@ -503,13 +502,6 @@ export interface CustomerOrder {
   items: CustomerOrderItem[];
 }
 
-export interface CustomerOrdersSummary {
-  totalOrders: number;
-  totalSpent: number;
-  completedOrders: number;
-  pendingOrders: number;
-}
-
 export interface CustomerOrdersPagination {
   limit: number;
   returned: number;
@@ -808,7 +800,6 @@ export async function getCustomerOrders(options: {
   success: boolean;
   orders: CustomerOrder[];
   customer?: CustomerInfo;
-  summary?: CustomerOrdersSummary;
   pagination?: CustomerOrdersPagination;
   /** Set only when the account's own phone is unverified and the store can text it a code. */
   phoneVerification?: PhoneVerificationPrompt | null;
@@ -840,7 +831,6 @@ export async function getCustomerOrders(options: {
       success: true,
       orders: data.orders || [],
       customer: data.customer,
-      ...(data.summary ? { summary: data.summary } : {}),
       ...(data.pagination ? { pagination: data.pagination } : {}),
       phoneVerification: readPhoneVerification(data.phoneVerification),
     };

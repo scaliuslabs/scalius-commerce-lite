@@ -350,9 +350,9 @@ export const customerRequestsDocument = defineSettingsDocument<CustomerRequestPo
 
 // ─────────────────────────────────────────
 // Conversation topics: the short list a buyer picks from when they write to
-// the store ("Payment", "Delivery"). Keys are kept on conversations; labels
-// are translated as `conversation_topic` resources (id = key). Empty by
-// default: no topic is offered or required.
+// the store ("Payment", "Delivery"). Keys are kept on conversations; each
+// topic carries its labels in the store's languages. Empty by default: no
+// topic is offered or required.
 // ─────────────────────────────────────────
 
 export interface ConversationTopicSettings {

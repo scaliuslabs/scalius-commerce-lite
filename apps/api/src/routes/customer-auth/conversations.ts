@@ -184,7 +184,7 @@ app.openapi(createRoute({
   tags: ["Customer Auth"],
   summary: "Close one of the account's conversations (the buyer's next message reopens it)",
   description: "Moves the conversation to `closed` by the machine's `close` move (from `open` or `pending`). Closing a closed conversation changes nothing. Posting a message later reopens it for the store.",
-  request: { params: conversationParam },
+  request: { params: conversationParam, query: z.object({ presence: presenceQuerySchema }) },
   responses: {
     200: { description: "The conversation, closed", content: { "application/json": { schema: threadEnvelope } } },
     ...writeResponses,
@@ -194,7 +194,7 @@ app.openapi(createRoute({
   const { actor } = await customerActor(c);
   const db = c.get("db");
   const thread = await resolveBuyerThread(db, actor, c.req.valid("param").id);
-  return ok(c, { conversation: await getBuyerConversationView(db, await closeBuyerThread(db, thread)) });
+  return ok(c, { conversation: await getBuyerConversationView(db, await closeBuyerThread(db, thread), { scope: buyerTranslation(c) }) });
 });
 
 app.openapi(createRoute({
