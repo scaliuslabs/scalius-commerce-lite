@@ -31,7 +31,7 @@ import type { PluginFunctionPoint } from "./manifest";
 import { PLUGIN_CUSTOMER_ROLE_PATTERN, PLUGIN_CUSTOMER_ROLE_REF_PATTERN, PLUGIN_CUSTOMER_ROLES_MAX } from "./customer-roles";
 import { PROTECTED_FIELD_KEYWORD, protectedPathsOf, type ProtectedCustomerData, type ProtectedPath } from "./protected-data";
 import { ORDER_CHANNELS } from "../order-channel";
-import { LINE_ADD_ONS_MAX } from "../add-on-totals";
+import { LINE_ADD_ONS_MAX } from "../line-identity";
 import { ONLINE_STORE_CHANNEL_ID, SALES_CHANNEL_ID_MAX_LENGTH, SALES_CHANNEL_ID_PATTERN } from "../sales-channels";
 
 const id = z.string().min(1).max(128);

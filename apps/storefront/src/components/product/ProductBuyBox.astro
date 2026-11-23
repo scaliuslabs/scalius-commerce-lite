@@ -23,7 +23,12 @@ import ProductSummary from "./ProductSummary.astro";
 import WarrantyRow from "./WarrantyRow.astro";
 import ProductFeatureList from "./modules/ProductFeatureList.astro";
 import ReviewsSummary from "./reviews/ReviewsSummary.astro";
+import KitContents from "./KitContents.astro";
+import PlacedOffers from "./PlacedOffers.astro";
 import { buyBoxFeatures } from "./lib/product-page-modules";
+import { catalogCopy } from "@/lib/catalog-copy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 
 type SummaryProps = ComponentProps<typeof ProductSummary>;
 
@@ -48,10 +53,24 @@ interface Props {
   placed?: readonly StorefrontBuyFormPart[];
   /** Draw only this part, where a skin placed it (a `buy_form_part` embed). */
   only?: StorefrontBuyFormPart;
+  /**
+   * Draw the offers placed under the page's own (`product.placedOffers`):
+   * false when a product_main skin's own `buyOffer` buttons buy every one.
+   */
+  placedOffers?: boolean;
 }
 
-const { summary, reviewCopy, features, emi, contactLinks, contactCopy, blockData, fulfilment, deliveryFacts, canPurchaseAny, openingVariantId, placed = [], only } = Astro.props;
+const { summary, reviewCopy, features, emi, contactLinks, contactCopy, blockData, fulfilment, deliveryFacts, canPurchaseAny, openingVariantId, placed = [], only, placedOffers = true } = Astro.props;
 const { product } = summary;
+// What a kit SKU of the page's own holds (the chosen one shows), and the offers placed under the
+// page's own, from the projection a skin gets: the same data, the store's own drawing.
+const projected = only ? null : blockData().product;
+const { language } = await currentRequestTheme(Astro.locals);
+const kitWords = catalogCopy(language).product.kit;
+const kitSkus = (projected?.variants ?? []).flatMap((variant) => (variant.kit ? [{ id: variant.id, kit: variant.kit }] : []));
+const onlySku = (projected?.variants.length ?? 0) === 1;
+const offers = placedOffers ? projected?.placedOffers ?? [] : [];
+const buttonWords = { ...ENGLISH_CHECKOUT_LANGUAGE_DATA, ...summary.actionCopy };
 const warrantyPlaced = placed.includes("warranty");
 const hasWarranty = only === "warranty" && skuWarranties(product, summary.variants).byId.size > 0;
 const placedPart = { [BUY_FORM_PLACED_PART]: only };
@@ -68,6 +87,12 @@ const placedPart = { [BUY_FORM_PLACED_PART]: only };
 ) : (
 <ProductSummary {...summary} projection={blockData()} placed={placed}>
   <ReviewsSummary slot="after-title" product={product} copy={reviewCopy} />
+  {kitSkus.map(({ id, kit }) => (
+    <KitContents slot="after-actions" kit={kit} words={kitWords} language={language} variantId={onlySku ? undefined : id} hidden={!onlySku && id !== openingVariantId} open={onlySku} />
+  ))}
+  {offers.length > 0 && (
+    <PlacedOffers slot="after-actions" offers={offers} words={kitWords} language={language} addLabel={buttonWords.addToCartText} buyLabel={buttonWords.buyNowText} />
+  )}
   <AppSlot slot="after-title" name="product.buy_box.before" data={blockData} />
   {features.shown && (
     <ProductFeatureList slot="after-actions" features={buyBoxFeatures(product)} variant="list" title={features.title} />

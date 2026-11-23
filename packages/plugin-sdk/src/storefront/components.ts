@@ -7,9 +7,11 @@ import type {
   StorefrontComponentSlot,
   StorefrontDeferredHydration,
   StorefrontEmbedKind,
+  StorefrontHeaderData,
   StorefrontImage,
   StorefrontIslandHydration,
   StorefrontMoney,
+  StorefrontPlacedOffer,
   StorefrontProductCard,
   StorefrontBuyFormOptionLayout,
   StorefrontBuyFormPart,
@@ -295,6 +297,47 @@ export function buyVariant(variant: ProductPageVariant, action: "add" | "buy"): 
   return { "data-buy-variant": variant.id, "data-buy-intent": action };
 }
 
+/**
+ * Attributes of a `<button>` that adds another product's SKU placed under
+ * this page's offers (`data.product.placedOffers`, a kit or a cross-sold
+ * SKU) to the cart (`"add"`) or buys it now (`"buy"`), one unit, at the
+ * price and availability the store decides (product_main skins). It is not
+ * the buy form's: the page's options, buyer inputs and quantity are the
+ * page's own SKU's. Without JavaScript it posts the offer to its product's
+ * buy route. The host owns `type`, `form`, `formaction`, `name`, `value`,
+ * `disabled` and `aria-busy`: off while the offer cannot be bought, busy
+ * while it adds. A button naming an offer the page does not carry stays
+ * yours, unbound.
+ *
+ *   {data.product.placedOffers?.map((offer) => (
+ *     <div class="offer">
+ *       <a href={offer.url}>{offer.title}</a> <Price price={offer.price} compareAt={offer.compareAt} context={context} />
+ *       <button {...buyOffer(offer, "add")}>Add to cart</button>
+ *     </div>
+ *   ))}
+ */
+export function buyOffer(offer: Pick<StorefrontPlacedOffer, "variantId">, action: "add" | "buy"): Attributes {
+  return { "data-buy-offer": offer.variantId, "data-buy-intent": action };
+}
+
+/**
+ * Attributes of a header's search `<form>`: the store's one search. It is a
+ * real `GET` form to the search page (`data.routes.search`; name its field
+ * `data.searchParam`, and a department select `data.searchScopeParam`), so
+ * it searches without JavaScript; with it, a press on the field or the
+ * first letters typed open the store's live search with them, unless a
+ * department is chosen (the form then searches that department). Draw no
+ * suggestion list of your own: the live search is the store's.
+ *
+ *   <form {...searchForm(data)}>
+ *     <input type="search" name={data.searchParam} aria-label="Search" />
+ *     <button type="submit">Search</button>
+ *   </form>
+ */
+export function searchForm(data: Pick<StorefrontHeaderData, "routes">): Attributes {
+  return { role: "search", method: "get", action: data.routes.search, "data-header-search": "" };
+}
+
 /** The cart's item count, kept current in the browser (empty while the cart is). */
 export function CartCount(props: { class?: string }): Html {
   return raw(`<span data-scalius-cart-count${props.class ? ` class="${escapeHtml(props.class)}"` : ""} aria-live="polite"></span>`);
@@ -346,6 +389,12 @@ export interface BuyFormProps {
    * show only as the edited cart line's one "Update cart".
    */
   actions?: boolean;
+  /**
+   * False leaves out the quantity stepper: every add is one unit (the buyer
+   * changes it in the cart), and a placed `<BuyFormPart name="quantity" />`
+   * draws nothing.
+   */
+  quantity?: boolean;
   /** The Add to cart button's words (60 characters at most); the store's own words in the page's language otherwise. */
   addLabel?: string;
   /** The Buy now button's words (60 characters at most); the store's own words in the page's language otherwise. */
@@ -368,6 +417,7 @@ export function BuyForm(props: BuyFormProps = {}): Html {
     options: props.options === false ? "false" : undefined,
     "options-layout": props.optionsLayout,
     actions: props.actions === false ? "false" : undefined,
+    quantity: props.quantity === false ? "false" : undefined,
     "add-label": props.addLabel,
     "buy-label": props.buyLabel,
   });

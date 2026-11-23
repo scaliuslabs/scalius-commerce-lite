@@ -243,6 +243,7 @@ export function init() {
   state.selection = requested?.selection ??
     createInitialSelection(state.options, state.variants);
   hideExpiredOffers();
+  installPlacedOfferButtons();
   warranty = readWarranty();
 
   state.purchaseBlocked = Boolean(part("blocked"));
@@ -348,6 +349,46 @@ function checkedPurchaseOptions(): CartLinePurchaseOption[] {
     .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
 }
 
+let placedOfferButtons = false;
+
+/**
+ * A placed offer's buttons (another product's SKU: PlacedOffers.astro, a
+ * skin's `buyOffer`, both bound by the host) add it in place: one listener,
+ * its code loaded on the first press. When that cannot add it, the button
+ * posts the offer to its product's buy route, as without JavaScript.
+ */
+function installPlacedOfferButtons() {
+  if (placedOfferButtons) return;
+  placedOfferButtons = true;
+  document.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-sx-bound][data-buy-offer]:not([data-needs-choices])") : null;
+    if (!button || button.disabled || event.defaultPrevented || button.hasAttribute("aria-busy")) return;
+    event.preventDefault();
+    button.setAttribute("aria-busy", "true");
+    void import("./offer-buy")
+      .then(({ buyPlacedOffer }) => buyPlacedOffer(button))
+      .catch(() => false)
+      .then((added) => {
+        button.removeAttribute("aria-busy");
+        if (!added) button.form?.requestSubmit(button);
+      });
+  });
+}
+
+/**
+ * The parts that follow the chosen SKU: a kit SKU's contents
+ * (`data-sx-sku`, shown while it is the chosen one) and the chosen SKU's
+ * name (`variant_title`: "Product, Black / XL", the product's name until an
+ * exact SKU is chosen).
+ */
+function updateSkuParts() {
+  const exact = exactVariant();
+  for (const part of buyFormQueryAll(cache.scopes, "[data-sx-sku]")) part.hidden = part.dataset.sxSku !== exact?.id;
+  const name = cache.container?.dataset.productName ?? "";
+  const values = exact?.selectedOptions.map((option) => option.value).filter(Boolean).join(" / ");
+  for (const title of parts("variant-title")) title.textContent = values ? `${name}, ${values}` : name;
+}
+
 /** Offers end on their own schedule: hide one that ended while the page was cached. */
 function hideExpiredOffers() {
   const now = Date.now() / 1000;
@@ -367,9 +408,18 @@ function typedQuantity(value: string): number {
   return /^[-−]/u.test(latin) ? 0 : Number.parseInt(latin.replace(/\D/g, ""), 10);
 }
 
+/**
+ * Without a quantity field (`<BuyForm quantity={false} />`): one unit, or
+ * the edited cart line's own quantity, which an edit keeps.
+ */
+function fieldlessQuantity(): number {
+  return clampQuantity(state.edit?.quantity ?? 1);
+}
+
 /** The quantity the field means now, without touching it. */
 function currentQuantity(): number {
-  const typed = typedQuantity(cache.quantity?.value ?? "1");
+  if (!cache.quantity) return fieldlessQuantity();
+  const typed = typedQuantity(cache.quantity.value);
   return clampQuantity(Number.isFinite(typed) ? typed : 1);
 }
 
@@ -377,7 +427,7 @@ function currentQuantity(): number {
 function readQuantity(): number {
   const input = cache.quantity;
   const message = part("quantity-message");
-  if (!input) return 1;
+  if (!input) return fieldlessQuantity();
   const typed = typedQuantity(input.value);
   const quantity = currentQuantity();
   input.value = String(quantity);
@@ -664,6 +714,7 @@ function refresh(revealSelection = false) {
     updatePrice();
     updateVariantImage();
     updateWarrantyRows();
+    updateSkuParts();
     updateBuyerInputSkus();
     publish();
   });

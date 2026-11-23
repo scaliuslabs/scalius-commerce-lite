@@ -26,7 +26,7 @@ import { presentCheckoutAttributes } from "@scalius/shared/plugins/checkout-attr
 import { storeRegion } from "@/lib/store-time-zone";
 import { fromMinor } from "@scalius/shared/money";
 import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
-import { frozenAddOnTotals } from "@scalius/shared/add-on-totals";
+import { frozenAddOnTotals } from "@scalius/shared/add-on-folding";
 
 /** An order as the receipt read returns it. */
 export type ReceiptOrder = NonNullable<Awaited<ReturnType<typeof getOrderReceipt>>>;

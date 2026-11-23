@@ -719,6 +719,8 @@ export interface CustomerOrderDetailOrder {
 
 export interface CustomerOrderDetail {
   buyerUi?: BuyerUiBlock[];
+  /** The apps' add-on rows, folded by the server from the order's frozen lines (`readAddOnRows`). */
+  addOns?: unknown;
   /** The apps' checkout answers the buyer gave (`<app id>.<key>`), worded with `attributeApps`. */
   appAnswers?: Record<string, string>;
   attributeApps?: import("@scalius/shared/plugins/checkout-attribute-text").CheckoutAttributeApp[];

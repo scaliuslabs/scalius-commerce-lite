@@ -203,6 +203,8 @@ export type StorefrontProductModuleEmbed = (typeof STOREFRONT_PRODUCT_MODULE_EMB
  * - `purchase_options`: the apps' ways to buy (a subscription), when any.
  * - `stock`: the chosen SKU's stock line.
  * - `status`: where the form says why it refused an add, announced.
+ * - `variant_title`: the chosen SKU's name as the cart line reads it
+ *   ("Product, Black / XL"; the product's name until an exact SKU is chosen).
  *
  * A placed part leaves the buy form and draws where the skin places it,
  * still the same form's part: the store renders it there, ties its controls
@@ -210,7 +212,7 @@ export type StorefrontProductModuleEmbed = (typeof STOREFRONT_PRODUCT_MODULE_EMB
  * moves in the browser. Without the buy form a part renders nothing.
  * The list only grows, at its end.
  */
-export const STOREFRONT_BUY_FORM_PARTS = ["price", "options", "quantity", "actions", "warranty", "inputs", "purchase_options", "stock", "status"] as const;
+export const STOREFRONT_BUY_FORM_PARTS = ["price", "options", "quantity", "actions", "warranty", "inputs", "purchase_options", "stock", "status", "variant_title"] as const;
 export type StorefrontBuyFormPart = (typeof STOREFRONT_BUY_FORM_PARTS)[number];
 
 /**
@@ -530,6 +532,29 @@ export interface StorefrontStoreInfo {
   logoWidth: number;
 }
 
+/**
+ * The store's own pages a header or footer links to, as root paths (the
+ * store keeps every link on the page's market path). Put them in links and
+ * forms; never write a path.
+ * - `orders`: the signed-in buyer's order history; `trackOrder`: the guest
+ *   order lookup.
+ * - `inbox`: the buyer's messages with the store (a support link); a guest
+ *   signs in first.
+ * - `warrantyClaims`: the buyer's warranties, where a claim starts (a
+ *   guest signs in first).
+ * Older stores send only `home`, `search`, `cart` and `account`.
+ */
+export interface StorefrontRoutes {
+  home: string;
+  search: string;
+  cart: string;
+  account: string;
+  orders?: string;
+  trackOrder?: string;
+  inbox?: string;
+  warrantyClaims?: string;
+}
+
 /** What a header skin gets: the store, its header menu and the core routes. */
 export interface StorefrontHeaderData {
   store: StorefrontStoreInfo;
@@ -538,12 +563,8 @@ export interface StorefrontHeaderData {
   /** The top categories with their children, for a category menu (within the same bounds). */
   categories: StorefrontMenuItem[];
   announcement: { text: string; url: string | null } | null;
-  /**
-   * Core routes: put them in links and forms, never hard-code them.
-   * `orders` is the signed-in buyer's order history, `trackOrder` the guest
-   * order lookup (absent from older stores).
-   */
-  routes: { home: string; search: string; cart: string; account: string; orders?: string; trackOrder?: string };
+  /** The store's own pages: put them in links and forms, never hard-code a path. */
+  routes: StorefrontRoutes;
   /** The search form's query parameter. */
   searchParam: string;
   /**
@@ -642,7 +663,8 @@ export interface StorefrontFooterData {
   policies: Array<{ title: string; url: string }>;
   /** The store's newsletter sign-up endpoint is on (POST the form to `routes.newsletter`). */
   newsletter: boolean;
-  routes: { home: string; newsletter: string };
+  /** The store's own pages, as the header gets them, and the newsletter sign-up endpoint. */
+  routes: StorefrontRoutes & { newsletter: string };
   year: number;
 }
 
@@ -669,6 +691,112 @@ export interface StorefrontInstallments {
   monthly: StorefrontMoney;
 }
 
+/** A buyer's availability band: never a quantity. */
+export type StorefrontAvailability = "untracked" | "out_of_stock" | "low_stock" | "in_stock";
+
+/** What a product's media item is (`StorefrontProductMedia.kind`). The list only grows, at its end: treat one you do not know as a photo. */
+export const STOREFRONT_PRODUCT_MEDIA_KINDS = ["image", "video"] as const;
+export type StorefrontProductMediaKind = (typeof STOREFRONT_PRODUCT_MEDIA_KINDS)[number];
+
+/**
+ * One item of a product's gallery: a photo, or a video's poster with the
+ * video (`kind: "video"`, `video.url` a file of the store to put in a
+ * `<video>`). Draw the poster wherever a photo goes; play the video only
+ * on the buyer's press. Absent `kind` (older stores): a photo.
+ */
+export interface StorefrontProductMedia extends StorefrontImage {
+  kind?: StorefrontProductMediaKind;
+  /** The video file and its length; null for a photo. */
+  video?: { url: string; durationMs: number | null } | null;
+}
+
+/** The items a placed offer's kit lists on its host page, at most (its own page lists them all). */
+export const STOREFRONT_PLACED_KIT_ITEMS_MAX = 6;
+
+/**
+ * How a kit's item reaches the buyer (`StorefrontKitComponent.delivery`),
+ * from its own fulfilment setting: shipped or picked up, performed, a
+ * licence key, or a file. A theme writes the words. The list only grows, at
+ * its end: say nothing for a kind you do not know.
+ */
+export const STOREFRONT_KIT_DELIVERY_KINDS = ["physical", "service", "digital_key", "digital_file"] as const;
+export type StorefrontKitDelivery = (typeof STOREFRONT_KIT_DELIVERY_KINDS)[number];
+
+/** One included item of a kit, in the page's language and currency. */
+export interface StorefrontKitComponent {
+  productId: string;
+  variantId: string;
+  /** Its product's name. */
+  title: string;
+  /** Its product's page; null when that page is not public (link nothing then). */
+  url: string | null;
+  image: StorefrontImage | null;
+  /** Its chosen option values (platform, format), in option order. */
+  options: Array<{ name: string; value: string }>;
+  /** How many of it one kit holds. */
+  quantity: number;
+  delivery: StorefrontKitDelivery;
+  /** One unit's price. */
+  price: StorefrontMoney;
+}
+
+/**
+ * A SKU made of other SKUs: checkout sells it as one line and fulfils its
+ * items. `price` is what one kit costs, `compareAt` its items at their
+ * current prices; `availability` comes from its items (the scarcest one).
+ */
+export interface StorefrontKit {
+  /**
+   * Its items a buyer may read, in the merchant's order: never one whose
+   * product is a draft, archived or deleted (`unavailableItems` counts them;
+   * the kit is out of stock then). A placed offer's kit lists its first
+   * `STOREFRONT_PLACED_KIT_ITEMS_MAX`; its own page lists all, at most 20.
+   */
+  components: StorefrontKitComponent[];
+  /** How many items it holds, whatever `components` lists: link the kit's page for the rest. */
+  componentCount: number;
+  /** Items withheld from `components` because they are not for sale. */
+  unavailableItems: number;
+  price: StorefrontMoney;
+  compareAt: StorefrontMoney;
+  saving: StorefrontMoney;
+  /** The saving in whole percent of `compareAt` (0 when none). */
+  savingPercent: number;
+  availability: StorefrontAvailability;
+}
+
+/**
+ * A SKU of another product the merchant placed under this page's own
+ * offers (a kit, a cross-sold SKU), in their order, at most 20. One that
+ * cannot be bought now (out of stock, a draft, unpublished) is left out.
+ * Buy it with `buyOffer(offer, "add" | "buy")` on a `<button>`.
+ */
+export interface StorefrontPlacedOffer {
+  productId: string;
+  variantId: string;
+  /** Its product's name. */
+  title: string;
+  /** Its product's page. */
+  url: string;
+  sku: string | null;
+  /** Its option values, in option order (`[]` for a product without options). */
+  options: Array<{ name: string; value: string }>;
+  image: StorefrontImage | null;
+  price: StorefrontMoney;
+  /** A kit's items at their current prices, or a SKU's regular price while it is on sale; null otherwise. */
+  compareAt: StorefrontMoney | null;
+  available: boolean;
+  /**
+   * Its product asks the buyer for inputs (an engraving) before buying: link
+   * its page (`url`, "Choose options") instead of a buy button. A
+   * `buyOffer` button on it opens that page.
+   */
+  needsChoices: boolean;
+  availability: StorefrontAvailability;
+  /** Its contents when it is a kit; null otherwise. */
+  kit: StorefrontKit | null;
+}
+
 /**
  * What a product_main skin and a product block get: the product as the core
  * product page shows it, priced in the page's market. Availability is a
@@ -684,13 +812,25 @@ export interface StorefrontProductPage {
     brand: StorefrontLink | null;
     /** The merchant's description, sanitized by the store; "" without one. */
     descriptionHtml: string;
-    /** Photos (a video's poster), in the gallery's order; 20 at most. */
-    media: StorefrontImage[];
+    /**
+     * The merchant's other details tabs (Products, Details), in order, each
+     * its title and its sanitized HTML; `[]` without any. Draw them in your
+     * own tab set (beside the description and `<Reviews />`), or place
+     * `<ProductModule name="description" />`, which draws them: not both.
+     * Absent from older stores.
+     */
+    tabs?: Array<{ title: string; html: string }>;
+    /**
+     * The gallery, in its order, 20 at most: photos, and each video as its
+     * poster (`kind: "video"` with the video file). Absent posters leave a
+     * video out.
+     */
+    media: StorefrontProductMedia[];
     /** The price the page opens on (the lowest when options are priced differently). */
     price: StorefrontMoney;
     compareAt: StorefrontMoney | null;
     priceVaries: boolean;
-    availability: "untracked" | "out_of_stock" | "low_stock" | "in_stock";
+    availability: StorefrontAvailability;
     rating: { average: number; count: number } | null;
     /**
      * The merchant's option axes, in order, with their values. `swatch` is the value's swatch colour (`#rrggbb`) from Products, null
@@ -727,7 +867,17 @@ export interface StorefrontProductPage {
        * (`<app id>.eligible`) or value. Absent from older stores.
        */
       fields?: StorefrontFieldValues;
+      /**
+       * The SKU's contents when it is a kit (its items, its price against
+       * them, its band); null for an ordinary SKU. Absent from older stores.
+       */
+      kit?: StorefrontKit | null;
     }>;
+    /**
+     * Other products' SKUs the merchant placed under this page's own
+     * offers, in order (`[]` without any). Absent from older stores.
+     */
+    placedOffers?: StorefrontPlacedOffer[];
     fields: StorefrontFieldValues;
     /**
      * Each warranty policy the SKUs have, once however many SKUs share it

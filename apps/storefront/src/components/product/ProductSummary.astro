@@ -113,6 +113,8 @@ interface Props {
    * lib/extensions/purchase-controls.ts).
    */
   nativeActions?: boolean;
+  /** False leaves out the quantity stepper, a placed one too (`<BuyForm quantity={false} />`): every add is one unit. */
+  nativeQuantity?: boolean;
   /** The parts a product_main skin draws apart from the form (`<BuyFormPart />`): left out here. */
   placed?: readonly StorefrontBuyFormPart[];
   /** Draw only this part, where the skin placed it, in a host-only wrapper (lib/buy-scope.ts). */
@@ -144,6 +146,7 @@ const {
   nativeOptions = true,
   optionsLayout = "buttons",
   nativeActions = true,
+  nativeQuantity = true,
   placed = [],
   only,
 } = Astro.props;
@@ -359,7 +362,13 @@ const placedParts = new Set(placed);
 const partHasContent = (part: StorefrontBuyFormPart) =>
   part === "options" ? options.length > 0 && nativeOptions
     : part === "purchase_options" ? purchaseOptions.length > 0
+    : part === "quantity" ? nativeQuantity
+    // The chosen SKU's name is drawn only where a skin places it.
+    : part === "variant_title" ? only === "variant_title"
     : part !== "warranty";
+// The chosen SKU's name as the cart line reads it: "Product, Black / XL" (the product's alone until one is chosen).
+const openingValues = initialSelectedVariant?.selectedOptions.map((option) => option.value).filter(Boolean).join(" / ");
+const variantTitle = openingValues ? `${product.name}, ${openingValues}` : product.name;
 // The form and its buyer inputs, wherever they are drawn.
 const formInputs = {
   formId: buyFormId,
@@ -411,6 +420,7 @@ function optionAriaLabel(
       {only === "purchase_options" && <ProductPurchaseOptions formId={buyFormId} options={purchaseOptions} copy={purchaseOptionsCopy} />}
       {only === "stock" && <BuyFormStock {...stockProps} />}
       {only === "status" && <BuyFormStatus />}
+      {only === "variant_title" && <span data-buy-part="variant-title" data-sx-buy="variant-title">{variantTitle}</span>}
     </div>
   )
 ) : (

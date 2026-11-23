@@ -515,6 +515,18 @@ export type StorefrontThemeDocument = {
         imageFit: 'contain' | 'cover';
         headerTone: 'light' | 'dark' | 'brand';
         container: '1200' | '1290' | '1360' | '1440' | 'full';
+        pagePaint?: {
+            kind: 'color';
+            color: 'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring';
+        } | {
+            kind: 'linear';
+            angle: number;
+            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring'>;
+        } | {
+            kind: 'radial';
+            at: 'top' | 'center' | 'bottom';
+            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring'>;
+        };
     };
     brand: {
         logo: string | null;
@@ -3311,9 +3323,13 @@ export type StorefrontPlacedOffer = {
      */
     price: number;
     /**
-     * A kit's items summed; null for a SKU that is not a kit.
+     * A kit's items summed, or a SKU's regular price while it is on sale; null otherwise.
      */
     compareAtPrice: number | null;
+    /**
+     * Its product asks the buyer for inputs before buying: offer a link to its page, never a bare add.
+     */
+    requiresCustomization: boolean;
     availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
     kit: StorefrontKit | null;
 };
@@ -3322,6 +3338,9 @@ export type StorefrontPlacedOffer = {
  * A SKU made of other SKUs: checkout sells it as them.
  */
 export type StorefrontKit = {
+    /**
+     * Its items a buyer may read, in order: none whose product is a draft, archived or deleted (counted in `unavailableItems`); a host page's placed offer lists its first 6 (`componentCount` says how many it holds; its own page lists them all).
+     */
     components: Array<{
         variantId: string;
         productId: string;
@@ -3350,6 +3369,14 @@ export type StorefrontKit = {
          */
         price: number;
     }>;
+    /**
+     * How many items it holds, whatever `components` lists.
+     */
+    componentCount: number;
+    /**
+     * Items withheld because their product is not for sale; the kit is out of stock then.
+     */
+    unavailableItems: number;
     /**
      * What one kit costs: its own price, never more than `compareAtPrice`. Send it as the cart line's price.
      */
@@ -15831,6 +15858,14 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
             paymentRecovery: BuyerPaymentRecovery;
             buyerView: BuyerOrderDetailView;
             giftCardTenders: Array<OrderGiftCardTender>;
+            addOns: {
+                itemsSubtotalMinor: number;
+                rows: Array<{
+                    appId: string | null;
+                    title: string;
+                    amountMinor: number;
+                }>;
+            };
         };
     };
 };
@@ -21980,7 +22015,7 @@ export type GetApiV1ProductsBySlugResponses = {
                     monthlyMinor: number;
                 } | null;
                 /**
-                 * SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be sold is left out.
+                 * SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be bought now (out of stock, a draft, unpublished) is left out.
                  */
                 placedOffers: Array<StorefrontPlacedOffer>;
                 /**

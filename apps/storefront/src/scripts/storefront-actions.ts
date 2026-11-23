@@ -2,6 +2,7 @@
 // popovers: only these attributes participate, and prevented events stay theirs.
 import { pagePath } from "@/lib/presence-url";
 import { onTextEdit } from "@/lib/text-edits";
+import { STOREFRONT_SEARCH_SCOPE_PARAM } from "@scalius/shared/storefront-routes";
 
 let uninstall: (() => void) | undefined;
 
@@ -64,15 +65,16 @@ export function installStorefrontActions(): () => void {
     // ordinary GET search form without JavaScript taking their field away.
     if (targetOf(event)?.closest("[data-search-inline]")) openSearch(event);
   };
-  // Predictive search (Dawn's): the first letters typed in the header's
-  // field open the typeahead palette with them, for keyboard users too. A
-  // search scoped to a department stays a plain form (the palette searches
-  // the whole store).
+  // Predictive search (Dawn's): the first letters typed in a header's search
+  // field (the store's, or a theme's `searchForm()`) open the typeahead
+  // palette with them, for keyboard users too. A search scoped to a
+  // department (the store's `[data-search-scope]`, a theme's `category`
+  // select) stays a plain form (the palette searches the whole store).
   const input = (event: Event) => {
     const field = event.target;
     if (!(field instanceof HTMLInputElement) || field.name !== "q") return;
     const form = field.closest<HTMLFormElement>("[data-header-search]");
-    if (!form || (form.querySelector<HTMLSelectElement>("[data-search-scope]")?.value ?? "") !== "") return;
+    if (!form || (form.querySelector<HTMLSelectElement>(`[data-search-scope], select[name="${STOREFRONT_SEARCH_SCOPE_PARAM}"]`)?.value ?? "") !== "") return;
     // The field keeps everything typed until the palette takes it
     // ("search-palette-took-query"): letters typed while the palette's code
     // loads land here, and each keystroke hands over the whole text, so none

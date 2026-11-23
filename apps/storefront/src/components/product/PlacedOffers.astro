@@ -1,0 +1,113 @@
+---
+// The SKUs of other products a merchant placed under the page's own offers
+// (`product.placedOffers`: a kit, a cross-sold SKU), each an offer row: its
+// picture, product, option values, price with the compare-at and saving, a
+// kit's contents (KitContents.astro) and its own Add to cart and Buy now.
+// Drawn from the page's projection, the same data a product_main skin gets
+// (a skin draws its own rows with `buyOffer`, and then the form draws none).
+// The buttons are submit buttons of the page's one offer form
+// (`OFFER_FORM_ID`, empty and hidden) posting their own SKU to its product's
+// buy route, so an offer buys without JavaScript; product-controller.ts adds
+// it in place with it. They never carry the page's own options or inputs.
+import type { StorefrontPlacedOffer } from "@scalius/shared/plugins/storefront-protocol";
+import { formatNumber } from "@scalius/shared/locale-format";
+import type { CatalogCopy } from "@/lib/catalog-copy";
+import { OFFER_FORM_ID, offerBuyPath } from "./lib/buy-form";
+import KitContents from "./KitContents.astro";
+
+interface Props {
+  offers: readonly StorefrontPlacedOffer[];
+  words: CatalogCopy["product"]["kit"];
+  language: string;
+  /** The buy form's words for its buttons (the theme's or the store's). */
+  addLabel: string;
+  buyLabel: string;
+}
+
+const { offers, words, language, addLabel, buyLabel } = Astro.props;
+const rows = offers.flatMap((offer) => {
+  const action = offerBuyPath(offer.url);
+  return action ? [{ offer, action }] : [];
+});
+const headingId = "placed-offers-title";
+---
+
+{rows.length > 0 && (
+  <section class="mt-4 space-y-2" data-placed-offers aria-labelledby={headingId}>
+    <h2 id={headingId} class="text-sm font-semibold text-foreground">{words.moreOffers}</h2>
+    <ul class="space-y-2">
+      {rows.map(({ offer, action }) => {
+        const facts = offer.options.map((option) => option.value).filter(Boolean).join(" / ");
+        const saving = offer.kit && offer.kit.saving.amountMinor > 0 ? offer.kit : null;
+        const off = !offer.available;
+        const titleId = `placed-offer-${offer.variantId}`;
+        return (
+          <li class="space-y-2 rounded-lg border border-border bg-card p-3" data-placed-offer={offer.variantId} data-availability={offer.available ? "available" : "sold-out"}>
+            <div class="flex items-start gap-3">
+              {offer.image ? (
+                <img
+                  src={offer.image.url}
+                  srcset={offer.image.srcset ?? undefined}
+                  sizes="4rem"
+                  width="64"
+                  height="64"
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  class="size-16 shrink-0 rounded-md border border-border bg-muted object-cover"
+                />
+              ) : null}
+              <div class="min-w-0 flex-1 text-sm">
+                <a id={titleId} href={offer.url} class="font-semibold text-foreground underline-offset-2 hover:underline" data-offer-part="title">{offer.title}</a>
+                {facts && <p class="text-muted-foreground" data-offer-part="options">{facts}</p>}
+                <p class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1" data-offer-part="price">
+                  <span class="text-base font-bold text-foreground" data-price-current>{offer.price.formatted}</span>
+                  {offer.compareAt && <s class="text-muted-foreground" data-price-regular>{offer.compareAt.formatted}</s>}
+                  {saving && (
+                    <span class="rounded-md bg-primary/10 px-1.5 py-0.5 text-xs font-semibold text-primary-ink" data-offer-part="saving">
+                      {words.save(saving.saving.formatted, formatNumber(saving.savingPercent, language))}
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+            {offer.kit && <KitContents kit={offer.kit} words={words} language={language} moreUrl={offer.url} />}
+            {offer.needsChoices ? (
+              <a href={offer.url} class="flex min-h-11 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-background px-2 text-sm font-medium text-primary hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" data-offer-part="choose" aria-describedby={titleId}>{words.chooseOptions}</a>
+            ) : (
+            <div class="flex gap-2" data-offer-part="actions">
+              <button
+                type="submit"
+                form={OFFER_FORM_ID}
+                formaction={action}
+                name="variant"
+                value={offer.variantId}
+                data-buy-offer={offer.variantId}
+                data-buy-intent="add"
+                data-sx-bound
+                aria-describedby={titleId}
+                disabled={off}
+                class="flex min-h-11 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-background px-2 text-sm font-medium text-primary hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground"
+              >{addLabel}</button>
+              <button
+                type="submit"
+                form={OFFER_FORM_ID}
+                formaction={action}
+                name="variant"
+                value={offer.variantId}
+                data-buy-offer={offer.variantId}
+                data-buy-intent="buy"
+                data-sx-bound
+                aria-describedby={titleId}
+                disabled={off}
+                hidden={off}
+                class="flex min-h-11 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-primary px-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >{buyLabel}</button>
+            </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  </section>
+)}
