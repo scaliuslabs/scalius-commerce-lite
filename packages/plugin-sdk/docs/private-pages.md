@@ -187,12 +187,12 @@ The stylesheet is parsed by a CSS Syntax 3 parser and written back from what was
 
 | Reason | Means |
 | --- | --- |
-| `unscoped_selector` | A selector does not start at a region's wrapper, selects the wrapper itself, or leaves it by `~` or `+`. |
+| `unscoped_selector` | A selector does not start at a region's wrapper, selects the wrapper itself, leaves it by `~` or `+`, or climbs out of it: `:is()`, `:where()` and `:not()` take compound selectors only (no combinator), `:has()` looks only down (` ` or `>`, never `~` or `+`), and `html`, `body` and `:root` appear only first, as the page's scheme, language or direction (`:root[data-color-scheme="dark"] [data-free="header"] p`). |
 | `positioning` | `position: fixed` or `sticky`, a position read from a variable, anchor positioning or a view transition name. |
 | `animation_name` | An animation that names a keyframe that is not yours. |
 | `import`, `foreign_url`, `forbidden_function` | `@import`, a `url()` that is not one of your assets or is a cursor, `image()`, `image-set()`, `cross-fade()`, `element()`, `attr()` and other functions not on the list. |
-| `form_value_selector`, `state_selector` | Selectors that read what a buyer types (`[value^=…]`, `:placeholder-shown`, `:has(:checked)`). |
-| `unsupported_selector`, `unsupported_at_rule`, `custom_property` | A selector, at-rule or custom property not on the lists, or `[class…]`, `[id…]`, `[data-host…]` (use `.name`, `#name`). |
+| `unknown_attribute`, `state_selector` | An attribute your region's markup never carries (`[value^=…]`, `[data-part…]`, `[data-host…]`; it may name `[data-ui]`, `[data-tone]`, `aria-*` and the other attributes the inert rebuild keeps), or a state that reads what a buyer does (`:placeholder-shown`, `:has(:checked)`). |
+| `unsupported_selector`, `unsupported_at_rule`, `custom_property` | A selector, at-rule or custom property not on the lists, or `[class…]`, `[id…]` (use `.name`, `#name`). |
 | `syntax`, `escape`, `bad_string`, `bad_url`, `comment`, `unbalanced`, `null_byte`, `nested_rule` | What a browser would repair: refused instead. |
 | `too_large`, `too_deep`, `unsafe_output` | Over 24 KiB, 12000 tokens or 24 levels of nesting, or output that did not read back as checked. |
 

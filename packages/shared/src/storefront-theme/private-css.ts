@@ -28,14 +28,17 @@
 // numbers, colours, strings and the allowed functions; `url(<asset>)` for
 // one of the theme's listed assets; its own custom properties `--t-*`.
 // What it may not, each with its `reason`: reach any file or host
-// (`import`, `foreign_url`, `forbidden_function`); read what a buyer types
-// (`form_value_selector`, `state_selector`); select outside a region or its
-// wrapper (`unscoped_selector`); leave a sealed box (`positioning`: fixed or
+// (`import`, `foreign_url`, `forbidden_function`); read state (`state_selector`)
+// or an attribute the region's inert markup never carries (`unknown_attribute`);
+// select outside a region or its wrapper (`unscoped_selector`: a selector
+// climbs nowhere, since `:is()`, `:where()` and `:not()` hold compound
+// selectors only, `:has()` looks only down, and `html`, `body` and `:root`
+// appear only as the leading root state); leave a sealed box (`positioning`: fixed or
 // sticky position, anchor positioning); run the store's animations
 // (`animation_name`); use escapes, nesting, other at-rules, more than 24 KiB,
 // 12000 tokens or 24 levels of nesting.
 
-import { CHROME_NAME_PREFIX } from "../plugins/inert-html";
+import { CHROME_NAME_PREFIX, INERT_MARKUP } from "../plugins/inert-html";
 import {
   CssSyntaxError,
   parseDeclarations,
@@ -62,7 +65,7 @@ export const PRIVATE_CSS_SANITIZER_VERSION = 5 as const;
 export const PRIVATE_CSS_REASONS = [
   "too_large", "syntax", "null_byte", "bad_string", "bad_url", "comment", "unbalanced", "escape", "nested_rule",
   "too_deep", "import", "unsupported_at_rule", "foreign_url", "forbidden_function", "custom_property",
-  "form_value_selector", "state_selector", "unsupported_selector", "unscoped_selector",
+  "unknown_attribute", "state_selector", "unsupported_selector", "unscoped_selector",
   "positioning", "animation_name", "unsafe_output",
 ] as const;
 export type PrivateCssReason = (typeof PRIVATE_CSS_REASONS)[number];
@@ -265,8 +268,13 @@ const STATES_OUTSIDE_HAS = new Set(["checked", "indeterminate"]);
 const SELECTOR_FUNCTIONS = new Set(["is", "where", "not", "has"]);
 const RAW_FUNCTIONS = new Set(["nth-child", "nth-last-child", "nth-of-type", "nth-last-of-type", "dir", "lang"]);
 const PSEUDO_ELEMENTS = new Set(["before", "after", "marker", "first-line", "first-letter", "selection"]);
-const FORM_CONTROLS = new Set(["input", "select", "textarea", "option", "button", "output", "datalist", "optgroup"]);
-const VALUE_ATTRIBUTES = new Set(["value", "placeholder", "aria-valuenow", "aria-valuetext", "data-value", "checked", "selected", "name", "autocomplete"]);
+/** The attributes a selector may name: those the region's inert markup carries (plugins/inert-html.ts), never a class or id by attribute. */
+const REGION_ATTRIBUTES = new Set([...INERT_MARKUP.attributes, ...Object.values(INERT_MARKUP.byTag).flat(), ...INERT_MARKUP.svg].filter((name) => name !== "class" && name !== "id"));
+const REGION_ARIA = new RegExp(INERT_MARKUP.aria);
+/** The page root's state a selector may read before its region: the scheme, the language and the direction. */
+const ROOT_STATE_ATTRIBUTES = new Set(["data-color-scheme", "data-private-tokens", "lang", "dir"]);
+/** The page itself: named only as the leading root state, never inside a selector. */
+const PAGE_TYPES = new Set(["html", "body"]);
 
 function splitTop(nodes: readonly CssNode[]): CssNode[][] {
   const parts: CssNode[][] = [[]];
@@ -355,7 +363,16 @@ function parseCompound(nodes: readonly CssNode[], start: number, inHas: boolean)
       } else if (next?.type === "fn") {
         const name = next.name.toLowerCase();
         if (SELECTOR_FUNCTIONS.has(name)) {
-          out.push({ kind: "pseudo", name, selectors: parseSelectorList(next.values, name === "has", inHas || name === "has"), raw: null });
+          const selectors = parseSelectorList(next.values, name === "has", inHas || name === "has");
+          // A selector never climbs: :is(), :where() and :not() test the element itself (one compound, no
+          // combinator), and :has() looks only down from it (a descendant or a child, never a sibling).
+          if (name !== "has" && selectors.some((complex) => complex.compounds.length > 1)) {
+            refuse("unscoped_selector", `:${name}() holds compound selectors only (no space, >, + or ~): write the combinator outside it.`);
+          }
+          if (name === "has" && selectors.some((complex) => complex.lead === "+" || complex.lead === "~" || complex.combinators.some((combinator) => combinator === "+" || combinator === "~"))) {
+            refuse("unscoped_selector", ":has() looks only down, at descendants ( ) or children (>), never at siblings (+, ~).");
+          }
+          out.push({ kind: "pseudo", name, selectors, raw: null });
         } else if (RAW_FUNCTIONS.has(name)) {
           const raw = trim(next.values);
           const ok = raw.every((item) => item.type === "whitespace" || item.type === "number" || item.type === "string"
@@ -377,13 +394,6 @@ function parseCompound(nodes: readonly CssNode[], start: number, inHas: boolean)
     }
   }
   if (out.length === 0) refuse("syntax", "An empty compound selector.");
-  const type = out[0]!.kind === "type" ? (out[0] as { name: string }).name : null;
-  for (const simple of out) {
-    if (simple.kind !== "attr" || simple.op === null) continue;
-    if (VALUE_ATTRIBUTES.has(simple.name) || (type && FORM_CONTROLS.has(type))) {
-      refuse("form_value_selector", `[${simple.name}${simple.op}…] can reveal what a buyer types. Style form controls through their part: [data-part="contact"] input.`);
-    }
-  }
   return [out, i];
 }
 
@@ -457,8 +467,14 @@ function ownNames(complex: Complex): Complex {
       if (!NAMED.test(item.name)) refuse("unsupported_selector", `${item.kind === "class" ? "." : "#"}${item.name}: a name of letters, digits, _ and - only.`);
       return { ...item, name: `${PRIVATE_CHROME_NAME_PREFIX}${item.name}` };
     }
-    if (item.kind === "attr" && ["class", "id", "style", "for", "name", "data-free", "data-private", "data-hook", "data-buyer-ui-app", "data-host"].includes(item.name)) {
-      refuse("unsupported_selector", `[${item.name}…]: select by .class, #id, a tag or a data-ui kind inside a region.`);
+    if ((item.kind === "type" && PAGE_TYPES.has(item.name)) || (item.kind === "pseudo" && item.name === "root")) {
+      refuse("unscoped_selector", `${item.kind === "type" ? item.name : ":root"} names the page, never something inside a region. A state of the page goes first: :root[data-color-scheme="dark"] [data-free="header"] p.`);
+    }
+    if (item.kind === "attr" && (item.name === "class" || item.name === "id")) {
+      refuse("unsupported_selector", `[${item.name}…]: select by .class or #id inside a region.`);
+    }
+    if (item.kind === "attr" && !REGION_ATTRIBUTES.has(item.name) && !(REGION_ARIA.test(item.name) && !INERT_MARKUP.loudAria.includes(item.name))) {
+      refuse("unknown_attribute", `[${item.name}…] is not an attribute the region's markup carries: select by tag, .class, #id, [data-ui], [data-tone], an aria-* attribute or another attribute the inert markup keeps.`);
     }
     if (item.kind === "pseudo" && item.selectors) return { ...item, selectors: item.selectors.map(ownNames) };
     return item;
@@ -477,8 +493,8 @@ function scopeSelector(complex: Complex): string {
   let state = "";
   const first = compounds[0]!;
   if (first.some((simple) => (simple.kind === "type" && (simple.name === "html" || simple.name === "body")) || (simple.kind === "pseudo" && simple.name === "root"))) {
-    if (!first.every((simple) => simple.kind === "attr" || (simple.kind === "pseudo" && !simple.selectors) || (simple.kind === "type" && (simple.name === "html" || simple.name === "body")))) {
-      refuse("unscoped_selector", "The page root takes only a state (an attribute or a pseudo-class) before the region.");
+    if (!first.every((simple) => (simple.kind === "attr" && ROOT_STATE_ATTRIBUTES.has(simple.name)) || (simple.kind === "type" && PAGE_TYPES.has(simple.name)) || (simple.kind === "pseudo" && simple.name === "root"))) {
+      refuse("unscoped_selector", `The page root takes only its scheme, language or direction (${[...ROOT_STATE_ATTRIBUTES].map((name) => `[${name}]`).join(", ")}) before the region: :root[data-color-scheme="dark"] [data-free="header"] p.`);
     }
     if (combinators[0] !== " ") refuse("unscoped_selector", "A root state is followed by a space and a region.");
     state = first.filter((simple) => simple.kind !== "type" && !(simple.kind === "pseudo" && simple.name === "root")).map(writeSimple).join("");
