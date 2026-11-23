@@ -123,8 +123,9 @@ export function cspSourcesAllowOrigin(origin: string, sources: readonly string[]
 
 /**
  * True when an image URL may load on a buyer's private page: one on the
- * page's own origin (a path), a `data:` or `blob:` URL, or one whose origin
- * the source list allows. The URL is judged as the browser reads it: one
+ * page's own origin (a path), a `data:` URL, or one whose origin the source
+ * list allows. Never a `blob:` URL: a blob is made in a browser, so served
+ * markup never names one, and a blob of another origin is that origin's. The URL is judged as the browser reads it: one
  * holding a control character or edge space (which the browser strips
  * before parsing) is refused, and the rest is resolved against the page.
  */
@@ -142,5 +143,5 @@ export function cspSourcesAllowImage(url: string, sources: readonly string[], se
   } catch {
     return false;
   }
-  return parsed.protocol === "data:" || parsed.protocol === "blob:" || parsed.origin === page || cspSourcesAllowOrigin(parsed.origin, sources);
+  return parsed.protocol === "data:" || (parsed.protocol !== "blob:" && (parsed.origin === page || cspSourcesAllowOrigin(parsed.origin, sources)));
 }
