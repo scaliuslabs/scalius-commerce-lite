@@ -10,6 +10,7 @@ import { allOf } from "../utils/all-of";
 import { buyerState, publicBuyerStateCondition } from "../modules/catalog/buyer-state";
 import type * as ListingPlan from "../modules/catalog/listing-plan";
 import type { NarrowedPlan, NarrowedPlanInput } from "../modules/catalog/listing-plan";
+import { publicProductCount } from "../modules/catalog/popular-plan";
 
 export function oracleListingPageOf(ids: SQL): SQL {
     return sql`(WITH listing_page AS MATERIALIZED (${ids}) SELECT * FROM listing_page) AS listing_page`;
@@ -56,20 +57,19 @@ export function oracleNarrowedShopAllPlan(input: NarrowedPlanInput): NarrowedPla
             FROM ${count.from}
             ${range("lowest", sql`${buyerState.fromMinor}`, "")}
             ${range("highest", sql`${buyerState.toMinor}`, " DESC")}`,
-        page: (pageRows, ids) => sql`(${pageIds(pageRows, ids)}) AS listing_page`,
-        pageIds,
-    };
-
-    function pageIds(pageRows: number, ids: (form: "driven" | "walking", rows: SQL) => SQL): SQL {
-        const rows = sql.raw(String(pageRows));
-        return sql`WITH ${plan},
+        page: (pageRows, ids) => {
+            const rows = sql.raw(String(pageRows));
+            return sql`(WITH ${plan},
             listing_page AS MATERIALIZED (
                 SELECT * FROM (${ids("driven", rowsFor("driven", input.pageRowsNeeded, rows))}) AS driven_page
                 UNION ALL
                 SELECT * FROM (${ids("walking", rowsFor("walking", input.pageRowsNeeded, rows))}) AS walking_page
             )
-            SELECT * FROM listing_page`;
-    }
+            SELECT * FROM listing_page) AS listing_page`;
+        },
+        // The popular order's own plan reads the same sizes (not frozen: it never had a CTE).
+        size: { set: input.driving.publicCount, total: publicProductCount() },
+    };
 }
 
 /**
