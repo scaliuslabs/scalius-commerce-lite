@@ -127,6 +127,12 @@ interface Props {
    */
   privateStyle?: string;
   /**
+   * The private page is in token mode (the theme set tokens for it): every
+   * colour there comes from its compiled colour table (`data-private-tokens`
+   * on `<html>`, private-tokens.ts `PRIVATE_TOKEN_MODE`).
+   */
+  privateTokens?: boolean;
+  /**
    * A private page that shows the theme's own header and footer
    * (`privatePages.chrome: theme`): drawn script-free, from the store's
    * projections only (components/private/PrivateChrome.astro).
@@ -154,6 +160,7 @@ const {
   analytics = true,
   libraryPreview = false,
   privateStyle,
+  privateTokens = false,
   privateChrome = false,
 } = Astro.props;
 
@@ -465,6 +472,7 @@ const pageStoreTimeZone = storeTimeZone();
 <!doctype html>
 <html
   data-library-preview={libraryPreview ? "" : undefined}
+  data-private-tokens={privateStyle && privateTokens ? "" : undefined}
   data-color-scheme={paint.colorScheme?.scheme}
   lang={pageLanguage}
   dir={textDirection(pageLanguage) === "rtl" ? "rtl" : undefined}

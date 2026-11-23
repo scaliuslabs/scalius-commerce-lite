@@ -5,13 +5,10 @@
 // frame, post, collect, cover or impersonate anything:
 // - elements: text, lists, links, images, disclosure (`details`), tables and
 //   SVG drawing only; a button only as `type="button"`;
-// - forms: none but one search form the host builds from the skin's intent
-//   (its first GET form to the store's search path): GET to that path, one
-//   search field named the store's query parameter, in the store's words,
-//   and at most one submit. It is a host island (`data-host="search"`): no
-//   theme rule reaches it or anything in it, and its look is tokens only.
-//   Every other form, field, select, text area and label goes with its
-//   content, so no form here takes what a buyer types;
+// - forms: none. Every form, field, select, text area and label goes with
+//   its content, so nothing here takes what a buyer types; the store's own
+//   search sits beside the region where the theme places it
+//   (`privatePages.search`, the header's `PrivateSearch`), never inside it;
 // - islands are unwrapped (no app script loads), deferred markup is drawn in
 //   place, and script, style, link, base, meta, frames, objects, embeds,
 //   media, dialogs and templates go with their content;
@@ -31,12 +28,6 @@ import { storefrontBrowsingPath } from "../storefront-routes";
 import { UNTRUSTED_HTML_PARSING, VOID_ELEMENTS, escapeHtmlText, untrustedHtml, writeStartTag } from "../html-writer";
 
 export interface InertChromeOptions {
-  /** The store's search path (`/search`): the one form a skin may keep. */
-  searchAction: string;
-  /** The store's search query parameter (`q`): the search field's name. */
-  searchParam: string;
-  /** The store's word for search, in the page's language: the field's and the button's name. */
-  searchLabel: string;
   /** Whether an image source may load on this page (same-origin paths and the page's allowed image origins). */
   imageAllowed(src: string): boolean;
 }
@@ -162,69 +153,29 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
   return out;
 }
 
-const SEARCH_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>';
-
-function* elements(nodes: readonly ChildNode[]): Generator<Element> {
-  for (const node of nodes) {
-    if (!isTag(node)) continue;
-    yield node;
-    yield* elements(node.children);
-  }
-}
-
-/**
- * The one search form, built by the host from the skin's: GET to the store's
- * search path, one search field named the query parameter and at most one
- * submit, both in the store's words; the skin keeps only its class names.
- */
-function searchForm(node: Element, options: InertChromeOptions): string | null {
-  const method = (node.attribs.method ?? "get").toLowerCase();
-  if (method !== "get" || node.attribs.action !== options.searchAction) return null;
-  const all = [...elements(node.children)];
-  const field = all.find((child) => child.name.toLowerCase() === "input" && ["search", "text", ""].includes((child.attribs.type ?? "").toLowerCase()));
-  if (!field) return null;
-  const submit = all.find((child) => (child.name.toLowerCase() === "button" && (child.attribs.type ?? "submit").toLowerCase() === "submit")
-    || (child.name.toLowerCase() === "input" && (child.attribs.type ?? "").toLowerCase() === "submit"));
-  const classOf = (element: Element): Array<[string, string]> => {
-    const names = ownList(element.attribs.class ?? "");
-    return names ? [["class", names]] : [];
-  };
-  const label = options.searchLabel;
-  // A host island: its look is the store's and the theme's tokens (`search`), its words the store's.
-  let out = writeStartTag("form", [["action", options.searchAction], ["method", "get"], ["role", "search"], ["data-host", "search"], ...classOf(node)]);
-  out += writeStartTag("input", [["type", "search"], ["name", options.searchParam], ["aria-label", label], ["placeholder", label], ["autocomplete", "off"], ["enterkeyhint", "search"]]);
-  if (submit) out += `${writeStartTag("button", [["type", "submit"], ["aria-label", label]])}${SEARCH_ICON}</button>`;
-  return `${out}</form>`;
-}
-
-function walk(nodes: ChildNode[], options: InertChromeOptions, out: string[], search: { used: boolean }): void {
+function walk(nodes: ChildNode[], options: InertChromeOptions, out: string[]): void {
   for (const node of nodes) {
     if (isText(node)) { out.push(escapeHtmlText(node.data)); continue; }
     if (!isTag(node)) continue;
     const tag = node.name.toLowerCase();
-    if (tag === "form" && !search.used) {
-      const form = searchForm(node, options);
-      if (form) { out.push(form); search.used = true; }
-      continue;
-    }
     if (DROP.has(tag)) continue;
     if (UNWRAP.has(tag)) {
       // Deferred markup's one child is its template: drawn in place here.
       const children = node.children.flatMap((child) => isTag(child) && child.name.toLowerCase() === "template"
         ? ((child as Element & { content?: { children: ChildNode[] } }).content?.children ?? child.children)
         : [child]);
-      walk(children, options, out, search);
+      walk(children, options, out);
       continue;
     }
     if (!KEEP.has(tag)) {
-      walk(node.children, options, out, search);
+      walk(node.children, options, out);
       continue;
     }
     const kept = attributes(tag, node.attribs, options);
     if (!kept) continue;
     out.push(writeStartTag(tag, kept));
     if (VOID_ELEMENTS.has(tag)) continue;
-    walk(node.children, options, out, search);
+    walk(node.children, options, out);
     out.push(`</${tag}>`);
   }
 }
@@ -232,6 +183,6 @@ function walk(nodes: ChildNode[], options: InertChromeOptions, out: string[], se
 /** Checked skin markup rebuilt with nothing left that runs, loads, frames, posts, collects or shadows the page. */
 export function inertChromeHtml(html: string, options: InertChromeOptions): string {
   const out: string[] = [];
-  walk(parseDocument(untrustedHtml(html), { ...UNTRUSTED_HTML_PARSING, recognizeSelfClosing: true }).children, options, out, { used: false });
+  walk(parseDocument(untrustedHtml(html), { ...UNTRUSTED_HTML_PARSING, recognizeSelfClosing: true }).children, options, out);
   return out.join("");
 }

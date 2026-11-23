@@ -21,6 +21,8 @@ export const REFERENCE_PALETTE: StorefrontThemeColors = {
 
 export const REFERENCE_PRIVATE_PAGES = {
   chrome: "theme",
+  // F1: the theme's full header, the store's search after it.
+  search: "after",
   pages: {
     cart: {
       // F3 a line under the heading; F5 no progress; F16 no code entry; F21 no merchandising.
@@ -75,7 +77,9 @@ export const REFERENCE_PRIVATE_PAGES = {
       "ui.banner.warning@gameghor.protection": { background: "#3a2a0a", text: "#fde68a", border: "#f59e0b", "border-width": 1, radius: 0 },
       "ui.button@gameghor.protection": { background: "#10b981", text: "#04130d", radius: 0, weight: "700" },
       submit: { background: "#7c3aed", text: "#ffffff", radius: 0, case: "uppercase", weight: "700", tracking: "wide" },
+      // F19: the decision dialog: square, violet border, its Continue Checkout button violet like the submit.
       dialog: { background: "card", border: "#524179", radius: 0 },
+      "dialog-confirm": { background: "#7c3aed", text: "#ffffff", radius: 0, weight: "700" },
       "@line-grid": { columns: [64, "1fr", 88], "columns-wide": [92, "1fr", 150], gap: 12 },
       "@line-side": { gap: 8 },
       "@cart-columns": { gap: 24 },
@@ -87,5 +91,11 @@ export const REFERENCE_PRIVATE_PAGES = {
     '[data-free="header"] .site-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: #120d22 }',
     '[data-free="header"] .site-header a { color: #f4f1ff; text-decoration: none }',
   ].join("\n"),
-  labels: { "cart.heading": { en: "Your Cart", bn: "আপনার কার্ট" } },
+  // F3, F19, F22: the heading in its own words; the actions as the store's variants (the store words them in each language).
+  labels: {
+    "cart.heading": { en: "Your Cart", bn: "আপনার কার্ট" },
+    "dialog.goBack": "go-back",
+    "dialog.confirm": "continue-checkout",
+    "drawer.checkout": "proceed-to-checkout",
+  },
 } satisfies StorefrontPrivatePagesTemplate;

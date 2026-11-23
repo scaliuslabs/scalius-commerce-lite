@@ -4,7 +4,7 @@
 // and the request's render host. Everything here is read from what
 // the page already read: no extra API call.
 
-import { servedPrivatePages, type StorefrontSkinRef, type StorefrontThemeSkinUnit } from "@scalius/shared/storefront-theme";
+import { servedPrivatePages, type PrivateSearchPlace, type StorefrontSkinRef, type StorefrontThemeSkinUnit } from "@scalius/shared/storefront-theme";
 import { resolvePluginSettingBindings } from "@scalius/shared/storefront-theme/bindings";
 import { parsePluginSurfaceKey } from "@scalius/shared/plugins/storefront";
 import type { PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
@@ -256,22 +256,29 @@ export async function privateChromeMarkup(locals: object, url: URL, target: "hea
   const settings = resolveSkinSettings(declaration.settings, values, (id) => storefrontImageOf(theme.skinMedia.get(id)));
   const html = await host.render(extension, { kind: "skin", target, component: declaration.id, settings, data: await data() } as never, { jsonLd: false });
   const markup = appMarkup(extension, target, html);
-  const searchLabel = storefrontCopy(theme.language).chrome.header.search;
-  return markup ? { ...markup, parts: markup.parts.map((part) => (part.kind === "html" ? { ...part, html: inertHtml(part.html, searchLabel) } : part)) } : null;
+  return markup ? { ...markup, parts: markup.parts.map((part) => (part.kind === "html" ? { ...part, html: inertHtml(part.html) } : part)) } : null;
+}
+
+/**
+ * The store's search on a private page with the theme's header, where the
+ * theme places it in the header's frame (`privatePages.search`: before or
+ * after the theme's region), in the store's words; null where it has none.
+ */
+export async function privateHeaderSearch(locals: object): Promise<{ place: PrivateSearchPlace; form: { action: string; param: string; label: string } } | null> {
+  const theme = await currentRequestTheme(locals);
+  const served = servedPrivatePages(theme.theme.privatePages);
+  if (served.chrome !== "theme" || !served.search) return null;
+  return { place: served.search, form: { action: STOREFRONT_CORE_ROUTES.search, param: STOREFRONT_SEARCH_QUERY, label: storefrontCopy(theme.language).chrome.header.search } };
 }
 
 /**
  * Checked app markup rebuilt for a private page (`inertChromeHtml`, an allow-list): no
- * island, script, style, frame or form but the one search form the host builds (GET to the
- * store's search path, its query field in the store's words), class names and ids the
- * region's own, links only to store paths and images only from the page's allowed origins.
+ * island, script, style, frame or form, class names and ids the region's own, links only
+ * to store paths and images only from the page's allowed origins.
  */
-export function inertHtml(html: string, searchLabel = "Search"): string {
+export function inertHtml(html: string): string {
   const allowed = getRuntimePrivateImageOrigins() ?? [];
   return inertChromeHtml(html, {
-    searchAction: STOREFRONT_CORE_ROUTES.search,
-    searchParam: STOREFRONT_SEARCH_QUERY,
-    searchLabel,
     imageAllowed: (src) => cspSourcesAllowImage(src, allowed, getRuntimeStorefrontUrl()),
   });
 }

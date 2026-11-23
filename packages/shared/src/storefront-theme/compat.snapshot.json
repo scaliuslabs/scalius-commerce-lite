@@ -6272,6 +6272,13 @@
        "theme"
       ]
      },
+     "search": {
+      "type": "string",
+      "enum": [
+       "before",
+       "after"
+      ]
+     },
      "pages": {
       "type": "object",
       "properties": {
@@ -6291,29 +6298,97 @@
      },
      "labels": {
       "type": "object",
-      "propertyNames": {
-       "type": "string",
-       "enum": [
-        "cart.heading",
-        "cart.continue",
-        "cart.empty",
-        "cart.emptyText",
-        "cart.subtotal",
-        "cart.showSummary",
-        "cart.hideSummary",
-        "dialog.goBack",
-        "dialog.confirm",
-        "drawer.title",
-        "drawer.checkout",
-        "drawer.viewCart",
-        "drawer.continue",
-        "drawer.empty",
-        "drawer.startShopping"
-       ]
+      "properties": {
+       "cart.heading": {
+        "$ref": "#/$defs/__schema83"
+       },
+       "cart.continue": {
+        "type": "string",
+        "enum": [
+         "continue-shopping",
+         "keep-shopping",
+         "back-to-store"
+        ]
+       },
+       "cart.empty": {
+        "$ref": "#/$defs/__schema83"
+       },
+       "cart.emptyText": {
+        "$ref": "#/$defs/__schema83"
+       },
+       "cart.subtotal": {
+        "type": "string",
+        "enum": [
+         "subtotal",
+         "items-total"
+        ]
+       },
+       "cart.showSummary": {
+        "type": "string",
+        "enum": [
+         "show-summary",
+         "show-cart"
+        ]
+       },
+       "cart.hideSummary": {
+        "type": "string",
+        "enum": [
+         "hide-summary",
+         "hide-cart"
+        ]
+       },
+       "dialog.goBack": {
+        "type": "string",
+        "enum": [
+         "go-back",
+         "cancel"
+        ]
+       },
+       "dialog.confirm": {
+        "type": "string",
+        "enum": [
+         "confirm",
+         "continue-checkout",
+         "agree-and-continue"
+        ]
+       },
+       "drawer.title": {
+        "$ref": "#/$defs/__schema83"
+       },
+       "drawer.checkout": {
+        "type": "string",
+        "enum": [
+         "checkout",
+         "proceed-to-checkout"
+        ]
+       },
+       "drawer.viewCart": {
+        "type": "string",
+        "enum": [
+         "view-cart",
+         "go-to-cart"
+        ]
+       },
+       "drawer.continue": {
+        "type": "string",
+        "enum": [
+         "continue-shopping",
+         "keep-shopping"
+        ]
+       },
+       "drawer.empty": {
+        "$ref": "#/$defs/__schema83"
+       },
+       "drawer.startShopping": {
+        "type": "string",
+        "enum": [
+         "start-shopping",
+         "browse-products",
+         "continue-shopping"
+        ]
+       }
       },
-      "additionalProperties": {
-       "$ref": "#/$defs/__schema83"
-      }
+      "additionalProperties": false
      },
      "icons": {
       "type": "object",

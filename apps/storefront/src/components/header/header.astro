@@ -7,8 +7,9 @@
 // and the merchant's light or dark switch where the skin places `header.actions`.
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import Skin from "@/components/apps/Skin.astro";
-import { appSkin, privateChromeMarkup, requestExtensions } from "@/lib/extensions";
+import { appSkin, privateChromeMarkup, privateHeaderSearch, requestExtensions } from "@/lib/extensions";
 import PrivateMarkup from "@/components/private/PrivateMarkup.astro";
+import PrivateSearch from "./PrivateSearch.astro";
 import { headerData, headerMarket, headerPageData } from "@/lib/extensions/data";
 import { getLayoutData } from "@/lib/api";
 import { getRuntimePresence } from "@/lib/api/runtime";
@@ -58,14 +59,16 @@ const data = async () => {
     ...(pageLead !== undefined && skin ? { page: headerPageData(pageLead, skin.extension) } : {}),
   });
 };
-// On a private page only the theme's own header draws, from the store's projection alone.
+// On a private page only the theme's own header draws, from the store's projection alone; the
+// store's search, where the theme places it, sits beside it in the frame, never inside its region.
 const privateMarkup = privatePage ? await privateChromeMarkup(Astro.locals, Astro.url, "header", data) : null;
+const privateSearch = privateMarkup ? await privateHeaderSearch(Astro.locals) : null;
 ---
 
 {privatePage ? (
 <div class="contents" data-storefront-header data-private="header">
   {privateMarkup ? (
-    <Fragment><div data-free="header"><PrivateMarkup markup={privateMarkup} embeds={embeds} /></div>{tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}</Fragment>
+    <Fragment>{privateSearch?.place === "before" && <PrivateSearch {...privateSearch.form} />}<div data-free="header"><PrivateMarkup markup={privateMarkup} embeds={embeds} /></div>{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}{tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}</Fragment>
   ) : <CoreHeader {...props} />}
 </div>
 ) : (

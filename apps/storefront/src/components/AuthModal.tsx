@@ -672,6 +672,7 @@ export default function AuthModal() {
                   <a
                     href={pagePath("/account")}
                     data-astro-prefetch="false"
+                    data-part="dialog-confirm"
                     className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {copy.viewAccount}
@@ -680,6 +681,7 @@ export default function AuthModal() {
                     type="button"
                     onClick={() => void signOut()}
                     disabled={loading}
+                    data-part="dialog-back"
                     className="min-h-11 rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {copy.signOut}
@@ -693,6 +695,7 @@ export default function AuthModal() {
                     || (step === "contact" && (!contact.trim() || sendWait > 0))
                     || (step === "code" && (code.length !== 6 || locked))
                   }
+                  data-part="dialog-confirm"
                   className="min-h-11 flex-1 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 >
                   {loading

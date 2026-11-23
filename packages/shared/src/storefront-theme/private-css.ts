@@ -4,9 +4,9 @@
 // It reaches only free regions (private-anatomy.ts `PRIVATE_FREE_REGIONS`):
 // every selector starts at one region's wrapper (`[data-free]`, a region
 // kind or a content block's `[data-hook]`) and selects strictly inside it,
-// never the wrapper and never a host island inside it (`data-host`, the
-// header's search form), so no rule can match a host part, a layout node,
-// the page, the body or an app's block.
+// never the wrapper, so no rule can match a host part, a layout node, the
+// page, the body, the host's search or an app's block (none is ever inside
+// a region).
 // The host seals each wrapper (nothing inside paints, lays out or acts
 // outside it), and gives host parts their look through typed tokens
 // (private-tokens.ts), never through this stylesheet.
@@ -57,7 +57,7 @@ export const PRIVATE_COMPILED_CSS_MAX_BYTES = 64 * 1024;
  * The checker's version. A stylesheet compiled by an older one is never
  * served: the page compiles it again or draws without it.
  */
-export const PRIVATE_CSS_SANITIZER_VERSION = 3 as const;
+export const PRIVATE_CSS_SANITIZER_VERSION = 4 as const;
 
 export const PRIVATE_CSS_REASONS = [
   "too_large", "syntax", "null_byte", "bad_string", "bad_url", "comment", "unbalanced", "escape", "nested_rule",
@@ -243,9 +243,7 @@ type Simple =
   | { kind: "class"; name: string }
   | { kind: "attr"; name: string; op: string | null; value: string | null; flag: string | null }
   | { kind: "pseudo"; name: string; selectors: Complex[] | null; raw: CssNode[] | null }
-  | { kind: "element"; name: string }
-  /** Host-written text (never a theme's). */
-  | { kind: "raw"; text: string };
+  | { kind: "element"; name: string };
 type Compound = Simple[];
 interface Complex {
   /** A relative selector's leading combinator (inside `:has()`). */
@@ -420,7 +418,6 @@ function writeSimple(simple: Simple): string {
     case "class": return `.${name(simple.name)}`;
     case "attr": return simple.op === null ? `[${name(simple.name)}]` : `[${name(simple.name)}${simple.op}"${simple.value}"${simple.flag ? ` ${simple.flag}` : ""}]`;
     case "element": return `::${simple.name}`;
-    case "raw": return simple.text;
     case "pseudo":
       if (simple.selectors) return `:${simple.name}(${simple.selectors.map(writeComplex).join(",")})`;
       if (simple.raw) return `:${simple.name}(${serializeCss(simple.raw)})`;
@@ -495,11 +492,6 @@ function scopeSelector(complex: Complex): string {
   if (compounds.length < 2) refuse("unscoped_selector", "A region's wrapper is the host's: select something inside it.");
   if (combinators[0] !== " " && combinators[0] !== ">") refuse("unscoped_selector", "Inside a region means a descendant ( ) or a child (>) of its wrapper.");
   const inside = ownNames({ lead: null, compounds: compounds.slice(1), combinators: combinators.slice(1) });
-  // The subject is never a host island or inside one (the header's search form is the host's).
-  const subject = inside.compounds[inside.compounds.length - 1]!;
-  const element = subject.findIndex((simple) => simple.kind === "element");
-  const guard: Simple = { kind: "raw", text: ":not([data-host],[data-host] *)" };
-  subject.splice(element < 0 ? subject.length : element, 0, guard);
   return `${state ? `:root${state} ` : ""}${PRIVATE_CSS_PAGE} ${anchor}${combinators[0] === ">" ? ">" : " "}${writeComplex(inside)}`;
 }
 

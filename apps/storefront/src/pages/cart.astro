@@ -393,6 +393,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   hideNavigationSidebar
   privateChrome={themeChrome}
   privateStyle={cartStyle}
+  privateTokens={cartPlan.tokens}
 >
   {!themeChrome && <CheckoutHeader layoutData={layoutData} copy={copy} />}
   {Object.keys(dialogLabels).length > 0 && (

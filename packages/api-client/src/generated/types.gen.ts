@@ -1332,6 +1332,7 @@ export type StorefrontPageTemplate = {
 
 export type StorefrontPrivatePages = {
     chrome: 'core' | 'theme';
+    search?: 'before' | 'after';
     pages: {
         cart?: {
             frame?: string;
@@ -1360,48 +1361,28 @@ export type StorefrontPrivatePages = {
         'cart.heading'?: {
             [key: string]: string;
         };
-        'cart.continue'?: {
-            [key: string]: string;
-        };
+        'cart.continue'?: 'continue-shopping' | 'keep-shopping' | 'back-to-store';
         'cart.empty'?: {
             [key: string]: string;
         };
         'cart.emptyText'?: {
             [key: string]: string;
         };
-        'cart.subtotal'?: {
-            [key: string]: string;
-        };
-        'cart.showSummary'?: {
-            [key: string]: string;
-        };
-        'cart.hideSummary'?: {
-            [key: string]: string;
-        };
-        'dialog.goBack'?: {
-            [key: string]: string;
-        };
-        'dialog.confirm'?: {
-            [key: string]: string;
-        };
+        'cart.subtotal'?: 'subtotal' | 'items-total';
+        'cart.showSummary'?: 'show-summary' | 'show-cart';
+        'cart.hideSummary'?: 'hide-summary' | 'hide-cart';
+        'dialog.goBack'?: 'go-back' | 'cancel';
+        'dialog.confirm'?: 'confirm' | 'continue-checkout' | 'agree-and-continue';
         'drawer.title'?: {
             [key: string]: string;
         };
-        'drawer.checkout'?: {
-            [key: string]: string;
-        };
-        'drawer.viewCart'?: {
-            [key: string]: string;
-        };
-        'drawer.continue'?: {
-            [key: string]: string;
-        };
+        'drawer.checkout'?: 'checkout' | 'proceed-to-checkout';
+        'drawer.viewCart'?: 'view-cart' | 'go-to-cart';
+        'drawer.continue'?: 'continue-shopping' | 'keep-shopping';
         'drawer.empty'?: {
             [key: string]: string;
         };
-        'drawer.startShopping'?: {
-            [key: string]: string;
-        };
+        'drawer.startShopping'?: 'start-shopping' | 'browse-products' | 'continue-shopping';
     };
     icons: {
         'cart.empty'?: {
@@ -1423,6 +1404,7 @@ export type StorefrontPrivatePages = {
         anatomy: number;
         sanitizer: number;
         css: string;
+        refused?: boolean;
     };
 };
 

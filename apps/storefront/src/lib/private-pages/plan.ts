@@ -7,11 +7,12 @@
  */
 import {
   PRIVATE_PAGES,
-  PRIVATE_TOKEN_BASE_CSS,
+  PRIVATE_TOKEN_MODE_CSS,
   privateAssetProperty,
   privateFrame,
   privatePagesCss,
   privateItemIsDefault,
+  privatePageTokenMode,
   servedPrivatePages,
   privateLayoutIsDefault,
   privatePageArrangement,
@@ -21,6 +22,7 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import type { PrivateAssetUrl } from "./html";
+import { privateLabelVariantWords } from "./labels";
 
 export interface PrivatePagePlan {
   page: PrivatePageKey;
@@ -34,12 +36,19 @@ export interface PrivatePagePlan {
   labels: Record<string, string>;
   /** The theme's icons for this page, by key, as URLs. */
   icons: Record<string, string>;
+  /**
+   * The page is in token mode (the theme set tokens): every colour comes from
+   * the compiled table, and the page is drawn from its arrangement (the
+   * default one when the theme set none), so the table's places are the page's.
+   */
+  tokens: boolean;
 }
 
 export function privatePagePlan(theme: StorefrontThemeDocument, page: PrivatePageKey, language: string, asset: PrivateAssetUrl): PrivatePagePlan {
   const privatePages = servedPrivatePages(theme.privatePages);
   const arrangement = privatePageArrangement(privatePages, page);
   const spec = PRIVATE_PAGES[page];
+  const tokens = privatePageTokenMode(theme.privatePages, page);
   const icons = Object.fromEntries(spec.icons.flatMap((key) => {
     const ref = privatePages.icons[key];
     const url = ref ? asset(ref) : null;
@@ -48,10 +57,11 @@ export function privatePagePlan(theme: StorefrontThemeDocument, page: PrivatePag
   return {
     page,
     frame: privateFrame(page, arrangement),
-    layout: privateLayoutIsDefault(page, arrangement) ? null : arrangement!.layout!,
+    layout: tokens ? [...arrangement?.layout ?? spec.layout] : privateLayoutIsDefault(page, arrangement) ? null : arrangement!.layout!,
     items: Object.fromEntries(Object.keys(spec.items).map((item) => [item, privateItemIsDefault(page, item, arrangement) ? null : arrangement!.items![item]!])),
-    labels: privatePageLabels(privatePages, page, language),
+    labels: privatePageLabels(privatePages, page, language, (variant) => privateLabelVariantWords(variant, language)),
     icons,
+    tokens,
   };
 }
 
@@ -71,19 +81,22 @@ export const PRIVATE_FREE_REGION_SEAL =
   + '[data-free="header"]{max-block-size:24rem}[data-free="footer"]{max-block-size:80rem}';
 
 /**
- * The theme's look as the page writes it ("" for none): the region seal, the
- * token rules' base (host surfaces reset carried text colours), the
- * theme's assets as the custom properties its stylesheet names (each URL
- * built here from the store's own origin; an asset whose app is not active
- * draws nothing), then the compiled token rules and stylesheet. Only what
- * this build's checker compiled is served (`privatePagesCss`).
+ * The theme's look as the page writes it ("" for none): the region seal; in
+ * token mode, the host's palette classes around the compiled colour table
+ * (surfaces before it, every other colour after it: private-tokens.ts
+ * `PRIVATE_TOKEN_MODE_CSS`); the theme's assets as the custom properties its
+ * stylesheet names (each URL built here from the store's own origin; an
+ * asset whose app is not active draws nothing); then the compiled table,
+ * token rules and stylesheet. Only what this build's checker compiled is
+ * served (`privatePagesCss`).
  */
-export function privateStyle(theme: StorefrontThemeDocument, asset: PrivateAssetUrl): string {
+export function privateStyle(theme: StorefrontThemeDocument, asset: PrivateAssetUrl, page: PrivatePageKey = "cart"): string {
   const css = privatePagesCss(theme.privatePages);
   if (!css) return "";
+  const tokens = privatePageTokenMode(theme.privatePages, page);
   const properties = Object.entries(theme.privatePages.assets).flatMap(([key, ref]) => {
     const url = asset(ref);
     return url && ASSET_PATH.test(url) ? [`${privateAssetProperty(key)}:url("${url}")`] : [];
   });
-  return `${PRIVATE_FREE_REGION_SEAL}${PRIVATE_TOKEN_BASE_CSS}${properties.length > 0 ? `body[data-private-body]{${properties.join(";")}}` : ""}${css}`;
+  return `${PRIVATE_FREE_REGION_SEAL}${tokens ? PRIVATE_TOKEN_MODE_CSS.before : ""}${properties.length > 0 ? `body[data-private-body]{${properties.join(";")}}` : ""}${css}${tokens ? PRIVATE_TOKEN_MODE_CSS.after : ""}`;
 }

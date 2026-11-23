@@ -5,12 +5,16 @@
 // - `chrome`: `core` draws the store's minimal checkout header there;
 //   `theme` draws the theme's header and footer, script-free and from the
 //   same store projections the public pages use (never a buyer's data).
+// - `search`: with the theme's chrome, where the host's search form sits in
+//   the header's frame (before or after the theme's header; unset, none).
 // - `pages`: each page's arrangement; an absent page draws as the host does.
 // - `tokens`: the look of the host parts, as typed values per style target
-//   (private-tokens.ts); the host writes the CSS.
+//   (private-tokens.ts); any token puts the page in token mode, where every
+//   colour comes from one table the host writes and checks.
 // - `css`: the theme's stylesheet for its free regions, as written.
-// - `labels`, `icons`: host words the theme rewords per language, host icons
-//   it replaces with its own files.
+// - `labels`, `icons`: host labels the theme changes (a host variant for an
+//   action or an amount, its own words per language for the rest), host
+//   icons it replaces with its own files.
 // - `compiled`: written by the store on every save and publish, never by
 //   hand: the token CSS and the checked stylesheet, the checker's version
 //   and the anatomy version the arrangements were checked against. A page
@@ -21,7 +25,6 @@ import { z } from "zod";
 import { PLUGIN_ID_PATTERN } from "../plugins/ids";
 import { storefrontBrowsingPath } from "../storefront-routes";
 import { parsePluginSurfaceKey } from "../plugins/storefront";
-import type { StorefrontThemeColors } from "./contrast";
 import { storefrontDarkPalette, type StorefrontThemeTokens } from "./tokens";
 import {
   PRIVATE_ANATOMY_VERSION,
@@ -31,8 +34,10 @@ import {
   PRIVATE_LAYOUT_KINDS,
   PRIVATE_PAGES,
   PRIVATE_PAGE_KEYS,
+  PRIVATE_SEARCH_PLACES,
   privateIconKeys,
   privateLabelKeys,
+  type PrivateSearchPlace,
   type PrivateAssetRef,
   type PrivateContentBlock,
   type PrivateNode,
@@ -57,10 +62,10 @@ import {
 } from "./private-css";
 import { withoutHiddenCharacters } from "./private-css-syntax";
 import {
-  privateTokenCss,
-  privateTokenIssues,
+  compilePrivateTokens,
   privatePalettes,
   privateTokensSchema,
+  type PrivatePalette,
   type PrivateTokenReason,
   type PrivateTokens,
 } from "./private-tokens";
@@ -137,17 +142,19 @@ export const privatePageArrangementSchema = z.preprocess(
   }).strict(),
 );
 
-const labelKeys = privateLabelKeys().map((entry) => entry.key) as [string, ...string[]];
+/** Each label's value: one of the host's variants for an action or an amount, the theme's words per language for the rest. */
+const labelsSchema = z.object(Object.fromEntries(privateLabelKeys().map(({ key, spec }) => [key, spec.variants ? z.enum(spec.variants) : wordsSchema]))).partial().strict();
 const iconKeys = privateIconKeys() as [string, ...string[]];
 
 const pagesShape = Object.fromEntries(PRIVATE_PAGE_KEYS.map((page) => [page, privatePageArrangementSchema.optional()])) as Record<PrivatePageKey, z.ZodOptional<typeof privatePageArrangementSchema>>;
 
 const privatePagesFields = {
   chrome: z.enum(STOREFRONT_PRIVATE_CHROME),
+  search: z.enum(PRIVATE_SEARCH_PLACES).optional(),
   pages: z.object(pagesShape).strict(),
   tokens: privateTokensSchema,
   css: z.string().max(PRIVATE_CSS_MAX_BYTES),
-  labels: z.partialRecord(z.enum(labelKeys), wordsSchema),
+  labels: labelsSchema,
   icons: z.partialRecord(z.enum(iconKeys), privateAssetRefSchema),
   /** The theme's files its stylesheet names (`url(<key>)`), at most 16. */
   assets: z.record(z.string().regex(PRIVATE_ASSET_KEY), privateAssetRefSchema)
@@ -174,10 +181,11 @@ export const storefrontPrivatePagesTemplateSchema = z.object(privatePagesFields)
 
 export interface StorefrontPrivatePages {
   chrome: StorefrontPrivateChrome;
+  search?: PrivateSearchPlace;
   pages: Partial<Record<PrivatePageKey, PrivatePageArrangement>>;
   tokens: PrivateTokens;
   css: string;
-  labels: Partial<Record<string, PrivateWords>>;
+  labels: Partial<Record<string, PrivateWords | string>>;
   icons: Partial<Record<string, PrivateAssetRef>>;
   assets: Record<string, PrivateAssetRef>;
   compiled: { anatomy: number; sanitizer: number; css: string; refused?: boolean };
@@ -196,7 +204,7 @@ export type PrivatePagesReason =
   | ReturnType<typeof privateArrangementIssues>[number]["reason"]
   | PrivateCssReason
   | PrivateTokenReason
-  | "label_too_long" | "markup" | "foreign_asset" | "content_limit";
+  | "label_too_long" | "label_variant" | "markup" | "foreign_asset" | "content_limit";
 
 export interface PrivatePagesIssue {
   path: Array<string | number>;
@@ -248,7 +256,7 @@ function contentIssues(nodes: readonly PrivateNode[], path: Array<string | numbe
 
 /** What the private pages are checked against besides themselves: the palettes buyers see, and the theme's own app. */
 export interface PrivatePagesCompileContext {
-  palettes: readonly StorefrontThemeColors[];
+  palettes: readonly PrivatePalette[];
   /** The app the theme is a template of: its files are the only ones an asset or icon may name (null: no files). */
   themeApp: string | null;
 }
@@ -310,20 +318,27 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
     if (!tokens) continue;
     const arrangement = privatePageArrangement({ ...value, pages, compiled: { ...value.compiled, anatomy: PRIVATE_ANATOMY_VERSION } }, page);
     const spec: PrivatePageSpec = PRIVATE_PAGES[page];
-    const found = privateTokenIssues(page, tokens, {
+    const compiled = compilePrivateTokens(page, tokens, {
       layout: arrangement?.layout ?? spec.layout,
       items: Object.fromEntries(Object.keys(spec.items).map((item) => [item, arrangement?.items?.[item] ?? spec.items[item]!.layout])),
       palettes: context.palettes,
     });
-    issues.push(...found);
-    const unitHooks = new Set<string>();
-    const collect = (nodes: readonly PrivateNode[]) => { for (const node of nodes) if (node.type === "layout") { if (node.hook) unitHooks.add(node.hook); collect(node.children); } };
-    for (const item of Object.keys(spec.items)) collect(arrangement?.items?.[item] ?? []);
-    if (found.length === 0) tokenCss.push(privateTokenCss(page, tokens, unitHooks));
+    issues.push(...compiled.issues);
+    tokenCss.push(compiled.css);
   }
-  const bounds = new Map(privateLabelKeys().map((entry) => [entry.key, entry.max]));
-  const labels = Object.fromEntries(Object.entries(value.labels).flatMap(([key, words]) => words ? [[key, plainPrivateWords(words)]] : []));
-  for (const [key, words] of Object.entries(labels)) issues.push(...wordsIssues(words, ["privatePages", "labels", key], bounds.get(key) ?? 0));
+  const specs = new Map(privateLabelKeys().map((entry) => [entry.key, entry.spec]));
+  const labels = Object.fromEntries(Object.entries(value.labels).flatMap(([key, words]) => words ? [[key, typeof words === "string" ? words : plainPrivateWords(words)]] : []));
+  for (const [key, label] of Object.entries(labels)) {
+    const spec = specs.get(key)!;
+    const path = ["privatePages", "labels", key];
+    if (spec.variants) {
+      if (typeof label !== "string" || !spec.variants.includes(label)) issues.push({ path, reason: "label_variant", message: `${key} names an action or an amount: choose one of ${spec.variants.join(", ")}; the store words it in every language.` });
+    } else if (typeof label === "string") {
+      issues.push({ path, reason: "label_variant", message: `${key} is the theme's own words, per language: { "en": "…", "bn": "…" }.` });
+    } else {
+      issues.push(...wordsIssues(label, path, spec.max));
+    }
+  }
   const css = compilePrivateCss(value.css, privateCssContext(value));
   issues.push(...css.issues.map((issue) => ({ path: ["privatePages", "css"], reason: issue.reason, message: issue.message })));
   if (issues.length > 0) return { ok: false, issues };
@@ -401,6 +416,12 @@ export function privatePagesCss(privatePages: Pick<StorefrontPrivatePages, "comp
   return privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused ? privatePages.compiled.css : "";
 }
 
+/** The page's tokens put it in token mode: its colours come from the compiled table, the host's palette classes read it. */
+export function privatePageTokenMode(privatePages: StorefrontPrivatePages, page: PrivatePageKey): boolean {
+  const served = servedPrivatePages(privatePages);
+  return Object.keys(served.tokens[page] ?? {}).length > 0;
+}
+
 /** Words in the page's language: its base language, else English, else the first the theme wrote. */
 export function privateWords(words: PrivateWords | undefined, languageCode: string | null | undefined): string | null {
   if (!words) return null;
@@ -408,15 +429,16 @@ export function privateWords(words: PrivateWords | undefined, languageCode: stri
   return words[base] ?? words.en ?? Object.values(words)[0] ?? null;
 }
 
-/** The host label `key` in the page's language: the theme's words, else `fallback`. */
-export function privateLabel(privatePages: Pick<StorefrontPrivatePages, "labels">, key: string, languageCode: string | null | undefined, fallback: string): string {
-  return privateWords(privatePages.labels[key], languageCode) ?? fallback;
-}
-
-/** The labels of one page in one language (what a page sends its browser code). */
-export function privatePageLabels(privatePages: Pick<StorefrontPrivatePages, "labels">, page: PrivatePageKey, languageCode: string | null | undefined): Record<string, string> {
-  return Object.fromEntries(Object.keys(PRIVATE_PAGES[page].labels).flatMap((key) => {
-    const words = privateWords(privatePages.labels[key], languageCode);
+/**
+ * The labels of one page in one language (what a page sends its browser
+ * code): the theme's words for a descriptive label, the store's words for
+ * the variant it chose for an action or an amount (`variantWords`, core's
+ * copy in the page's language).
+ */
+export function privatePageLabels(privatePages: Pick<StorefrontPrivatePages, "labels">, page: PrivatePageKey, languageCode: string | null | undefined, variantWords: (variant: string) => string | null): Record<string, string> {
+  return Object.fromEntries(Object.entries(PRIVATE_PAGES[page].labels).flatMap(([key, spec]) => {
+    const label = privatePages.labels[key];
+    const words = typeof label === "string" ? (spec.variants?.includes(label) ? variantWords(label) : null) : privateWords(label, languageCode);
     return words === null ? [] : [[key, words]];
   }));
 }

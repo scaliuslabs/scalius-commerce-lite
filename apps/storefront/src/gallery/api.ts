@@ -263,6 +263,11 @@ function checkoutApps(entry: GalleryEntry) {
       appId: "acme.loyalty", releaseId: "gallery", target: "cart.page.summary", attributes: [], values: {},
       ui: { type: "banner", tone: "info", text: "You will earn 120 Nakshi points with this order." },
     },
+    // A per-line block under the first line: an app's toned badges (the fourth review drew them on a dark line).
+    {
+      appId: "acme.protection", releaseId: "gallery", target: "cart.line.after", attributes: [], values: {}, lineKey: "line:v3:prod_0:variant:var_0:p:none",
+      ui: { type: "stack", direction: "horizontal", children: [{ type: "badge", tone: "warning", text: "Protection eligible" }, { type: "badge", tone: "success", text: "Ships today" }] },
+    },
   ];
 }
 

@@ -6,7 +6,9 @@
 // layout nodes (private-arrangement.ts). A theme never writes a selector
 // for a host part: each page names its style targets (`styles`), the parts'
 // elements a theme gives a look through typed tokens (private-tokens.ts),
-// and the host writes all the CSS that reads them. The theme's own
+// and the host writes all the CSS that reads them; in token mode every
+// target is a row of the page's colour table, which drives the CSS and the
+// contrast check alike. The theme's own
 // stylesheet (private-css.ts) reaches only inside free regions (its content
 // blocks, its header and footer, the inside of an app's block), which the
 // host seals. No theme or app script ever runs on these pages. Each page says which parts a buyer must see and do (mandatory:
@@ -95,31 +97,44 @@ export type PrivatePaletteRole =
   | "border" | "input" | "ring";
 
 /**
+ * What a style target is to the colour table (private-tokens.ts): a `box`
+ * (a surface that holds other things: fields and buttons are checked
+ * against it), a `field` (its own surface, words and placeholder, and a
+ * border, focus ring and error border that read on what is around it), a
+ * `control` (a button, a stepper, a toggle: its focus ring reads on what is
+ * around it) or `text` (words on a surface).
+ */
+export type PrivateStyleKind = "box" | "field" | "control" | "text";
+
+/**
  * An element of a host part a theme gives a look by tokens. The host writes
  * `<root> <selector> { … }` from the validated values; the theme never
- * writes a selector here. `surface` and `text` are what the host paints by
- * default, so the save can keep every text above the contrast floor: the
- * `text` token replaces the first text role (and the foreground inside),
- * `muted`, `link` and `error` the muted, primary and destructive text inside.
+ * writes a selector here. In token mode every target is one row of the
+ * page's colour table (private-tokens.ts): its surface, the colour of its own
+ * words (`ink`) and of its muted, link and error words, its border and focus
+ * ring, each the theme's token where given, else a default that reads on the
+ * surface beneath.
  */
 export interface PrivateStyleSpec {
   /** The host's selector, inside the page root (or the whole document, `absolute`: the dialogs, the body). */
   readonly selector: string;
   readonly absolute?: boolean;
   readonly tokens: readonly PrivateTokenName[];
-  /** Its default background: a palette role, or `under` (none of its own: what is beneath shows). */
+  readonly kind: PrivateStyleKind;
+  /** Its default surface: a palette role, or `under` (none of its own: the surface of the row it sits in shows). */
   readonly surface: PrivatePaletteRole | "under";
-  /** The text roles it draws (the first is its own colour). */
-  readonly text: readonly PrivatePaletteRole[];
-  /** The style target it is drawn inside (what is beneath it, and whose text it reads). */
+  /** The palette role of its own words (its `text` token replaces it). */
+  readonly ink: PrivatePaletteRole;
+  /**
+   * Where it sits, which says what is beneath it: inside the target `on`, as
+   * the part `part` where the arrangement puts it (of the unit `item`), in
+   * the host layout `layout`, or (none of these) anywhere: a field or button
+   * the host draws in many places, checked on every box of the page.
+   */
   readonly on?: string;
-  /** Drawn in several places: the style targets it may sit on, each checked (an input, an app's block). */
-  readonly within?: readonly string[];
-  /** Non-text marks that must read at 3:1 on what is beneath it (a field's border, its focus ring, its error border). */
-  readonly marks?: readonly PrivatePaletteRole[];
-  /** The part it belongs to (its place in the arrangement says what is beneath it), and its unit for a repeated one. */
   readonly part?: string;
   readonly item?: string;
+  readonly layout?: PrivateLayoutKind;
 }
 
 /** The tokens a theme's layout node takes (`@<hook>` in `privatePages.tokens`). */
@@ -136,10 +151,15 @@ export interface PrivateUnitSpec {
   readonly layout: readonly PrivateNode[];
 }
 
-/** A label the theme may reword, and its longest words. */
-export interface PrivateLabelSpec {
-  readonly max: number;
-}
+/**
+ * A host label a theme may change. Words that name an action or an amount
+ * (go back, confirm, check out, subtotal) are chosen from the host's
+ * variants (`variants`), each translated by core in the store's copy, so a
+ * theme can never make "Go back" confirm or a subtotal read as the total.
+ * Words that describe (a heading, an empty state) are the theme's own plain
+ * text, per language, up to `max` characters.
+ */
+export type PrivateLabelSpec = { readonly max: number; readonly variants?: undefined } | { readonly variants: readonly [string, ...string[]]; readonly max?: undefined };
 
 export interface PrivatePageSpec extends PrivateUnitSpec {
   /** The elements a theme styles by tokens, by name (`page` is the page itself). */
@@ -154,7 +174,7 @@ export interface PrivatePageSpec extends PrivateUnitSpec {
   readonly layoutContents?: Partial<Record<PrivateLayoutKind, readonly string[]>>;
   /** Repeated units, by name. */
   readonly items: Readonly<Record<string, PrivateUnitSpec>>;
-  /** Host labels the theme may reword (plain text, per language). */
+  /** Host labels the theme may change: a host variant for an action or an amount, its own words for the rest. */
   readonly labels: Readonly<Record<string, PrivateLabelSpec>>;
   /** Host icons the theme may replace with its own image. */
   readonly icons: readonly string[];
@@ -186,41 +206,42 @@ export const PRIVATE_LINE_HOOK = "line";
 
 const TEXT_TOKENS = ["text", "font", "weight", "size", "case", "tracking"] as const satisfies readonly PrivateTokenName[];
 const BOX_TOKENS = ["background", "gradient", "text", "muted", "link", "error", "border", "border-width", "border-style", "radius", "shadow", "padding"] as const satisfies readonly PrivateTokenName[];
-const BUTTON_TOKENS = ["background", "gradient", "text", "border", "border-width", "border-style", "radius", "shadow", "font", "weight", "size", "case", "tracking"] as const satisfies readonly PrivateTokenName[];
+const BUTTON_TOKENS = ["background", "gradient", "text", "border", "border-width", "border-style", "radius", "shadow", "ring", "font", "weight", "size", "case", "tracking"] as const satisfies readonly PrivateTokenName[];
+const FIELD_TOKENS = ["background", "text", "placeholder", "border", "ring", "invalid", "border-width", "radius"] as const satisfies readonly PrivateTokenName[];
 
-/** The cart page's style targets (and the store's dialogs over it). */
+/** The cart page's style targets (and the store's dialogs over it), outer before inner. */
 const CART_STYLES: Record<string, PrivateStyleSpec> = {
   // The page's paint (F2: a gradient behind everything) and its frame's width.
-  page: { selector: "body[data-private-body]", absolute: true, tokens: ["background", "gradient"], surface: "background", text: ["foreground", "muted-foreground"] },
-  frame: { selector: "", tokens: ["max-width"], surface: "under", text: [], on: "page" },
-  notice: { selector: '[data-part="notice"]', tokens: ["background", "text", "border", "border-width", "radius"], surface: "background", text: ["destructive"], part: "notices" },
-  lines: { selector: '[data-part="lines"]', tokens: [...BOX_TOKENS], surface: "card", text: ["foreground", "muted-foreground"], part: "lines" },
-  "lines-heading": { selector: '[data-part="lines-heading"]', tokens: [...TEXT_TOKENS], surface: "under", text: ["foreground"], on: "lines" },
-  "cart-empty": { selector: '[data-part="cart-empty"]', tokens: ["text", "muted"], surface: "under", text: ["foreground", "muted-foreground"], on: "lines" },
-  line: { selector: '[data-part="line"]', tokens: ["background", "border", "border-width", "border-style", "radius", "padding"], surface: "under", text: [], on: "lines" },
-  "line-image": { selector: '[data-part="line-image"]', tokens: ["width", "height", "width-wide", "height-wide", "radius", "background", "border", "border-width", "border-style", "fit"], surface: "muted", text: [], item: "line", part: "image" },
-  "line-title": { selector: '[data-part="line-title"]', tokens: [...TEXT_TOKENS, "clamp"], surface: "under", text: ["foreground"], item: "line", part: "title" },
-  "line-details": { selector: '[data-part="line-details"]', tokens: ["text", "size"], surface: "under", text: ["muted-foreground"], item: "line", part: "details" },
-  "line-price": { selector: '[data-part="line-price"]', tokens: ["text", "muted", "font", "weight", "size", "align"], surface: "under", text: ["foreground", "muted-foreground"], item: "line", part: "price" },
-  "line-quantity": { selector: '[data-part="line-quantity"]', tokens: ["background", "text", "border", "border-width", "border-style", "radius"], surface: "under", text: ["foreground"], item: "line", part: "quantity" },
-  "line-remove": { selector: '[data-part="line-remove"]', tokens: ["text", "radius"], surface: "under", text: ["muted-foreground"], item: "line", part: "remove" },
-  "fold-toggle": { selector: '[data-part="fold-toggle"]', tokens: ["background", "text", "border", "border-width", "radius", "shadow"], surface: "card", text: ["foreground"] },
-  summary: { selector: '[data-part="summary"]', tokens: [...BOX_TOKENS, "gap"], surface: "card", text: ["foreground", "muted-foreground", "primary", "destructive"], part: "summary" },
-  "summary-rows": { selector: '[data-summary-row]:not([data-summary-row="total"])', tokens: ["text", "muted", "size"], surface: "under", text: ["muted-foreground", "foreground"], on: "summary" },
-  "summary-total": { selector: '[data-summary-row="total"]', tokens: [...TEXT_TOKENS], surface: "under", text: ["foreground"], on: "summary" },
-  // A field has its own surface: no part's text token reaches it. Its placeholder is its muted text.
-  input: {
-    selector: ':is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea)', tokens: ["background", "text", "placeholder", "border", "ring", "invalid", "border-width", "radius"],
-    surface: "background", text: ["foreground", "muted-foreground"], within: ["page", "summary", "details-form"], marks: ["input", "ring", "destructive"],
-  },
-  "details-form": { selector: '[data-part="details-form"]', tokens: [...BOX_TOKENS], surface: "card", text: ["foreground", "muted-foreground", "destructive", "primary"], part: "details" },
-  "section-heading": { selector: ':is([data-part="contact"],[data-part="delivery"]) h2', tokens: [...TEXT_TOKENS], surface: "under", text: ["foreground"], on: "details-form" },
-  submit: { selector: '[data-part="details-submit"]', tokens: [...BUTTON_TOKENS], surface: "primary", text: ["primary-foreground"] },
-  legal: { selector: '[data-part="legal"]', tokens: ["text", "size", "align"], surface: "under", text: ["muted-foreground", "foreground"], on: "details-form" },
-  // The theme header's search form, built by the host (its own words, no theme selector reaches it).
-  search: { selector: '[data-host="search"]', absolute: true, tokens: ["background", "text", "placeholder", "border", "ring", "border-width", "radius"], surface: "background", text: ["foreground", "muted-foreground"], marks: ["input"] },
-  dialog: { selector: '[data-private="dialog"]', absolute: true, tokens: ["background", "text", "muted", "border", "border-width", "radius", "shadow"], surface: "card", text: ["foreground", "muted-foreground"] },
-  "dialog-confirm": { selector: '[data-private="dialog"] [data-part="dialog-confirm"]', absolute: true, tokens: [...BUTTON_TOKENS], surface: "primary", text: ["primary-foreground"] },
+  page: { selector: "body[data-private-body]", absolute: true, tokens: ["background", "gradient", "text", "muted", "link", "error"], kind: "box", surface: "background", ink: "foreground" },
+  frame: { selector: "", tokens: ["max-width"], kind: "box", surface: "under", ink: "foreground", on: "page" },
+  // Every filled button the host draws without a target of its own (bg-primary), and every field, on the page and in its dialogs.
+  action: { selector: ':is([data-private="cart"],[data-private="dialog"]) .bg-primary', absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground" },
+  input: { selector: ':is([data-private="cart"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea)', absolute: true, tokens: [...FIELD_TOKENS], kind: "field", surface: "background", ink: "foreground" },
+  notice: { selector: '[data-part="notice"]', tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius"], kind: "box", surface: "under", ink: "foreground", part: "notices" },
+  lines: { selector: '[data-part="lines"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "lines" },
+  "lines-heading": { selector: '[data-part="lines-heading"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "lines" },
+  "cart-empty": { selector: '[data-part="cart-empty"]', tokens: ["text", "muted"], kind: "text", surface: "under", ink: "foreground", on: "lines" },
+  line: { selector: '[data-part="line"]', tokens: ["background", "border", "border-width", "border-style", "radius", "padding"], kind: "box", surface: "under", ink: "foreground", on: "lines" },
+  "line-image": { selector: '[data-part="line-image"]', tokens: ["width", "height", "width-wide", "height-wide", "radius", "background", "border", "border-width", "border-style", "fit"], kind: "text", surface: "muted", ink: "foreground", item: "line", part: "image" },
+  "line-title": { selector: '[data-part="line-title"]', tokens: [...TEXT_TOKENS, "clamp"], kind: "text", surface: "under", ink: "foreground", item: "line", part: "title" },
+  "line-details": { selector: '[data-part="line-details"]', tokens: ["text", "size"], kind: "text", surface: "under", ink: "muted-foreground", item: "line", part: "details" },
+  "line-price": { selector: '[data-part="line-price"]', tokens: ["text", "muted", "font", "weight", "size", "align"], kind: "text", surface: "under", ink: "foreground", item: "line", part: "price" },
+  "line-quantity": { selector: '[data-part="line-quantity"]', tokens: ["background", "text", "border", "border-width", "border-style", "radius", "ring"], kind: "control", surface: "under", ink: "foreground", item: "line", part: "quantity" },
+  "line-remove": { selector: '[data-part="line-remove"]', tokens: ["text", "radius", "ring"], kind: "control", surface: "under", ink: "muted-foreground", item: "line", part: "remove" },
+  "fold-toggle": { selector: '[data-part="fold-toggle"]', tokens: ["background", "text", "border", "border-width", "radius", "shadow", "ring"], kind: "control", surface: "card", ink: "foreground", layout: "fold" },
+  summary: { selector: '[data-part="summary"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", part: "summary" },
+  "summary-rows": { selector: '[data-summary-row]:not([data-summary-row="total"])', tokens: ["text", "size"], kind: "text", surface: "under", ink: "muted-foreground", on: "summary" },
+  "summary-total": { selector: '[data-summary-row="total"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary" },
+  "details-form": { selector: '[data-part="details-form"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "details" },
+  "section-heading": { selector: ':is([data-part="contact"],[data-part="delivery"]) h2', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "details-form" },
+  submit: { selector: '[data-part="details-submit"]', tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "details-form" },
+  legal: { selector: '[data-part="legal"]', tokens: ["text", "size", "align"], kind: "text", surface: "under", ink: "muted-foreground", on: "details-form" },
+  // The store's dialogs over the page (confirmation, sign-in): their surface, words, fields and buttons.
+  dialog: { selector: '[data-private="dialog"]', absolute: true, tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "shadow"], kind: "box", surface: "card", ink: "foreground", on: "page" },
+  "dialog-back": { selector: '[data-private="dialog"] [data-part="dialog-back"]', absolute: true, tokens: ["background", "text", "border", "border-width", "radius", "ring", "weight"], kind: "control", surface: "under", ink: "foreground", on: "dialog" },
+  "dialog-confirm": { selector: '[data-private="dialog"] [data-part="dialog-confirm"]', absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "dialog" },
+  // The host's search in the theme header's frame (`privatePages.search`), never inside the theme's region.
+  search: { selector: '[data-host="search"]', absolute: true, tokens: [...FIELD_TOKENS], kind: "field", surface: "background", ink: "foreground", on: "page" },
 };
 
 /** The cart page: the information step (lines, totals, the details form and its submit). */
@@ -274,14 +295,14 @@ const CART_PAGE: PrivatePageSpec = {
   },
   labels: {
     "cart.heading": { max: 60 },
-    "cart.continue": { max: 40 },
+    "cart.continue": { variants: ["continue-shopping", "keep-shopping", "back-to-store"] },
     "cart.empty": { max: 80 },
     "cart.emptyText": { max: 200 },
-    "cart.subtotal": { max: 40 },
-    "cart.showSummary": { max: 40 },
-    "cart.hideSummary": { max: 40 },
-    "dialog.goBack": { max: 30 },
-    "dialog.confirm": { max: 30 },
+    "cart.subtotal": { variants: ["subtotal", "items-total"] },
+    "cart.showSummary": { variants: ["show-summary", "show-cart"] },
+    "cart.hideSummary": { variants: ["hide-summary", "hide-cart"] },
+    "dialog.goBack": { variants: ["go-back", "cancel"] },
+    "dialog.confirm": { variants: ["confirm", "continue-checkout", "agree-and-continue"] },
   },
   icons: ["cart.empty"],
 };
@@ -331,11 +352,11 @@ const CART_DRAWER: PrivatePageSpec = {
   },
   labels: {
     "drawer.title": { max: 40 },
-    "drawer.checkout": { max: 30 },
-    "drawer.viewCart": { max: 30 },
-    "drawer.continue": { max: 40 },
+    "drawer.checkout": { variants: ["checkout", "proceed-to-checkout"] },
+    "drawer.viewCart": { variants: ["view-cart", "go-to-cart"] },
+    "drawer.continue": { variants: ["continue-shopping", "keep-shopping"] },
     "drawer.empty": { max: 80 },
-    "drawer.startShopping": { max: 30 },
+    "drawer.startShopping": { variants: ["start-shopping", "browse-products", "continue-shopping"] },
   },
   icons: ["drawer.empty"],
 };
@@ -371,29 +392,51 @@ export const PRIVATE_SCOPES = ["dialog", "header", "footer"] as const;
  * widens the page or acts outside them) and the only places the theme's
  * stylesheet reaches, strictly inside the wrapper (`data-free`): the
  * theme's content blocks (`block`, with their `data-hook`) and its header
- * and footer (`header`, `footer`). Host islands inside them (`data-host`,
- * the header's search form) are the host's: no theme rule reaches them.
+ * and footer (`header`, `footer`). Nothing of the host's is ever inside one:
+ * the host's search sits beside the theme's header (`PRIVATE_SEARCH_PLACES`).
  */
 export const PRIVATE_FREE_REGIONS = ["block", "header", "footer"] as const;
 
+/**
+ * Where the host's search form sits in the header's frame on a private page
+ * with the theme's chrome (`privatePages.search`): before or after the
+ * theme's header region, or (unset) nowhere. Its look is the `search` target's
+ * tokens; whatever search form the theme's header draws is dropped.
+ */
+export const PRIVATE_SEARCH_PLACES = ["before", "after"] as const;
+export type PrivateSearchPlace = (typeof PRIVATE_SEARCH_PLACES)[number];
+
 /** The most content blocks a page holds, and the most before and after its last mandatory part (each is at most 30rem tall). */
 export const PRIVATE_CONTENT_LIMITS = { perPage: 8, beforeLastMandatory: 3, afterLastMandatory: 3 } as const;
+
+/** An app node kind's style target (`ui.<kind>`): what it is to the colour table, by tone. */
+export interface PrivateBuyerUiStyle {
+  /** The node's selector inside its block (`data-ui`, with `data-tone` added per tone). */
+  readonly kind: string;
+  readonly tones?: readonly PrivateContentTone[];
+  readonly tokens: readonly PrivateTokenName[];
+  /** Null for a node that draws no colour (a row of nodes): it has no row in the table. */
+  readonly style: PrivateStyleKind | null;
+  /** The palette role of its own words, per tone (`critical` words are the error colour). */
+  readonly ink?: PrivatePaletteRole;
+  readonly toneInk?: Partial<Record<PrivateContentTone, PrivatePaletteRole>>;
+}
 
 /**
  * An app's buyer UI block is host-drawn from typed nodes: a host part. A
  * theme gives each node kind a look by tokens under `ui.<kind>`, narrowed by
  * tone (`ui.banner.warning`), app (`@acme.protection`) and target
- * (`/cart.line.after`). It may sit in any target, so its text is checked on
- * every surface a target can be placed on.
+ * (`/cart.line.after`). Each kind and tone has a row in the colour table at
+ * every one of the page's targets, on whatever that target sits on.
  */
-export const PRIVATE_BUYER_UI_STYLES: Readonly<Record<string, Omit<PrivateStyleSpec, "selector"> & { kind: string; tones?: readonly string[] }>> = {
-  banner: { kind: '[data-ui="banner"]', tones: PRIVATE_CONTENT_TONES, tokens: ["background", "text", "border", "border-width", "radius", "shadow", "padding"], surface: "under", text: ["foreground"], within: ["page", "lines", "line", "summary", "details-form"] },
-  button: { kind: ':is(button,a)[data-ui="button"]', tokens: ["background", "text", "border", "border-width", "radius", "weight", "size", "case"], surface: "background", text: ["foreground"] },
-  badge: { kind: '[data-ui="badge"]', tones: PRIVATE_CONTENT_TONES, tokens: ["background", "text", "border", "radius"], surface: "under", text: ["foreground"], within: ["page", "lines", "line", "summary", "details-form"] },
-  text: { kind: '[data-ui="text"]', tokens: ["text", "size", "weight"], surface: "under", text: ["foreground"], within: ["page", "lines", "line", "summary", "details-form"] },
-  heading: { kind: '[data-ui="heading"]', tokens: ["text", "size", "weight", "font", "case"], surface: "under", text: ["foreground"], within: ["page", "lines", "line", "summary", "details-form"] },
-  disclosure: { kind: '[data-ui="disclosure"]', tokens: ["background", "text", "border", "radius"], surface: "under", text: ["foreground"], within: ["page", "lines", "line", "summary", "details-form"] },
-  row: { kind: ':is([data-ui="stack"],[data-ui="columns"])', tokens: ["gap"], surface: "under", text: [] },
+export const PRIVATE_BUYER_UI_STYLES: Readonly<Record<string, PrivateBuyerUiStyle>> = {
+  banner: { kind: '[data-ui="banner"]', tones: PRIVATE_CONTENT_TONES, tokens: ["background", "text", "border", "border-width", "radius", "shadow", "padding"], style: "box", ink: "foreground", toneInk: { critical: "destructive" } },
+  button: { kind: ':is(a[data-ui="button"],[data-ui="button"]>button)', tokens: ["background", "text", "border", "border-width", "radius", "ring", "weight", "size", "case"], style: "control", ink: "foreground" },
+  badge: { kind: '[data-ui="badge"]', tones: PRIVATE_CONTENT_TONES, tokens: ["background", "text", "border", "radius"], style: "text", ink: "foreground", toneInk: { critical: "destructive" } },
+  text: { kind: '[data-ui="text"]', tokens: ["text", "size", "weight"], style: "text", ink: "foreground" },
+  heading: { kind: '[data-ui="heading"]', tokens: ["text", "size", "weight", "font", "case"], style: "text", ink: "foreground" },
+  disclosure: { kind: '[data-ui="disclosure"]', tokens: ["background", "text", "border", "radius"], style: "box", ink: "foreground" },
+  row: { kind: ':is([data-ui="stack"],[data-ui="columns"])', tokens: ["gap"], style: null },
 };
 export type PrivateFreeRegion = (typeof PRIVATE_FREE_REGIONS)[number];
 export const PRIVATE_FREE_ATTRIBUTE = "data-free";
@@ -412,9 +455,14 @@ export const PRIVATE_DIALOG_HOOKS = ["sign-in", "dialog-title", "dialog-text", "
  */
 export const PRIVATE_BUYER_UI_HOOKS = ["data-buyer-ui-target", "data-buyer-ui-app", "data-ui"] as const;
 
-/** Every label key of every page, with its page. */
-export function privateLabelKeys(): Array<{ page: PrivatePageKey; key: string; max: number }> {
-  return PRIVATE_PAGE_KEYS.flatMap((page) => Object.entries(PRIVATE_PAGES[page].labels).map(([key, spec]) => ({ page, key, max: spec.max })));
+/** Every label key of every page, with its page and its spec. */
+export function privateLabelKeys(): Array<{ page: PrivatePageKey; key: string; spec: PrivateLabelSpec }> {
+  return PRIVATE_PAGE_KEYS.flatMap((page) => Object.entries(PRIVATE_PAGES[page].labels).map(([key, spec]) => ({ page, key, spec })));
+}
+
+/** Every variant any label offers (core's copy words each, in every language it translates). */
+export function privateLabelVariants(): string[] {
+  return [...new Set(privateLabelKeys().flatMap((entry) => entry.spec.variants ?? []))].sort();
 }
 
 /** Every icon key of every page. */
@@ -446,12 +494,12 @@ export function privatePageAnatomy(): string[] {
       lines.push(`${page}.${name} root ${PRIVATE_PART_ATTRIBUTE}=${PRIVATE_LINE_HOOK}`);
       unit(`${page}.${name}`, item);
     }
-    for (const [key, label] of Object.entries(spec.labels)) lines.push(`${page} label ${key} max=${label.max}`);
+    for (const [key, label] of Object.entries(spec.labels)) lines.push(`${page} label ${key} ${label.variants ? `variants=${label.variants.join("|")}` : `max=${label.max}`}`);
     for (const icon of spec.icons) lines.push(`${page} icon ${icon}`);
   }
   lines.push(`dialog root ${PRIVATE_SCOPE_ATTRIBUTE}=dialog hooks=${PRIVATE_DIALOG_HOOKS.join(",")}`);
   lines.push(`buyer-ui attributes=${PRIVATE_BUYER_UI_HOOKS.join(",")}`);
-  lines.push(`chrome roots ${PRIVATE_SCOPE_ATTRIBUTE}=header|footer`);
+  lines.push(`chrome roots ${PRIVATE_SCOPE_ATTRIBUTE}=header|footer search=${PRIVATE_SEARCH_PLACES.join("|")}`);
   lines.push(`layout tokens=${PRIVATE_LAYOUT_TOKENS.join(",")}`);
   for (const [kind, style] of Object.entries(PRIVATE_BUYER_UI_STYLES)) lines.push(`buyer-ui style ui.${kind}${style.tones ? `[.${style.tones.join("|")}]` : ""}[@<app>][/<target>] ${style.kind} tokens=${style.tokens.join(",")}`);
   lines.push(`free regions ${PRIVATE_FREE_ATTRIBUTE}=${PRIVATE_FREE_REGIONS.join("|")}`);
