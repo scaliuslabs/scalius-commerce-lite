@@ -6564,6 +6564,9 @@
               },
               "refused": {
                 "type": "boolean"
+              },
+              "tokenMode": {
+                "type": "boolean"
               }
             },
             "required": [

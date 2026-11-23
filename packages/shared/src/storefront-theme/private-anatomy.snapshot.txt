@@ -6,6 +6,7 @@ cart part summary mandatory hooks=summary,summary-validation
 cart part discount hooks=discount
 cart part details mandatory hooks=details,details-sign-in,details-form,contact,delivery,details-errors,details-submit,legal
 cart part empty hooks=empty-extras
+cart fields in discount,details
 cart target cart.page.summary
 cart target cart.page.below
 cart layouts stack,columns,grid,group,fold
@@ -30,11 +31,11 @@ cart style fold-toggle <root> [data-part="fold-toggle"] tokens=background,text,b
 cart style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap
 cart style summary-rows <root> [data-summary-row]:not([data-summary-row="total"]) tokens=text,size
 cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,case,tracking
-cart style details-form <root> [data-part="details-form"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+cart style details-form <root> [data-part="details-form"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding targets=checkout.contact.after,checkout.delivery.after
 cart style section-heading <root> :is([data-part="contact"],[data-part="delivery"]) h2 tokens=text,font,weight,size,case,tracking
 cart style submit <root> [data-part="details-submit"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,font,weight,size,case,tracking
 cart style legal <root> [data-part="legal"] tokens=text,size,align
-cart style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow
+cart style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow fields
 cart style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=background,text,border,border-width,radius,ring,weight
 cart style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,font,weight,size,case,tracking
 cart style chrome [data-private="core-header"] tokens=background,gradient,text,muted,link,border,border-width
@@ -50,6 +51,7 @@ cart.line part remove mandatory hooks=line-remove
 cart.line part limit mandatory hooks=line-limit
 cart.line part issue mandatory hooks=line-issue
 cart.line part rule mandatory hooks=line-rule
+cart.line fields in inputs
 cart.line target cart.line.after
 cart.line layouts stack,columns,grid,group
 cart label cart.heading max=60
@@ -85,6 +87,7 @@ cartDrawer.line part remove mandatory hooks=line-remove
 cartDrawer.line part limit mandatory hooks=line-limit
 cartDrawer.line part issue mandatory hooks=line-issue
 cartDrawer.line part rule mandatory hooks=line-rule
+cartDrawer.line fields in inputs
 cartDrawer.line target cart.line.after
 cartDrawer.line layouts stack,columns,grid,group
 cartDrawer label drawer.title max=40

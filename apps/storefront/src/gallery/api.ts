@@ -12,7 +12,7 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import type { GalleryEntry } from "./entries";
-import { fixtureProductSoldOut } from "./cart-seed";
+import { fixtureProductSoldOut, GALLERY_KIT } from "./cart-seed";
 import {
   BANGLA_STORE_NAME,
   FIXTURE_POLICIES,
@@ -253,7 +253,15 @@ function listing(entry: GalleryEntry, search: URLSearchParams) {
 function checkoutApps(entry: GalleryEntry) {
   if (!entry.scenario.checkoutBuyerUi) return [];
   const kinds = entry.scenario.buyerUiKinds
-    ? [everyKindBlock("acme.kinds", "cart.page.summary"), everyKindBlock("acme.kinds", "cart.page.below"), everyKindBlock("acme.kinds", "cart.line.after", "line:v3:prod_1:variant:var_1:p:none")]
+    ? [
+      everyKindBlock("acme.kinds", "cart.page.summary"), everyKindBlock("acme.kinds", "cart.page.below"), everyKindBlock("acme.kinds", "cart.line.after", "line:v3:prod_1:variant:var_1:p:none"),
+      // Inside the details form: every kind after the contact fields, a toned banner and a button after delivery.
+      everyKindBlock("acme.kinds", "checkout.contact.after"),
+      { appId: "acme.kinds", releaseId: "gallery", target: "checkout.delivery.after", attributes: [], values: {}, ui: { type: "stack", children: [
+        { type: "banner", tone: "warning", title: "Delivery takes 3 days after Eid", text: "Order today to have it before the weekend." },
+        { type: "button", label: "See delivery areas", action: { kind: "navigate", to: { kind: "store", path: "/pages/delivery" } } },
+      ] } },
+    ]
     : [];
   return [
     ...kinds,
@@ -265,6 +273,14 @@ function checkoutApps(entry: GalleryEntry) {
     {
       appId: "acme.loyalty", releaseId: "gallery", target: "cart.page.summary", attributes: [], values: {},
       ui: { type: "banner", tone: "info", text: "You will earn 120 Nakshi points with this order." },
+    },
+    // An app's offer row under the kit's line: words beside a button (the lines state's cart holds the kit).
+    {
+      appId: "acme.offers", releaseId: "gallery", target: "cart.line.after", attributes: [], values: {}, lineKey: GALLERY_KIT.key,
+      ui: { type: "columns", children: [
+        { type: "stack", children: [{ type: "text", emphasis: "strong", text: "Add a matching blouse piece" }, { type: "text", text: "৳900 with this set, ৳150 off." }] },
+        { type: "button", label: "Add to this order", action: { kind: "navigate", to: { kind: "store", path: "/products/blouse-piece" } } },
+      ] },
     },
     // A per-line block under the first line: an app's toned badges (the fourth review drew them on a dark line).
     {
@@ -448,10 +464,10 @@ async function cartValidation(entry: GalleryEntry, request: Request) {
     ...(lineStates ? { lineInputs: [PROTECTION_INPUTS] } : {}),
     items: items.map((item, index) => ({
       ...(lineStates && item.productId === "prod_0" ? { lineInputs: ["acme.protect.plan"] } : {}),
-      // An app's add-on priced into the line (a bundle's gift wrap).
-      ...(lineStates && item.productId === "prod_1" ? { adjustments: [{ key: "_adjustment", label: "Gift wrap", displayValue: "Gold paper and a card", price: 100, priceMinor: 10_000, appId: "acme.wrap" }] } : {}),
+      // A store kit, one line: an app's add-on priced once per kit (never per item), in its unit price.
+      ...(item.variantId === GALLERY_KIT.variantId ? { adjustments: [GALLERY_KIT.addOn] } : {}),
       index, cartKey: item.cartKey ?? null, productId: item.productId, variantId: item.variantId, quantity: item.quantity,
-      unitPrice: item.price, productName: item.productName ?? "", variantLabel: item.variantLabel ?? null, freeDelivery: false,
+      unitPrice: item.variantId === GALLERY_KIT.variantId ? GALLERY_KIT.price + GALLERY_KIT.addOn.price : item.price, productName: item.productName ?? "", variantLabel: item.variantLabel ?? null, freeDelivery: false,
       availableQuantity: fixtureProductSoldOut(item.productId) ? 0 : 12, productImageMediaId: null, productImage: null, fulfillmentKind: "physical", fulfillmentType: null,
     })),
     subtotal: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
@@ -481,7 +497,7 @@ async function taxQuote(entry: GalleryEntry, request: Request) {
     const product = Number.isSafeInteger(productIndex) ? cardProduct(productIndex, { bangla }) : null;
     return {
       cartKey: item.cartKey ?? `line-${index}`, productId: item.productId, variantId: item.variantId, quantity: item.quantity,
-      unitPrice: product?.discountedPrice ?? 0, productName: item.productName ?? product?.name ?? item.productId, variantLabel: item.variantLabel ?? null,
+      unitPrice: item.variantId === GALLERY_KIT.variantId ? GALLERY_KIT.price + GALLERY_KIT.addOn.price : product?.discountedPrice ?? 0, productName: item.productName ?? product?.name ?? item.productId, variantLabel: item.variantLabel ?? null,
       fulfillmentType: null, properties: [], propertiesPriceMinor: 0, propertiesHash: "none",
     };
   });

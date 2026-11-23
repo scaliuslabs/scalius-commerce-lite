@@ -44,3 +44,17 @@ export function galleryCartSeed(kind: GalleryCartSeed): { items: Record<string, 
   ]));
   return { items, discountCodes: [] };
 }
+
+/**
+ * A store kit (`variants[].kit`, a SKU made of other SKUs) as the cart holds
+ * it: one line, two kits, each at the kit's own price (৳4,800) and an app's
+ * add-on priced once per kit (৳100), never per item. The cart check answers
+ * it as the API does: its items are checkout's, never separate lines.
+ */
+export const GALLERY_KIT = {
+  key: "line:v3:prod_7:variant:var_kit_7:p:none",
+  variantId: "var_kit_7",
+  price: 4800,
+  line: { id: "prod_7", slug: "eid-gift-set", name: "Eid gift set", price: 4900, quantity: 2, variantId: "var_kit_7", propertiesHash: "none", options: [{ name: "Set", value: "Saree, panjabi and gift box" }] },
+  addOn: { key: "_adjustment", label: "Gift wrap", displayValue: "Gold paper and a card", price: 100, priceMinor: 10_000, appId: "acme.wrap" },
+} as const;

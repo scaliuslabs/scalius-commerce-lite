@@ -1386,6 +1386,7 @@ export type StorefrontPrivatePages = {
         sanitizer: number;
         css: string;
         refused?: boolean;
+        tokenMode?: boolean;
     };
 };
 

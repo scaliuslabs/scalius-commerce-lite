@@ -4,7 +4,7 @@
 // draws the real cart page through Vite with the store's real CSS, compiles
 // each document with the store's compiler, and answers as a store that
 // delivers (Place order is on), with an app block of every node kind and tone
-// in the summary, below the cart and under a line.
+// in the summary, below the cart, under a line and inside the details form.
 //
 // From the repo root:
 //   pnpm test:private-pages                       the gate: the named cases and a fast seed set
@@ -18,8 +18,8 @@
 //
 // Each document is a LEGAL theme (or a named break the save must refuse). A
 // document the save refuses is not drawn. Each accepted one is drawn in its
-// states (a store that delivers; a line asking for a decision, an add-on and
-// a sold-out line; an empty cart; long Bangla titles; an Arabic right-to-left
+// states (a store that delivers; a line asking for a decision, a store kit
+// with an add-on once per kit and an app's offer row, and a sold-out line; an empty cart; long Bangla titles; an Arabic right-to-left
 // presence) at 320, 390 and 1280 px, light and dark, and with validation
 // errors showing, the sign-in dialog open and the confirmation dialog open.
 // Every draw must hold:
@@ -28,14 +28,17 @@
 // - the coverage walk: every text and every focusable control the host draws
 //   belongs to a row of the page's colour table (in token mode its words are
 //   one of the row's colours and no surface the table does not know lies
-//   between them and the row); with no tokens, to a surface the anatomy names;
+//   between them and the row); with no tokens, to a surface the anatomy names,
+//   and the page shows no paint of its own (a theme's page paint puts the page
+//   in token mode, so the table checks what stands on it);
 //   nothing of the host's inside a free region;
 // - every text, with no budget, at its contrast floor against the pixels
 //   behind it (the text hidden, the page photographed);
 // - every text whole: nothing cut sideways, no glyph cut by a clip, no word
 //   broken inside itself;
 // - every control takes a click at its centre, is reached by Tab in document
-//   order, and shows a focus ring at 3:1 against what is around it;
+//   order, shows a focus ring at 3:1 against what is around it, and under the
+//   pointer still reads (and shows its hover where the host draws one);
 // - on a phone, the page scrolls by touch from the top to Place order;
 // - no request answers 5xx.
 import assert from "node:assert/strict";
@@ -65,7 +68,7 @@ let bailed = false;
 const JOBS = number("jobs", 4);
 const WIDTHS = [320, 390, 1280];
 const SCHEMES = ["light", "dark"];
-const STATES = ["base", "lines", "empty", "bn", "ar"];
+const STATES = ["base", "lines", "decide", "empty", "bn", "ar"];
 /** How far below the top a mandatory part may sit (24rem header, 3 blocks of 30rem, the host's own page). */
 const MAX_DEPTH_PX = 9000;
 
@@ -121,7 +124,7 @@ const HOSTILE_CSS = [
 const LONG = "Supercalifragilisticexpialidocious".repeat(8);
 const PALETTES = ["retail", "marketplace", "boutique", "fresh", "beauty", "heritage", "midnight"];
 const TONES = ["neutral", "info", "success", "warning", "critical"];
-const UI_TARGETS = ["cart.page.summary", "cart.page.below", "cart.line.after"];
+const UI_TARGETS = ["cart.page.summary", "cart.page.below", "cart.line.after", "checkout.contact.after", "checkout.delivery.after"];
 /** Text and its surface chosen together (the save refuses an unreadable pair; most still pass). */
 const PAIRS = [["card", "card-foreground"], ["background", "foreground"], ["#1e1831", "#f4f1ff"], ["#ffffff", "#111111"], ["#111111", "#ffffff"], ["#0f2a1d", "#ecfdf5"]];
 /** The theme's own files the generator names: the gallery draws any `pp/<name>.svg` of the theme's app. */
@@ -253,6 +256,7 @@ function generate(seed) {
 const LEGAL_COLUMNS = [{ type: "part", part: "notices" }, { type: "layout", layout: "columns", children: [{ type: "layout", layout: "stack", children: [{ type: "layout", layout: "fold", children: [{ type: "part", part: "lines" }, { type: "part", part: "summary" }, { type: "target", target: "cart.page.summary" }] }, { type: "target", target: "cart.page.below" }] }, { type: "part", part: "details" }] }];
 const DARK = { background: "#111111", text: "#ffffff", muted: "#d4d4d4", link: "#c4b5fd", error: "#fca5a5" };
 const PAINT = { kind: "linear", angle: 160, stops: ["background", "muted", "secondary"] };
+const DARK_PAINT = { kind: "radial", at: "top", stops: ["muted", "background", "secondary"] };
 
 /**
  * The reviews' concrete breaks: each must hold when drawn (in the states it
@@ -273,15 +277,27 @@ const REGRESSIONS = {
   "review 4, S3: the theme's header styling the store's search from its region": { request: { noor: true }, privatePages: { chrome: "theme", search: "after", css: '[data-free="header"] div { visibility: hidden; pointer-events: none; font-size: 60px; direction: rtl }' } },
   // Review 4, B4: the gate could not see the details form; a dark one, tokens only, in every state.
   "review 4, B4: tokens only, a dark details form in every state": { states: "all", privatePages: { tokens: { cart: { "details-form": DARK } } } },
+  // The apps' blocks inside the details form stand on its row, and a theme styles them there by `ui.*`.
+  "the apps' blocks in a dark details form, styled by target": { privatePages: { tokens: { cart: { "details-form": DARK, "ui.banner.warning/checkout.delivery.after": { background: "#3a2a0a", text: "#fde68a", border: "#f59e0b" }, "ui.button/checkout.contact.after": { background: "#7c3aed", text: "#ffffff", radius: 12 } } } } },
   "review 4, S6: Place order's focus ring on a dark form": { privatePages: { tokens: { cart: { "details-form": DARK, submit: { background: "#7c3aed", text: "#ffffff", radius: 0 } } } } },
   "review 4, S8: a 40px wide-tracked title clamped to two lines": { privatePages: { tokens: { cart: { "line-title": { size: 40, tracking: "wider", clamp: "2" } } } } },
   "review 4: every node kind under a dark summary and a dark line, in every state": { states: "all", privatePages: { tokens: { cart: { summary: DARK, lines: DARK, "ui.banner.warning/cart.line.after": { background: "#3a2a0a", text: "#fde68a", border: "#f59e0b" } } } } },
+  // A dark page in a theme that shows dark colours: the dark rows write every cell the light rows write (else the
+  // light lines panel's dark focus ring reads on the dark one).
+  "a dark page under the dark colours": { request: { scheme: "system" }, privatePages: { tokens: { cart: { page: DARK } } } },
   "the store's own header under dark tokens": { privatePages: { tokens: { cart: { chrome: { background: "#111111", text: "#ffffff", muted: "#d4d4d4", link: "#c4b5fd" } } } } },
   "the store's own page, no theme, in every state": { states: "all", privatePages: {} },
+  // The theme's chrome with no header skin: the store's own checkout header draws, in token mode like the rest.
+  "the theme's chrome with no header skin, under a dark page": { request: { noor: true, headerSkin: false }, privatePages: { chrome: "theme", tokens: { cart: { page: DARK } } } },
+  "the theme's chrome with no header skin, no tokens": { request: { noor: true, headerSkin: false, scheme: "dark" }, privatePages: { chrome: "theme" } },
   // The theme's page paint (tokens.pagePaint) shows on private pages: behind the store's own page, and under tokens
   // that paint no page surface, where the table checks every word along the gradient.
   "the theme's page paint behind the store's own page": { request: { paint: PAINT }, privatePages: {} },
   "the theme's page paint under a dark summary": { request: { paint: PAINT, scheme: "light" }, privatePages: { tokens: { cart: { summary: DARK, page: { text: "#000000" } } } } },
+  // A dark page paint (the dark colours' own stops): with no tokens the page is drawn in token mode, its default rows
+  // computed from the paint; with tokens, those that paint no page surface stand on it too.
+  "a dark page paint, no private tokens": { states: "all", request: { palette: "retail", scheme: "dark", paint: DARK_PAINT }, privatePages: {} },
+  "a dark page paint under dark tokens": { request: { palette: "retail", scheme: "dark", paint: DARK_PAINT }, privatePages: { tokens: { cart: { summary: DARK, lines: DARK } } } },
   // What the save must refuse (under a mutation that lets one through, the drawing must fail).
   "a stylesheet hiding a host part": { refused: "unscoped_selector", privatePages: { css: '[data-part="summary"] * { display: none } [data-part="details-submit"] * { visibility: hidden }' } },
   "summary rows that do not read on their summary": { refused: "contrast", privatePages: { tokens: { cart: { "summary-rows": { text: "#eeeeee" }, summary: { background: "#ffffff" } } } } },
@@ -352,6 +368,9 @@ const rgb = (css) => css.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number);
 
 const MANDATORY = ['[data-part="lines"]', '[data-part="line-title"]', '[data-part="line-price"]', '[data-part="line-quantity"]', '[data-part="line-remove"]', '[data-part="summary"]', "#subtotal", "#total", '[data-part="details-form"]', '[data-part="contact"]', '[data-part="details-submit"]'];
 const EMPTY_MANDATORY = ['[data-part="lines"]', '[data-part="cart-empty"]'];
+/** The lines state's cart also holds a store kit (one line, its add-on once per kit) and an app's offer row under it. */
+const KIT_LINE = '[data-part="line"][data-line-key="line:v3:prod_7:variant:var_kit_7:p:none"]';
+const LINES_MANDATORY = [...MANDATORY, KIT_LINE, `${KIT_LINE} [data-buyer-ui-app="acme.offers"] [data-ui="button"]`];
 
 /**
  * Not the store's buyer-facing page: the gallery's own scaffolding, the theme's
@@ -365,7 +384,7 @@ const EXEMPT = "script,style,template,noscript,[data-free],#gallery-page-end,vit
  * the host draws, checks each against the colour table (or, with no tokens,
  * the anatomy's style targets) and returns them for the pixel checks.
  */
-function walk({ rows, anatomy, mandatory, scope, maxDepth, exempt }) {
+function walk({ rows, anatomy, uiKinds, mandatory, scope, maxDepth, exempt }) {
   const problems = [];
   const width = innerWidth;
   const root = scope ? document.querySelector(scope) : document.body;
@@ -426,6 +445,16 @@ function walk({ rows, anatomy, mandatory, scope, maxDepth, exempt }) {
     if (!clear && !row.gradient && style.backgroundColor !== parse(row.paint ?? "")) problems.push(`${name(element)}: paints ${style.backgroundColor} where its row (${row.key}) paints ${row.paint ?? "nothing"}`);
     if (style.backgroundImage !== "none" && !row.gradient) problems.push(`${name(element)}: paints an image its row (${row.key}) does not`);
   };
+  // The page itself: in token mode its row paints the body (the theme's page paint included); with no
+  // tokens nothing may paint it but the page colour, or what stands on it would go unchecked at save.
+  if (tokenMode && rowOf.has(document.body)) checkPaint(document.body);
+  if (!tokenMode) {
+    const body = getComputedStyle(document.body);
+    const page = getComputedStyle(document.documentElement).getPropertyValue("--background").trim();
+    if (body.backgroundImage !== "none" || (/^#[0-9a-f]{6}$/i.test(page) && body.backgroundColor !== parse(page))) {
+      problems.push(`the page shows a paint of its own (${body.backgroundImage !== "none" ? body.backgroundImage.slice(0, 60) : body.backgroundColor}) and no colour table checks what stands on it`);
+    }
+  }
   /** The coverage walk for one element that draws text or takes focus. */
   const claim = (element, what) => {
     if (claimed.has(element)) return true;
@@ -437,6 +466,11 @@ function walk({ rows, anatomy, mandatory, scope, maxDepth, exempt }) {
     const row = nearestRow(element);
     if (!row) { problems.push(`${what} ${name(element)}: no row of the colour table claims it`); return false; }
     checkPaint(row);
+    // An app's node of a kind a theme styles (`ui.<kind>…/<target>`) is claimed by its own row at its target, never
+    // only by the box its block sits in (else the theme's tokens for it would style nothing the table checks).
+    const node = element.closest(uiKinds.join(","));
+    const mount = node?.closest("[data-buyer-ui-target]");
+    if (node && mount && !mount.contains(row)) { problems.push(`${what} ${name(element)}: an app's node at ${mount.dataset.buyerUiTarget} has no row of its own (it reads ${rowOf.get(row).key})`); return false; }
     for (let at = element; at && at !== row; at = at.parentElement) {
       if (paints(at) && !at.matches("input,select,textarea")) { problems.push(`${what} ${name(element)}: ${name(at)} paints ${getComputedStyle(at).backgroundColor} under it and no row of the table claims that surface (its row: ${rowOf.get(row).key})`); return false; }
     }
@@ -506,7 +540,7 @@ function walk({ rows, anatomy, mandatory, scope, maxDepth, exempt }) {
     control.dataset.ptControl = String(id);
     if (target !== control) target.dataset.ptControlLabel = String(id);
     const row = tokenMode ? nearestRow(control) : null;
-    controls.push({ id, label: name(control), viaLabel: target !== control, radio: control.matches("input[type=radio]") ? control.name : null, group: `${row ? rowOf.get(row).key : ""}|${nearestRow(control.parentElement ?? control) ? rowOf.get(nearestRow(control.parentElement ?? control)).key : ""}|${control.tagName}|${control.className}|${control.type ?? ""}` });
+    controls.push({ id, label: name(control), viaLabel: target !== control, field: control.matches("input,select,textarea"), radio: control.matches("input[type=radio]") ? control.name : null, group: `${row ? rowOf.get(row).key : ""}|${nearestRow(control.parentElement ?? control) ? rowOf.get(nearestRow(control.parentElement ?? control)).key : ""}|${control.tagName}|${control.className}|${control.type ?? ""}` });
   }
   return { problems, texts, controls };
 }
@@ -772,6 +806,84 @@ async function focusRings(page, controls) {
   return problems;
 }
 
+/**
+ * Under the pointer, each kind of control still reads: its words at their
+ * floor on what is behind them while hovered, and a control the host gives a
+ * hover surface (a `hover:bg-*` class) shows it (a quarter of its box changes).
+ */
+async function hovers(page, controls) {
+  const problems = [];
+  const groups = new Set();
+  const viewport = page.viewportSize();
+  const hide = "*,*::before,*::after{color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important;text-decoration-color:transparent!important}";
+  for (const control of controls) {
+    if (control.viaLabel || control.field || groups.has(control.group)) continue;
+    groups.add(control.group);
+    await page.mouse.move(0, 0);
+    const box = await page.evaluate((id) => {
+      const element = document.querySelector(`[data-pt-control="${id}"]`);
+      element.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
+      const rect = element.getBoundingClientRect();
+      return { x: rect.left, y: rect.top, w: rect.width, h: rect.height, surfaced: [...element.classList].some((name) => /(^|:)hover:bg-/.test(name)) };
+    }, control.id);
+    const clip = { x: Math.max(0, Math.floor(box.x)), y: Math.max(0, Math.floor(box.y)) };
+    clip.width = Math.min(viewport.width, Math.ceil(box.x + box.w)) - clip.x;
+    clip.height = Math.min(viewport.height, Math.ceil(box.y + box.h)) - clip.y;
+    if (clip.width < 8 || clip.height < 8) continue;
+    const hidden = await page.addStyleTag({ content: hide });
+    const before = decode(await page.screenshot({ clip, animations: "disabled", caret: "hide" }));
+    await hidden.evaluate((style) => style.remove());
+    await page.mouse.move(box.x + box.w / 2, box.y + box.h / 2);
+    // The words as they are drawn under the pointer: their colours, and their boxes inside the control.
+    const words = await page.evaluate(({ id, clip }) => {
+      // A colour transition (the hover's, or the words coming back from hidden) drawn to its end.
+      for (const animation of document.getAnimations()) animation.finish();
+      const element = document.querySelector(`[data-pt-control="${id}"]`);
+      const out = [];
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const parent = node.parentElement;
+        if (!node.textContent.trim() || !parent || parent.closest(".sr-only") || getComputedStyle(parent).clipPath !== "none") continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const style = getComputedStyle(parent);
+        const size = Number.parseFloat(style.fontSize);
+        const rects = [...range.getClientRects()].map((rect) => ({ x: rect.left - clip.x, y: rect.top - clip.y, w: rect.width, h: rect.height })).filter((rect) => rect.w >= 2 && rect.h >= 4);
+        if (rects.length > 0) out.push({ text: node.textContent.trim().slice(0, 30), color: style.color, large: size >= 24 || (size >= 18.6 && Number(style.fontWeight) >= 700), rects });
+      }
+      return out;
+    }, { id: control.id, clip });
+    const covered = await page.addStyleTag({ content: hide });
+    const after = decode(await page.screenshot({ clip, animations: "disabled", caret: "hide" }));
+    await covered.evaluate((style) => style.remove());
+    for (const word of words) {
+      const ink = rgb(word.color);
+      const ratios = [];
+      for (const rect of word.rects) {
+        for (let y = Math.max(0, Math.floor(rect.y + 1)); y <= Math.min(after.height - 1, Math.ceil(rect.y + rect.h - 1)); y += 1) {
+          for (let x = Math.max(0, Math.floor(rect.x + 1)); x <= Math.min(after.width - 1, Math.ceil(rect.x + rect.w - 1)); x += 1) ratios.push(contrast(ink, pixelAt(after, x, y)));
+        }
+      }
+      if (ratios.length === 0) continue;
+      ratios.sort((a, b) => a - b);
+      const worst = ratios[Math.floor(ratios.length * 0.05)];
+      if (worst < (word.large ? 3 : 4.5) - 0.05) problems.push(`control ${control.label} hovered: "${word.text}" ${word.color} reads ${worst.toFixed(2)}:1 on what is behind it`);
+    }
+    if (box.surfaced) {
+      let changed = 0;
+      for (let y = 0; y < Math.min(before.height, after.height); y += 1) {
+        for (let x = 0; x < Math.min(before.width, after.width); x += 1) {
+          const [a, b] = [pixelAt(before, x, y), pixelAt(after, x, y)];
+          if (Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2])) >= 6) changed += 1;
+        }
+      }
+      if (changed < before.width * before.height * 0.25) problems.push(`control ${control.label}: shows no hover (${changed} of ${before.width * before.height} pixels change under the pointer)`);
+    }
+  }
+  await page.mouse.move(0, 0);
+  return problems;
+}
+
 /** On a phone: swiping from the top reaches Place order (nothing on the way takes the gesture). */
 async function touchScroll(page, selector) {
   const session = await page.context().newCDPSession(page);
@@ -826,7 +938,7 @@ async function startGallery() {
   return { url, close };
 }
 const gallery = await startGallery();
-const { styles } = await fetch(`${gallery.url}/__gallery/private-anatomy`).then((answer) => answer.json());
+const { styles, ui: UI_KINDS } = await fetch(`${gallery.url}/__gallery/private-anatomy`).then((answer) => answer.json());
 /**
  * With no tokens (the store's own colours, no table) the walk claims by the
  * anatomy: everything the host draws must sit inside a surface it names (the
@@ -860,11 +972,14 @@ function drawsOf(state) {
     return WIDTHS.flatMap((width) => SCHEMES.map((scheme) => ({
       width, scheme,
       focus: width === 390 || (width === 1280 && scheme === "dark"),
+      // Under a mouse pointer (a touch screen has no hover): the wide page, dark.
+      hover: width === 1280 && scheme === "dark",
       interact: (width === 390 && scheme === "light") || (width === 1280 && scheme === "dark"),
     })));
   }
   // The confirmation dialog in the same way; the other states on a phone and the wide page, crossed over the schemes.
   if (state === "lines") return [[390, "dark"], [1280, "light"]].map(([width, scheme]) => ({ width, scheme, focus: false, interact: true }));
+  if (state === "decide") return [[390, "light"], [1280, "dark"]].map(([width, scheme]) => ({ width, scheme, focus: false, interact: true }));
   return [[320, "light"], [1280, "dark"]].map(([width, scheme]) => ({ width, scheme, focus: false, interact: false }));
 }
 
@@ -929,17 +1044,17 @@ async function open(context, id, width, server5xx) {
 }
 
 /** One draw: the page in one state at one width and scheme, with its interactions. */
-async function draw({ context, id, state, width, focus, interact, rows, chrome, search }) {
+async function draw({ context, id, state, width, focus, hover, interact, rows, chrome, search }) {
   const problems = [];
   const server5xx = [];
   const page = await timed("load", () => open(context, id, width, server5xx));
   // With the theme's chrome its header region is drawn (else the seed tests nothing of the chrome), and the host's search where it says.
-  const chromeParts = [...(chrome ? ['[data-free="header"]'] : []), ...(search ? ['[data-host="search"]'] : [])];
-  const mandatory = [...(state === "empty" ? EMPTY_MANDATORY : MANDATORY), ...chromeParts];
+  const chromeParts = [...(chrome ? ['[data-free="header"]'] : ['[data-private="core-header"]']), ...(search ? ['[data-host="search"]'] : [])];
+  const mandatory = [...(state === "empty" ? EMPTY_MANDATORY : state === "lines" ? LINES_MANDATORY : MANDATORY), ...chromeParts];
   const at = (label, list) => problems.push(...list.map((problem) => `${label}: ${problem}`));
   const check = async (label, scope, list, { controls: wantControls = true } = {}) => {
     await timed("settle", () => settle(page));
-    const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy: ANATOMY, mandatory: list, scope, maxDepth: MAX_DEPTH_PX, exempt: EXEMPT }));
+    const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: list, scope, maxDepth: MAX_DEPTH_PX, exempt: EXEMPT }));
     at(label, walked.problems);
     at(label, await timed("whole", () => page.evaluate(wholeTexts)));
     at(label, await timed("contrast", () => textContrast(page, walked.texts)));
@@ -950,7 +1065,7 @@ async function draw({ context, id, state, width, focus, interact, rows, chrome, 
   // Phones: Tab order and the touch scroll run before anything is clicked.
   if (width < 1280 && state !== "empty") at("touch", await timed("touch", () => touchScroll(page, '[data-part="details-submit"]')));
   if (focus) {
-    const { controls } = await page.evaluate(walk, { rows, anatomy: ANATOMY, mandatory: [], scope: null, maxDepth: MAX_DEPTH_PX, exempt: EXEMPT });
+    const { controls } = await page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: [], scope: null, maxDepth: MAX_DEPTH_PX, exempt: EXEMPT });
     at("focus order", await timed("tab", () => focusOrder(page, controls)));
   }
   // On a phone the cart folds behind its bar: open it, as a buyer does.
@@ -959,6 +1074,7 @@ async function draw({ context, id, state, width, focus, interact, rows, chrome, 
   await page.waitForTimeout(150);
   const page0 = await check(state, null, mandatory);
   if (focus) at(`${state} focus`, await timed("rings", () => focusRings(page, page0.controls)));
+  if (hover) at(`${state} hover`, await timed("hover", () => hovers(page, page0.controls)));
   if (interact && state === "base") {
     // Place order with nothing filled in: every field says what it needs.
     await page.locator('[data-part="details-submit"]').click().catch(() => {});
@@ -992,9 +1108,45 @@ async function draw({ context, id, state, width, focus, interact, rows, chrome, 
       }
     }
   }
+  if (interact && state === "decide") {
+    // Place order with every field filled and a line still undecided: the store asks for the decision in its dialog.
+    const filled = await fillDetails(page);
+    if (filled) problems.push(`confirm from Place order: ${filled}`);
+    else {
+      await page.locator('[data-part="details-submit"]').click().catch(() => {});
+      const dialog = await page.waitForSelector("dialog[data-cart-line-confirm][open]", { timeout: 8_000 }).catch(() => null);
+      if (!dialog) problems.push("confirm from Place order: the confirmation dialog did not open");
+      else {
+        await settle(page);
+        await check("confirm from Place order", "dialog[data-cart-line-confirm][open]", ['[data-part="dialog-back"]', '[data-part="dialog-confirm"]', '[data-part="dialog-title"]']);
+        await page.keyboard.press("Escape");
+      }
+    }
+  }
   at("5xx", server5xx);
   await page.close();
   return problems;
+}
+
+/** The details form filled as a buyer does (name, phone, address, city and thana from their lists, a delivery option); a problem, or null. */
+async function fillDetails(page) {
+  try {
+    await page.fill("#customerName", "Anika Rahman");
+    await page.fill("#customerPhone-input", "01712345678");
+    await page.fill("#shippingAddress", "House 12, Road 5, Dhanmondi");
+    for (const [field, text] of [["city", "Dhaka"], ["zone", "Dhan"]]) {
+      await page.waitForFunction((id) => document.getElementById(id) && !document.getElementById(id).disabled, `checkout-${field}`, { timeout: 8_000 });
+      await page.click(`#checkout-${field}`);
+      // On a phone the list opens to pick from (the field is read-only); else the buyer types to narrow it.
+      if (!(await page.locator(`#checkout-${field}`).getAttribute("readonly").then((value) => value !== null))) await page.fill(`#checkout-${field}`, text);
+      await page.locator(`#checkout-${field}-list [role=option]`).filter({ hasText: text }).first().click({ timeout: 8_000 });
+    }
+    await page.locator("[data-shipping-options] input[type=radio]").first().check({ force: true, timeout: 8_000 });
+    await page.waitForTimeout(300);
+    return null;
+  } catch (error) {
+    return `the details could not be filled in (${String(error.message).split("\n")[0].slice(0, 120)})`;
+  }
 }
 
 try {
@@ -1030,7 +1182,7 @@ try {
           for (const each of plan) {
             if (bailed) { await context.close(); return; }
             draws += 1;
-            const problems = await draw({ context, id, state, ...each, rows, chrome: entry.privatePages.chrome === "theme", search: entry.privatePages.chrome === "theme" && entry.privatePages.search });
+            const problems = await draw({ context, id, state, ...each, rows, chrome: entry.privatePages.chrome === "theme" && entry.request?.headerSkin !== false, search: entry.privatePages.chrome === "theme" && entry.privatePages.search });
             if (problems.length > 0) {
               failures.push({ index, name: entry.name, where: `${state} at ${each.width}px, ${scheme}`, problems, document: entry });
               // `--bail` (the mutations' runs): one failing draw is the answer.

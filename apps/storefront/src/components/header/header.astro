@@ -61,6 +61,8 @@ const data = async () => {
 };
 // On a private page only the theme's own header draws, from the store's projection alone; the
 // store's search, where the theme places it, sits beside it in the frame, never inside its region.
+// With no theme header to draw (no skin, an inactive app), the page's own fallback draws: the store's
+// checkout header, exactly as with the store's chrome (`private-fallback`), never the full store header.
 const privateMarkup = privatePage ? await privateChromeMarkup(Astro.locals, Astro.url, "header", data) : null;
 const privateSearch = privateMarkup ? await privateHeaderSearch(Astro.locals) : null;
 ---
@@ -69,7 +71,7 @@ const privateSearch = privateMarkup ? await privateHeaderSearch(Astro.locals) : 
 <div class="contents" data-storefront-header data-private="header">
   {privateMarkup ? (
     <Fragment>{privateSearch?.place === "before" && <PrivateSearch {...privateSearch.form} />}<div data-free="header"><PrivateMarkup markup={privateMarkup} embeds={embeds} /></div>{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}{tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}</Fragment>
-  ) : <CoreHeader {...props} />}
+  ) : <slot name="private-fallback" />}
 </div>
 ) : (
 <div class="contents" data-storefront-header>

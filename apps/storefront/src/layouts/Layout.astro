@@ -608,7 +608,9 @@ const pageStoreTimeZone = storeTimeZone();
             navigationStyle={themeLayout.navigation}
             mobileNavigation={showMobileTabs ? "tabs" : "drawer"}
             private={privateChrome}
-          />
+          >
+            <slot name="private-header" slot="private-fallback" />
+          </Header>
         )
       }
       {/* With the sidebar, <main> is the content column: full-bleed sections

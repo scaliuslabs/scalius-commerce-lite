@@ -134,7 +134,8 @@ function sendJson(response, status, body) {
 function galleryTables(shared, privatePages, context) {
   const arrangement = shared.privatePageArrangement(privatePages, "cart");
   const spec = shared.PRIVATE_PAGES.cart;
-  const compiled = shared.compilePrivateTokens("cart", privatePages.tokens.cart, {
+  // A page in token mode with no tokens of its own (the theme's page paint put it there) has the default rows.
+  const compiled = shared.compilePrivateTokens("cart", privatePages.tokens.cart ?? {}, {
     layout: arrangement?.layout ?? spec.layout,
     items: Object.fromEntries(Object.keys(spec.items).map((item) => [item, arrangement?.items?.[item] ?? spec.items[item].layout])),
     palettes: context.palettes,
@@ -296,7 +297,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       }
       // The private pages' rendered property tests: a generated theme compiled with the store's own
       // compiler (a refusal answers its issues, as a save would) and drawn on the buyer UI cart entry in
-      // one of its states, under a palette, colour scheme and page paint, with Noor's chrome when asked. The answer
+      // one of its states, under a palette, colour scheme and page paint, with Noor's chrome when asked (its
+      // header skin dropped with `headerSkin: false`). The answer
       // carries the page's colour table (each row's key, selector and kind) for the coverage walk.
       if (url.pathname === `${GALLERY_PREFIX}/private-theme` && request.method === "POST") {
         const body = JSON.parse(await readBody(request) || "{}");
@@ -305,6 +307,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const { noorTheme } = await vite.ssrLoadModule("/src/gallery/noor.ts");
         const found = findEntry(makeId("app", "buyer-ui")).theme;
         const base = body.noor ? noorTheme(structuredClone(found)) : found;
+        // A store whose theme has no header skin (`headerSkin: false`): its chrome draws no theme header.
+        if (body.noor && body.headerSkin === false && base.apps?.skins) delete base.apps.skins.header;
         const colors = body.palette && shared.STOREFRONT_THEME_PALETTES[body.palette] ? { ...shared.STOREFRONT_THEME_PALETTES[body.palette] } : base.tokens.colors;
         const tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors: shared.storefrontDarkPalette(colors), ...(body.paint ? { pagePaint: body.paint } : {}) };
         // A page paint the palette cannot read on is dropped by a save: a case that asks for one names a readable paint.
@@ -321,7 +325,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens).
       if (url.pathname === `${GALLERY_PREFIX}/private-anatomy`) {
         const shared = await vite.ssrLoadModule("@scalius/shared/storefront-theme");
-        return sendJson(response, 200, { styles: shared.PRIVATE_PAGES.cart.styles });
+        // And the app node kinds that have rows (their selectors inside a block).
+        return sendJson(response, 200, { styles: shared.PRIVATE_PAGES.cart.styles, ui: Object.values(shared.PRIVATE_BUYER_UI_STYLES).filter((style) => style.style).map((style) => style.kind) });
       }
       // Whether the mutation this gallery runs under was applied to a module it served.
       if (url.pathname === `${GALLERY_PREFIX}/mutation`) {

@@ -396,6 +396,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   privateTokens={cartPlan.tokens}
 >
   {!themeChrome && <CheckoutHeader layoutData={layoutData} copy={copy} />}
+  {/* The theme's chrome with no header of its own to draw: the store's checkout header in the header's place. */}
+  {themeChrome && <CheckoutHeader slot="private-header" layoutData={layoutData} copy={copy} />}
   {Object.keys(dialogLabels).length > 0 && (
     <script is:inline type="application/json" id="privateLabels" set:html={serializeJsonForInlineScript(dialogLabels)} />
   )}

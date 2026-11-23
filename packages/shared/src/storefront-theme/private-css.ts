@@ -57,7 +57,7 @@ export const PRIVATE_COMPILED_CSS_MAX_BYTES = 64 * 1024;
  * The checker's version. A stylesheet compiled by an older one is never
  * served: the page compiles it again or draws without it.
  */
-export const PRIVATE_CSS_SANITIZER_VERSION = 4 as const;
+export const PRIVATE_CSS_SANITIZER_VERSION = 5 as const;
 
 export const PRIVATE_CSS_REASONS = [
   "too_large", "syntax", "null_byte", "bad_string", "bad_url", "comment", "unbalanced", "escape", "nested_rule",

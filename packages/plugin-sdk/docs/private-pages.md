@@ -102,16 +102,16 @@ Example: the summary and the form in a side column, a line of your own words und
 
 Each page names its **style targets**, the elements of its parts that take a look, and the tokens each one takes. You set values; the store writes every CSS rule from them. The anatomy reference below lists the targets as `style <name> <selector> tokens=…`.
 
-**Token mode.** A page with any token is drawn in token mode, and every colour a buyer reads there comes from one **colour table** the store resolves when you save:
+**Token mode.** A page with any token is drawn in token mode, and so is the cart page of a theme with a page paint (`tokens.pagePaint`), tokens or not. Every colour a buyer reads there comes from one **colour table** the store resolves when you save:
 
-- the table has a row for every style target at every place your arrangement puts it (each app node kind and tone at each of the page's targets, the store's dialogs, every field and button), for each palette a buyer can see (light, dark or both);
-- a row holds a solid surface (or a gradient's points), the colour of the target's own words, its muted, link and error words, its border and focus ring, and for a field its placeholder and error border;
+- the table has a row for every style target at every place your arrangement puts it (each app node kind and tone at each of the page's targets and inside the details form, the store's dialogs, every filled button, a field row in every box that holds fields), for each palette a buyer can see (light, dark or both);
+- a row holds a solid surface (or a gradient's points), the colour of the target's own words, its muted, link and error words, its border and focus ring, its hover surface (a step from the surface that its words still read on), and for a field its placeholder and error border;
 - each is your token where you set one, else a default that reads on the surface beneath: a dark box gives its untouched children readable words, and a field keeps its own surface;
-- the page itself stands on the theme's page paint (`tokens.pagePaint`, [themes](themes.md)) unless your `page` tokens give it a surface, so the page's words are checked along the whole paint;
-- the store writes exactly those rows as CSS, and checks exactly those rows: **every text at 4.5:1** on its surface, **a field's border and error border and every focus ring at 3:1** on what is around them. A gradient counts at every point;
+- the page itself stands on the theme's page paint (`tokens.pagePaint`, [themes](themes.md)) unless your `page` tokens give it a surface, so every row on the page, the store's defaults included, is checked along the whole paint;
+- the store writes exactly those rows as CSS, and checks exactly those rows: **every text at 4.5:1** on its surface and on its row's hover surface, **a field's border and error border and every focus ring at 3:1** on the box around them (a field only on the boxes that hold fields). A gradient counts at every point;
 - inside the page, the store's own palette classes read the nearest row: no translucent tint and no palette colour decides a colour there. The page is drawn from its arrangement (the store's default one if you set none), so the table's places are the page's.
 
-A page with no token at all is drawn exactly as the store draws it.
+A page with no token, in a theme with no page paint, is drawn exactly as the store draws it. The drawer takes no tokens (`unknown_style`): it opens over public pages and takes their look.
 
 | Token | Value | Writes |
 | --- | --- | --- |
@@ -136,7 +136,7 @@ A page with no token at all is drawn exactly as the store draws it.
 
 A layout node takes `background`, `gradient`, `border`, `border-width`, `border-style`, `radius`, `shadow`, `padding`, `gap`, `columns` and `columns-wide` through its hook: `"@studio-grid": { "columns": [64, "1fr", 88] }`. A hook with a colour is a row of the table. The store's own layouts split into columns by the width of the box they sit in, never the screen's.
 
-`action` is every filled button the store draws without a target of its own, `input` every field on the page and in its dialogs, `dialog` the store's dialogs (the confirmation an app's choice asks for, sign-in) with `dialog-back` and `dialog-confirm` their buttons, `chrome` the store's own header (`chrome: core`), and `search` the store's search in your header (see `search` above).
+`action` is every filled button the store draws without a target of its own, `input` every field on the page and in its dialogs (one row per box that holds fields: the discount part, the details form, a line's inputs, a dialog, an app's target), `dialog` the store's dialogs (the confirmation an app's choice asks for, sign-in) with `dialog-back` and `dialog-confirm` their buttons, `chrome` the store's own header (`chrome: core`), and `search` the store's search in your header (see `search` above).
 
 **Apps' blocks.** The store draws an app's block from typed nodes, so it is one of the store's parts: you give it a look by node kind, under `ui.<kind>`, narrowed by tone, app and target: `"ui.banner.warning@acme.protection/cart.page.summary": { "background": "#3a2a0a", "text": "#fde68a" }`. Every kind and tone has a row at each of the page's targets (`cart.page.summary`, `cart.page.below`, `cart.line.after`), on whatever that target sits on, whether you name it or not.
 
@@ -208,19 +208,20 @@ The stylesheet is parsed by a CSS Syntax 3 parser and written back from what was
 
 ## The rendered gate
 
-What the save proves is checked again by drawing. `pnpm test:private-pages` (`apps/storefront/test-support/private-pages.properties.browser.mjs`) compiles each theme with the store's compiler and draws the real cart page in headless Chromium on the fixture gallery: a store that delivers (Place order is on), two lines, and an app block of every node kind and tone in the summary, below the cart and under a line. CI runs it when a push reaches the storefront, the theme model, the apps' buyer UI or Noor.
+What the save proves is checked again by drawing. `pnpm test:private-pages` (`apps/storefront/test-support/private-pages.properties.browser.mjs`) compiles each theme with the store's compiler and draws the real cart page in headless Chromium on the fixture gallery: a store that delivers (Place order is on), two lines, and an app block of every node kind and tone in the summary, below the cart, under a line and inside the details form. CI runs it when a push reaches the storefront, the theme model, the apps' buyer UI or Noor.
 
-**What it draws.** The reviews' named breaks, then seeded legal themes: the default arrangement (tokens only) and generated ones; tokens for every style target, `ui.<kind>` with tone, app and target; labels, icons, image, link, disclosure and divider blocks; gradients, every palette, light, dark and system schemes, the narrow frame; and `chrome: theme` with Noor's real header skin (its region is drawn). Each in its states: the base cart, a line asking for a decision with an add-on line and a sold-out line, an empty cart, long Bangla titles, an Arabic right-to-left presence; with field errors showing, the sign-in dialog open and the confirmation dialog open. At 320, 390 and 1280 px, light and dark.
+**What it draws.** The reviews' named breaks, then seeded legal themes: the default arrangement (tokens only) and generated ones; tokens for every style target, `ui.<kind>` with tone, app and target; labels, icons, image, link, disclosure and divider blocks; gradients, every palette, light, dark and system schemes, the narrow frame; page paints with and without tokens; `chrome: theme` with Noor's real header skin (its region is drawn) and with no header skin (the store's checkout header is drawn). Each in its states: the base cart; a line asking for a decision, a store kit as one line with an add-on once per kit and an app's offer row under it, and a sold-out line; the decision asked from Place order with every field filled; an empty cart; long Bangla titles; an Arabic right-to-left presence; with field errors showing, the sign-in dialog open and the confirmation dialog open. At 320, 390 and 1280 px, light and dark.
 
 **What fails it.**
 
 | Check | Fails when |
 | --- | --- |
 | Mandatory parts | One (with `chrome: theme`, your header's region and the store's search too) is missing, under 8px, outside the viewport, more than 9000px down, or covered by a free region; the page scrolls sideways; anything of the store's sits inside a free region. |
-| Coverage walk | A text or a focusable control belongs to no row of the colour table (token mode: its words are none of its row's colours, its row's element paints something other than the row's paint, or a surface the table does not know lies between it and its row), or, with no tokens, to no surface the anatomy names. |
+| Coverage walk | A text or a focusable control belongs to no row of the colour table (token mode: its words are none of its row's colours, its row's element paints something other than the row's paint, the body included, a surface the table does not know lies between it and its row, or an app's node of a styled kind has no row of its own at its target), or, with no tokens, to no surface the anatomy names, or the page shows a paint of its own. |
 | Contrast | Any text, with no budget, reads under 4.5:1 (3:1 large) against the pixels behind it (every text hidden, the page photographed). |
 | Whole text | A text is cut off at the side, a glyph is cut by its box, or a word breaks inside itself. |
 | Controls | A click at a control's centre lands elsewhere; Tab does not reach it, or reaches it out of document order; its focus ring changes under three quarters of its perimeter at 3:1. |
+| Hover | Under the pointer (1280 px, dark), a control's words read under their floor, or a control the store gives a hover surface changes under a quarter of its box. |
 | Touch | On a phone, swiping from the top does not reach Place order. |
 | Server | Any request answers 5xx. |
 
@@ -228,12 +229,12 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (`ap
 
 | Run | Command |
 | --- | --- |
-| The gate (named cases and the fast seed set, about 2.5 minutes) | `pnpm test:private-pages` |
+| The gate (named cases and the fast seed set, about 4 minutes) | `pnpm test:private-pages` |
 | A longer run | `pnpm test:private-pages --seeds 30 --from 100` (`--no-named` for seeds only, `--all-states` for every state of each) |
 | One seed or case | `--seed 7`, `--case "B4"` (a failing seed prints its document) |
 | The gate's own test | `pnpm test:private-pages --mutations`: every known-bad change in `private-pages.mutations.mjs` must fail it |
 
-A mutation rewrites one source file as the test gallery serves it (never the store's code, never in production): each review's fix reverted, the region seal without clipping, a stylesheet allowed to select a host part, the search inside the theme's region, a row's contrast skipped, the surface reset off, the store's header outside token mode, every row leaving out its parent's cells, a title's clamp on its heading, screen-sized text and unfitted columns. Paint containment clips on its own, so the seal's overflow clip is a second guard (the mutation that drops clipping drops both). The seal no longer holds `contain: inline-size`: without it no case failed, and `min-inline-size: 0` with `max-inline-size: 100%` is what keeps a block from widening its column (dropping those fails the gate).
+A mutation rewrites one source file as the test gallery serves it (never the store's code, never in production): each review's fix reverted, the region seal without clipping, a stylesheet allowed to select a host part, the search inside the theme's region, a row's contrast skipped, the surface reset off, the store's header outside token mode, every row leaving out its parent's cells, a title's clamp on its heading, screen-sized text, unfitted columns, the page row off the page paint, a page paint with no tokens drawing the store's own page, a dark row leaving out a cell its light row writes, the theme's chrome with no header drawing the public header, the details form's app targets without rows, and no hover surface in token mode. Paint containment clips on its own, so the seal's overflow clip is a second guard (the mutation that drops clipping drops both). The seal no longer holds `contain: inline-size`: without it no case failed, and `min-inline-size: 0` with `max-inline-size: 100%` is what keeps a block from widening its column (dropping those fails the gate).
 
 The gate checks the cart page with the fixture gallery's data, not every store's data.
 
@@ -260,7 +261,7 @@ A label that names an action or an amount takes one of the store's **variants**,
 
 ## Your header and footer
 
-With `chrome: theme` the cart page draws your header and footer skins from the same projection as any page: the store's name, logo, menus and routes. The skin is told the page's root (`/cart`) and nothing more: never an order's or a claim's path, a session, an order or an address. What the skin draws is rebuilt, not copied, inside its sealed region:
+With `chrome: theme` the cart page draws your header and footer skins from the same projection as any page (with no header skin it draws the store's checkout header, with no footer skin no footer, as with `chrome: core`): the store's name, logo, menus and routes. The skin is told the page's root (`/cart`) and nothing more: never an order's or a claim's path, a session, an order or an address. What the skin draws is rebuilt, not copied, inside its sealed region:
 
 - text, lists, links to this store's clean paths (no `//`, no dot segment) or to the region's own ids, images from the page's allowed origins, disclosure (`<details>`), tables and SVG drawing (no `url()` references);
 - no script, island, style attribute, frame, media, dialog, popover, event handler, live region, alert or modal role;
@@ -314,6 +315,7 @@ cart part summary mandatory hooks=summary,summary-validation
 cart part discount hooks=discount
 cart part details mandatory hooks=details,details-sign-in,details-form,contact,delivery,details-errors,details-submit,legal
 cart part empty hooks=empty-extras
+cart fields in discount,details
 cart target cart.page.summary
 cart target cart.page.below
 cart layouts stack,columns,grid,group,fold
@@ -338,11 +340,11 @@ cart style fold-toggle <root> [data-part="fold-toggle"] tokens=background,text,b
 cart style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap
 cart style summary-rows <root> [data-summary-row]:not([data-summary-row="total"]) tokens=text,size
 cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,case,tracking
-cart style details-form <root> [data-part="details-form"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+cart style details-form <root> [data-part="details-form"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding targets=checkout.contact.after,checkout.delivery.after
 cart style section-heading <root> :is([data-part="contact"],[data-part="delivery"]) h2 tokens=text,font,weight,size,case,tracking
 cart style submit <root> [data-part="details-submit"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,font,weight,size,case,tracking
 cart style legal <root> [data-part="legal"] tokens=text,size,align
-cart style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow
+cart style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow fields
 cart style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=background,text,border,border-width,radius,ring,weight
 cart style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,font,weight,size,case,tracking
 cart style chrome [data-private="core-header"] tokens=background,gradient,text,muted,link,border,border-width
@@ -358,6 +360,7 @@ cart.line part remove mandatory hooks=line-remove
 cart.line part limit mandatory hooks=line-limit
 cart.line part issue mandatory hooks=line-issue
 cart.line part rule mandatory hooks=line-rule
+cart.line fields in inputs
 cart.line target cart.line.after
 cart.line layouts stack,columns,grid,group
 cart label cart.heading max=60
@@ -393,6 +396,7 @@ cartDrawer.line part remove mandatory hooks=line-remove
 cartDrawer.line part limit mandatory hooks=line-limit
 cartDrawer.line part issue mandatory hooks=line-issue
 cartDrawer.line part rule mandatory hooks=line-rule
+cartDrawer.line fields in inputs
 cartDrawer.line target cart.line.after
 cartDrawer.line layouts stack,columns,grid,group
 cartDrawer label drawer.title max=40

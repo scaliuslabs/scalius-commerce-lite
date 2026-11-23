@@ -24,7 +24,7 @@
 // nearest row (`PRIVATE_TOKEN_MODE_CSS`): a translucent tint or a palette
 // colour never decides a colour there.
 import { z } from "zod";
-import { STOREFRONT_THEME_COLOR_KEYS, storefrontThemeContrast, type StorefrontThemeColors } from "./contrast";
+import { STOREFRONT_THEME_COLOR_KEYS, storefrontThemeContrast, storefrontThemeMix, type StorefrontThemeColors } from "./contrast";
 import { storefrontPagePaintColors, storefrontPagePaintCss, type StorefrontPagePaint } from "./tokens";
 import {
   PRIVATE_BUYER_UI_STYLES,
@@ -181,8 +181,8 @@ export interface PrivateTokenContext {
 
 const UI_KEY = /^ui\.([a-z]{1,12})(?:\.([a-z]{1,12}))?(?:@([a-z0-9][a-z0-9.-]{0,63}))?(?:\/([a-z_.]{1,64}))?$/;
 
-/** The page's extension targets, its units' included. */
-const pageTargets = (spec: PrivatePageSpec) => [...spec.targets, ...Object.values(spec.items).flatMap((item) => item.targets)];
+/** The page's extension targets: its units' and those its host parts draw inside themselves included. */
+const pageTargets = (spec: PrivatePageSpec) => [...spec.targets, ...Object.values(spec.items).flatMap((item) => item.targets), ...Object.values(spec.styles).flatMap((style) => style.targets ?? [])];
 
 /** A theme key's tokens and selector: an anatomy target, or an app node kind narrowed by tone, app and target. */
 function styleOf(spec: PrivatePageSpec, key: string): { tokens: readonly PrivateTokenName[]; selector: string; absolute?: boolean } | null {
@@ -242,6 +242,11 @@ function validTokens(page: PrivatePageKey, tokens: NonNullable<PrivateTokens[Pri
   const valid: Record<string, Values> = {};
   for (const [target, values] of Object.entries(tokens)) {
     const base = ["privatePages", "tokens", page, target];
+    // A page with no page of its own (the drawer) opens over public pages and takes their look.
+    if (!Object.hasOwn(spec.styles, "page")) {
+      issues.push({ path: base, reason: "unknown_style", message: `${page} takes no tokens: it opens over public pages and takes their look from the public stylesheet.` });
+      continue;
+    }
     const layout = target.startsWith("@");
     const allowed: readonly PrivateTokenName[] | undefined = layout
       ? (PRIVATE_HOOK_PATTERN.test(target.slice(1)) && hooks.has(target.slice(1)) ? PRIVATE_LAYOUT_TOKENS : undefined)
@@ -293,7 +298,7 @@ export function compilePrivateTokens(page: PrivatePageKey, tokens: PrivateTokens
 // ─── The colour table ─────────────────────────────────────────────────────
 
 /** The colours of a row, each a cell the CSS writes and the check reads. */
-export const PRIVATE_ROW_COLOURS = ["text", "muted", "link", "error", "border", "ring", "placeholder", "invalid"] as const;
+export const PRIVATE_ROW_COLOURS = ["text", "muted", "link", "error", "border", "ring", "placeholder", "invalid", "hover"] as const;
 export type PrivateRowColour = (typeof PRIVATE_ROW_COLOURS)[number];
 
 /** One row of the colour table: a style target at one place on the page, every colour it draws resolved for one palette. */
@@ -323,6 +328,8 @@ export interface PrivateTokenRow {
   error: string;
   border: string;
   ring: string;
+  /** What a control the host gives a hover paints under the pointer: visibly not its surface, its words still readable on it. */
+  hover: string;
   /** A field's (and the page's, where every field reads it first) placeholder and error border. */
   placeholder: string | null;
   invalid: string | null;
@@ -363,6 +370,25 @@ function readable(candidates: ReadonlyArray<string | null | undefined>, backs: r
   return best;
 }
 
+/**
+ * A hover surface, solid under the pointer: a step past every point of the
+ * surface towards its words (from the point nearest them; else away, from the
+ * point farthest), so it shows on a gradient's every point too, as far as its
+ * words still read on it; the surface itself when no step keeps them readable.
+ */
+function hoverOf(surface: readonly string[], words: readonly string[]): string {
+  const reads = (colour: string) => words.every((word) => storefrontThemeContrast(word, colour) >= PRIVATE_CONTRAST_FLOOR);
+  const byNearness = [...surface].sort((a, b) => storefrontThemeContrast(words[0]!, a) - storefrontThemeContrast(words[0]!, b));
+  const away = storefrontThemeContrast(words[0]!, "#000000") > storefrontThemeContrast(words[0]!, "#ffffff") ? "#000000" : "#ffffff";
+  for (const [from, towards] of [[byNearness[0]!, words[0]!], [byNearness.at(-1)!, away]] as const) {
+    for (const step of [0.1, 0.08, 0.06]) {
+      const colour = storefrontThemeMix(from, towards, step);
+      if (!surface.includes(colour) && reads(colour)) return colour;
+    }
+  }
+  return surface[0]!;
+}
+
 /** One row as the walk places it, before its colours are resolved. */
 interface Place {
   key: string;
@@ -389,7 +415,12 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
   const place = (key: string, style: PrivateStyleSpec, parent: Place["parent"]) => {
     places.push({ key, selector: selectorOf(style), kind: style.kind, surface: style.surface, ink: style.ink, parent, nested: parent !== "boxes" && parent !== null && !style.absolute, base: null, sources: [key] });
   };
+  // The rows that hold fields: a part that draws them (on its box, else on what it sits on), a dialog, an app's target.
+  const holders = new Set<string>();
   const inside = (key: string) => {
+    // The apps' targets the host draws inside this target's element (the details form's) stand on its row.
+    const targets = spec.styles[key]?.targets ?? [];
+    if (targets.length > 0) ui(targets, key);
     for (const [name, style] of styles) {
       if (style.on !== key || style.absolute) continue;
       place(name, style, key);
@@ -397,7 +428,19 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
       if (spec.items[name]) walk(context.items[name] ?? spec.items[name]!.layout, name, name);
     }
   };
-  const ui = (target: string, parent: string) => {
+  /**
+   * The rows of every app node kind and tone at targets on one row: one set
+   * for targets sharing a row that the theme names none of (their selectors
+   * joined), else a set per target.
+   */
+  const ui = (targets: readonly string[], parent: string): void => {
+    holders.add(parent);
+    if (targets.length > 1 && Object.keys(tokens).some((key) => targets.some((target) => UI_KEY.exec(key)?.[4] === target))) {
+      for (const target of targets) ui([target], parent);
+      return;
+    }
+    const target = targets.join("+");
+    const mount = targets.length > 1 ? `:is(${targets.map((each) => `[data-buyer-ui-target="${each}"]`).join(",")})` : `[data-buyer-ui-target="${target}"]`;
     const apps = new Map<string, Set<string>>();
     for (const key of Object.keys(tokens)) {
       const match = UI_KEY.exec(key);
@@ -412,7 +455,7 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
           const sources = [...scope(""), ...(tone ? scope(`.${tone}`) : []), ...(app ? [...scope(`@${app}`), ...(tone ? scope(`.${tone}@${app}`) : [])] : [])];
           places.push({
             key: `ui.${kind}${tone ? `.${tone}` : ""}${app ? `@${app}` : ""}/${target}`,
-            selector: `${root} ${uiSelector(style.kind, tone, app, target)}`,
+            selector: `${root} ${uiSelector(style.kind, tone, app, target).replace(`[data-buyer-ui-target="${target}"]`, mount)}`,
             kind: style.style, surface: "under", ink: (tone && style.toneInk?.[tone]) || style.ink || "foreground", parent, nested: true,
             // A generic tone row adds nothing where it writes what its kind's row (always written) writes.
             base: tone && !app ? `ui.${kind}/${target}` : null, sources,
@@ -433,13 +476,16 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
         for (const [name, style] of styles) if (style.layout === node.layout && !item) place(name, style, here);
         walk(node.children, here, item);
       } else if (node.type === "part") {
+        let box: string | null = null;
         for (const [name, style] of styles) {
           if (style.part !== node.part || style.item !== item) continue;
           place(name, style, parent);
+          if (style.kind === "box") box ??= name;
           inside(name);
         }
+        if ((item ? spec.items[item]?.parts : spec.parts)?.[node.part]?.fields) holders.add(box ?? parent);
       } else if (node.type === "target") {
-        ui(node.target, parent);
+        ui([node.target], parent);
       }
     }
   }
@@ -448,13 +494,24 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
   place(pageKey, spec.styles[pageKey]!, null);
   // The page's frame, then the fields and buttons drawn anywhere, then the arrangement, then the dialogs and the header's search.
   for (const [name, style] of styles) if (style.on === pageKey && !style.absolute) place(name, style, pageKey);
-  for (const [name, style] of styles) if (!style.on && !style.part && !style.item && !style.layout && name !== pageKey) place(name, style, "boxes");
+  for (const [name, style] of styles) if (!style.on && !style.part && !style.item && !style.layout && !style.element && name !== pageKey) place(name, style, "boxes");
   const frame = places[1]?.key ?? pageKey;
   walk(context.layout, frame, undefined);
   for (const [name, style] of styles) {
     if (!style.absolute || style.on !== pageKey) continue;
     place(name, style, pageKey);
+    if (style.fields) holders.add(name);
     for (const [child, inner] of styles) if (inner.on === name) place(child, inner, name);
+  }
+  // A field style's rows, one in each box that holds fields, outer before inner (a field takes its nearest box's
+  // row): its marks are checked on the box it is drawn on, never on every box of the page.
+  const byKey = new Map(places.map((each) => [each.key, each]));
+  const depth = (key: string): number => { const parent = byKey.get(key)?.parent; return typeof parent === "string" && parent !== "boxes" ? 1 + depth(parent) : 0; };
+  for (const [name, style] of styles) {
+    if (!style.element) continue;
+    for (const holder of [...holders].sort((a, b) => depth(a) - depth(b))) {
+      places.push({ key: `${name}/${holder}`, selector: `${byKey.get(holder)!.selector} ${style.element}`, kind: style.kind, surface: style.surface, ink: style.ink, parent: holder, nested: true, base: null, sources: [name] });
+    }
   }
   return places;
 }
@@ -540,7 +597,7 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     const cells = { text, muted, link, error };
     const row: PrivateTokenRow = {
       key: place.key, sources: place.sources, selector: place.selector, kind: place.kind, parents: parents.map((each) => each.key), nested: place.nested, base: place.base,
-      paint, gradient, surface, ink: cells[cell], text, muted, link, error, border, ring, placeholder, invalid, from,
+      paint, gradient, surface, ink: cells[cell], text, muted, link, error, border, ring, hover: hoverOf(paint !== null && !gradient ? [paint] : surface, [text, cells[cell]]), placeholder, invalid, from,
     };
     return row;
   };
@@ -564,8 +621,9 @@ export function privateTokenTables(page: PrivatePageKey, tokens: Record<string, 
   const collect = (nodes: readonly PrivateNode[]) => { for (const node of nodes) if (node.type === "layout") { layouts.add(node.layout); collect(node.children); } };
   collect(context.layout);
   for (const [name, style] of Object.entries(spec.styles)) {
-    // A target only a host layout draws (the fold's bar) has no row where the arrangement has no such layout.
-    if (keys.has(name) || (style.layout && !layouts.has(style.layout))) continue;
+    // A target only a host layout draws (the fold's bar) has no row where the arrangement has no such layout;
+    // a field style's rows are its holders' (`input/details-form`).
+    if (keys.has(name) || (style.element && [...keys].some((key) => key.startsWith(`${name}/`))) || (style.layout && !layouts.has(style.layout))) continue;
     issues.push({ path: ["privatePages", "tokens", page, name], reason: "no_row", message: `${name}: the page draws it but its colour table has no row for it, so its colours could not be checked.` });
   }
   return { tables: context.palettes.map((palette) => ({ palette, rows: resolveRows(places, tokens, palette) })), issues };
@@ -585,6 +643,9 @@ export function privateTablePairs(table: PrivateTokenTable): PrivateTokenPair[] 
     add("ring", row.ring, marked ? around : row.surface, PRIVATE_MARK_CONTRAST_FLOOR);
     add("border", row.border, row.kind === "field" ? around : row.surface, row.kind === "field" ? PRIVATE_MARK_CONTRAST_FLOOR : 1);
     add("invalid", row.invalid, around, PRIVATE_MARK_CONTRAST_FLOOR);
+    // A hovered control paints the hover surface under its words.
+    // (A hover that is a point of the surface adds no pair: its words are checked on the surface.)
+    if (!row.surface.includes(row.hover)) for (const word of new Set([row.text, row.ink])) pairs.push({ key: row.key, what: "hover", fore: word, back: row.hover, floor: PRIVATE_CONTRAST_FLOOR });
   }
   return pairs;
 }
@@ -600,7 +661,8 @@ function tableIssues(page: PrivatePageKey, tables: readonly PrivateTokenTable[])
       if (ratio >= pair.floor) continue;
       const row = byKey.get(pair.key)!;
       const target = row.from[pair.what] ?? row.from.surface ?? row.parents.map((key) => byKey.get(key)?.from.surface).find(Boolean) ?? row.sources.at(-1) ?? row.key;
-      const id = `${target}|${pair.key}|${pair.what}|${pair.fore}|${pair.back}`;
+      // Once per theme key and pair: a field style's rows in several boxes refuse its one bad pair once.
+      const id = `${target}|${pair.what}|${pair.fore}|${pair.back}`;
       if (seen.has(id)) continue;
       seen.add(id);
       const where = pair.key === target ? target : `${target} (${pair.key})`;
@@ -610,7 +672,7 @@ function tableIssues(page: PrivatePageKey, tables: readonly PrivateTokenTable[])
   return issues;
 }
 
-const CELL_PROPERTIES = [["text", "--pt-t"], ["muted", "--pt-m"], ["link", "--pt-l"], ["error", "--pt-e"], ["border", "--pt-b"], ["ring", "--pt-r"], ["placeholder", "--pt-p"], ["invalid", "--pt-i"]] as const;
+const CELL_PROPERTIES = [["text", "--pt-t"], ["muted", "--pt-m"], ["link", "--pt-l"], ["error", "--pt-e"], ["border", "--pt-b"], ["ring", "--pt-r"], ["hover", "--pt-h"], ["placeholder", "--pt-p"], ["invalid", "--pt-i"]] as const;
 
 /**
  * A row's cells as declarations: its paint, its own words' colour and the
@@ -619,18 +681,37 @@ const CELL_PROPERTIES = [["text", "--pt-t"], ["muted", "--pt-m"], ["link", "--pt
  * what differs is written (its own words' colour always). A control, a field
  * and an app's node write every cell: their element also meets another row
  * (Place order is a filled button, a badge has its kind's and its tone's
- * rows), whose cells it would read instead of its parent's.
+ * rows), whose cells it would read instead of its parent's. What another
+ * palette's row of the same target writes (`also`), this one writes too: the
+ * dark rows sit over the light ones on the same element, so a cell left out
+ * there would read the light row's value.
  */
-export function privateRowDeclarations(row: PrivateTokenRow, parent: PrivateTokenRow | null): string {
+export function privateRowDeclarations(row: PrivateTokenRow, parent: PrivateTokenRow | null, also: ReadonlySet<string> = NONE): string {
   const inherited = row.nested && (row.kind === "box" || row.kind === "text") && !row.key.startsWith("ui.") ? parent : null;
-  const paints = row.paint !== null && !(inherited && inherited.surface.length === 1 && inherited.paint === row.paint && !row.gradient);
+  const paints = row.paint !== null && (also.has("background-color") || !(inherited && inherited.surface.length === 1 && inherited.paint === row.paint && !row.gradient));
   return [
     paints ? `background-color:${row.paint}` : "",
     row.gradient ? `background-image:${row.gradient}` : "",
     `color:${row.ink}`,
     row.kind === "field" ? `border-color:${row.border}` : "",
-    ...CELL_PROPERTIES.map(([cell, property]) => row[cell] && row[cell] !== inherited?.[cell] ? `${property}:${row[cell]}` : ""),
+    ...CELL_PROPERTIES.map(([cell, property]) => row[cell] && (row[cell] !== inherited?.[cell] || also.has(property)) ? `${property}:${row[cell]}` : ""),
   ].filter(Boolean).join(";");
+}
+
+const NONE: ReadonlySet<string> = new Set();
+
+/** Per target, the properties any palette's row of it writes: every palette's row writes them all. */
+export function privateRowsWritten(tables: readonly PrivateTokenTable[]): Map<string, Set<string>> {
+  const written = new Map<string, Set<string>>();
+  for (const table of tables) {
+    const byKey = new Map(table.rows.map((row) => [row.key, row]));
+    for (const row of table.rows) {
+      const set = written.get(row.key) ?? new Set<string>();
+      for (const declaration of privateRowDeclarations(row, row.parents.length === 1 ? byKey.get(row.parents[0]!)! : null).split(";")) set.add(declaration.slice(0, declaration.indexOf(":")));
+      written.set(row.key, set);
+    }
+  }
+  return written;
 }
 
 /**
@@ -643,13 +724,14 @@ export function privateRowDeclarations(row: PrivateTokenRow, parent: PrivateToke
  * the host's palette classes after them read the row's cells.
  */
 export function privateTableCss(tables: readonly PrivateTokenTable[]): string {
+  const everywhere = privateRowsWritten(tables);
   return tables.map((table, index) => {
     const scope = index === 0 ? PRIVATE_TOKEN_MODE : `${PRIVATE_TOKEN_MODE}:where([data-color-scheme="dark"])`;
     const byKey = new Map(table.rows.map((row) => [row.key, row]));
     const written = new Map<string, string>();
     const rules: Array<{ selectors: string[]; declarations: string }> = [];
     for (const row of table.rows) {
-      const declarations = privateRowDeclarations(row, row.parents.length === 1 ? byKey.get(row.parents[0]!)! : null);
+      const declarations = privateRowDeclarations(row, row.parents.length === 1 ? byKey.get(row.parents[0]!)! : null, everywhere.get(row.key));
       written.set(row.key, declarations);
       if (row.base && written.get(row.base) === declarations) continue;
       const last = rules.at(-1);
@@ -745,14 +827,17 @@ const IN_SCOPE = `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope}
  * token mode: a surface class paints nothing (the row beneath shows; a
  * target with a surface of its own is a row), a text, border or ring colour
  * reads the nearest row's cell (`--pt-t` text, `--pt-m` muted, `--pt-l` link,
- * `--pt-e` error, `--pt-b` border, `--pt-r` focus ring, `--pt-p` placeholder,
- * `--pt-i` error border). A variant applies in its state; a hover surface
- * never paints. A class missing here fails the storefront's vocabulary test.
+ * `--pt-e` error, `--pt-b` border, `--pt-r` focus ring, `--pt-h` hover
+ * surface, `--pt-p` placeholder, `--pt-i` error border). A variant applies in
+ * its state (a hover only where the pointer can hover, as the store's own
+ * classes). A class missing here fails the storefront's vocabulary test.
  */
 export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [declaration: string, state?: string]>> = Object.fromEntries([
   ...["bg-background", "bg-card", "bg-muted", "bg-muted/40", "bg-muted/50", "bg-muted/60", "bg-primary", "bg-primary/10", "bg-primary/5", "bg-destructive", "bg-destructive/10",
-    "bg-success/10", "bg-warning/10", "dark:bg-card", "hover:bg-background/70", "hover:bg-muted", "hover:bg-muted/40", "hover:bg-muted/50", "hover:bg-primary/90", "sm:hover:bg-muted/60",
+    "bg-success/10", "bg-warning/10", "dark:bg-card",
   ].map((name) => [name, ["background-color:transparent"]] as const),
+  // A hover surface is the nearest row's: visibly not its surface, its words readable on it.
+  ...["hover:bg-background/70", "hover:bg-muted", "hover:bg-muted/40", "hover:bg-muted/50", "hover:bg-primary/90", "sm:hover:bg-muted/60"].map((name) => [name, ["background-color:var(--pt-h)", ":hover"]] as const),
   ...["text-foreground", "text-card-foreground", "text-primary-foreground"].map((name) => [name, ["color:var(--pt-t)"]] as const),
   ...["text-muted-foreground", "text-muted-foreground/60"].map((name) => [name, ["color:var(--pt-m)"]] as const),
   ...["text-primary", "text-primary-ink"].map((name) => [name, ["color:var(--pt-l)"]] as const),
@@ -798,7 +883,8 @@ function classRules(names: readonly string[]): string {
     const [state, declaration] = key.split("\u0000") as [string, string];
     const element = `${IN_SCOPE}:is(${selectors.join(",")})`;
     // A pseudo-element or a child stays outside the zero-specificity wrapper; a state stays inside it.
-    return `${PRIVATE_TOKEN_MODE} :where(${element}${state.startsWith(">") ? ` ${state}` : state.startsWith("::") ? "" : state})${state.startsWith("::") ? state : ""}{${declaration}}`;
+    const rule = `${PRIVATE_TOKEN_MODE} :where(${element}${state.startsWith(">") ? ` ${state}` : state.startsWith("::") ? "" : state})${state.startsWith("::") ? state : ""}{${declaration}}`;
+    return state === ":hover" ? `@media (hover:hover){${rule}}` : rule;
   }).join("");
 }
 

@@ -76,6 +76,8 @@ export interface PrivatePartSpec {
   readonly variants?: readonly [string, ...string[]];
   /** Its `data-part` hooks, its own name first (the anatomy contract; no theme selector reaches them). */
   readonly hooks: readonly string[];
+  /** It draws fields (the discount code, the details form, a line's inputs): they stand on its box, else on what it sits on. */
+  readonly fields?: boolean;
 }
 
 /**
@@ -135,6 +137,20 @@ export interface PrivateStyleSpec {
   readonly part?: string;
   readonly item?: string;
   readonly layout?: PrivateLayoutKind;
+  /**
+   * A field drawn in many places (`element`, the field elements): it has a
+   * row in every box that holds fields (a part that draws them, a dialog, an
+   * app's target), its marks checked on that box only, never on every box.
+   */
+  readonly element?: string;
+  /** It holds fields (a dialog): a field style has a row in it. */
+  readonly fields?: boolean;
+  /**
+   * The apps' targets the host draws inside its element, in fixed places (the
+   * details form's `checkout.contact.after`): each node kind and tone there
+   * has a row on this target's surface, and `ui.<kind>…/<target>` names them.
+   */
+  readonly targets?: readonly string[];
 }
 
 /** The tokens a theme's layout node takes (`@<hook>` in `privatePages.tokens`). */
@@ -180,7 +196,7 @@ export interface PrivatePageSpec extends PrivateUnitSpec {
   readonly icons: readonly string[];
 }
 
-const part = (mandatory: boolean, hooks: readonly string[]): PrivatePartSpec => ({ mandatory, hooks });
+const part = (mandatory: boolean, hooks: readonly string[], fields?: "fields"): PrivatePartSpec => ({ mandatory, hooks, ...(fields ? { fields: true } : {}) });
 const p = (name: string): PrivateNode => ({ type: "part", part: name });
 const t = (target: string): PrivateNode => ({ type: "target", target });
 const l = (layout: PrivateLayoutKind, children: PrivateNode[]): PrivateNode => ({ type: "layout", layout, children });
@@ -192,7 +208,7 @@ const CART_LINE_PARTS = {
   // The options, answers and fulfilment the buyer chose: what they are buying.
   details: part(true, ["line-details"]),
   // The apps' line inputs drawn by the host (a decision the buyer must make).
-  inputs: part(true, ["line-inputs"]),
+  inputs: part(true, ["line-inputs"], "fields"),
   quantity: part(true, ["line-quantity"]),
   price: part(true, ["line-price"]),
   remove: part(true, ["line-remove"]),
@@ -209,6 +225,9 @@ const BOX_TOKENS = ["background", "gradient", "text", "muted", "link", "error", 
 const BUTTON_TOKENS = ["background", "gradient", "text", "border", "border-width", "border-style", "radius", "shadow", "ring", "font", "weight", "size", "case", "tracking"] as const satisfies readonly PrivateTokenName[];
 const FIELD_TOKENS = ["background", "text", "placeholder", "border", "ring", "invalid", "border-width", "radius"] as const satisfies readonly PrivateTokenName[];
 
+/** The fields the host draws (a check box or a radio is drawn by its label). */
+const FIELD_ELEMENTS = ':is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea)';
+
 /** The cart page's style targets (and the store's dialogs over it), outer before inner. */
 const CART_STYLES: Record<string, PrivateStyleSpec> = {
   // The page's paint (F2: a gradient behind everything) and its frame's width.
@@ -216,7 +235,7 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   frame: { selector: "", tokens: ["max-width"], kind: "box", surface: "under", ink: "foreground", on: "page" },
   // Every filled button the host draws without a target of its own (bg-primary), and every field, on the page and in its dialogs.
   action: { selector: ':is([data-private="cart"],[data-private="dialog"]) .bg-primary', absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground" },
-  input: { selector: ':is([data-private="cart"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea)', absolute: true, tokens: [...FIELD_TOKENS], kind: "field", surface: "background", ink: "foreground" },
+  input: { selector: `:is([data-private="cart"],[data-private="dialog"]) ${FIELD_ELEMENTS}`, absolute: true, element: FIELD_ELEMENTS, tokens: [...FIELD_TOKENS], kind: "field", surface: "background", ink: "foreground" },
   notice: { selector: '[data-part="notice"]', tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius"], kind: "box", surface: "under", ink: "foreground", part: "notices" },
   lines: { selector: '[data-part="lines"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "lines" },
   "lines-heading": { selector: '[data-part="lines-heading"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "lines" },
@@ -232,12 +251,12 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   summary: { selector: '[data-part="summary"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", part: "summary" },
   "summary-rows": { selector: '[data-summary-row]:not([data-summary-row="total"])', tokens: ["text", "size"], kind: "text", surface: "under", ink: "muted-foreground", on: "summary" },
   "summary-total": { selector: '[data-summary-row="total"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary" },
-  "details-form": { selector: '[data-part="details-form"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "details" },
+  "details-form": { selector: '[data-part="details-form"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "details", targets: ["checkout.contact.after", "checkout.delivery.after"] },
   "section-heading": { selector: ':is([data-part="contact"],[data-part="delivery"]) h2', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "details-form" },
   submit: { selector: '[data-part="details-submit"]', tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "details-form" },
   legal: { selector: '[data-part="legal"]', tokens: ["text", "size", "align"], kind: "text", surface: "under", ink: "muted-foreground", on: "details-form" },
   // The store's dialogs over the page (confirmation, sign-in): their surface, words, fields and buttons.
-  dialog: { selector: '[data-private="dialog"]', absolute: true, tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "shadow"], kind: "box", surface: "card", ink: "foreground", on: "page" },
+  dialog: { selector: '[data-private="dialog"]', absolute: true, tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "shadow"], kind: "box", surface: "card", ink: "foreground", on: "page", fields: true },
   "dialog-back": { selector: '[data-private="dialog"] [data-part="dialog-back"]', absolute: true, tokens: ["background", "text", "border", "border-width", "radius", "ring", "weight"], kind: "control", surface: "under", ink: "foreground", on: "dialog" },
   "dialog-confirm": { selector: '[data-private="dialog"] [data-part="dialog-confirm"]', absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "dialog" },
   // The store's own header (`chrome: core`): its surface, words and border.
@@ -259,8 +278,8 @@ const CART_PAGE: PrivatePageSpec = {
     lines: part(true, ["lines", "lines-heading", "lines-continue", "lines-loading", "lines-list", "lines-clear", "lines-undo", "cart-empty", "cart-empty-icon"]),
     // Its money rows carry `data-summary-row` (subtotal, add-on, delivery, discount, tax, total), as on every surface.
     summary: part(true, ["summary", "summary-validation"]),
-    discount: part(false, ["discount"]),
-    details: part(true, ["details", "details-sign-in", "details-form", "contact", "delivery", "details-errors", "details-submit", "legal"]),
+    discount: part(false, ["discount"], "fields"),
+    details: part(true, ["details", "details-sign-in", "details-form", "contact", "delivery", "details-errors", "details-submit", "legal"], "fields"),
     empty: part(false, ["empty-extras"]),
   },
   targets: ["cart.page.summary", "cart.page.below"],
@@ -482,6 +501,8 @@ export function privatePageAnatomy(): string[] {
     for (const [name, entry] of Object.entries(spec.parts)) {
       lines.push(`${prefix} part ${name}${entry.mandatory ? " mandatory" : ""}${entry.variants ? ` variants=${entry.variants.join("|")}` : ""} hooks=${entry.hooks.join(",")}`);
     }
+    const fields = Object.entries(spec.parts).filter(([, entry]) => entry.fields).map(([name]) => name);
+    if (fields.length > 0) lines.push(`${prefix} fields in ${fields.join(",")}`);
     for (const target of spec.targets) lines.push(`${prefix} target ${target}`);
     lines.push(`${prefix} layouts ${spec.layouts.join(",")}`);
   };
@@ -491,7 +512,7 @@ export function privatePageAnatomy(): string[] {
     unit(page, spec);
     for (const [kind, hooks] of Object.entries(spec.layoutHooks ?? {})) lines.push(`${page} layout ${kind} hooks=${hooks.join(",")}`);
     for (const [kind, names] of Object.entries(spec.layoutContents ?? {})) lines.push(`${page} layout ${kind} holds=${names.join(",")}`);
-    for (const [name, style] of Object.entries(spec.styles)) lines.push(`${page} style ${name} ${style.absolute ? "" : "<root> "}${style.selector || "<root>"} tokens=${style.tokens.join(",")}`);
+    for (const [name, style] of Object.entries(spec.styles)) lines.push(`${page} style ${name} ${style.absolute ? "" : "<root> "}${style.selector || "<root>"} tokens=${style.tokens.join(",")}${style.fields ? " fields" : ""}${style.targets ? ` targets=${style.targets.join(",")}` : ""}`);
     for (const [name, item] of Object.entries(spec.items)) {
       lines.push(`${page}.${name} root ${PRIVATE_PART_ATTRIBUTE}=${PRIVATE_LINE_HOOK}`);
       unit(`${page}.${name}`, item);

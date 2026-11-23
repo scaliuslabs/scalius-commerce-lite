@@ -175,6 +175,8 @@ export const storefrontPrivatePagesSchema = z.object({
     css: z.string().max(PRIVATE_COMPILED_CSS_MAX_BYTES),
     /** The store's maintenance compile refused this source: the pages draw the default look until a save. */
     refused: z.boolean().optional(),
+    /** The page with a page of its own (the cart) is drawn in token mode: the theme set its tokens, or has a page paint. */
+    tokenMode: z.boolean().optional(),
   }).strict(),
 }).strict();
 
@@ -190,7 +192,7 @@ export interface StorefrontPrivatePages {
   labels: Partial<Record<string, PrivateWords | string>>;
   icons: Partial<Record<string, PrivateAssetRef>>;
   assets: Record<string, PrivateAssetRef>;
-  compiled: { anatomy: number; sanitizer: number; css: string; refused?: boolean };
+  compiled: { anatomy: number; sanitizer: number; css: string; refused?: boolean; tokenMode?: boolean };
 }
 export type StorefrontPrivatePagesTemplate = Partial<Omit<StorefrontPrivatePages, "compiled">>;
 
@@ -315,9 +317,15 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
     if (ref.app !== context.themeApp) issues.push({ path, reason: "foreign_asset", message: `${ref.app}/${ref.file}: a private page names only the theme's own files${context.themeApp ? ` (${context.themeApp})` : ""}.` });
   }
   const tokenCss: string[] = [];
+  let tokenMode = false;
+  // A theme's page paint shows behind every private page: a page with no tokens is drawn in token mode
+  // anyway, its rows the defaults computed from the paint, so what stands on the paint is checked on it
+  // (the drawer has no page of its own: it opens over public pages and takes their look).
+  const painted = context.palettes.some((palette) => palette.pagePaint);
   for (const page of PRIVATE_PAGE_KEYS) {
-    const tokens = value.tokens[page];
+    const tokens = Object.keys(value.tokens[page] ?? {}).length > 0 ? value.tokens[page]! : painted && privatePageHasOwnPage(page) ? {} : null;
     if (!tokens) continue;
+    tokenMode ||= privatePageHasOwnPage(page);
     const arrangement = privatePageArrangement({ ...value, pages, compiled: { ...value.compiled, anatomy: PRIVATE_ANATOMY_VERSION } }, page);
     const spec: PrivatePageSpec = PRIVATE_PAGES[page];
     const compiled = compilePrivateTokens(page, tokens, {
@@ -348,7 +356,7 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
   if (new TextEncoder().encode(compiled).byteLength > PRIVATE_COMPILED_CSS_MAX_BYTES) {
     return { ok: false, issues: [{ path: ["privatePages", "css"], reason: "too_large", message: `The compiled look is over ${PRIVATE_COMPILED_CSS_MAX_BYTES / 1024} KiB; shorten the stylesheet.` }] };
   }
-  return { ok: true, value: { ...value, pages, labels, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CSS_SANITIZER_VERSION, css: compiled } } };
+  return { ok: true, value: { ...value, pages, labels, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CSS_SANITIZER_VERSION, css: compiled, ...(tokenMode ? { tokenMode } : {}) } } };
 }
 
 /**
@@ -418,10 +426,18 @@ export function privatePagesCss(privatePages: Pick<StorefrontPrivatePages, "comp
   return privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused ? privatePages.compiled.css : "";
 }
 
-/** The page's tokens put it in token mode: its colours come from the compiled table, the host's palette classes read it. */
+/**
+ * The page is in token mode (the compile wrote its table: the theme set its
+ * tokens, or has a page paint): its colours come from the compiled table, the
+ * host's palette classes read it.
+ */
 export function privatePageTokenMode(privatePages: StorefrontPrivatePages, page: PrivatePageKey): boolean {
-  const served = servedPrivatePages(privatePages);
-  return Object.keys(served.tokens[page] ?? {}).length > 0;
+  return privatePageHasOwnPage(page) && servedPrivatePages(privatePages).compiled.tokenMode === true;
+}
+
+/** A page of its own (a `page` style target: the cart), not one drawn over public pages (the drawer, which takes their look). */
+function privatePageHasOwnPage(page: PrivatePageKey): boolean {
+  return Object.hasOwn(PRIVATE_PAGES[page].styles, "page");
 }
 
 /** Words in the page's language: its base language, else English, else the first the theme wrote. */

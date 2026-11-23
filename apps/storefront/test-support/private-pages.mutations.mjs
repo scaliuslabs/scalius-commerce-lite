@@ -16,7 +16,7 @@ const rewrite = (file, find, replace) => ({ file, find, replace });
 const TOKENS = "packages/shared/src/storefront-theme/private-tokens.ts";
 const PLAN = "apps/storefront/src/lib/private-pages/plan.ts";
 const SEAL = "overflow:hidden;overflow:clip;contain:layout paint style;";
-const ROW = "export function privateRowDeclarations(row: PrivateTokenRow, parent: PrivateTokenRow | null): string {\n";
+const ROW = "export function privateRowDeclarations(row: PrivateTokenRow, parent: PrivateTokenRow | null, also: ReadonlySet<string> = NONE): string {\n";
 /** A row of the table that writes only its paint: its words keep whatever colour reaches them. */
 const paintOnly = (test) => rewrite(TOKENS, ROW, `${ROW}  if (${test}) return row.paint ? \`background-color:\${row.paint}\` : "";\n`);
 
@@ -45,7 +45,7 @@ export const MUTATIONS = {
   "B2 an app's nodes have no rows and keep the palette's words": {
     why: "no row for an app's node kinds and tones, no inherited words, and text-foreground keeps the palette's colour: dark words in a dark line",
     rewrites: [
-      rewrite(TOKENS, "        ui(node.target, parent);\n", "\n"),
+      rewrite(TOKENS, "        ui([node.target], parent);\n", "\n"),
       rewrite(TOKENS, "{color:inherit;--focus-ring-color:var(--pt-r)}", "{--focus-ring-color:var(--pt-r)}"),
       rewrite(TOKENS, '...["text-foreground", "text-card-foreground", "text-primary-foreground"].map(', '...["text-card-foreground", "text-primary-foreground"].map('),
     ],
@@ -131,7 +131,33 @@ export const MUTATIONS = {
   "P1 the page row ignores the theme's page paint": {
     why: "the table checks the page's words on its page colour while the body shows the theme's gradient",
     rewrites: [rewrite(TOKENS, "} else if (place.parent === null && palette.pagePaint) {", "} else if (false) {")],
-    cases: ["page words that do not read on the theme's page paint"],
+    cases: ["page words that do not read on the theme's page paint", "a dark page paint under dark tokens"],
+  },
+  "T1 a dark row leaves out a cell its light row writes": {
+    why: "the dark lines panel leaves its ring to its parent's, so the light panel's dark ring shows on it",
+    rewrites: [rewrite(TOKENS, "(row[cell] !== inherited?.[cell] || also.has(property))", "row[cell] !== inherited?.[cell]")],
+    cases: ["a dark page under the dark colours"],
+  },
+  "C1 the theme's chrome with no header draws the store's full header": {
+    why: "a theme chrome with no header skin draws the public header, whose surfaces and words no row of the table knows",
+    rewrites: [rewrite("apps/storefront/src/components/header/header.astro", '<slot name="private-fallback" />', "<CoreHeader {...props} />")],
+    cases: ["the theme's chrome with no header skin, under a dark page"],
+  },
+  "U1 the details form's app targets have no rows": {
+    why: "an app's blocks inside the details form read the form's row only: a theme's ui.* tokens for them style nothing the table checks",
+    rewrites: [rewrite(TOKENS, "    if (targets.length > 0) ui(targets, key);\n", "")],
+    cases: ["the apps' blocks in a dark details form, styled by target"],
+  },
+  "H1 token mode paints no hover": {
+    why: "a hover surface paints nothing in token mode: a control the host gives a hover shows none under the pointer",
+    rewrites: [rewrite(TOKENS, '.map((name) => [name, ["background-color:var(--pt-h)", ":hover"]] as const),', '.map((name) => [name, ["background-color:transparent"]] as const),')],
+    cases: [B1],
+    expect: /shows no hover/,
+  },
+  "P2 a page paint with no tokens draws the store's own page": {
+    why: "the theme's page paint shows behind the default look, whose rows no table checks on it",
+    rewrites: [rewrite("packages/shared/src/storefront-theme/private-layout.ts", "painted && ownPage ? {} : null", "null")],
+    cases: ["a dark page paint, no private tokens"],
   },
 };
 
