@@ -7,13 +7,15 @@ import { pluginUiDocumentSchema, pluginUiNodes, pluginUiTreeSchema, type PluginU
 import { computedChoicesFit } from "./checkout-attribute-values";
 export { computedChoicesFit, isAttributeDate } from "./checkout-attribute-values";
 import { pluginKeySchema } from "./manifest-patterns";
+import { appTextSchema } from "./app-text";
 import { APP_LINE_INPUT_TEXT_LIMITS, CUSTOMIZATION_LIMITS, LINE_INPUT_CONFIRM_LIMITS, LINE_INPUT_FIELD_TYPES, LINE_INPUT_SURFACES } from "../line-properties";
 import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES } from "../buyer-uploads";
 import { MAX_ORDER_LINES } from "../order-limits";
 
 /** A checkout attribute key: snake_case (it is stored on the order). */
 const key = pluginKeySchema();
-const label = z.string().trim().min(1).max(120);
+/** An app's label the store draws, cleaned at the boundary (app-text.ts). */
+const label = appTextSchema(120);
 
 /**
  * What a `file` input (a line input or a checkout attribute) takes: the
@@ -63,14 +65,14 @@ export const PURCHASE_OPTIONS_MAX = 10;
 export const purchaseOptionDeclarationSchema = z.object({
   key,
   /** What the buyer sees on the line, the cart and the order ("Subscribe and save"). */
-  title: z.string().trim().min(1).max(80),
-  description: z.string().trim().min(1).max(300).optional(),
+  title: appTextSchema(80),
+  description: appTextSchema(300).optional(),
 }).strict();
 export type PurchaseOptionDeclaration = z.infer<typeof purchaseOptionDeclarationSchema>;
 
 /** The most line inputs one app declares. */
 export const LINE_INPUTS_MAX = 10;
-const lineInputLabel = z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.labelLength);
+const lineInputLabel = appTextSchema(CUSTOMIZATION_LIMITS.labelLength);
 const bulkLabel = z.string().trim().min(1).max(LINE_INPUT_CONFIRM_LIMITS.labelLength);
 /**
  * One of the app's own settings (`manifest.settings`, a `text` or `textarea`
@@ -130,10 +132,10 @@ export const lineInputDecisionSchema = z.object({
 export const lineInputDeclarationSchema = z.object({
   key,
   /** What the field is called; a checkbox's label is what the buyer agrees to, up to 1,000 characters (`APP_LINE_INPUT_TEXT_LIMITS`). */
-  label: z.string().trim().min(1).max(APP_LINE_INPUT_TEXT_LIMITS.agreement),
+  label: appTextSchema(APP_LINE_INPUT_TEXT_LIMITS.agreement),
   /** The merchant's words for `label` (a decline agreement): a setting key. */
   labelSetting: textSetting,
-  help: z.string().trim().min(1).max(APP_LINE_INPUT_TEXT_LIMITS.help).optional(),
+  help: appTextSchema(APP_LINE_INPUT_TEXT_LIMITS.help).optional(),
   /** The merchant's words for `help`: a setting key. */
   helpSetting: textSetting,
   type: z.enum(LINE_INPUT_FIELD_TYPES),
@@ -225,9 +227,10 @@ export const checkoutAttributesSchema = z.record(z.string().max(160), z.string()
 export const BUYER_UI_LINES_MAX_BYTES = 128 * 1024;
 /**
  * What a storefront extension answers: a buyer-surface document, or null to
- * show nothing. A per-line slot (`cart.line.after`) answers `ui: null` and a
- * block per line it draws under (`lines`, by `input.lines[].lineKey`; a line
- * left out draws nothing), at most `BUYER_UI_LINES_MAX_BYTES` in all.
+ * show nothing. A per-line slot (`cart.line.after`, `order.line.after`)
+ * answers `ui: null` and a block per line it draws under (`lines`, by
+ * `input.lines[].lineKey` or `input.orderLines[].lineKey`; a line left out
+ * draws nothing), at most `BUYER_UI_LINES_MAX_BYTES` in all.
  */
 export const buyerUiOutputSchema = z.object({
   ui: pluginUiDocumentSchema("buyer").nullable(),
@@ -240,7 +243,8 @@ export type BuyerUiOutput = z.infer<typeof buyerUiOutputSchema>;
 /**
  * One app's tree for one UI slot, as the API hands it to the storefront
  * (references checked, media resolved). A per-line slot's block names its
- * line (`lineKey`, the cart line's key) and is drawn under that line only.
+ * line (`lineKey`: the cart line's key, or the order row's) and is drawn
+ * under that line only.
  */
 export interface BuyerUiBlock {
   appId: string; releaseId: string; target: StorefrontUiSlot; ui: PluginUiNode;

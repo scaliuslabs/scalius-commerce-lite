@@ -489,7 +489,6 @@
     "type": "object",
     "properties": {
      "attributes": {
-      "default": [],
       "maxItems": 10,
       "type": "array",
       "items": {
@@ -501,8 +500,7 @@
         },
         "label": {
          "type": "string",
-         "minLength": 1,
-         "maxLength": 120
+         "maxLength": 480
         },
         "help": {
          "type": "string",
@@ -548,8 +546,7 @@
            },
            "label": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 120
+            "maxLength": 480
            }
           },
           "required": [
@@ -593,7 +590,6 @@
       }
      },
      "purchaseOptions": {
-      "default": [],
       "maxItems": 10,
       "type": "array",
       "items": {
@@ -605,13 +601,11 @@
         },
         "title": {
          "type": "string",
-         "minLength": 1,
-         "maxLength": 80
+         "maxLength": 320
         },
         "description": {
          "type": "string",
-         "minLength": 1,
-         "maxLength": 300
+         "maxLength": 1200
         }
        },
        "required": [
@@ -622,7 +616,6 @@
       }
      },
      "lineInputs": {
-      "default": [],
       "maxItems": 10,
       "type": "array",
       "items": {
@@ -634,8 +627,7 @@
         },
         "label": {
          "type": "string",
-         "minLength": 1,
-         "maxLength": 1000
+         "maxLength": 4000
         },
         "labelSetting": {
          "type": "string",
@@ -643,8 +635,7 @@
         },
         "help": {
          "type": "string",
-         "minLength": 1,
-         "maxLength": 1000
+         "maxLength": 4000
         },
         "helpSetting": {
          "type": "string",
@@ -680,8 +671,7 @@
            },
            "label": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 60
+            "maxLength": 240
            },
            "confirm": {
             "type": "object",
@@ -4053,7 +4043,7 @@
         },
         "extensions": {
          "default": [],
-         "maxItems": 13,
+         "maxItems": 14,
          "type": "array",
          "items": {
           "type": "string",
@@ -4069,6 +4059,7 @@
            "cart.line.after",
            "order.confirmation",
            "account.order",
+           "order.line.after",
            "account.overview",
            "account.profile"
           ]
@@ -5900,7 +5891,7 @@
      },
      "extensions": {
       "default": [],
-      "maxItems": 13,
+      "maxItems": 14,
       "type": "array",
       "items": {
        "type": "object",
@@ -5919,6 +5910,7 @@
           "cart.line.after",
           "order.confirmation",
           "account.order",
+          "order.line.after",
           "account.overview",
           "account.profile"
          ]

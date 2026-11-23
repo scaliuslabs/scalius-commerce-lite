@@ -398,7 +398,8 @@ export async function getOrderReceipt(
   }
 
   const response = await apiFetch(
-    `/orders/receipt/${encodeURIComponent(orderId)}`,
+    // The page's own read: the apps draw their blocks (a status poll never asks).
+    `/orders/receipt/${encodeURIComponent(orderId)}?buyerUi=run`,
     {
       headers: { "X-Receipt-Token": receiptToken, ...await buyerUiLocaleHeaders() },
       cache: "no-store",

@@ -11,6 +11,7 @@ import { getProductImageUrl } from "@/lib/product-media";
 import { isFreeOrderLine, resolveSavedOrderLineMoney } from "@scalius/shared/order-money-presentation";
 import { presentedLineTotalMinor } from "@/lib/order-line-discounts";
 import { orderLineGroupStatusText, orderLinePropertyRows } from "@/lib/order-line-groups";
+import { buyerLineAddOnRows } from "@scalius/shared/buyer-line-add-on-text";
 import LongAnswer from "@/components/LongAnswer.astro";
 import { longAnswerWords } from "@/lib/long-answer";
 import { pageLanguage } from "@/lib/store-time-zone";
@@ -242,11 +243,15 @@ const answerWords = longAnswerWords(pageLanguage());
       {
         group.items.map((item) => {
           const savedLine = resolveSavedOrderLineMoney(item, savedMoneySummary);
-          const propertyRows = orderLinePropertyRows(
-            item.properties,
-            (property) => savedMoneySummary ? formatReceiptMinor(property.priceMinor) : formatReceiptAmount(property.price),
-            copy,
-          );
+          const propertyRows = [
+            ...orderLinePropertyRows(
+              item.properties,
+              (property) => savedMoneySummary ? formatReceiptMinor(property.priceMinor) : formatReceiptAmount(property.price),
+              copy,
+            ),
+            // What the apps charged on the row: its `addOns`, the one place a row says it.
+            ...buyerLineAddOnRows((item as { addOns?: unknown }).addOns, { label: copy.lineAddOnText, money: formatReceiptMinor, language: pageLanguage() }),
+          ];
           const preparing = Boolean(order && isDigitalLinePreparing(item, order));
           return (
             <div class="order-success-print-item border-b border-border pb-3 last:border-0 last:pb-0">

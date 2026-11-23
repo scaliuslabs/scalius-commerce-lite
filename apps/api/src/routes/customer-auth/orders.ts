@@ -1,11 +1,9 @@
 // One signed-in customer order: claim a receipt, detail, support requests and payment sessions.
-import { frozenAddOnTotals } from "@scalius/shared/add-on-folding";
-import { ADD_ON_ROWS_MAX } from "@scalius/shared/add-on-totals";
 import { checkoutAttributeAppsSchema } from "../../schemas/checkout-attribute-apps";
 import { readCheckoutAttributeApps } from "@scalius/core/modules/order-kernel";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { claimGuestOrderToAccount } from "@scalius/core/modules/orders";
-import { getCustomerOrderDetailForOrder, getCustomerOwnedOrderForDetail, getCustomerPaymentSessionOrderForDetail } from "@scalius/core/modules/orders";
+import { buyerUiOrderLines, getCustomerOrderDetailForOrder, getCustomerOwnedOrderForDetail, getCustomerPaymentSessionOrderForDetail } from "@scalius/core/modules/orders";
 import { listOrderDiscountLines } from "@scalius/core/modules/promotions";
 import { orderDiscountLineSchema, presentOrderDiscountLines } from "../../schemas/storefront-discounts";
 import { buyerOrderProgressSchema, buyerOrderTimelineSchema } from "../../schemas/order-tracking";
@@ -25,7 +23,9 @@ import {
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { buyerOrderShippingAddressShape } from "../../schemas/entities";
 import {
+    buyerLineAddOnsSchema,
     buyerOrderFulfilmentSchema,
+    orderAddOnTotalsSchema,
     orderFulfilmentShape,
     orderLineBundleSchema,
     orderLineFulfilmentShape,
@@ -248,6 +248,7 @@ const customerOrderDetailSchema = z.object({
     variantLabel: z.string().nullable(),
     unitPrice: z.number(),
     lineTotal: z.number(),
+    unitsTotalMinor: z.number().int().openapi({ description: "The row's units at their unit prices (`lineTotal` in minor units)." }),
     unitPriceMinor: z.number().int().nullable(),
     lineSubtotalMinor: z.number().int().nullable(),
     discountAmountMinor: z.number().int().nullable(),
@@ -257,6 +258,7 @@ const customerOrderDetailSchema = z.object({
     ...orderLineExtrasShape,
     /** The bundle the line was bought in: a store kit's lines name its SKU and product, so Buy again puts the kit back. */
     bundle: orderLineBundleSchema.nullable().optional(),
+    addOns: buyerLineAddOnsSchema,
     createdAt: nullableTimestampSchema,
   }).passthrough()),
   /** Each handed-over action: a parcel sent, a pickup, a performed service. */
@@ -329,10 +331,7 @@ const customerOrderDetailSchema = z.object({
    * lines froze, folded here in the buyer's language: the page draws them
    * as they are, after Subtotal (the items alone).
    */
-  addOns: z.object({
-    itemsSubtotalMinor: z.number().int(),
-    rows: z.array(z.object({ appId: z.string().nullable(), title: z.string(), amountMinor: z.number().int() })).max(ADD_ON_ROWS_MAX),
-  }),
+  addOns: orderAddOnTotalsSchema,
 });
 
 const getCustomerOrderDetailRoute = createRoute({
@@ -347,6 +346,11 @@ const getCustomerOrderDetailRoute = createRoute({
     }),
     params: z.object({
       id: z.string(),
+    }),
+    query: z.object({
+      buyerUi: z.enum(["run"]).optional().openapi({
+        description: "`run`: the apps draw their blocks for the order's slots (`buyerUi`), one run per slot. Only the account order page's own read asks; absent (Buy again, an ownership check), no app runs and `buyerUi` is empty.",
+      }),
     }),
   },
   responses: {
@@ -373,7 +377,7 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
   const orderId = c.req.valid("param").id;
   const order = await getCustomerOwnedOrderForDetail(c.get("db"), session.customerId, orderId);
   const [detail, discountLines, paymentRecovery] = await Promise.all([
-    getCustomerOrderDetailForOrder(c.get("db"), order),
+    getCustomerOrderDetailForOrder(c.get("db"), order, requestBuyerLanguage(null, c.req.header("x-storefront-language"))),
     listOrderDiscountLines(c.get("db"), orderId),
     resolvePaymentSessionRecovery(c, {
       orderId,
@@ -399,14 +403,17 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
     registrations: await listActiveCheckoutRegistrations(db),
     buyerRequest: c.req.raw,
   });
-  const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN)
+  // The apps draw only when the account order page's own read asks (`buyerUi=run`).
+  const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN) && c.req.valid("query").buyerUi === "run"
     ? await apps.buyerUi?.({
-      targets: ["account.order"],
+      targets: ["account.order", "order.line.after"],
       language: c.req.header("x-storefront-language"),
       locale: c.req.header("x-storefront-locale"),
       currency: order.currencyCode ?? (await readStoreCurrency(db)).code,
       attributes: readCheckoutAttributes(order.attributes),
       customer: { id: session.customerId },
+      // Each row's facts: the per-line slot draws under each row.
+      orderLines: buyerUiOrderLines(detail.items),
       order: {
         orderId,
         status: order.status,
@@ -420,8 +427,6 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
 
   // The apps' answers the buyer gave, with their words (one read, only when there are answers).
   const appAnswers = readCheckoutAttributes(order.attributes);
-  // The add-on rows the page draws, folded here from the frozen lines (the page folds nothing).
-  const addOns = frozenAddOnTotals(detail.items, detail.order.subtotalAmountMinor ?? 0, requestBuyerLanguage(null, c.req.header("x-storefront-language")));
   const attributeApps = await readCheckoutAttributeApps(db, appAnswers);
   return ok(c, {
     ...detail,
@@ -429,7 +434,6 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
     appAnswers,
     attributeApps,
     giftCardTenders,
-    addOns,
     items: detail.items.map((item) => withOrderLineExtras(item, lineExtras)),
     discounts: presentOrderDiscountLines(discountLines, order.currencyDecimalPlaces),
     paymentRecovery,

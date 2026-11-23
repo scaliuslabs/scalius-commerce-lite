@@ -14,14 +14,31 @@
  * still add up and the page always takes them.
  */
 export const ADD_ON_ROWS_MAX = 50;
-/** An add-on's title, at most (`cart.line_prices` titles). */
+/** An add-on's title, at most (`cart.line_prices` titles); a detail line too. */
 export const ADD_ON_TITLE_MAX = 80;
+/**
+ * The detail lines one add-on on one line carries at most ("#1 · ৳350"): the
+ * summary's rows over the add-ons a line takes (`ADD_ON_ROWS_MAX` /
+ * `LINE_ADD_ONS_MAX`), so one line's add-ons together never hold more detail
+ * than one summary shows rows. A summary row opens to at most
+ * `ADD_ON_ROWS_MAX` of them, its lines' in order.
+ */
+export const ADD_ON_DETAILS_MAX = 10;
 
 /** One row of the summary: every unit's add-on of one app under one title. */
 export interface AddOnTotalRow {
   appId: string | null;
   title: string;
   amountMinor: number;
+  /** The app's detail lines of this add-on over the lines, in order (text, at most `ADD_ON_ROWS_MAX`); absent: none. */
+  details?: string[];
+}
+
+/** Well-formed detail lines (text within `ADD_ON_TITLE_MAX`), at most `max`; null when the value is not a list of them. */
+export function readAddOnDetails(value: unknown, max: number = ADD_ON_ROWS_MAX): string[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > max) return null;
+  return value.every((line) => typeof line === "string" && line.length > 0 && line.length <= ADD_ON_TITLE_MAX) ? [...value as string[]] : null;
 }
 
 export interface AddOnTotals {
@@ -46,9 +63,11 @@ export function readAddOnRows(value: unknown): AddOnTotalRow[] {
   const rows = (value as { rows?: unknown } | null | undefined)?.rows;
   if (!Array.isArray(rows) || rows.length > ADD_ON_ROWS_MAX) return [];
   const read = rows.flatMap((row): AddOnTotalRow[] => {
-    const { appId, title, amountMinor } = (row ?? {}) as Record<string, unknown>;
+    const { appId, title, amountMinor, details } = (row ?? {}) as Record<string, unknown>;
+    const lines = readAddOnDetails(details);
     return typeof title === "string" && title.length > 0 && title.length <= ADD_ON_TITLE_MAX && Number.isSafeInteger(amountMinor) && (amountMinor as number) >= 0
-      && (appId === null || typeof appId === "string") ? [{ appId: appId as string | null, title, amountMinor: amountMinor as number }] : [];
+      && (appId === null || typeof appId === "string") && lines !== null
+      ? [{ appId: appId as string | null, title, amountMinor: amountMinor as number, ...(lines.length > 0 ? { details: lines } : {}) }] : [];
   });
   return read.length === rows.length ? read : [];
 }

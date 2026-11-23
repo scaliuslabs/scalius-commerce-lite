@@ -56,6 +56,7 @@ import { fromMinor, toMinor } from "@scalius/shared/money";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
 import { qualifiedColumn } from "../../utils/qualified-column";
 import { bundleAnchors } from "./app-line-prices";
+import type { KitItem } from "../products";
 import {
     appCartMarketCountry,
     buildAppFunctionCart,
@@ -82,8 +83,12 @@ export const BUNDLE_LINE_PROPERTY_KEY = LINE_BUNDLE_PROPERTY_KEY;
 export interface TransformedCart {
     /** What checkout validates, prices and orders. */
     items: StorefrontCartValidationItem[];
-    /** Per buyer line that was expanded: its components' quantity per bundle unit, by component position in `items`. */
-    expansions: Array<{ sourceIndex: number; title: string; components: Array<{ position: number; perUnit: number }> }>;
+    /**
+     * Per buyer line that was expanded: its components' quantity per bundle
+     * unit, by component position in `items`; a store kit's, its items as the
+     * buyer reads them when the read asked (`kitItems`).
+     */
+    expansions: Array<{ sourceIndex: number; title: string; components: Array<{ position: number; perUnit: number }>; kitItems?: KitItem[] }>;
 }
 
 /**
@@ -190,11 +195,13 @@ export interface CartKitExpansion {
     priceSource?: StorefrontCartValidatedItem["priceSource"];
     storeUnitPriceMinor?: number;
     components: Array<{ variantId: string; productId: string; quantity: number }>;
+    /** Its items as the buyer reads them, when the cart check asked (`kitItems`). */
+    kitItems?: KitItem[];
 }
 
 /** The valid kit lines of a first pass (`kitComponents`), by line index. */
 export function cartKitExpansions(
-    valid: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "productId" | "variantId" | "productName" | "variantLabel" | "baseUnitPriceMinor" | "kitComponents" | "bundle"> & Partial<Pick<StorefrontCartValidatedItem, "priceSource" | "storeUnitPriceMinor">>>,
+    valid: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "productId" | "variantId" | "productName" | "variantLabel" | "baseUnitPriceMinor" | "kitComponents" | "bundle"> & Partial<Pick<StorefrontCartValidatedItem, "priceSource" | "storeUnitPriceMinor" | "kitItems">>>,
 ): Map<number, CartKitExpansion> {
     const kits = new Map<number, CartKitExpansion>();
     for (const line of valid) {
@@ -207,6 +214,7 @@ export function cartKitExpansions(
             ...(line.priceSource ? { priceSource: line.priceSource } : {}),
             ...(line.storeUnitPriceMinor !== undefined ? { storeUnitPriceMinor: line.storeUnitPriceMinor } : {}),
             components: line.kitComponents,
+            ...(line.kitItems ? { kitItems: line.kitItems } : {}),
         });
     }
     return kits;
@@ -242,7 +250,7 @@ export function applyCartTransform(
 ): TransformedCart | null {
     const lineIndex = new Map(lineIds.map((lineId, position) => [lineId, valid[position]!]));
     const used = new Set<number>();
-    const expanded = new Map<number, { title: string; components: Array<{ variantId: string; productId: string; perUnit: number }>; inputs: Pick<CartLineBundle, "properties" | "canonicalProperties" | "lineInputs">; kit?: CartLineBundle["kit"] }>();
+    const expanded = new Map<number, { title: string; components: Array<{ variantId: string; productId: string; perUnit: number }>; inputs: Pick<CartLineBundle, "properties" | "canonicalProperties" | "lineInputs">; kit?: CartLineBundle["kit"]; kitItems?: KitItem[] }>();
     const merged = new Map<number, CartLineBundle>();
     let lineCount = items.length;
     const skip = (pluginId: string, message: string) => apps?.report(pluginId, "cart.transform", `${message} It was skipped.`);
@@ -272,6 +280,7 @@ export function applyCartTransform(
                 ...(kit.priceSource ? { priceSource: kit.priceSource } : {}),
                 ...(kit.storeUnitPriceMinor !== undefined ? { storeUnitPriceMinor: kit.storeUnitPriceMinor } : {}),
             },
+            ...(kit.kitItems ? { kitItems: kit.kitItems } : {}),
         });
     }
 
@@ -370,7 +379,7 @@ export function applyCartTransform(
                 ...(item.purchaseOptions !== undefined && item.purchaseOptions !== null ? { purchaseOptions: item.purchaseOptions } : {}),
             });
         }
-        expansions.push({ sourceIndex, title: expansion.title, components });
+        expansions.push({ sourceIndex, title: expansion.title, components, ...(expansion.kitItems ? { kitItems: expansion.kitItems } : {}) });
     });
     return { items: transformed, expansions };
 }
@@ -496,7 +505,7 @@ export function presentTransformedCartLines(
         // Summed by app and title, never one entry per component, and within the one bound a line carries.
         const adjustments = aggregateLineAddOns(components.flatMap((component) => lineAddOnsOf(component.item!.adjustments)
             .map((addOn) => ({ ...addOn, perUnit: component.perUnit }))))
-            .map((addOn) => lineAdjustmentProperty(addOn.title, addOn.amountMinor, addOn.appId ?? undefined));
+            .map((addOn) => lineAdjustmentProperty(addOn.title, addOn.amountMinor, addOn.appId ?? undefined, addOn.details));
         const adjustmentsMinor = adjustments.reduce((sum, adjustment) => sum + adjustment.priceMinor, 0);
         items.push({
             ...first,
@@ -516,6 +525,8 @@ export function presentTransformedCartLines(
             ...(adjustments.length > 0 ? { adjustments, adjustmentsMinor } : { adjustments: undefined, adjustmentsMinor: undefined }),
             productName: expansion.title,
             variantLabel: null,
+            // A store kit's contents, as the buyer reads them (when the check asked).
+            ...(expansion.kitItems ? { kitItems: expansion.kitItems } : {}),
             availableQuantity: available,
             freeDelivery: components.every((component) => component.item!.freeDelivery),
         });

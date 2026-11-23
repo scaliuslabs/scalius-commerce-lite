@@ -26,7 +26,7 @@ import { presentCheckoutAttributes } from "@scalius/shared/plugins/checkout-attr
 import { storeRegion } from "@/lib/store-time-zone";
 import { fromMinor } from "@scalius/shared/money";
 import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
-import { frozenAddOnTotals } from "@scalius/shared/add-on-folding";
+import { addOnRowsOver, readAddOnRows } from "@scalius/shared/add-on-totals";
 
 /** An order as the receipt read returns it. */
 export type ReceiptOrder = NonNullable<Awaited<ReturnType<typeof getOrderReceipt>>>;
@@ -72,8 +72,9 @@ export function orderReceiptView({ order, copy, languageCode, configuredCurrency
         tax: 0,
         total: order.totalAmount,
       };
-  // The apps' add-ons as their own rows, from what the order's lines froze (never an app's answer now).
-  const receiptAddOns = savedMoneySummary ? frozenAddOnTotals(order.items ?? [], savedMoneySummary.subtotalMinor, languageCode) : null;
+  // The apps' add-ons as their own rows: the server's, from the order's real lines (the page folds nothing).
+  // (`addOns` is read untyped: the receipt's hand-written type does not name it yet.)
+  const receiptAddOns = savedMoneySummary ? addOnRowsOver(savedMoneySummary.subtotalMinor, readAddOnRows((order as { addOns?: unknown }).addOns)) : null;
   const receiptAddOnRows = (receiptAddOns?.rows ?? []).map((row) => ({ title: row.title, amount: toMajor(row.amountMinor) }));
   const receiptItemsSubtotal = receiptAddOns && receiptAddOnRows.length > 0 ? toMajor(receiptAddOns.itemsSubtotalMinor) : receiptMoney.subtotal;
   const receiptDiscounts = summarizeOrderDiscounts({
