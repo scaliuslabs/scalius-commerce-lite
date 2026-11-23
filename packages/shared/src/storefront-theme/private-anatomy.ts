@@ -82,7 +82,7 @@ export interface PrivatePartSpec {
  * node takes the ones it lists.
  */
 export const PRIVATE_TOKEN_NAMES = [
-  "background", "gradient", "text", "muted", "link", "error", "border", "border-width", "border-style", "radius", "shadow", "padding", "gap",
+  "background", "gradient", "text", "muted", "link", "error", "placeholder", "ring", "invalid", "border", "border-width", "border-style", "radius", "shadow", "padding", "gap",
   "font", "weight", "size", "case", "tracking", "align", "clamp",
   "columns", "columns-wide", "width", "height", "width-wide", "height-wide", "fit", "max-width",
 ] as const;
@@ -111,8 +111,12 @@ export interface PrivateStyleSpec {
   readonly surface: PrivatePaletteRole | "under";
   /** The text roles it draws (the first is its own colour). */
   readonly text: readonly PrivatePaletteRole[];
-  /** The style target it is drawn inside (what is beneath it). */
+  /** The style target it is drawn inside (what is beneath it, and whose text it reads). */
   readonly on?: string;
+  /** Drawn in several places: the style targets it may sit on, each checked (an input, an app's block). */
+  readonly within?: readonly string[];
+  /** Non-text marks that must read at 3:1 on what is beneath it (a field's border, its focus ring, its error border). */
+  readonly marks?: readonly PrivatePaletteRole[];
   /** The part it belongs to (its place in the arrangement says what is beneath it), and its unit for a repeated one. */
   readonly part?: string;
   readonly item?: string;
@@ -204,11 +208,17 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   summary: { selector: '[data-part="summary"]', tokens: [...BOX_TOKENS, "gap"], surface: "card", text: ["foreground", "muted-foreground", "primary", "destructive"], part: "summary" },
   "summary-rows": { selector: '[data-summary-row]:not([data-summary-row="total"])', tokens: ["text", "muted", "size"], surface: "under", text: ["muted-foreground", "foreground"], on: "summary" },
   "summary-total": { selector: '[data-summary-row="total"]', tokens: [...TEXT_TOKENS], surface: "under", text: ["foreground"], on: "summary" },
-  input: { selector: ':is(input:not([type="checkbox"],[type="radio"]),select,textarea)', tokens: ["background", "text", "border", "border-width", "radius"], surface: "background", text: ["foreground"] },
+  // A field has its own surface: no part's text token reaches it. Its placeholder is its muted text.
+  input: {
+    selector: ':is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea)', tokens: ["background", "text", "placeholder", "border", "ring", "invalid", "border-width", "radius"],
+    surface: "background", text: ["foreground", "muted-foreground"], within: ["page", "summary", "details-form"], marks: ["input", "ring", "destructive"],
+  },
   "details-form": { selector: '[data-part="details-form"]', tokens: [...BOX_TOKENS], surface: "card", text: ["foreground", "muted-foreground", "destructive", "primary"], part: "details" },
   "section-heading": { selector: ':is([data-part="contact"],[data-part="delivery"]) h2', tokens: [...TEXT_TOKENS], surface: "under", text: ["foreground"], on: "details-form" },
   submit: { selector: '[data-part="details-submit"]', tokens: [...BUTTON_TOKENS], surface: "primary", text: ["primary-foreground"] },
   legal: { selector: '[data-part="legal"]', tokens: ["text", "size", "align"], surface: "under", text: ["muted-foreground", "foreground"], on: "details-form" },
+  // The theme header's search form, built by the host (its own words, no theme selector reaches it).
+  search: { selector: '[data-host="search"]', absolute: true, tokens: ["background", "text", "placeholder", "border", "ring", "border-width", "radius"], surface: "background", text: ["foreground", "muted-foreground"], marks: ["input"] },
   dialog: { selector: '[data-private="dialog"]', absolute: true, tokens: ["background", "text", "muted", "border", "border-width", "radius", "shadow"], surface: "card", text: ["foreground", "muted-foreground"] },
   "dialog-confirm": { selector: '[data-private="dialog"] [data-part="dialog-confirm"]', absolute: true, tokens: [...BUTTON_TOKENS], surface: "primary", text: ["primary-foreground"] },
 };
@@ -357,14 +367,34 @@ export const PRIVATE_HOOK_MAX = 40;
 export const PRIVATE_SCOPES = ["dialog", "header", "footer"] as const;
 
 /**
- * Free regions: boxes the host seals (nothing inside paints, lays out or
- * acts outside them) and the only places the theme's stylesheet reaches,
- * strictly inside the wrapper (`data-free`): the theme's content blocks
- * (`block`, with their `data-hook`), its header and footer (`header`,
- * `footer`) and each app block a buyer UI target draws (`app`, with its
- * `data-buyer-ui-app`).
+ * Free regions: boxes the host seals (nothing inside paints, lays out,
+ * widens the page or acts outside them) and the only places the theme's
+ * stylesheet reaches, strictly inside the wrapper (`data-free`): the
+ * theme's content blocks (`block`, with their `data-hook`) and its header
+ * and footer (`header`, `footer`). Host islands inside them (`data-host`,
+ * the header's search form) are the host's: no theme rule reaches them.
  */
-export const PRIVATE_FREE_REGIONS = ["block", "header", "footer", "app"] as const;
+export const PRIVATE_FREE_REGIONS = ["block", "header", "footer"] as const;
+
+/** The most content blocks a page holds, and the most before its last mandatory part (each is at most 30rem tall). */
+export const PRIVATE_CONTENT_LIMITS = { perPage: 8, beforeLastMandatory: 3 } as const;
+
+/**
+ * An app's buyer UI block is host-drawn from typed nodes: a host part. A
+ * theme gives each node kind a look by tokens under `ui.<kind>`, narrowed by
+ * tone (`ui.banner.warning`), app (`@acme.protection`) and target
+ * (`/cart.line.after`). It may sit in any target, so its text is checked on
+ * every surface a target can be placed on.
+ */
+export const PRIVATE_BUYER_UI_STYLES: Readonly<Record<string, Omit<PrivateStyleSpec, "selector"> & { kind: string; tones?: readonly string[] }>> = {
+  banner: { kind: '[data-ui="banner"]', tones: PRIVATE_CONTENT_TONES, tokens: ["background", "text", "border", "border-width", "radius", "shadow", "padding"], surface: "under", text: ["foreground"], within: ["page", "lines", "line", "summary", "details-form"] },
+  button: { kind: ':is(button,a)[data-ui="button"]', tokens: ["background", "text", "border", "border-width", "radius", "weight", "size", "case"], surface: "background", text: ["foreground"] },
+  badge: { kind: '[data-ui="badge"]', tones: PRIVATE_CONTENT_TONES, tokens: ["background", "text", "border", "radius"], surface: "under", text: ["foreground"], within: ["page", "lines", "line", "summary", "details-form"] },
+  text: { kind: '[data-ui="text"]', tokens: ["text", "size", "weight"], surface: "under", text: ["foreground"], within: ["page", "lines", "line", "summary", "details-form"] },
+  heading: { kind: '[data-ui="heading"]', tokens: ["text", "size", "weight", "font", "case"], surface: "under", text: ["foreground"], within: ["page", "lines", "line", "summary", "details-form"] },
+  disclosure: { kind: '[data-ui="disclosure"]', tokens: ["background", "text", "border", "radius"], surface: "under", text: ["foreground"], within: ["page", "lines", "line", "summary", "details-form"] },
+  row: { kind: ':is([data-ui="stack"],[data-ui="columns"])', tokens: ["gap"], surface: "under", text: [] },
+};
 export type PrivateFreeRegion = (typeof PRIVATE_FREE_REGIONS)[number];
 export const PRIVATE_FREE_ATTRIBUTE = "data-free";
 
@@ -376,10 +406,9 @@ export const PRIVATE_DIALOG_HOOKS = ["sign-in", "dialog-title", "dialog-text", "
 
 /**
  * An app's buyer UI block, wherever a private page draws it: its mount's
- * `data-buyer-ui-target`, the block's free-region wrapper with
- * `data-buyer-ui-app` (the app's id) and each node's kind on `data-ui`
- * (`banner`, `text`, `button`, …). A theme's content blocks carry the same
- * `data-ui` kinds.
+ * `data-buyer-ui-target`, the block's wrapper with `data-buyer-ui-app` (the
+ * app's id) and each node's kind on `data-ui` (`banner`, `text`, `button`,
+ * …) and tone on `data-tone`. A theme's content blocks carry the same kinds.
  */
 export const PRIVATE_BUYER_UI_HOOKS = ["data-buyer-ui-target", "data-buyer-ui-app", "data-ui"] as const;
 
@@ -424,6 +453,7 @@ export function privatePageAnatomy(): string[] {
   lines.push(`buyer-ui attributes=${PRIVATE_BUYER_UI_HOOKS.join(",")}`);
   lines.push(`chrome roots ${PRIVATE_SCOPE_ATTRIBUTE}=header|footer`);
   lines.push(`layout tokens=${PRIVATE_LAYOUT_TOKENS.join(",")}`);
+  for (const [kind, style] of Object.entries(PRIVATE_BUYER_UI_STYLES)) lines.push(`buyer-ui style ui.${kind}${style.tones ? `[.${style.tones.join("|")}]` : ""}[@<app>][/<target>] ${style.kind} tokens=${style.tokens.join(",")}`);
   lines.push(`free regions ${PRIVATE_FREE_ATTRIBUTE}=${PRIVATE_FREE_REGIONS.join("|")}`);
   return lines;
 }

@@ -28,11 +28,12 @@ cart style fold-toggle <root> [data-part="fold-toggle"] tokens=background,text,b
 cart style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap
 cart style summary-rows <root> [data-summary-row]:not([data-summary-row="total"]) tokens=text,muted,size
 cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,case,tracking
-cart style input <root> :is(input:not([type="checkbox"],[type="radio"]),select,textarea) tokens=background,text,border,border-width,radius
+cart style input <root> :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 cart style details-form <root> [data-part="details-form"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 cart style section-heading <root> :is([data-part="contact"],[data-part="delivery"]) h2 tokens=text,font,weight,size,case,tracking
 cart style submit <root> [data-part="details-submit"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,font,weight,size,case,tracking
 cart style legal <root> [data-part="legal"] tokens=text,size,align
+cart style search [data-host="search"] tokens=background,text,placeholder,border,ring,border-width,radius
 cart style dialog [data-private="dialog"] tokens=background,text,muted,border,border-width,radius,shadow
 cart style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,font,weight,size,case,tracking
 cart.line root data-part=line
@@ -94,4 +95,11 @@ dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-ag
 buyer-ui attributes=data-buyer-ui-target,data-buyer-ui-app,data-ui
 chrome roots data-private=header|footer
 layout tokens=background,gradient,border,border-width,border-style,radius,shadow,padding,gap,columns,columns-wide
-free regions data-free=block|header|footer|app
+buyer-ui style ui.banner[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="banner"] tokens=background,text,border,border-width,radius,shadow,padding
+buyer-ui style ui.button[@<app>][/<target>] :is(button,a)[data-ui="button"] tokens=background,text,border,border-width,radius,weight,size,case
+buyer-ui style ui.badge[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="badge"] tokens=background,text,border,radius
+buyer-ui style ui.text[@<app>][/<target>] [data-ui="text"] tokens=text,size,weight
+buyer-ui style ui.heading[@<app>][/<target>] [data-ui="heading"] tokens=text,size,weight,font,case
+buyer-ui style ui.disclosure[@<app>][/<target>] [data-ui="disclosure"] tokens=background,text,border,radius
+buyer-ui style ui.row[@<app>][/<target>] :is([data-ui="stack"],[data-ui="columns"]) tokens=gap
+free regions data-free=block|header|footer

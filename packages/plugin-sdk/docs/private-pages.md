@@ -3,11 +3,11 @@
 The cart, checkout, payment, receipt and account pages are a buyer's own pages: they hold a cart, an address, a phone number and a code. No theme or app script runs there. You still design them, with data the store draws:
 
 - you **arrange** the store's parts and your own content;
-- you give the store's parts their **look through typed tokens** (colours, sizes, radii, fonts, columns);
-- you style **your own regions** freely with one stylesheet: your content blocks, your header and footer, and the inside of an app's block;
+- you give the store's parts, and the apps' blocks the store draws, their **look through typed tokens** (colours, sizes, radii, fonts, columns);
+- you style **your own regions** freely with one stylesheet: your content blocks and your header and footer;
 - you **reword** the store's labels and swap its icons.
 
-The store never lets a stylesheet select one of its parts. That is how it can promise a buyer always sees the total, the form, the terms and every error, however a page is designed.
+The store never lets a stylesheet select one of its parts. Rendered property tests (`pnpm test:private-pages`) draw generated themes at 320, 390 and 1280 px, light and dark, and check that every part a buyer must reach stays on screen, uncovered and readable.
 
 This page covers the cart page, which is private, and the cart drawer. The drawer opens over public pages and is part of each of them: its arrangement, words and icons come from here, and its look comes from your public stylesheet through the same hooks. No store check compiles that public stylesheet. The checkout, the receipt and the account follow the same model as they move to it; until then they take the closed choices in [themes.md](themes.md#templates).
 
@@ -99,33 +99,48 @@ Example: the summary and the form in a side column, a line of your own words und
 
 ## Tokens
 
-Each page names its **style targets**, the elements of its parts that take a look, and the tokens each one takes. You set values; the store writes every CSS rule from them under the page's root. The anatomy reference below lists the targets as `style <name> <selector> tokens=…`, so you can see where each one lands.
+Each page names its **style targets**, the elements of its parts that take a look, and the tokens each one takes. You set values; the store writes every CSS rule from them under the page's root, all at the same (zero) specificity, so the anatomy's order decides: an outer target first, what is inside it after. The anatomy reference below lists the targets as `style <name> <selector> tokens=…`.
 
 | Token | Value | Writes |
 | --- | --- | --- |
-| `background`, `text`, `muted`, `link`, `error`, `border` | A palette role (`card`, `primary`, `muted-foreground`, …) or an opaque `#rrggbb` | Its colour. `text` also recolours the target's own foreground text inside it; `muted`, `link` and `error` recolour the muted, primary and destructive text inside. |
+| `background`, `border` | A palette role (`card`, `primary`, `muted-foreground`, …) or an opaque `#rrggbb` | Its colour |
+| `text`, `muted`, `link`, `error` | A colour | The target's own text, and its foreground, muted, primary and destructive text inside, **on its own surface only**: a field, a button or chip with a background, or a nested card keeps its own colours |
+| `placeholder`, `ring`, `invalid` | A colour | A field's placeholder, focus ring and error border |
 | `gradient` | `{ "shape": "linear" \| "radial", "angle"?: 0–360, "from": colour, "to": colour }` | `background-image` |
-| `border-width`, `radius`, `padding`, `gap` | Whole pixels: 0–4, 0–32, 0–48, 0–48 | Those properties |
+| `border-width`, `radius` | Whole pixels: 0–4, 0–32 | Those properties |
+| `padding`, `gap` | 0–48 px | Those, scaled down to 4% of the screen's width on a phone |
 | `border-style` | `solid`, `dashed`, `dotted`, `none` | `border-style` |
 | `shadow` | `none`, `sm`, `md`, `lg` | A fixed `box-shadow` |
 | `font` | `body`, `heading` (the theme's typography) | `font-family` |
-| `weight`, `size`, `case`, `tracking`, `align` | `400`–`800`; 12–40 px; `none`/`uppercase`; `normal`/`wide`/`wider`; `start`/`center`/`end` | Those properties |
+| `size` | 12–40 px | `font-size`, at most 8% of the screen's width (never under 12 px) |
+| `weight`, `case`, `tracking`, `align` | `400`–`800`; `none`/`uppercase`; `normal`/`wide`/`wider`; `start`/`center`/`end` | Those properties |
 | `clamp` | `none`, `2`, `3` (lines of a title) | A line clamp |
-| `columns`, `columns-wide` | 1 to 4 tracks: `auto`, `min-content`, `1fr`–`4fr`, or 24–480 px | `grid-template-columns` (wide: from 40rem) |
-| `width`, `height`, `width-wide`, `height-wide` | 40–240 px, 40–320 px | An image's size (wide: from 40rem) |
+| `columns`, `columns-wide` | 1 to 4 tracks: `auto`, `min-content`, `1fr`–`4fr`, or 24–480 px | A layout node's columns, **only where the box holding it fits them** (`columns-wide` from 40rem); a share is at least 6rem and a pixel track may shrink; else the store's one column |
+| `width`, `height`, `width-wide`, `height-wide` | 40–240 px (at most 30% of the screen), 40–320 px | An image's size |
 | `fit` | `contain`, `cover` | The image's `object-fit` |
 | `max-width` | 480–1600 px | The page frame's width |
 
-A layout node takes `background`, `gradient`, `border`, `border-width`, `border-style`, `radius`, `shadow`, `padding`, `gap`, `columns` and `columns-wide` through its hook: `"@studio-grid": { "columns": [64, "1fr", 88] }`.
+A layout node takes `background`, `gradient`, `border`, `border-width`, `border-style`, `radius`, `shadow`, `padding`, `gap`, `columns` and `columns-wide` through its hook: `"@studio-grid": { "columns": [64, "1fr", 88] }`. The store's own layouts split into columns by the width of the box they sit in, never the screen's.
 
-No value is text CSS reads as code: no `var()`, no `calc()`, no `url()`, no font name. **Every text the store draws keeps a contrast of 4.5:1** with what is beneath it, in every palette a buyer can see (light, dark, or both with the switch). The save works out what is beneath each target from your tokens, your layout nodes and the store's own surfaces, and refuses a set that would make a part unreadable (`contrast`). A refusal names the pair: `summary: text #1d1c1a on #1e1831 is 1.00:1`.
+**Apps' blocks.** The store draws an app's block from typed nodes, so it is one of the store's parts: you give it a look by node kind, under `ui.<kind>`, narrowed by tone, app and target: `"ui.banner.warning@acme.protection/cart.page.summary": { "background": "#3a2a0a", "text": "#fde68a" }`.
+
+| Kind | Tokens |
+| --- | --- |
+| `ui.banner[.neutral\|info\|success\|warning\|critical]` | `background`, `text`, `border`, `border-width`, `radius`, `shadow`, `padding` |
+| `ui.button` | `background`, `text`, `border`, `border-width`, `radius`, `weight`, `size`, `case` |
+| `ui.badge[.<tone>]` | `background`, `text`, `border`, `radius` |
+| `ui.text`, `ui.heading` | `text`, `size`, `weight` (a heading also `font`, `case`) |
+| `ui.disclosure` | `background`, `text`, `border`, `radius` |
+| `ui.row` | `gap` |
+
+No value is text CSS reads as code: no `var()`, no `calc()`, no `url()`, no font name. The save keeps **every text the store draws at 4.5:1** and **a field's border, focus ring and error border at 3:1** against what is beneath it, in every palette a buyer can see (light, dark, or both). It works that out from your tokens, your layout nodes and the store's own surfaces; a gradient counts at its worst point, and an app's node is checked on every surface a target can sit on. A refusal names the pair: `summary: text #1d1c1a on #1e1831 is 1.00:1`.
 
 | Reason | Means |
 | --- | --- |
-| `unknown_style` | No such style target on the page, or no layout node with that hook. |
+| `unknown_style` | No such style target, node kind, tone or target on the page, or no layout node with that hook. |
 | `unknown_token` | The target does not take that token. |
 | `token_value` | Not a value of the token's type, or outside its bounds. |
-| `contrast` | A text would read below 4.5:1 on what is beneath it. |
+| `contrast` | A text would read below 4.5:1, or a field's mark below 3:1, on what is beneath it. |
 
 ## Free regions and your stylesheet
 
@@ -135,33 +150,33 @@ Your stylesheet styles **free regions** only, and only what is inside them:
 | --- | --- | --- |
 | One of your content blocks | `data-free="block"` with its `data-hook` | `[data-hook="studio-lead"] p` |
 | Your header or footer | `data-free="header"`, `data-free="footer"` | `[data-free="header"] .logo` |
-| An app's block in a target | `data-free="app"` with `data-buyer-ui-app` | `[data-buyer-ui-app="acme.protection"] [data-ui="banner"]` |
 | Every region | `data-free` | `[data-free] a` |
 
-A selector starts at one wrapper (written as just that attribute), then a space or `>`, then what it selects inside. A root state may come first: `:root[data-color-scheme="dark"] [data-free="header"] .logo`. The wrapper itself is the store's: you never select it, and a selector that starts anywhere else is refused (`unscoped_selector`). Class names and ids are your region's own: `.logo` matches what your header skin wrote as `class="logo"` (both are written `tc-logo`), so they never meet a store or utility class.
+A selector starts at one wrapper (written as just that attribute), then a space or `>`, then what it selects inside. A root state may come first: `:root[data-color-scheme="dark"] [data-free="header"] .logo`. The wrapper itself is the store's: you never select it, and a selector that starts anywhere else is refused (`unscoped_selector`). The header's search form is the store's too (`data-host`): no rule of yours reaches it, and it takes the `search` tokens. Class names and ids are your region's own: `.logo` matches what your header skin wrote as `class="logo"` (both are written `tc-logo`), so they never meet a store or utility class.
 
-Inside a region you may use what CSS offers for a design: layout, colour, gradients, transforms, absolute positioning, animations, pseudo-elements, `@media`, `@supports`, `@container` and `@keyframes`. The store **seals** every region: it is its own containing block and stacking context, it clips and contains everything painted inside it, and its height is bounded (header 24rem, app block 40rem, content block 60rem, footer 80rem). However your rules paint, nothing leaves the region: an outline of `100vmax`, a shadow, a box at `z-index: 2147483647` or a negative margin stays inside its box.
+Inside a region you may use what CSS offers for a design: layout, colour, gradients, transforms, absolute positioning, animations, pseudo-elements, `@media`, `@supports`, `@container` and `@keyframes`. The store **seals** every region: it is its own containing block and stacking context; its size, layout and paint are contained, its width included, so nothing inside widens the page or a column; what is painted inside is clipped to it; and its height is bounded (a content block 30rem, the header 24rem, the footer 80rem).
 
 ```css
 [data-hook="cart-intro"] p { color: #b9b0d6; margin: 0 }
-[data-buyer-ui-app="gameghor.protection"] [data-ui="banner"] { display: flex; gap: 12px; background: #3a2a0a; border: 1px solid #f59e0b; color: #fde68a }
 :root[data-color-scheme="dark"] [data-free="header"] .site-header { background: #120d22 }
 [data-hook="cart-intro"] p::before { content: "★ "; animation: glow 2s ease-in infinite }
 @keyframes glow { from { opacity: .4 } to { opacity: 1 } }
 ```
 
-`url(<asset>)` names one of your listed `assets`; the page loads it from the store's own origin. Your animations name only your own `@keyframes` (written `t-<name>`). Custom properties are named `--t-<name>`.
+`url(<asset>)` names one of your listed `assets` (never a cursor); the page loads it from the store's own origin. Your animations name only your own `@keyframes` (written `t-<name>`). Custom properties are named `--t-<name>`.
+
+A page holds at most **8 content blocks**, at most **3 before its last part a buyer must reach** (the details form on the cart page), and at most 2 in a cart line (`content_limit`).
 
 The stylesheet is parsed by a CSS Syntax 3 parser and written back from what was checked, never copied, then read back and compared: anything that disagrees serves nothing. It never throws: oversize, too many tokens and deep nesting are refusals too.
 
 | Reason | Means |
 | --- | --- |
 | `unscoped_selector` | A selector does not start at a region's wrapper, selects the wrapper itself, or leaves it by `~` or `+`. |
-| `positioning` | `position: fixed` or `sticky`, a position read from a variable, anchor positioning or a view transition name: they reach outside a region. |
+| `positioning` | `position: fixed` or `sticky`, a position read from a variable, anchor positioning or a view transition name. |
 | `animation_name` | An animation that names a keyframe that is not yours. |
-| `import`, `foreign_url`, `forbidden_function` | `@import`, a `url()` that is not one of your assets, `image()`, `image-set()`, `cross-fade()`, `element()`, `attr()` and other functions not on the list. |
+| `import`, `foreign_url`, `forbidden_function` | `@import`, a `url()` that is not one of your assets or is a cursor, `image()`, `image-set()`, `cross-fade()`, `element()`, `attr()` and other functions not on the list. |
 | `form_value_selector`, `state_selector` | Selectors that read what a buyer types (`[value^=…]`, `:placeholder-shown`, `:has(:checked)`). |
-| `unsupported_selector`, `unsupported_at_rule`, `custom_property` | A selector, at-rule or custom property not on the lists, or `[class…]`/`[id…]` (use `.name`, `#name`). |
+| `unsupported_selector`, `unsupported_at_rule`, `custom_property` | A selector, at-rule or custom property not on the lists, or `[class…]`, `[id…]`, `[data-host…]` (use `.name`, `#name`). |
 | `syntax`, `escape`, `bad_string`, `bad_url`, `comment`, `unbalanced`, `null_byte`, `nested_rule` | What a browser would repair: refused instead. |
 | `too_large`, `too_deep`, `unsafe_output` | Over 24 KiB, 12000 tokens or 24 levels of nesting, or output that did not read back as checked. |
 
@@ -169,13 +184,13 @@ The stylesheet is parsed by a CSS Syntax 3 parser and written back from what was
 
 | The store guarantees | Yours |
 | --- | --- |
-| No rule of your stylesheet matches a store part, a layout node, the page or the body, so it cannot hide, cover, move or fake the total, a row, the form, its submit, the terms or an error. | Everything inside your regions: your words, your pictures, your header. |
-| Nothing inside a region paints, lays out or sits outside it. | A region that clips its own content because you made it taller than its bound. |
-| Every text the store draws reads at 4.5:1 or better in every palette buyers can see. | Text inside your regions, and the inside of an app's block you restyle. |
-| A token never carries code: only typed values the store writes as its own CSS. | The look of the drawer on public pages (your public stylesheet). |
+| No rule of your stylesheet matches a store part, an app's block, a layout node, the page, the body or the header's search form. | Everything inside your regions: your words, your pictures, your header's markup. |
+| A region is sealed: what it paints is clipped to it and its content does not widen the page; its height is bounded. | A region that clips its own content because you made it bigger than its bound. |
+| A token is a typed value the store writes as its own CSS; a text colour reaches only text on that target's own surface. | Choosing tokens that read well together beyond the floors. |
+| Every text the store draws reads at 4.5:1, and a field's marks at 3:1, as the save computes them. | The drawer's look on public pages (your public stylesheet). |
 | A buyer's request never compiles; a look an older checker wrote is not served. | Re-saving after a store update if you want your look before the next maintenance run. |
 
-The inside of an app's block is a free region because the app already chooses every word there. A rule of yours can hide something inside it, such as an app's button. The store still asks for any decision an app requires before the order is placed. The store's money rows, fields and submit are never inside a region.
+What is proven by rendering, not only by the save: `pnpm test:private-pages` draws seeded legal themes (and every reviewed break) on the real cart page and fails if a part a buyer must reach is off screen, too far down, covered by a region, unreadable against the pixels behind it, or if the page scrolls sideways. It checks the cart page with its lines and apps' blocks drawn by the fixture gallery, not every store's data.
 
 ## Words and icons
 
@@ -192,11 +207,11 @@ Labels are plain text: `markup` refuses HTML and `label_too_long` refuses words 
 
 With `chrome: theme` the cart page draws your header and footer skins from the same projection as any page: the store's name, logo, menus and routes. The skin is told the page's root (`/cart`) and nothing more: never an order's or a claim's path, a session, an order or an address. What the skin draws is rebuilt, not copied, inside its sealed region:
 
-- text, lists, links to this store's paths, images from the page's allowed origins, disclosure (`<details>`), tables and SVG drawing (no `url()` references);
-- no script, island, style attribute, frame, media, dialog or popover, and no event handler;
-- class names and ids become your region's own (`tc-<name>`), the ids ARIA attributes name too, so the chrome never shadows a store element;
+- text, lists, links to this store's clean paths (no `//`, no dot segment) or to the region's own ids, images from the page's allowed origins, disclosure (`<details>`), tables and SVG drawing (no `url()` references);
+- no script, island, style attribute, frame, media, dialog, popover, event handler, live region, alert or modal role;
+- class names and ids become your region's own (`tc-<name>`), the ids ARIA attributes and fragment links name too, so the chrome never shadows a store element;
 - of the data attributes, only the store's chrome behaviours stay (`whenSignedIn()`, `colorSchemeToggle()`, `accountLink()`);
-- exactly one form, built by the store from your first `GET` form to `/search`: one search field named `q` in the store's own words, and at most one submit. Every other form, field, select and label goes. The page carries no app form token.
+- exactly one form, built by the store from your first `GET` form to `/search`: a host island (`data-host="search"`) with one search field named `q` in the store's own words and at most one submit. Every other form, field, select and label goes. The page carries no app form token.
 
 Your public stylesheet does not load on private pages: style the chrome in this stylesheet through its classes (`[data-free="header"] .site-header`). A menu works as a `<details>`.
 
@@ -217,10 +232,12 @@ The reference design's cart (a dark store with a square violet panel, portrait l
       "summary": { "background": "card", "border": "#524179", "border-width": 1, "radius": 0, "padding": 20, "gap": 12 },
       "summary-total": { "text": "#34d399", "size": 20, "weight": "800" },
       "submit": { "background": "#7c3aed", "text": "#ffffff", "radius": 0, "case": "uppercase", "weight": "700" },
+      "ui.banner.warning@gameghor.protection": { "background": "#3a2a0a", "text": "#fde68a", "border": "#f59e0b", "border-width": 1, "radius": 0 },
+      "ui.button@gameghor.protection": { "background": "#10b981", "text": "#04130d", "radius": 0, "weight": "700" },
       "@line-grid": { "columns": [64, "1fr", 88], "columns-wide": [92, "1fr", 150], "gap": 12 }
     }
   },
-  "css": "[data-buyer-ui-app=\"gameghor.protection\"] [data-ui=\"banner\"] { display: flex; gap: 12px; background: #3a2a0a; border: 1px solid #f59e0b; color: #fde68a }"
+  "css": "[data-hook=\"cart-intro\"] p { color: #b9b0d6; margin: 0 }"
 }
 ```
 
@@ -228,7 +245,7 @@ The line arrangement puts the image, a stack of the title and its facts, and a `
 
 ## Anatomy reference
 
-The contract a test pins: a renamed or removed part, hook or label fails the store's build. Each page's root carries `data-private`, each part's elements `data-part`, each host layout `data-layout`. Money rows carry `data-summary-row` (`subtotal`, `add-on`, `delivery`, `discount`, `tax`, `total`) on every surface. An app's block is drawn in its free region (`data-free="app"` with `data-buyer-ui-app`) inside its target's `data-buyer-ui-target`, and each of its nodes carries its kind on `data-ui`. These hooks are for reading the page; your stylesheet reaches only inside free regions, and the store's parts take tokens. A `style` line is a style target: the selector the store writes it at (`<root>` is the page's `data-private` root) and the tokens it takes.
+The contract a test pins: a renamed or removed part, hook or label fails the store's build. Each page's root carries `data-private`, each part's elements `data-part`, each host layout `data-layout`. Money rows carry `data-summary-row` (`subtotal`, `add-on`, `delivery`, `discount`, `tax`, `total`) on every surface. An app's block is drawn in a wrapper with `data-buyer-ui-app` inside its target's `data-buyer-ui-target`, and each of its nodes carries its kind on `data-ui` and its tone on `data-tone`. These hooks are for reading the page; your stylesheet reaches only inside free regions, and the store's parts and the apps' blocks take tokens. A `style` line is a style target: the selector the store writes it at (`<root>` is the page's `data-private` root) and the tokens it takes.
 
 ```text
 cart root data-private=cart frames=standard|narrow
@@ -261,11 +278,12 @@ cart style fold-toggle <root> [data-part="fold-toggle"] tokens=background,text,b
 cart style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap
 cart style summary-rows <root> [data-summary-row]:not([data-summary-row="total"]) tokens=text,muted,size
 cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,case,tracking
-cart style input <root> :is(input:not([type="checkbox"],[type="radio"]),select,textarea) tokens=background,text,border,border-width,radius
+cart style input <root> :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 cart style details-form <root> [data-part="details-form"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 cart style section-heading <root> :is([data-part="contact"],[data-part="delivery"]) h2 tokens=text,font,weight,size,case,tracking
 cart style submit <root> [data-part="details-submit"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,font,weight,size,case,tracking
 cart style legal <root> [data-part="legal"] tokens=text,size,align
+cart style search [data-host="search"] tokens=background,text,placeholder,border,ring,border-width,radius
 cart style dialog [data-private="dialog"] tokens=background,text,muted,border,border-width,radius,shadow
 cart style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,font,weight,size,case,tracking
 cart.line root data-part=line
@@ -327,5 +345,12 @@ dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-ag
 buyer-ui attributes=data-buyer-ui-target,data-buyer-ui-app,data-ui
 chrome roots data-private=header|footer
 layout tokens=background,gradient,border,border-width,border-style,radius,shadow,padding,gap,columns,columns-wide
-free regions data-free=block|header|footer|app
+buyer-ui style ui.banner[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="banner"] tokens=background,text,border,border-width,radius,shadow,padding
+buyer-ui style ui.button[@<app>][/<target>] :is(button,a)[data-ui="button"] tokens=background,text,border,border-width,radius,weight,size,case
+buyer-ui style ui.badge[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="badge"] tokens=background,text,border,radius
+buyer-ui style ui.text[@<app>][/<target>] [data-ui="text"] tokens=text,size,weight
+buyer-ui style ui.heading[@<app>][/<target>] [data-ui="heading"] tokens=text,size,weight,font,case
+buyer-ui style ui.disclosure[@<app>][/<target>] [data-ui="disclosure"] tokens=background,text,border,radius
+buyer-ui style ui.row[@<app>][/<target>] :is([data-ui="stack"],[data-ui="columns"]) tokens=gap
+free regions data-free=block|header|footer
 ```

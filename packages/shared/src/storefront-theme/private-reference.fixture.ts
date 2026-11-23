@@ -16,7 +16,7 @@ export const REFERENCE_PALETTE: StorefrontThemeColors = {
   muted: "#2a2140", "muted-foreground": "#b9b0d6",
   accent: "#2a2140", "accent-foreground": "#f4f1ff",
   destructive: "#f87171", "destructive-foreground": "#0b0915",
-  border: "#524179", input: "#524179", ring: "#a78bfa",
+  border: "#524179", input: "#8b7bb8", ring: "#a78bfa",
 };
 
 export const REFERENCE_PRIVATE_PAGES = {
@@ -70,7 +70,10 @@ export const REFERENCE_PRIVATE_PAGES = {
       summary: { background: "card", border: "#524179", "border-width": 1, radius: 0, padding: 20, gap: 12 },
       "summary-total": { text: "#34d399", size: 20, weight: "800" },
       "details-form": { background: "card", border: "#524179", radius: 0 },
-      input: { background: "#0f0b1d", text: "foreground", border: "#524179", radius: 0 },
+      input: { background: "#0f0b1d", text: "foreground", placeholder: "muted-foreground", border: "#8b7bb8", radius: 0 },
+      // F11, F18: the protection app's offer row and status box, by its node kinds.
+      "ui.banner.warning@gameghor.protection": { background: "#3a2a0a", text: "#fde68a", border: "#f59e0b", "border-width": 1, radius: 0 },
+      "ui.button@gameghor.protection": { background: "#10b981", text: "#04130d", radius: 0, weight: "700" },
       submit: { background: "#7c3aed", text: "#ffffff", radius: 0, case: "uppercase", weight: "700", tracking: "wide" },
       dialog: { background: "card", border: "#524179", radius: 0 },
       "@line-grid": { columns: [64, "1fr", 88], "columns-wide": [92, "1fr", 150], gap: 12 },
@@ -78,11 +81,9 @@ export const REFERENCE_PRIVATE_PAGES = {
       "@cart-columns": { gap: 24 },
     },
   },
-  // Free regions only: the theme's own words, its header and the app's offer row (F11, F18).
+  // Free regions only: the theme's own words and its header.
   css: [
     '[data-hook="cart-intro"] p { color: #b9b0d6; margin: 0 }',
-    '[data-buyer-ui-app="gameghor.protection"] [data-ui="banner"] { display: flex; align-items: center; gap: 12px; background: #3a2a0a; border: 1px solid #f59e0b; border-radius: 0; color: #fde68a }',
-    '[data-buyer-ui-app="gameghor.protection"] [data-ui="button"] { background: #10b981; color: #04130d; border-radius: 0; font-weight: 700 }',
     '[data-free="header"] .site-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: #120d22 }',
     '[data-free="header"] .site-header a { color: #f4f1ff; text-decoration: none }',
   ].join("\n"),

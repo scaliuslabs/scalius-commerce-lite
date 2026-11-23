@@ -1348,7 +1348,7 @@ export type StorefrontPrivatePages = {
             };
         };
     };
-    tokens: {
+    tokens?: {
         [key: string]: {
             [key: string]: {
                 [key: string]: unknown;

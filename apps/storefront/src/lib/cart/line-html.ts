@@ -155,7 +155,7 @@ export function cartLineHtml(view: CartLineView, slots: CartLineHtmlSlots): stri
             </div>${parts.limit ? `
             ${parts.limit}` : ""}${parts.issue}`;
   return `
-      <li class="py-3 first:pt-0" data-line-key="${escapeHtml(view.key)}" data-part="line"><div class="flex gap-3">
+      <li class="@container py-3 first:pt-0" data-line-key="${escapeHtml(view.key)}" data-part="line"><div class="flex gap-3">
           ${parts.image}
           <div class="min-w-0 flex-1">
             <div class="flex justify-between gap-2">

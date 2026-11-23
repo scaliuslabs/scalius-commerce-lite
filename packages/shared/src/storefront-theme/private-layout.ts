@@ -24,6 +24,7 @@ import type { StorefrontThemeColors } from "./contrast";
 import { storefrontDarkPalette, type StorefrontThemeTokens } from "./tokens";
 import {
   PRIVATE_ANATOMY_VERSION,
+  PRIVATE_CONTENT_LIMITS,
   PRIVATE_CONTENT_TONES,
   PRIVATE_HOOK_MAX,
   PRIVATE_LAYOUT_KINDS,
@@ -104,11 +105,36 @@ export const privateNodeSchema: z.ZodType<PrivateNode> = z.lazy(() => z.discrimi
   z.object({ type: z.literal("content"), content: privateContentBlockSchema, hook: hook.optional() }).strict(),
 ])).meta({ id: "StorefrontPrivateNode" }) as z.ZodType<PrivateNode>;
 
-export const privatePageArrangementSchema = z.object({
-  frame: name.optional(),
-  layout: z.array(privateNodeSchema).max(24).optional(),
-  items: z.record(z.string().regex(/^[a-z]{1,24}$/), z.array(privateNodeSchema).max(24)).optional(),
-}).strict();
+/** The deepest a layout tree may nest. */
+export const PRIVATE_LAYOUT_MAX_DEPTH = 12;
+
+/** How deep a stored arrangement nests, counted without recursion (so any input answers, never overflows). */
+function arrangementDepth(value: unknown): number {
+  let deepest = 0;
+  const stack: Array<[unknown, number]> = [[value, 0]];
+  while (stack.length > 0) {
+    const [node, depth] = stack.pop()!;
+    if (depth > PRIVATE_LAYOUT_MAX_DEPTH + 1) return depth;
+    deepest = Math.max(deepest, depth);
+    if (Array.isArray(node)) for (const child of node) stack.push([child, depth]);
+    else if (node && typeof node === "object") {
+      for (const [key, child] of Object.entries(node)) stack.push([child, key === "children" ? depth + 1 : depth]);
+    }
+  }
+  return deepest;
+}
+
+/** Stands in for an arrangement nested too deep, before the recursive parse reaches it (it then fails as an unknown key). */
+const TOO_DEEP = { layoutsNestAtMost12Deep: true };
+
+export const privatePageArrangementSchema = z.preprocess(
+  (value) => arrangementDepth(value) <= PRIVATE_LAYOUT_MAX_DEPTH ? value : TOO_DEEP,
+  z.object({
+    frame: name.optional(),
+    layout: z.array(privateNodeSchema).max(24).optional(),
+    items: z.record(z.string().regex(/^[a-z]{1,24}$/), z.array(privateNodeSchema).max(24)).optional(),
+  }).strict(),
+);
 
 const labelKeys = privateLabelKeys().map((entry) => entry.key) as [string, ...string[]];
 const iconKeys = privateIconKeys() as [string, ...string[]];
@@ -130,6 +156,8 @@ const privatePagesFields = {
 /** The document's `privatePages`. */
 export const storefrontPrivatePagesSchema = z.object({
   ...privatePagesFields,
+  // A version 15 document written before tokens existed reads as having none.
+  tokens: privateTokensSchema.optional().transform((tokens): PrivateTokens => tokens ?? {}),
   compiled: z.object({
     anatomy: z.number().int().min(1),
     /** The checker's version (0: never compiled): a page never serves what an older checker compiled. */
@@ -165,7 +193,7 @@ export type PrivatePagesReason =
   | ReturnType<typeof privateArrangementIssues>[number]["reason"]
   | PrivateCssReason
   | PrivateTokenReason
-  | "label_too_long" | "markup" | "foreign_asset";
+  | "label_too_long" | "markup" | "foreign_asset" | "content_limit";
 
 export interface PrivatePagesIssue {
   path: Array<string | number>;
@@ -251,6 +279,7 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
     const base = ["privatePages", "pages", page];
     issues.push(...privateArrangementIssues(page, arrangement).map((issue) => ({ ...issue, path: [...base, ...issue.path] })));
     if (arrangement.layout) issues.push(...contentIssues(arrangement.layout, [...base, "layout"]));
+    issues.push(...contentLimitIssues(page, arrangement, base));
     for (const [item, layout] of Object.entries(arrangement.items ?? {})) issues.push(...contentIssues(layout, [...base, "items", item]));
     const compact = compactPrivateArrangement(page, arrangement);
     if (compact) {
@@ -284,7 +313,10 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
       palettes: context.palettes,
     });
     issues.push(...found);
-    if (found.length === 0) tokenCss.push(privateTokenCss(page, tokens));
+    const unitHooks = new Set<string>();
+    const collect = (nodes: readonly PrivateNode[]) => { for (const node of nodes) if (node.type === "layout") { if (node.hook) unitHooks.add(node.hook); collect(node.children); } };
+    for (const item of Object.keys(spec.items)) collect(arrangement?.items?.[item] ?? []);
+    if (found.length === 0) tokenCss.push(privateTokenCss(page, tokens, unitHooks));
   }
   const bounds = new Map(privateLabelKeys().map((entry) => [entry.key, entry.max]));
   const labels = Object.fromEntries(Object.entries(value.labels).flatMap(([key, words]) => words ? [[key, plainPrivateWords(words)]] : []));
@@ -297,6 +329,32 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
     return { ok: false, issues: [{ path: ["privatePages", "css"], reason: "too_large", message: `The compiled look is over ${PRIVATE_COMPILED_CSS_MAX_BYTES / 1024} KiB; shorten the stylesheet.` }] };
   }
   return { ok: true, value: { ...value, pages, labels, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CSS_SANITIZER_VERSION, css: compiled } } };
+}
+
+/**
+ * Content blocks may not bury what a buyer must reach: at most
+ * PRIVATE_CONTENT_LIMITS.perPage on a page, and at most `beforeLastMandatory`
+ * before its last mandatory part in reading order (each at most 30rem tall),
+ * at most 2 in a repeated unit.
+ */
+function contentLimitIssues(page: PrivatePageKey, arrangement: PrivatePageArrangement, base: Array<string | number>): PrivatePagesIssue[] {
+  const spec: PrivatePageSpec = PRIVATE_PAGES[page];
+  const order: PrivateNode[] = [];
+  const flatten = (nodes: readonly PrivateNode[]) => { for (const node of nodes) node.type === "layout" ? flatten(node.children) : order.push(node); };
+  flatten(arrangement.layout ?? spec.layout);
+  const issues: PrivatePagesIssue[] = [];
+  const blocks = order.filter((node) => node.type === "content").length;
+  const last = order.reduce((at, node, index) => node.type === "part" && spec.parts[node.part]?.mandatory ? index : at, -1);
+  const before = order.slice(0, last).filter((node) => node.type === "content").length;
+  if (blocks > PRIVATE_CONTENT_LIMITS.perPage) issues.push({ path: [...base, "layout"], reason: "content_limit", message: `At most ${PRIVATE_CONTENT_LIMITS.perPage} content blocks on a page.` });
+  if (before > PRIVATE_CONTENT_LIMITS.beforeLastMandatory) issues.push({ path: [...base, "layout"], reason: "content_limit", message: `At most ${PRIVATE_CONTENT_LIMITS.beforeLastMandatory} content blocks before the page's last part a buyer must reach.` });
+  for (const [item, nodes] of Object.entries(arrangement.items ?? {})) {
+    const inside: PrivateNode[] = [];
+    const walk = (list: readonly PrivateNode[]) => { for (const node of list) node.type === "layout" ? walk(node.children) : inside.push(node); };
+    walk(nodes);
+    if (inside.filter((node) => node.type === "content").length > 2) issues.push({ path: [...base, "items", item], reason: "content_limit", message: "At most 2 content blocks in a repeated unit." });
+  }
+  return issues;
 }
 
 function imageRefs(nodes: readonly PrivateNode[], path: Array<string | number>): Array<[Array<string | number>, PrivateAssetRef]> {

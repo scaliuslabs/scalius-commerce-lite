@@ -141,7 +141,7 @@ function storeHref(to: PluginUiTarget): string | null {
 function buttonNode(node: PluginUiButton, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement | null {
   const action = node.action;
   if (action.kind === "cart" && !isCartSlot(block.target)) return null;
-  const buttonClass = "rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50";
+  const buttonClass = "rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50";
   if (action.kind === "navigate") {
     const href = storeHref(action.to);
     if (!href) return null;
@@ -188,14 +188,17 @@ function keyValueText(value: string | number | boolean | null): string {
 }
 
 /**
- * One node, its kind on `data-ui` (`banner`, `text`, `button`, …): inside the block's
- * free region (`data-free="app"` with `data-buyer-ui-app`) in its mount's
- * `data-buyer-ui-target`, the stable hooks a theme's private stylesheet styles an
- * app's blocks by (private-anatomy.ts).
+ * One node, its kind on `data-ui` (`banner`, `text`, `button`, …) and its tone on
+ * `data-tone`, inside the block's wrapper (`data-buyer-ui-app`) in its mount's
+ * `data-buyer-ui-target`: the hooks a theme's tokens address an app's nodes by
+ * (private-anatomy.ts `PRIVATE_BUYER_UI_STYLES`). No theme selector reaches them.
  */
 function renderNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement | null {
   const rendered = drawNode(node, block, options);
-  if (rendered) rendered.dataset.ui = node.type;
+  if (rendered) {
+    rendered.dataset.ui = node.type;
+    if ("tone" in node && typeof node.tone === "string") rendered.dataset.tone = node.tone;
+  }
   return rendered;
 }
 
@@ -291,12 +294,11 @@ export function renderBuyerUi(value: unknown, options: BuyerUiOptions = {}): voi
       if (block.target !== mount.dataset.buyerUiTarget || (block.lineKey ?? null) !== (mount.dataset.buyerUiLine ?? null)) continue;
       const node = renderNode(block.ui, block, options);
       if (!node) continue;
-      // Each block in its free region: the theme's stylesheet may style inside it, the host seals the box.
-      const region = element("div", "");
-      region.dataset.free = "app";
-      region.dataset.buyerUiApp = block.appId;
-      region.append(node);
-      nodes.push(region);
+      // Each block in a wrapper naming its app: a host part a theme styles by tokens (`ui.<kind>@<app>`).
+      const wrapper = element("div", "");
+      wrapper.dataset.buyerUiApp = block.appId;
+      wrapper.append(node);
+      nodes.push(wrapper);
     }
     // A line's blocks name their line to assistive technology: each button is described by the line's name.
     const lineName = mount.dataset.buyerUiLineName;

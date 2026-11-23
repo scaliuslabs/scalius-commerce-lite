@@ -66,7 +66,7 @@ if (custom) {
 
 // The theme's line: the arrangement with its sub-parts as marks the cart script fills.
 const lineTemplate = plan.items.line
-  ? `<li class="py-3 first:pt-0" data-part="line" data-line-key="">${renderPrivateNodes(plan.items.line, {
+  ? `<li class="@container py-3 first:pt-0" data-part="line" data-line-key="">${renderPrivateNodes(plan.items.line, {
     part: (name) => `<!--line:${name}-->`,
     target: () => "<!--line:target-->",
     content: (block, hook) => privateContentHtml(block, hook, language, asset),
@@ -76,7 +76,7 @@ const lineTemplate = plan.items.line
 
 {lineTemplate && <template data-cart-line-template set:html={lineTemplate}></template>}
 {custom ? (
-  <div class="grid min-h-[100svh] content-start gap-4 lg:gap-6" data-cart-grid data-layout="page"><Fragment set:html={html} /></div>
+  <div class="@container grid min-h-[100svh] content-start gap-4 lg:gap-6" data-cart-grid data-layout="page"><Fragment set:html={html} /></div>
 ) : (
   <Fragment>
     <slot name="progress" />

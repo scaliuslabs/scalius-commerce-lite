@@ -3,9 +3,10 @@
 //
 // It reaches only free regions (private-anatomy.ts `PRIVATE_FREE_REGIONS`):
 // every selector starts at one region's wrapper (`[data-free]`, a region
-// kind, a content block's `[data-hook]` or an app block's
-// `[data-buyer-ui-app]`) and selects strictly inside it, never the wrapper,
-// so no rule can match a host part, a layout node, the page or the body.
+// kind or a content block's `[data-hook]`) and selects strictly inside it,
+// never the wrapper and never a host island inside it (`data-host`, the
+// header's search form), so no rule can match a host part, a layout node,
+// the page, the body or an app's block.
 // The host seals each wrapper (nothing inside paints, lays out or acts
 // outside it), and gives host parts their look through typed tokens
 // (private-tokens.ts), never through this stylesheet.
@@ -51,7 +52,7 @@ import {
 /** The longest stylesheet a theme ships for its private pages (UTF-8 bytes). */
 export const PRIVATE_CSS_MAX_BYTES = 24 * 1024;
 /** The longest compiled stylesheet. */
-export const PRIVATE_COMPILED_CSS_MAX_BYTES = 40 * 1024;
+export const PRIVATE_COMPILED_CSS_MAX_BYTES = 64 * 1024;
 /**
  * The checker's version. A stylesheet compiled by an older one is never
  * served: the page compiles it again or draws without it.
@@ -242,7 +243,9 @@ type Simple =
   | { kind: "class"; name: string }
   | { kind: "attr"; name: string; op: string | null; value: string | null; flag: string | null }
   | { kind: "pseudo"; name: string; selectors: Complex[] | null; raw: CssNode[] | null }
-  | { kind: "element"; name: string };
+  | { kind: "element"; name: string }
+  /** Host-written text (never a theme's). */
+  | { kind: "raw"; text: string };
 type Compound = Simple[];
 interface Complex {
   /** A relative selector's leading combinator (inside `:has()`). */
@@ -417,6 +420,7 @@ function writeSimple(simple: Simple): string {
     case "class": return `.${name(simple.name)}`;
     case "attr": return simple.op === null ? `[${name(simple.name)}]` : `[${name(simple.name)}${simple.op}"${simple.value}"${simple.flag ? ` ${simple.flag}` : ""}]`;
     case "element": return `::${simple.name}`;
+    case "raw": return simple.text;
     case "pseudo":
       if (simple.selectors) return `:${simple.name}(${simple.selectors.map(writeComplex).join(",")})`;
       if (simple.raw) return `:${simple.name}(${serializeCss(simple.raw)})`;
@@ -440,11 +444,10 @@ function anchorOf(compound: Compound): string | null {
   if (attr.flag) return null;
   if (attr.name === "data-free") {
     if (attr.op === null) return "[data-free]";
-    return attr.op === "=" && ["block", "header", "footer", "app"].includes(attr.value!) ? `[data-free="${attr.value}"]` : null;
+    return attr.op === "=" && ["block", "header", "footer"].includes(attr.value!) ? `[data-free="${attr.value}"]` : null;
   }
   if (attr.op !== "=") return null;
   if (attr.name === "data-hook" && /^[a-z][a-z0-9]*(?:-[a-z0-9]+){0,5}$/.test(attr.value!) && attr.value!.length <= 40) return `[data-free="block"][data-hook="${attr.value}"]`;
-  if (attr.name === "data-buyer-ui-app" && /^[a-z0-9][a-z0-9.-]{0,63}$/.test(attr.value!)) return `[data-free="app"][data-buyer-ui-app="${attr.value}"]`;
   return null;
 }
 
@@ -457,7 +460,7 @@ function ownNames(complex: Complex): Complex {
       if (!NAMED.test(item.name)) refuse("unsupported_selector", `${item.kind === "class" ? "." : "#"}${item.name}: a name of letters, digits, _ and - only.`);
       return { ...item, name: `${PRIVATE_CHROME_NAME_PREFIX}${item.name}` };
     }
-    if (item.kind === "attr" && ["class", "id", "style", "for", "name", "data-free", "data-private", "data-hook", "data-buyer-ui-app"].includes(item.name)) {
+    if (item.kind === "attr" && ["class", "id", "style", "for", "name", "data-free", "data-private", "data-hook", "data-buyer-ui-app", "data-host"].includes(item.name)) {
       refuse("unsupported_selector", `[${item.name}…]: select by .class, #id, a tag or a data-ui kind inside a region.`);
     }
     if (item.kind === "pseudo" && item.selectors) return { ...item, selectors: item.selectors.map(ownNames) };
@@ -487,11 +490,16 @@ function scopeSelector(complex: Complex): string {
   }
   const anchor = compounds[0] ? anchorOf(compounds[0]) : null;
   if (!anchor) {
-    refuse("unscoped_selector", "Start every selector at a free region and select inside it: [data-hook=\"<your block>\"] p, [data-free=\"header\"] .logo, [data-buyer-ui-app=\"<app>\"] [data-ui=\"banner\"]. Host parts take tokens (privatePages.tokens), not selectors.");
+    refuse("unscoped_selector", "Start every selector at a free region and select inside it: [data-hook=\"<your block>\"] p, [data-free=\"header\"] .logo. Host parts and apps' blocks take tokens (privatePages.tokens), not selectors.");
   }
   if (compounds.length < 2) refuse("unscoped_selector", "A region's wrapper is the host's: select something inside it.");
   if (combinators[0] !== " " && combinators[0] !== ">") refuse("unscoped_selector", "Inside a region means a descendant ( ) or a child (>) of its wrapper.");
   const inside = ownNames({ lead: null, compounds: compounds.slice(1), combinators: combinators.slice(1) });
+  // The subject is never a host island or inside one (the header's search form is the host's).
+  const subject = inside.compounds[inside.compounds.length - 1]!;
+  const element = subject.findIndex((simple) => simple.kind === "element");
+  const guard: Simple = { kind: "raw", text: ":not([data-host],[data-host] *)" };
+  subject.splice(element < 0 ? subject.length : element, 0, guard);
   return `${state ? `:root${state} ` : ""}${PRIVATE_CSS_PAGE} ${anchor}${combinators[0] === ">" ? ">" : " "}${writeComplex(inside)}`;
 }
 
@@ -595,6 +603,8 @@ class Compiler {
         });
         if (value.length === 0) refuse("syntax", `${name} has no value.`);
         if (name === "position") checkPosition(value);
+        // A cursor image is painted by the system, outside any box.
+        if (name === "cursor" && JSON.stringify(value).includes(privateAssetProperty(""))) refuse("forbidden_function", "cursor takes a keyword: a cursor image paints outside its region.");
         if (name === "animation" || name === "animation-name") checkAnimation(name, value, this.prefixed);
         declarations.push([declaration.name.startsWith("--") ? declaration.name : name, serializeCss(value), declaration.important]);
       } catch (error) {

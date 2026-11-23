@@ -6528,7 +6528,7 @@
               },
               "css": {
                 "type": "string",
-                "maxLength": 40960
+                "maxLength": 65536
               }
             },
             "required": [
@@ -6542,7 +6542,6 @@
         "required": [
           "chrome",
           "pages",
-          "tokens",
           "css",
           "labels",
           "icons",

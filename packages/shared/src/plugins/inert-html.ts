@@ -8,8 +8,10 @@
 // - forms: none but one search form the host builds from the skin's intent
 //   (its first GET form to the store's search path): GET to that path, one
 //   search field named the store's query parameter, in the store's words,
-//   and at most one submit. Every other form, field, select, text area and
-//   label goes with its content, so no form here takes what a buyer types;
+//   and at most one submit. It is a host island (`data-host="search"`): no
+//   theme rule reaches it or anything in it, and its look is tokens only.
+//   Every other form, field, select, text area and label goes with its
+//   content, so no form here takes what a buyer types;
 // - islands are unwrapped (no app script loads), deferred markup is drawn in
 //   place, and script, style, link, base, meta, frames, objects, embeds,
 //   media, dialogs and templates go with their content;
@@ -18,8 +20,10 @@
 //   (`tc-<name>`), as are the ids ARIA attributes name, so chrome never
 //   shares a class with the store's CSS or an id with a host element; the
 //   only data attributes are the store's chrome behaviours (signed-in
-//   versions, the colour scheme switch, the account link). A link keeps an
-//   href only to a path on this store; an image only a source the page allows.
+//   versions, the colour scheme switch, the account link); no live region,
+//   alert or modal role. A link keeps an href only to a clean path on this
+//   store (no `//`, no dot segment) or to one of the region's own ids; an
+//   image only a source the page allows.
 // The host draws the result inside a sealed free region (`data-free`).
 import { isTag, isText, type ChildNode, type Element } from "domhandler";
 import { parseDocument } from "htmlparser2";
@@ -57,6 +61,9 @@ const DROP = new Set([
 const UNWRAP = new Set(["scalius-island", "scalius-deferred"]);
 
 const GENERAL = new Set(["role", "title", "hidden", "lang", "dir", "translate"]);
+/** Roles that would speak over the page or pose as one of its dialogs. */
+const LOUD_ROLES = new Set(["dialog", "alertdialog", "alert", "status", "log", "marquee", "timer"]);
+const LOUD_ARIA = new Set(["aria-modal", "aria-live", "aria-atomic", "aria-relevant", "aria-busy"]);
 const BY_TAG: Record<string, ReadonlySet<string>> = {
   a: new Set(["href", "rel", "hreflang"]),
   img: new Set(["src", "srcset", "sizes", "alt", "width", "height", "loading", "decoding", "fetchpriority"]),
@@ -88,8 +95,9 @@ const NAME = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
 const own = (name: string) => `${CHROME_NAME_PREFIX}${name}`;
 const ownList = (value: string) => value.split(/\s+/).filter((name) => NAME.test(name)).map(own).join(" ");
 
-/** A path on this store (not `//host`), or a fragment. */
-const storePath = (href: string) => /^(?:\/(?![/\\])|#)[^\s"<>\\]*$/.test(href);
+/** A clean path on this store: one leading slash, no `//` anywhere, no dot segment, nothing a browser would rewrite. */
+const storePath = (href: string) => /^\/(?!.*\/\/)[^\s"<>\\#]*(?:#[^\s"<>\\]*)?$/.test(href)
+  && !href.split(/[?#]/)[0]!.split("/").some((segment) => segment === "." || segment === ".." || /^%2e/i.test(segment));
 
 function allowedSrcset(value: string, options: InertChromeOptions): boolean {
   return value.split(",").every((candidate) => {
@@ -122,9 +130,12 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
       continue;
     }
     if (name === "href") {
-      if (tag === "a" && storePath(value)) out.push([name, value]);
+      if (tag !== "a") continue;
+      if (value.startsWith("#")) { if (NAME.test(value.slice(1))) out.push([name, `#${own(value.slice(1))}`]); continue; }
+      if (storePath(value)) out.push([name, value]);
       continue;
     }
+    if (LOUD_ARIA.has(name) || (name === "role" && LOUD_ROLES.has(value.trim().toLowerCase()))) continue;
     if (name === "src") {
       if (tag !== "img") continue;
       if (!options.imageAllowed(value)) return null;
@@ -178,9 +189,10 @@ function searchForm(node: Element, options: InertChromeOptions): string | null {
     return names ? [["class", names]] : [];
   };
   const label = options.searchLabel;
-  let out = writeStartTag("form", [["action", options.searchAction], ["method", "get"], ["role", "search"], ...classOf(node)]);
-  out += writeStartTag("input", [["type", "search"], ["name", options.searchParam], ["aria-label", label], ["placeholder", label], ["autocomplete", "off"], ["enterkeyhint", "search"], ...classOf(field)]);
-  if (submit) out += `${writeStartTag("button", [["type", "submit"], ["aria-label", label], ...classOf(submit)])}${SEARCH_ICON}</button>`;
+  // A host island: its look is the store's and the theme's tokens (`search`), its words the store's.
+  let out = writeStartTag("form", [["action", options.searchAction], ["method", "get"], ["role", "search"], ["data-host", "search"], ...classOf(node)]);
+  out += writeStartTag("input", [["type", "search"], ["name", options.searchParam], ["aria-label", label], ["placeholder", label], ["autocomplete", "off"], ["enterkeyhint", "search"]]);
+  if (submit) out += `${writeStartTag("button", [["type", "submit"], ["aria-label", label]])}${SEARCH_ICON}</button>`;
   return `${out}</form>`;
 }
 

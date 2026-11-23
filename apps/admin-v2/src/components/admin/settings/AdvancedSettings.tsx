@@ -195,7 +195,11 @@ export function TrustedWebsitesCard() {
           <ul className="divide-y divide-border border-y border-border">
             {blocked.map((host) => (
               <li key={host} className="flex min-h-11 items-center justify-between gap-3">
-                <span className="min-w-0 truncate text-body">{host}</span>
+                <span className="min-w-0 truncate text-body">
+                  {host}
+                  {/* Trusted websites cover cart and account pages, never payment pages. */}
+                  {cspSourcesAllowOrigin(host, values.sources) ? <span className="ms-2 text-muted-foreground">{t("imageHostsPaymentOnly")}</span> : null}
+                </span>
                 <Button type="button" variant="outline" disabled={!canEdit} aria-label={`${t("imageHostsAllow")} ${host}`} onClick={() => setValue("images", [...values.images, host])}>
                   {t("imageHostsAllow")}
                 </Button>

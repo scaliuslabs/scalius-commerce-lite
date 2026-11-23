@@ -7,6 +7,7 @@
  */
 import {
   PRIVATE_PAGES,
+  PRIVATE_TOKEN_BASE_CSS,
   privateAssetProperty,
   privateFrame,
   privatePagesCss,
@@ -57,17 +58,19 @@ const ASSET_PATH = /^\/_x\/[a-z0-9][a-z0-9.-]*\/[A-Za-z0-9._-]+\/public\/[A-Za-z
 
 /**
  * The seal on every free region (private-anatomy.ts `PRIVATE_FREE_REGIONS`):
- * its own containing block and stacking context, its paint and layout
- * contained and clipped (with the older browsers' overflow clip first), and
- * a bounded height, so nothing a theme's stylesheet does inside one paints,
- * lays out or sits outside it. The stylesheet never selects a wrapper.
+ * its own containing block and stacking context; its size, layout, paint
+ * and style contained, inline size included, so nothing inside widens the
+ * page or a grid column (`contain: inline-size`, `min-inline-size: 0`);
+ * everything painted inside clipped (with the older browsers' overflow clip
+ * first); and a bounded height. The stylesheet never selects a wrapper.
  */
 export const PRIVATE_FREE_REGION_SEAL =
-  "[data-free]{display:block;position:relative;z-index:0;isolation:isolate;overflow:hidden;overflow:clip;contain:layout paint style;max-block-size:60rem}"
-  + '[data-free="header"]{max-block-size:24rem}[data-free="footer"]{max-block-size:80rem}[data-free="app"]{max-block-size:40rem}';
+  "[data-free]{display:block;position:relative;z-index:0;isolation:isolate;min-inline-size:0;max-inline-size:100%;overflow:hidden;overflow:clip;contain:inline-size layout paint style;max-block-size:30rem}"
+  + '[data-free="header"]{max-block-size:24rem}[data-free="footer"]{max-block-size:80rem}';
 
 /**
  * The theme's look as the page writes it ("" for none): the region seal, the
+ * token rules' base (host surfaces reset carried text colours), the
  * theme's assets as the custom properties its stylesheet names (each URL
  * built here from the store's own origin; an asset whose app is not active
  * draws nothing), then the compiled token rules and stylesheet. Only what
@@ -80,5 +83,5 @@ export function privateStyle(theme: StorefrontThemeDocument, asset: PrivateAsset
     const url = asset(ref);
     return url && ASSET_PATH.test(url) ? [`${privateAssetProperty(key)}:url("${url}")`] : [];
   });
-  return `${PRIVATE_FREE_REGION_SEAL}${properties.length > 0 ? `body[data-private-body]{${properties.join(";")}}` : ""}${css}`;
+  return `${PRIVATE_FREE_REGION_SEAL}${PRIVATE_TOKEN_BASE_CSS}${properties.length > 0 ? `body[data-private-body]{${properties.join(";")}}` : ""}${css}`;
 }

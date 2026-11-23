@@ -28,16 +28,18 @@ export interface PrivateNodeRenderers {
 }
 
 /**
- * The plain layouts' classes. A theme shapes `grid` (and overrides the rest)
- * through its hook: these only give a sensible start.
+ * The plain layouts' classes. Each layout node is a size container and
+ * `columns` splits by the width of the box it sits in (from 48rem), never
+ * the viewport's: a narrow frame or a nested layout never squeezes a part.
+ * A theme shapes `grid` (and overrides the rest) through its hook's tokens.
  */
 export const PRIVATE_LAYOUT_CLASSES: Record<PrivateLayoutKind, string> = {
-  stack: "flex min-w-0 flex-col gap-4",
-  columns: "grid min-w-0 gap-4 lg:grid-flow-col lg:auto-cols-fr lg:gap-8",
-  grid: "grid min-w-0 gap-4",
-  group: "min-w-0",
-  fold: "min-w-0",
-  scroll: "min-w-0",
+  stack: "@container flex min-w-0 flex-col gap-4",
+  columns: "@container grid min-w-0 gap-4 @3xl:grid-flow-col @3xl:auto-cols-fr @3xl:gap-8",
+  grid: "@container grid min-w-0 gap-4",
+  group: "@container min-w-0",
+  fold: "@container min-w-0",
+  scroll: "@container min-w-0",
 };
 
 export function hookAttribute(hook: string | undefined): string {
