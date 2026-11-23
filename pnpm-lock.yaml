@@ -727,19 +727,6 @@ importers:
         specifier: ^5.0.4
         version: 5.0.4(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(happy-dom@21.0.4)(vite@8.3.8(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
-  plugins/gift-notes:
-    dependencies:
-      '@scalius/plugin-sdk':
-        specifier: workspace:*
-        version: link:../../packages/plugin-sdk
-    devDependencies:
-      '@scalius/tsconfig':
-        specifier: workspace:*
-        version: link:../../packages/tsconfig
-      vitest:
-        specifier: ^5.0.3
-        version: 5.0.4(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(happy-dom@21.0.4)(vite@8.3.8(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
-
   plugins/noor:
     dependencies:
       '@scalius/plugin-sdk':
@@ -754,32 +741,6 @@ importers:
         version: link:../../packages/tsconfig
       vitest:
         specifier: ^5.0.4
-        version: 5.0.4(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(happy-dom@21.0.4)(vite@8.3.8(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
-
-  plugins/protection:
-    dependencies:
-      '@scalius/plugin-sdk':
-        specifier: workspace:*
-        version: link:../../packages/plugin-sdk
-    devDependencies:
-      '@scalius/tsconfig':
-        specifier: workspace:*
-        version: link:../../packages/tsconfig
-      vitest:
-        specifier: ^5.0.3
-        version: 5.0.4(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(happy-dom@21.0.4)(vite@8.3.8(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
-
-  plugins/restock:
-    dependencies:
-      '@scalius/plugin-sdk':
-        specifier: workspace:*
-        version: link:../../packages/plugin-sdk
-    devDependencies:
-      '@scalius/tsconfig':
-        specifier: workspace:*
-        version: link:../../packages/tsconfig
-      vitest:
-        specifier: ^5.0.3
         version: 5.0.4(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(happy-dom@21.0.4)(vite@8.3.8(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
 packages:

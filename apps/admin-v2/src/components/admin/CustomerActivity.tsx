@@ -141,7 +141,7 @@ function SamePhone({ customer }: { customer: CustomerFacts }) {
   return <p className="text-body text-muted-foreground">{withLinks(t("samePhoneAs"), { names })}</p>;
 }
 
-/** " · by Nasrin", " · by Gift Notes", " · by the buyer", " · by System"; nothing for older entries without an author. */
+/** " · by Nasrin", " · by Packing Slips", " · by the buyer", " · by System"; nothing for older entries without an author. */
 function Author({ author }: { author: HistoryEntry["author"] }) {
   const t = useMessages(customerPageMessages);
   const actor = changeActor(author);
