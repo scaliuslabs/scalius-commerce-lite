@@ -735,10 +735,11 @@ export default function CartFlyout({ onReady }: Props) {
         </div>
       ),
       title: (
-        <h3 className="line-clamp-2 pe-1 text-[12px] font-bold leading-tight text-foreground sm:text-[13.5px]" data-part="line-title">
+        // The clamp is the link's own (as on the cart page): a clamp on the heading would clip the link's focus ring.
+        <h3 className="pe-1 text-[12px] font-bold leading-tight text-foreground sm:text-[13.5px]" data-part="line-title">
           <a
             href={view.productHref}
-            className="hover:text-muted-foreground transition-colors"
+            className="line-clamp-2 break-words hover:text-muted-foreground transition-colors"
             data-cart-line-name
           >
             {view.name}
