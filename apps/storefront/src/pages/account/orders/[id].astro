@@ -1,7 +1,8 @@
 ---
 // Account → an order, after Shopify's order page: the status and its
 // timeline, the items and totals, and the address, payment and order help
-// in side cards. The shell and the tab counts render on the server; the order
+// in side cards, and a link to the order's printable receipt (order success,
+// which proves the owner by the session). The shell and the tab counts render on the server; the order
 // itself renders in the browser (lib/account-order-detail.ts: payment retry,
 // cancel/return requests, Buy again, the order's conversation).
 import { markPaymentPage } from "@/lib/analytics-csp";
@@ -17,6 +18,7 @@ import { getCheckoutLanguagePreset, resolveCheckoutLanguageData } from "@scalius
 import { storefrontLanguage } from "@/lib/storefront-language";
 import { pageLanguage } from "@/lib/store-time-zone";
 import { sessionCookieOf } from "@/lib/account-inbox-server";
+import { isOrderId } from "@/lib/account-inbox";
 import { readAccountSummaryForRequest } from "@/lib/account-server";
 import { accountUi as ui } from "@/lib/account-ui";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
@@ -40,6 +42,7 @@ const checkoutCopy = checkoutLanguage?.languageData && checkoutLanguageBaseCode(
   : getCheckoutLanguagePreset(pageLanguage());
 Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
 const trackHref = `/track-order?${new URLSearchParams({ order: orderId })}`;
+const receiptHref = isOrderId(orderId) ? `/order-success?${new URLSearchParams({ orderId })}` : null;
 const card = `${ui.card} ${ui.cardBody}`;
 const heading = `${ui.cardTitle} mb-3`;
 const skeleton = "theme-skeleton block";
@@ -98,12 +101,15 @@ markPaymentPage(Astro.locals);
       </div>
 
       <div id="orderContent" class="hidden">
-        <header class="mb-6">
-          <div class="flex flex-wrap items-center gap-3">
-            <h1 id="orderTitle" tabindex="-1" class="break-all text-2xl font-semibold text-foreground focus:outline-none sm:text-3xl"></h1>
-            <span id="orderStatus"></span>
+        <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-3">
+              <h1 id="orderTitle" tabindex="-1" class="break-all text-2xl font-semibold text-foreground focus:outline-none sm:text-3xl"></h1>
+              <span id="orderStatus"></span>
+            </div>
+            <p id="orderSubtitle" class="mt-1 text-sm text-muted-foreground"></p>
           </div>
-          <p id="orderSubtitle" class="mt-1 text-sm text-muted-foreground"></p>
+          {receiptHref && <a href={receiptHref} data-astro-prefetch="false" data-order-receipt class={`${ui.secondaryButton} min-h-10`}>{orderWords.receipt}</a>}
         </header>
 
         <div id="orderPaymentReturnNotice" role="status" class={`${ui.notice} mb-4 hidden`}></div>

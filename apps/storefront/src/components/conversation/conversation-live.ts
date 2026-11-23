@@ -192,6 +192,8 @@ function bindLive(list: HTMLElement): void {
       (panel.closest("[data-account-workspace]") ?? panel).querySelectorAll<HTMLElement>("[data-conversation-thread-status]").forEach((node) => { node.textContent = conversationStatusLabel(update.status!); });
       const closed = panel.querySelector<HTMLElement>("[data-conversation-closed]");
       if (closed) closed.hidden = update.status !== "closed";
+      // The buyer's Close shows while the conversation is open; a message opens a closed one again.
+      (panel.closest("[data-account-workspace]") ?? panel).querySelectorAll<HTMLElement>("[data-conversation-close]").forEach((node) => { node.hidden = update.status === "closed"; });
     }
     const pane = scrollPane();
     const wasPinned = pinned();

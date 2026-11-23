@@ -1,6 +1,9 @@
 ---
-// Account → Profile, after Shopify's customer accounts: the name, email and
-// phone in one section with an inline edit dialog for the name, and the
+// Account → Profile, after Shopify's customer accounts: the name, WhatsApp
+// (when the store collects one apart from the phone), email and phone in one
+// section, with an edit dialog for the name and WhatsApp whose Save waits for
+// a change, the phone's verified state and, with JavaScript, the two-code
+// phone change (lib/account-phone-verification.ts); and the
 // address book (MARKETS-DESIGN D7): each saved address as a card, the
 // default first and marked Default, with Edit, Remove and Make default.
 // Every edit is a plain POST handled here (Post/Redirect/Get), so it works
@@ -8,12 +11,14 @@
 // another country's fields follow its rules. Saved payment methods (cards a
 // provider kept for a subscription's renewals) show while there are any, each
 // removable behind a confirm popover. Only an outcome flag enters a URL.
-import { pagePhone } from "@/lib/checkout-text";
+import { fieldPhone, pagePhone } from "@/lib/checkout-text";
+import StoreContact from "@/components/StoreContact.astro";
 import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import AccountDialog from "@/components/account/AccountDialog.astro";
 import AccountAddressForm from "@/components/account/AccountAddressForm.astro";
 import { getLayoutData } from "@/lib/api";
+import { getCheckoutConfig } from "@/lib/api/checkout";
 import { getAreas, getCities, getZones } from "@/lib/api/shipping";
 import type { LocationData } from "@/lib/api/types";
 import {
@@ -56,6 +61,7 @@ import {
   addressBookInput,
   addressDraftOf,
   addressErrors,
+  detailsRefusal,
   emptyAddressDraft,
   nameError,
   profileSavedText,
@@ -82,7 +88,7 @@ const noStore = { "Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL };
 Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
 
 let posted: ProfileForm | null = null;
-let fieldErrors: Partial<Record<AddressDraftField | "name", string>> = {};
+let fieldErrors: Partial<Record<AddressDraftField | "name" | "whatsapp", string>> = {};
 let formMessage: string | null = null;
 let marketingFailure: "invalid" | "unavailable" | null = null;
 let paymentMethodFailure: "refused" | "unavailable" | null = null;
@@ -136,10 +142,10 @@ if (Astro.request.method === "POST") {
   let saved: ProfileSaveResult | AddressBookResult | null = null;
   if (otherFailure) {
     // Nothing else was posted.
-  } else if (posted?.intent === "name") {
+  } else if (posted?.intent === "details") {
     const error = nameError(posted.name);
     if (error) fieldErrors = { name: error };
-    else saved = await saveAccountProfile(Astro.request, { name: posted.name });
+    else saved = await saveAccountProfile(Astro.request, { name: posted.name, ...(posted.whatsapp !== null ? { whatsapp: posted.whatsapp } : {}) });
   } else if (posted?.intent === "address") {
     const locations = await locationsFor(posted.draft);
     if (!locations.cities || !locations.zones || !locations.areas) {
@@ -170,20 +176,28 @@ if (Astro.request.method === "POST") {
   }
   if (saved && !saved.ok) {
     if (saved.reason === "signed_out") return new Response(null, { status: 303, headers: { Location: "/account/profile", ...noStore } });
-    formMessage = saved.reason === "invalid" && saved.message ? saved.message : offlineMessage;
+    if (posted?.intent === "details" && saved.reason === "invalid") {
+      // The API names the field it refused (`details.reason`): its words go under that field.
+      const refused = detailsRefusal("refusal" in saved ? saved.refusal : null, saved.message);
+      if (refused.field) fieldErrors = { [refused.field]: refused.message };
+      else formMessage = refused.message;
+    } else {
+      formMessage = saved.reason === "invalid" && saved.message ? saved.message : offlineMessage;
+    }
   }
   Astro.response.status = otherFailure
     ? (otherFailure === "unavailable" ? 503 : 422)
     : formMessage === offlineMessage ? 503 : 422;
 }
 
-const [layoutData, read, summary, marketingRead, addressesRead, paymentMethodsRead] = await Promise.all([
+const [layoutData, read, summary, marketingRead, addressesRead, paymentMethodsRead, checkoutConfig] = await Promise.all([
   getLayoutData(),
   readAccountCustomer(Astro.request),
   readAccountSummaryForRequest(Astro.request),
   readAccountMarketing(Astro.request),
   readAccountAddresses(Astro.request),
   readAccountPaymentMethods(Astro.request),
+  getCheckoutConfig(),
 ]);
 // The whole page speaks the store's language: the account's words, News and offers, notifications.
 const words = accountCopy().profile;
@@ -226,8 +240,14 @@ const forms = customer && addresses
     ])
   : [];
 const addForm = forms.find((form) => form.key === "new") ?? null;
-const nameFailed = posted?.intent === "name";
-const nameValue = nameFailed ? posted!.name : customer?.name ?? "";
+// The details form: its fields start from the saved values (a failed save shows what was posted).
+const detailsFailed = posted?.intent === "details";
+const nameValue = detailsFailed ? posted!.name : customer?.name ?? "";
+// WhatsApp is asked only when the store collects one apart from the phone (Settings → Customer accounts).
+const collectsWhatsapp = checkoutConfig.customerIdentity?.whatsapp === "separate";
+const savedWhatsapp = customer?.whatsapp ? fieldPhone(customer.whatsapp) : "";
+const whatsappValue = detailsFailed && posted!.whatsapp !== null ? posted!.whatsapp : savedWhatsapp;
+const phoneWords = accountCopy().phone;
 const errorId = (key: string) => (fieldErrors[key as keyof typeof fieldErrors] ? `${key}Error` : undefined);
 const offline = (locations: { cities: LocationData[] | null; zones: LocationData[] | null; areas: LocationData[] | null }) => ({
   cities: locations.cities ?? [],
@@ -259,25 +279,42 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
                 <p class={ui.muted}>{words.name}</p>
                 <p class="mt-0.5 break-words font-medium text-foreground">{customer.name}</p>
               </div>
-              {!nameFailed && <button type="button" popovertarget="editName" class={ui.textButton}>{words.edit}</button>}
+              {!detailsFailed && <button type="button" popovertarget="editDetails" class={ui.textButton}>{words.edit}</button>}
             </div>
-            {nameFailed && (
-              <AccountDialog id="editName" title={words.editName} inline>
-                  <form method="post" action="/account/profile" class="space-y-4" novalidate>
-                    <input type="hidden" name="intent" value="name" />
-                    <div>
-                      <label for="fieldName" class={ui.label}>{words.fullName}</label>
-                      <input id="fieldName" name="name" type="text" autocomplete="name" required maxlength="120" value={nameValue} aria-invalid={fieldErrors.name ? "true" : undefined} aria-describedby={errorId("name")} class={ui.field} autofocus />
-                      {fieldErrors.name && <p id="nameError" class={ui.fieldError}>{fieldErrors.name}</p>}
-                    </div>
-                    {formMessage && <p role="alert" class="text-sm text-destructive">{formMessage}</p>}
-                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                      <a href="/account/profile" data-astro-prefetch="false" class={ui.secondaryButton}>{words.cancel}</a>
-                      <button type="submit" class={ui.primaryButton}>{words.save}</button>
-                    </div>
-                  </form>
-              </AccountDialog>
+            {collectsWhatsapp && (
+              <div class={row}>
+                <div class="min-w-0">
+                  <p class={ui.muted}>{words.whatsapp}</p>
+                  <p class="mt-0.5 text-foreground tabular-nums" data-profile-whatsapp>{customer.whatsapp ? pagePhone(customer.whatsapp) : words.sameAsPhone}</p>
+                </div>
+                {!detailsFailed && <button type="button" popovertarget="editDetails" class={ui.textButton}>{words.edit}</button>}
+              </div>
             )}
+            <AccountDialog id="editDetails" title={words.editDetails} inline={detailsFailed}>
+              <form method="post" action="/account/profile" class="space-y-4" novalidate data-save-when-changed>
+                <input type="hidden" name="intent" value="details" />
+                <div>
+                  <label for="fieldName" class={ui.label}>{words.fullName}</label>
+                  <input id="fieldName" name="name" type="text" autocomplete="name" required maxlength="100" value={nameValue} data-saved={customer.name} aria-invalid={fieldErrors.name ? "true" : undefined} aria-describedby={errorId("name")} class={ui.field} autofocus={detailsFailed && !fieldErrors.whatsapp} />
+                  {fieldErrors.name && <p id="nameError" class={ui.fieldError}>{fieldErrors.name}</p>}
+                </div>
+                {collectsWhatsapp && (
+                  <div>
+                    <label for="fieldWhatsapp" class={ui.label}>{words.whatsapp}</label>
+                    <input id="fieldWhatsapp" name="whatsapp" type="tel" inputmode="tel" autocomplete="tel" maxlength="32" value={whatsappValue} data-saved={savedWhatsapp} aria-invalid={fieldErrors.whatsapp ? "true" : undefined} aria-describedby={fieldErrors.whatsapp ? "whatsappError whatsappHint" : "whatsappHint"} class={ui.field} autofocus={Boolean(fieldErrors.whatsapp)} />
+                    <p id="whatsappHint" class="mt-1 text-sm text-muted-foreground">{words.whatsappHint}</p>
+                    {fieldErrors.whatsapp && <p id="whatsappError" class={ui.fieldError}>{fieldErrors.whatsapp}</p>}
+                  </div>
+                )}
+                {detailsFailed && formMessage && <p role="alert" class="text-sm text-destructive">{formMessage}</p>}
+                <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  {detailsFailed
+                    ? <a href="/account/profile" data-astro-prefetch="false" class={ui.secondaryButton}>{words.cancel}</a>
+                    : <button type="button" popovertarget="editDetails" popovertargetaction="hide" class={ui.secondaryButton}>{words.cancel}</button>}
+                  <button type="submit" class={ui.primaryButton}>{words.save}</button>
+                </div>
+              </form>
+            </AccountDialog>
             <div class={row}>
               <div class="min-w-0">
                 <p class={ui.muted}>{words.email}</p>
@@ -287,11 +324,21 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
             <div class={row}>
               <div class="min-w-0">
                 <p class={ui.muted}>{words.phone}</p>
-                <p class="mt-0.5 text-foreground tabular-nums">{customer.phone ? pagePhone(customer.phone) : words.notAdded}</p>
+                <p class="mt-0.5 flex flex-wrap items-center gap-2 text-foreground">
+                  <span class="tabular-nums">{customer.phone ? pagePhone(customer.phone) : words.notAdded}</span>
+                  {customer.phone && <span class={accountPill(customer.phoneVerified ? "success" : "neutral")} data-phone-verified={customer.phoneVerified ? "true" : "false"}>{customer.phoneVerified ? words.verified : words.notVerified}</span>}
+                </p>
               </div>
+              {/* The change takes two codes in the browser: without JavaScript the button stays hidden. */}
+              <button type="button" popovertarget="changePhone" hidden data-phone-change-open class={ui.textButton}>{customer.phone ? words.changePhone : words.addPhone}</button>
             </div>
           </div>
         </section>
+
+        <AccountDialog id="changePhone" title={customer.phone ? phoneWords.changeTitle : phoneWords.addTitle}>
+          <div id="phoneChange" data-phone={customer.phone ?? ""} data-verified={customer.phoneVerified ? "true" : "false"} data-confirm-with={customer.email ? "email" : "phone"}></div>
+          <StoreContact layoutData={layoutData} id="phoneChangeContact" hidden class="mt-2 text-sm text-muted-foreground" />
+        </AccountDialog>
 
         <section class={ui.card} aria-labelledby="addressesHeading">
           <div class="flex min-h-12 items-center justify-between gap-3 border-b border-border px-4 sm:px-5">
@@ -495,21 +542,6 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
           </div>
         </section>
 
-        {!nameFailed && (
-          <AccountDialog id="editName" title={words.editName}>
-            <form method="post" action="/account/profile" class="space-y-4" novalidate>
-              <input type="hidden" name="intent" value="name" />
-              <div>
-                <label for="fieldName" class={ui.label}>{words.fullName}</label>
-                <input id="fieldName" name="name" type="text" autocomplete="name" required maxlength="120" value={nameValue} class={ui.field} />
-              </div>
-              <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button type="button" popovertarget="editName" popovertargetaction="hide" class={ui.secondaryButton}>{words.cancel}</button>
-                <button type="submit" class={ui.primaryButton}>{words.save}</button>
-              </div>
-            </form>
-          </AccountDialog>
-        )}
       </div>
     )}
     <div data-buyer-ui-target="account.profile" data-buyer-ui={JSON.stringify(summary?.buyerUi ?? [])} class="mt-8 empty:hidden"></div>
@@ -522,8 +554,24 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
   import { enhanceShippingCountry } from "@/lib/checkout/country-address";
   import { enhanceBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
   import { loadLazyScript } from "@/scripts/lazy-script";
+  import { saveWhenChanged } from "@/lib/account-form-changes";
+  import { renderPhoneChange } from "@/lib/account-phone-verification";
 
   void enhanceBuyerUiWhenNeeded();
+
+  // Save waits for a change to the details.
+  document.querySelectorAll<HTMLFormElement>("form[data-save-when-changed]").forEach(saveWhenChanged);
+
+  // The phone change: a new number, a code to how the account signs in now and one to the number.
+  const phoneBox = document.getElementById("phoneChange");
+  if (phoneBox) {
+    renderPhoneChange(phoneBox, {
+      phone: phoneBox.dataset.phone || null,
+      verified: phoneBox.dataset.verified === "true",
+      confirmWith: phoneBox.dataset.confirmWith === "phone" ? "phone" : "email",
+    }, { storeContact: document.getElementById("phoneChangeContact") });
+    document.querySelectorAll<HTMLElement>("[data-phone-change-open]").forEach((button) => { button.hidden = false; });
+  }
 
   // The same search-or-scroll pickers as checkout; without JavaScript the
   // server answers "choose a thana" with the new city's list. Another
