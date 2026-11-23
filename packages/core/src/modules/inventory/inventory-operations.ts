@@ -27,6 +27,7 @@ import {
   catalogBuyerStateRefreshStatementsForSkus,
   digitalStockError,
   isDigitalKind,
+  kitGuardRefusal,
   rethrowDigitalStockRuleViolation,
 } from "../products";
 import {
@@ -289,6 +290,9 @@ export async function executeInventoryOperation(
       }
       // The SKU turned digital since the read: its stock is now its keys.
       rethrowDigitalStockRuleViolation(error);
+      // A bundle (kit) holds no stock of its own: its guard refused the movement.
+      const kit = kitGuardRefusal(error);
+      if (kit) throw new ValidationError(kit.message, kit.details);
       const racedOperation = await selectInventoryOperation(
         db,
         normalized.operationKey,

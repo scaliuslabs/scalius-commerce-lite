@@ -20,11 +20,16 @@ import {
     kitRefusal,
     parseVariantOptionValues,
     productPublishedToChannelSql,
+    resolveProductMediaProjectionRows,
+    resolveSkuImageRepresentation,
+    selectSkuMediaProjectionRows,
     variantOptionValuesSql,
     type KitComponentProblem,
     type KitRefusalReason,
+    type ProductMediaProjection,
 } from "../products";
 import { readStoreCurrency } from "../markets";
+import { containsText } from "../../utils/text-match";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -292,6 +297,84 @@ export async function readProductKitsSection(db: Database, productId: string) {
         };
     });
     return { section: "kits" as const, aggregateRevision: product.aggregateRevision, items };
+}
+
+/** The picker's page size bound, and how deep it pages (a search narrows past that). */
+export const SKU_OPTIONS_LIMIT_MAX = 20;
+export const SKU_OPTIONS_PAGE_MAX = 50;
+
+/**
+ * Live SKUs of any product for the bundle and page-offer pickers, searched by
+ * product name, SKU code or option value; drafts and untracked SKUs included
+ * (the editor shows their state). Each with its picture, options, price in the
+ * store's currency, available units (null when it tracks none) and whether it
+ * is a bundle (kit) or a gift card, which a bundle can't hold. Two statements:
+ * the page's rows, then their pictures.
+ */
+export async function searchProductSkuOptions(
+    db: Database,
+    input: { search?: string; page: number; limit: number },
+) {
+    const limit = Math.min(Math.max(1, Math.trunc(input.limit)), SKU_OPTIONS_LIMIT_MAX);
+    const page = Math.min(Math.max(1, Math.trunc(input.page)), SKU_OPTIONS_PAGE_MAX);
+    const term = input.search?.trim() ?? "";
+    const matches = term === "" ? undefined : sql`(${containsText(products.name, term)} OR ${containsText(productVariants.sku, term)} OR EXISTS (
+        SELECT 1 FROM product_variant_option_values AS pick_pvov
+        JOIN product_option_values AS pick_pov ON pick_pov.id = pick_pvov.option_value_id
+        WHERE pick_pvov.variant_id = ${productVariants.id} AND instr(lower(pick_pov.value), lower(${term})) > 0
+    ))`;
+    const [rows, currency] = await Promise.all([
+        db.select({
+            variantId: productVariants.id,
+            productId: productVariants.productId,
+            productName: products.name,
+            productActive: products.isActive,
+            giftCard: products.isGiftCard,
+            sku: productVariants.sku,
+            imageId: productVariants.imageId,
+            priceMinor: productVariants.priceMinor,
+            discountType: productVariants.discountType,
+            discountBps: productVariants.discountBps,
+            discountAmountMinor: productVariants.discountAmountMinor,
+            productDiscountType: products.discountType,
+            productDiscountBps: products.discountBps,
+            productDiscountAmountMinor: products.discountAmountMinor,
+            stock: productVariants.stock,
+            reservedStock: productVariants.reservedStock,
+            trackInventory: productVariants.trackInventory,
+            options: variantOptionValuesSql(productVariants.id).as("pick_options"),
+            isKit: sql<number>`EXISTS (SELECT 1 FROM variant_components AS pick_kit WHERE pick_kit.kit_variant_id = ${productVariants.id})`.mapWith(Number).as("pick_is_kit"),
+        }).from(productVariants)
+            .innerJoin(products, eq(products.id, productVariants.productId))
+            .where(and(isNull(productVariants.deletedAt), isNull(products.deletedAt), matches))
+            .orderBy(sql`lower(${products.name})`, productVariants.productId, productVariants.sku, productVariants.id)
+            .limit(limit + 1)
+            .offset((page - 1) * limit)
+            .all(),
+        readStoreCurrency(db),
+    ]);
+    const shown = rows.slice(0, limit);
+    const pictures = shown.length === 0 ? new Map<string, ProductMediaProjection[]>() : resolveProductMediaProjectionRows(await selectSkuMediaProjectionRows(db, {
+        productIds: sql.join([...new Set(shown.map((row) => row.productId))].map((id) => sql`${id}`), sql`, `),
+        variantIds: sql.join(shown.map((row) => sql`${row.variantId}`), sql`, `),
+    }).all());
+    const items = shown.map((row) => {
+        const picture = resolveSkuImageRepresentation(pictures.get(row.productId) ?? [], row.imageId);
+        return {
+            variantId: row.variantId,
+            productId: row.productId,
+            productName: row.productName,
+            productActive: row.productActive === true,
+            sku: row.sku,
+            options: parseVariantOptionValues(row.options),
+            imageUrl: picture?.url ?? null,
+            price: fromMinor(storePriceMinor(row, currency.priceIncrementMinor), currency.decimalPlaces),
+            available: row.trackInventory ? Number(row.stock) - Number(row.reservedStock) : null,
+            isKit: row.isKit === 1,
+            isGiftCard: row.giftCard === true,
+        };
+    });
+    return { items, page, hasMore: rows.length > limit && page < SKU_OPTIONS_PAGE_MAX };
 }
 
 /** The page's offers as the editor reads them: each placed SKU, whether buyers see it, and why not. */

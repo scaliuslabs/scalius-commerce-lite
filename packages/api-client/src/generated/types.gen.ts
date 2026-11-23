@@ -75997,6 +75997,107 @@ export type GetApiV1AdminProductsLookupBarcodeResponses = {
 
 export type GetApiV1AdminProductsLookupBarcodeResponse = GetApiV1AdminProductsLookupBarcodeResponses[keyof GetApiV1AdminProductsLookupBarcodeResponses];
 
+export type GetApiV1AdminProductsSkuOptionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Product name, SKU code or option value
+         */
+        search?: string;
+        /**
+         * Page number, up to 50: search to narrow past it
+         */
+        page?: number;
+        /**
+         * SKUs per page
+         */
+        limit?: number;
+    };
+    url: '/api/v1/admin/products/sku-options';
+};
+
+export type GetApiV1AdminProductsSkuOptionsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminProductsSkuOptionsError = GetApiV1AdminProductsSkuOptionsErrors[keyof GetApiV1AdminProductsSkuOptionsErrors];
+
+export type GetApiV1AdminProductsSkuOptionsResponses = {
+    /**
+     * A page of SKUs
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                variantId: string;
+                productId: string;
+                productName: string;
+                /**
+                 * False for a draft or archived product: a bundle holding it can't be sold.
+                 */
+                productActive: boolean;
+                sku: string;
+                /**
+                 * The SKU's chosen option values (platform, format), in option order.
+                 */
+                options: Array<{
+                    name: string;
+                    value: string;
+                }>;
+                /**
+                 * The SKU's picture, else its product's.
+                 */
+                imageUrl: string | null;
+                /**
+                 * One unit's price in the store's currency, its discount applied.
+                 */
+                price: number;
+                /**
+                 * Units on hand less reserved; null when it does not track stock.
+                 */
+                available: number | null;
+                /**
+                 * It is a bundle (a SKU made of other SKUs): it can't be an item of another.
+                 */
+                isKit: boolean;
+                /**
+                 * A gift card: it can't be in a bundle.
+                 */
+                isGiftCard: boolean;
+            }>;
+            page: number;
+            hasMore: boolean;
+        };
+    };
+};
+
+export type GetApiV1AdminProductsSkuOptionsResponse = GetApiV1AdminProductsSkuOptionsResponses[keyof GetApiV1AdminProductsSkuOptionsResponses];
+
 export type GetApiV1AdminProductsData = {
     body?: never;
     path?: never;
