@@ -51,9 +51,6 @@ import {
 } from "./order-form/types";
 import { OrderFormProvider } from "./order-form/OrderFormContext";
 import { CustomerInfoSection, ORDER_ADDRESS_IDS } from "./order-form/CustomerInfoSection";
-import { SalesChannelSection } from "./order-form/SalesChannelSection";
-import { AppQuestionsSection } from "./order-form/AppQuestionsSection";
-import { PaymentSection } from "./order-form/PaymentSection";
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { OrderItemsSection } from "./order-form/OrderItemsSection";
 import { SummarySection } from "./order-form/SummarySection";
@@ -78,7 +75,8 @@ import { queryKeys } from "@/lib/query-keys";
 import { getServerFnError } from "@/lib/api-mutations/shared";
 import { readAdminApiErrorCode } from "@/lib/admin-api-error";
 import { isAdminApiRetryableReadError, readCheckoutRuleErrors, readKitAmendedInPartIssues, readManualOrderDiscountLimitError, readManualOrderItemIssues } from "@/lib/manual-order-errors";
-import { readKitLineRefusal } from "~/i18n/kit-line-refusals";
+import { kitLineRefusalOf } from "~/lib/kit-line-refusal-reason";
+import { useKitLineSentence } from "~/lib/use-kit-line-sentence";
 import { useCurrency } from "@/hooks/use-currency";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
@@ -302,6 +300,7 @@ function OrderEditor({
   savedShippingMethod = null,
   amendShipsNothing = false,
   currencyCode: amendedOrderCurrency,
+  createSections,
 }: OrderFormProps) {
   const isEdit = mode === "amend";
   const t = useMessages(orderFormMessages);
@@ -318,6 +317,8 @@ function OrderEditor({
   const canSave = isEdit ? orderActions.canEditOrders : orderActions.canCreateOrders;
   const createMutation = useCreateOrder();
   const amendMutation = useConfirmManualOrderAmendment();
+  const amendKitReason = amendMutation.error ? kitLineRefusalOf(amendMutation.error)?.reason ?? null : null;
+  const amendKitSentence = useKitLineSentence(amendKitReason);
   const amendmentRequest = React.useRef<{ key: string; payload: string } | null>(null);
   // One request per click: set before the request leaves, cleared on failure.
   const submitLock = React.useRef(false);
@@ -517,8 +518,13 @@ function OrderEditor({
   const ruleErrors = currentQuoteError ? readCheckoutRuleErrors(currentQuoteError) : null;
   // Lines the API refused (a download on a cash on delivery order, a SKU out of stock, a bundle's items
   // changed in part): said on each line.
+  // A bundle's refusal is worded by words loaded when it arrives; until then nothing reads the server's text.
+  const quoteKitReason = currentQuoteError ? kitLineRefusalOf(currentQuoteError)?.reason ?? null : null;
+  const quoteKitSentence = useKitLineSentence(quoteKitReason);
+  const kitWordsLoading = quoteKitReason !== null && quoteKitSentence === null;
   const itemIssues = currentQuoteError
-    ? readManualOrderItemIssues(currentQuoteError) ?? readKitAmendedInPartIssues(currentQuoteError, quoteItems)
+    ? readManualOrderItemIssues(currentQuoteError)
+      ?? (quoteKitSentence ? readKitAmendedInPartIssues(currentQuoteError, quoteItems, quoteKitSentence) : null)
     : null;
   const strayIssues = itemIssues?.filter((issue) => issue.index >= quoteItems.length) ?? [];
   const manualQuote = {
@@ -538,7 +544,7 @@ function OrderEditor({
     ruleErrors,
     itemIssues,
     // A refusal is never invisible: one naming no row of the form is said here.
-    errorMessage: currentQuoteError && !authoritativeDiscountLimit && !ruleErrors && (!itemIssues || strayIssues.length > 0)
+    errorMessage: currentQuoteError && !authoritativeDiscountLimit && !ruleErrors && !kitWordsLoading && (!itemIssues || strayIssues.length > 0)
       ? strayIssues.length > 0 ? [...new Set(strayIssues.map((issue) => issue.message))].join(" ") : getServerFnError(currentQuoteError, t("totalFailed"))
       : null,
     canRetry: currentQuoteError ? isAdminApiRetryableReadError(currentQuoteError) : false,
@@ -818,7 +824,8 @@ function OrderEditor({
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   });
 
-  const amendError = amendMutation.error ? readKitLineRefusal(amendMutation.error)?.message ?? orderErrorMessage(amendMutation.error) : null;
+  // A bundle refused in part reads as the dashboard's sentence once its words load, never the server's text.
+  const amendError = amendMutation.error ? (amendKitReason ? amendKitSentence : orderErrorMessage(amendMutation.error)) : null;
 
   return (
     <Page width="form">
@@ -865,9 +872,7 @@ function OrderEditor({
                     disabled={isInteractionLocked}
                   />
                 )}
-                {isEdit ? null : <AppQuestionsSection />}
-                {isEdit ? null : <PaymentSection />}
-                {isEdit ? null : <SalesChannelSection />}
+                {isEdit ? null : createSections}
               </div>
             </div>
           </OrderFormProvider>
