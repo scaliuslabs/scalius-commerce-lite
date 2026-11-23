@@ -155,6 +155,8 @@ const TEXT_GROUPS = [
 export const EDITABLE_CHECKOUT_TEXT_KEYS: ReadonlySet<string> = new Set<string>([
   ...TEXT_FIELDS,
   "termsText",
+  "termsAcceptText",
+  "termsRequiredText",
   "termsLinkText",
   "privacyLinkText",
   ...GIFT_CARD_TEXT_FIELDS,
@@ -292,6 +294,14 @@ export function CustomerContactCard() {
         checked={values.requireFullBillingAddress === true}
         disabled={!canEdit}
         onCheckedChange={(on) => setValue("requireFullBillingAddress", on)}
+      />
+      <SettingsCheckbox
+        id="checkout-terms-acceptance"
+        label={t("termsAcceptance")}
+        help={t("termsAcceptanceHelp")}
+        checked={values.requireTermsAcceptance === true}
+        disabled={!canEdit}
+        onCheckedChange={(on) => setValue("requireTermsAcceptance", on)}
       />
       <div>
         <Link to="/admin/settings/customer-accounts" className={standaloneLinkClassName}>{t("contactFieldsPointer")}</Link>
@@ -444,7 +454,7 @@ function LanguageForm({ language }: { language: Language | null }) {
         <Textarea id="language-terms" rows={2} value={draft.languageData.termsText ?? ""} onChange={(event) => setText("termsText", event.target.value)} />
       </SettingsField>
       <div className="grid gap-4 sm:grid-cols-2">
-        {(["termsLinkText", "privacyLinkText"] as const).map((key) => (
+        {(["termsAcceptText", "termsRequiredText", "termsLinkText", "privacyLinkText"] as const).map((key) => (
           <SettingsField key={key} id={`language-${key}`} label={t(key)}>
             <Input id={`language-${key}`} value={draft.languageData[key] ?? ""} onChange={(event) => setText(key, event.target.value)} />
           </SettingsField>

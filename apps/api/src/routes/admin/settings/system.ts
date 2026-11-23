@@ -318,6 +318,8 @@ const checkoutFlowSettingsSchema = z.object({
      * postal code the country requires.
      */
     requireFullBillingAddress: z.boolean(),
+    /** The buyer ticks "I agree to the terms" before any order is placed; the order records it. */
+    requireTermsAcceptance: z.boolean(),
     revision: z.number().int().nonnegative(),
 });
 
@@ -345,11 +347,13 @@ app.openapi(getCheckoutFlowRoute, async (c) => {
 });
 
 const saveCheckoutFlowSchema = checkoutFlowSettingsSchema
-    .omit({ revision: true, autoFulfilMode: true, requireFullBillingAddress: true })
+    .omit({ revision: true, autoFulfilMode: true, requireFullBillingAddress: true, requireTermsAcceptance: true })
     .extend({
         autoFulfilMode: checkoutFlowSettingsSchema.shape.autoFulfilMode.optional(),
         /** Omitted: keep the saved choice. */
         requireFullBillingAddress: checkoutFlowSettingsSchema.shape.requireFullBillingAddress.optional(),
+        /** Omitted: keep the saved choice. */
+        requireTermsAcceptance: checkoutFlowSettingsSchema.shape.requireTermsAcceptance.optional(),
         expectedRevision: z.number().int().nonnegative(),
     })
     .strict();

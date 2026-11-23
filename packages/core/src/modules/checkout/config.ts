@@ -56,6 +56,8 @@ export interface CheckoutConfig {
     partialPaymentAmount: number;
     /** Settings → Checkout: every order asks for a full billing address (Shopify's option). */
     requireFullBillingAddress: boolean;
+    /** Settings → Checkout: the buyer ticks "I agree to the terms" before the order is placed (the commit refuses without it). */
+    requireTermsAcceptance: boolean;
     /**
      * The phone countries checkout accepts: the merchant's customer-country
      * policy united with every country an active market sells to
@@ -172,6 +174,7 @@ export async function getCheckoutConfig(
             partialPaymentEnabled,
             partialPaymentAmount,
             requireFullBillingAddress: checkout.requireFullBillingAddress,
+            requireTermsAcceptance: checkout.requireTermsAcceptance,
             allowedCountries: allowedCountriesConfig.allowedCountries,
             allowedCountriesMode: allowedCountriesConfig.allowedCountriesMode,
             currency: {
@@ -260,6 +263,7 @@ export async function getCheckoutConfig(
         partialPaymentEnabled,
         partialPaymentAmount,
         requireFullBillingAddress: checkout.requireFullBillingAddress,
+        requireTermsAcceptance: checkout.requireTermsAcceptance,
         allowedCountries: allowedCountriesConfig.allowedCountries,
         allowedCountriesMode: allowedCountriesConfig.allowedCountriesMode,
         currency: {

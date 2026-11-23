@@ -65,6 +65,12 @@ export const ORDER_EVENT_KINDS = [
      * `amount`, `amountMinor`, `currency`, `reason`, `byHand`.
      */
     "payment_dispute",
+    /**
+     * The buyer ticked "I agree to the terms" when placing the order (the
+     * store requires it, checkout/terms-acceptance.ts). Written with the
+     * order in its commit batch; its time is when they agreed.
+     */
+    "terms_accepted",
 ] as const;
 export type OrderEventKind = (typeof ORDER_EVENT_KINDS)[number];
 
@@ -242,6 +248,23 @@ export function buildPlacedOrderEventInsert(db: Database, input: { orderId: stri
         body: null,
         data: orderEventData(null),
         ...eventActorColumns(input.actorId),
+        createdAt: sql`unixepoch()`,
+    });
+}
+
+/**
+ * The buyer agreed to the store's terms: in the order's own commit batch, so
+ * the order and the fact commit together (during an agent's request,
+ * `data.via` names the agent, orderEventData).
+ */
+export function buildTermsAcceptedOrderEventInsert(db: Database, orderId: string) {
+    return db.insert(orderEvents).values({
+        id: newOrderEventId(),
+        orderId,
+        kind: "terms_accepted",
+        body: null,
+        data: orderEventData(null),
+        ...eventActorColumns(null),
         createdAt: sql`unixepoch()`,
     });
 }

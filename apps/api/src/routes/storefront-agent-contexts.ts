@@ -244,6 +244,9 @@ const startedContinuationSchema = continuationViewSchema.extend({
 
 const checkoutSubmitSchema = z.object({
   attributes: checkoutAttributesSchema.optional(),
+  termsAccepted: z.boolean().optional().openapi({
+    description: "The buyer read and agreed to the store's terms (the storefront's terms page), which you showed them. Required (true) when the store's checkout config says `requireTermsAcceptance`: without it submit is refused with `details.reason: terms_acceptance_required`. The order records the agreement and this agent.",
+  }),
   shippingRateToken: z.string().min(1).max(2048).optional().nullable(),
   expectedRevision: revisionSchema,
   expectedQuoteFingerprint: z.string().regex(/^taxq_[A-Za-z0-9_-]{22}$/).openapi({

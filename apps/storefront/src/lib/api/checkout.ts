@@ -43,6 +43,8 @@ export interface CheckoutConfig {
   partialPaymentAmount?: number;
   /** Settings → Checkout: every order asks for a full billing address (absent: off). */
   requireFullBillingAddress?: boolean;
+  /** Settings → Checkout: the buyer ticks "I agree to the terms" before the order is placed (absent: off). */
+  requireTermsAcceptance?: boolean;
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
   currency?: {

@@ -206,6 +206,9 @@ export function describeTimelineEvent(
         detail: from && from !== to ? t("timeline.locationWas", { location: from }) : null,
       };
     }
+    case "terms_accepted":
+      // The buyer ticked "I agree to the terms" when placing the order (the store requires it).
+      return { text: t("timeline.termsAccepted"), detail: null };
     case "prices_set":
       // Staff or an app priced lines by hand when placing the order.
       return { text: t("timeline.pricesSet"), detail: null };
