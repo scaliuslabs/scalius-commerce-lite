@@ -90,14 +90,14 @@ const NAME = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
 const own = (name: string) => `${CHROME_NAME_PREFIX}${name}`;
 const ownList = (value: string) => value.split(/\s+/).filter((name) => NAME.test(name)).map(own).join(" ");
 
-/** A clean path on this store: one leading slash, no `//` anywhere, no dot segment, nothing a browser would rewrite. */
-const storePath = (href: string) => /^(?!.*\/\/)\/[^\s"<>\\#]*(?:#[^\s"<>\\]*)?$/.test(href)
-  && !href.split(/[?#]/)[0]!.split("/").some((segment) => segment === "." || segment === ".." || /^%2e/i.test(segment));
+/** A srcset candidate's descriptor: a width, a density or a height. */
+const DESCRIPTOR = /^(?:\d+w|\d*\.?\d+(?:e[+-]?\d+)?x|\d+h)$/i;
 
+/** Every candidate as the browser splits it (URL, then descriptors), each URL allowed and each descriptor one. */
 function allowedSrcset(value: string, options: InertChromeOptions): boolean {
   return value.split(",").every((candidate) => {
-    const url = candidate.trim().split(/\s+/)[0] ?? "";
-    return url !== "" && options.imageAllowed(url);
+    const [url = "", ...descriptors] = candidate.trim().split(/[\t\n\f\r ]+/);
+    return url !== "" && options.imageAllowed(url) && descriptors.every((descriptor) => DESCRIPTOR.test(descriptor));
   });
 }
 
@@ -127,7 +127,7 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
     if (name === "href") {
       if (tag !== "a") continue;
       if (value.startsWith("#")) { if (NAME.test(value.slice(1))) out.push([name, `#${own(value.slice(1))}`]); continue; }
-      if (storePath(value) && storefrontBrowsingPath(value)) out.push([name, value]);
+      if (storefrontBrowsingPath(value)) out.push([name, value]);
       continue;
     }
     if (LOUD_ARIA.has(name) || (name === "role" && LOUD_ROLES.has(value.trim().toLowerCase()))) continue;

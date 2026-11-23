@@ -263,7 +263,7 @@ A label that names an action or an amount takes one of the store's **variants**,
 
 With `chrome: theme` the cart page draws your header and footer skins from the same projection as any page (with no header skin it draws the store's checkout header, with no footer skin no footer, as with `chrome: core`): the store's name, logo, menus and routes. The skin is told the page's root (`/cart`) and nothing more: never an order's or a claim's path, a session, an order or an address. What the skin draws is rebuilt, not copied, inside its sealed region:
 
-- text, lists, links to this store's clean paths (no `//`, no dot segment) or to the region's own ids, images from the page's allowed origins, disclosure (`<details>`), tables and SVG drawing (no `url()` references);
+- text, lists, links to this store's clean paths (no `//`, no dot segment) or to the region's own ids, images from the page's allowed origins (each URL judged as the browser reads it: a control character drops it, and it is resolved against the page), disclosure (`<details>`), tables and SVG drawing (no `url()` references);
 - no script, island, style attribute, frame, media, dialog, popover, event handler, live region, alert or modal role;
 - class names and ids become your region's own (`tc-<name>`), the ids ARIA attributes and fragment links name too, so the chrome never shadows a store element;
 - of the data attributes, only the store's chrome behaviours stay (`whenSignedIn()`, `colorSchemeToggle()`, `accountLink()`), and the buyer UI's kind and tone words (`data-ui`, `data-tone`);

@@ -122,18 +122,25 @@ export function cspSourcesAllowOrigin(origin: string, sources: readonly string[]
 }
 
 /**
- * True when an image URL may load on a buyer's private page: a path on the
- * page's own origin, a `data:` or `blob:` URL, the page's own origin, or an
- * origin the source list allows.
+ * True when an image URL may load on a buyer's private page: one on the
+ * page's own origin (a path), a `data:` or `blob:` URL, or one whose origin
+ * the source list allows. The URL is judged as the browser reads it: one
+ * holding a control character or edge space (which the browser strips
+ * before parsing) is refused, and the rest is resolved against the page.
  */
 export function cspSourcesAllowImage(url: string, sources: readonly string[], self: string): boolean {
-  if (/^\/(?![/\\])/.test(url) || /^(?:data|blob):/i.test(url)) return true;
+  if (/[\u0000-\u001f\u007f]/.test(url) || url !== url.trim()) return false;
+  let page = "https://self.invalid";
+  try {
+    if (self) page = new URL(self).origin;
+  } catch {
+    // No page origin: a path resolves against a placeholder of its own.
+  }
   let parsed: URL;
   try {
-    parsed = new URL(url);
+    parsed = new URL(url, page);
   } catch {
     return false;
   }
-  if (self && parsed.origin === (() => { try { return new URL(self).origin; } catch { return ""; } })()) return true;
-  return cspSourcesAllowOrigin(parsed.origin, sources);
+  return parsed.protocol === "data:" || parsed.protocol === "blob:" || parsed.origin === page || cspSourcesAllowOrigin(parsed.origin, sources);
 }
