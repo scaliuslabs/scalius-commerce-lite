@@ -84,6 +84,8 @@ export const LICENCE_KEY_IMPORT_MAX_KEYS = 500;
 export const LICENCE_KEY_HASH_PURPOSE = "digital-licence-key-hash-v1";
 /** AES-GCM purpose for `digital_licence_keys.key_ciphertext` (key derived from `CREDENTIAL_ENCRYPTION_KEY`). */
 export const LICENCE_KEY_CIPHER_PURPOSE = "digital-licence-key-v1";
+/** AES-GCM purpose for `order_line_messages.body_ciphertext`, the same envelope as a licence key under its own key. */
+export const ORDER_LINE_MESSAGE_CIPHER_PURPOSE = "order-line-message-v1";
 
 /** `null` (unlimited) or an integer 1–100. */
 export function isDigitalDownloadLimit(value: unknown): value is number | null {

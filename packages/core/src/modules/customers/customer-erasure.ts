@@ -29,6 +29,8 @@
 // - conversations of the customer and of those orders: the buyer's message
 //   bodies become ERASED_TEXT (their search terms are deleted) and a store
 //   thread's subject is cleared;
+// - delivery messages staff wrote on those orders' lines (migration 0226):
+//   deleted, ciphertext and all;
 // - files the buyer uploaded for those orders (buyer uploads, migration
 //   0201): their rows are deleted and their objects become delete tasks;
 // - sign-in code delivery receipts sent to the buyer's own or their orders'
@@ -73,6 +75,7 @@ import {
   customerSessions,
   customFieldValues,
   customers,
+  orderLineMessages,
   orders,
   orderTrackingSignals,
   pluginCustomerRoles,
@@ -384,6 +387,8 @@ function scrubStatements(db: Database, subjectId: string, scope: ErasureScope): 
       updatedAt: now,
     }).where(and(theirOrders, orderStillNamesBuyer())),
     db.delete(orderTrackingSignals).where(orderIdSet(orderTrackingSignals.orderId)),
+    // The delivery messages staff wrote for them (sealed sign-ins, instructions): deleted.
+    db.delete(orderLineMessages).where(orderIdSet(orderLineMessages.orderId)),
     db.update(trackingDeliveries).set({ matchSignals: null }).where(and(orderIdSet(trackingDeliveries.orderId), isNotNull(trackingDeliveries.matchSignals))),
     db.update(productReviews).set({ authorDisplayName: REVIEW_FALLBACK_DISPLAY_NAME })
       .where(and(

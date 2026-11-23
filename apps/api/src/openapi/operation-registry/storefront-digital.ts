@@ -23,6 +23,13 @@ export const STOREFRONT_DIGITAL_OPERATIONS = {
     sensitive: true,
     reason: `Returns a plaintext licence key to its owner's browser. ${cookieBound}`,
   },
+  "storefront.customer_auth_delivery_messages_reveal.reveal": {
+    exposure: "excluded",
+    principals: ["customer"],
+    risk: "security",
+    sensitive: true,
+    reason: `Returns a delivery message (a sign-in the store wrote) to its order's signed-in buyer. ${cookieBound}`,
+  },
   "storefront.orders_receipt_downloads.get_downloads": {
     exposure: "excluded",
     sensitive: true,

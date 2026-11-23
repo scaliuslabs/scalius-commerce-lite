@@ -24,4 +24,18 @@ export const DASHBOARD_DIGITAL_OPERATIONS = {
   "dashboard.digital_entitlements.reset": {},
   "dashboard.digital_entitlements.revoke": { risk: "destructive" },
   "dashboard.orders.digital_resend": { openWorld: true, idempotency: "required" },
+  "dashboard.orders.line_message_set": {
+    exposure: "excluded",
+    sensitive: true,
+    stability: "internal",
+    revision: "required",
+    reason: "Carries a buyer's sign-in or instructions in the clear; staff write delivery messages in the dashboard so they never pass through agent I/O. Agents see that a line has one (extras.message) from the order.",
+  },
+  "dashboard.orders.line_message_reveal": {
+    exposure: "excluded",
+    risk: "security",
+    sensitive: true,
+    stability: "internal",
+    reason: "Returns a delivery message (a buyer's sign-in) in the clear to staff who may write it; never passes through agent I/O.",
+  },
 } satisfies Record<string, OperationRegistryEntry>;

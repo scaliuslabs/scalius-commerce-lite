@@ -391,6 +391,8 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
     orderItemIds: detail.items.map((item) => item.id),
     audience: "buyer",
     currencyDecimalPlaces: order.currencyDecimalPlaces,
+    // The signed-in buyer's own order: a message they may read shows (ids only); the receipt never does.
+    deliveryMessages: true,
   });
   const giftCardTenders = await presentOrderGiftCardTenders(c.get("db"), orderId, order.currencyDecimalPlaces);
   const db = c.get("db");

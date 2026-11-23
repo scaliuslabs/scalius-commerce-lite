@@ -8665,7 +8665,8 @@
             "app_event",
             "stock_held",
             "late_payment",
-            "payment_dispute"
+            "payment_dispute",
+            "delivery_message"
            ]
           },
           "body": {

@@ -10819,6 +10819,9 @@
             "items": {
               "$ref": "#/components/schemas/OrderLineWarrantyExtra"
             }
+          },
+          "message": {
+            "$ref": "#/components/schemas/OrderLineMessageExtra"
           }
         }
       },
@@ -11091,6 +11094,38 @@
           "openClaimId",
           "claim"
         ]
+      },
+      "OrderLineMessageExtra": {
+        "type": "object",
+        "properties": {
+          "messageId": {
+            "type": "string"
+          },
+          "hasLink": {
+            "type": "boolean",
+            "description": "The message carries a link besides its text."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "Staff reads only: the revision a write names (`expectedRevision`)."
+          },
+          "orderItemId": {
+            "type": "string",
+            "description": "Staff reads only: the line the message is stored on (a split kit item's first line)."
+          }
+        },
+        "required": [
+          "messageId",
+          "hasLink",
+          "updatedAt"
+        ],
+        "description": "A delivery message the store wrote for this line. Never its text or link: the signed-in buyer reveals those with a POST; staff with the digital-access permission reveal them from the order."
       },
       "BuyerLineAddOn": {
         "type": "object",
@@ -15572,6 +15607,28 @@
           "keyId",
           "key",
           "last4"
+        ]
+      },
+      "RevealedDeliveryMessage": {
+        "type": "object",
+        "properties": {
+          "messageId": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "description": "Plain text with line breaks; draw it as text, never HTML."
+          },
+          "link": {
+            "type": "string",
+            "nullable": true,
+            "description": "An https:// address; draw it as a plain external link."
+          }
+        },
+        "required": [
+          "messageId",
+          "text",
+          "link"
         ]
       },
       "BuyerGiftCard": {
@@ -71180,6 +71237,151 @@
           "sensitiveOutput": true,
           "oneTimeSecretOutput": false,
           "exclusionReason": "Returns a plaintext licence key to its owner's browser. Download tickets and licence keys are bound to the buyer's browser cookie proof and never pass through agent I/O.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/customer-auth/delivery-messages/{messageId}/reveal": {
+      "post": {
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Show a delivery message the store wrote on one of the account's order lines",
+        "description": "Only for the signed-in account that owns the order, once it is paid, while it is not cancelled, refunded, returned or on hold. Anything else is the same 404.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "messageId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RevealedDeliveryMessage"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "storefront.customer_auth_delivery_messages_reveal.reveal",
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "customer"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Returns a delivery message (a sign-in the store wrote) to its order's signed-in buyer. Download tickets and licence keys are bound to the buyer's browser cookie proof and never pass through agent I/O.",
           "dryRun": "none",
           "confirmation": "none",
           "impact": "none"
@@ -253058,7 +253260,8 @@
                                   "app_event",
                                   "stock_held",
                                   "late_payment",
-                                  "payment_dispute"
+                                  "payment_dispute",
+                                  "delivery_message"
                                 ]
                               },
                               "body": {
@@ -253273,7 +253476,8 @@
                             "app_event",
                             "stock_held",
                             "late_payment",
-                            "payment_dispute"
+                            "payment_dispute",
+                            "delivery_message"
                           ]
                         },
                         "body": {
@@ -261172,6 +261376,504 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "orders.refund"
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/items/{itemId}/delivery-message": {
+      "put": {
+        "operationId": "dashboard.orders.line_message_set",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Write, replace or remove a line's delivery message",
+        "description": "Sets what the buyer of this line reads in their account (an account's sign-in, an instruction) and an optional https link, or removes it with `message: null`. Plain text of 1 to 4000 characters, drawn as text, never HTML; the link is a full https:// address of at most 2048 characters. Both are stored encrypted. Name the message's `revision` from the order (`items[].extras.message.revision`), or 0 when the line has none: a stale one is refused with 409 `line_message_revision_conflict` (`details.revision` is the current one) and nothing changes. A split kit item's lines share one message. The buyer sees it once the order is paid; the order timeline records the change, never the text.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "itemId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "text": {
+                        "type": "string",
+                        "maxLength": 4000,
+                        "description": "Plain text; line breaks are kept."
+                      },
+                      "link": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 2048,
+                        "description": "An https:// address, or null for none."
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The message, or null to remove it."
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "The message's revision you read; 0 when the line has none."
+                  }
+                },
+                "required": [
+                  "message",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The message as staff see it (null once removed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "orderItemId": {
+                              "type": "string",
+                              "description": "The line it is stored on: a split kit item's two lines share their first line's message."
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true
+                            },
+                            "hasLink": {
+                              "type": "boolean"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "orderItemId",
+                            "revision",
+                            "hasLink",
+                            "updatedAt"
+                          ]
+                        },
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "message",
+                        "changed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "line_message_revision_conflict: the message changed since it was read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Carries a buyer's sign-in or instructions in the clear; staff write delivery messages in the dashboard so they never pass through agent I/O. Agents see that a line has one (extras.message) from the order.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.manage_digital_access"
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/items/{itemId}/delivery-message/reveal": {
+      "post": {
+        "operationId": "dashboard.orders.line_message_reveal",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Show a line's delivery message to edit it",
+        "description": "The text and link of the line's delivery message, for staff who may write it. Never cached.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "itemId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "orderItemId": {
+                              "type": "string",
+                              "description": "The line it is stored on: a split kit item's two lines share their first line's message."
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true
+                            },
+                            "hasLink": {
+                              "type": "boolean"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "orderItemId",
+                            "revision",
+                            "hasLink",
+                            "updatedAt"
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "link": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "message",
+                        "text",
+                        "link"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Returns a delivery message (a buyer's sign-in) in the clear to staff who may write it; never passes through agent I/O.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.manage_digital_access"
         }
       }
     },

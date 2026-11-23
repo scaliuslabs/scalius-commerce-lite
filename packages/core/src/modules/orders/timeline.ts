@@ -65,6 +65,12 @@ export const ORDER_EVENT_KINDS = [
      * `amount`, `amountMinor`, `currency`, `reason`, `byHand`.
      */
     "payment_dispute",
+    /**
+     * Staff added, changed or removed a line's delivery message
+     * (fulfilment/line-messages.ts). `data`: `orderItemId`, `change`
+     * (`added`, `changed`, `removed`) and `hasLink`; never its text or link.
+     */
+    "delivery_message",
 ] as const;
 export type OrderEventKind = (typeof ORDER_EVENT_KINDS)[number];
 

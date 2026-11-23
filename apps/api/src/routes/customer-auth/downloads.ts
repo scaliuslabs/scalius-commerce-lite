@@ -1,12 +1,15 @@
 // Signed-in buyer downloads and licence keys (Wave B design §3.4, §7.1):
 // everything the account's orders delivered, a download ticket bound to the
-// session token, and a licence-key reveal. Private, never cached.
+// session token, a licence-key reveal, and a line's delivery message reveal
+// (rules/orders/buyer-line-delivery-message.md: the account only, never a
+// receipt proof). Private, never cached.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { listBuyerDownloads, mintDownloadTicket, revealLicenceKey } from "@scalius/core/modules/digital";
+import { revealBuyerOrderLineMessage } from "@scalius/core/modules/fulfilment";
 import { ok } from "../../utils/api-response";
 import { UnauthorizedError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
-import { errorResponses, successEnvelope } from "../../schemas/responses";
+import { errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import {
     buyerDigitalLineSchema,
     downloadTicketResponses,
@@ -67,6 +70,33 @@ app.openapi(createRoute({
     return ok(c, await revealLicenceKey(c.get("db"), getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>), {
         keyId: c.req.valid("param").keyId,
         access,
+    }));
+});
+
+const revealedDeliveryMessageSchema = z.object({
+    messageId: z.string(),
+    text: z.string().openapi({ description: "Plain text with line breaks; draw it as text, never HTML." }),
+    link: z.string().nullable().openapi({ description: "An https:// address; draw it as a plain external link." }),
+}).openapi("RevealedDeliveryMessage");
+
+app.openapi(createRoute({
+    method: "post",
+    path: "/delivery-messages/{messageId}/reveal",
+    tags: ["Customer Auth"],
+    summary: "Show a delivery message the store wrote on one of the account's order lines",
+    description: "Only for the signed-in account that owns the order, once it is paid, while it is not cancelled, refunded, returned or on hold. Anything else is the same 404.",
+    request: { params: z.object({ messageId: z.string().min(1).max(80) }) },
+    responses: {
+        200: { description: "The message", content: { "application/json": { schema: successEnvelope(revealedDeliveryMessageSchema) } } },
+        ...errorResponses,
+        503: serviceUnavailableResponse,
+    },
+}), async (c) => {
+    setNoStore(c);
+    const { access } = await customerAccess(c);
+    return ok(c, await revealBuyerOrderLineMessage(c.get("db"), getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>), {
+        messageId: c.req.valid("param").messageId,
+        customerId: access.customerId,
     }));
 });
 

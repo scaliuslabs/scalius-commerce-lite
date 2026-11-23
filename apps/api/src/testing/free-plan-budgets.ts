@@ -502,10 +502,12 @@ export const BUYER_ORDER_READ_BUDGETS = {
  * storefront-orders/order-line-slot.d1.test.ts, recorded exactly): one run per slot the app
  * draws, never one per row, only when the page's own read asks (`buyerUi=run`): neither form of
  * the status poll (`paymentRecovery=omit`, or `include` when the page asks about a retry) runs one.
+ * The account order reads its lines' delivery messages (2026-11-24, wave 3 k2): one statement,
+ * two when the order has one (its lines, for a split kit item's shared message).
  */
 export const BUYER_ORDER_KIT_APP_READ_BUDGETS = {
   receiptKitApp: { d1Calls: 27, d1Statements: 29 },
   receiptKitAppPoll: { d1Calls: 21, d1Statements: 23 },
   receiptKitAppRetryPoll: { d1Calls: 21, d1Statements: 23 },
-  accountKitApp: { d1Calls: 20, d1Statements: 27 },
+  accountKitApp: { d1Calls: 21, d1Statements: 28 },
 } as const;
