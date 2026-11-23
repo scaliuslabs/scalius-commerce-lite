@@ -693,6 +693,8 @@ export function buildStorefrontColorCss(colors: StorefrontThemeColors, headerTon
     // outlined one's tint under the action colour, on the page and the card.
     "primary-hover": storefrontThemeHoverSurface([colors.primary], [colors["primary-foreground"]]),
     "primary-soft-hover": storefrontThemeHoverSurface([colors.background, colors.card], [colors.primary]),
+    // A link's hover: the action colour toward the page, so it shows, then back toward the ink until it reads 4.5:1.
+    "primary-link-hover": readableOn(storefrontThemeMix(colors.primary, colors.background, 0.25), [colors.background, colors.card], colors.foreground),
   };
 }
 
@@ -746,6 +748,7 @@ export function buildStorefrontTokenCss(tokens: StorefrontThemeTokens): Record<s
     "theme-sale": colors["theme-sale"],
     "primary-hover": colors["primary-hover"],
     "primary-soft-hover": colors["primary-soft-hover"],
+    "primary-link-hover": colors["primary-link-hover"],
     "theme-rating": STOREFRONT_RATING_COLOR,
     "theme-success": STOREFRONT_SUCCESS_COLOR,
     "theme-surface-border": STOREFRONT_ELEVATION[tokens.surface].border,
