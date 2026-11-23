@@ -184,6 +184,7 @@ Sections, components and skins use the app settings types (`text`, `textarea`, `
 | `list` (`fields` up to 12, `max` up to 24, `itemLabel`) | items of the fields above (no products, no lists) | items with their images resolved |
 
 - Values resolve against the schema as it is now: a removed setting drops, a new one takes its default, a deleted image or product resolves to `null`.
+- A `popular` list continues on the search page in its own order: link its "View all" to `/search?sortBy=popular` (best selling first, then newest).
 - Skins and components cannot use `products` or `product`. A unit skin (header, footer, card, product page, listing) may declare up to 8 top-level `image` settings, which resolve with the layout read at no extra cost. Section skins, components and images inside a skin's `list` ship their images in your public files.
 - The page reads every image, product list and picked product its sections name in one batch, within the homepage limits (40 images, 8 product lists).
 

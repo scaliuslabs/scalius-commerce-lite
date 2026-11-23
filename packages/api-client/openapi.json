@@ -35840,9 +35840,11 @@
                 "discount",
                 "rating",
                 "popular"
-              ]
+              ],
+              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest."
             },
             "required": false,
+            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.",
             "name": "sort",
             "in": "query"
           },
