@@ -51,7 +51,6 @@ import { LineProperties } from "./LineProperties";
 import { OrderFulfillmentLocation } from "./OrderFulfillmentLocation";
 import { returnedQuantities } from "./OrderItemsCard";
 import { BookCourier } from "./ShipmentCard";
-import { DeliveryMessagesCard } from "./DeliveryMessagesCard";
 import { DigitalLinesCard } from "./DigitalLinesCard";
 import { formatCurrencyAmount, formatOrderTimestamp } from "./formatters";
 import {
@@ -75,6 +74,8 @@ const ManualFulfillmentDialog = lazy(() => import("./ManualFulfillmentDialog").t
 // Loaded only for orders with warranty records to show.
 const WarrantyLinesCard = lazy(() => import("./WarrantyLinesCard").then((module) => ({ default: module.WarrantyLinesCard })));
 const GiftCardLinesCard = lazy(() => import("./GiftCardLinesCard").then((module) => ({ default: module.GiftCardLinesCard })));
+// For staff who write delivery messages: the card, its lines and its words load after the page.
+const DeliveryMessagesCard = lazy(() => import("./DeliveryMessagesCard").then((module) => ({ default: module.DeliveryMessagesCard })));
 
 function hasWarranties(order: Order): boolean {
   return order.items.some((item) => Array.isArray(item.extras?.warranty) && item.extras.warranty.length > 0);
@@ -147,7 +148,7 @@ export function OrderFulfilmentCards({ order, request, onRecordPayment }: {
         />
       ))}
       <DigitalLinesCard order={order} />
-      <DeliveryMessagesCard order={order} />
+      <Suspense fallback={null}><DeliveryMessagesCard order={order} /></Suspense>
       {hasIssuedGiftCards(order) && (
         <Suspense fallback={null}>
           <GiftCardLinesCard order={order} />
