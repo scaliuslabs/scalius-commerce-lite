@@ -251,7 +251,7 @@ function drawNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptio
       // A named group: the marker turns with its own disclosure, never an open ancestor's.
       const details = element("details", "group/disclosure rounded-md border border-border");
       details.open = node.open === true;
-      const summary = element("summary", "flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-9 [&::-webkit-details-marker]:hidden");
+      const summary = element("summary", "flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:min-h-9 [&::-webkit-details-marker]:hidden");
       const marker = element("span", "shrink-0 transition-transform group-open/disclosure:rotate-180", "\u25BE");
       marker.setAttribute("aria-hidden", "true");
       summary.append(element("span", "min-w-0", node.summary), marker);

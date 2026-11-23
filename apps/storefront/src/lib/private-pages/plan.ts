@@ -70,14 +70,15 @@ const ASSET_PATH = /^\/_x\/[a-z0-9][a-z0-9.-]*\/[A-Za-z0-9._-]+\/public\/[A-Za-z
 
 /**
  * The seal on every free region (private-anatomy.ts `PRIVATE_FREE_REGIONS`):
- * its own containing block and stacking context; its size, layout, paint
- * and style contained, inline size included, so nothing inside widens the
- * page or a grid column (`contain: inline-size`, `min-inline-size: 0`);
+ * its own containing block and stacking context; its layout, paint and style
+ * contained; never wider than its column, so nothing inside widens the page
+ * or a grid column (`min-inline-size: 0`, `max-inline-size: 100%`; inline-size
+ * containment added nothing the rendered gate could find, so it is gone);
  * everything painted inside clipped (with the older browsers' overflow clip
  * first); and a bounded height. The stylesheet never selects a wrapper.
  */
 export const PRIVATE_FREE_REGION_SEAL =
-  "[data-free]{display:block;position:relative;z-index:0;isolation:isolate;min-inline-size:0;max-inline-size:100%;overflow:hidden;overflow:clip;contain:inline-size layout paint style;max-block-size:30rem}"
+  "[data-free]{display:block;position:relative;z-index:0;isolation:isolate;min-inline-size:0;max-inline-size:100%;overflow:hidden;overflow:clip;contain:layout paint style;max-block-size:30rem}"
   + '[data-free="header"]{max-block-size:24rem}[data-free="footer"]{max-block-size:80rem}';
 
 /**

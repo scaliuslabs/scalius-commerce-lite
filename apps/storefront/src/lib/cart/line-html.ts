@@ -110,7 +110,7 @@ export function cartLineParts(view: CartLineView, slots: CartLineHtmlSlots): Rec
   const key = escapeHtml(view.key);
   return {
     image: `<div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20" data-part="line-image"><img src="${escapeHtml(lineImageUrl(view.image))}" alt="" width="80" height="80" loading="lazy" decoding="async" class="h-full w-full object-contain object-center" /></div>`,
-    title: `<h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base" data-part="line-title"><a href="${escapeHtml(view.productHref)}" class="hover:text-muted-foreground" data-cart-line-name>${escapeHtml(view.name)}</a></h3>`,
+    title: `<h3 class="text-sm font-medium text-foreground sm:text-base" data-part="line-title"><a href="${escapeHtml(view.productHref)}" class="line-clamp-2 break-words hover:text-muted-foreground" data-cart-line-name>${escapeHtml(view.name)}</a></h3>`,
     details: `<div class="mt-0.5 text-sm text-muted-foreground" data-part="line-details">${detailsHtml(view, slots)}</div>`,
     inputs: `<div class="mt-1.5 grid max-w-sm gap-2" data-cart-line-inputs data-line-key="${key}" data-part="line-inputs" hidden></div>`,
     target: `<div class="mt-2 grid gap-2" data-buyer-ui-target="cart.line.after" data-buyer-ui-line="${key}" data-buyer-ui-line-name="${escapeHtml(view.lineName)}" hidden></div>`,

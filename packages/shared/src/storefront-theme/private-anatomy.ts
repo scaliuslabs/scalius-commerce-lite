@@ -240,6 +240,8 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   dialog: { selector: '[data-private="dialog"]', absolute: true, tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "shadow"], kind: "box", surface: "card", ink: "foreground", on: "page" },
   "dialog-back": { selector: '[data-private="dialog"] [data-part="dialog-back"]', absolute: true, tokens: ["background", "text", "border", "border-width", "radius", "ring", "weight"], kind: "control", surface: "under", ink: "foreground", on: "dialog" },
   "dialog-confirm": { selector: '[data-private="dialog"] [data-part="dialog-confirm"]', absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "dialog" },
+  // The store's own header (`chrome: core`): its surface, words and border.
+  chrome: { selector: '[data-private="core-header"]', absolute: true, tokens: ["background", "gradient", "text", "muted", "link", "border", "border-width"], kind: "box", surface: "background", ink: "foreground", on: "page" },
   // The host's search in the theme header's frame (`privatePages.search`), never inside the theme's region.
   search: { selector: '[data-host="search"]', absolute: true, tokens: [...FIELD_TOKENS], kind: "field", surface: "background", ink: "foreground", on: "page" },
 };
@@ -384,8 +386,8 @@ export const PRIVATE_HOOK_ATTRIBUTE = "data-hook";
 export const PRIVATE_HOOK_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+){0,5}$/;
 export const PRIVATE_HOOK_MAX = 40;
 
-/** Surfaces besides the pages that carry the scope: the store's dialogs and the theme's chrome there. */
-export const PRIVATE_SCOPES = ["dialog", "header", "footer"] as const;
+/** Surfaces besides the pages that carry the scope: the store's dialogs, the theme's chrome there and the store's own header. */
+export const PRIVATE_SCOPES = ["dialog", "header", "footer", "core-header"] as const;
 
 /**
  * Free regions: boxes the host seals (nothing inside paints, lays out,

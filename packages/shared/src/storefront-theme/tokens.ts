@@ -452,9 +452,21 @@ export function storefrontDarkPalette(colors: StorefrontThemeColors): Storefront
   const primary = coloured ?? foreground;
   let mutedForeground = readableOn(mix(foreground, background, 0.38), [background, card, muted], foreground);
   if (storefrontThemeChroma(mutedForeground) > STOREFRONT_THEME_MAX_MUTED_CHROMA) mutedForeground = readableOn("#9c9c9c", [background, card, muted], "#ffffff");
-  let destructive = lift(colors.destructive);
+  // An alert draws the error colour on its own 10% tint (`bg-destructive/10`, over a card or a muted panel): it reads there too.
+  const panels = [background, card, muted, mix(card, muted, 0.4)];
+  const liftError = (color: string) => {
+    // The tint is of the colour chosen, so lift until it reads on its own tint.
+    let lifted = lift(color);
+    for (let round = 0; round < 4; round += 1) {
+      const next = readableOn(color, [...panels, ...panels.map((panel) => mix(panel, lifted, 0.1))], "#ffffff");
+      if (next === lifted) break;
+      lifted = next;
+    }
+    return lifted;
+  };
+  let destructive = liftError(colors.destructive);
   for (let step = 1; step <= 10 && storefrontThemeColorDistance(mutedForeground, destructive) < STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE; step += 1) {
-    destructive = lift(mix(colors.destructive, "#ff0000", step / 10));
+    destructive = liftError(mix(colors.destructive, "#ff0000", step / 10));
   }
   return {
     background, foreground, card, "card-foreground": foreground, popover: card, "popover-foreground": foreground,

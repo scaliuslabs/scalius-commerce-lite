@@ -105,20 +105,25 @@ export const PRIVATE_TOKEN_SPECS: Record<PrivateTokenName, TokenSpec> = {
     lg: "box-shadow:0 12px 32px rgb(0 0 0 / 0.28)",
   }),
   // Spacing and type scale down on a narrow screen, so no part outgrows a phone.
+  // Written by shapeCss, which knows the box's radius: never under 4px nor under 30% of the radius.
   padding: { schema: px(0, 48), write: (value: number) => `padding:min(${value}px,4vw)` },
   gap: { schema: px(0, 48), write: (value: number) => `gap:min(${value}px,4vw)` },
   font: choice({ body: "font-family:var(--theme-font-body)", heading: "font-family:var(--theme-font-heading)" }),
   weight: choice({ 400: "font-weight:400", 500: "font-weight:500", 600: "font-weight:600", 700: "font-weight:700", 800: "font-weight:800" }),
-  size: { schema: px(12, 40), write: (value: number) => `font-size:min(${value}px,max(12px,8vw))`, on: ["", " :where(.text-foreground,.text-card-foreground)"] },
+  // Bounded by the box it sits in (each line and layout node is a size container; else the screen), so a word fits its column.
+  size: { schema: px(12, 40), write: (value: number) => `font-size:min(${value}px,max(12px,7cqi))`, on: ["", " :where(.text-foreground,.text-card-foreground)"] },
   case: choice({ none: "text-transform:none", uppercase: "text-transform:uppercase" }),
   tracking: choice({ normal: "letter-spacing:normal", wide: "letter-spacing:0.04em", wider: "letter-spacing:0.08em" }),
   align: choice({ start: "text-align:start", center: "text-align:center", end: "text-align:end" }),
-  // At least two lines: a title is never cut to one.
-  clamp: choice({
-    none: "display:block;-webkit-line-clamp:none;overflow:visible",
-    2: "display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden",
-    3: "display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden",
-  }),
+  // At least two lines: a title is never cut to one. The clamp is the title's link's own, so it never clips the link's focus ring.
+  clamp: {
+    ...choice({
+      none: "display:block;-webkit-line-clamp:none;overflow:visible",
+      2: "display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden",
+      3: "display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden",
+    }),
+    on: [" a"],
+  },
   // Written by privateTokenCss, which knows the floor of the node's level.
   columns: { schema: tracksSchema },
   "columns-wide": { schema: tracksSchema, wide: true },
@@ -600,12 +605,15 @@ const CELL_PROPERTIES = [["text", "--pt-t"], ["muted", "--pt-m"], ["link", "--pt
 
 /**
  * A row's cells as declarations: its paint, its own words' colour and the
- * cells everything inside it reads (`--pt-*`). A nested row's element
- * inherits its parent's cells and shows its parent's paint, so only what
- * differs is written (its own words' colour always).
+ * cells everything inside it reads (`--pt-*`). A nested box or text target's
+ * element inherits its parent's cells and shows its parent's paint, so only
+ * what differs is written (its own words' colour always). A control, a field
+ * and an app's node write every cell: their element also meets another row
+ * (Place order is a filled button, a badge has its kind's and its tone's
+ * rows), whose cells it would read instead of its parent's.
  */
 export function privateRowDeclarations(row: PrivateTokenRow, parent: PrivateTokenRow | null): string {
-  const inherited = row.nested ? parent : null;
+  const inherited = row.nested && (row.kind === "box" || row.kind === "text") && !row.key.startsWith("ui.") ? parent : null;
   const paints = row.paint !== null && !(inherited && inherited.surface.length === 1 && inherited.paint === row.paint && !row.gradient);
   return [
     paints ? `background-color:${row.paint}` : "",
@@ -696,6 +704,10 @@ function shapeCss(page: PrivatePageKey, tokens: Record<string, Values>, unitHook
         const rule = `${selectors}{grid-template-columns:${tracks(value as Tracks, floor)};grid-auto-flow:row}`;
         const fit = Math.max(tracksFit(value as Tracks, gap, floor), name === "columns-wide" ? 640 : 0);
         narrow.push(`:where(${root} :has(> ${selector.slice(root.length + 1)})){container-type:inline-size}@container (min-width:${fit}px){${rule}}`);
+      } else if (name === "padding") {
+        // A box's padding leaves its children's focus rings (4px) and its own rounded corners (30% of the radius) on its surface.
+        const room = Math.max(4, Math.ceil(0.3 * (typeof values.radius === "number" ? values.radius : 0)));
+        narrow.push(`${selectors}{padding:max(min(${value as number}px,4vw),${room}px)}`);
       } else {
         (token.wide ? wide : narrow).push(`${selectors}{${token.write!(value as never)}}`);
       }
@@ -714,8 +726,8 @@ function shapeCss(page: PrivatePageKey, tokens: Record<string, Values>, unitHook
  */
 export const PRIVATE_TOKEN_MODE = ":root[data-private-tokens]";
 
-/** Where token mode reaches: the private pages, the store's dialogs over them and the host's search. */
-const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]', '[data-host="search"]'];
+/** Where token mode reaches: the private pages, the store's dialogs over them, the host's search and the store's own header. */
+const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]', '[data-host="search"]', '[data-private="core-header"]'];
 const IN_SCOPE = `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope} *`)].join(",")})`;
 
 /**
