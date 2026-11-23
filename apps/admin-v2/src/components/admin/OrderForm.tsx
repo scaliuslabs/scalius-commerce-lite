@@ -520,6 +520,7 @@ function OrderEditor({
   const itemIssues = currentQuoteError
     ? readManualOrderItemIssues(currentQuoteError) ?? readKitAmendedInPartIssues(currentQuoteError, quoteItems)
     : null;
+  const strayIssues = itemIssues?.filter((issue) => issue.index >= quoteItems.length) ?? [];
   const manualQuote = {
     data: quoteQuery.data ?? null,
     isCurrent: canRequestQuote && quoteQuery.isSuccess,
@@ -536,8 +537,9 @@ function OrderEditor({
     }),
     ruleErrors,
     itemIssues,
-    errorMessage: currentQuoteError && !authoritativeDiscountLimit && !ruleErrors && !itemIssues
-      ? getServerFnError(currentQuoteError, t("totalFailed"))
+    // A refusal is never invisible: one naming no row of the form is said here.
+    errorMessage: currentQuoteError && !authoritativeDiscountLimit && !ruleErrors && (!itemIssues || strayIssues.length > 0)
+      ? strayIssues.length > 0 ? [...new Set(strayIssues.map((issue) => issue.message))].join(" ") : getServerFnError(currentQuoteError, t("totalFailed"))
       : null,
     canRetry: currentQuoteError ? isAdminApiRetryableReadError(currentQuoteError) : false,
     retry: () => {
@@ -635,8 +637,7 @@ function OrderEditor({
       throw new SaveNotCompleted(manualQuote.isLoading
         ? t("waitForTotal")
         : manualQuote.ruleErrors ? t("appRulesTitle")
-          : manualQuote.itemIssues ? t("itemsRefused", { count: manualQuote.itemIssues.length })
-            : manualQuote.errorMessage ?? t("totalFailed"));
+          : manualQuote.errorMessage ?? (manualQuote.itemIssues ? t("itemsRefused", { count: manualQuote.itemIssues.length }) : t("totalFailed")));
     }
     if (submitLock.current) throw new SaveNotCompleted(undefined, []);
     // The server stores the names of the places it validates; these only label the review.
