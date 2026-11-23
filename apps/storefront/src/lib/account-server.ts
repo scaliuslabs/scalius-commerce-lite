@@ -33,6 +33,8 @@ interface ApiAnswer {
   status: number;
   data: unknown;
   error: string | null;
+  /** The refusal's machine reason (`details.reason`), for a page that words it per field. */
+  reason?: string | null;
 }
 
 async function callAccountApi(
@@ -61,10 +63,11 @@ async function callAccountApi(
     const payload = await response.json().catch(() => null) as {
       success?: unknown;
       data?: unknown;
-      error?: { code?: unknown; message?: unknown } | string | null;
+      error?: { code?: unknown; message?: unknown; details?: { reason?: unknown } } | string | null;
     } | null;
     const error = payload?.success === true ? null : buyerApiErrorText(payload, { status: response.status, headers: response.headers });
-    return { status: response.status, data: payload?.success === true ? payload.data : null, error };
+    const reason = payload && typeof payload.error === "object" && typeof payload.error?.details?.reason === "string" ? payload.error.details.reason : null;
+    return { status: response.status, data: payload?.success === true ? payload.data : null, error, reason };
   } catch (error) {
     console.warn("[account] API call failed:", error instanceof Error ? error.name : "unknown");
     return null;
@@ -141,14 +144,15 @@ export async function readAccountCustomer(request: Request): Promise<AccountRead
   return { ok: true, data: data.customer };
 }
 
-/** The profile is the name; addresses are in the address book. */
+/** The profile is the name and the WhatsApp number ("" clears it: the phone); addresses are in the address book. */
 export interface ProfileUpdate {
   name?: string;
+  whatsapp?: string;
 }
 
 export type ProfileSaveResult =
   | { ok: true; customer: CustomerInfo }
-  | { ok: false; reason: "signed_out" | "unavailable" | "invalid"; message: string | null };
+  | { ok: false; reason: "signed_out" | "unavailable" | "invalid"; message: string | null; refusal?: string | null };
 
 export interface AccountMarketingChannel {
   channel: MarketingChannel;
@@ -232,12 +236,14 @@ export async function changeAccountAddresses(
   return { ...failed(answer), message: null };
 }
 
-/** Saves the name; the API validates it. */
+/** Saves the name and the WhatsApp number; the API validates them and names why it refused (`refusal`). */
 export async function saveAccountProfile(request: Request, update: ProfileUpdate): Promise<ProfileSaveResult> {
   const answer = await callAccountApi(request, "/api/v1/customer-auth/profile", { method: "PUT", body: update });
   const customer = answer?.status === 200 ? (answer.data as { customer?: CustomerInfo } | null)?.customer : null;
   if (customer) return { ok: true, customer };
-  if (answer?.status === 400 || answer?.status === 422) return { ok: false, reason: "invalid", message: answer.error };
+  if (answer?.status === 400 || answer?.status === 409 || answer?.status === 422) {
+    return { ok: false, reason: "invalid", message: answer.error, ...(answer.reason ? { refusal: answer.reason } : {}) };
+  }
   return { ...failed(answer), message: null };
 }
 

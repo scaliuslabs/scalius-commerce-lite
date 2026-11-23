@@ -282,6 +282,6 @@ export function themePreviewSampleAccount(currency: SampleCurrency, languageCode
       order(2, "processing", amounts.total, [line(words.firstProduct, words.firstVariant, 2, amounts.first), line(words.secondProduct, null, 1, amounts.second)]),
       order(1, "delivered", amounts.second + amounts.shipping, [line(words.secondProduct, null, 1, amounts.second)]),
     ],
-    summary: { unreadInbox: 1, reviewsToWrite: 1, reviewsWritten: 0, downloads: 0, giftCards: 0, activeWarranties: 0 },
+    summary: { orders: 2, spent: [], openConversations: 1, unreadInbox: 1, reviewsToWrite: 1, reviewsWritten: 0, downloads: 0, giftCards: 0, activeWarranties: 0 },
   };
 }

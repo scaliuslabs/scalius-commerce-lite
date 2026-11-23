@@ -1,8 +1,10 @@
 ---
 // Account → Orders, after Shopify's customer accounts: every order as a card
 // (status, date, total, thumbnails, Buy again), dense rows on a phone like
-// Daraz and Amazon. Server-rendered from the session cookie, so it works
-// without JavaScript; "Older orders" pages with the API's opaque cursor.
+// Daraz and Amazon, under the account's numbers (orders, spend per currency,
+// open conversations), each a link to its list. Server-rendered from the
+// session cookie, so it works without JavaScript; "Older orders" pages with
+// the API's opaque cursor.
 import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import StoreContact from "@/components/StoreContact.astro";
@@ -10,6 +12,7 @@ import { getLayoutData } from "@/lib/api";
 import { readAccountOrders, readAccountSummaryForRequest } from "@/lib/account-server";
 import AccountOrderCards from "@/components/account/AccountOrderCards.astro";
 import { accountOrderCards } from "@/lib/account-order-cards";
+import { accountSummaryStats } from "@/lib/account-tabs";
 import { accountCopy } from "@/lib/account-copy";
 import { formatCount } from "@/lib/store-time-zone";
 import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
@@ -37,7 +40,9 @@ const phoneVerified = Astro.url.searchParams.get("phone") === "verified";
 const copy = accountCopy();
 const words = copy.orders;
 const checkoutCopy = getCheckoutLanguagePreset(layoutData?.storefrontCopy?.languageCode);
-const countText = page ? words.count(formatCount(page.totalOrders), page.totalOrders === 1) : null;
+// The summary says the order count; without it (unreachable, or nothing yet) the heading does.
+const stats = accountSummaryStats(summary, { storeCurrency: layoutData?.currency?.code ?? "BDT", ordersHref: "#accountOrders" });
+const countText = page && !stats ? words.count(formatCount(page.totalOrders), page.totalOrders === 1) : null;
 
 const cards = accountOrderCards(orders, copy, checkoutCopy);
 ---
@@ -60,6 +65,19 @@ const cards = accountOrderCards(orders, copy, checkoutCopy);
         <StoreContact layoutData={layoutData} id="phoneVerificationContact" hidden class="mt-2 text-sm text-muted-foreground" />
       </div>
     )}
+
+    {stats && (
+      <section aria-label={words.summary} class="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:grid-cols-3 sm:gap-4" data-account-summary>
+        {stats.map((stat) => (
+          <a href={stat.href} data-astro-prefetch="false" data-account-stat={stat.key} class:list={[ui.card, "block p-4 transition-colors hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", stat.key === "spent" && "col-span-2 sm:col-span-1"]}>
+            <span class="block text-sm text-muted-foreground">{stat.label}</span>
+            {stat.values.map((value) => <span class="mt-1 block break-words text-xl font-semibold tabular-nums text-foreground">{value}</span>)}
+            {stat.note && <span class="mt-1 block text-sm font-medium text-primary">{stat.note}</span>}
+          </a>
+        ))}
+      </section>
+    )}
+    {stats && <h2 id="accountOrders" tabindex="-1" class="sr-only">{words.title}</h2>}
 
     {cards.length === 0 ? (
       <div class={ui.empty}>

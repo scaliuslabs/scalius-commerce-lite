@@ -9,10 +9,11 @@
 // and nothing here logs message text.
 
 import { resolveBackendTarget } from "@/lib/api/transport";
-import { seedRuntimeStoreLanguage } from "@/lib/api/runtime";
+import { getRuntimePresence, seedRuntimeStoreLanguage } from "@/lib/api/runtime";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
 import { ownCspHeaders } from "@/lib/middleware-helper/own-csp";
 import {
+  isConversationTopicKey,
   normalizeConversationBody,
   normalizeConversationSubject,
 } from "@scalius/shared/conversation";
@@ -29,6 +30,7 @@ import {
   statusFlagForApiStatus,
   withConversationStatus,
   type BuyerConversationThread,
+  type BuyerConversationTopic,
   type BuyerInboxPage,
   type ConversationAccess,
   type ConversationStatusFlag,
@@ -192,12 +194,27 @@ export function readRefusalJson(result: { reason: "signed_out" | "no_access" | "
   return conversationJson({ success: false }, result.reason === "signed_out" ? 401 : result.reason === "no_access" ? noAccessStatus : 503);
 }
 
+/** The page's presence (`bn-bd`), so the API names the merchant's topics in its language. */
+function presenceQuery(): { presence?: string } {
+  const presence = getRuntimePresence();
+  return presence ? { presence } : {};
+}
+
+function readTopics(value: unknown): BuyerConversationTopic[] {
+  return (Array.isArray(value) ? value : []).flatMap((each) => {
+    const topic = each as Partial<BuyerConversationTopic> | null;
+    return topic && isConversationTopicKey(topic.key) && typeof topic.label === "string" && topic.label.trim()
+      ? [{ key: topic.key, label: topic.label }]
+      : [];
+  });
+}
+
 export async function readInbox(request: Request, cursor?: string): Promise<ReadResult<BuyerInboxPage>> {
   const session = sessionCookieOf(request);
   if (!session) return { ok: false, reason: "signed_out" };
   const headers = new Headers({ Accept: "application/json", Cookie: session });
   const response = await callApi(
-    withQuery("/api/v1/customer-auth/conversations", { cursor }),
+    withQuery("/api/v1/customer-auth/conversations", { cursor, ...presenceQuery() }),
     { method: "GET", headers },
     READ_TIMEOUT_MS,
   );
@@ -210,6 +227,7 @@ export async function readInbox(request: Request, cursor?: string): Promise<Read
       items: data.items,
       nextCursor: typeof data.nextCursor === "string" ? data.nextCursor : null,
       canStartStoreConversation: data.canStartStoreConversation === true,
+      topics: readTopics(data.topics),
     },
   };
 }
@@ -224,7 +242,7 @@ export async function readConversation(
   const headers = buyerCredentialHeaders(request, target);
   if (!headers) return { ok: false, reason: isReceiptTarget(target) ? "no_access" : "signed_out" };
   const response = await callApi(
-    withQuery(conversationApiPaths(target).read, { beforeSeq, afterSeq }),
+    withQuery(conversationApiPaths(target).read, { beforeSeq, afterSeq, ...presenceQuery() }),
     { method: "GET", headers },
     READ_TIMEOUT_MS,
   );
@@ -287,7 +305,9 @@ export type WriteResult =
 
 async function refusal(response: Response | null, action: "post" | "start" | "upload"): Promise<WriteResult> {
   if (!response) return { ok: false, flag: "unavailable" };
-  const payload = await response.json().catch(() => null) as { error?: { code?: unknown } } | null;
+  const payload = await response.json().catch(() => null) as { error?: { code?: unknown; details?: { reason?: unknown } } } | null;
+  // A topic the merchant removed since the page rendered.
+  if (payload?.error?.details?.reason === "unknown_topic") return { ok: false, flag: "topic" };
   // The API's refusal code decides (`CODE_KIND`), its status when it names none.
   const flag = statusFlagForApiStatus(response.status, action, payload?.error?.code);
   if (flag !== "rate_limited") return { ok: false, flag };
@@ -433,12 +453,14 @@ async function sendWithImages(
   return thread ? { ok: true, flag: "sent", thread } : { ok: false, flag: "unavailable" };
 }
 
-/** Starts a store conversation (verified accounts only). */
+/** Starts a store conversation (verified accounts only), about one of the store's topics when the buyer chose one. */
 export async function startStoreConversation(request: Request, form: FormData): Promise<WriteResult> {
   const subject = normalizeConversationSubject(form.get("subject"));
   const body = normalizeConversationBody(form.get("body"));
   const clientMessageKey = form.get("clientMessageKey");
   if (!subject.ok || !body.ok || !isClientMessageKey(clientMessageKey)) return { ok: false, flag: "invalid" };
+  const topic = form.get("topic") ?? "";
+  if (topic !== "" && !isConversationTopicKey(topic)) return { ok: false, flag: "topic" };
   const session = sessionCookieOf(request);
   if (!session) return { ok: false, flag: "signin" };
   const headers = new Headers({ Accept: "application/json", "Content-Type": "application/json", Cookie: session });
@@ -447,11 +469,38 @@ export async function startStoreConversation(request: Request, form: FormData): 
   const response = await callApi("/api/v1/customer-auth/conversations", {
     method: "POST",
     headers,
-    body: JSON.stringify({ subject: subject.value, body: body.value, clientMessageKey }),
+    body: JSON.stringify({ subject: subject.value, body: body.value, clientMessageKey, ...(topic ? { topic } : {}) }),
   }, WRITE_TIMEOUT_MS);
   if (!response || response.status !== 201) return refusal(response, "start");
   const thread = await threadFrom(response);
   return thread ? { ok: true, flag: "started", thread } : { ok: false, flag: "unavailable" };
+}
+
+/**
+ * The buyer closes one of their conversations (a store thread or an order's);
+ * their next message opens it again. Answered as the thread page's outcome
+ * flag (`closed`, or why not).
+ */
+export async function closeConversation(request: Request, conversationId: string): Promise<{ flag: ConversationStatusFlag; retryAfterSeconds?: number }> {
+  const session = sessionCookieOf(request);
+  if (!session) return { flag: "signin" };
+  const headers = new Headers({ Accept: "application/json", Cookie: session });
+  const connectingIp = request.headers.get("cf-connecting-ip");
+  if (connectingIp) headers.set("cf-connecting-ip", connectingIp);
+  const response = await callApi(`/api/v1/customer-auth/conversations/${encode(conversationId)}/close`, { method: "POST", headers }, WRITE_TIMEOUT_MS);
+  if (!response) return { flag: "unavailable" };
+  if (response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    return { flag: "closed" };
+  }
+  const flag = statusFlagForApiStatus(response.status, "post");
+  if (flag !== "rate_limited") {
+    await response.body?.cancel().catch(() => undefined);
+    return { flag };
+  }
+  // A rate limit names its wait in the body and in Retry-After.
+  const retryAfterSeconds = apiAnswerWaitSeconds(response, await response.json().catch(() => null));
+  return { flag, ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
 }
 
 // ---------------------------------------------------------------------------
@@ -484,6 +533,7 @@ export function conversationRedirect(location: string): Response {
 
 const JSON_STATUS: Partial<Record<ConversationStatusFlag, number>> = {
   invalid: 400,
+  topic: 400,
   image: 400,
   signin: 401,
   unverified: 403,

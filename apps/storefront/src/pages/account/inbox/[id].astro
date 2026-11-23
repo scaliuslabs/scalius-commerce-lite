@@ -1,6 +1,7 @@
 ---
 // One conversation of the account Inbox: the store's replies on the left, the
-// buyer's messages on the right, system lines centered, and a reply form.
+// buyer's messages on the right, system lines centered, and a reply form; its
+// topic and status at the top, and Close for an open one (a message opens it again).
 // Server-rendered from the session cookie with explicit display acknowledgment, so it
 // works without JavaScript; the reply form is a plain POST that JavaScript
 // upgrades to an in-place send.
@@ -12,6 +13,7 @@ import {
   conversationCopy,
   conversationStatusLabel,
   conversationTitle,
+  conversationTopicLabel,
   isConversationId,
   readBeforeSeq,
   readConversationStatusFlag,
@@ -68,10 +70,17 @@ const title = thread ? conversationTitle(thread) : copy.notFound;
     unavailable={{ text: copy.unavailable, retryHref: threadHref, retryText: copy.retry }}
   >
     <Fragment slot="actions">
-      {thread && <p class="text-sm text-muted-foreground max-sm:w-full max-sm:ps-11 sm:ms-auto sm:shrink-0">
+      {thread && <div class="flex flex-wrap items-center gap-x-1 text-sm text-muted-foreground max-sm:w-full max-sm:ps-11 sm:ms-auto sm:shrink-0">
+        {conversationTopicLabel(thread) && <><span data-conversation-topic class="font-medium text-foreground">{conversationTopicLabel(thread)}</span> ·</>}
         <span data-conversation-thread-status>{conversationStatusLabel(thread.status)}</span>
-        {orderHref && <> · <a href={orderHref} data-astro-prefetch="false" class="font-medium text-primary hover:underline">{copy.viewOrder}</a></>}
-      </p>}
+        {orderHref && <> · <a href={orderHref} data-astro-prefetch="false" class="inline-flex min-h-11 items-center font-medium text-primary hover:underline">{copy.viewOrder}</a></>}
+        <span hidden={thread.status === "closed"} data-conversation-close>
+          <span aria-hidden="true">·</span>
+          <form method="post" action={`/api/conversations/${encodeURIComponent(thread.id)}/close`} class="inline">
+            <button type="submit" class="inline-flex min-h-11 items-center font-medium text-primary hover:underline">{copy.closeConversation}</button>
+          </form>
+        </span>
+      </div>}
     </Fragment>
 
     {failure === "no_access" && (
