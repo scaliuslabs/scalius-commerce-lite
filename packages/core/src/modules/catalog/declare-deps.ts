@@ -128,6 +128,10 @@ export function declareListing(
         // of its own, so its facets depend on the whole public set's rows.
         if (options.facets || filteredByFacets) deps.listFacets("all");
     }
+    // The popular order reads every scoped product's sales stats at or above
+    // MIN_POPULAR_UNITS (the popular tier and its order), which `popular` covers;
+    // the rest's newest order is the scope's own (`lm:`).
+    if (sort === "popular") deps.popular();
     if (params.search) {
         // Search text of products and categories, and the published state of
         // the categories a query can match by name or slug.

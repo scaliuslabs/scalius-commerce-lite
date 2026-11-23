@@ -151,7 +151,7 @@ export const LISTED: MarketPricing = {
     }),
 } as MarketPricing;
 
-const SORTS = ["newest", "price-asc", "price-desc", "name-asc", "discount", "rating"] as const;
+const SORTS = ["newest", "price-asc", "price-desc", "name-asc", "discount", "rating", "popular"] as const;
 
 /** A random request: query parameters for the attribute filters, and the listing's own parameters. */
 export function randomRequest(random: (n: number) => number) {

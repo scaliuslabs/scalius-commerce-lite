@@ -7,6 +7,7 @@ import { normalizeSearchQuery } from "./search-query";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { formatList } from "@scalius/shared/locale-words";
 import { FACET_FILTER_KEY_PATTERN, FACET_RANGE_KEY_PATTERN } from "@scalius/shared/catalog-filter-keys";
+import { STOREFRONT_SEARCH_SORTS } from "@scalius/shared/listing-sorts";
 import { catalogCopy } from "./catalog-copy";
 import { storefrontLanguage } from "./storefront-language";
 import { pageLanguage } from "./store-time-zone";
@@ -33,16 +34,7 @@ export const DEFAULT_PRODUCT_LIST_PAGE_SIZE: ProductListPageSize = 20;
 /** Keys of the listing URL that choose a view (page, sort, page size), not a filter. */
 const PRODUCT_LIST_VIEW_KEYS = new Set(["page", "sortBy", "limit", PRODUCT_LIST_SHOW_ALL_PARAM]);
 
-const PRODUCT_LIST_SORT_VALUES = [
-  "relevance",
-  "newest",
-  "price-asc",
-  "price-desc",
-  "name-asc",
-  "name-desc",
-  "discount",
-  "rating",
-] as const satisfies NonNullable<ProductListOptions["sort"]>[];
+const PRODUCT_LIST_SORT_VALUES = STOREFRONT_SEARCH_SORTS satisfies readonly NonNullable<ProductListOptions["sort"]>[];
 
 const PRODUCT_LIST_BOOLEAN_FILTERS = ["freeDelivery", "hasDiscount", "inStock"] as const;
 const PRODUCT_LIST_PRICE_FILTERS = ["minPrice", "maxPrice"] as const;

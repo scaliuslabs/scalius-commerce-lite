@@ -9,6 +9,7 @@ import { products } from "@scalius/database/schema";
 import { sql, type SQL } from "drizzle-orm";
 import { allOf } from "../../utils/all-of";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
+import { publicProductCount } from "./popular-plan";
 
 /** A narrowed shop-all page reads its own price range up to this many products of its value. */
 export const NARROWED_RANGE_DRIVEN_PRODUCTS = 1_000;
@@ -42,6 +43,8 @@ export interface NarrowedPlan {
     summary(extra: SQL): SQL;
     /** The page's ids as the card statement's FROM item (`listing_page.page_product_id`), one form read. */
     page(pageRows: number, ids: (form: "driven" | "walking", rows: SQL) => SQL): SQL;
+    /** S, the value's public products, and T, the public products with a category, as scalar subqueries. */
+    size: { set: SQL<number>; total: SQL<number> };
 }
 
 /**
@@ -68,11 +71,9 @@ export interface NarrowedPlan {
  * do (`subtreePageIds`), since a page is many rows.
  */
 export function narrowedShopAllPlan(input: NarrowedPlanInput): NarrowedPlan {
+    const publicProducts = publicProductCount();
     const plan = sql`(
-        SELECT value_size.products AS value_products, (
-            SELECT COALESCE(SUM(plan_count.product_count), 0) FROM product_facet_scope_counts AS plan_count
-            WHERE plan_count.scope_kind = 'category' AND plan_count.facet_kind = 'products'
-        ) AS public_products
+        SELECT value_size.products AS value_products, ${publicProducts} AS public_products
         FROM (SELECT ${input.driving.publicCount} AS products) AS value_size
         LIMIT 1 OFFSET 0
     ) AS listing_plan`;
@@ -126,5 +127,6 @@ export function narrowedShopAllPlan(input: NarrowedPlanInput): NarrowedPlan {
                 CROSS JOIN json_each(listing_choice.page_ids) AS page_id
             ) AS listing_page`;
         },
+        size: { set: input.driving.publicCount, total: publicProducts },
     };
 }
