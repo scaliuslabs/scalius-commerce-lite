@@ -10,9 +10,14 @@
 // the others. The collections directory's card facts became visible when
 // the census's store gained collections: its card ids CTE is a public
 // product query read by four terms (card-facts.ts), accepted there.
+//
+// 2026-11-23: the census now reads with a Cache API and lets each read's
+// after-response work finish, as production does. A cached category listing
+// also reads its category's ancestors (its cache dependencies) in the facet
+// statement: 62 -> 63 CTE cursors, measured for the first time, not grown.
 export const PENDING: Readonly<Record<string, readonly [cteCursors: number, cteReferences: number]>> = {
   "/api/v1/admin/notifications | with allowed": [108, 5],
-  "/api/v1/categories/panjabi/product-summaries?page=1&limit=20 | with facet_scope": [62, 5],
+  "/api/v1/categories/panjabi/product-summaries?page=1&limit=20 | with facet_scope": [63, 5],
   "/api/v1/collections/directory | select (with card_ids)": [109, 4],
 };
 
