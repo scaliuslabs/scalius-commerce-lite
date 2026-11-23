@@ -37,7 +37,6 @@ import { cartLineCopy, isLongAnswer } from "@/lib/cart-line-copy";
 import { cartLineStockText } from "@/lib/cart-line-stock-copy";
 import { buyerApiErrorTextNow, loadBuyerApiErrors } from "@/lib/buyer-api-error-text-later";
 import { lineEntryWords } from "@scalius/shared/line-entry-words";
-import { priceCopy as storefrontPriceCopy } from "@/lib/price-copy";
 import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
 import { PRODUCT_IMAGE_FALLBACK, productImageSources, resolveProductImageUrl } from "@/lib/product-media";
 import type { ImageSlot } from "@/lib/responsive-image";
@@ -46,12 +45,6 @@ import { discountLineKey, type CheckoutDiscountFacts } from "@/lib/checkout/quot
 import type { CartRuleError, CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
 import { groupCartRuleErrors, parseCartRuleErrors } from "@/lib/cart/rule-errors";
 import { cartItemVariantLabel } from "@/lib/cart/item-options";
-import type { ProductRecommendations } from "@/lib/api/types";
-import {
-  fetchRecommendationsFromBrowser,
-  recommendationQuery,
-  recommendationTitle,
-} from "@/lib/recommendations";
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import { currentPresence, pagePath } from "@/lib/presence-url";
 import { readBuyerAttributes } from "@/lib/buyer-ui/state";
@@ -60,6 +53,9 @@ import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 import { readCartDrawerPlan, type CartDrawerNode } from "@/lib/cart/drawer-plan";
 import { cartLineInputFacts, NO_LINE_INPUTS, type CartLineInputFacts } from "@/lib/cart/line-inputs";
 import { cartEstimate, cartHasMixedFulfilment, cartLineDiscountsOf, cartLineEntries, cartLineIssues, cartLineView, type CartLineDiscount } from "@/lib/cart/line-view";
+
+/** The drawer's suggestions: a chunk of their own, loaded with the open drawer (never with the first add to cart). */
+const DrawerRecommendations = React.lazy(() => import("./cart/DrawerRecommendations"));
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -86,11 +82,9 @@ const DRAWER_BUTTON =
   + " border border-primary/20 shadow-md hover:shadow-lg bg-primary font-bold text-primary-foreground";
 const DRAWER_CHECKOUT = "flex items-center justify-center gap-2 h-12 w-full rounded-xl px-4 py-2 text-base";
 
-const CART_RECOMMENDATION_LIMIT = 4;
 /** Line photo: h-12 w-12, sm:h-18 sm:w-18. */
 const CART_LINE_IMAGE: ImageSlot = { width: 160, sizes: "(min-width: 640px) 72px, 48px", maxWidth: 320 };
 /** Suggestion photo: a w-28 card minus p-1.5 and its border. */
-const CART_RECOMMENDATION_IMAGE: ImageSlot = { width: 160, sizes: "98px", maxWidth: 320 };
 
 function productImageProps(
   url: string | null | undefined,
@@ -100,43 +94,6 @@ function productImageProps(
   return { src, srcSet: srcset, sizes };
 }
 
-const cartRecommendationCache = new Map<string, ProductRecommendations | null>();
-
-/**
- * "You might also like" for the open drawer: fetched lazily once per cart
- * contents, only while the drawer is open and has items. Products already in
- * the cart are never suggested.
- */
-function useCartRecommendations(cart: CartStore, isOpen: boolean) {
-  const productIds = Object.values(cart.items).map((item) => item.id);
-  const key = recommendationQuery(productIds, CART_RECOMMENDATION_LIMIT);
-  const [result, setResult] = useState<ProductRecommendations | null>(null);
-  useEffect(() => {
-    if (!isOpen || productIds.length === 0) return;
-    if (cartRecommendationCache.has(key)) {
-      setResult(cartRecommendationCache.get(key) ?? null);
-      return;
-    }
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      void fetchRecommendationsFromBrowser(productIds, CART_RECOMMENDATION_LIMIT, controller.signal)
-        .then((recommendations) => {
-          if (controller.signal.aborted) return;
-          cartRecommendationCache.set(key, recommendations);
-          setResult(recommendations);
-        });
-    }, 400);
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-    // `key` encodes the product ids.
-  }, [key, isOpen]);
-  if (!result || productIds.length === 0) return null;
-  const inCart = new Set(productIds);
-  const products = result.products.filter((product) => !inCart.has(product.id));
-  return products.length > 0 ? { reason: result.reason, products } : null;
-}
 
 export type AddToCartEventDetail = Parameters<typeof addToCart>[0] & {
   redirectToCart?: boolean;
@@ -414,7 +371,6 @@ export default function CartFlyout({ onReady }: Props) {
   const inputsIdBase = useId();
   const inputsId = (index: number, item: { properties?: unknown[] }) =>
     item.properties && item.properties.length > 0 ? `${inputsIdBase}-inputs-${index}` : undefined;
-  const priceCopy = storefrontPriceCopy(pageLanguage());
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
   const { discounts, discountsPending, lineDiscounts, issues, issueLists, limits, ruleErrors, buyerUi, lineInputs, addOnRows, recheck } = useDrawerCartFacts(cart, isOpen);
@@ -429,7 +385,7 @@ export default function CartFlyout({ onReady }: Props) {
   const plan = readCartDrawerPlan();
   const look = { width: plan.frame === "wide" ? "wide" : "standard", recommendations: !plan.layout || drawerHas(plan.layout, "recommendations") };
   const label = (key: string, fallback: string) => plan.labels[key] ?? fallback;
-  const recommendations = useCartRecommendations(cart, isOpen && look.recommendations);
+
   // A line that can't be bought as is blocks Checkout here, like on the cart page,
   // and so does a store app's rule (on its line, or about the whole cart).
   const lineIssues = Object.entries(issues).filter(([key]) => cart.items[key]);
@@ -678,41 +634,11 @@ export default function CartFlyout({ onReady }: Props) {
       </button>
     </div>
   );
-  const recommendationsPart = recommendations && (
-    <section aria-labelledby="cart-recommendations-title" className="pt-2" data-part="drawer-recommendations">
-      <h3 id="cart-recommendations-title" className="mb-2 text-xs font-bold text-foreground sm:text-sm">
-        {recommendationTitle(recommendations.reason)}
-      </h3>
-      {/* Padding inside the scroller gives the focus outline room: overflow clips it. */}
-      <ul data-h-rail className="-mx-1 flex gap-2 overflow-x-auto px-1 py-1">
-        {recommendations.products.map((product) => (
-          <li key={product.id} className="w-28 shrink-0">
-            <a
-              href={pagePath(`/products/${encodeURIComponent(product.slug)}`)}
-              className="flex h-full flex-col rounded-lg border border-border bg-card p-1.5 transition-colors hover:border-foreground/30"
-            >
-              <img
-                {...productImageProps(product.imageUrl, CART_RECOMMENDATION_IMAGE)}
-                alt={product.imageAlt || product.name}
-                width={100}
-                height={100}
-                loading="lazy"
-                decoding="async"
-                className="aspect-square w-full rounded-md bg-muted object-cover"
-              />
-              <span className="mt-1 line-clamp-2 text-xs font-medium leading-tight text-foreground">
-                {product.name}
-              </span>
-              <span className="mt-auto pt-0.5 text-xs font-semibold tabular-nums text-foreground">
-                {product.priceVaries
-                  ? priceCopy.from(formatMoney(product.discountedPrice))
-                  : formatMoney(product.discountedPrice)}
-              </span>
-            </a>
-          </li>
-        ))}
-      </ul>
-    </section>
+  // The suggestions load with the open drawer once it holds items (components/cart/DrawerRecommendations.tsx).
+  const recommendationsPart = isOpen && look.recommendations && cart.totalItems > 0 && (
+    <React.Suspense fallback={null}>
+      <DrawerRecommendations productIds={Object.values(cart.items).map((item) => item.id)} />
+    </React.Suspense>
   );
   /** One line: its sub-parts, in the host's own card or the theme's arrangement of them. */
   const line = ([key, item]: (typeof lineEntries)[number], index: number) => {
