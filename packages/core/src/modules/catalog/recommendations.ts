@@ -47,6 +47,7 @@ import { productRecommendations, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { asc, eq, sql, type SQL } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
+import { MIN_POPULAR_UNITS } from "@scalius/shared/listing-sorts";
 import {
   effectivePriceMinorSql,
   loadProductMediaProjections,
@@ -836,8 +837,6 @@ async function readStoredRecommendations(
  */
 const FALLBACK_CATEGORY_LIMIT = 3;
 const FALLBACK_CATEGORY_WINDOW = 48;
-/** Units sold in 30 days (`product_sales_stats`) before the fallback calls a product popular (home-lists.ts). */
-const FALLBACK_MIN_POPULAR_UNITS = 2;
 
 type FallbackRow = {
     kind: "source" | "category" | "candidate";
@@ -890,7 +889,7 @@ async function rankFallbackRows(
             UNION SELECT product_id FROM (
                 SELECT stats.product_id FROM product_sales_stats AS stats
                 INNER JOIN product_buyer_state AS popular_state ON popular_state.product_id = stats.product_id
-                WHERE stats.sold_30d >= ${n(FALLBACK_MIN_POPULAR_UNITS)} AND +popular_state.is_public = 1
+                WHERE stats.sold_30d >= ${n(MIN_POPULAR_UNITS)} AND +popular_state.is_public = 1
                 ORDER BY stats.sold_30d DESC, stats.product_id LIMIT ${window}
             ) AS best_sellers
             UNION SELECT product_id FROM (
@@ -906,7 +905,7 @@ async function rankFallbackRows(
         UNION ALL
         SELECT 'candidate', candidate.product_id,
             CASE WHEN candidate.category_id IN (SELECT id FROM fb_categories) THEN 1 ELSE 0 END,
-            CASE WHEN stats.sold_30d >= ${n(FALLBACK_MIN_POPULAR_UNITS)} THEN stats.sold_30d ELSE 0 END,
+            CASE WHEN stats.sold_30d >= ${n(MIN_POPULAR_UNITS)} THEN stats.sold_30d ELSE 0 END,
             CAST(candidate.product_created_at AS INTEGER),
             CASE WHEN candidate.is_public = 1 AND candidate.available_for_sale = 1 THEN 1 ELSE 0 END
         FROM fb_window AS pool

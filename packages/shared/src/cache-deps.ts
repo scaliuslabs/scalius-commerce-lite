@@ -29,6 +29,7 @@
  * - while `cache_clock.coarse = 1` (a catalogue-wide rebuild batch), every
  *   trigger advances `store` instead of its keys.
  */
+import { MIN_POPULAR_UNITS } from "./listing-sorts";
 
 // ---------------------------------------------------------------------------
 // Keys
@@ -933,14 +934,15 @@ const CACHE_DEP_TABLE_RULES = {
   },
   product_sales_stats: {
     kinds: ["sold", "popular"], noise: ["computed_at"],
-    // Match card-facts.CARD_SOLD_MIN (10) and home-lists.MIN_POPULAR_UNITS (2).
-    // A hidden count changing below a threshold does not affect that surface.
+    // Match card-facts.CARD_SOLD_MIN (10) and MIN_POPULAR_UNITS (the home
+    // "popular" list and the `popular` listing order). A count changing below
+    // a threshold does not affect that surface.
     rules: [
       ...everyChange([{ prefix: "sold:", columns: ["product_id"] }]).map((rule) => ({
         ...rule, name: `sold_${rule.name}`, where: { exists: "SELECT 1 WHERE R.sold_30d >= 10" },
       })),
       ...everyChange([{ dep: "popular" }]).map((rule) => ({
-        ...rule, name: `popular_${rule.name}`, where: { exists: "SELECT 1 WHERE R.sold_30d >= 2" },
+        ...rule, name: `popular_${rule.name}`, where: { exists: `SELECT 1 WHERE R.sold_30d >= ${MIN_POPULAR_UNITS}` },
       })),
     ],
   },

@@ -94,6 +94,7 @@ export interface CatalogCopy {
     nameZA: string;
     biggestDiscount: string;
     topRated: string;
+    bestSelling: string;
   };
   view: { showAs: string; grid: string; list: string };
   paging: {
@@ -348,6 +349,7 @@ const EN: CatalogCopy = {
     nameZA: "Name: Z to A",
     biggestDiscount: "Biggest discount",
     topRated: "Top rated",
+    bestSelling: "Best selling",
   },
   view: { showAs: "Show products as", grid: "Grid", list: "List" },
   paging: {
@@ -577,6 +579,7 @@ const BN: CatalogCopy = {
     nameZA: "নাম: হ থেকে ক",
     biggestDiscount: "সবচেয়ে বেশি ছাড়",
     topRated: "সেরা রেটিং",
+    bestSelling: "সবচেয়ে বেশি বিক্রি",
   },
   view: { showAs: "পণ্য যেভাবে দেখাবে", grid: "গ্রিড", list: "তালিকা" },
   paging: {

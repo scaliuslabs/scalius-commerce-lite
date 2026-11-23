@@ -204,8 +204,9 @@ export function catalogListingControls({
 
 /**
  * The listing's sort choices: "Best match" for a search, the default order's
- * own label ("Latest", or "Featured" for curated collections), and "Top
- * rated" once the store has reviews (or while it is the chosen order).
+ * own label ("Latest", or "Featured" for curated collections), "Best
+ * selling", and "Top rated" once the store has reviews (or while it is the
+ * chosen order).
  */
 export function catalogSortOptions(input: {
   defaultSort: ProductListSort;
@@ -219,6 +220,8 @@ export function catalogSortOptions(input: {
   return [
     ...(input.defaultSort === "relevance" ? [{ value: "relevance", label: copy.bestMatch }] : []),
     { value: "newest", label: input.newestLabel },
+    // Units sold in 30 days, then newest: a store without sales lists newest.
+    { value: "popular", label: copy.bestSelling },
     { value: "price-asc", label: copy.priceLowHigh },
     { value: "price-desc", label: copy.priceHighLow },
     { value: "name-asc", label: copy.nameAZ },

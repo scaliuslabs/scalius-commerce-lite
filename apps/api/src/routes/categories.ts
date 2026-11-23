@@ -18,7 +18,7 @@ import { publicMarketPricing, publicTranslation } from "../utils/public-market";
 import { localizedHandleFields } from "../schemas/translations";
 import { appliedFacetFilterSchema, appliedFacetFilters, productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError } from "../utils/api-error";
-import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, errorResponses } from "../schemas/responses";
+import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, listingSortSchema, LISTING_SORT_DESCRIPTION, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 import {
@@ -57,8 +57,6 @@ const minRatingQuerySchema = z.coerce.number().int().min(1).max(4).optional().op
   description: "Only products whose published-review average is at least this many whole stars (1-4).",
 });
 
-const listingSortSchema = z.enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount", "rating"]);
-
 // Schema for category product filtering
 const categoryProductFilterSchema = z.object({
   presence: marketPresenceQueryField,
@@ -68,7 +66,7 @@ const categoryProductFilterSchema = z.object({
   sort: listingSortSchema
     .optional()
     .default("newest")
-    .openapi({ description: "Sort order. `rating`: the Bayesian review rank, unreviewed products last." }),
+    .openapi({ description: LISTING_SORT_DESCRIPTION }),
   minRating: minRatingQuerySchema,
   search: z.string().trim().max(100).optional().openapi({ description: "Search within category" }),
   minPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Minimum effective buyer-SKU price" }),

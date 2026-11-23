@@ -35,6 +35,9 @@ function productParts(): string[] {
     `/api/v1/products?${LIST}&sort=price-desc`,
     `/api/v1/products?${LIST}&sort=name-asc`,
     `/api/v1/products?${LIST}&sort=discount`,
+    // Best selling: the popular walk and the newest rest, whole and narrowed by a facet value.
+    `/api/v1/products?${LIST}&sort=popular`,
+    `/api/v1/products?${LIST}&sort=popular&material=linen`,
     `/api/v1/products?${LIST}&search=panjabi`,
     `/api/v1/products?${LIST}&search=silk&sort=relevance`,
     `/api/v1/products?${LIST}&category=panjabi&sort=newest`,
@@ -91,6 +94,7 @@ function categoryParts(): string[] {
   }
   parts.push(
     `/api/v1/categories/men/products?${LIST}&sort=price-asc`,
+    `/api/v1/categories/men/products?${LIST}&sort=popular`,
     `/api/v1/categories/panjabi/products?${LIST}&sort=price-desc&material=linen`,
     "/api/v1/categories/men/children",
     "/api/v1/categories/no-such-category",

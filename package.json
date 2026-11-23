@@ -74,6 +74,7 @@
     "test": "node scripts/test-runner.mjs",
     "test:ci": "node scripts/test-runner.mjs",
     "test:affected": "node scripts/test-affected.mjs",
+    "ci:local": "node scripts/ci-local.mjs",
     "worktree": "node scripts/worktree.mjs",
     "test:watch": "vitest"
   },

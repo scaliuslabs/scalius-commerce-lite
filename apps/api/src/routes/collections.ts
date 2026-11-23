@@ -3,7 +3,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { collections } from "@scalius/database/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import { NotFoundError } from "../utils/api-error";
-import { successEnvelope, paginationSchema, errorResponses, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema } from "../schemas/responses";
+import { successEnvelope, paginationSchema, errorResponses, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, listingSortSchema, LISTING_SORT_DESCRIPTION } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import { getPublicCollectionCatalog, getPublicCollectionSitemapEntries, listPublicCollectionDirectory } from "@scalius/core/modules/catalog";
 import { marketPresenceQueryField } from "../schemas/markets";
@@ -115,15 +115,7 @@ const collectionCatalogQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   ...listingCursorQuerySchema,
-  sort: z.enum([
-    "newest",
-    "price-asc",
-    "price-desc",
-    "name-asc",
-    "name-desc",
-    "discount",
-    "rating",
-  ]).optional(),
+  sort: listingSortSchema.optional().openapi({ description: LISTING_SORT_DESCRIPTION }),
   minRating: minRatingQuerySchema,
   search: z.string().optional(),
   minPrice: majorMoney(z.coerce.number().min(0)).optional(),
