@@ -216,6 +216,12 @@ export const MUTATIONS = {
     cases: ["review 5, S6: the theme's chrome with the phone tab bar, under a dark page"],
     expect: /nav#mobile-tab-bar paints .* no row of the table claims that surface/,
   },
+  "R5-A3 the dark colours' ring is the action colour": {
+    why: "the derived dark colours ring a focused field in the action colour, which shows under 3:1 on the field's own border",
+    rewrites: [rewrite("packages/shared/src/storefront-theme/tokens.ts", "ring: storefrontThemeFocusRing({ ring: primary, input, background, card, foreground }),", "ring: primary,")],
+    cases: ["review 5: the store's own page under the marketplace palette's dark colours"],
+    expect: /input#\w+: its focus ring reads at 3:1 on/,
+  },
   "P2 a page paint with no tokens draws the store's own page": {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",
     // With the layout's guard too (review 5, S4), which draws no paint on a cart not in token mode.

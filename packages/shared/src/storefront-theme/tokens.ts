@@ -294,13 +294,23 @@ type Palette = Readonly<StorefrontThemeColors>;
  * the card (WCAG 1.4.11): the border is the only edge a text field has.
  */
 function palette(colors: Omit<Palette, "popover" | "popover-foreground" | "ring"> & Partial<Palette>): Palette {
+  const input = storefrontThemeFieldBorder(colors);
   return {
     popover: colors.card,
     "popover-foreground": colors["card-foreground"],
-    ring: colors.primary,
     ...colors,
-    input: storefrontThemeFieldBorder(colors),
+    input,
+    ring: storefrontThemeFocusRing({ ...colors, ring: colors.ring ?? colors.primary, input }),
   } as Palette;
+}
+
+/**
+ * A colour set's focus ring as the palettes give it: a field's border turns
+ * this colour when it has focus, so it shows (3:1) against that border and
+ * on the page and the card; its tint taken toward the ink until it does.
+ */
+export function storefrontThemeFocusRing(colors: Pick<StorefrontThemeColors, "ring" | "input" | "background" | "card" | "foreground">): string {
+  return readableOn(colors.ring, [colors.input, colors.background, colors.card], colors.foreground, STOREFRONT_THEME_MIN_FIELD_BORDER_CONTRAST);
 }
 
 /**
@@ -468,6 +478,7 @@ export function storefrontDarkPalette(colors: StorefrontThemeColors): Storefront
   for (let step = 1; step <= 10 && storefrontThemeColorDistance(mutedForeground, destructive) < STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE; step += 1) {
     destructive = liftError(mix(colors.destructive, "#ff0000", step / 10));
   }
+  const input = fieldBorder(mix(background, paper, 0.24), [background, card], paper);
   return {
     background, foreground, card, "card-foreground": foreground, popover: card, "popover-foreground": foreground,
     primary, "primary-foreground": background,
@@ -475,7 +486,8 @@ export function storefrontDarkPalette(colors: StorefrontThemeColors): Storefront
     muted, "muted-foreground": mutedForeground,
     accent, "accent-foreground": foreground,
     destructive, "destructive-foreground": background,
-    border: mix(background, paper, 0.16), input: fieldBorder(mix(background, paper, 0.24), [background, card], paper), ring: primary,
+    // A field's focus turns its border the ring colour: it shows on that border, lifted from the action colour.
+    border: mix(background, paper, 0.16), input, ring: storefrontThemeFocusRing({ ring: primary, input, background, card, foreground }),
   };
 }
 

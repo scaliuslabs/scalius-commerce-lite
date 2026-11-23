@@ -336,6 +336,9 @@ const REGRESSIONS = {
   // Review 5, S6: the theme's phone tab bar (`bottom-tabs`) under the theme's chrome, drawn outside token scope.
   "review 5, S6: the theme's chrome with the phone tab bar, under a dark page": { request: { noor: true, tabs: true }, privatePages: { chrome: "theme", tokens: { cart: { page: DARK } } } },
   "review 5, S6: the theme's chrome with the phone tab bar, no tokens": { request: { noor: true, tabs: true, scheme: "dark" }, privatePages: { chrome: "theme" } },
+  // Review 5: the default look under a palette whose action colour is a mid tone. A field's focus turns its border
+  // the ring colour, which must read at 3:1 on the field's own border, in the derived dark colours too.
+  "review 5: the store's own page under the marketplace palette's dark colours": { request: { palette: "marketplace", scheme: "dark" }, privatePages: {} },
   // What the save must refuse (under a mutation that lets one through, the drawing must fail).
   "a stylesheet hiding a host part": { refused: "unscoped_selector", privatePages: { css: '[data-part="summary"] * { display: none } [data-part="details-submit"] * { visibility: hidden }' } },
   "summary rows that do not read on their summary": { refused: "contrast", privatePages: { tokens: { cart: { "summary-rows": { text: "#eeeeee" }, summary: { background: "#ffffff" } } } } },
