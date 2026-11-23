@@ -216,6 +216,8 @@ export const installedAppsMessages = defineMessages({
     problem_atLeast: "Enter {min} or more.",
     problem_atMost: "Enter {max} or less.",
     problem_https: "Enter a full address that starts with https://",
+    problem_storePage: "Use a page on your store, a path like {example}, not another site's address.",
+    storePageHelp: "A page on your store, a path like {example}.",
     problem_email: "Enter an email address like name@example.com.",
     problem_color: "Use a color code like #1a2b3c.",
 
@@ -521,6 +523,8 @@ export const installedAppsMessages = defineMessages({
     problem_atLeast: "{min} বা তার বেশি দিন।",
     problem_atMost: "{max} বা তার কম দিন।",
     problem_https: "https:// দিয়ে শুরু হওয়া পুরো ঠিকানা দিন",
+    problem_storePage: "আপনার স্টোরের একটি পেজ দিন, {example}-এর মতো একটি পাথ; অন্য সাইটের ঠিকানা নয়।",
+    storePageHelp: "আপনার স্টোরের একটি পেজ, {example}-এর মতো একটি পাথ।",
     problem_email: "name@example.com এর মতো একটি ইমেইল ঠিকানা দিন।",
     problem_color: "#1a2b3c এর মতো একটি রঙের কোড দিন।",
 

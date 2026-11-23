@@ -24,11 +24,19 @@ export type SettingProblem =
   | { kind: "atLeast"; min: number }
   | { kind: "atMost"; max: number }
   | { kind: "https" }
+  | { kind: "storePage" }
+  | { kind: "stored"; message: string }
   | { kind: "email" }
   | { kind: "color" };
 
 const COLOR = /^#[0-9a-f]{6}$/;
 const SECRET_MAX = 4096;
+/** An example of what a store-page setting takes (a path on this store, never another site's address). */
+export const STORE_PAGE_EXAMPLE = "/pages/shipping-policy";
+// The API's store-page rule (settings-schema.ts urlValue): a path from the root, no host, query, hash or dot segments.
+const STORE_PAGE = /^\/(?!\/)[^\\\s?#]*$/u;
+const storePage = (value: string) =>
+  value.length <= 2048 && STORE_PAGE.test(value) && !value.split("/").some((part) => part === "." || part === "..") && !/%(?:2f|5c|2e)/iu.test(value);
 
 export function draftFromSettings(settings: AppDetail["settings"]): SettingsDraft {
   const values: SettingsDraft["values"] = {};
@@ -105,6 +113,7 @@ export function checkSetting(field: AppSettingField, draft: SettingsDraft, secre
       return null;
     }
     case "url":
+      if (field.store) return storePage(value) ? null : { kind: "storePage" };
       try {
         new URL(value);
       } catch {
@@ -123,11 +132,23 @@ export function checkSetting(field: AppSettingField, draft: SettingsDraft, secre
 /** The key a translation's problem is filed under (and its control's id suffix). */
 export const translationProblemKey = (key: string, locale: string) => `${key}.${locale}`;
 
-/** Every field's problem, by key; a translation's under `<key>.<language>`. */
-export function checkSettings(fields: readonly AppSettingField[], draft: SettingsDraft, secrets: Record<string, boolean>): Record<string, SettingProblem> {
+/**
+ * Every field's problem, by key; a translation's under `<key>.<language>`.
+ * `stored`: the values the API reports as no longer accepted (`settings.invalid`,
+ * key → its message) against `saved`, the draft as last saved. Such a field
+ * keeps its stored value and that message until the merchant changes it.
+ */
+export function checkSettings(
+  fields: readonly AppSettingField[],
+  draft: SettingsDraft,
+  secrets: Record<string, boolean>,
+  stored?: { invalid: Record<string, string>; saved: SettingsDraft },
+): Record<string, SettingProblem> {
   const problems: Record<string, SettingProblem> = {};
   for (const field of fields) {
-    const problem = checkSetting(field, draft, secrets[field.key] === true);
+    const message = stored?.invalid[field.key];
+    const unchanged = stored !== undefined && message !== undefined && sameFormValue(draft.values[field.key], stored.saved.values[field.key]);
+    const problem: SettingProblem | null = unchanged ? { kind: "stored", message } : checkSetting(field, draft, secrets[field.key] === true);
     if (problem) problems[field.key] = problem;
     if (!field.translatable || field.maxLength === null) continue;
     for (const [locale, texts] of Object.entries(draft.translations)) {
