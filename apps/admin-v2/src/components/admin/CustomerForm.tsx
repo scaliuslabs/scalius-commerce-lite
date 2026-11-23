@@ -34,7 +34,7 @@ import { formatDateTime, useMessages } from "~/i18n";
 import { customerPageMessages } from "~/i18n/customer-page";
 import { customerAddressesMessages } from "~/i18n/customer-addresses";
 import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
-import { readCustomerPhoneConflict, readCustomerSignInRefusal, type CustomerPhoneConflict } from "~/lib/admin-api-conflicts";
+import { isCustomerSignInChanged, readCustomerPhoneConflict, readCustomerSignInRefusal, type CustomerPhoneConflict } from "~/lib/admin-api-conflicts";
 import { CustomerTrashNotice, type TrashedCustomer } from "./CustomerTrashNotice";
 import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
@@ -227,6 +227,11 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
         if (defaultValues?.id) void queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(defaultValues.id) });
         return t(signInRefusal.field === "phone" ? "contactIsSignInPhone" : "contactIsSignInEmail");
       }
+      if (isCustomerSignInChanged(error)) {
+        // A sign-in, proof or reset landed after this page read the customer: reload what it holds now.
+        if (defaultValues?.id) void queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(defaultValues.id) });
+        return t("signInChanged");
+      }
       const conflict = readCustomerPhoneConflict(error);
       if (!conflict) return undefined;
       setPhoneConflict(conflict);
@@ -256,7 +261,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <FormField
             control={form.control}
             name="phone"
-            render={({ field, fieldState }) => signIn?.phoneProven ? (
+            render={({ field, fieldState }) => signIn?.phoneProven || recovery?.method === "phone" ? (
               <SignInContact label={t("phone")} value={savedPhone ? formatPhone(savedPhone) : null} />
             ) : canSave ? (
               <div className="flex flex-col gap-2">
@@ -279,7 +284,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <FormField
             control={form.control}
             name="email"
-            render={({ field, fieldState }) => signIn?.emailProven ? (
+            render={({ field, fieldState }) => signIn?.emailProven || recovery?.method === "email" ? (
               <SignInContact label={t("email")} value={defaultValues?.email} />
             ) : canSave ? (
               <Field label={t("email")} error={fieldState.error?.message}>

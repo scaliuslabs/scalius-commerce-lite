@@ -1016,6 +1016,82 @@ function collectWholeModuleMockViolations() {
     .map((file) => ({ name: relative(root, file), text: readFileSync(file, "utf8") })));
 }
 
+// ---------------------------------------------------------------------------
+// How a customer signs in has one writer
+// ---------------------------------------------------------------------------
+
+/** The one module that writes how a customer signs in (rules/auth/sign-in-writes-name-their-version.md). */
+export const SIGN_IN_WRITER = "packages/core/src/modules/customers/sign-in-writes.ts";
+const SIGN_IN_WRITE_ROOTS = ["apps/api/src", "packages/core/src", "packages/database/src"];
+/** Columns an update of `customers` may set only through the writer. */
+const SIGN_IN_UPDATE_KEYS = new Set(["phone", "email", "phoneVerifiedAt", "emailVerifiedAt", "signInRecovery", "signInRecoveryAt", "signInVersion"]);
+/** Columns a new `customers` row may carry only through the writer (a contact alone is a new record's). */
+const SIGN_IN_INSERT_KEYS = new Set(["phoneVerifiedAt", "emailVerifiedAt", "signInRecovery", "signInRecoveryAt", "signInVersion"]);
+const RAW_SIGN_IN_WRITES = [
+  /\bUPDATE\s+[`"]?customers[`"]?\s+SET\b[^;`]*?\b(?:phone|email|phone_verified_at|email_verified_at|sign_in_recovery|sign_in_recovery_at|sign_in_version)[`"]?\s*=/i,
+  /\b(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE|DELETE\s+FROM)\s+[`"]?customer_identities\b/i,
+];
+
+/**
+ * Writes of how a customer signs in outside its one writer: an update of
+ * `customers` that sets a sign-in column, spreads or passes a value whose keys
+ * cannot be read here; an insert that carries a proof, a recovery mark or the
+ * version; any write of `customer_identities`; the same in raw SQL.
+ */
+export function signInWriteViolations(files) {
+  const violations = [];
+  for (const { name, text } of files) {
+    if (name === SIGN_IN_WRITER) continue;
+    for (const pattern of RAW_SIGN_IN_WRITES) if (pattern.test(text)) violations.push(`${name}: raw SQL writes how a customer signs in (${pattern})`);
+    if (!/\b(?:customers|customerIdentities)\b/.test(text)) continue;
+    const source = ts.createSourceFile(name, text, ts.ScriptTarget.Latest, true, name.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+    const at = (node) => `${name}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`;
+    /** `<target>.<method>(<table>)`: the table a write call names, or null. */
+    const writeOf = (node) => ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+      && ["insert", "update", "delete"].includes(node.expression.name.text) && node.arguments.length === 1 && ts.isIdentifier(node.arguments[0])
+      ? { method: node.expression.name.text, table: node.arguments[0].text }
+      : null;
+    const checkSet = (node, argument, keys, what) => {
+      if (!argument || !ts.isObjectLiteralExpression(argument)) {
+        violations.push(`${at(node)}: ${what} of customers takes a value whose columns can't be read; build it with ${SIGN_IN_WRITER}`);
+        return;
+      }
+      for (const property of argument.properties) {
+        if (ts.isSpreadAssignment(property)) violations.push(`${at(property)}: ${what} of customers spreads a value; build it with ${SIGN_IN_WRITER}`);
+        else if (property.name && keys.has(property.name.getText(source))) violations.push(`${at(property)}: ${what} of customers writes ${property.name.getText(source)}; only ${SIGN_IN_WRITER} does`);
+      }
+    };
+    const visit = (node) => {
+      const write = writeOf(node);
+      if (write?.table === "customerIdentities") violations.push(`${at(node)}: ${write.method}(customerIdentities) outside ${SIGN_IN_WRITER}`);
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+        const inner = writeOf(node.expression.expression);
+        const method = node.expression.name.text;
+        if (inner?.table === "customers" && inner.method === "update" && method === "set") checkSet(node, node.arguments[0], SIGN_IN_UPDATE_KEYS, "an update");
+        if (inner?.table === "customers" && inner.method === "insert" && method === "values") {
+          const values = node.arguments[0];
+          for (const row of values && ts.isArrayLiteralExpression(values) ? values.elements : [values]) checkSet(node, row, SIGN_IN_INSERT_KEYS, "an insert");
+        }
+        if (method === "onConflictDoUpdate" && /\.insert\(\s*customers\s*\)/.test(node.expression.expression.getText(source))) {
+          const options = node.arguments[0];
+          const set = options && ts.isObjectLiteralExpression(options)
+            ? options.properties.find((property) => property.name?.getText(source) === "set")
+            : undefined;
+          checkSet(node, set && ts.isPropertyAssignment(set) ? set.initializer : undefined, SIGN_IN_UPDATE_KEYS, "an upsert");
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+  return violations;
+}
+
+function collectSignInWriteViolations() {
+  return signInWriteViolations(SIGN_IN_WRITE_ROOTS.flatMap((path) => codeFiles(path))
+    .map((file) => ({ name: relative(root, file), text: readFileSync(file, "utf8") })));
+}
+
 /** Violations of one policy for the given file texts ({ name, text }). */
 export function policyViolations(policy, files) {
   const violations = [];
@@ -1270,6 +1346,7 @@ export function collectSourcePolicyViolations() {
     ...mutableModuleVariables().map((v) => `no mutable module state\n    ${v}`),
     ...collectWholeModuleMockViolations().map((v) => `a test mock of an internal module spreads the real module (async (importOriginal) => ({ ...(await importOriginal()), ... })) or says why it replaces it (// whole-module mock: <reason>)\n    ${v}`),
     ...collectCoreBoundaryViolations().map((v) => `core domain boundaries (scripts/core-boundaries.mjs)\n    ${v}`),
+    ...collectSignInWriteViolations().map((v) => `how a customer signs in is written only by ${SIGN_IN_WRITER}, which names the version each write read\n    ${v}`),
   ];
 }
 
@@ -1280,6 +1357,6 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     for (const violation of violations) console.error(`- ${violation}`);
     process.exitCode = 1;
   } else {
-    console.log(`Source policy check: OK (${policies.length + 5} policies)`);
+    console.log(`Source policy check: OK (${policies.length + 6} policies)`);
   }
 }

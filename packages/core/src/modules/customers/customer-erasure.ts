@@ -90,6 +90,7 @@ import { REVIEW_FALLBACK_DISPLAY_NAME } from "@scalius/shared/reviews";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { inJsonArray } from "../../utils/in-json-array";
 import { hashCustomerAuthOtpIdentifier } from "./customer-auth-otp-challenges";
+import { eraseSignIn } from "./sign-in-writes";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -303,7 +304,8 @@ function orderStillNamesBuyer(): SQL {
 function recordNotErased(): SQL {
   return sql`(${customers.erasedAt} IS NULL OR ${customers.deletedAt} IS NULL OR ${customers.name} <> ${ERASED_TEXT}
     OR ${customers.email} IS NOT NULL OR ${customers.phone} <> ${NO_PHONE} OR ${customers.phoneVerifiedAt} IS NOT NULL
-    OR ${customers.emailVerifiedAt} IS NOT NULL OR ${customers.lastAuthenticatedAt} IS NOT NULL OR ${customers.taxExemptionId} IS NOT NULL)`;
+    OR ${customers.emailVerifiedAt} IS NOT NULL OR ${customers.lastAuthenticatedAt} IS NOT NULL OR ${customers.taxExemptionId} IS NOT NULL
+    OR ${customers.signInRecovery} IS NOT NULL OR ${customers.signInRecoveryAt} IS NOT NULL)`;
 }
 
 /**
@@ -331,26 +333,22 @@ function scrubStatements(db: Database, subjectId: string, scope: ErasureScope): 
     db.delete(buyerUploads).where(sql`${buyerUploads.orderId} IS NOT NULL AND ${orderIdSet(buyerUploads.orderId)}`),
     // First: it matches the contacts the statements below clear.
     db.delete(abandonedCheckouts).where(abandonedCheckoutsOfBuyer(scope)),
-    // Erased first: the address-book delete below then announces no update.
-    db.update(customers).set({
+    // Erased first: the address-book delete below then announces no update. How the
+    // customer signs in (contacts, proofs, a reset's recovery mark, linked identities)
+    // is cleared by its one writer, which advances the version: an in-flight sign-in fails.
+    ...eraseSignIn(db, and(inIds(customers.id), recordNotErased())!, {
       name: erased,
-      email: null,
-      phone: NO_PHONE,
       whatsapp: null,
-      phoneVerifiedAt: null,
-      emailVerifiedAt: null,
       lastAuthenticatedAt: null,
       // A tax registration number names its holder; the order snapshots keep theirs as issued.
       taxExempt: false,
       taxExemptionId: null,
       erasedAt: sql`coalesce(${customers.erasedAt}, unixepoch())`,
       deletedAt: sql`coalesce(${customers.deletedAt}, unixepoch())`,
-      updatedAt: now,
-    }).where(and(inIds(customers.id), recordNotErased())),
+    }, inIds(customerIdentities.customerId)),
     db.update(customerHistory).set({ name: erased, email: null, phone: NO_PHONE })
       .where(and(inIds(customerHistory.customerId), sql`(${customerHistory.name} <> ${erased} OR ${customerHistory.email} IS NOT NULL OR ${customerHistory.phone} <> ${NO_PHONE})`)),
     db.delete(customerAddresses).where(inIds(customerAddresses.customerId)),
-    db.delete(customerIdentities).where(inIds(customerIdentities.customerId)),
     db.delete(customerSessions).where(inIds(customerSessions.customerId)),
     // The account's order totals (an erased account keeps none: the triggers skip it after).
     db.delete(accountOrderTotals).where(inIds(accountOrderTotals.customerId)),

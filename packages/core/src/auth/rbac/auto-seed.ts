@@ -50,6 +50,9 @@ function getSystemRoleSeeds(): SystemRoleSeed[] {
         (p) =>
           !p.includes("permanent_delete") &&
           p !== PERMISSIONS.ORDERS_REFUND &&
+          // Resetting how a buyer signs in hands their account to a contact staff name:
+          // the Super Admin's call, or a role the owner grants it to.
+          p !== PERMISSIONS.CUSTOMERS_RESET_SIGN_IN &&
           p !== PERMISSIONS.GIFT_CARDS_MANAGE &&
           p !== PERMISSIONS.PAYOUTS_MANAGE &&
           p !== PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT &&

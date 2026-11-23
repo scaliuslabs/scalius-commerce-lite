@@ -19,6 +19,7 @@ import { nanoid } from "nanoid";
 import { fromMinor } from "@scalius/shared/money";
 import { customerKind, guestRecordForContact, normalizeContactEmail } from "./customer-identity";
 import { SIGN_IN_RECOVERY_DAYS } from "./sign-in-recovery";
+import { isSignInChangedError, signInChangedConflict, writeCustomerWhere, writeSignIn } from "./sign-in-writes";
 import { storedPhone } from "@scalius/shared/customer-auth-policy";
 import { currentMarketingContactSql, segmentWhereSql } from "./customer-segments";
 import {
@@ -636,17 +637,23 @@ export async function updateCustomer(
     // A save that changes nothing writes nothing: no bumped timestamp, no empty "Updated" entry.
     if (taxUnchanged && (Object.keys(next) as Array<keyof typeof next>).every((key) => (next[key] ?? null) === (existing[key] ?? null))) return;
 
-    // An ordinary edit never touches how a buyer signs in: a proven sign-in contact is refused
-    // (only a sign-in reset changes it, `resetCustomerSignIn`); an unproven contact is a plain edit
-    // that stays unproven, so it can never sign anyone in until the buyer proves it.
+    // An ordinary edit never touches how a buyer signs in: a sign-in contact (a proven one, or
+    // the live recovery contact of a reset) is refused (only a sign-in reset changes it,
+    // `resetCustomerSignIn`); another contact is a plain edit that stays unproven, so it can
+    // never sign anyone in until the buyer proves it. The write names the version this read:
+    // a proof or reset that lands first refuses it (409 `sign_in_changed`).
     const phoneMoved = data.phone != null && storedPhone(data.phone) !== existing.phone;
     const emailMoved = data.email !== undefined && normalizeContactEmail(data.email) !== normalizeContactEmail(existing.email);
-    const provenMoved = existing.accountClaimedAt
-        ? (phoneMoved && existing.phoneVerifiedAt ? "phone" : emailMoved && existing.emailVerifiedAt ? "email" : null)
+    const recoveryLive = existing.signInRecovery && existing.signInRecoveryAt
+        && new Date(existing.signInRecoveryAt).getTime() + SIGN_IN_RECOVERY_DAYS * 86_400_000 > Date.now()
+        ? existing.signInRecovery
         : null;
-    if (provenMoved) {
-        throw new AppError(409, "contact_is_sign_in", `The customer signs in with this ${provenMoved}. Reset their sign-in to change it.`, {
-            field: provenMoved,
+    const signsIn = (kind: "phone" | "email") => Boolean(existing.accountClaimedAt)
+        && (recoveryLive === kind || Boolean(kind === "phone" ? existing.phoneVerifiedAt : existing.emailVerifiedAt));
+    const signInMoved = phoneMoved && signsIn("phone") ? "phone" : emailMoved && signsIn("email") ? "email" : null;
+    if (signInMoved) {
+        throw new AppError(409, "contact_is_sign_in", `The customer signs in with this ${signInMoved}. Reset their sign-in to change it.`, {
+            field: signInMoved,
             reason: "contact_is_sign_in",
             allowed: ["reset_sign_in"],
         });
@@ -654,8 +661,9 @@ export async function updateCustomer(
     // Only the fields the caller sent: a field another writer changed since the read keeps its value.
     const changes = {
         ...(data.name != null ? { name: data.name } : {}),
-        ...(data.email !== undefined ? { email: data.email } : {}),
-        ...(data.phone != null ? { phone: storedPhone(data.phone) } : {}),
+        // A contact is written only when it changes: how the buyer signs in is versioned.
+        ...(data.email !== undefined && (data.email ?? null) !== (existing.email ?? null) ? { email: data.email } : {}),
+        ...(phoneMoved ? { phone: storedPhone(data.phone!) } : {}),
         ...(data.taxExempt !== undefined || data.taxExemptionId !== undefined ? tax : {}),
         // Naming a checkout guest record in the dashboard makes it the merchant's customer.
         ...(!existing.accountClaimedAt && next.name !== existing.name ? { origin: "merchant" as const } : {}),
@@ -674,10 +682,13 @@ export async function updateCustomer(
             // An erasure committed since the read refuses the edit.
             customerNotErasedGuard(db, id),
             ...(expectsTax ? [buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${customers} WHERE ${customers.id} = ${id} AND ${taxAsRead})`, "CUSTOMER_TAX_MOVED")] : []),
-            db.update(customers).set({ ...changes, updatedAt: sql`unixepoch()` }).where(and(eq(customers.id, id), live)),
+            ...("phone" in changes || "email" in changes
+                ? writeSignIn(db, existing, changes, live)
+                : [writeCustomerWhere(db, and(eq(customers.id, id), live)!, { ...changes, updatedAt: sql`unixepoch()` })]),
             historyFromLiveRow(db, id, "updated", actorId, live),
         ]);
     } catch (error) {
+        if (isSignInChangedError(error)) throw signInChangedConflict();
         if (isBatchGuardError(error, "CUSTOMER_TAX_MOVED")) {
             throw new AppError(409, "tax_exemption_changed", "The customer's tax exemption changed since it was read. Read the customer again and repeat the change.");
         }

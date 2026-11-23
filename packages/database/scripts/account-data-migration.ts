@@ -38,7 +38,9 @@ const HEADER = `-- What a buyer's account reads, at any order count (rules/order
 -- - \`customers.sign_in_recovery\` / \`sign_in_recovery_at\`: the one recovery
 --   contact a sign-in reset named; for 7 days, and only while the account
 --   proves nothing, a sign-in code to it reaches the account. Partial indexes
---   on the marked phone and email.`;
+--   on the marked phone and email.
+-- - \`customers.sign_in_version\`: advanced by every write of how a customer
+--   signs in; each such write names the version it read (0 for every row).`;
 
 /** Drizzle's statements in the file it wrote, without breakpoints, comments, triggers, backfills or the ledger row. */
 function drizzleStatements(migration: string): string[] {

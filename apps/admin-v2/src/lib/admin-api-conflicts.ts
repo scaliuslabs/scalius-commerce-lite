@@ -214,6 +214,12 @@ export interface CustomerSignInRefusal {
   field: "phone" | "email";
 }
 
+/** A write of a customer's sign-in contacts lost to another that landed after the page read them (409 `sign_in_changed`). */
+export function isCustomerSignInChanged(error: unknown): boolean {
+  const parsed = readAdminApiError(error);
+  return parsed?.status === 409 && (parsed.details as { reason?: unknown } | null | undefined)?.reason === "sign_in_changed";
+}
+
 export function readCustomerSignInRefusal(error: unknown): CustomerSignInRefusal | null {
   const parsed = readAdminApiError(error);
   if (parsed?.status !== 409 || !parsed.details || typeof parsed.details !== "object") return null;

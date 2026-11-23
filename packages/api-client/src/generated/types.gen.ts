@@ -44957,14 +44957,16 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 email: string | null;
                 phone: string | null;
                 /**
-                 * created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, or erased (see `order`, `relatedCustomer` and `verifiedContact`)
+                 * created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, erased, or sign_in_reset (see `order`, `relatedCustomer` and `verifiedContact`)
                  */
                 changeType: string;
                 verifiedContact: 'email' | 'phone' | null;
                 author: {
-                    kind: 'staff' | 'app' | 'buyer' | 'system';
+                    kind: 'staff' | 'app' | 'agent' | 'buyer' | 'system';
                     name: string | null;
                     appId: string | null;
+                    connection: string | null;
+                    client: string | null;
                 } | null;
                 order: {
                     id: string;

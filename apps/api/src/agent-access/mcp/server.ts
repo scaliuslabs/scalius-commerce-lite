@@ -46,6 +46,7 @@ import {
   isConfirmGated,
   mintConfirmToken,
   readAgentConfirmPolicy,
+  confirmPolicyWaives,
   type ConfirmStep,
 } from "./confirm";
 import { confirmSummaryRows } from "./confirm-summary";
@@ -995,8 +996,9 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
     }
   }
   const gated = prepared.some(stepGated);
-  const policy = gated ? await readAgentConfirmPolicy(deps.env, principal) : "none";
-  if (policy !== "none") {
+  // A grant's policy may waive an approval, never a security one.
+  const waived = !gated || confirmPolicyWaives(await readAgentConfirmPolicy(deps.env, principal), prepared);
+  if (!waived) {
     // An approval binds the values the owner reads: a value another step
     // supplies is unknown when they read it.
     const referenced = prepared.find((step) => stepGated(step) && containsStepReference(step.input));
@@ -1030,7 +1032,7 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
         return agentErrorResult(errorFromUnknown(error, step.operation.operationId));
       }
     }
-    const confirmation = gated && policy !== "none"
+    const confirmation = !waived
       ? { summary: await approvalSummary(getDb(deps.env), confirmSummaryRows(confirmSteps, await summaryCurrencies(deps.env, confirmSteps))), approvalRequired: true, ...approvalReason(principal, confirmSteps) }
       : null;
     return toolResult({
@@ -1043,7 +1045,7 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
   }
 
   let confirmation: { by: AgentConfirmation; token: string } | null = null;
-  if (gated && policy !== "none") {
+  if (!waived) {
     const invalid = await validateBeforeApproval(deps, principal, prepared, options);
     if (invalid) return invalid;
     const outcome = await resolveConfirmation(deps, principal, confirmSteps, args.approvalId, ctx);

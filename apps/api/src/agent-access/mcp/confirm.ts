@@ -153,6 +153,17 @@ export async function readAgentConfirmPolicy(env: Env, principal: AgentPrincipal
   return row?.value === "none" ? "none" : "destructive_financial";
 }
 
+/**
+ * Whether the grant's policy lets these gated steps run without an approval.
+ * A policy of `none` waives destructive and financial approvals, never a
+ * security one: a write with security impact (a sign-in reset, an app's
+ * access) always waits for the owner in the dashboard.
+ */
+export function confirmPolicyWaives(policy: AgentConfirmPolicy, steps: readonly GatedStep[]): boolean {
+  return policy === "none" && !steps.some((step) => (step.operation.impact === "security" && step.operation.risk !== "read")
+    || approvalClassOf(step.operation, step.changedMoneyFields) === "security");
+}
+
 /** Sets one grant's confirm policy. Human-only: never reachable from an agent call. */
 export async function writeAgentConfirmPolicy(env: Env, grantId: string, policy: AgentConfirmPolicy): Promise<void> {
   const key = `${POLICY_KEY_PREFIX}${grantId}`;

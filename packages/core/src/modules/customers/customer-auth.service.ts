@@ -39,6 +39,15 @@ import {
 } from "./customer-auth-rate-limit";
 import { buildVerifiedContactOrderLink, phoneChangedHistory, signedUpHistory } from "./customer-identity";
 import { recoveryOwnerQuery } from "./sign-in-recovery";
+import {
+    insertCustomer,
+    isSignInChangedError,
+    linkIdentity,
+    proveSignIn,
+    signInChangedConflict,
+    signInWithLinkedIdentity,
+    writeSignIn,
+} from "./sign-in-writes";
 import { parseContactPhone, validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import { isQualifiedProviderId, type IdentityExchangeOutput } from "@scalius/shared/plugins/providers";
 import {
@@ -52,12 +61,7 @@ import {
 import type { EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
 import { assertCustomerChannelReady, phoneCodeChannel } from "./customer-code-channels";
-import {
-    acceptedCustomerCountries,
-    customerAuthDocument,
-    customerCountriesDocument,
-    selectDocumentsWithSellingCountries,
-} from "../settings";
+import { readSignInPolicy } from "./sign-in-policy";
 import { formatAddressInline, usesDeliveryHierarchy } from "@scalius/shared/address";
 import { customerAddressFromRow, type CustomerAddress } from "./addresses";
 import { otpHmacSha256Hex } from "../../utils/credential-encryption";
@@ -243,27 +247,6 @@ export function getCookieConfig(
     return {
         sameSite: isProd ? "None" : "Lax",
         domainAttr: getCustomerAuthCookieDomainAttr(customerAuthCookieDomain),
-    };
-}
-
-async function getCustomerAuthRuntimePolicy(db: Database): Promise<{
-    identity: CustomerIdentitySettings;
-    phoneCountryPolicy: PhoneCountryPolicy;
-}> {
-    // The countries the markets sell to ride in the same statement: a phone
-    // from any of them is accepted whatever the merchant's list says.
-    const { rows, sellingCountries } = await selectDocumentsWithSellingCountries(db, [customerAuthDocument, customerCountriesDocument]);
-    const [auth, countries] = await Promise.all([
-        customerAuthDocument.fromRows(rows),
-        customerCountriesDocument.fromRows(rows),
-    ]);
-    const accepted = acceptedCustomerCountries(countries.value, sellingCountries);
-    return {
-        identity: auth.value,
-        phoneCountryPolicy: {
-            countries: accepted.allowedCountries,
-            mode: accepted.allowedCountriesMode,
-        },
     };
 }
 
@@ -502,7 +485,7 @@ export async function sendOtp(
     db: Database,
     input: SendOtpInput,
 ): Promise<SendOtpResult> {
-    const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await readSignInPolicy(db);
     const identifier = normalizeIdentifier(input.method, input.identifier, phoneCountryPolicy);
     // Only the channels the store chose in Customer accounts; never another one.
     // A bound change code is not a sign-in: email goes out wherever the store can send it.
@@ -610,7 +593,7 @@ export async function verifyOtp(
     if (!input.code?.trim()) {
         throw new ValidationError("Enter the 6-digit code.");
     }
-    const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await readSignInPolicy(db);
     const identifier = normalizeIdentifier(input.method, input.identifier, phoneCountryPolicy);
     const channel = resolveSignInChannel(identity.channels, input.method, input.channel);
     if (!channel) throw new ValidationError("There's no active code. Send a new code.");
@@ -646,7 +629,8 @@ export async function verifyOtp(
     if (owner.kind === "account") {
         row = markProven(owner.row, input.method, authenticatedAt);
         address = owner.address;
-        statements.push(db.update(customers).set(proofUpdate(input.method)).where(eq(customers.id, row.id)) as SQLiteBatchItem);
+        // Decided from the row as read: the contact it holds is the one the code went to.
+        statements.push(...proveSignIn(db, owner.row, input.method, identifier));
     } else {
         row = newAccount!.row;
         address = newAccount!.address;
@@ -706,13 +690,7 @@ export async function signInWithIdentity(
     const closed = () => new ValidationError("This account was closed. Contact the store to restore it.");
     const now = new Date();
     const nowSeconds = Math.floor(now.getTime() / 1000);
-    const identityRow = (customerId: string) => db.insert(customerIdentities).values({
-        providerId: input.providerId,
-        subject,
-        customerId,
-        createdAt: nowSeconds,
-        lastUsedAt: nowSeconds,
-    }) as SQLiteBatchItem;
+    const linked = { providerId: input.providerId, subject, at: nowSeconds };
 
     const known = await db
         .select({ customer: customers, address: customerAddresses })
@@ -724,14 +702,8 @@ export async function signInWithIdentity(
     if (known) {
         if (known.customer.deletedAt) throw closed();
         const row: CustomerRow = { ...known.customer, lastAuthenticatedAt: now };
-        const session = await createSessionForCustomer(db, row, known.address, input.sessionHashKey, [
-            db.update(customers)
-                .set({ lastAuthenticatedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
-                .where(eq(customers.id, row.id)) as SQLiteBatchItem,
-            db.update(customerIdentities)
-                .set({ lastUsedAt: nowSeconds })
-                .where(and(eq(customerIdentities.providerId, input.providerId), eq(customerIdentities.subject, subject))) as SQLiteBatchItem,
-        ]);
+        const session = await createSessionForCustomer(db, row, known.address, input.sessionHashKey,
+            signInWithLinkedIdentity(db, known.customer, linked));
         return { status: "signed_in", session, customer: buildCustomerAuthProfile(row, known.address), isNewUser: false, via: "known" };
     }
 
@@ -756,10 +728,8 @@ export async function signInWithIdentity(
         if (owner.kind === "deleted") throw closed();
         if (owner.kind !== "account") continue;
         const row = markProven(owner.row, method, now);
-        const session = await createSessionForCustomer(db, row, owner.address, input.sessionHashKey, [
-            db.update(customers).set(proofUpdate(method)).where(eq(customers.id, row.id)) as SQLiteBatchItem,
-            identityRow(row.id),
-        ]);
+        const session = await createSessionForCustomer(db, row, owner.address, input.sessionHashKey,
+            proveSignIn(db, owner.row, method, identifier, linked));
         return { status: "signed_in", session, customer: buildCustomerAuthProfile(row, owner.address), isNewUser: false, via: "linked" };
     }
 
@@ -767,7 +737,7 @@ export async function signInWithIdentity(
     const name = input.facts.name?.trim();
     const method: "email" | "phone" | null = email ? "email" : phone ? "phone" : null;
     if (!name || !method) return { status: "needs_account_details" };
-    const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await readSignInPolicy(db);
     let accountPhone: string | null = null;
     if (phone) {
         try {
@@ -794,9 +764,9 @@ export async function signInWithIdentity(
     };
     const row = { totalOrders: 0, lastOrderAt: null, deletedAt: null, ...values } as CustomerRow;
     const session = await createSessionForCustomer(db, row, null, input.sessionHashKey, [
-        db.insert(customers).values(values) as SQLiteBatchItem,
+        insertCustomer(db, values),
         signedUpHistory(db, { accountId: row.id, via: method }) as SQLiteBatchItem,
-        identityRow(row.id),
+        linkIdentity(db, { ...linked, customerId: row.id }),
     ]);
     return { status: "signed_in", session, customer: buildCustomerAuthProfile(row, null), isNewUser: true, via: "created" };
 }
@@ -816,7 +786,7 @@ export async function getAccountPhoneVerificationPrompt(
     const account = await getActiveCustomerById(db, accountId);
     const phone = phoneOrNull(account?.phone);
     if (!account?.accountClaimedAt || account.phoneVerifiedAt || !phone) return null;
-    const { identity } = await getCustomerAuthRuntimePolicy(db);
+    const { identity } = await readSignInPolicy(db);
     return await phoneCodeChannel(db, identity, credentialEncryptionKey, appProviders) ? { phone } : null;
 }
 
@@ -906,7 +876,7 @@ export async function sendAccountPhoneCode(
 ): Promise<AccountPhoneCodeResult> {
     const account = await getActiveCustomerById(db, input.accountId);
     if (!account?.accountClaimedAt) throw new UnauthorizedError("Please sign in again.");
-    const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await readSignInPolicy(db);
     const { phone, changing } = accountPhoneTarget(account, input.phone, phoneCountryPolicy);
     if (account.phoneVerifiedAt && !changing) throw new ConflictError("Your phone number is already verified.");
     // Whether the number is proven on another account is answered only at verify, after both
@@ -980,7 +950,7 @@ export async function verifyAccountPhoneCode(
     const loaded = await getActiveCustomerProfileRow(db, input.accountId);
     const account = loaded?.customer;
     if (!account?.accountClaimedAt) throw new UnauthorizedError("Please sign in again.");
-    const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await readSignInPolicy(db);
     const { phone } = accountPhoneTarget(account, input.phone, phoneCountryPolicy);
     const current = currentSignIn(account);
     if (!current) throw noSignInToConfirm();
@@ -1024,15 +994,15 @@ export async function verifyAccountPhoneCode(
             // Two finishes of one change race: only the one whose session is still live writes.
             ...(input.callerSessionTokenHash ? [buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${customerSessions}
                 WHERE ${customerSessions.tokenHash} = ${input.callerSessionTokenHash} AND ${customerSessions.revokedAt} IS NULL)`, CALLER_SESSION_ENDED) as SQLiteBatchItem] : []),
-            db.update(customers).set({
+            // Decided from the account as read: a sign-in write since (a reset, a staff edit) refuses it.
+            ...writeSignIn(db, account, {
                 phone,
                 whatsapp,
                 phoneVerifiedAt: sql`unixepoch()`,
                 signInRecovery: null,
                 signInRecoveryAt: null,
                 lastAuthenticatedAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
-            }).where(eq(customers.id, account.id)) as SQLiteBatchItem,
+            }),
             // Every session ends, the caller's too (its cookie may be a copy); the new one is written after.
             db.update(customerSessions).set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
                 .where(and(eq(customerSessions.customerId, account.id), isNull(customerSessions.revokedAt))) as SQLiteBatchItem,
@@ -1108,19 +1078,6 @@ async function queuePhoneChangedNotice(
         maxAttempts: 1,
     });
     return buildOtpDelivery({ channel: target.channel, purpose: "phone_changed", challengeKey: otpKey, deliveryKey, maskedPhone: input.maskedPhone });
-}
-
-function proofUpdate(method: "email" | "phone") {
-    return {
-        ...(method === "email"
-            ? { emailVerifiedAt: sql`coalesce(${customers.emailVerifiedAt}, unixepoch())` }
-            : { phoneVerifiedAt: sql`coalesce(${customers.phoneVerifiedAt}, unixepoch())` }),
-        // A proof ends a sign-in reset: the account signs in again.
-        signInRecovery: null,
-        signInRecoveryAt: null,
-        lastAuthenticatedAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-    };
 }
 
 function markProven(row: CustomerRow, method: "email" | "phone", at: Date): CustomerRow {
@@ -1304,7 +1261,7 @@ async function prepareNewAccount(
         } as CustomerRow,
         address,
         writes: [
-            db.insert(customers).values(values) as SQLiteBatchItem,
+            insertCustomer(db, values),
             ...(address ? [db.insert(customerAddresses).values(address) as SQLiteBatchItem] : []),
         ],
     };
@@ -1348,6 +1305,7 @@ async function createSessionForCustomer(
         await safeBatch(db, statements);
     } catch (error: unknown) {
         if (isBatchGuardError(error, CALLER_SESSION_ENDED)) throw new UnauthorizedError("Your session ended. Sign in again.");
+        if (isSignInChangedError(error)) throw signInChangedConflict();
         const message = error instanceof Error ? error.message : String(error);
         // Only a proven identifier is unique: a concurrent sign-up proved it first.
         if (message.includes("customers_verified_") || message.includes("UNIQUE constraint failed: customers.")) {
@@ -1475,10 +1433,10 @@ export async function updateCustomerProfile(
         throw new ValidationError("Enter your name.");
     }
 
-    const changes: Partial<CustomerInsertRow> = { name: nextName };
+    let whatsapp: string | null | undefined;
     const phone = phoneOrNull(existing.phone);
     if (updates.whatsapp !== undefined || existing.whatsapp || updates.phone !== undefined) {
-        const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+        const { identity, phoneCountryPolicy } = await readSignInPolicy(db);
         if (updates.phone !== undefined) {
             const typed = updates.phone?.trim() ? contactNumberOrThrow(updates.phone, "phone", phoneCountryPolicy) : null;
             if (typed !== phone) {
@@ -1496,17 +1454,18 @@ export async function updateCustomerProfile(
             if (typedWhatsapp) {
                 throw new ValidationError("This store doesn't ask for a separate WhatsApp number.", { field: "whatsapp", reason: "whatsapp_not_collected" });
             }
-            changes.whatsapp = null;
+            whatsapp = null;
         } else {
-            const whatsapp = typedWhatsapp === undefined ? existing.whatsapp : typedWhatsapp;
+            const kept = typedWhatsapp === undefined ? existing.whatsapp : typedWhatsapp;
             // Null means "the phone", as on an order.
-            changes.whatsapp = whatsapp && whatsapp !== phone ? whatsapp : null;
+            whatsapp = kept && kept !== phone ? kept : null;
         }
     }
 
+    // Name and WhatsApp only: how the buyer signs in is never written here.
     await db
         .update(customers)
-        .set({ ...changes, updatedAt: sql`unixepoch()` })
+        .set({ name: nextName, whatsapp: whatsapp === undefined ? sql`${customers.whatsapp}` : whatsapp, updatedAt: sql`unixepoch()` })
         .where(and(eq(customers.id, session.customerId), isNull(customers.deletedAt)));
 
     return readCustomerProfile(db, session);

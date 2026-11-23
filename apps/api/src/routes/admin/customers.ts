@@ -35,7 +35,8 @@ import { parseContactPhone } from "@scalius/shared/customer-utils";
 import { fromMinor } from "@scalius/shared/money";
 import { contactPhoneSql, customers, customerHistory, orders, user } from "@scalius/database/schema";
 import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
-import { eq, sql, isNull, isNotNull, and } from "drizzle-orm";
+import { eq, sql, isNull, isNotNull, and, inArray } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
 import { alias } from "drizzle-orm/sqlite-core";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { customerListFilterQuery, customerListFiltersFromQuery, customerMatchingSchema, readCustomerSlice } from "./customer-marketing";
@@ -96,18 +97,22 @@ const customerHistoryEntrySchema = z.object({
     email: pii("email", z.string().nullable()),
     phone: pii("phone", z.string().nullable()),
     changeType: z.string().openapi({
-        description: "created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, or erased (see `order`, `relatedCustomer` and `verifiedContact`)",
+        description: "created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, erased, or sign_in_reset (see `order`, `relatedCustomer` and `verifiedContact`)",
     }),
-    /** The proven contact behind signed_up / order_linked / order_moved_*. */
+    /** The proven contact behind signed_up / order_linked / order_moved_*; the kind of recovery contact a sign_in_reset named. */
     verifiedContact: z.enum(["email", "phone"]).nullable(),
     /**
      * Who made the change; `name` is the staff member's name when known (null
-     * for a removed account), `appId` the app's plugin id for kind `app`.
+     * for a removed account; for kind `agent`, the connection's owner it ran
+     * as), `appId` the app's plugin id for kind `app`, `connection` and
+     * `client` the agent connection's name and the client it runs in.
      */
     author: z.object({
-        kind: z.enum(["staff", "app", "buyer", "system"]),
+        kind: z.enum(["staff", "app", "agent", "buyer", "system"]),
         name: z.string().nullable(),
         appId: z.string().nullable(),
+        connection: z.string().nullable(),
+        client: z.string().nullable(),
     }).nullable(),
     /** The order that moved, for order_moved_in / order_moved_out. */
     order: z.object({ id: z.string(), orderNumber: z.number().int().nullable() }).nullable(),
@@ -757,19 +762,59 @@ const getHistoryRoute = createRoute({
     }
 });
 
+type HistoryAuthor = {
+    kind: "staff" | "app" | "agent" | "buyer" | "system";
+    name: string | null;
+    appId: string | null;
+    connection: string | null;
+    client: string | null;
+};
+type AgentAuthor = { ownerName: string | null; connection: string | null; client: string | null };
+
+/** `agent:<grant id>:<owner user id>`, as an approved agent's write records its actor. */
+function agentActorIds(actorId: string | null): { grantId: string; ownerUserId: string } | null {
+    const match = actorId ? /^agent:([^:]+):(.+)$/.exec(actorId) : null;
+    return match ? { grantId: match[1]!, ownerUserId: match[2]! } : null;
+}
+
+/** Each agent actor among these entries: its connection (name, client) and the staff member it ran as, read once each. */
+async function readAgentAuthors(db: Database, actorIds: ReadonlyArray<string | null>): Promise<Map<string, AgentAuthor>> {
+    const agents = [...new Set(actorIds.filter((id): id is string => agentActorIds(id) !== null))];
+    const authors = new Map<string, AgentAuthor>();
+    if (agents.length === 0) return authors;
+    const ids = agents.map((id) => agentActorIds(id)!);
+    const { readAgentConnection } = await import("../../agent-access/audit");
+    const [connections, owners] = await Promise.all([
+        Promise.all([...new Set(ids.map((id) => id.grantId))].map(async (grantId) => [grantId, await readAgentConnection(db, grantId)] as const)),
+        db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, [...new Set(ids.map((id) => id.ownerUserId))])),
+    ]);
+    const connectionOf = new Map(connections);
+    const ownerOf = new Map(owners.map((owner) => [owner.id, owner.name]));
+    for (const [index, actorId] of agents.entries()) {
+        const connection = connectionOf.get(ids[index]!.grantId) ?? null;
+        authors.set(actorId, { ownerName: ownerOf.get(ids[index]!.ownerUserId) ?? null, connection: connection?.name ?? null, client: connection?.client ?? null });
+    }
+    return authors;
+}
+
 /**
  * Who made a history entry. An app's dashboard call records `app:<plugin id>`
- * (entries written before the app kind existed say "staff"), so the id decides.
+ * (entries written before the app kind existed say "staff"), and an approved
+ * agent's `agent:<grant>:<owner>` (a sign-in reset), so the id decides.
  */
 function historyAuthor(
     actor: string | null,
     actorId: string | null,
     actorName: string | null,
-): { kind: "staff" | "app" | "buyer" | "system"; name: string | null; appId: string | null } | null {
+    agents: ReadonlyMap<string, AgentAuthor>,
+): HistoryAuthor | null {
     if (!actor) return null;
-    if (actorId?.startsWith("app:")) return { kind: "app", name: null, appId: actorId.slice(4) };
-    if (actor === "buyer" || actor === "system") return { kind: actor, name: null, appId: null };
-    return { kind: "staff", name: actorName ?? null, appId: null };
+    const none = { appId: null, connection: null, client: null };
+    if (actorId?.startsWith("app:")) return { ...none, kind: "app", name: null, appId: actorId.slice(4) };
+    const agent = actorId ? agents.get(actorId) : undefined;
+    if (agent) return { ...none, kind: "agent", name: agent.ownerName, connection: agent.connection, client: agent.client };
+    if (actor === "buyer" || actor === "system") return { ...none, kind: actor, name: null };
+    return { ...none, kind: "staff", name: actorName ?? null };
 }
 
 app.openapi(getHistoryRoute, async (c) => {
@@ -908,12 +953,13 @@ app.openapi(getHistoryRoute, async (c) => {
         updatedAt: new Date(customer.updatedAt * 1000),
     };
 
+    const agents = await readAgentAuthors(db, history.map((entry) => entry.actorId));
     const enrichedHistory = history.map(({
         orderId, orderNumber, relatedCustomerId, relatedCustomerName, relatedCustomerPhone,
         relatedCustomerClaimedAt, relatedCustomerOrigin, actor, actorId, actorName, ...record
     }) => ({
         ...record,
-        author: historyAuthor(actor, actorId, actorName),
+        author: historyAuthor(actor, actorId, actorName, agents),
         order: orderId ? { id: orderId, orderNumber: orderNumber ?? null } : null,
         relatedCustomer: relatedCustomerId
             ? {

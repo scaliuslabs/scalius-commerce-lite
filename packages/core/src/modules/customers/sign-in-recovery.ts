@@ -1,16 +1,19 @@
 // A sign-in reset: the one action that changes how a buyer signs in on their
 // behalf, for a buyer who lost every way in. Ordinary customer edits never
-// touch a proven sign-in (`updateCustomer` refuses it with
-// `contact_is_sign_in`). Staff with the sensitive `customers.reset_sign_in`
-// permission name ONE recovery contact; an agent's call always waits for the
-// merchant's approval, and an app cannot make it (the route refuses).
+// touch a sign-in contact, proven or a live recovery contact (`updateCustomer`
+// refuses it with `contact_is_sign_in`). Staff with the sensitive
+// `customers.reset_sign_in` permission name ONE recovery contact; an agent's
+// call always waits for the merchant's approval, and an app cannot make it
+// (the route refuses).
 import { and, eq, gt, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { customerHistory, customerIdentities, customers, customerSessions } from "@scalius/database/schema";
-import { storedPhone } from "@scalius/shared/customer-auth-policy";
+import { customerHistory, customers, customerSessions } from "@scalius/database/schema";
+import { isEmailAddress } from "@scalius/shared/text-scan";
+import { parseContactPhone } from "@scalius/shared/customer-utils";
 import { AppError, ConflictError, NotFoundError, ValidationError } from "../../errors";
-import { normalizeContactEmail } from "./customer-identity";
+import { readSignInPolicy } from "./sign-in-policy";
+import { isSignInChangedError, resetSignInWrites, signInChangedConflict } from "./sign-in-writes";
 
 /** How long a recovery contact reaches its account, from the reset. */
 export const SIGN_IN_RECOVERY_DAYS = 7;
@@ -18,36 +21,63 @@ const RECOVERY_SECONDS = SIGN_IN_RECOVERY_DAYS * 24 * 60 * 60;
 
 export type SignInRecoveryContact = { phone: string; email?: never } | { email: string; phone?: never };
 
+/** A recovery mark still standing: set under `SIGN_IN_RECOVERY_DAYS` ago. An expired one reaches and blocks nothing. */
+export function liveRecovery(method: "phone" | "email") {
+    // The kind is written inline, as the partial recovery indexes spell it.
+    return and(sql`${customers.signInRecovery} = ${sql.raw(method === "phone" ? "'phone'" : "'email'")}`, gt(customers.signInRecoveryAt, sql`unixepoch() - ${RECOVERY_SECONDS}`))!;
+}
+
 /**
  * The account a sign-in code to `identifier` recovers: the one live, claimed
  * account a reset named it on, that proves nothing at all (no proven phone
- * or email) and was reset under `SIGN_IN_RECOVERY_DAYS` ago. Ids only; one
- * search of `customers_recovery_phone_idx` / `customers_recovery_email_idx`.
+ * or email) and was reset under `SIGN_IN_RECOVERY_DAYS` ago. The contact
+ * holds exactly the value the reset set: a write that moves it ends the mark
+ * (`sign-in-writes.ts`). Ids only; one search of
+ * `customers_recovery_phone_idx` / `customers_recovery_email_idx`.
  */
 export function recoveryOwnerQuery(db: Database, method: "email" | "phone", identifier: string) {
     return db.select({ id: customers.id })
         .from(customers)
         .where(and(
-            method === "email"
-                ? and(eq(customers.signInRecovery, "email"), sql`lower(${customers.email}) = ${identifier}`)
-                : and(eq(customers.signInRecovery, "phone"), eq(customers.phone, identifier)),
+            method === "email" ? sql`lower(${customers.email}) = ${identifier}` : eq(customers.phone, identifier),
+            liveRecovery(method),
             isNull(customers.deletedAt),
             isNotNull(customers.accountClaimedAt),
             isNull(customers.phoneVerifiedAt),
             isNull(customers.emailVerifiedAt),
-            gt(customers.signInRecoveryAt, sql`unixepoch() - ${RECOVERY_SECONDS}`),
         ))
         .limit(2);
 }
 
 /**
- * Resets how a customer signs in, in one batch: every proof on the account
- * (phone and email) is cleared, its linked app identities are deleted, every
- * session is revoked, the one recovery contact is set and marked with the
- * time, and the change is written to the customer's history naming the actor
- * (`actorId`: a staff id, or `agent:<grant>:<owner>` for an approved agent).
- * Refused when the contact is proven on any other account, live or closed,
- * or is another account's recovery contact.
+ * The recovery contact as a sign-in reads it: an email trimmed, checked and
+ * lower-cased; a phone in E.164 by the store's accepted countries, as a
+ * sign-in code to it is read. The route's checks are not relied on.
+ */
+async function recoveryValue(db: Database, contact: SignInRecoveryContact): Promise<{ method: "phone" | "email"; value: string }> {
+    const method: "phone" | "email" = contact.phone !== undefined ? "phone" : "email";
+    const typed = (method === "phone" ? contact.phone : contact.email)?.trim() ?? "";
+    if (!typed) throw new ValidationError(`Enter the ${method} the customer will sign in with.`, { field: method, reason: "recovery_contact_required" });
+    if (method === "email") {
+        if (!isEmailAddress(typed)) throw new ValidationError("Enter a valid email address.", { field: "email", reason: "invalid" });
+        return { method, value: typed.toLowerCase() };
+    }
+    const { phoneCountryPolicy } = await readSignInPolicy(db);
+    const parsed = parseContactPhone(typed, { allowedCountries: phoneCountryPolicy });
+    if (!parsed.ok) throw new ValidationError(parsed.message, { field: "phone", reason: parsed.reason });
+    return { method, value: parsed.value };
+}
+
+/**
+ * Resets how a customer signs in, in one batch decided from one read (409
+ * `sign_in_changed` when another sign-in write landed since): every proof on
+ * the account (phone and email) is cleared, its linked app identities are
+ * deleted, every session is revoked, the one recovery contact is set and
+ * marked with the time, and a `sign_in_reset` entry naming the contact kind
+ * and the actor goes to the customer's history (`actorId`: a staff id, or
+ * `agent:<grant>:<owner>` for an approved agent). Refused when the contact is
+ * proven on any other account, live or closed, or is another account's live
+ * recovery contact (an expired mark blocks nothing).
  */
 export async function resetCustomerSignIn(
     db: Database,
@@ -60,9 +90,7 @@ export async function resetCustomerSignIn(
     if (!existing.accountClaimedAt) {
         throw new ValidationError("Only a customer account signs in. This customer has no account to reset.", { reason: "no_account" });
     }
-    const method: "phone" | "email" = input.contact.phone !== undefined ? "phone" : "email";
-    const value = method === "phone" ? storedPhone(input.contact.phone!.trim()) : normalizeContactEmail(input.contact.email);
-    if (!value) throw new ValidationError(`Enter the ${method} the customer will sign in with.`, { field: method, reason: "recovery_contact_required" });
+    const { method, value } = await recoveryValue(db, input.contact);
 
     // The same answer for a phone and an email, a live and a closed account.
     const taken = await db.select({ id: customers.id }).from(customers).where(and(
@@ -70,7 +98,7 @@ export async function resetCustomerSignIn(
         method === "phone" ? eq(customers.phone, value) : sql`lower(${customers.email}) = ${value}`,
         or(
             method === "phone" ? isNotNull(customers.phoneVerifiedAt) : isNotNull(customers.emailVerifiedAt),
-            eq(customers.signInRecovery, method),
+            liveRecovery(method),
         ),
     )).limit(1).get();
     if (taken) {
@@ -82,17 +110,10 @@ export async function resetCustomerSignIn(
     }
 
     const expiresAt = Math.floor(Date.now() / 1000) + RECOVERY_SECONDS;
+    const byAgent = input.actorId.startsWith("agent:");
     try {
         await safeBatch(db, [
-            db.update(customers).set({
-                ...(method === "phone" ? { phone: value } : { email: value }),
-                phoneVerifiedAt: null,
-                emailVerifiedAt: null,
-                signInRecovery: method,
-                signInRecoveryAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
-            }).where(and(eq(customers.id, customerId), isNull(customers.erasedAt))),
-            db.delete(customerIdentities).where(eq(customerIdentities.customerId, customerId)),
+            ...resetSignInWrites(db, existing, method, value),
             db.update(customerSessions).set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
                 .where(and(eq(customerSessions.customerId, customerId), isNull(customerSessions.revokedAt))),
             db.insert(customerHistory).select(db.select({
@@ -101,16 +122,17 @@ export async function resetCustomerSignIn(
                 name: customers.name,
                 email: customers.email,
                 phone: customers.phone,
-                changeType: sql<string>`'updated'`.as("change_type"),
+                changeType: sql<string>`'sign_in_reset'`.as("change_type"),
                 orderId: sql<string | null>`NULL`.as("order_id"),
                 relatedCustomerId: sql<string | null>`NULL`.as("related_customer_id"),
-                verifiedContact: sql<string | null>`NULL`.as("verified_contact"),
-                actor: sql<string>`'staff'`.as("actor"),
+                verifiedContact: sql<string>`${method}`.as("verified_contact"),
+                actor: sql<string>`${byAgent ? "agent" : "staff"}`.as("actor"),
                 actorId: sql<string>`${input.actorId}`.as("actor_id"),
                 createdAt: sql<number>`unixepoch()`.as("created_at"),
             }).from(customers).where(eq(customers.id, customerId))),
         ] as unknown as Parameters<typeof safeBatch>[1]);
     } catch (error) {
+        if (isSignInChangedError(error)) throw signInChangedConflict();
         if (error instanceof Error && /UNIQUE/i.test(error.message)) {
             throw new AppError(409, "recovery_contact_taken", `This ${method} belongs to another customer record.`, {
                 field: method,

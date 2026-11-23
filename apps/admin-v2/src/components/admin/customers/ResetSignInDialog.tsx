@@ -27,7 +27,7 @@ import { formMessages } from "~/i18n/forms";
 import { resourceMessages } from "~/i18n/resource";
 import { apiData, type ApiBody } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
-import { readCustomerSignInRefusal } from "~/lib/admin-api-conflicts";
+import { isCustomerSignInChanged, readCustomerSignInRefusal } from "~/lib/admin-api-conflicts";
 import { toE164Phone } from "~/lib/admin-phone-schema";
 import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
@@ -185,7 +185,7 @@ function RecoveryContactForm({ savedPhone, savedEmail, pending, error, onEdit, o
         )}
         {error && !taken ? (
           <Alert variant="destructive">
-            <AlertDescription>{getServerFnError(error, t("resetSignInFailed"))}</AlertDescription>
+            <AlertDescription>{isCustomerSignInChanged(error) ? t("signInChanged") : getServerFnError(error, t("resetSignInFailed"))}</AlertDescription>
           </Alert>
         ) : null}
       </div>

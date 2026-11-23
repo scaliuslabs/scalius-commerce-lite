@@ -160067,7 +160067,7 @@
                               },
                               "changeType": {
                                 "type": "string",
-                                "description": "created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, or erased (see `order`, `relatedCustomer` and `verifiedContact`)"
+                                "description": "created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, erased, or sign_in_reset (see `order`, `relatedCustomer` and `verifiedContact`)"
                               },
                               "verifiedContact": {
                                 "type": "string",
@@ -160087,6 +160087,7 @@
                                     "enum": [
                                       "staff",
                                       "app",
+                                      "agent",
                                       "buyer",
                                       "system"
                                     ]
@@ -160098,12 +160099,22 @@
                                   "appId": {
                                     "type": "string",
                                     "nullable": true
+                                  },
+                                  "connection": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "client": {
+                                    "type": "string",
+                                    "nullable": true
                                   }
                                 },
                                 "required": [
                                   "kind",
                                   "name",
-                                  "appId"
+                                  "appId",
+                                  "connection",
+                                  "client"
                                 ]
                               },
                               "order": {

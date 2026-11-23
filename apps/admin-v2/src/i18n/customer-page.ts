@@ -29,7 +29,8 @@ export const customerPageMessages = defineMessages({
     contactIsSignInEmail: "The customer signs in with this email, so it can't be changed here. Reset sign-in to change it.",
     resetSignIn: "Reset sign-in",
     resetSignInTitle: "Reset sign-in for “{name}”?",
-    resetSignInBody: "The customer is signed out on every device. Their verified phone and email stop working for sign-in, and sign-in apps (like Google) are removed. For {days, plural, one {# day} other {# days}} they can sign in with a code to this contact; after that, or once they verify another contact, it no longer works.",
+    resetSignInBody: "The customer is signed out on every device, and their verified phone and email stop signing in. Other ways of signing in (like Google) are removed: using one again makes a new, empty account, and the orders stay on this one. For {days, plural, one {# day} other {# days}} they can sign in with a code sent to this contact. After that, reset again.",
+    signInChanged: "How this customer signs in changed while you worked. Check the contact and try again.",
     recoveryContact: "Recovery contact",
     resettingSignIn: "Resetting…",
     signInResetToast: "Sign-in reset",
@@ -70,6 +71,8 @@ export const customerPageMessages = defineMessages({
     orderMovedOutEmail: "Order {order} moved to account {name}, linked by verified email on {date}",
     orderMovedOutPhone: "Order {order} moved to account {name}, linked by verified phone on {date}",
     orderMovedOut: "Order {order} moved to account {name}",
+    signInResetPhone: "Sign-in reset to a recovery phone",
+    signInResetEmail: "Sign-in reset to a recovery email",
 
     // Erasing personal data (Super Admin only; it can't be undone)
     erasedValue: "Erased",
@@ -120,7 +123,8 @@ export const customerPageMessages = defineMessages({
     contactIsSignInEmail: "কাস্টমার এই ইমেইল দিয়ে সাইন ইন করেন, তাই এখানে এটি বদলানো যাবে না। বদলাতে সাইন ইন রিসেট করুন।",
     resetSignIn: "সাইন ইন রিসেট করুন",
     resetSignInTitle: "“{name}”-এর সাইন ইন রিসেট করবেন?",
-    resetSignInBody: "কাস্টমার সব ডিভাইস থেকে সাইন আউট হবেন। তার ভেরিফাইড ফোন ও ইমেইল দিয়ে আর সাইন ইন হবে না, আর সাইন-ইন অ্যাপ (যেমন Google) সরিয়ে দেওয়া হবে। {days} দিন তিনি এই যোগাযোগে পাঠানো কোড দিয়ে সাইন ইন করতে পারবেন; এরপর, বা তিনি অন্য কোনো যোগাযোগ ভেরিফাই করলে, এটি আর কাজ করবে না।",
+    resetSignInBody: "কাস্টমার সব ডিভাইস থেকে সাইন আউট হবেন, আর তার ভেরিফাইড ফোন ও ইমেইল দিয়ে সাইন ইন হবে না। সাইন ইনের অন্য উপায় (যেমন Google) সরিয়ে দেওয়া হবে: সেগুলো আবার ব্যবহার করলে নতুন, খালি একটি অ্যাকাউন্ট তৈরি হবে, অর্ডারগুলো এই অ্যাকাউন্টেই থাকবে। {days} দিন তিনি এই যোগাযোগে পাঠানো কোড দিয়ে সাইন ইন করতে পারবেন। এরপর আবার রিসেট করুন।",
+    signInChanged: "আপনি কাজ করার সময় এই কাস্টমারের সাইন ইন বদলে গেছে। যোগাযোগটি দেখে আবার চেষ্টা করুন।",
     recoveryContact: "রিকভারি যোগাযোগ",
     resettingSignIn: "রিসেট হচ্ছে…",
     signInResetToast: "সাইন ইন রিসেট হয়েছে",
@@ -161,6 +165,8 @@ export const customerPageMessages = defineMessages({
     orderMovedOutEmail: "অর্ডার {order} অ্যাকাউন্ট {name}-এ সরানো হয়েছে, {date} তারিখে ভেরিফাইড ইমেইল দিয়ে যুক্ত",
     orderMovedOutPhone: "অর্ডার {order} অ্যাকাউন্ট {name}-এ সরানো হয়েছে, {date} তারিখে ভেরিফাইড ফোন দিয়ে যুক্ত",
     orderMovedOut: "অর্ডার {order} অ্যাকাউন্ট {name}-এ সরানো হয়েছে",
+    signInResetPhone: "রিকভারি ফোনে সাইন ইন রিসেট",
+    signInResetEmail: "রিকভারি ইমেইলে সাইন ইন রিসেট",
 
     // Erasing personal data (Super Admin only; it can't be undone)
     erasedValue: "মুছে ফেলা হয়েছে",

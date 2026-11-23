@@ -19,6 +19,8 @@
 --   contact a sign-in reset named; for 7 days, and only while the account
 --   proves nothing, a sign-in code to it reaches the account. Partial indexes
 --   on the marked phone and email.
+-- - `customers.sign_in_version`: advanced by every write of how a customer
+--   signs in; each such write names the version it read (0 for every row).
 CREATE TABLE `account_order_totals` (
 	`customer_id` text NOT NULL,
 	`currency_code` text NOT NULL,
@@ -39,6 +41,8 @@ ALTER TABLE `customers` ADD `whatsapp` text;
 ALTER TABLE `customers` ADD `sign_in_recovery` text;
 --> statement-breakpoint
 ALTER TABLE `customers` ADD `sign_in_recovery_at` integer;
+--> statement-breakpoint
+ALTER TABLE `customers` ADD `sign_in_version` integer DEFAULT 0 NOT NULL;
 --> statement-breakpoint
 CREATE INDEX `customers_recovery_phone_idx` ON `customers` (`phone`) WHERE "customers"."sign_in_recovery" = 'phone' AND "customers"."deleted_at" IS NULL;
 --> statement-breakpoint
@@ -139,4 +143,4 @@ UPDATE conversations SET buyer_account_id = (SELECT owner_order.account_owner_cu
     WHERE owner_order.id = conversations.order_id AND owner_order.deleted_at IS NULL)
     WHERE subject_type <> 'store' AND order_id IS NOT NULL;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (225, '0225_account_data', 'f76ff9050be91af445dff1559824da488b900ee695c7bcad2c9f5f4b0f8fed4c');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (225, '0225_account_data', '17345ed453e58c297e33bccaa46a00b830343dfce726baf65819505c83e5b870');
