@@ -323,7 +323,9 @@ const REGRESSIONS = {
   "review 5, B1: the theme's chrome and a 2000px image block with no look of its own": { request: { noor: true }, privatePages: { chrome: "theme", pages: { cart: { layout: [{ type: "part", part: "notices" }, { type: "content", hook: "big", content: { kind: "image", image: { app: NOOR, file: "pp/banner.svg" }, alt: { en: "A banner" }, width: 2000, height: 2000 } }, ...LEGAL_COLUMNS.slice(1)] } } } },
   // Review 5, B2: the store's controls (the colour scheme switch, the market and language forms) once drew inside the
   // theme's header and footer, where its stylesheet reaches; the regions now hold inert markup only.
+  // The store draws them beside the regions (`privatePages.controls`), where the colour table covers them.
   "review 5, B2: the theme's header and footer in a store with a scheme switch and two markets": { request: { noor: true, toggle: true, localization: true }, privatePages: { chrome: "theme", search: "after", css: '[data-free="footer"] select { opacity: 0; position: absolute; inset: 0 } [data-free="header"] button { opacity: 0 }' } },
+  "review 5, B2: the store's controls before the regions, under dark tokens": { request: { noor: true, toggle: true, localization: true, scheme: "system" }, privatePages: { chrome: "theme", controls: "before", tokens: { cart: { page: DARK, scheme: { text: "#ffffff", ring: "#c4b5fd" }, localization: { text: "#ffffff" } } } } },
   // Review 5, S4: between a deploy and the maintenance compile the default look is served: it stands on the page colour,
   // never on the theme's page paint, which no table checked it on.
   "review 5, S4: a page paint behind a look this build has not compiled": { request: { paint: PAINT, scheme: "light", stale: true }, privatePages: { tokens: { cart: { summary: DARK } } } },
@@ -1101,12 +1103,13 @@ async function open(context, id, width, server5xx) {
 }
 
 /** One draw: the page in one state at one width and scheme, with its interactions. */
-async function draw({ context, id, state, width, focus, hover, interact, rows, chrome, search }) {
+async function draw({ context, id, state, width, focus, hover, interact, rows, chrome, search, controls }) {
   const problems = [];
   const server5xx = [];
   const page = await timed("load", () => open(context, id, width, server5xx));
   // With the theme's chrome its header region is drawn (else the seed tests nothing of the chrome), and the host's search where it says.
-  const chromeParts = [...(chrome ? ['[data-free="header"]'] : ['[data-private="core-header"]']), ...(search ? ['[data-host="search"]'] : [])];
+  // The store's controls beside the theme's regions where it draws them: the switch, and the market and language forms.
+  const chromeParts = [...(chrome ? ['[data-free="header"]'] : ['[data-private="core-header"]']), ...(search ? ['[data-host="search"]'] : []), ...(controls ?? [])];
   const mandatory = [...(state === "empty" ? EMPTY_MANDATORY : state === "lines" ? LINES_MANDATORY : MANDATORY), ...chromeParts];
   const at = (label, list) => problems.push(...list.map((problem) => `${label}: ${problem}`));
   const check = async (label, scope, list, { controls: wantControls = true } = {}) => {
@@ -1240,7 +1243,12 @@ try {
           for (const each of plan) {
             if (bailed) { await context.close(); return; }
             draws += 1;
-            const problems = await draw({ context, id, state, ...each, rows, chrome: entry.privatePages.chrome === "theme" && entry.request?.headerSkin !== false, search: entry.privatePages.chrome === "theme" && entry.privatePages.search });
+            const themeChrome = entry.privatePages.chrome === "theme" && entry.privatePages.controls !== "none";
+            const controls = [
+              ...(themeChrome && entry.request?.headerSkin !== false && entry.request?.toggle ? ['[data-host="scheme"] button'] : []),
+              ...(themeChrome && entry.request?.localization ? ['[data-host="localization"] select'] : []),
+            ];
+            const problems = await draw({ context, id, state, ...each, rows, chrome: entry.privatePages.chrome === "theme" && entry.request?.headerSkin !== false, search: entry.privatePages.chrome === "theme" && entry.privatePages.search, controls });
             if (problems.length > 0) {
               failures.push({ index, name: entry.name, where: `${state} at ${each.width}px, ${scheme}`, problems, document: entry });
               // `--bail` (the mutations' runs): one failing draw is the answer.

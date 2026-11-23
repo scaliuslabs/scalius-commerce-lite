@@ -19,6 +19,7 @@ A template sets them under `privatePages`. The merchant's theme document holds t
 | --- | --- |
 | `chrome` | `core` (the store's minimal checkout header) or `theme` (your header and footer skins, drawn without script). |
 | `search` | With `chrome: theme`, where the store's search sits in the header: `before` or `after` your header's region. Leave it out for none. |
+| `controls` | With `chrome: theme`, where the store's controls sit: the light or dark switch by your header, the market and language forms by your footer, `before` or `after` your region, or `none`. Leave it out for after. |
 | `pages.cart`, `pages.cartDrawer` | An arrangement per page. Leave a page out to keep the store's own. |
 | `tokens` | The look of the store's parts, per page and style target: `{ "cart": { "summary": { "background": "card", "radius": 0 } } }`. |
 | `css` | Your stylesheet for your own regions, at most 24 KiB. |
@@ -234,7 +235,7 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (`ap
 | One seed or case | `--seed 7`, `--case "B4"` (a failing seed prints its document) |
 | The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change in `private-pages.mutations.mjs` must fail the check it names (`expect`), not just any check |
 
-A mutation rewrites one source file as the test gallery serves it (never the store's code, never in production): each review's fix reverted, the region seal without clipping, the seal written only with a compiled look, the skin's slots drawing the store's controls inside its region, a stylesheet allowed to select a host part, the search inside the theme's region, a row's contrast skipped, the surface reset off, the store's header outside token mode, every row leaving out its parent's cells, a title's clamp on its heading, screen-sized text, unfitted columns, the page row off the page paint, a page paint with no tokens drawing the store's own page, a dark row leaving out a cell its light row writes, the theme's chrome with no header drawing the public header, the details form's app targets without rows, no hover surface in token mode, the page paint behind the default look, a line's blocks as tall as a page's, and the phone tab bar on a private page. Paint containment clips on its own, so the seal's overflow clip is a second guard (the mutation that drops clipping drops both). The seal no longer holds `contain: inline-size`: without it no case failed, and `min-inline-size: 0` with `max-inline-size: 100%` is what keeps a block from widening its column (dropping those fails the gate).
+A mutation rewrites one source file as the test gallery serves it (never the store's code, never in production): each review's fix reverted, the region seal without clipping, the seal written only with a compiled look, the skin's slots drawing the store's controls inside its region, the store's own controls drawn inside the regions, a stylesheet allowed to select a host part, the search inside the theme's region, a row's contrast skipped, the surface reset off, the store's header outside token mode, every row leaving out its parent's cells, a title's clamp on its heading, screen-sized text, unfitted columns, the page row off the page paint, a page paint with no tokens drawing the store's own page, a dark row leaving out a cell its light row writes, the theme's chrome with no header drawing the public header, the details form's app targets without rows, no hover surface in token mode, the page paint behind the default look, a line's blocks as tall as a page's, and the phone tab bar on a private page. Paint containment clips on its own, so the seal's overflow clip is a second guard (the mutation that drops clipping drops both). The seal no longer holds `contain: inline-size`: without it no case failed, and `min-inline-size: 0` with `max-inline-size: 100%` is what keeps a block from widening its column (dropping those fails the gate).
 
 The gate checks the cart page with the fixture gallery's data, not every store's data.
 
@@ -267,7 +268,7 @@ With `chrome: theme` the cart page draws your header and footer skins from the s
 - no script, island, style attribute, frame, media, dialog, popover, event handler, live region, alert, modal or control role (`role="button"`, `"link"`, `"menuitem"`, `"checkbox"`, `"switch"`, `"tab"`, `"option"` and the like: nothing inert poses as a control). Your words stay yours: a heading or an `aria-label` that reads like an action does nothing, so word them as what they are;
 - class names and ids become your region's own (`tc-<name>`), the ids ARIA attributes and fragment links name too, so the chrome never shadows a store element;
 - of the data attributes, only the store's chrome behaviours stay (`whenSignedIn()`, `colorSchemeToggle()`, `accountLink()`), and the buyer UI's kind and tone words (`data-ui`, `data-tone`);
-- your slots draw nothing: no app slot, no light or dark switch, no market or language form sits inside your region (the page offers none of them, as with the store's checkout header);
+- your slots draw nothing: no app slot, no light or dark switch, no market or language form sits inside your region. The store draws its controls beside your regions, where `controls` says: the light or dark switch (when you offer it) by your header, the market and language forms (when the store sells in several) by your footer, `before` or `after` the region (unset: after), or `none`. Their look is the `scheme` and `localization` targets' tokens;
 - no form: every form, field, select and label goes, a search form included. The store's own search (`data-host="search"`: one field named `q` and a submit, in the store's words) sits in its own slot of the header's frame, before or after your region as `search` says, never inside it. The page carries no app form token.
 
 Your public stylesheet does not load on private pages: style the chrome in this stylesheet through its classes (`[data-free="header"] .site-header`). A menu works as a `<details>`.
@@ -350,6 +351,8 @@ cart style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=
 cart style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,font,weight,size,case,tracking
 cart style chrome [data-private="core-header"] tokens=background,gradient,text,muted,link,border,border-width
 cart style search [data-host="search"] tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+cart style scheme [data-host="scheme"] button tokens=text,ring,radius
+cart style localization [data-host="localization"] tokens=text,muted,link fields
 cart.line root data-part=line
 cart.line part image hooks=line-image
 cart.line part title mandatory hooks=line-title
@@ -409,7 +412,7 @@ cartDrawer label drawer.startShopping variants=start-shopping|browse-products|co
 cartDrawer icon drawer.empty
 dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-agree,dialog-actions,dialog-back,dialog-confirm
 buyer-ui attributes=data-buyer-ui-target,data-buyer-ui-app,data-ui
-chrome roots data-private=header|footer search=before|after
+chrome roots data-private=header|footer search=before|after controls=before|after|none
 layout tokens=background,gradient,border,border-width,border-style,radius,shadow,padding,gap,columns,columns-wide
 buyer-ui style ui.banner[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="banner"] tokens=background,text,border,border-width,radius,shadow,padding
 buyer-ui style ui.button[@<app>][/<target>] :is(a[data-ui="button"],[data-ui="button"]>button) tokens=background,text,border,border-width,radius,ring,weight,size,case

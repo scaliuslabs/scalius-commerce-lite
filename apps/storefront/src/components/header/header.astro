@@ -6,12 +6,14 @@
 // theme's phone tab bar (never on a private page, as under the store's own
 // checkout header) and its menu disclosure behaviour (nav-disclosure.ts),
 // and the merchant's light or dark switch where the skin places `header.actions`
-// (on a public page: a private page's theme header draws none of its slots).
+// (on a public page: a private page's theme header draws none of its slots, and
+// the store draws the switch beside its region, `privatePages.controls`).
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import Skin from "@/components/apps/Skin.astro";
-import { appSkin, privateChromeMarkup, privateHeaderSearch, requestExtensions } from "@/lib/extensions";
+import { appSkin, privateChromeControls, privateChromeMarkup, privateHeaderSearch, requestExtensions } from "@/lib/extensions";
 import PrivateMarkup from "@/components/private/PrivateMarkup.astro";
 import PrivateSearch from "./PrivateSearch.astro";
+import PrivateSchemeSwitch from "./PrivateSchemeSwitch.astro";
 import { headerData, headerMarket, headerPageData } from "@/lib/extensions/data";
 import { getLayoutData } from "@/lib/api";
 import { getRuntimePresence } from "@/lib/api/runtime";
@@ -68,12 +70,14 @@ const data = async () => {
 // checkout header, exactly as with the store's chrome (`private-fallback`), never the full store header.
 const privateMarkup = privatePage ? await privateChromeMarkup(Astro.locals, Astro.url, "header", data) : null;
 const privateSearch = privateMarkup ? await privateHeaderSearch(Astro.locals) : null;
+// The store's light or dark switch beside the theme's region, where the theme places the store's controls.
+const privateControls = privateMarkup ? await privateChromeControls(Astro.locals) : null;
 ---
 
 {privatePage ? (
 <div class="contents" data-storefront-header data-private="header">
   {privateMarkup ? (
-    <Fragment>{privateSearch?.place === "before" && <PrivateSearch {...privateSearch.form} />}<div data-free="header"><PrivateMarkup markup={privateMarkup} /></div>{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}</Fragment>
+    <Fragment>{privateControls === "before" && <PrivateSchemeSwitch />}{privateSearch?.place === "before" && <PrivateSearch {...privateSearch.form} />}<div data-free="header"><PrivateMarkup markup={privateMarkup} /></div>{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}{privateControls === "after" && <PrivateSchemeSwitch />}</Fragment>
   ) : <slot name="private-fallback" />}
 </div>
 ) : (

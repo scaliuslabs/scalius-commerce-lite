@@ -7,6 +7,9 @@
 //   same store projections the public pages use (never a buyer's data).
 // - `search`: with the theme's chrome, where the host's search form sits in
 //   the header's frame (before or after the theme's header; unset, none).
+// - `controls`: with the theme's chrome, where the store's controls sit (the
+//   light or dark switch by the header, the market and language forms by the
+//   footer): before or after the theme's region, or none (unset: after).
 // - `pages`: each page's arrangement; an absent page draws as the host does.
 // - `tokens`: the look of the host parts, as typed values per style target
 //   (private-tokens.ts); any token puts the page in token mode, where every
@@ -34,9 +37,11 @@ import {
   PRIVATE_LAYOUT_KINDS,
   PRIVATE_PAGES,
   PRIVATE_PAGE_KEYS,
+  PRIVATE_CONTROL_PLACES,
   PRIVATE_SEARCH_PLACES,
   privateIconKeys,
   privateLabelKeys,
+  type PrivateControlPlace,
   type PrivateSearchPlace,
   type PrivateAssetRef,
   type PrivateContentBlock,
@@ -153,6 +158,7 @@ const pagesShape = Object.fromEntries(PRIVATE_PAGE_KEYS.map((page) => [page, pri
 const privatePagesFields = {
   chrome: z.enum(STOREFRONT_PRIVATE_CHROME),
   search: z.enum(PRIVATE_SEARCH_PLACES).optional(),
+  controls: z.enum(PRIVATE_CONTROL_PLACES).optional(),
   pages: z.object(pagesShape).strict(),
   tokens: privateTokensSchema,
   css: z.string().max(PRIVATE_CSS_MAX_BYTES),
@@ -186,6 +192,8 @@ export const storefrontPrivatePagesTemplateSchema = z.object(privatePagesFields)
 export interface StorefrontPrivatePages {
   chrome: StorefrontPrivateChrome;
   search?: PrivateSearchPlace;
+  /** Where the store's controls sit beside the theme's header and footer (unset: after). */
+  controls?: PrivateControlPlace;
   pages: Partial<Record<PrivatePageKey, PrivatePageArrangement>>;
   tokens: PrivateTokens;
   css: string;

@@ -818,8 +818,8 @@ function shapeCss(page: PrivatePageKey, tokens: Record<string, Values>, unitHook
  */
 export const PRIVATE_TOKEN_MODE = ":root[data-private-tokens]";
 
-/** Where token mode reaches: the private pages, the store's dialogs over them, the host's search and the store's own header. */
-const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]', '[data-host="search"]', '[data-private="core-header"]'];
+/** Where token mode reaches: the private pages, the store's dialogs over them, the host's controls and search, and the store's own header. */
+const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]', '[data-host="scheme"]', '[data-host="localization"]', '[data-host="search"]', '[data-private="core-header"]'];
 const IN_SCOPE = `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope} *`)].join(",")})`;
 
 /**

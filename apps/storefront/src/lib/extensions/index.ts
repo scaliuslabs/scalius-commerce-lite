@@ -4,7 +4,7 @@
 // and the request's render host. Everything here is read from what
 // the page already read: no extra API call.
 
-import { servedPrivatePages, type PrivateSearchPlace, type StorefrontSkinRef, type StorefrontThemeSkinUnit } from "@scalius/shared/storefront-theme";
+import { servedPrivatePages, type PrivateControlPlace, type PrivateSearchPlace, type StorefrontSkinRef, type StorefrontThemeSkinUnit } from "@scalius/shared/storefront-theme";
 import { resolvePluginSettingBindings } from "@scalius/shared/storefront-theme/bindings";
 import { parsePluginSurfaceKey } from "@scalius/shared/plugins/storefront";
 import type { PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
@@ -269,6 +269,17 @@ export async function privateHeaderSearch(locals: object): Promise<{ place: Priv
   const served = servedPrivatePages(theme.theme.privatePages);
   if (served.chrome !== "theme" || !served.search) return null;
   return { place: served.search, form: { action: STOREFRONT_CORE_ROUTES.search, param: STOREFRONT_SEARCH_QUERY, label: storefrontCopy(theme.language).chrome.header.search } };
+}
+
+/**
+ * Where the store's controls sit on a private page with the theme's chrome
+ * (`privatePages.controls`: before or after the theme's header and footer
+ * regions, unset after); null where it draws none.
+ */
+export async function privateChromeControls(locals: object): Promise<Exclude<PrivateControlPlace, "none"> | null> {
+  const served = servedPrivatePages((await currentRequestTheme(locals)).theme.privatePages);
+  if (served.chrome !== "theme" || served.controls === "none") return null;
+  return served.controls ?? "after";
 }
 
 /**

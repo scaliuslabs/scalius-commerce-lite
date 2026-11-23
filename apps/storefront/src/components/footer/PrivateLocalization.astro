@@ -1,0 +1,49 @@
+---
+// The store's market and language forms on a private page with the theme's
+// chrome (`privatePages.controls`), in their own slot of the footer's frame,
+// never inside the theme's region: the same plain POSTs to /localization as
+// the public footer's (FooterLocalization), without a stylesheet of their own,
+// so the `localization` target's tokens give them their look.
+import { MARKET_SELECTION_PATH } from "@scalius/shared/markets";
+import { languageOptions, marketCountryOptions, marketSelectorCopy, selectedMarketCountry } from "@/lib/market-selector";
+import type { FooterLocalizationModel } from "./footer-localization";
+
+interface Props {
+  localization?: FooterLocalizationModel | null;
+}
+
+const { localization } = Astro.props;
+const copy = marketSelectorCopy(localization?.pageLanguage);
+const countries = localization?.markets ? marketCountryOptions(localization.matrix, localization.pageLanguage, localization.currencyCode) : [];
+const country = localization?.markets ? selectedMarketCountry(localization.matrix, localization.presence) : null;
+const languages = localization?.language ? languageOptions(localization.language.market) : [];
+const language = localization?.language
+  ? localization.language.market.presences.find((each) => each.value === (localization.presence ?? ""))?.locale ?? languages[0]?.locale
+  : null;
+---
+
+{localization && (localization.markets || localization.language) && (
+  <div data-host="localization">
+    {localization.markets && (
+      <form method="post" action={MARKET_SELECTION_PATH}>
+        <label for="private-market-country">{copy.label}</label>
+        <select id="private-market-country" name="country_code" autocomplete="country">
+          {countries.map((option) => <option value={option.code} selected={option.code === country}>{option.name} ({option.currencyCode ?? localization.currencyCode})</option>)}
+        </select>
+        <input type="hidden" name="return_to" value={localization.returnTo} />
+        <button type="submit">{copy.submit}</button>
+      </form>
+    )}
+    {localization.language && (
+      <form method="post" action={MARKET_SELECTION_PATH}>
+        <label for="private-market-language">{copy.languageLabel}</label>
+        <select id="private-market-language" name="locale_code">
+          {languages.map((option) => <option value={option.locale} lang={option.locale} selected={option.locale === language}>{option.name}</option>)}
+        </select>
+        <input type="hidden" name="country_code" value={localization.language.country} />
+        <input type="hidden" name="return_to" value={localization.returnTo} />
+        <button type="submit">{copy.submit}</button>
+      </form>
+    )}
+  </div>
+)}

@@ -95,6 +95,15 @@ export const MUTATIONS = {
     cases: [S3],
     expect: /\[data-free="header"\] <(?:form|input|button)[ >]/,
   },
+  "R5-B2b the store's controls inside the theme's regions": {
+    why: "the store's light or dark switch and its market and language forms draw inside the theme's regions, where its stylesheet reaches",
+    rewrites: [
+      rewrite("apps/storefront/src/components/header/header.astro", '<div data-free="header"><PrivateMarkup markup={privateMarkup} /></div>{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}{privateControls === "after" && <PrivateSchemeSwitch />}', '<div data-free="header"><PrivateMarkup markup={privateMarkup} />{privateControls === "after" && <PrivateSchemeSwitch />}</div>{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}'),
+      rewrite("apps/storefront/src/components/Footer.astro", '<div data-free="footer"><PrivateMarkup markup={privateMarkup} /></div>}\n  {privateControls === "after" && <PrivateLocalization localization={props.localization} />}', '<div data-free="footer"><PrivateMarkup markup={privateMarkup} />{privateControls === "after" && <PrivateLocalization localization={props.localization} />}</div>}'),
+    ],
+    cases: ["review 5, B2: the theme's header and footer in a store with a scheme switch and two markets"],
+    expect: /\[data-free="(?:header|footer)"\] <(?:div data-host|form|select)>/,
+  },
   "R5-B2 the skin's slots draw the store's controls inside its region": {
     why: "the theme's header and footer draw their slots on a private page: the scheme switch and the market and language forms sit inside the regions",
     rewrites: [
@@ -210,7 +219,7 @@ export const MUTATIONS = {
   "R5-S6 the phone tab bar on a private page": {
     why: "the theme's chrome draws the phone tab bar on the cart, outside token scope: its surface and words belong to no row",
     rewrites: [
-      rewrite("apps/storefront/src/components/header/header.astro", '{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}</Fragment>', '{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}{tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}</Fragment>'),
+      rewrite("apps/storefront/src/components/header/header.astro", '{privateControls === "after" && <PrivateSchemeSwitch />}</Fragment>', '{privateControls === "after" && <PrivateSchemeSwitch />}{tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}</Fragment>'),
       rewrite("apps/storefront/src/layouts/Layout.astro", "const showMobileTabs = !hideHeader && !privateChrome && themeLayout.mobileNavigation", "const showMobileTabs = !hideHeader && themeLayout.mobileNavigation"),
     ],
     cases: ["review 5, S6: the theme's chrome with the phone tab bar, under a dark page"],

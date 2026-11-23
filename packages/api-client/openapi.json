@@ -6410,6 +6410,14 @@
               "after"
             ]
           },
+          "controls": {
+            "type": "string",
+            "enum": [
+              "before",
+              "after",
+              "none"
+            ]
+          },
           "pages": {
             "type": "object",
             "properties": {

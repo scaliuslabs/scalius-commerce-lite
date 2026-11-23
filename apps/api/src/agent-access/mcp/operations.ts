@@ -271,6 +271,11 @@ export const COMPONENT_SCHEMA_RESOURCE_PREFIX = "scalius://schemas/";
  */
 export const INLINE_COMPONENT_SCHEMA_BYTES = 12 * 1024;
 
+/** The most a full description or a schema resource may hold: half of one agent result. */
+export const FULL_DESCRIBE_MAX_BYTES = 32 * 1024;
+/** What a schema resource's envelope (its name, the links to the rest) takes besides the schemas. */
+const SCHEMA_RESOURCE_ENVELOPE_BYTES = 2 * 1024;
+
 const schemaBytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
 /**
@@ -279,7 +284,7 @@ const schemaBytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(
  * and those linked as `scalius://schemas/<name>` resources. `always` is
  * carried inline whatever its size (a schema resource carries itself).
  */
-export function bundleComponentSchemas(roots: unknown[], always?: string) {
+export function bundleComponentSchemas(roots: unknown[], always?: string, budget = INLINE_COMPONENT_SCHEMA_BYTES) {
   const referenced = referencedComponentSchemas(roots, AGENT_COMPONENT_SCHEMAS);
   const sized = Object.entries(referenced)
     .map(([name, schema]) => ({ name, schema, bytes: schemaBytes(schema) }))
@@ -288,7 +293,7 @@ export function bundleComponentSchemas(roots: unknown[], always?: string) {
   const linked: Record<string, string> = {};
   let used = 0;
   for (const entry of sized) {
-    if (entry.name === always || used + entry.bytes <= INLINE_COMPONENT_SCHEMA_BYTES) {
+    if (entry.name === always || used + entry.bytes <= budget) {
       schemas[entry.name] = entry.schema;
       if (entry.name !== always) used += entry.bytes;
     } else {
@@ -302,11 +307,17 @@ export function bundleComponentSchemas(roots: unknown[], always?: string) {
   };
 }
 
-/** One shared schema as its own resource: itself, plus the shared schemas it refers to (bundled the same way). */
+/**
+ * One shared schema as its own resource: itself, plus the shared schemas it
+ * refers to (bundled the same way), fewer inline when it is large itself, so
+ * the resource stays within FULL_DESCRIBE_MAX_BYTES however they grow.
+ */
 export function describeComponentSchema(name: string) {
   if (!Object.hasOwn(AGENT_COMPONENT_SCHEMAS, name)) return null;
   const ref = { $ref: `#/components/schemas/${name}` };
-  return { name, schema: ref, ...bundleComponentSchemas([ref], name) };
+  const own = schemaBytes(AGENT_COMPONENT_SCHEMAS[name as keyof typeof AGENT_COMPONENT_SCHEMAS]);
+  const budget = Math.max(0, Math.min(INLINE_COMPONENT_SCHEMA_BYTES, FULL_DESCRIBE_MAX_BYTES - SCHEMA_RESOURCE_ENVELOPE_BYTES - own));
+  return { name, schema: ref, ...bundleComponentSchemas([ref], name, budget) };
 }
 
 /**

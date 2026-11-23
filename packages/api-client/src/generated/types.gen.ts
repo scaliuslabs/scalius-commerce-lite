@@ -1345,6 +1345,7 @@ export type StorefrontPageTemplate = {
 export type StorefrontPrivatePages = {
     chrome: 'core' | 'theme';
     search?: 'before' | 'after';
+    controls?: 'before' | 'after' | 'none';
     pages: {
         cart?: StorefrontPrivateArrangement;
         cartDrawer?: StorefrontPrivateArrangement;

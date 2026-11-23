@@ -265,6 +265,10 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   chrome: { selector: '[data-private="core-header"]', absolute: true, tokens: ["background", "gradient", "text", "muted", "link", "border", "border-width"], kind: "box", surface: "background", ink: "foreground", on: "page" },
   // The host's search in the theme header's frame (`privatePages.search`), never inside the theme's region.
   search: { selector: '[data-host="search"]', absolute: true, tokens: [...FIELD_TOKENS], kind: "field", surface: "background", ink: "foreground", on: "page" },
+  // The store's controls in the theme's chrome frames (`privatePages.controls`), never inside its regions:
+  // the light or dark switch beside the header, the market and language forms beside the footer.
+  scheme: { selector: '[data-host="scheme"] button', absolute: true, tokens: ["text", "ring", "radius"], kind: "control", surface: "under", ink: "foreground", on: "page" },
+  localization: { selector: '[data-host="localization"]', absolute: true, tokens: ["text", "muted", "link"], kind: "box", surface: "under", ink: "foreground", on: "page", fields: true },
 };
 
 /** The cart page: the information step (lines, totals, the details form and its submit). */
@@ -418,7 +422,8 @@ export const PRIVATE_SCOPES = ["dialog", "header", "footer", "core-header"] as c
  * stylesheet reaches, strictly inside the wrapper (`data-free`): the
  * theme's content blocks (`block`, with their `data-hook`) and its header
  * and footer (`header`, `footer`). Nothing of the host's is ever inside one:
- * the host's search sits beside the theme's header (`PRIVATE_SEARCH_PLACES`).
+ * the host's search and controls sit beside the theme's header and footer
+ * (`PRIVATE_SEARCH_PLACES`, `PRIVATE_CONTROL_PLACES`).
  */
 export const PRIVATE_FREE_REGIONS = ["block", "header", "footer"] as const;
 
@@ -430,6 +435,17 @@ export const PRIVATE_FREE_REGIONS = ["block", "header", "footer"] as const;
  */
 export const PRIVATE_SEARCH_PLACES = ["before", "after"] as const;
 export type PrivateSearchPlace = (typeof PRIVATE_SEARCH_PLACES)[number];
+
+/**
+ * Where the store's controls sit in the theme's chrome frames on a private
+ * page (`privatePages.controls`): the light or dark switch (where the theme
+ * offers it) before or after the header's region, the market and language
+ * forms (where the store sells in several) before or after the footer's;
+ * `none` leaves them out. Unset: after. Each is a host part, its look the
+ * `scheme` and `localization` targets' tokens; none is ever inside a region.
+ */
+export const PRIVATE_CONTROL_PLACES = ["before", "after", "none"] as const;
+export type PrivateControlPlace = (typeof PRIVATE_CONTROL_PLACES)[number];
 
 /**
  * The most content blocks a page holds, and the most before and after its
@@ -531,7 +547,7 @@ export function privatePageAnatomy(): string[] {
   }
   lines.push(`dialog root ${PRIVATE_SCOPE_ATTRIBUTE}=dialog hooks=${PRIVATE_DIALOG_HOOKS.join(",")}`);
   lines.push(`buyer-ui attributes=${PRIVATE_BUYER_UI_HOOKS.join(",")}`);
-  lines.push(`chrome roots ${PRIVATE_SCOPE_ATTRIBUTE}=header|footer search=${PRIVATE_SEARCH_PLACES.join("|")}`);
+  lines.push(`chrome roots ${PRIVATE_SCOPE_ATTRIBUTE}=header|footer search=${PRIVATE_SEARCH_PLACES.join("|")} controls=${PRIVATE_CONTROL_PLACES.join("|")}`);
   lines.push(`layout tokens=${PRIVATE_LAYOUT_TOKENS.join(",")}`);
   for (const [kind, style] of Object.entries(PRIVATE_BUYER_UI_STYLES)) lines.push(`buyer-ui style ui.${kind}${style.tones ? `[.${style.tones.join("|")}]` : ""}[@<app>][/<target>] ${style.kind} tokens=${style.tokens.join(",")}`);
   lines.push(`free regions ${PRIVATE_FREE_ATTRIBUTE}=${PRIVATE_FREE_REGIONS.join("|")}`);
