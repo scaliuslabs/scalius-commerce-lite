@@ -1,6 +1,9 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { putApiV1AdminOrdersByIdItemsByItemIdDeliveryMessage } from "@scalius/api-client/sdk";
+import {
+  postApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageReveal,
+  putApiV1AdminOrdersByIdItemsByItemIdDeliveryMessage,
+} from "@scalius/api-client/sdk";
 import { toast } from "~/lib/toast";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
@@ -9,10 +12,9 @@ import { useMessages } from "~/i18n";
 import { orderDeliveryMessageMessages } from "~/i18n/order-delivery-message";
 import { resourceMessages } from "~/i18n/resource";
 import { apiData } from "~/lib/api";
-import { invalidateOrder, orderErrorMessage } from "~/lib/api-mutations/orders";
-import { useCommand } from "~/lib/use-command";
-import { DeliveryMessageDialog, type SaveMessage } from "./DeliveryMessageDialog";
-import type { MessageLine } from "./delivery-messages";
+import { invalidateOrder, orderErrorMessage, useOrderCommand } from "~/lib/api-mutations/orders";
+import { DeliveryMessageDialog, type RevealedMessage, type SaveMessage } from "./DeliveryMessageDialog";
+import { messagesExpectedOn, type MessageLine } from "./delivery-messages";
 import { formatOrderTimestamp } from "./formatters";
 
 /**
@@ -30,8 +32,12 @@ export function DeliveryMessagesBody({ orderId, lines }: { orderId: string; line
   const lastEditing = useRef(editing);
   if (editing) lastEditing.current = editing;
   const [removing, setRemoving] = useState<string | null>(null);
+  // An order of parcels only opens closed: one press lists its lines.
+  const [listed, setListed] = useState(() => messagesExpectedOn(lines));
 
-  const save = useCommand({
+  // An order command: once it lands the order is read again (its card, its timeline line).
+  const save = useOrderCommand({
+    order: () => orderId,
     subject: (input: SaveMessage) => input.itemId,
     mutationFn: (input: SaveMessage) =>
       apiData(putApiV1AdminOrdersByIdItemsByItemIdDeliveryMessage({
@@ -39,7 +45,32 @@ export function DeliveryMessagesBody({ orderId, lines }: { orderId: string; line
         body: { message: input.message, expectedRevision: input.expectedRevision },
       })),
   });
-  const open = (itemId: string) => setEditing({ session: ++sessions.current, itemId });
+  // The text read back for one opening, in component state only (the command itself returns nothing).
+  const [revealed, setRevealed] = useState<(RevealedMessage & { session: number }) | null>(null);
+  const [revealFailed, setRevealFailed] = useState<number | null>(null);
+  // Reading a message back is an order command too: the server writes who read it on the timeline,
+  // so the order is read again and the line shows without a reload. It runs once per Edit press.
+  const reveal = useOrderCommand({
+    order: () => orderId,
+    subject: (input: { itemId: string; session: number }) => `${input.itemId}:${input.session}`,
+    mutationFn: async (input: { itemId: string; session: number }) => {
+      const body = await apiData(postApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageReveal({ path: { id: orderId, itemId: input.itemId } }));
+      if (sessions.current === input.session) setRevealed({ session: input.session, text: body.text ?? "", link: body.link ?? "" });
+      return null;
+    },
+  });
+  const open = (line: MessageLine) => {
+    const session = ++sessions.current;
+    setRevealed(null);
+    setRevealFailed(null);
+    setEditing({ session, itemId: line.item.id });
+    if (line.message) reveal.mutate({ itemId: line.item.id, session }, { onError: () => setRevealFailed(session) });
+  };
+  const close = () => {
+    setEditing(null);
+    // Nothing of the text stays once the dialog is gone.
+    setRevealed(null);
+  };
   const removeLine = lines.find((line) => line.item.id === removing);
   const editLine = lines.find((line) => line.item.id === (editing ?? lastEditing.current)?.itemId);
   const nameOf = (line: MessageLine) => line.item.productName || t("unnamedProduct");
@@ -48,8 +79,13 @@ export function DeliveryMessagesBody({ orderId, lines }: { orderId: string; line
     <Card data-testid="delivery-messages">
       <CardHeader>
         <CardTitle>{t("title")}</CardTitle>
-        <CardDescription>{t("note")}</CardDescription>
+        <CardDescription>{t(listed ? "note" : "closedNote")}</CardDescription>
       </CardHeader>
+      {!listed ? (
+        <CardContent>
+          <Button type="button" variant="outline" size="sm" onClick={() => setListed(true)}>{t("showLines")}</Button>
+        </CardContent>
+      ) : (
       <CardContent>
         <ul className="divide-y">
           {lines.map((line) => (
@@ -70,28 +106,27 @@ export function DeliveryMessagesBody({ orderId, lines }: { orderId: string; line
               <div className="flex flex-wrap gap-2">
                 {line.message ? (
                   <>
-                    <Button type="button" variant="outline" size="sm" onClick={() => open(line.item.id)}>{t("edit")}</Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => open(line)}>{t("edit")}</Button>
                     <Button type="button" variant="ghost" size="sm" onClick={() => setRemoving(line.item.id)}>{t("remove")}</Button>
                   </>
                 ) : (
-                  <Button type="button" variant="outline" size="sm" onClick={() => open(line.item.id)}>{t("add")}</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => open(line)}>{t("add")}</Button>
                 )}
               </div>
             </li>
           ))}
         </ul>
       </CardContent>
+      )}
       <DeliveryMessageDialog
         open={editing !== null}
         session={lastEditing.current?.session ?? 0}
-        orderId={orderId}
         line={editLine ?? null}
+        revealed={revealed && revealed.session === editing?.session ? revealed : null}
+        revealFailed={revealFailed !== null && revealFailed === editing?.session}
         save={save}
-        onClose={() => setEditing(null)}
-        onSaved={() => {
-          toast.success(t("saved"));
-          void invalidateOrder(queryClient, orderId);
-        }}
+        onClose={close}
+        onSaved={() => toast.success(t("saved"))}
         onConflict={() => void invalidateOrder(queryClient, orderId)}
       />
       <ConfirmDialog
@@ -108,7 +143,6 @@ export function DeliveryMessagesBody({ orderId, lines }: { orderId: string; line
             onSuccess: () => {
               setRemoving(null);
               toast.success(t("removed"));
-              void invalidateOrder(queryClient, orderId);
             },
             onError: (error) => {
               setRemoving(null);
