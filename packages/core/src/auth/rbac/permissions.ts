@@ -99,6 +99,7 @@ export const PERMISSIONS = {
   CUSTOMERS_DELETE: "customers.delete",
   CUSTOMERS_VIEW_HISTORY: "customers.view_history",
   CUSTOMERS_SYNC: "customers.sync",
+  CUSTOMERS_RESET_SIGN_IN: "customers.reset_sign_in",
 
   // Sending marketing messages is separate from managing customer records.
   MARKETING_SEND: "marketing.send",

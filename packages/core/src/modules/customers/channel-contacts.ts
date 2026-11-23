@@ -11,6 +11,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { validateCustomerPhoneCountry } from "../settings";
+import { insertCustomer } from "./sign-in-writes";
 
 /** The channels whose contact address is the buyer's phone (E.164); an app's own channel (`<app id>:<key>`) never is. */
 const PHONE_CHANNELS: ReadonlySet<string> = new Set(["whatsapp", "viber"]);
@@ -52,7 +53,7 @@ export async function resolveChannelContactCustomer(
     const id = `cust_${nanoid()}`;
     try {
         await db.batch([
-            db.insert(customers).values({ id, name, email: null, phone: phone ?? NO_PHONE, origin: "merchant", totalOrders: 0 }),
+            insertCustomer(db, { id, name, email: null, phone: phone ?? NO_PHONE, origin: "merchant", totalOrders: 0 }),
             db.insert(customerHistory).values({
                 id: `hist_${nanoid()}`,
                 customerId: id,

@@ -4,6 +4,7 @@
 export * from "./browser";
 export {
   assertBuyerOrderAccess,
+  closeBuyerThread,
   countBuyerUnread,
   createStoreThread,
   decodeConversationCursor,
@@ -28,6 +29,7 @@ export {
   postStaffOrderMessage,
   readChannelContact,
   readOrderThread,
+  readBuyerInboxCounts,
   readThread,
   resolveBuyerThread,
   updateStaffThread,
@@ -70,6 +72,14 @@ export {
   readConversationRepresentation,
 } from "./representation";
 
+export {
+  chosenConversationTopic,
+  conversationTopicView,
+  getConversationTopicsDocument,
+  readConversationTopics,
+  saveConversationTopics,
+  type ConversationTopicView,
+} from "./topics";
 export * from "./saved-replies";
 export * from "./cart-share";
 export { findConversationMessages } from "./search";

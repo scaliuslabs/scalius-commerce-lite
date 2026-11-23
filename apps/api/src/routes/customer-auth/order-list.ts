@@ -91,12 +91,6 @@ const getCustomerOrdersRoute = createRoute({
                 variantLabel: z.string().nullable(),
               }).passthrough()),
             }).passthrough()),
-            summary: z.object({
-              totalOrders: z.number(),
-              totalSpent: z.number(),
-              completedOrders: z.number(),
-              pendingOrders: z.number(),
-            }),
             pagination: z.object({
               limit: z.number(),
               returned: z.number(),
@@ -142,12 +136,6 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
     return ok(c, {
       orders: [],
       customer: sessionProfile,
-      summary: {
-        totalOrders: 0,
-        totalSpent: 0,
-        completedOrders: 0,
-        pendingOrders: 0,
-      },
       pagination: {
         limit: query.limit ?? 50,
         returned: 0,
@@ -180,7 +168,6 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
   return ok(c, {
     orders: result.orders,
     customer,
-    summary: result.summary,
     pagination: result.pagination,
     phoneVerification,
   });

@@ -280,8 +280,9 @@ export const orders = sqliteTable("orders", {
         table.deletedAt,
         table.createdAt,
     ).where(sql`${table.customerId} IS NOT NULL`),
+    // An account's orders, by currency: the account totals refresh reads one currency's (0225).
     index("orders_account_owner_customer_id_idx")
-        .on(table.accountOwnerCustomerId)
+        .on(table.accountOwnerCustomerId, table.currencyCode)
         .where(sql`${table.accountOwnerCustomerId} IS NOT NULL`),
     index("orders_created_at_idx").on(table.createdAt),
     // The dashboard list (orders/admin/list.ts): every sort and filter it

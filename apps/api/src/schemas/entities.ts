@@ -856,6 +856,15 @@ export const customerDetailSchema = z.object({
   phone: pii("phone", z.string().nullable()),
   accountClaimedAt: nullableTimestampSchema,
   ...customerTitleFields,
+  /** How the account signs in: a proven contact changes only by a sign-in reset (`POST /{id}/reset-sign-in`). */
+  signIn: z.object({
+    phoneProven: z.boolean(),
+    emailProven: z.boolean(),
+    recovery: z.object({
+      method: z.enum(["phone", "email"]).openapi({ description: "Which of the customer's contacts recovers the account (the phone or the email shown above)." }),
+      expiresAt: z.number().int().openapi({ description: "Unix seconds: after it the recovery contact reaches nothing." }),
+    }).nullable(),
+  }).optional().openapi({ description: "On the customer read (not the history page's header)." }),
   totalOrders: z.number(),
   totalSpent: z.number(),
   lastOrderAt: nullableTimestampSchema,

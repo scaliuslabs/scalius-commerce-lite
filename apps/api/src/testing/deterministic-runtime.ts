@@ -72,6 +72,15 @@ export function installDeterministicRuntime(seed: number, mathRandom: (draw: num
   };
 }
 
+/**
+ * Where a measured sequence starts for a runtime seeded with `seed`: half the generator's cycle
+ * (2^31 draws) from the setup's start, so the setup can draw any number of values below that
+ * (another seeded row, a new permission) and never reach, or move, the measured sequence.
+ */
+export function checkpointState(seed: number): number {
+  return (seed + 0x8000_0000) >>> 0;
+}
+
 /** nanoid's URL alphabet: each id draws its own bytes from Web Crypto (no pool kept between ids). */
 export function nanoid(size = 21): string {
   const alphabet = "useandom-26T198340PX75pxJACKVERYMINDBUSHWOLF_GQZbfghjklqvwyzrict";

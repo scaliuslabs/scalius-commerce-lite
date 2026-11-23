@@ -30,12 +30,15 @@ import {
     setDefaultCustomerAddress,
     updateCustomerAddress,
 } from "@scalius/core/modules/customers";
+import { resetCustomerSignIn, SIGN_IN_RECOVERY_DAYS, type SignInRecoveryContact } from "@scalius/core/modules/customers";
+import { parseContactPhone } from "@scalius/shared/customer-utils";
 import { fromMinor } from "@scalius/shared/money";
 import { contactPhoneSql, customers, customerHistory, orders, user } from "@scalius/database/schema";
 import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
-import { eq, sql, isNull, isNotNull, and } from "drizzle-orm";
+import { eq, sql, isNull, isNotNull, and, inArray } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
 import { alias } from "drizzle-orm/sqlite-core";
-import { ForbiddenError, NotFoundError } from "../../utils/api-error";
+import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { customerListFilterQuery, customerListFiltersFromQuery, customerMatchingSchema, readCustomerSlice } from "./customer-marketing";
 import { matchingResultSchema, requireOneSelection, type MatchingResult } from "../../schemas/bulk-matching";
 import { planLimits } from "@scalius/shared/plan-limits";
@@ -54,7 +57,7 @@ import { requestPaymentProviders } from "../../plugins/providers/payment";
 import { drainCustomerErasureAfterResponse } from "../../background/customer-erasure";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { timestampSchema, nullableTimestampSchema, optionalNullableTimestampSchema } from "../../schemas/timestamps";
-import { requestActorId, requestStaffUser } from "./request-actor";
+import { requestActorId, requestAppId, requestStaffUser } from "./request-actor";
 const app = adminRouter();
 
 /** The signed-in staff member, recorded as the author of customer changes. */
@@ -94,18 +97,22 @@ const customerHistoryEntrySchema = z.object({
     email: pii("email", z.string().nullable()),
     phone: pii("phone", z.string().nullable()),
     changeType: z.string().openapi({
-        description: "created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, or erased (see `order`, `relatedCustomer` and `verifiedContact`)",
+        description: "created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, erased, or sign_in_reset (see `order`, `relatedCustomer` and `verifiedContact`)",
     }),
-    /** The proven contact behind signed_up / order_linked / order_moved_*. */
+    /** The proven contact behind signed_up / order_linked / order_moved_*; the kind of recovery contact a sign_in_reset named. */
     verifiedContact: z.enum(["email", "phone"]).nullable(),
     /**
      * Who made the change; `name` is the staff member's name when known (null
-     * for a removed account), `appId` the app's plugin id for kind `app`.
+     * for a removed account; for kind `agent`, the connection's owner it ran
+     * as), `appId` the app's plugin id for kind `app`, `connection` and
+     * `client` the agent connection's name and the client it runs in.
      */
     author: z.object({
-        kind: z.enum(["staff", "app", "buyer", "system"]),
+        kind: z.enum(["staff", "app", "agent", "buyer", "system"]),
         name: z.string().nullable(),
         appId: z.string().nullable(),
+        connection: z.string().nullable(),
+        client: z.string().nullable(),
     }).nullable(),
     /** The order that moved, for order_moved_in / order_moved_out. */
     order: z.object({ id: z.string(), orderNumber: z.number().int().nullable() }).nullable(),
@@ -492,6 +499,63 @@ app.openapi(eraseCustomerRoute, async (c) => {
     return ok(c, result);
 });
 
+// ── Sign-in reset: the one action that changes how a customer signs in ──
+
+const resetSignInRoute = createRoute({
+    operationId: "dashboard.customers.reset_sign_in",
+    method: "post",
+    path: "/{id}/reset-sign-in",
+    tags: ["Admin - Customers"],
+    summary: "Reset how a customer signs in, to one recovery contact",
+    description: `For a customer who lost every way to sign in. In one step: every proven phone and email of the account stops signing in, its linked sign-in apps are removed, it is signed out everywhere, and the one contact named here (a phone or an email) becomes its recovery contact. For ${SIGN_IN_RECOVERY_DAYS} days, and only while the account proves nothing else, a sign-in code to that contact signs into this account and proves it. Refused (409 \`recovery_contact_taken\`) when the contact signs in to another account, live or closed, or is another account's recovery contact. Staff with the sensitive reset permission only; never an app; an agent always waits for approval. Ordinary customer edits never change a proven contact (409 \`contact_is_sign_in\`).`,
+    request: {
+        params: z.object({ id: z.string().min(1).max(128) }),
+        body: {
+            required: true,
+            content: {
+                "application/json": {
+                    schema: z.union([
+                        z.object({ phone: z.string().trim().min(7).max(32) }).strict(),
+                        z.object({ email: z.string().trim().email().max(254) }).strict(),
+                    ]).openapi({ description: "The one recovery contact: a phone or an email." }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: "Reset",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                recovery: z.enum(["phone", "email"]),
+                expiresAt: z.number().int().openapi({ description: "Unix seconds: after it the recovery contact reaches nothing." }),
+                recoveryDays: z.number().int(),
+            })) } },
+        },
+        ...errorResponses,
+        409: conflictResponse,
+    },
+});
+
+app.openapi(resetSignInRoute, async (c) => {
+    c.header("Cache-Control", "private, no-store");
+    if (requestAppId(c)) throw new ForbiddenError("An app cannot change how a customer signs in.");
+    const staff = requestStaffUser(c);
+    if (!staff?.id) throw new ForbiddenError("Sign in again to reset a customer's sign-in.");
+    const agent = c.get("agentPrincipal") as { grantId?: string; ownerUserId?: string } | undefined;
+    const actorId = agent?.grantId ? `agent:${agent.grantId}:${agent.ownerUserId ?? staff.id}` : staff.id;
+    const body = c.req.valid("json") as { phone?: string; email?: string };
+    let contact: SignInRecoveryContact;
+    if (body.phone !== undefined) {
+        const parsed = parseContactPhone(body.phone);
+        if (!parsed.ok) throw new ValidationError(parsed.message, { field: "phone", reason: parsed.reason });
+        contact = { phone: parsed.value };
+    } else {
+        contact = { email: body.email! };
+    }
+    const result = await resetCustomerSignIn(c.get("db"), c.req.valid("param").id, { contact, actorId });
+    return ok(c, { ...result, recoveryDays: SIGN_IN_RECOVERY_DAYS });
+});
+
 // ── The address book (MARKETS-DESIGN D7, Shopify's customer addresses) ──
 
 const addressListPayload = z.object({ addresses: z.array(customerAddressSchema) });
@@ -698,19 +762,59 @@ const getHistoryRoute = createRoute({
     }
 });
 
+type HistoryAuthor = {
+    kind: "staff" | "app" | "agent" | "buyer" | "system";
+    name: string | null;
+    appId: string | null;
+    connection: string | null;
+    client: string | null;
+};
+type AgentAuthor = { ownerName: string | null; connection: string | null; client: string | null };
+
+/** `agent:<grant id>:<owner user id>`, as an approved agent's write records its actor. */
+function agentActorIds(actorId: string | null): { grantId: string; ownerUserId: string } | null {
+    const match = actorId ? /^agent:([^:]+):(.+)$/.exec(actorId) : null;
+    return match ? { grantId: match[1]!, ownerUserId: match[2]! } : null;
+}
+
+/** Each agent actor among these entries: its connection (name, client) and the staff member it ran as, read once each. */
+async function readAgentAuthors(db: Database, actorIds: ReadonlyArray<string | null>): Promise<Map<string, AgentAuthor>> {
+    const agents = [...new Set(actorIds.filter((id): id is string => agentActorIds(id) !== null))];
+    const authors = new Map<string, AgentAuthor>();
+    if (agents.length === 0) return authors;
+    const ids = agents.map((id) => agentActorIds(id)!);
+    const { readAgentConnection } = await import("../../agent-access/audit");
+    const [connections, owners] = await Promise.all([
+        Promise.all([...new Set(ids.map((id) => id.grantId))].map(async (grantId) => [grantId, await readAgentConnection(db, grantId)] as const)),
+        db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, [...new Set(ids.map((id) => id.ownerUserId))])),
+    ]);
+    const connectionOf = new Map(connections);
+    const ownerOf = new Map(owners.map((owner) => [owner.id, owner.name]));
+    for (const [index, actorId] of agents.entries()) {
+        const connection = connectionOf.get(ids[index]!.grantId) ?? null;
+        authors.set(actorId, { ownerName: ownerOf.get(ids[index]!.ownerUserId) ?? null, connection: connection?.name ?? null, client: connection?.client ?? null });
+    }
+    return authors;
+}
+
 /**
  * Who made a history entry. An app's dashboard call records `app:<plugin id>`
- * (entries written before the app kind existed say "staff"), so the id decides.
+ * (entries written before the app kind existed say "staff"), and an approved
+ * agent's `agent:<grant>:<owner>` (a sign-in reset), so the id decides.
  */
 function historyAuthor(
     actor: string | null,
     actorId: string | null,
     actorName: string | null,
-): { kind: "staff" | "app" | "buyer" | "system"; name: string | null; appId: string | null } | null {
+    agents: ReadonlyMap<string, AgentAuthor>,
+): HistoryAuthor | null {
     if (!actor) return null;
-    if (actorId?.startsWith("app:")) return { kind: "app", name: null, appId: actorId.slice(4) };
-    if (actor === "buyer" || actor === "system") return { kind: actor, name: null, appId: null };
-    return { kind: "staff", name: actorName ?? null, appId: null };
+    const none = { appId: null, connection: null, client: null };
+    if (actorId?.startsWith("app:")) return { ...none, kind: "app", name: null, appId: actorId.slice(4) };
+    const agent = actorId ? agents.get(actorId) : undefined;
+    if (agent) return { ...none, kind: "agent", name: agent.ownerName, connection: agent.connection, client: agent.client };
+    if (actor === "buyer" || actor === "system") return { ...none, kind: actor, name: null };
+    return { ...none, kind: "staff", name: actorName ?? null };
 }
 
 app.openapi(getHistoryRoute, async (c) => {
@@ -849,12 +953,13 @@ app.openapi(getHistoryRoute, async (c) => {
         updatedAt: new Date(customer.updatedAt * 1000),
     };
 
+    const agents = await readAgentAuthors(db, history.map((entry) => entry.actorId));
     const enrichedHistory = history.map(({
         orderId, orderNumber, relatedCustomerId, relatedCustomerName, relatedCustomerPhone,
         relatedCustomerClaimedAt, relatedCustomerOrigin, actor, actorId, actorName, ...record
     }) => ({
         ...record,
-        author: historyAuthor(actor, actorId, actorName),
+        author: historyAuthor(actor, actorId, actorName, agents),
         order: orderId ? { id: orderId, orderNumber: orderNumber ?? null } : null,
         relatedCustomer: relatedCustomerId
             ? {

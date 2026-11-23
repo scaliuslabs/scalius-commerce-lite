@@ -87,9 +87,7 @@ const cards = accountOrderCards(orders, copy, checkoutCopy);
 
 <script>
   import { buyAgainOrder } from "@/lib/account-buy-again";
-  import { pagePath } from "@/lib/presence-url";
   import { renderPhoneVerification } from "@/lib/account-phone-verification";
-  import { accountCopy } from "@/lib/account-copy";
   import { enhanceBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 
   void enhanceBuyerUiWhenNeeded();
@@ -114,11 +112,11 @@ const cards = accountOrderCards(orders, copy, checkoutCopy);
   });
 
   // The account's own phone, unverified: prove it to add the orders placed with it.
+  // Once proven the page loads again with the new session cookie.
   const phoneBox = document.getElementById("phoneVerification");
   if (phoneBox?.dataset.phone) {
     renderPhoneVerification(phoneBox, { phone: phoneBox.dataset.phone }, {
       storeContact: document.getElementById("phoneVerificationContact"),
-      onVerified: () => window.location.assign(pagePath("/account?phone=verified")),
     });
   }
 </script>

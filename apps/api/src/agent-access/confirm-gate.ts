@@ -165,7 +165,8 @@ export async function enforceAgentConfirmation(
   if (clearance?.confirmed) return null;
   if (clearance?.dryRun && operation.dryRun === "native") return null;
   const env = c.env as Env;
-  if (await confirm.readAgentConfirmPolicy(env, principal) === "none") return null;
+  // A grant's policy may waive an approval, never a security one.
+  if (confirm.confirmPolicyWaives(await confirm.readAgentConfirmPolicy(env, principal), [{ operation }])) return null;
   const { input, raw, request } = await requestFacts(c, operation, pathname);
   // A write that sets money in only some fields waits only when this request changes one.
   let changedMoneyFields: string[] = [];

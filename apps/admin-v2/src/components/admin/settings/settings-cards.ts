@@ -89,6 +89,7 @@ export const SETTINGS_CARDS = [
   { page: "customerAccounts", card: "customerSignIn" },
   { page: "customerAccounts", card: "otherSignIn" },
   { page: "customerAccounts", card: "marketingConsent" },
+  { page: "customerAccounts", card: "conversationTopics" },
   { page: "privacy", card: "cookieBanner" },
   { page: "privacy", card: "customerData" },
   { page: "notifications", card: "customerNotifications", subPage: "customerMessages", anchors: ["customer-rule-"] },

@@ -58,6 +58,7 @@
     "checkout -> translations",
     "conversations -> notifications",
     "conversations -> orders",
+    "conversations -> settings",
     "custom-fields -> markets",
     "custom-fields -> settings",
     "customer-marketing -> customers",
