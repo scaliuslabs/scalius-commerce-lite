@@ -15,6 +15,7 @@ const rewrite = (file, find, replace) => ({ file, find, replace });
 
 const TOKENS = "packages/shared/src/storefront-theme/private-tokens.ts";
 const PLAN = "apps/storefront/src/lib/private-pages/plan.ts";
+const MARKUP = "apps/storefront/src/components/private/PrivateMarkup.astro";
 const SEAL = "overflow:hidden;overflow:clip;contain:layout paint style;";
 const ROW = "export function privateRowDeclarations(row: PrivateTokenRow, parent: PrivateTokenRow | null, also: ReadonlySet<string> = NONE): string {\n";
 /** A row of the table that writes only its paint: its words keep whatever colour reaches them. */
@@ -82,8 +83,23 @@ export const MUTATIONS = {
   // The gate's own.
   "M5 the host's search inside the theme's region": {
     why: "the header draws the store's search inside the theme's sealed region, where its stylesheet reaches",
-    rewrites: [rewrite("apps/storefront/src/components/header/header.astro", "<PrivateMarkup markup={privateMarkup} embeds={embeds} /></div>{privateSearch?.place === \"after\" && <PrivateSearch {...privateSearch.form} />}", "<PrivateMarkup markup={privateMarkup} embeds={embeds} />{privateSearch?.place === \"after\" && <PrivateSearch {...privateSearch.form} />}</div>")],
+    rewrites: [rewrite("apps/storefront/src/components/header/header.astro", "<PrivateMarkup markup={privateMarkup} /></div>{privateSearch?.place === \"after\" && <PrivateSearch {...privateSearch.form} />}", "<PrivateMarkup markup={privateMarkup} />{privateSearch?.place === \"after\" && <PrivateSearch {...privateSearch.form} />}</div>")],
     cases: [S3],
+    expect: /\[data-free="header"\] <(?:form|input|button)[ >]/,
+  },
+  "R5-B2 the skin's slots draw the store's controls inside its region": {
+    why: "the theme's header and footer draw their slots on a private page: the scheme switch and the market and language forms sit inside the regions",
+    rewrites: [
+      rewrite(MARKUP, "const { markup } = Astro.props;\n---\n\n{markup.parts.map((part) => part.kind === \"html\" && <Fragment set:html={part.html} />)}",
+        "const { markup, embeds = {} } = Astro.props as { markup: AppMarkup; embeds?: import(\"@/lib/extensions/embeds\").EmbedRenderers };\n"
+        + "type AnyComponent = (props: Record<string, unknown>) => unknown;\n"
+        + "const parts = markup.parts.map((part) => part.kind === \"html\" ? part : { kind: \"embed\" as const, rendered: embeds[part.embed]?.({ data: part.data, index: part.index }) ?? null, embed: part.embed });\n---\n\n"
+        + "{parts.map((part) => part.kind === \"html\" ? <Fragment set:html={part.html} /> : part.rendered && (() => { const Embed = part.rendered.component as unknown as AnyComponent; return <div class=\"contents\" data-sx-embed={part.embed}><Embed {...part.rendered.props} /></div>; })())}"),
+      rewrite("apps/storefront/src/components/header/header.astro", "<div data-free=\"header\"><PrivateMarkup markup={privateMarkup} /></div>", "<div data-free=\"header\"><PrivateMarkup markup={privateMarkup} embeds={embeds} /></div>"),
+      rewrite("apps/storefront/src/components/Footer.astro", "<div data-free=\"footer\"><PrivateMarkup markup={privateMarkup} /></div>", "<div data-free=\"footer\"><PrivateMarkup markup={privateMarkup} embeds={embeds} /></div>"),
+    ],
+    cases: ["review 5, B2: the theme's header and footer in a store with a scheme switch and two markets"],
+    expect: /\[data-free="(?:header|footer)"\] <(?:div data-sx-embed|form|select|button data-sx-host-color-scheme-toggle)>/,
   },
   "M6 the save skips one row's contrast": {
     why: "the table's check skips the summary rows, so unreadable rows are saved",

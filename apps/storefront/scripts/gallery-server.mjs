@@ -298,7 +298,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       // The private pages' rendered property tests: a generated theme compiled with the store's own
       // compiler (a refusal answers its issues, as a save would) and drawn on the buyer UI cart entry in
       // one of its states, under a palette, colour scheme and page paint, with Noor's chrome when asked (its
-      // header skin dropped with `headerSkin: false`). The answer
+      // header skin dropped with `headerSkin: false`), and a store of two markets (`localization`). The answer
       // carries the page's colour table (each row's key, selector and kind) for the coverage walk.
       if (url.pathname === `${GALLERY_PREFIX}/private-theme` && request.method === "POST") {
         const body = JSON.parse(await readBody(request) || "{}");
@@ -318,7 +318,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const context = shared.privatePagesContextOf(theme);
         const compiled = mutation?.compile ? mutation.compile(shared, document, context) : shared.compileStorefrontPrivatePages(document, context);
         if (!compiled.ok) return sendJson(response, 422, { issues: compiled.issues.slice(0, 5) });
-        const entry = registerPrivatePagesEntry(String(body.id), { ...theme, privatePages: compiled.value }, body.state ?? "base", { noor: body.noor === true });
+        const entry = registerPrivatePagesEntry(String(body.id), { ...theme, privatePages: compiled.value }, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true });
         const tables = shared.privatePageTokenMode(compiled.value, "cart") ? galleryTables(shared, compiled.value, context) : [];
         return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables });
       }
@@ -326,7 +326,13 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       if (url.pathname === `${GALLERY_PREFIX}/private-anatomy`) {
         const shared = await vite.ssrLoadModule("@scalius/shared/storefront-theme");
         // And the app node kinds that have rows (their selectors inside a block).
-        return sendJson(response, 200, { styles: shared.PRIVATE_PAGES.cart.styles, ui: Object.values(shared.PRIVATE_BUYER_UI_STYLES).filter((style) => style.style).map((style) => style.kind) });
+        // And what the inert rebuild may emit, with the very function that checks markup against it (run in the page on every free region).
+        const inert = await vite.ssrLoadModule("@scalius/shared/plugins/inert-html");
+        return sendJson(response, 200, {
+          styles: shared.PRIVATE_PAGES.cart.styles,
+          ui: Object.values(shared.PRIVATE_BUYER_UI_STYLES).filter((style) => style.style).map((style) => style.kind),
+          inert: { markup: inert.INERT_MARKUP, check: inert.inertMarkupProblems.toString() },
+        });
       }
       // Whether the mutation this gallery runs under was applied to a module it served.
       if (url.pathname === `${GALLERY_PREFIX}/mutation`) {

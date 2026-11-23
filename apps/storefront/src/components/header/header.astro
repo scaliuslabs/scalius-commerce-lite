@@ -4,7 +4,8 @@
 // app header that is inactive, fails or is late gives way to the core
 // header, so a page always has one. Under an app header the store adds the
 // theme's phone tab bar and its menu disclosure behaviour (nav-disclosure.ts),
-// and the merchant's light or dark switch where the skin places `header.actions`.
+// and the merchant's light or dark switch where the skin places `header.actions`
+// (on a public page: a private page's theme header draws none of its slots).
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import Skin from "@/components/apps/Skin.astro";
 import { appSkin, privateChromeMarkup, privateHeaderSearch, requestExtensions } from "@/lib/extensions";
@@ -59,8 +60,9 @@ const data = async () => {
     ...(pageLead !== undefined && skin ? { page: headerPageData(pageLead, skin.extension) } : {}),
   });
 };
-// On a private page only the theme's own header draws, from the store's projection alone; the
-// store's search, where the theme places it, sits beside it in the frame, never inside its region.
+// On a private page only the theme's own header draws, from the store's projection alone, its slots
+// empty (no host control inside its region); the store's search, where the theme places it, sits beside
+// it in the frame.
 // With no theme header to draw (no skin, an inactive app), the page's own fallback draws: the store's
 // checkout header, exactly as with the store's chrome (`private-fallback`), never the full store header.
 const privateMarkup = privatePage ? await privateChromeMarkup(Astro.locals, Astro.url, "header", data) : null;
@@ -70,7 +72,7 @@ const privateSearch = privateMarkup ? await privateHeaderSearch(Astro.locals) : 
 {privatePage ? (
 <div class="contents" data-storefront-header data-private="header">
   {privateMarkup ? (
-    <Fragment>{privateSearch?.place === "before" && <PrivateSearch {...privateSearch.form} />}<div data-free="header"><PrivateMarkup markup={privateMarkup} embeds={embeds} /></div>{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}{tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}</Fragment>
+    <Fragment>{privateSearch?.place === "before" && <PrivateSearch {...privateSearch.form} />}<div data-free="header"><PrivateMarkup markup={privateMarkup} /></div>{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}{tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}</Fragment>
   ) : <slot name="private-fallback" />}
 </div>
 ) : (

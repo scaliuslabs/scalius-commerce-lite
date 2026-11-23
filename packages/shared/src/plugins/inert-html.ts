@@ -81,6 +81,9 @@ const BEHAVIOURS: Record<string, (tag: string, value: string) => boolean> = {
   "data-scalius-when": (_tag, value) => value === "signed-in" || value === "signed-out",
   "data-color-scheme-toggle": (tag) => tag === "button",
   "data-account-link": (tag) => tag === "a",
+  // The buyer UI's kind and tone words, as the theme's content blocks carry them: one stylesheet styles both.
+  "data-ui": (_tag, value) => /^[a-z]{1,24}$/.test(value),
+  "data-tone": (_tag, value) => ["neutral", "info", "success", "warning", "critical"].includes(value),
 };
 
 const NAME = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
@@ -178,6 +181,49 @@ function walk(nodes: ChildNode[], options: InertChromeOptions, out: string[]): v
     walk(node.children, options, out);
     out.push(`</${tag}>`);
   }
+}
+
+/**
+ * Everything the rebuild can emit, as data: its elements, the attributes any
+ * of them may carry, those of one element, SVG's, and the roles and button
+ * type it never writes. The host's content blocks draw from the same words.
+ */
+export const INERT_MARKUP = {
+  tags: [...KEEP],
+  attributes: [...GENERAL, "class", "id", "tabindex", ...ID_REFERENCES, ...Object.keys(BEHAVIOURS)],
+  byTag: Object.fromEntries(Object.entries(BY_TAG).map(([tag, names]) => [tag, [...names, ...(tag === "button" ? ["type"] : [])]])) as Record<string, string[]>,
+  svgTags: [...SVG_TAGS],
+  svg: [...SVG],
+  aria: "^aria-[a-z]+$",
+  loudAria: [...LOUD_ARIA],
+  roles: [...LOUD_ROLES],
+  buttonType: "button",
+};
+
+/**
+ * Why each element inside `root` is not one the rebuild could have written
+ * ([] when every one is). Self-contained, so the rendered gate runs this very
+ * function inside the page, on every free region it draws.
+ */
+export function inertMarkupProblems(root: { querySelectorAll(selector: string): ArrayLike<{ localName: string; attributes: ArrayLike<{ name: string; value: string }> }> }, markup: typeof INERT_MARKUP): string[] {
+  const problems: string[] = [];
+  const aria = new RegExp(markup.aria);
+  for (const element of Array.from(root.querySelectorAll("*"))) {
+    const tag = element.localName.toLowerCase();
+    if (!markup.tags.includes(tag)) {
+      problems.push(`<${tag}>: an element the inert markup never draws`);
+      continue;
+    }
+    for (const { name: raw, value } of Array.from(element.attributes)) {
+      const name = raw.toLowerCase();
+      const known = markup.attributes.includes(name) || (markup.byTag[tag] ?? []).includes(name)
+        || (markup.svgTags.includes(tag) && markup.svg.includes(name)) || (aria.test(name) && !markup.loudAria.includes(name));
+      if (!known) problems.push(`<${tag} ${name}>: an attribute the inert markup never draws`);
+      else if (name === "role" && markup.roles.includes(value.trim().toLowerCase())) problems.push(`<${tag} role="${value}">: a role the inert markup never draws`);
+      else if (name === "type" && value !== markup.buttonType) problems.push(`<${tag} type="${value}">: the inert markup draws only type="${markup.buttonType}"`);
+    }
+  }
+  return problems;
 }
 
 /** Checked skin markup rebuilt with nothing left that runs, loads, frames, posts, collects or shadows the page. */

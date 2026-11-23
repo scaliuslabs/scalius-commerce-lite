@@ -31,7 +31,7 @@
 //   between them and the row); with no tokens, to a surface the anatomy names,
 //   and the page shows no paint of its own (a theme's page paint puts the page
 //   in token mode, so the table checks what stands on it);
-//   nothing of the host's inside a free region;
+//   every free region sealed and holding inert markup only (no form, field, submit, host control or embed);
 // - every text, with no budget, at its contrast floor against the pixels
 //   behind it (the text hidden, the page photographed);
 // - every text whole: nothing cut sideways, no glyph cut by a clip, no word
@@ -300,6 +300,9 @@ const REGRESSIONS = {
   "a dark page paint under dark tokens": { request: { palette: "retail", scheme: "dark", paint: DARK_PAINT }, privatePages: { tokens: { cart: { summary: DARK, lines: DARK } } } },
   // Review 5, B1: the theme's chrome and a large image block, with no stylesheet, tokens or paint: the seal is the host's.
   "review 5, B1: the theme's chrome and a 2000px image block with no look of its own": { request: { noor: true }, privatePages: { chrome: "theme", pages: { cart: { layout: [{ type: "part", part: "notices" }, { type: "content", hook: "big", content: { kind: "image", image: { app: NOOR, file: "pp/banner.svg" }, alt: { en: "A banner" }, width: 2000, height: 2000 } }, ...LEGAL_COLUMNS.slice(1)] } } } },
+  // Review 5, B2: the store's controls (the colour scheme switch, the market and language forms) once drew inside the
+  // theme's header and footer, where its stylesheet reaches; the regions now hold inert markup only.
+  "review 5, B2: the theme's header and footer in a store with a scheme switch and two markets": { request: { noor: true, toggle: true, localization: true }, privatePages: { chrome: "theme", search: "after", css: '[data-free="footer"] select { opacity: 0; position: absolute; inset: 0 } [data-free="header"] button { opacity: 0 }' } },
   // What the save must refuse (under a mutation that lets one through, the drawing must fail).
   "a stylesheet hiding a host part": { refused: "unscoped_selector", privatePages: { css: '[data-part="summary"] * { display: none } [data-part="details-submit"] * { visibility: hidden }' } },
   "summary rows that do not read on their summary": { refused: "contrast", privatePages: { tokens: { cart: { "summary-rows": { text: "#eeeeee" }, summary: { background: "#ffffff" } } } } },
@@ -399,10 +402,6 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, maxDepth, exempt }) {
     if (!/paint|content|strict/.test(style.contain) || style.overflowY === "visible" || style.maxBlockSize === "none" || style.position === "static") {
       problems.push(`[data-free="${region.dataset.free}"]: not sealed (contain: ${style.contain}, overflow: ${style.overflowY}, max-block-size: ${style.maxBlockSize})`);
     }
-  }
-  // Nothing of the host's is inside a free region, where the theme's stylesheet reaches.
-  for (const element of document.querySelectorAll("[data-free] :is([data-part],[data-host],[data-buyer-ui-target],[data-private])")) {
-    problems.push(`${element.tagName.toLowerCase()}[${["data-part", "data-host", "data-buyer-ui-target", "data-private"].map((name) => element.getAttribute(name)).find(Boolean)}]: the host's, inside a free region`);
   }
   const name = (element) => {
     const bits = [];
@@ -948,7 +947,13 @@ async function startGallery() {
   return { url, close };
 }
 const gallery = await startGallery();
-const { styles, ui: UI_KINDS } = await fetch(`${gallery.url}/__gallery/private-anatomy`).then((answer) => answer.json());
+const { styles, ui: UI_KINDS, inert: INERT } = await fetch(`${gallery.url}/__gallery/private-anatomy`).then((answer) => answer.json());
+/**
+ * Nothing but inert markup inside a free region, by construction: every element there is one the inert
+ * rebuild writes, with only the attributes it writes (plugins/inert-html.ts `inertMarkupProblems`, the
+ * very function, run in the page). No form, field, submit button, host control or embed can hide there.
+ */
+const INERT_CHECK = `[...document.querySelectorAll("[data-free]")].flatMap((region) => (${INERT.check})(region, ${JSON.stringify(INERT.markup)}).map((problem) => \`[data-free="\${region.dataset.free}"] \${problem}\`))`;
 /**
  * With no tokens (the store's own colours, no table) the walk claims by the
  * anatomy: everything the host draws must sit inside a surface it names (the
@@ -1066,6 +1071,7 @@ async function draw({ context, id, state, width, focus, hover, interact, rows, c
     await timed("settle", () => settle(page));
     const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: list, scope, maxDepth: MAX_DEPTH_PX, exempt: EXEMPT }));
     at(label, walked.problems);
+    at(label, await page.evaluate(INERT_CHECK));
     at(label, await timed("whole", () => page.evaluate(wholeTexts)));
     at(label, await timed("contrast", () => textContrast(page, walked.texts)));
     if (wantControls) at(label, await timed("clicks", () => page.evaluate(clicks)));
