@@ -6,6 +6,7 @@
 import { fromMinor } from "@scalius/shared/money";
 import { readOrderLineBundle, readOrderLineProperties, type OrderLineBundle } from "@scalius/shared/line-properties";
 import { buyerLineAddOns, type BuyerLineAddOn } from "@scalius/shared/add-on-folding";
+import { LINE_ADJUSTMENT_KEY } from "@scalius/shared/line-identity";
 
 /** What the fold reads of an order line. */
 export interface BuyerFoldableLine {
@@ -49,7 +50,10 @@ function sumNullable(left: number | null, right: number | null): number | null {
  * other field is the first line's (the lines are copies of one cart line),
  * except its frozen entries (`properties`): the anchor line's, which holds
  * the bundle's inputs and add-ons. Every row reads what the apps charged on
- * it over its lines (`addOns`). Nothing else is ever folded.
+ * it from its real lines (`addOns`, `buyerLineAddOns`: exact totals). Its
+ * entries never misstate money: an add-on entry stays only while its amount
+ * is what each unit of the row pays (else it is in `addOns` alone), and no
+ * entry repeats an add-on's detail lines. Nothing else is ever folded.
  */
 export function foldBuyerOrderLines<
   T extends BuyerFoldableLine,
@@ -83,15 +87,18 @@ export function foldBuyerOrderLines<
     const bundle = rest.length === 0 ? bundles[0] ?? null : foldedBundle(bundles);
     // A split item's entries are its anchor line's: the bundle's inputs and add-ons are frozen there.
     const anchor = rest.length === 0 ? first : members[bundles.findIndex((entry) => entry?.anchor === true)] ?? first;
+    const addOns = buyerLineAddOns(members.map((line, index) => ({
+      entries: readOrderLineProperties(line.properties), quantity: line.quantity, bundle: bundles[index] ?? null,
+    })), bundle);
     const row: Record<string, unknown> = {
       ...(first as object),
-      properties: anchor.properties,
+      properties: buyerRowEntries(anchor.properties, addOns),
       quantity,
       unitPriceMinor: rest.length === 0 ? first.unitPriceMinor : wholeUnit(unitsTotalMinor, quantity),
       unitsTotalMinor,
       lineIds: members.map((line) => line.id),
       bundle,
-      addOns: buyerLineAddOns(members.map((line) => ({ entries: readOrderLineProperties(line.properties), quantity: line.quantity })), bundle),
+      addOns,
     };
     if (rest.length > 0) {
       for (const key of sum) {
@@ -107,6 +114,33 @@ export function foldBuyerOrderLines<
     }
     return row as BuyerOrderLine<T, P>;
   });
+}
+
+/**
+ * A row's frozen entries as the buyer reads them: an add-on entry
+ * (`_adjustment`, per unit of its line) stays only while every unit of the row
+ * pays exactly it (the row's `addOns` says `per: "unit"` with that amount);
+ * otherwise (a bundle's add-on, a split item's) the row's `addOns` alone
+ * carries it, once, exactly. Detail lines ride `addOns`, never the entries.
+ */
+function buyerRowEntries(stored: string | null, addOns: readonly BuyerLineAddOn[]): string | null {
+  if (!stored) return stored;
+  let entries: unknown;
+  try {
+    entries = JSON.parse(stored);
+  } catch {
+    return stored;
+  }
+  if (!Array.isArray(entries)) return stored;
+  const exact = new Set(addOns.filter((addOn) => addOn.per === "unit" && addOn.amountMinor !== null)
+    .map((addOn) => `${addOn.appId ?? ""}\u0000${addOn.title}\u0000${addOn.amountMinor}`));
+  const kept = entries.flatMap((entry: unknown) => {
+    if (!entry || typeof entry !== "object" || (entry as { key?: unknown }).key !== LINE_ADJUSTMENT_KEY) return [entry];
+    const { details: _details, ...rest } = entry as { key: string; value?: unknown; appId?: unknown; priceMinor?: unknown; details?: unknown };
+    const title = typeof rest.value === "string" ? rest.value.trim() : "";
+    return exact.has(`${typeof rest.appId === "string" ? rest.appId : ""}\u0000${title}\u0000${rest.priceMinor}`) ? [rest] : [];
+  });
+  return kept.length === 0 ? null : JSON.stringify(kept);
 }
 
 function wholeUnit(totalMinor: number, quantity: number): number | null {

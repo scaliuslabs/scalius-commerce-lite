@@ -109,6 +109,13 @@ export const APP_LINE_INPUT_TEXT_LIMITS = {
 
 /** Serialized snapshot bound; the `order_items.properties` CHECK enforces the same number. */
 export const ORDER_LINE_PROPERTIES_MAX_LENGTH = 65_536;
+/**
+ * A line's frozen app add-ons together, serialized, at most: what is left of
+ * the snapshot after the buyer's answers (`LINE_PROPERTY_INPUT_LIMITS.serializedLength`)
+ * and room for its purchase options and bundle. Checkout refuses an answer
+ * past it (`add_on_unavailable`), so freezing a line never overflows.
+ */
+export const LINE_ADD_ONS_SERIALIZED_MAX = 12_288;
 
 /** Keys with this prefix carry gift-card recipient details (Wave B) and are reserved. */
 export const RESERVED_PROPERTY_KEY_PREFIX = "_gc_";

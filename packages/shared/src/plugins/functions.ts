@@ -33,14 +33,17 @@ import { PROTECTED_FIELD_KEYWORD, protectedPathsOf, type ProtectedCustomerData, 
 import { ORDER_CHANNELS } from "../order-channel";
 import { LINE_ADD_ONS_MAX } from "../line-identity";
 import { ADD_ON_DETAILS_MAX } from "../add-on-totals";
+import { APP_TEXT_PATTERN } from "./app-text";
 import { ONLINE_STORE_CHANNEL_ID, SALES_CHANNEL_ID_MAX_LENGTH, SALES_CHANNEL_ID_PATTERN } from "../sales-channels";
 
 const id = z.string().min(1).max(128);
 const minor = z.number().int().safe();
 const nonNegativeMinor = minor.min(0);
 const code = z.string().regex(/^[a-z0-9][a-z0-9_.-]{0,63}$/);
-const message = z.string().trim().min(1).max(200);
-const label = z.string().trim().min(1).max(80);
+/** App text the store draws: plain, single-line, never a control or bidi override character (app-text.ts). */
+const appText = (max: number) => z.string().trim().min(1).max(max).regex(APP_TEXT_PATTERN, "Use plain text: no control characters or bidi overrides.");
+const message = appText(200);
+const label = appText(80);
 /**
  * An add-on's detail lines (`cart.line_prices` `details`): plain text, one
  * fact a line ("#1 · ৳350", "Covers accidental damage"), at most
@@ -702,11 +705,17 @@ export const buyerUiOrderLineSchema = z.object({
     units: z.number().int().min(1).nullable(),
     perUnit: z.number().int().min(1).nullable(),
   }).strict().nullable(),
-  /** Every app's add-ons the row was charged ("Protection ৳350"): `per: "bundle"`, once per bundle unit, on a bundle's anchor row. */
+  /**
+   * Every app's add-ons the row was charged ("Protection ৳350"), from its
+   * real lines: `totalMinor` exactly; `amountMinor` per unit (`per: "unit"`)
+   * or once per bundle unit (`per: "bundle"`, on a bundle's anchor row) when
+   * one amount is exact for every unit, else null. At most a line's.
+   */
   addOns: z.array(z.object({
     appId: z.string().max(128).nullable(),
     title: z.string().max(80),
-    amountMinor: nonNegativeMinor,
+    totalMinor: nonNegativeMinor,
+    amountMinor: nonNegativeMinor.nullable(),
     per: z.enum(["unit", "bundle"]),
   }).strict()).max(LINE_ADJUSTMENTS_ON_LINE_MAX),
   /** The app's own line answers frozen on the row (keys without the app id): what the buyer chose for it. */
@@ -715,8 +724,11 @@ export const buyerUiOrderLineSchema = z.object({
     value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength),
   }).strict()).max(LINE_INPUTS_MAX),
 }).strict();
-/** Every row of an order, as one app's run reads them: at most an order's lines. */
-export const buyerUiOrderLinesSchema = z.array(buyerUiOrderLineSchema).max(MAX_ORDER_LINES);
+/** The most bytes one app's rows of an order are, its own answers included. */
+export const BUYER_UI_ORDER_LINES_MAX_BYTES = 128 * 1024;
+/** Every row of an order, as one app's run reads them: at most an order's lines and `BUYER_UI_ORDER_LINES_MAX_BYTES`. */
+export const buyerUiOrderLinesSchema = z.array(buyerUiOrderLineSchema).max(MAX_ORDER_LINES)
+  .refine((rows) => new TextEncoder().encode(JSON.stringify(rows)).byteLength <= BUYER_UI_ORDER_LINES_MAX_BYTES, `An order's rows are at most ${BUYER_UI_ORDER_LINES_MAX_BYTES / 1024} KiB for one app.`);
 export type BuyerUiOrderLine = z.infer<typeof buyerUiOrderLineSchema>;
 
 export const buyerUiInputSchema = z.object({

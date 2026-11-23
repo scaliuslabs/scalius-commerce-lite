@@ -10714,6 +10714,82 @@
         },
         "description": "The apps the order's checkout answers belong to: their names, declared questions (labels, choices, types) and translations, to show each answer under its label and with its choice's label, in the reader's language."
       },
+      "OrderLineProperty": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "textarea",
+              "select",
+              "checkbox",
+              "file"
+            ],
+            "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "x-scalius-buyer-text": true
+          },
+          "displayValue": {
+            "type": "string",
+            "x-scalius-buyer-text": true
+          },
+          "price": {
+            "type": "number"
+          },
+          "priceMinor": {
+            "type": "integer"
+          },
+          "appId": {
+            "type": "string"
+          },
+          "textRevision": {
+            "type": "string",
+            "description": "An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`."
+          },
+          "revision": {
+            "type": "string",
+            "description": "The revision of the words the buyer answered (absent: none named)."
+          },
+          "confirmation": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ]
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "x-scalius-buyer-text": true
+            },
+            "maxItems": 10
+          }
+        },
+        "required": [
+          "key",
+          "type",
+          "label",
+          "value",
+          "displayValue",
+          "price",
+          "priceMinor"
+        ]
+      },
       "OrderLineExtras": {
         "type": "object",
         "properties": {
@@ -11027,11 +11103,21 @@
             "type": "string",
             "x-scalius-buyer-text": true
           },
-          "amount": {
+          "total": {
             "type": "number"
           },
+          "totalMinor": {
+            "type": "integer",
+            "description": "What the row's lines were charged for it, exactly."
+          },
+          "amount": {
+            "type": "number",
+            "nullable": true
+          },
           "amountMinor": {
-            "type": "integer"
+            "type": "integer",
+            "nullable": true,
+            "description": "Per unit (`per: unit`) or per bundle unit (`per: bundle`), when one amount is exact for every unit; null: show `totalMinor`."
           },
           "per": {
             "type": "string",
@@ -11039,7 +11125,7 @@
               "unit",
               "bundle"
             ],
-            "description": "`unit`: on each unit of the row; `bundle`: once per bundle unit (a kit's add-on, on the row of its anchor item)."
+            "description": "From what the line froze: `bundle` for a kit's or an expanded bundle's add-on (on its anchor item's row), else `unit`."
           },
           "details": {
             "type": "array",
@@ -11048,17 +11134,19 @@
               "maxLength": 80,
               "x-scalius-buyer-text": true
             },
-            "maxItems": 50
+            "maxItems": 10
           }
         },
         "required": [
           "appId",
           "title",
+          "total",
+          "totalMinor",
           "amount",
           "amountMinor",
           "per"
         ],
-        "description": "What an app's `cart.line_prices` charged on this row (\"Protection ৳350\"), as the order froze it."
+        "description": "What an app's `cart.line_prices` charged on this row (\"Protection ৳350\"), from the order's real lines."
       },
       "BuyerPaymentRecovery": {
         "type": "object",
@@ -28891,6 +28979,245 @@
         "required": [
           "available",
           "reason"
+        ]
+      },
+      "AdminOrderLine": {
+        "type": "object",
+        "properties": {
+          "fulfillmentType": {
+            "type": "string",
+            "enum": [
+              "ship",
+              "pickup",
+              "digital",
+              "gift_card",
+              "service"
+            ],
+            "description": "How the order line reaches the buyer, frozen when the order is placed."
+          },
+          "fulfilledQuantity": {
+            "type": "integer"
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderLineProperty"
+            },
+            "x-scalius-app-owned": "items"
+          },
+          "propertiesPrice": {
+            "type": "number"
+          },
+          "propertiesPriceMinor": {
+            "type": "integer"
+          },
+          "baseUnitPriceMinor": {
+            "type": "integer",
+            "nullable": true
+          },
+          "id": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "variantId": {
+            "type": "string",
+            "nullable": true
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "price": {
+            "type": "number"
+          },
+          "productName": {
+            "type": "string",
+            "nullable": true
+          },
+          "productImage": {
+            "type": "string",
+            "nullable": true
+          },
+          "variantLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "inventoryTracked": {
+            "type": "boolean"
+          },
+          "unitPriceMinor": {
+            "type": "integer",
+            "nullable": true
+          },
+          "lineSubtotalMinor": {
+            "type": "integer",
+            "nullable": true
+          },
+          "discountAmountMinor": {
+            "type": "integer",
+            "nullable": true
+          },
+          "taxableAmountMinor": {
+            "type": "integer",
+            "nullable": true
+          },
+          "taxAmountMinor": {
+            "type": "integer"
+          },
+          "extras": {
+            "$ref": "#/components/schemas/OrderLineExtras"
+          }
+        },
+        "required": [
+          "fulfillmentType",
+          "fulfilledQuantity",
+          "properties",
+          "propertiesPrice",
+          "propertiesPriceMinor",
+          "baseUnitPriceMinor",
+          "id",
+          "productId",
+          "variantId",
+          "quantity",
+          "price",
+          "productName",
+          "productImage",
+          "variantLabel",
+          "inventoryTracked",
+          "unitPriceMinor",
+          "lineSubtotalMinor",
+          "discountAmountMinor",
+          "taxableAmountMinor",
+          "taxAmountMinor"
+        ],
+        "description": "One order line as staff read it: its money, frozen entries, fulfilment and extras."
+      },
+      "OrderRefundAttempt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "orderId": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "gateway": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "providerStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "success",
+              "warning",
+              "danger"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/NullableTimestamp"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/NullableTimestamp"
+          },
+          "nextProbeAt": {
+            "$ref": "#/components/schemas/NullableTimestamp"
+          },
+          "lastProbeAt": {
+            "$ref": "#/components/schemas/NullableTimestamp"
+          },
+          "refundedAt": {
+            "$ref": "#/components/schemas/NullableTimestamp"
+          },
+          "failedAt": {
+            "$ref": "#/components/schemas/NullableTimestamp"
+          },
+          "providerProcessing": {
+            "type": "boolean",
+            "description": "The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it."
+          },
+          "locksOrder": {
+            "type": "boolean",
+            "description": "A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded."
+          },
+          "reason": {
+            "type": "string"
+          },
+          "refundPaymentId": {
+            "type": "string"
+          },
+          "sourcePaymentId": {
+            "type": "string"
+          },
+          "sourceTransactionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "refundReference": {
+            "type": "string"
+          },
+          "providerRefundId": {
+            "type": "string",
+            "nullable": true
+          },
+          "providerCorrelationId": {
+            "type": "string",
+            "nullable": true
+          },
+          "allocationIndex": {
+            "type": "number"
+          },
+          "allocationCount": {
+            "type": "number"
+          },
+          "attempts": {
+            "type": "number"
+          },
+          "lastError": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "amount",
+          "currency",
+          "gateway",
+          "status",
+          "providerStatus",
+          "active",
+          "severity",
+          "label",
+          "message",
+          "createdAt",
+          "updatedAt",
+          "nextProbeAt",
+          "lastProbeAt",
+          "refundedAt",
+          "failedAt"
         ]
       },
       "WarrantyClaim": {
@@ -60998,80 +61325,7 @@
                               "properties": {
                                 "type": "array",
                                 "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "key": {
-                                      "type": "string"
-                                    },
-                                    "type": {
-                                      "type": "string",
-                                      "enum": [
-                                        "text",
-                                        "textarea",
-                                        "select",
-                                        "checkbox",
-                                        "file"
-                                      ],
-                                      "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
-                                    },
-                                    "label": {
-                                      "type": "string"
-                                    },
-                                    "value": {
-                                      "type": "string",
-                                      "x-scalius-buyer-text": true
-                                    },
-                                    "displayValue": {
-                                      "type": "string",
-                                      "x-scalius-buyer-text": true
-                                    },
-                                    "price": {
-                                      "type": "number"
-                                    },
-                                    "priceMinor": {
-                                      "type": "integer"
-                                    },
-                                    "appId": {
-                                      "type": "string"
-                                    },
-                                    "textRevision": {
-                                      "type": "string",
-                                      "description": "An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`."
-                                    },
-                                    "revision": {
-                                      "type": "string",
-                                      "description": "The revision of the words the buyer answered (absent: none named)."
-                                    },
-                                    "confirmation": {
-                                      "type": "object",
-                                      "properties": {
-                                        "text": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "required": [
-                                        "text"
-                                      ]
-                                    },
-                                    "details": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string",
-                                        "maxLength": 80,
-                                        "x-scalius-buyer-text": true
-                                      },
-                                      "maxItems": 50
-                                    }
-                                  },
-                                  "required": [
-                                    "key",
-                                    "type",
-                                    "label",
-                                    "value",
-                                    "displayValue",
-                                    "price",
-                                    "priceMinor"
-                                  ]
+                                  "$ref": "#/components/schemas/OrderLineProperty"
                                 },
                                 "x-scalius-app-owned": "items"
                               },
@@ -61149,8 +61403,8 @@
                                 "items": {
                                   "$ref": "#/components/schemas/BuyerLineAddOn"
                                 },
-                                "maxItems": 5,
-                                "description": "Every app add-on the row was charged, from what its line froze; empty: none. The app's own line answers are in `properties` (entries with its `appId`)."
+                                "maxItems": 10,
+                                "description": "Every app add-on the row was charged, exactly; empty: none. The app's own line answers are in `properties` (entries with its `appId`); an add-on is never in `properties` unless it is what each unit pays."
                               },
                               "createdAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
@@ -61968,6 +62222,15 @@
                                   },
                                   "amountMinor": {
                                     "type": "integer"
+                                  },
+                                  "details": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "maxLength": 80,
+                                      "x-scalius-buyer-text": true
+                                    },
+                                    "maxItems": 50
                                   }
                                 },
                                 "required": [
@@ -61982,7 +62245,8 @@
                           "required": [
                             "itemsSubtotalMinor",
                             "rows"
-                          ]
+                          ],
+                          "description": "The apps' add-ons as summary rows from the order's real lines: draw Subtotal as `itemsSubtotalMinor`, then each row."
                         }
                       },
                       "required": [
@@ -88538,10 +88802,10 @@
                 "include",
                 "omit"
               ],
-              "description": "`omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind."
+              "description": "`omit` is the status poll: it skips deciding the payment the buyer may make (its gateway and settings reads) and runs no app's blocks (`buyerUi` is empty); the poll needs only the order's kind."
             },
             "required": false,
-            "description": "`omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind.",
+            "description": "`omit` is the status poll: it skips deciding the payment the buyer may make (its gateway and settings reads) and runs no app's blocks (`buyerUi` is empty); the poll needs only the order's kind.",
             "name": "paymentRecovery",
             "in": "query"
           },
@@ -92829,6 +93093,52 @@
                                 "$ref": "#/components/schemas/OrderGiftCardTender"
                               }
                             },
+                            "addOns": {
+                              "type": "object",
+                              "properties": {
+                                "itemsSubtotalMinor": {
+                                  "type": "integer"
+                                },
+                                "rows": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "appId": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "amountMinor": {
+                                        "type": "integer"
+                                      },
+                                      "details": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "maxLength": 80,
+                                          "x-scalius-buyer-text": true
+                                        },
+                                        "maxItems": 50
+                                      }
+                                    },
+                                    "required": [
+                                      "appId",
+                                      "title",
+                                      "amountMinor"
+                                    ]
+                                  },
+                                  "maxItems": 50
+                                }
+                              },
+                              "required": [
+                                "itemsSubtotalMinor",
+                                "rows"
+                              ],
+                              "description": "The apps' add-ons as summary rows from the order's real lines: draw Subtotal as `itemsSubtotalMinor`, then each row."
+                            },
                             "createdAt": {
                               "type": "string",
                               "nullable": true
@@ -92914,80 +93224,7 @@
                                   "properties": {
                                     "type": "array",
                                     "items": {
-                                      "type": "object",
-                                      "properties": {
-                                        "key": {
-                                          "type": "string"
-                                        },
-                                        "type": {
-                                          "type": "string",
-                                          "enum": [
-                                            "text",
-                                            "textarea",
-                                            "select",
-                                            "checkbox",
-                                            "file"
-                                          ],
-                                          "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
-                                        },
-                                        "label": {
-                                          "type": "string"
-                                        },
-                                        "value": {
-                                          "type": "string",
-                                          "x-scalius-buyer-text": true
-                                        },
-                                        "displayValue": {
-                                          "type": "string",
-                                          "x-scalius-buyer-text": true
-                                        },
-                                        "price": {
-                                          "type": "number"
-                                        },
-                                        "priceMinor": {
-                                          "type": "integer"
-                                        },
-                                        "appId": {
-                                          "type": "string"
-                                        },
-                                        "textRevision": {
-                                          "type": "string",
-                                          "description": "An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`."
-                                        },
-                                        "revision": {
-                                          "type": "string",
-                                          "description": "The revision of the words the buyer answered (absent: none named)."
-                                        },
-                                        "confirmation": {
-                                          "type": "object",
-                                          "properties": {
-                                            "text": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "text"
-                                          ]
-                                        },
-                                        "details": {
-                                          "type": "array",
-                                          "items": {
-                                            "type": "string",
-                                            "maxLength": 80,
-                                            "x-scalius-buyer-text": true
-                                          },
-                                          "maxItems": 50
-                                        }
-                                      },
-                                      "required": [
-                                        "key",
-                                        "type",
-                                        "label",
-                                        "value",
-                                        "displayValue",
-                                        "price",
-                                        "priceMinor"
-                                      ]
+                                      "$ref": "#/components/schemas/OrderLineProperty"
                                     },
                                     "x-scalius-app-owned": "items"
                                   },
@@ -93065,8 +93302,8 @@
                                     "items": {
                                       "$ref": "#/components/schemas/BuyerLineAddOn"
                                     },
-                                    "maxItems": 5,
-                                    "description": "Every app add-on the row was charged, from what its line froze; empty: none. The app's own line answers are in `properties` (entries with its `appId`)."
+                                    "maxItems": 10,
+                                    "description": "Every app add-on the row was charged, exactly; empty: none. The app's own line answers are in `properties` (entries with its `appId`); an add-on is never in `properties` unless it is what each unit pays."
                                   }
                                 },
                                 "required": [
@@ -93313,6 +93550,7 @@
                             "balanceDue",
                             "paymentTerms",
                             "giftCardTenders",
+                            "addOns",
                             "createdAt",
                             "updatedAt",
                             "items",
@@ -98332,159 +98570,13 @@
                               "properties": {
                                 "type": "array",
                                 "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "key": {
-                                      "type": "string"
-                                    },
-                                    "type": {
-                                      "type": "string",
-                                      "enum": [
-                                        "text",
-                                        "textarea",
-                                        "select",
-                                        "checkbox",
-                                        "file"
-                                      ],
-                                      "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
-                                    },
-                                    "label": {
-                                      "type": "string"
-                                    },
-                                    "value": {
-                                      "type": "string",
-                                      "x-scalius-buyer-text": true
-                                    },
-                                    "displayValue": {
-                                      "type": "string",
-                                      "x-scalius-buyer-text": true
-                                    },
-                                    "price": {
-                                      "type": "number"
-                                    },
-                                    "priceMinor": {
-                                      "type": "integer"
-                                    },
-                                    "appId": {
-                                      "type": "string"
-                                    },
-                                    "textRevision": {
-                                      "type": "string",
-                                      "description": "An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`."
-                                    },
-                                    "revision": {
-                                      "type": "string",
-                                      "description": "The revision of the words the buyer answered (absent: none named)."
-                                    },
-                                    "confirmation": {
-                                      "type": "object",
-                                      "properties": {
-                                        "text": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "required": [
-                                        "text"
-                                      ]
-                                    },
-                                    "details": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string",
-                                        "maxLength": 80,
-                                        "x-scalius-buyer-text": true
-                                      },
-                                      "maxItems": 50
-                                    }
-                                  },
-                                  "required": [
-                                    "key",
-                                    "type",
-                                    "label",
-                                    "value",
-                                    "displayValue",
-                                    "price",
-                                    "priceMinor"
-                                  ]
+                                  "$ref": "#/components/schemas/OrderLineProperty"
                                 }
                               },
                               "adjustments": {
                                 "type": "array",
                                 "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "key": {
-                                      "type": "string"
-                                    },
-                                    "type": {
-                                      "type": "string",
-                                      "enum": [
-                                        "text",
-                                        "textarea",
-                                        "select",
-                                        "checkbox",
-                                        "file"
-                                      ],
-                                      "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
-                                    },
-                                    "label": {
-                                      "type": "string"
-                                    },
-                                    "value": {
-                                      "type": "string",
-                                      "x-scalius-buyer-text": true
-                                    },
-                                    "displayValue": {
-                                      "type": "string",
-                                      "x-scalius-buyer-text": true
-                                    },
-                                    "price": {
-                                      "type": "number"
-                                    },
-                                    "priceMinor": {
-                                      "type": "integer"
-                                    },
-                                    "appId": {
-                                      "type": "string"
-                                    },
-                                    "textRevision": {
-                                      "type": "string",
-                                      "description": "An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`."
-                                    },
-                                    "revision": {
-                                      "type": "string",
-                                      "description": "The revision of the words the buyer answered (absent: none named)."
-                                    },
-                                    "confirmation": {
-                                      "type": "object",
-                                      "properties": {
-                                        "text": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "required": [
-                                        "text"
-                                      ]
-                                    },
-                                    "details": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string",
-                                        "maxLength": 80,
-                                        "x-scalius-buyer-text": true
-                                      },
-                                      "maxItems": 50
-                                    }
-                                  },
-                                  "required": [
-                                    "key",
-                                    "type",
-                                    "label",
-                                    "value",
-                                    "displayValue",
-                                    "price",
-                                    "priceMinor"
-                                  ]
+                                  "$ref": "#/components/schemas/OrderLineProperty"
                                 }
                               },
                               "purchaseOptions": {
@@ -103929,80 +104021,7 @@
                               "properties": {
                                 "type": "array",
                                 "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "key": {
-                                      "type": "string"
-                                    },
-                                    "type": {
-                                      "type": "string",
-                                      "enum": [
-                                        "text",
-                                        "textarea",
-                                        "select",
-                                        "checkbox",
-                                        "file"
-                                      ],
-                                      "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
-                                    },
-                                    "label": {
-                                      "type": "string"
-                                    },
-                                    "value": {
-                                      "type": "string",
-                                      "x-scalius-buyer-text": true
-                                    },
-                                    "displayValue": {
-                                      "type": "string",
-                                      "x-scalius-buyer-text": true
-                                    },
-                                    "price": {
-                                      "type": "number"
-                                    },
-                                    "priceMinor": {
-                                      "type": "integer"
-                                    },
-                                    "appId": {
-                                      "type": "string"
-                                    },
-                                    "textRevision": {
-                                      "type": "string",
-                                      "description": "An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`."
-                                    },
-                                    "revision": {
-                                      "type": "string",
-                                      "description": "The revision of the words the buyer answered (absent: none named)."
-                                    },
-                                    "confirmation": {
-                                      "type": "object",
-                                      "properties": {
-                                        "text": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "required": [
-                                        "text"
-                                      ]
-                                    },
-                                    "details": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string",
-                                        "maxLength": 80,
-                                        "x-scalius-buyer-text": true
-                                      },
-                                      "maxItems": 50
-                                    }
-                                  },
-                                  "required": [
-                                    "key",
-                                    "type",
-                                    "label",
-                                    "value",
-                                    "displayValue",
-                                    "price",
-                                    "priceMinor"
-                                  ]
+                                  "$ref": "#/components/schemas/OrderLineProperty"
                                 }
                               },
                               "propertiesPriceMinor": {
@@ -104011,80 +104030,7 @@
                               "adjustments": {
                                 "type": "array",
                                 "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "key": {
-                                      "type": "string"
-                                    },
-                                    "type": {
-                                      "type": "string",
-                                      "enum": [
-                                        "text",
-                                        "textarea",
-                                        "select",
-                                        "checkbox",
-                                        "file"
-                                      ],
-                                      "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
-                                    },
-                                    "label": {
-                                      "type": "string"
-                                    },
-                                    "value": {
-                                      "type": "string",
-                                      "x-scalius-buyer-text": true
-                                    },
-                                    "displayValue": {
-                                      "type": "string",
-                                      "x-scalius-buyer-text": true
-                                    },
-                                    "price": {
-                                      "type": "number"
-                                    },
-                                    "priceMinor": {
-                                      "type": "integer"
-                                    },
-                                    "appId": {
-                                      "type": "string"
-                                    },
-                                    "textRevision": {
-                                      "type": "string",
-                                      "description": "An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`."
-                                    },
-                                    "revision": {
-                                      "type": "string",
-                                      "description": "The revision of the words the buyer answered (absent: none named)."
-                                    },
-                                    "confirmation": {
-                                      "type": "object",
-                                      "properties": {
-                                        "text": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "required": [
-                                        "text"
-                                      ]
-                                    },
-                                    "details": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string",
-                                        "maxLength": 80,
-                                        "x-scalius-buyer-text": true
-                                      },
-                                      "maxItems": 50
-                                    }
-                                  },
-                                  "required": [
-                                    "key",
-                                    "type",
-                                    "label",
-                                    "value",
-                                    "displayValue",
-                                    "price",
-                                    "priceMinor"
-                                  ]
+                                  "$ref": "#/components/schemas/OrderLineProperty"
                                 }
                               },
                               "purchaseOptions": {
@@ -252912,188 +252858,7 @@
                         "items": {
                           "type": "array",
                           "items": {
-                            "type": "object",
-                            "properties": {
-                              "fulfillmentType": {
-                                "type": "string",
-                                "enum": [
-                                  "ship",
-                                  "pickup",
-                                  "digital",
-                                  "gift_card",
-                                  "service"
-                                ],
-                                "description": "How the order line reaches the buyer, frozen when the order is placed."
-                              },
-                              "fulfilledQuantity": {
-                                "type": "integer"
-                              },
-                              "properties": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "key": {
-                                      "type": "string"
-                                    },
-                                    "type": {
-                                      "type": "string",
-                                      "enum": [
-                                        "text",
-                                        "textarea",
-                                        "select",
-                                        "checkbox",
-                                        "file"
-                                      ],
-                                      "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
-                                    },
-                                    "label": {
-                                      "type": "string"
-                                    },
-                                    "value": {
-                                      "type": "string",
-                                      "x-scalius-buyer-text": true
-                                    },
-                                    "displayValue": {
-                                      "type": "string",
-                                      "x-scalius-buyer-text": true
-                                    },
-                                    "price": {
-                                      "type": "number"
-                                    },
-                                    "priceMinor": {
-                                      "type": "integer"
-                                    },
-                                    "appId": {
-                                      "type": "string"
-                                    },
-                                    "textRevision": {
-                                      "type": "string",
-                                      "description": "An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`."
-                                    },
-                                    "revision": {
-                                      "type": "string",
-                                      "description": "The revision of the words the buyer answered (absent: none named)."
-                                    },
-                                    "confirmation": {
-                                      "type": "object",
-                                      "properties": {
-                                        "text": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "required": [
-                                        "text"
-                                      ]
-                                    },
-                                    "details": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string",
-                                        "maxLength": 80,
-                                        "x-scalius-buyer-text": true
-                                      },
-                                      "maxItems": 50
-                                    }
-                                  },
-                                  "required": [
-                                    "key",
-                                    "type",
-                                    "label",
-                                    "value",
-                                    "displayValue",
-                                    "price",
-                                    "priceMinor"
-                                  ]
-                                },
-                                "x-scalius-app-owned": "items"
-                              },
-                              "propertiesPrice": {
-                                "type": "number"
-                              },
-                              "propertiesPriceMinor": {
-                                "type": "integer"
-                              },
-                              "baseUnitPriceMinor": {
-                                "type": "integer",
-                                "nullable": true
-                              },
-                              "id": {
-                                "type": "string"
-                              },
-                              "productId": {
-                                "type": "string"
-                              },
-                              "variantId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "quantity": {
-                                "type": "number"
-                              },
-                              "price": {
-                                "type": "number"
-                              },
-                              "productName": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "productImage": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "variantLabel": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "inventoryTracked": {
-                                "type": "boolean"
-                              },
-                              "unitPriceMinor": {
-                                "type": "integer",
-                                "nullable": true
-                              },
-                              "lineSubtotalMinor": {
-                                "type": "integer",
-                                "nullable": true
-                              },
-                              "discountAmountMinor": {
-                                "type": "integer",
-                                "nullable": true
-                              },
-                              "taxableAmountMinor": {
-                                "type": "integer",
-                                "nullable": true
-                              },
-                              "taxAmountMinor": {
-                                "type": "integer"
-                              },
-                              "extras": {
-                                "$ref": "#/components/schemas/OrderLineExtras"
-                              }
-                            },
-                            "required": [
-                              "fulfillmentType",
-                              "fulfilledQuantity",
-                              "properties",
-                              "propertiesPrice",
-                              "propertiesPriceMinor",
-                              "baseUnitPriceMinor",
-                              "id",
-                              "productId",
-                              "variantId",
-                              "quantity",
-                              "price",
-                              "productName",
-                              "productImage",
-                              "variantLabel",
-                              "inventoryTracked",
-                              "unitPriceMinor",
-                              "lineSubtotalMinor",
-                              "discountAmountMinor",
-                              "taxableAmountMinor",
-                              "taxAmountMinor"
-                            ]
+                            "$ref": "#/components/schemas/AdminOrderLine"
                           }
                         },
                         "latestShipment": {
@@ -253314,131 +253079,7 @@
                         "refundAttempts": {
                           "type": "array",
                           "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "orderId": {
-                                "type": "string"
-                              },
-                              "amount": {
-                                "type": "number"
-                              },
-                              "currency": {
-                                "type": "string"
-                              },
-                              "gateway": {
-                                "type": "string"
-                              },
-                              "status": {
-                                "type": "string"
-                              },
-                              "providerStatus": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "active": {
-                                "type": "boolean"
-                              },
-                              "severity": {
-                                "type": "string",
-                                "enum": [
-                                  "info",
-                                  "success",
-                                  "warning",
-                                  "danger"
-                                ]
-                              },
-                              "label": {
-                                "type": "string"
-                              },
-                              "message": {
-                                "type": "string"
-                              },
-                              "createdAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "updatedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "nextProbeAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "lastProbeAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "refundedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "failedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "providerProcessing": {
-                                "type": "boolean",
-                                "description": "The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it."
-                              },
-                              "locksOrder": {
-                                "type": "boolean",
-                                "description": "A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded."
-                              },
-                              "reason": {
-                                "type": "string"
-                              },
-                              "refundPaymentId": {
-                                "type": "string"
-                              },
-                              "sourcePaymentId": {
-                                "type": "string"
-                              },
-                              "sourceTransactionId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "refundReference": {
-                                "type": "string"
-                              },
-                              "providerRefundId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "providerCorrelationId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "allocationIndex": {
-                                "type": "number"
-                              },
-                              "allocationCount": {
-                                "type": "number"
-                              },
-                              "attempts": {
-                                "type": "number"
-                              },
-                              "lastError": {
-                                "type": "string",
-                                "nullable": true
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "orderId",
-                              "amount",
-                              "currency",
-                              "gateway",
-                              "status",
-                              "providerStatus",
-                              "active",
-                              "severity",
-                              "label",
-                              "message",
-                              "createdAt",
-                              "updatedAt",
-                              "nextProbeAt",
-                              "lastProbeAt",
-                              "refundedAt",
-                              "failedAt"
-                            ]
+                            "$ref": "#/components/schemas/OrderRefundAttempt"
                           }
                         },
                         "activeRefundOperation": {
@@ -254952,80 +254593,7 @@
                           "properties": {
                             "type": "array",
                             "items": {
-                              "type": "object",
-                              "properties": {
-                                "key": {
-                                  "type": "string"
-                                },
-                                "type": {
-                                  "type": "string",
-                                  "enum": [
-                                    "text",
-                                    "textarea",
-                                    "select",
-                                    "checkbox",
-                                    "file"
-                                  ],
-                                  "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
-                                },
-                                "label": {
-                                  "type": "string"
-                                },
-                                "value": {
-                                  "type": "string",
-                                  "x-scalius-buyer-text": true
-                                },
-                                "displayValue": {
-                                  "type": "string",
-                                  "x-scalius-buyer-text": true
-                                },
-                                "price": {
-                                  "type": "number"
-                                },
-                                "priceMinor": {
-                                  "type": "integer"
-                                },
-                                "appId": {
-                                  "type": "string"
-                                },
-                                "textRevision": {
-                                  "type": "string",
-                                  "description": "An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`."
-                                },
-                                "revision": {
-                                  "type": "string",
-                                  "description": "The revision of the words the buyer answered (absent: none named)."
-                                },
-                                "confirmation": {
-                                  "type": "object",
-                                  "properties": {
-                                    "text": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "required": [
-                                    "text"
-                                  ]
-                                },
-                                "details": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string",
-                                    "maxLength": 80,
-                                    "x-scalius-buyer-text": true
-                                  },
-                                  "maxItems": 50
-                                }
-                              },
-                              "required": [
-                                "key",
-                                "type",
-                                "label",
-                                "value",
-                                "displayValue",
-                                "price",
-                                "priceMinor"
-                              ]
+                              "$ref": "#/components/schemas/OrderLineProperty"
                             },
                             "x-scalius-app-owned": "items"
                           },
@@ -255412,131 +254980,7 @@
                         "refundAttempts": {
                           "type": "array",
                           "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "orderId": {
-                                "type": "string"
-                              },
-                              "amount": {
-                                "type": "number"
-                              },
-                              "currency": {
-                                "type": "string"
-                              },
-                              "gateway": {
-                                "type": "string"
-                              },
-                              "status": {
-                                "type": "string"
-                              },
-                              "providerStatus": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "active": {
-                                "type": "boolean"
-                              },
-                              "severity": {
-                                "type": "string",
-                                "enum": [
-                                  "info",
-                                  "success",
-                                  "warning",
-                                  "danger"
-                                ]
-                              },
-                              "label": {
-                                "type": "string"
-                              },
-                              "message": {
-                                "type": "string"
-                              },
-                              "createdAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "updatedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "nextProbeAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "lastProbeAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "refundedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "failedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "providerProcessing": {
-                                "type": "boolean",
-                                "description": "The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it."
-                              },
-                              "locksOrder": {
-                                "type": "boolean",
-                                "description": "A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded."
-                              },
-                              "reason": {
-                                "type": "string"
-                              },
-                              "refundPaymentId": {
-                                "type": "string"
-                              },
-                              "sourcePaymentId": {
-                                "type": "string"
-                              },
-                              "sourceTransactionId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "refundReference": {
-                                "type": "string"
-                              },
-                              "providerRefundId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "providerCorrelationId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "allocationIndex": {
-                                "type": "number"
-                              },
-                              "allocationCount": {
-                                "type": "number"
-                              },
-                              "attempts": {
-                                "type": "number"
-                              },
-                              "lastError": {
-                                "type": "string",
-                                "nullable": true
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "orderId",
-                              "amount",
-                              "currency",
-                              "gateway",
-                              "status",
-                              "providerStatus",
-                              "active",
-                              "severity",
-                              "label",
-                              "message",
-                              "createdAt",
-                              "updatedAt",
-                              "nextProbeAt",
-                              "lastProbeAt",
-                              "refundedAt",
-                              "failedAt"
-                            ]
+                            "$ref": "#/components/schemas/OrderRefundAttempt"
                           }
                         },
                         "activeRefundOperation": {
@@ -257477,80 +256921,7 @@
                                   "properties": {
                                     "type": "array",
                                     "items": {
-                                      "type": "object",
-                                      "properties": {
-                                        "key": {
-                                          "type": "string"
-                                        },
-                                        "type": {
-                                          "type": "string",
-                                          "enum": [
-                                            "text",
-                                            "textarea",
-                                            "select",
-                                            "checkbox",
-                                            "file"
-                                          ],
-                                          "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
-                                        },
-                                        "label": {
-                                          "type": "string"
-                                        },
-                                        "value": {
-                                          "type": "string",
-                                          "x-scalius-buyer-text": true
-                                        },
-                                        "displayValue": {
-                                          "type": "string",
-                                          "x-scalius-buyer-text": true
-                                        },
-                                        "price": {
-                                          "type": "number"
-                                        },
-                                        "priceMinor": {
-                                          "type": "integer"
-                                        },
-                                        "appId": {
-                                          "type": "string"
-                                        },
-                                        "textRevision": {
-                                          "type": "string",
-                                          "description": "An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`."
-                                        },
-                                        "revision": {
-                                          "type": "string",
-                                          "description": "The revision of the words the buyer answered (absent: none named)."
-                                        },
-                                        "confirmation": {
-                                          "type": "object",
-                                          "properties": {
-                                            "text": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "text"
-                                          ]
-                                        },
-                                        "details": {
-                                          "type": "array",
-                                          "items": {
-                                            "type": "string",
-                                            "maxLength": 80,
-                                            "x-scalius-buyer-text": true
-                                          },
-                                          "maxItems": 50
-                                        }
-                                      },
-                                      "required": [
-                                        "key",
-                                        "type",
-                                        "label",
-                                        "value",
-                                        "displayValue",
-                                        "price",
-                                        "priceMinor"
-                                      ]
+                                      "$ref": "#/components/schemas/OrderLineProperty"
                                     },
                                     "x-scalius-app-owned": "items"
                                   },

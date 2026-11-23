@@ -46,6 +46,7 @@ import {
 import {
   orderMoneyAmounts,
   orderMoneySelection,
+  buyerOrderAddOnTotals,
   buyerUiOrderLines,
   presentBuyerLineAddOns,
   presentOrderLineFulfilment,
@@ -56,6 +57,7 @@ import {
   buyerLineAddOnsSchema,
   buyerLineIdsSchema,
   buyerOrderFulfilmentSchema,
+  orderAddOnTotalsSchema,
   orderFulfilmentShape,
   orderLineBundleSchema,
   orderLineFulfilmentShape,
@@ -170,6 +172,8 @@ const orderReceiptSchema = z.object({
   }).nullable(),
   /** Gift cards still paying for the order, in commit order (released or refunded ones are left out). */
   giftCardTenders: z.array(orderGiftCardTenderSchema),
+  /** The apps' add-ons as summary rows, from the order's real lines: the page draws them as they are. */
+  addOns: orderAddOnTotalsSchema,
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
   items: z.array(z.object({
@@ -521,7 +525,7 @@ const getOrderReceiptRoute = createRoute({
     }),
     query: z.object({
       paymentRecovery: z.enum(["include", "omit"]).optional().openapi({
-        description: "`omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind.",
+        description: "`omit` is the status poll: it skips deciding the payment the buyer may make (its gateway and settings reads) and runs no app's blocks (`buyerUi` is empty); the poll needs only the order's kind.",
       }),
     }),
   },
@@ -683,7 +687,9 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     registrations,
     buyerRequest: c.req.raw,
   });
-  const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN)
+  // The status poll (`paymentRecovery=omit`) draws nothing: it runs no app; the page's own read does, once.
+  const polled = c.req.valid("query").paymentRecovery === "omit";
+  const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN) && !polled
     ? await apps.buyerUi?.({
       targets: ["order.confirmation", "account.order", "order.line.after"],
       language: c.req.header("x-storefront-language"),
@@ -751,6 +757,8 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       balanceDue: fromMinor(getCustomerVisibleBalanceDueMinor(order), order.currencyDecimalPlaces),
       paymentTerms: presentBuyerPaymentTerms(order),
       giftCardTenders,
+      // The summary's add-on rows from the real lines, before any fold (a split kit item's add-on once).
+      addOns: buyerOrderAddOnTotals(items, order.subtotalAmountMinor ?? 0, requestBuyerLanguage(null, c.req.header("x-storefront-language"))),
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
       items: rows.map(({ row: {

@@ -10,7 +10,7 @@ import {
 } from "@scalius/shared/fulfilment";
 import { BUYER_UPLOAD_TYPES } from "@scalius/shared/buyer-uploads";
 import { CART_LINE_INPUT_LIMITS, LINE_ADD_ONS_MAX } from "@scalius/shared/line-identity";
-import { ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX } from "@scalius/shared/add-on-totals";
+import { ADD_ON_DETAILS_MAX, ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX } from "@scalius/shared/add-on-totals";
 import {
   CUSTOMIZATION_FIELD_TYPES,
   LINE_INPUT_FIELD_TYPES,
@@ -92,7 +92,10 @@ export const linePurchaseOptionsSchema = z.array(z.object({
 })).openapi({ description: "The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them." });
 
 /** An add-on's detail lines: plain text an app wrote, never HTML. */
-const addOnDetailsSchema = z.array(buyerText(z.string().max(ADD_ON_TITLE_MAX))).max(ADD_ON_ROWS_MAX);
+/** An add-on's detail lines on one line or one buyer row (at most ADD_ON_DETAILS_MAX). */
+const addOnDetailsSchema = z.array(buyerText(z.string().max(ADD_ON_TITLE_MAX))).max(ADD_ON_DETAILS_MAX);
+/** A summary row's: its lines' detail lines (at most ADD_ON_ROWS_MAX). */
+const addOnRowDetailsSchema = z.array(buyerText(z.string().max(ADD_ON_TITLE_MAX))).max(ADD_ON_ROWS_MAX);
 
 /** A resolved buyer input as priced and frozen on the order line. */
 export const orderLinePropertySchema = z.object({
@@ -113,7 +116,7 @@ export const orderLinePropertySchema = z.object({
   confirmation: z.object({ text: z.string() }).optional(),
   /** An app add-on's (`_adjustment`) detail lines, text the app wrote; absent: none. */
   details: addOnDetailsSchema.optional(),
-});
+}).openapi("OrderLineProperty");
 
 /**
  * The apps' add-ons as rows of the money summary (`@scalius/shared/add-on-totals`):
@@ -129,9 +132,24 @@ export const addOnTotalsSchema = z.object({
     title: z.string(),
     amount: z.number(),
     amountMinor: z.number().int(),
-    details: addOnDetailsSchema.optional().openapi({ description: "What the row opens to: its lines' detail lines, in order; absent: none." }),
+    details: addOnRowDetailsSchema.optional().openapi({ description: "What the row opens to: its lines' detail lines, in order; absent: none." }),
   })).max(ADD_ON_ROWS_MAX),
 }).openapi({ description: "The apps' add-ons as their own summary rows (\"Protection ৳350\"), grouped by app and title, and `itemsSubtotal`: the subtotal less them. Draw Subtotal as `itemsSubtotal`, then each row: together they are the subtotal." });
+
+/**
+ * An order's add-on summary rows, from its real lines' frozen add-ons
+ * against its saved subtotal (`buyerOrderAddOnTotals`), folded in the
+ * reader's language: the receipt and the account order draw them as they are.
+ */
+export const orderAddOnTotalsSchema = z.object({
+  itemsSubtotalMinor: z.number().int(),
+  rows: z.array(z.object({
+    appId: z.string().nullable(),
+    title: z.string(),
+    amountMinor: z.number().int(),
+    details: addOnRowDetailsSchema.optional(),
+  })).max(ADD_ON_ROWS_MAX),
+}).openapi({ description: "The apps' add-ons as summary rows from the order's real lines: draw Subtotal as `itemsSubtotalMinor`, then each row." });
 
 /**
  * One active app's line input as a buyer page draws it (`checkout.lineInputs`,
@@ -195,15 +213,17 @@ export const orderLineBundleSchema = z.object({
 export const buyerLineAddOnSchema = z.object({
   appId: z.string().nullable(),
   title: buyerText(z.string()),
-  amount: z.number(),
-  amountMinor: z.number().int(),
-  per: z.enum(["unit", "bundle"]).openapi({ description: "`unit`: on each unit of the row; `bundle`: once per bundle unit (a kit's add-on, on the row of its anchor item)." }),
+  total: z.number(),
+  totalMinor: z.number().int().openapi({ description: "What the row's lines were charged for it, exactly." }),
+  amount: z.number().nullable(),
+  amountMinor: z.number().int().nullable().openapi({ description: "Per unit (`per: unit`) or per bundle unit (`per: bundle`), when one amount is exact for every unit; null: show `totalMinor`." }),
+  per: z.enum(["unit", "bundle"]).openapi({ description: "From what the line froze: `bundle` for a kit's or an expanded bundle's add-on (on its anchor item's row), else `unit`." }),
   details: addOnDetailsSchema.optional(),
-}).openapi("BuyerLineAddOn", { description: "What an app's `cart.line_prices` charged on this row (\"Protection ৳350\"), as the order froze it." });
+}).openapi("BuyerLineAddOn", { description: "What an app's `cart.line_prices` charged on this row (\"Protection ৳350\"), from the order's real lines." });
 
-/** The add-ons of a buyer's row: every app's, at most a line's. */
-export const buyerLineAddOnsSchema = z.array(buyerLineAddOnSchema).max(LINE_ADD_ONS_MAX).openapi({
-  description: "Every app add-on the row was charged, from what its line froze; empty: none. The app's own line answers are in `properties` (entries with its `appId`).",
+/** The add-ons of a buyer's row: its lines' (a split kit item is two lines). */
+export const buyerLineAddOnsSchema = z.array(buyerLineAddOnSchema).max(LINE_ADD_ONS_MAX * 2).openapi({
+  description: "Every app add-on the row was charged, exactly; empty: none. The app's own line answers are in `properties` (entries with its `appId`); an add-on is never in `properties` unless it is what each unit pays.",
 });
 
 /** The real order lines a buyer's row shows (`foldBuyerOrderLines`). */

@@ -386,8 +386,8 @@ app.openapi(cartValidationRoute, async (c) => {
       customerId: sessionCustomerId,
     },
     appContext,
-    // A kit line answers its items, named in the page's language.
-    kitItems: { translation: translationScope(data.presence) },
+    // Every line in the page's language, and a kit line answers its items.
+    buyerRead: { translation: translationScope(data.presence) },
   });
   // Apps that rewrote the lines (`cart.transform`): the buyer sees their own
   // lines (a bundle priced as its components), checkout the rewritten ones.

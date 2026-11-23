@@ -1834,5 +1834,107 @@
   "from": "ed5ad4d0141d319b",
   "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
   "reason": "cart.line_prices adjustments gain optional details: at most ADD_ON_DETAILS_MAX (10) text lines frozen with the add-on, which its summary row opens to (wave 3 k1, theme gaps F15). An answer without them is unchanged."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "1f3cab7ccaefd35d",
+  "change": "functions.cart.transform output operations[][variant 0].title: pattern changed.",
+  "reason": "App text the store draws is plain, single-line text: control characters and bidi embedding, override and isolate marks are refused at the function boundary (one schema, plugins/app-text.ts), so an app can never reorder or hide what the host draws beside it (review of wave 3 k1, Nov 23, 2026)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "1f3cab7ccaefd35d",
+  "change": "functions.cart.transform output operations[][variant 1].title: pattern changed.",
+  "reason": "App text the store draws is plain, single-line text: control characters and bidi embedding, override and isolate marks are refused at the function boundary (one schema, plugins/app-text.ts), so an app can never reorder or hide what the host draws beside it (review of wave 3 k1, Nov 23, 2026)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "1f3cab7ccaefd35d",
+  "change": "functions.cart.line_prices output adjustments[][variant 0].title: pattern changed.",
+  "reason": "App text the store draws is plain, single-line text: control characters and bidi embedding, override and isolate marks are refused at the function boundary (one schema, plugins/app-text.ts), so an app can never reorder or hide what the host draws beside it (review of wave 3 k1, Nov 23, 2026)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "1f3cab7ccaefd35d",
+  "change": "functions.cart.line_prices output adjustments[][variant 0].details[]: pattern changed.",
+  "reason": "App text the store draws is plain, single-line text: control characters and bidi embedding, override and isolate marks are refused at the function boundary (one schema, plugins/app-text.ts), so an app can never reorder or hide what the host draws beside it (review of wave 3 k1, Nov 23, 2026)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "1f3cab7ccaefd35d",
+  "change": "functions.cart.line_prices output adjustments[][variant 1].title: pattern changed.",
+  "reason": "App text the store draws is plain, single-line text: control characters and bidi embedding, override and isolate marks are refused at the function boundary (one schema, plugins/app-text.ts), so an app can never reorder or hide what the host draws beside it (review of wave 3 k1, Nov 23, 2026)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "1f3cab7ccaefd35d",
+  "change": "functions.cart.line_prices output adjustments[][variant 1].details[]: pattern changed.",
+  "reason": "App text the store draws is plain, single-line text: control characters and bidi embedding, override and isolate marks are refused at the function boundary (one schema, plugins/app-text.ts), so an app can never reorder or hide what the host draws beside it (review of wave 3 k1, Nov 23, 2026)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "1f3cab7ccaefd35d",
+  "change": "functions.cart.line_prices output offers[][variant 0].title: pattern changed.",
+  "reason": "App text the store draws is plain, single-line text: control characters and bidi embedding, override and isolate marks are refused at the function boundary (one schema, plugins/app-text.ts), so an app can never reorder or hide what the host draws beside it (review of wave 3 k1, Nov 23, 2026)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "1f3cab7ccaefd35d",
+  "change": "functions.cart.line_prices output offers[][variant 1].title: pattern changed.",
+  "reason": "App text the store draws is plain, single-line text: control characters and bidi embedding, override and isolate marks are refused at the function boundary (one schema, plugins/app-text.ts), so an app can never reorder or hide what the host draws beside it (review of wave 3 k1, Nov 23, 2026)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "1f3cab7ccaefd35d",
+  "change": "functions.cart.validate output errors[].message: pattern changed.",
+  "reason": "App text the store draws is plain, single-line text: control characters and bidi embedding, override and isolate marks are refused at the function boundary (one schema, plugins/app-text.ts), so an app can never reorder or hide what the host draws beside it (review of wave 3 k1, Nov 23, 2026)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "1f3cab7ccaefd35d",
+  "change": "functions.checkout.discounts output discounts[].title: pattern changed.",
+  "reason": "App text the store draws is plain, single-line text: control characters and bidi embedding, override and isolate marks are refused at the function boundary (one schema, plugins/app-text.ts), so an app can never reorder or hide what the host draws beside it (review of wave 3 k1, Nov 23, 2026)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "1f3cab7ccaefd35d",
+  "change": "functions.checkout.shipping_rates output operations[][variant 1].name: pattern changed.",
+  "reason": "App text the store draws is plain, single-line text: control characters and bidi embedding, override and isolate marks are refused at the function boundary (one schema, plugins/app-text.ts), so an app can never reorder or hide what the host draws beside it (review of wave 3 k1, Nov 23, 2026)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "1f3cab7ccaefd35d",
+  "change": "functions.checkout.payment_methods output operations[][variant 2].name: pattern changed.",
+  "reason": "App text the store draws is plain, single-line text: control characters and bidi embedding, override and isolate marks are refused at the function boundary (one schema, plugins/app-text.ts), so an app can never reorder or hide what the host draws beside it (review of wave 3 k1, Nov 23, 2026)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "1f3cab7ccaefd35d",
+  "change": "extensions input orderLines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "An order row's add-ons carry `totalMinor` exactly and `amountMinor` only when exact for every unit, else null (review of wave 3 k1: an inferred unit amount misstated a row charged unevenly). Unreleased in this branch."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "978030194cdbd81f",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiInput: an existing signature changed or gained a required member.",
+  "reason": "An order row's add-ons carry `totalMinor` exactly and `amountMinor` only when exact for every unit, else null (review of wave 3 k1: an inferred unit amount misstated a row charged unevenly). Unreleased in this branch."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "978030194cdbd81f",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiOrderLine: an existing signature changed or gained a required member.",
+  "reason": "An order row's add-ons carry `totalMinor` exactly and `amountMinor` only when exact for every unit, else null (review of wave 3 k1: an inferred unit amount misstated a row charged unevenly). Unreleased in this branch."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "978030194cdbd81f",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_EXTENSION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "An order row's add-ons carry `totalMinor` exactly and `amountMinor` only when exact for every unit, else null (review of wave 3 k1: an inferred unit amount misstated a row charged unevenly). Unreleased in this branch."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "978030194cdbd81f",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "An order row's add-ons carry `totalMinor` exactly and `amountMinor` only when exact for every unit, else null (review of wave 3 k1: an inferred unit amount misstated a row charged unevenly). Unreleased in this branch."
  }
 ]

@@ -58,7 +58,7 @@ import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 import { resolvePrice, storeAmountMinor, type AppLinePrice, type ResolvedPriceSource, type StoreAmountConversion } from "@scalius/shared/market-pricing";
 import { addOnUnavailable, bundleAnchors, resolveCartWithAppLinePrices, type AppLineAddOn, type AppLinePricer } from "./app-line-prices";
 import { expandCartKits, type CartTransformer, type TransformedCart } from "./cart-transform";
-import { cartKitItems, cartKitItemsFold, type CartKitItemsRead } from "./kit-items";
+import { cartKitItems, cartProductTranslationsSql, cartVariantOptionValuesSql, translateCartRows, type CartBuyerRead } from "./kit-items";
 import {
     checkoutListPricesSql,
     marketPricingMatrixSql,
@@ -298,7 +298,7 @@ export interface StorefrontCartValidatedItem {
     kitComponents?: Array<{ variantId: string; productId: string; quantity: number }>;
     /**
      * A kit's items as the buyer reads them (`cartKitItems`), when the cart
-     * check asked (`kitItems`): on the kit's first pass line, then on the
+     * check asked (`buyerRead`): on the kit's first pass line, then on the
      * buyer's kit line. Never on an order line.
      */
     kitItems?: KitItem[];
@@ -390,6 +390,8 @@ export interface StorefrontCartProductRow {
     isGiftCard: boolean;
     /** Raw `products.customization_schema`; parsed and validated per line. */
     customizationSchema: string | null;
+    /** A buyer's cart check in a presence: its translations (`productTranslationRowsSql`); absent otherwise. */
+    translations?: string | null;
 }
 
 export interface StorefrontCartVariantRow {
@@ -423,6 +425,8 @@ export interface StorefrontCartVariantRow {
     listPrices?: string | null;
     /** A kit's components (`kitComponentsSql`); null for a SKU that is not a kit. */
     kitComponents?: string | null;
+    /** A buyer's cart check in a presence, a cart SKU: its option values (`variantOptionValuesSql`); absent otherwise. */
+    optionValues?: string | null;
 }
 
 function variantLabel(variant: Pick<StorefrontCartVariantRow, "isDefault" | "optionLabel"> | undefined): string | null {
@@ -565,11 +569,14 @@ export function selectStorefrontCartProductRows(
     salesChannelId: string = ONLINE_STORE_CHANNEL_ID,
     shippingMethodId?: string | null,
     variantIds: readonly string[] = [],
+    /** A buyer's cart check in a presence: each product's translations ride its row (`translateCartRows`). */
+    buyerRead?: CartBuyerRead,
 ) {
     return db
         .select({
             id: products.id,
             name: products.name,
+            ...cartProductTranslationsSql(buyerRead, sql`${products.id}`),
             isActive: products.isActive,
             priceMinor: products.priceMinor,
             discountBps: products.discountBps,
@@ -615,8 +622,8 @@ export function selectStorefrontCartVariantRows(
     productIds: readonly string[],
     variantIds: readonly string[],
     salesChannelId: string = ONLINE_STORE_CHANNEL_ID,
-    /** A buyer's cart check: its kits' components carry what the buyer reads of them (`cartKitItems`). */
-    kitItems?: CartKitItemsRead,
+    /** A buyer's cart check: its kits' components carry their option values, and in a presence its SKUs theirs (`translateCartRows`). */
+    buyerRead?: CartBuyerRead,
 ) {
     return db
         .select({
@@ -651,7 +658,8 @@ export function selectStorefrontCartVariantRows(
             // The app flags its app line inputs follow, over its product's (`appLineInputApplies`).
             appFlags: appFlagsSql("variant", sql`${productVariants.id}`),
             // A kit's components (null for any other SKU): checkout sells the line as them.
-            kitComponents: kitComponentsSql(sql`${productVariants.id}`, kitItems ? cartKitItemsFold(kitItems) : undefined),
+            kitComponents: kitComponentsSql(sql`${productVariants.id}`, buyerRead !== undefined),
+            ...cartVariantOptionValuesSql(buyerRead, sql`${productVariants.id}`, variantIds),
         })
         .from(productVariants)
         // One id set (the cart's SKUs and its products' live SKUs), read by
@@ -687,7 +695,9 @@ export function resolveStorefrontCartValidationFromRows(
         /** Kit items whose lines must be laid out again to match the kit's split (`priceKitLines`). */
         onKitSplits?: (splits: KitLineSplit[]) => void;
         /** A buyer's cart check: a kit line carries its items as the buyer reads them (`kitItems`). */
-        kitItems?: CartKitItemsRead;
+        buyerRead?: CartBuyerRead;
+        /** The product rows' translations (`translateCartRows`): a kit item's options in the presence's language. */
+        translationChains?: ReturnType<typeof translateCartRows>["chains"];
         /** The purchase options the active apps declare, id → title (`checkoutPurchaseOptions`); absent: none. */
         purchaseOptions?: ReadonlyMap<string, string>;
         /** The active apps' line inputs (`checkoutLineInputs`): resolved with the product's own inputs. Absent: none. */
@@ -1146,7 +1156,7 @@ export function resolveStorefrontCartValidationFromRows(
             ...(kit ? { kitComponents: kit.map((component) => ({ variantId: component.variantId, productId: component.productId!, quantity: component.quantity })) } : {}),
             ...(() => {
                 // What the buyer reads of the kit's items, from the rows this pass already holds.
-                const kitItems = kit && options.kitItems ? cartKitItems(kit, { products: productMap, variants: variantMap, mediaByProduct }, options.kitItems) : null;
+                const kitItems = kit && options.buyerRead ? cartKitItems(kit, { products: productMap, variants: variantMap, mediaByProduct, chains: options.translationChains ?? new Map() }) : null;
                 return kitItems ? { kitItems } : {};
             })(),
         });
@@ -1445,8 +1455,12 @@ export async function validateStorefrontCartItems(
         purchaseOptions?: ReadonlyMap<string, string>;
         /** The active apps' line inputs (`checkoutLineInputs`); absent: none, so a line naming one is refused as unknown. */
         lineInputs?: readonly AppLineInputs[];
-        /** A buyer's cart check: each kit line answers its items (`kitItems`), in the presence's language. */
-        kitItems?: CartKitItemsRead;
+        /**
+         * A buyer's cart check: every line's names read in the presence's
+         * language, and each kit line answers its items (`kitItems`). Never on
+         * an order's own validation: an order keeps the store's words.
+         */
+        buyerRead?: CartBuyerRead;
     } = {},
 ): Promise<StorefrontCartValidationResult> {
     if (items.length === 0 || items.some((item) => !isPersistedVariantId(item.variantId))) {
@@ -1479,15 +1493,15 @@ async function validateCartLines(
         purchaseOptions?: ReadonlyMap<string, string>;
         lineInputs?: readonly AppLineInputs[];
         outerTransform?: TransformedCart;
-        kitItems?: CartKitItemsRead;
+        buyerRead?: CartBuyerRead;
     },
 ): Promise<StorefrontCartValidationResult> {
     const productIds = [...new Set(items.map((item) => item.productId))];
     const variantIds = [...new Set(items.map((item) => item.variantId))];
     // The cart's kits' components ride in the same statements (`cartProductIdsSql`).
     const [productRows, variantRows, bundleRows] = await Promise.all([
-        selectStorefrontCartProductRows(db, productIds, options.salesChannelId, options.market?.shippingMethodId, variantIds),
-        selectStorefrontCartVariantRows(db, productIds, variantIds, options.salesChannelId, options.kitItems),
+        selectStorefrontCartProductRows(db, productIds, options.salesChannelId, options.market?.shippingMethodId, variantIds, options.buyerRead),
+        selectStorefrontCartVariantRows(db, productIds, variantIds, options.salesChannelId, options.buyerRead),
         selectActiveProductBundleRows(db, productIds),
     ]);
     // Media is presentation snapshot data, so keep it outside catalog authority
@@ -1505,12 +1519,14 @@ async function validateCartLines(
         }),
     ]);
 
+    // A buyer's cart check in a presence reads its rows in the presence's language: every line, issue and kit item alike.
+    const read = translateCartRows(options.buyerRead, productRows as StorefrontCartProductRow[], variantRows as StorefrontCartVariantRow[]);
     return resolveStorefrontCartLines(
         items,
-        { ...options, priceScope },
+        { ...options, priceScope, translationChains: read.chains },
         {
-            productRows: productRows as StorefrontCartProductRow[],
-            variantRows: variantRows as StorefrontCartVariantRow[],
+            productRows: read.productRows,
+            variantRows: read.variantRows,
             mediaByProduct,
             bundleRows: (bundleRows ?? []) as ProductBundleRow[],
         },

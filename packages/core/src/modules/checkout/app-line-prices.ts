@@ -59,7 +59,8 @@ import { validateCheckoutAttributes } from "./attributes";
 // receipts, emails, tax, totals and refunds include them.
 
 import type { Database } from "@scalius/database/client";
-import { LINE_ADJUSTMENTS_PER_LINE_MAX, type FunctionCart, type PluginFunctionOutput } from "@scalius/shared/plugins";
+import { LINE_ADJUSTMENT_MAX_MINOR, LINE_ADJUSTMENTS_PER_LINE_MAX, type FunctionCart, type PluginFunctionOutput } from "@scalius/shared/plugins";
+import { LINE_ADD_ONS_SERIALIZED_MAX, lineAdjustmentProperty } from "@scalius/shared/line-properties";
 import { storeAmountMinor, type AppLinePrice, type ResolvedPriceSource, type StoreAmountConversion } from "@scalius/shared/market-pricing";
 import { roundToIncrementMinor } from "@scalius/shared/money";
 import { purchaseOptionAppId } from "@scalius/shared/plugins/ids";
@@ -440,6 +441,7 @@ export function resolveAppLineAdjustments(
     const anchors = bundleAnchors(items);
     const bundleFees = new Set<string>();
     const adjustments = new Map<number, AppLineAddOn[]>();
+    const frozenBytes = new Map<number, number>();
     for (const result of results) {
         for (const answer of (result.output as PluginFunctionOutput<"cart.line_prices">).adjustments ?? []) {
             const item = byLineId.get(answer.lineId);
@@ -471,6 +473,13 @@ export function resolveAppLineAdjustments(
                 apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} already has ${LINE_ADJUSTMENTS_PER_LINE_MAX} add-ons; "${answer.title}" refused checkout.`);
                 throw addOnUnavailable();
             }
+            // What the order line will freeze for it, at its largest amount: the line's add-ons stay within their share of the snapshot.
+            const frozen = (frozenBytes.get(target) ?? 0) + JSON.stringify(lineAdjustmentProperty(answer.title, LINE_ADJUSTMENT_MAX_MINOR, result.pluginId, answer.details)).length + 1;
+            if (frozen > LINE_ADD_ONS_SERIALIZED_MAX) {
+                apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId}'s add-ons would be more than an order line keeps; "${answer.title}" refused checkout.`);
+                throw addOnUnavailable();
+            }
+            frozenBytes.set(target, frozen);
             // The app's detail lines ride the add-on to the order line: what its summary row opens to.
             const details = answer.details?.length ? { details: [...answer.details] } : {};
             if ("percent" in answer) {

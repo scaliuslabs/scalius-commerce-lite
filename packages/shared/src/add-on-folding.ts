@@ -157,35 +157,44 @@ export function frozenAddOnTotals(
 export interface BuyerLineAddOn {
   appId: string | null;
   title: string;
-  /** `per: "unit"`: on each unit of the row; `"bundle"`: once per bundle unit (an expanded bundle's or a kit's add-on, on its anchor's row). */
-  amountMinor: number;
+  /** What the row's lines were charged for it, exactly: each line's amount times its units, summed. */
+  totalMinor: number;
+  /**
+   * `per: "unit"`: what each unit of the row pays, when every unit pays the
+   * same; `"bundle"`: what each bundle unit pays (an expanded bundle's or a
+   * kit's add-on, frozen on its anchor), when the row's bundle units are
+   * known. Null when no one amount is exact: show `totalMinor`.
+   */
+  amountMinor: number | null;
+  /** From what the line froze: `bundle` for an add-on on a line of an expanded bundle or a kit (its anchor), else `unit`. */
   per: "unit" | "bundle";
   details?: string[];
 }
 
 /**
- * A buyer row's add-ons from what its lines froze (`_adjustment` entries):
- * every add-on's charge over the row's lines (each line's amount times its
- * units), read back per unit of the row, or, for an expanded bundle's or a
- * kit's row whose bundle units are known, once per bundle unit: checkout
- * freezes such an add-on on the anchor at the fee over the anchor's units per
- * bundle unit, so "Protection ৳350" reads ৳350 on a kit of three items, its
- * anchor item split into two lines or not. A charge that does not divide
- * reads per unit at the first line's amount.
+ * A buyer row's add-ons from what its real lines froze (`_adjustment`
+ * entries), never from a folded row's entries times its quantity. Each
+ * add-on's `totalMinor` is its lines' amounts times their units, summed; its
+ * `per` is what the line froze (an add-on on a line of an expanded bundle or
+ * a kit is the bundle's, once per bundle unit: checkout freezes it on the
+ * anchor at the fee over the anchor's units per bundle unit); its
+ * `amountMinor` is given only when it is exact for every unit (every line of
+ * the row charged the same per unit, or the bundle's units divide the total).
  */
 export function buyerLineAddOns(
-  lines: ReadonlyArray<{ entries: Parameters<typeof lineAddOnsOf>[0]; quantity: number }>,
+  lines: ReadonlyArray<{ entries: Parameters<typeof lineAddOnsOf>[0]; quantity: number; bundle: { kind: string } | null }>,
   bundle: { kind: string; units: number | null } | null | undefined,
 ): BuyerLineAddOn[] {
-  const sums = new Map<string, { appId: string | null; title: string; totalMinor: number; firstMinor: number; details?: string[] }>();
-  let quantity = 0;
-  for (const line of lines) {
-    if (!Number.isSafeInteger(line.quantity) || line.quantity <= 0) continue;
-    quantity += line.quantity;
+  const sums = new Map<string, { appId: string | null; title: string; per: "unit" | "bundle"; totalMinor: number; amounts: Set<number>; lines: number; details?: string[] }>();
+  const counted = lines.filter((line) => Number.isSafeInteger(line.quantity) && line.quantity > 0);
+  for (const line of counted) {
+    const per = line.bundle && (line.bundle.kind === "expand" || line.bundle.kind === "kit") ? "bundle" : "unit";
     for (const addOn of lineAddOnsOf(line.entries)) {
-      const key = `${addOn.appId ?? ""}\u0000${addOn.title}`;
-      const sum = sums.get(key) ?? { appId: addOn.appId ?? null, title: addOn.title, totalMinor: 0, firstMinor: addOn.amountMinor };
+      const key = `${addOn.appId ?? ""}\u0000${addOn.title}\u0000${per}`;
+      const sum = sums.get(key) ?? { appId: addOn.appId ?? null, title: addOn.title, per, totalMinor: 0, amounts: new Set<number>(), lines: 0 };
       sum.totalMinor += addOn.amountMinor * line.quantity;
+      sum.amounts.add(addOn.amountMinor);
+      sum.lines += 1;
       const details = joinDetails(sum.details, addOn.details, ADD_ON_DETAILS_MAX);
       if (details) sum.details = details;
       sums.set(key, sum);
@@ -193,8 +202,9 @@ export function buyerLineAddOns(
   }
   const units = bundle && bundle.kind !== "merge" && bundle.units ? bundle.units : null;
   return [...sums.values()].map((sum) => {
-    const perBundle = units !== null && sum.totalMinor % units === 0;
-    const amountMinor = perBundle ? sum.totalMinor / units : quantity > 0 && sum.totalMinor % quantity === 0 ? sum.totalMinor / quantity : sum.firstMinor;
-    return { appId: sum.appId, title: sum.title, amountMinor, per: perBundle ? "bundle" : "unit", ...(sum.details?.length ? { details: sum.details } : {}) };
+    const amountMinor = sum.per === "bundle"
+      ? (units !== null && sum.totalMinor % units === 0 ? sum.totalMinor / units : null)
+      : (sum.lines === counted.length && sum.amounts.size === 1 ? [...sum.amounts][0]! : null);
+    return { appId: sum.appId, title: sum.title, totalMinor: sum.totalMinor, amountMinor, per: sum.per, ...(sum.details?.length ? { details: sum.details } : {}) };
   });
 }
