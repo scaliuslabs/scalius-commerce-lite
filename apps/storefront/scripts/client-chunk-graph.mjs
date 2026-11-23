@@ -59,6 +59,9 @@ export const FORBIDDEN_RUNTIMES = {
 export const HEAVY_TABLES = {
   "the plan profile table (@scalius/shared/plan-limits)": (code) => /algorithm:`pbkdf2-sha256`/.test(code) || /sameOriginMedia:!?[01]/.test(code),
   "the English checkout catalogue (@scalius/shared/checkout-language)": (code) => /checkoutSectionTitle:`Checkout information`/.test(code),
+  // Came in through the cart store's line bound (0.7 KiB gzip of the product
+  // page's first paint until 2026-11-23): pages read rows (add-on-totals.ts).
+  "the add-on summary folding (@scalius/shared/add-on-folding)": (code) => code.includes("[add-ons] the lines' add-ons exceed their subtotal"),
 };
 
 /** The static import chain from `roots` to `target`, as chunk names (shortest). */

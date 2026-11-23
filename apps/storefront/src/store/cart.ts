@@ -12,7 +12,7 @@ import {
 import { isFulfillmentKind, type FulfillmentKind } from "@scalius/shared/fulfilment";
 import { getCurrencyCode, getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
-import { LINE_ADD_ONS_MAX } from "@scalius/shared/add-on-totals";
+import { LINE_ADD_ONS_MAX } from "@scalius/shared/line-identity";
 import {
   normalizeCartItemOptions,
   type CartItemOption,

@@ -2,7 +2,7 @@
 // payment (with online payment recovery) and order help.
 
 import { checkoutText, pageOrderNumber, pagePhone } from "@/lib/checkout-text";
-import { frozenAddOnTotals } from "@scalius/shared/add-on-totals";
+import { frozenAddOnTotals } from "@scalius/shared/add-on-folding";
 import {
   createCustomerOrderPaymentSession,
   createCustomerOrderSupportRequest,

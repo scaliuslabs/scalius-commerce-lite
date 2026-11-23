@@ -46,26 +46,6 @@ function appLinesOf(blocks: unknown): Set<string> {
 }
 
 /**
- * Whether the store draws its own control for an input on a line: the input
- * names the cart among its surfaces, or the line needs an answer (undecided
- * under a required decision, or refused) and no block of its app arrived for
- * that line, so a slow or failing app never leaves the buyer without a way
- * to answer.
- */
-export function hostDrawsLineInput(
-  facts: CartLineInputFacts,
-  lineKey: string,
-  key: string,
-  item: Pick<VariantCartItem, "properties"> | undefined,
-): boolean {
-  const view = facts.inputs.get(key);
-  if (!view) return false;
-  if (view.input.surfaces === undefined || view.input.surfaces.includes("cart")) return true;
-  const needed = (view.input.decision !== undefined && !(item && lineAnswer(item, key))) || (facts.refused.get(lineKey)?.has(key) ?? false);
-  return needed && !facts.appLines.has(`${view.appId} ${lineKey}`);
-}
-
-/**
  * The facts from a cart check's answer. A line the check refused for one of
  * its app answers (a choice whose agreement changed: `confirmation_required`
  * on that key) still takes that input, so the buyer can answer it again.

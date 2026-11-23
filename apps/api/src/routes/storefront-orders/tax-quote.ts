@@ -43,7 +43,7 @@ import {
     presentAddOnTotals,
     buyerUiCartLines,
 } from "@scalius/core/modules/checkout";
-import { addOnFoldLabel, addOnTotals, lineAddOnsOf } from "@scalius/shared/add-on-totals";
+import { addOnFoldLabel, addOnTotals, lineAddOnsOf } from "@scalius/shared/add-on-folding";
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
