@@ -33,17 +33,18 @@ import { PROTECTED_FIELD_KEYWORD, protectedPathsOf, type ProtectedCustomerData, 
 import { ORDER_CHANNELS } from "../order-channel";
 import { LINE_ADD_ONS_MAX } from "../line-identity";
 import { ADD_ON_DETAILS_MAX } from "../add-on-totals";
-import { APP_TEXT_PATTERN } from "./app-text";
+import { appTextSchema } from "./app-text";
 import { ONLINE_STORE_CHANNEL_ID, SALES_CHANNEL_ID_MAX_LENGTH, SALES_CHANNEL_ID_PATTERN } from "../sales-channels";
 
 const id = z.string().min(1).max(128);
 const minor = z.number().int().safe();
 const nonNegativeMinor = minor.min(0);
 const code = z.string().regex(/^[a-z0-9][a-z0-9_.-]{0,63}$/);
-/** App text the store draws: plain, single-line, never a control or bidi override character (app-text.ts). */
-const appText = (max: number) => z.string().trim().min(1).max(max).regex(APP_TEXT_PATTERN, "Use plain text: no control characters or bidi overrides.");
-const message = appText(200);
-const label = appText(80);
+/** App text the store draws, cleaned at the boundary (app-text.ts): an app's titles, names and messages. */
+const message = appTextSchema(200);
+const label = appTextSchema(80);
+/** The store's own text handed TO an app (its rate and method names): as the store holds it, never cleaned. */
+const storeLabel = z.string().trim().min(1).max(80);
 /**
  * An add-on's detail lines (`cart.line_prices` `details`): plain text, one
  * fact a line ("#1 · ৳350", "Covers accidental damage"), at most
@@ -373,7 +374,7 @@ export const checkoutDiscountsOutputSchema = z.object({
 
 export const functionShippingRateSchema = z.object({
   rateId: id,
-  name: label,
+  name: storeLabel,
   amountMinor: nonNegativeMinor,
   kind: z.enum(["delivery", "pickup"]),
 }).strict();
@@ -726,6 +727,22 @@ export const buyerUiOrderLineSchema = z.object({
 }).strict();
 /** The most bytes one app's rows of an order are, its own answers included. */
 export const BUYER_UI_ORDER_LINES_MAX_BYTES = 128 * 1024;
+/**
+ * The rows of an order that fit one app's bound, in order (`dropped`: how
+ * many past it): the host hands an app the rows that fit and logs the rest,
+ * so the app still draws under those, never under none.
+ */
+export function fitBuyerUiOrderLines<T>(rows: readonly T[]): { rows: T[]; dropped: number } {
+  const encoder = new TextEncoder();
+  let bytes = 2;
+  const kept: T[] = [];
+  for (const row of rows) {
+    bytes += encoder.encode(JSON.stringify(row)).byteLength + (kept.length > 0 ? 1 : 0);
+    if (bytes > BUYER_UI_ORDER_LINES_MAX_BYTES) break;
+    kept.push(row);
+  }
+  return { rows: kept, dropped: rows.length - kept.length };
+}
 /** Every row of an order, as one app's run reads them: at most an order's lines and `BUYER_UI_ORDER_LINES_MAX_BYTES`. */
 export const buyerUiOrderLinesSchema = z.array(buyerUiOrderLineSchema).max(MAX_ORDER_LINES)
   .refine((rows) => new TextEncoder().encode(JSON.stringify(rows)).byteLength <= BUYER_UI_ORDER_LINES_MAX_BYTES, `An order's rows are at most ${BUYER_UI_ORDER_LINES_MAX_BYTES / 1024} KiB for one app.`);
@@ -786,7 +803,7 @@ export const PLUGIN_FUNCTION_SCHEMAS = {
       cart: functionCartSchema,
       methods: z.array(z.object({
         methodId: id,
-        name: label,
+        name: storeLabel,
         /** Offered only if an app answers `{ op: "allow" }` (the invoice, when the merchant lets apps decide). */
         gated: z.literal(true).optional(),
       }).strict()).max(20),

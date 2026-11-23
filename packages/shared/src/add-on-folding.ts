@@ -185,26 +185,26 @@ export function buyerLineAddOns(
   lines: ReadonlyArray<{ entries: Parameters<typeof lineAddOnsOf>[0]; quantity: number; bundle: { kind: string } | null }>,
   bundle: { kind: string; units: number | null } | null | undefined,
 ): BuyerLineAddOn[] {
-  const sums = new Map<string, { appId: string | null; title: string; per: "unit" | "bundle"; totalMinor: number; amounts: Set<number>; lines: number; details?: string[] }>();
+  const sums = new Map<string, { appId: string | null; title: string; per: "unit" | "bundle"; totalMinor: number; perLine: Map<number, number>; details?: string[] }>();
   const counted = lines.filter((line) => Number.isSafeInteger(line.quantity) && line.quantity > 0);
-  for (const line of counted) {
+  counted.forEach((line, lineIndex) => {
     const per = line.bundle && (line.bundle.kind === "expand" || line.bundle.kind === "kit") ? "bundle" : "unit";
     for (const addOn of lineAddOnsOf(line.entries)) {
       const key = `${addOn.appId ?? ""}\u0000${addOn.title}\u0000${per}`;
-      const sum = sums.get(key) ?? { appId: addOn.appId ?? null, title: addOn.title, per, totalMinor: 0, amounts: new Set<number>(), lines: 0 };
+      const sum = sums.get(key) ?? { appId: addOn.appId ?? null, title: addOn.title, per, totalMinor: 0, perLine: new Map<number, number>() };
       sum.totalMinor += addOn.amountMinor * line.quantity;
-      sum.amounts.add(addOn.amountMinor);
-      sum.lines += 1;
+      // What each unit of this line pays for it (two entries of one title on one line add up).
+      sum.perLine.set(lineIndex, (sum.perLine.get(lineIndex) ?? 0) + addOn.amountMinor);
       const details = joinDetails(sum.details, addOn.details, ADD_ON_DETAILS_MAX);
       if (details) sum.details = details;
       sums.set(key, sum);
     }
-  }
+  });
   const units = bundle && bundle.kind !== "merge" && bundle.units ? bundle.units : null;
   return [...sums.values()].map((sum) => {
     const amountMinor = sum.per === "bundle"
       ? (units !== null && sum.totalMinor % units === 0 ? sum.totalMinor / units : null)
-      : (sum.lines === counted.length && sum.amounts.size === 1 ? [...sum.amounts][0]! : null);
+      : (sum.perLine.size === counted.length && new Set(sum.perLine.values()).size === 1 ? [...sum.perLine.values()][0]! : null);
     return { appId: sum.appId, title: sum.title, totalMinor: sum.totalMinor, amountMinor, per: sum.per, ...(sum.details?.length ? { details: sum.details } : {}) };
   });
 }

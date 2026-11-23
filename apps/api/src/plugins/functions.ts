@@ -95,6 +95,8 @@ import {
   PLUGIN_EXTENSION_RUN,
   buyerUiLinesSchema,
   buyerUiOrderLinesSchema,
+  BUYER_UI_ORDER_LINES_MAX_BYTES,
+  fitBuyerUiOrderLines,
   functionInputProtectedPaths,
   pluginRunSchemas,
   pluginRunSource,
@@ -467,10 +469,15 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         }
         // An order's rows: likewise, of the apps' line answers only this app's own, by its own keys.
         if (Array.isArray(orderLineFacts)) {
-          const own = buyerUiOrderLinesSchema.safeParse(orderLineFacts.map((line: { inputs?: Array<{ key: string }> }) => ({
+          // The rows that fit one app's bound, in order: the app draws under those (the rest are logged).
+          const fitted = fitBuyerUiOrderLines(orderLineFacts.map((line: { inputs?: Array<{ key: string }> }) => ({
             ...line,
             inputs: (line.inputs ?? []).filter((each) => each.key.startsWith(prefix)).map((each) => ({ ...each, key: each.key.slice(prefix.length) })),
           })));
+          if (fitted.dropped > 0) {
+            settle(host.incident(installation, pluginRunSource(point, checked.data), `The order's last ${fitted.dropped} rows do not fit this app's facts (${BUYER_UI_ORDER_LINES_MAX_BYTES / 1024} KiB); it draws under the rows before them.`));
+          }
+          const own = buyerUiOrderLinesSchema.safeParse(fitted.rows);
           if (!own.success) {
             const issue = own.error.issues[0];
             settle(host.incident(installation, pluginRunSource(point, checked.data), `The order's row facts for this app do not fit (${issue?.path.join(".") || "orderLines"}: ${issue?.message ?? "invalid"}); its blocks were left out.`));

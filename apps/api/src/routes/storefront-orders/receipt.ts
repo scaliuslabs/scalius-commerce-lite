@@ -525,7 +525,10 @@ const getOrderReceiptRoute = createRoute({
     }),
     query: z.object({
       paymentRecovery: z.enum(["include", "omit"]).optional().openapi({
-        description: "`omit` is the status poll: it skips deciding the payment the buyer may make (its gateway and settings reads) and runs no app's blocks (`buyerUi` is empty); the poll needs only the order's kind.",
+        description: "`omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind.",
+      }),
+      buyerUi: z.enum(["run"]).optional().openapi({
+        description: "`run`: the apps draw their blocks for the receipt's slots (`buyerUi`), one run per slot. Only the page's own read asks; absent (a status poll, any other read), no app runs and `buyerUi` is empty.",
       }),
     }),
   },
@@ -687,9 +690,9 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     registrations,
     buyerRequest: c.req.raw,
   });
-  // The status poll (`paymentRecovery=omit`) draws nothing: it runs no app; the page's own read does, once.
-  const polled = c.req.valid("query").paymentRecovery === "omit";
-  const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN) && !polled
+  // The apps draw only when the page's own read asks (`buyerUi=run`): a status poll never runs one.
+  const drawsApps = c.req.valid("query").buyerUi === "run";
+  const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN) && drawsApps
     ? await apps.buyerUi?.({
       targets: ["order.confirmation", "account.order", "order.line.after"],
       language: c.req.header("x-storefront-language"),

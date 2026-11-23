@@ -7026,7 +7026,7 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
                 z.ZodObject<{
                     op: z.ZodLiteral<"expand">;
                     lineId: z.ZodString;
-                    title: z.ZodOptional<z.ZodString>;
+                    title: z.ZodOptional<z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>>;
                     components: z.ZodArray<z.ZodObject<{
                         variantId: z.ZodString;
                         quantity: z.ZodNumber;
@@ -7035,7 +7035,7 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
                 z.ZodObject<{
                     op: z.ZodLiteral<"merge">;
                     lineIds: z.ZodArray<z.ZodString>;
-                    title: z.ZodString;
+                    title: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 }, z.core.$strict>
             ], "op">>;
         }, z.core.$strict>;
@@ -7184,14 +7184,14 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
                         cart: "cart";
                         store: "store";
                     }>>;
-                    title: z.ZodString;
-                    details: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                    title: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
+                    details: z.ZodOptional<z.ZodArray<z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>>>;
                 }, z.core.$strict>,
                 z.ZodObject<{
                     lineId: z.ZodString;
                     percent: z.ZodNumber;
-                    title: z.ZodString;
-                    details: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                    title: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
+                    details: z.ZodOptional<z.ZodArray<z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>>>;
                 }, z.core.$strict>
             ]>>>;
             offers: z.ZodOptional<z.ZodArray<z.ZodUnion<readonly [
@@ -7202,12 +7202,12 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
                         cart: "cart";
                         store: "store";
                     }>>;
-                    title: z.ZodString;
+                    title: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 }, z.core.$strict>,
                 z.ZodObject<{
                     offerId: z.ZodString;
                     percent: z.ZodNumber;
-                    title: z.ZodString;
+                    title: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 }, z.core.$strict>
             ]>>>;
         }, z.core.$strict>;
@@ -7326,7 +7326,7 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
         readonly output: z.ZodObject<{
             errors: z.ZodArray<z.ZodObject<{
                 code: z.ZodString;
-                message: z.ZodString;
+                message: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 lineId: z.ZodOptional<z.ZodString>;
             }, z.core.$strict>>;
             commit: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -7438,7 +7438,7 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
         }, z.core.$strict>;
         readonly output: z.ZodObject<{
             discounts: z.ZodArray<z.ZodObject<{
-                title: z.ZodString;
+                title: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 code: z.ZodOptional<z.ZodString>;
                 target: z.ZodDiscriminatedUnion<[
                     z.ZodObject<{
@@ -7594,7 +7594,7 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
                 z.ZodObject<{
                     op: z.ZodLiteral<"rename">;
                     rateId: z.ZodString;
-                    name: z.ZodString;
+                    name: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 }, z.core.$strict>,
                 z.ZodObject<{
                     op: z.ZodLiteral<"price">;
@@ -7728,7 +7728,7 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
                 z.ZodObject<{
                     op: z.ZodLiteral<"rename">;
                     methodId: z.ZodString;
-                    name: z.ZodString;
+                    name: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 }, z.core.$strict>,
                 z.ZodObject<{
                     op: z.ZodLiteral<"reorder">;
@@ -8051,7 +8051,7 @@ declare const PLUGIN_RUN_SCHEMAS: {
                 z.ZodObject<{
                     op: z.ZodLiteral<"expand">;
                     lineId: z.ZodString;
-                    title: z.ZodOptional<z.ZodString>;
+                    title: z.ZodOptional<z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>>;
                     components: z.ZodArray<z.ZodObject<{
                         variantId: z.ZodString;
                         quantity: z.ZodNumber;
@@ -8060,7 +8060,7 @@ declare const PLUGIN_RUN_SCHEMAS: {
                 z.ZodObject<{
                     op: z.ZodLiteral<"merge">;
                     lineIds: z.ZodArray<z.ZodString>;
-                    title: z.ZodString;
+                    title: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 }, z.core.$strict>
             ], "op">>;
         }, z.core.$strict>;
@@ -8209,14 +8209,14 @@ declare const PLUGIN_RUN_SCHEMAS: {
                         cart: "cart";
                         store: "store";
                     }>>;
-                    title: z.ZodString;
-                    details: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                    title: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
+                    details: z.ZodOptional<z.ZodArray<z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>>>;
                 }, z.core.$strict>,
                 z.ZodObject<{
                     lineId: z.ZodString;
                     percent: z.ZodNumber;
-                    title: z.ZodString;
-                    details: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                    title: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
+                    details: z.ZodOptional<z.ZodArray<z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>>>;
                 }, z.core.$strict>
             ]>>>;
             offers: z.ZodOptional<z.ZodArray<z.ZodUnion<readonly [
@@ -8227,12 +8227,12 @@ declare const PLUGIN_RUN_SCHEMAS: {
                         cart: "cart";
                         store: "store";
                     }>>;
-                    title: z.ZodString;
+                    title: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 }, z.core.$strict>,
                 z.ZodObject<{
                     offerId: z.ZodString;
                     percent: z.ZodNumber;
-                    title: z.ZodString;
+                    title: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 }, z.core.$strict>
             ]>>>;
         }, z.core.$strict>;
@@ -8351,7 +8351,7 @@ declare const PLUGIN_RUN_SCHEMAS: {
         readonly output: z.ZodObject<{
             errors: z.ZodArray<z.ZodObject<{
                 code: z.ZodString;
-                message: z.ZodString;
+                message: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 lineId: z.ZodOptional<z.ZodString>;
             }, z.core.$strict>>;
             commit: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -8463,7 +8463,7 @@ declare const PLUGIN_RUN_SCHEMAS: {
         }, z.core.$strict>;
         readonly output: z.ZodObject<{
             discounts: z.ZodArray<z.ZodObject<{
-                title: z.ZodString;
+                title: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 code: z.ZodOptional<z.ZodString>;
                 target: z.ZodDiscriminatedUnion<[
                     z.ZodObject<{
@@ -8619,7 +8619,7 @@ declare const PLUGIN_RUN_SCHEMAS: {
                 z.ZodObject<{
                     op: z.ZodLiteral<"rename">;
                     rateId: z.ZodString;
-                    name: z.ZodString;
+                    name: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 }, z.core.$strict>,
                 z.ZodObject<{
                     op: z.ZodLiteral<"price">;
@@ -8753,7 +8753,7 @@ declare const PLUGIN_RUN_SCHEMAS: {
                 z.ZodObject<{
                     op: z.ZodLiteral<"rename">;
                     methodId: z.ZodString;
-                    name: z.ZodString;
+                    name: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
                 }, z.core.$strict>,
                 z.ZodObject<{
                     op: z.ZodLiteral<"reorder">;

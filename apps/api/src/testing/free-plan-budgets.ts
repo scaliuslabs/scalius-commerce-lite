@@ -463,10 +463,12 @@ export const BUYER_ORDER_READ_BUDGETS = {
 /**
  * A kit's order with an add-on and an app drawing under each row (2026-11-23, wave 3 k1,
  * storefront-orders/order-line-slot.d1.test.ts, recorded exactly): one run per slot the app
- * draws, never one per row, and the status poll runs no app at all (`paymentRecovery=omit`).
+ * draws, never one per row, only when the page's own read asks (`buyerUi=run`): neither form of
+ * the status poll (`paymentRecovery=omit`, or `include` when the page asks about a retry) runs one.
  */
 export const BUYER_ORDER_KIT_APP_READ_BUDGETS = {
   receiptKitApp: { d1Calls: 27, d1Statements: 29 },
   receiptKitAppPoll: { d1Calls: 21, d1Statements: 23 },
+  receiptKitAppRetryPoll: { d1Calls: 21, d1Statements: 23 },
   accountKitApp: { d1Calls: 20, d1Statements: 27 },
 } as const;

@@ -15041,7 +15041,12 @@ export type GetApiV1CustomerAuthOrdersByIdData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `run`: the apps draw their blocks for the order's slots (`buyerUi`), one run per slot. Only the account order page's own read asks; absent (Buy again, an ownership check), no app runs and `buyerUi` is empty.
+         */
+        buyerUi?: 'run';
+    };
     url: '/api/v1/customer-auth/orders/{id}';
 };
 
@@ -23886,9 +23891,13 @@ export type GetApiV1OrdersReceiptByIdData = {
     };
     query?: {
         /**
-         * `omit` is the status poll: it skips deciding the payment the buyer may make (its gateway and settings reads) and runs no app's blocks (`buyerUi` is empty); the poll needs only the order's kind.
+         * `omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind.
          */
         paymentRecovery?: 'include' | 'omit';
+        /**
+         * `run`: the apps draw their blocks for the receipt's slots (`buyerUi`), one run per slot. Only the page's own read asks; absent (a status poll, any other read), no app runs and `buyerUi` is empty.
+         */
+        buyerUi?: 'run';
     };
     url: '/api/v1/orders/receipt/{id}';
 };

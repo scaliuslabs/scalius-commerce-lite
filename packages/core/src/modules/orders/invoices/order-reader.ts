@@ -170,10 +170,12 @@ export async function readInvoiceOrderSource(
     items: foldBuyerOrderLines(
       items.map((item) => ({ ...item, returnedQuantity: returnedByItem.get(item.id) ?? 0 })),
       { sum: ["lineSubtotalMinor", "discountAmountMinor", "taxableAmountMinor", "taxAmountMinor", "returnedQuantity"] },
-    ).map(({ properties, lineIds: _lineIds, bundle: _bundle, addOns: _addOns, unitsTotalMinor, ...item }) => ({
+    ).map(({ properties, lineIds: _lineIds, bundle: _bundle, addOns, unitsTotalMinor, ...item }) => ({
       ...item,
       // The frozen buyer inputs, labels as the buyer saw them.
       properties: readOrderLineProperties(properties),
+      // What the apps charged on the row, exactly: its one place (`buyerLineAddOnText` prints it).
+      addOns: addOns.map(({ appId, title, totalMinor, amountMinor, per }) => ({ appId, title, totalMinor, amountMinor, per })),
       price: buyerLineUnitPrice({ ...item, unitsTotalMinor }, order.currencyDecimalPlaces),
     })),
   };

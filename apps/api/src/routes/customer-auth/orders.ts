@@ -347,6 +347,11 @@ const getCustomerOrderDetailRoute = createRoute({
     params: z.object({
       id: z.string(),
     }),
+    query: z.object({
+      buyerUi: z.enum(["run"]).optional().openapi({
+        description: "`run`: the apps draw their blocks for the order's slots (`buyerUi`), one run per slot. Only the account order page's own read asks; absent (Buy again, an ownership check), no app runs and `buyerUi` is empty.",
+      }),
+    }),
   },
   responses: {
     200: {
@@ -398,7 +403,8 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
     registrations: await listActiveCheckoutRegistrations(db),
     buyerRequest: c.req.raw,
   });
-  const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN)
+  // The apps draw only when the account order page's own read asks (`buyerUi=run`).
+  const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN) && c.req.valid("query").buyerUi === "run"
     ? await apps.buyerUi?.({
       targets: ["account.order", "order.line.after"],
       language: c.req.header("x-storefront-language"),

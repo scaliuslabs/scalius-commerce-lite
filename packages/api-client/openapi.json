@@ -14862,8 +14862,7 @@
                       },
                       "label": {
                         "type": "string",
-                        "minLength": 1,
-                        "maxLength": 120
+                        "maxLength": 480
                       },
                       "help": {
                         "type": "string",
@@ -14907,8 +14906,7 @@
                             },
                             "label": {
                               "type": "string",
-                              "minLength": 1,
-                              "maxLength": 120
+                              "maxLength": 480
                             }
                           },
                           "required": [
@@ -57185,6 +57183,19 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "run"
+              ],
+              "description": "`run`: the apps draw their blocks for the order's slots (`buyerUi`), one run per slot. Only the account order page's own read asks; absent (Buy again, an ownership check), no app runs and `buyerUi` is empty."
+            },
+            "required": false,
+            "description": "`run`: the apps draw their blocks for the order's slots (`buyerUi`), one run per slot. Only the account order page's own read asks; absent (Buy again, an ownership check), no app runs and `buyerUi` is empty.",
+            "name": "buyerUi",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "minLength": 1,
               "maxLength": 35
             },
@@ -60793,8 +60804,7 @@
                                     },
                                     "label": {
                                       "type": "string",
-                                      "minLength": 1,
-                                      "maxLength": 120
+                                      "maxLength": 480
                                     },
                                     "help": {
                                       "type": "string",
@@ -60838,8 +60848,7 @@
                                           },
                                           "label": {
                                             "type": "string",
-                                            "minLength": 1,
-                                            "maxLength": 120
+                                            "maxLength": 480
                                           }
                                         },
                                         "required": [
@@ -88802,11 +88811,24 @@
                 "include",
                 "omit"
               ],
-              "description": "`omit` is the status poll: it skips deciding the payment the buyer may make (its gateway and settings reads) and runs no app's blocks (`buyerUi` is empty); the poll needs only the order's kind."
+              "description": "`omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind."
             },
             "required": false,
-            "description": "`omit` is the status poll: it skips deciding the payment the buyer may make (its gateway and settings reads) and runs no app's blocks (`buyerUi` is empty); the poll needs only the order's kind.",
+            "description": "`omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind.",
             "name": "paymentRecovery",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "run"
+              ],
+              "description": "`run`: the apps draw their blocks for the receipt's slots (`buyerUi`), one run per slot. Only the page's own read asks; absent (a status poll, any other read), no app runs and `buyerUi` is empty."
+            },
+            "required": false,
+            "description": "`run`: the apps draw their blocks for the receipt's slots (`buyerUi`), one run per slot. Only the page's own read asks; absent (a status poll, any other read), no app runs and `buyerUi` is empty.",
+            "name": "buyerUi",
             "in": "query"
           },
           {
@@ -92431,8 +92453,7 @@
                                         },
                                         "label": {
                                           "type": "string",
-                                          "minLength": 1,
-                                          "maxLength": 120
+                                          "maxLength": 480
                                         },
                                         "help": {
                                           "type": "string",
@@ -92476,8 +92497,7 @@
                                               },
                                               "label": {
                                                 "type": "string",
-                                                "minLength": 1,
-                                                "maxLength": 120
+                                                "maxLength": 480
                                               }
                                             },
                                             "required": [
@@ -98098,8 +98118,7 @@
                                     },
                                     "label": {
                                       "type": "string",
-                                      "minLength": 1,
-                                      "maxLength": 120
+                                      "maxLength": 480
                                     },
                                     "help": {
                                       "type": "string",
@@ -98143,8 +98162,7 @@
                                           },
                                           "label": {
                                             "type": "string",
-                                            "minLength": 1,
-                                            "maxLength": 120
+                                            "maxLength": 480
                                           }
                                         },
                                         "required": [
@@ -103200,8 +103218,7 @@
                                     },
                                     "label": {
                                       "type": "string",
-                                      "minLength": 1,
-                                      "maxLength": 120
+                                      "maxLength": 480
                                     },
                                     "help": {
                                       "type": "string",
@@ -103245,8 +103262,7 @@
                                           },
                                           "label": {
                                             "type": "string",
-                                            "minLength": 1,
-                                            "maxLength": 120
+                                            "maxLength": 480
                                           }
                                         },
                                         "required": [

@@ -39,6 +39,21 @@ export interface InvoiceOrderItemSnapshot {
    * without inputs and on invoices issued before Wave A.
    */
   properties?: InvoiceLinePropertySnapshot[];
+  /**
+   * What the apps charged on the line (`BuyerLineAddOn`, minor units), from
+   * schema version 7: the row's one place for them (its `properties` carry
+   * none). Older snapshots kept them among `properties` as `_adjustment`.
+   */
+  addOns?: InvoiceLineAddOnSnapshot[];
+}
+
+/** One app add-on of an invoice line, as the buyer's row reads it. */
+export interface InvoiceLineAddOnSnapshot {
+  appId: string | null;
+  title: string;
+  totalMinor: number;
+  amountMinor: number | null;
+  per: "unit" | "bundle";
 }
 
 /** Net terms frozen on the invoice: "Net 30, due 21 Nov 2026". */
@@ -145,14 +160,15 @@ export interface InvoiceOrderSnapshot {
  * 1: the original shape. 2: item lines may carry `properties`. 3: the order
  * may carry `paymentTerms`. 4: the order may carry `taxExemption`. 5: a line's
  * properties carry their key, type and value. 6: the order may carry the
- * apps' checkout answers and their words. All read the same way; an older
- * snapshot simply has no buyer inputs, terms, exemption or answers, and
- * prints its line words as it froze them.
+ * apps' checkout answers and their words. 7: a line's app add-ons are its
+ * `addOns` (exact, from its real lines), never among its properties. All
+ * read the same way; an older snapshot simply has no buyer inputs, terms,
+ * exemption, answers or add-on list, and prints its line words as it froze them.
  */
-export const INVOICE_SNAPSHOT_SCHEMA_VERSION = 6 as const;
+export const INVOICE_SNAPSHOT_SCHEMA_VERSION = 7 as const;
 
 export interface StoredInvoiceSnapshot {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | typeof INVOICE_SNAPSHOT_SCHEMA_VERSION;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | typeof INVOICE_SNAPSHOT_SCHEMA_VERSION;
   renderVersion: typeof INVOICE_RENDER_VERSION;
   invoiceNumber: number;
   formattedNumber: string;
@@ -317,6 +333,9 @@ export function snapshotInvoiceOrder(
             priceMinor: property.priceMinor,
           })),
         }
+        : {}),
+      ...(item.addOns?.length
+        ? { addOns: item.addOns.map(({ appId, title, totalMinor, amountMinor, per }) => ({ appId, title, totalMinor, amountMinor, per })) }
         : {}),
     })),
   };

@@ -674,8 +674,7 @@
           "title": {
            "type": "string",
            "minLength": 1,
-           "maxLength": 80,
-           "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+           "maxLength": 80
           },
           "components": {
            "minItems": 1,
@@ -730,8 +729,7 @@
           "title": {
            "type": "string",
            "minLength": 1,
-           "maxLength": 80,
-           "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+           "maxLength": 80
           }
          },
          "required": [
@@ -1583,8 +1581,7 @@
           "title": {
            "type": "string",
            "minLength": 1,
-           "maxLength": 80,
-           "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+           "maxLength": 80
           },
           "details": {
            "maxItems": 10,
@@ -1592,8 +1589,7 @@
            "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 80,
-            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+            "maxLength": 80
            }
           }
          },
@@ -1620,8 +1616,7 @@
           "title": {
            "type": "string",
            "minLength": 1,
-           "maxLength": 80,
-           "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+           "maxLength": 80
           },
           "details": {
            "maxItems": 10,
@@ -1629,8 +1624,7 @@
            "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 80,
-            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+            "maxLength": 80
            }
           }
          },
@@ -1672,8 +1666,7 @@
           "title": {
            "type": "string",
            "minLength": 1,
-           "maxLength": 80,
-           "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+           "maxLength": 80
           }
          },
          "required": [
@@ -1699,8 +1692,7 @@
           "title": {
            "type": "string",
            "minLength": 1,
-           "maxLength": 80,
-           "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+           "maxLength": 80
           }
          },
          "required": [
@@ -2495,8 +2487,7 @@
         "message": {
          "type": "string",
          "minLength": 1,
-         "maxLength": 200,
-         "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+         "maxLength": 200
         },
         "lineId": {
          "type": "string",
@@ -3205,8 +3196,7 @@
         "title": {
          "type": "string",
          "minLength": 1,
-         "maxLength": 80,
-         "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+         "maxLength": 80
         },
         "code": {
          "type": "string",
@@ -3912,8 +3902,7 @@
         "name": {
          "type": "string",
          "minLength": 1,
-         "maxLength": 80,
-         "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+         "maxLength": 80
         },
         "amountMinor": {
          "type": "integer",
@@ -4101,8 +4090,7 @@
           "name": {
            "type": "string",
            "minLength": 1,
-           "maxLength": 80,
-           "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+           "maxLength": 80
           }
          },
          "required": [
@@ -4719,8 +4707,7 @@
         "name": {
          "type": "string",
          "minLength": 1,
-         "maxLength": 80,
-         "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+         "maxLength": 80
         },
         "gated": {
          "type": "boolean",
@@ -4917,8 +4904,7 @@
           "name": {
            "type": "string",
            "minLength": 1,
-           "maxLength": 80,
-           "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u202A-\\u202E\\u2066-\\u2069\\u2028\\u2029\\uFEFF]*$"
+           "maxLength": 80
           }
          },
          "required": [

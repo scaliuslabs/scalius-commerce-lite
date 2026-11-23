@@ -1936,5 +1936,17 @@
   "from": "978030194cdbd81f",
   "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
   "reason": "An order row's add-ons carry `totalMinor` exactly and `amountMinor` only when exact for every unit, else null (review of wave 3 k1: an inferred unit amount misstated a row charged unevenly). Unreleased in this branch."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "15e9df39b9da06b6",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "A loosening against the previous seal (second review of wave 3 k1, Nov 23, 2026): app text the store draws is cleaned at the boundary (control characters to one space, bidi embed/override/isolate marks removed, trimmed; refused only when nothing is left) instead of refusing the whole answer, so the schemas' declared type now includes the cleaning step; the store's own rate and method names handed to apps keep the plain text schema."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "15e9df39b9da06b6",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "A loosening against the previous seal (second review of wave 3 k1, Nov 23, 2026): app text the store draws is cleaned at the boundary (control characters to one space, bidi embed/override/isolate marks removed, trimmed; refused only when nothing is left) instead of refusing the whole answer, so the schemas' declared type now includes the cleaning step; the store's own rate and method names handed to apps keep the plain text schema."
  }
 ]
