@@ -4,7 +4,7 @@
 // and the request's render host. Everything here is read from what
 // the page already read: no extra API call.
 
-import type { StorefrontSkinRef, StorefrontThemeSkinUnit } from "@scalius/shared/storefront-theme";
+import { servedPrivatePages, type StorefrontSkinRef, type StorefrontThemeSkinUnit } from "@scalius/shared/storefront-theme";
 import { resolvePluginSettingBindings } from "@scalius/shared/storefront-theme/bindings";
 import { parsePluginSurfaceKey } from "@scalius/shared/plugins/storefront";
 import type { PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
@@ -118,7 +118,7 @@ export function privateChromeExtensions(locals: object, url: URL): Promise<Reque
     const root = `/${url.pathname.split("/").filter(Boolean)[0] ?? ""}`;
     pending = (async () => {
       const theme = await currentRequestTheme(locals);
-      const chrome = new Set(theme.theme.privatePages.chrome === "theme"
+      const chrome = new Set(servedPrivatePages(theme.theme.privatePages).chrome === "theme"
         ? [theme.theme.apps?.skins?.header?.app, theme.theme.apps?.skins?.footer?.app].flatMap((key) => {
           const parsed = key ? parsePluginSurfaceKey(key) : null;
           return parsed ? [parsed.pluginId] : [];
@@ -245,7 +245,7 @@ const contractWarnings = new Set<string>();
  */
 export async function privateChromeMarkup(locals: object, url: URL, target: "header" | "footer", data: () => unknown): Promise<AppMarkup | null> {
   const theme = await currentRequestTheme(locals);
-  const ref = theme.theme.privatePages.chrome === "theme" ? theme.theme.apps?.skins?.[target] : undefined;
+  const ref = servedPrivatePages(theme.theme.privatePages).chrome === "theme" ? theme.theme.apps?.skins?.[target] : undefined;
   const key = ref ? parsePluginSurfaceKey(ref.app) : null;
   if (!ref || !key) return null;
   const { byId, host } = await privateChromeExtensions(locals, url);

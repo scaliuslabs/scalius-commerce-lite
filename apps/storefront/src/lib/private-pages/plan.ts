@@ -12,6 +12,7 @@ import {
   privateFrame,
   privatePagesCss,
   privateItemIsDefault,
+  servedPrivatePages,
   privateLayoutIsDefault,
   privatePageArrangement,
   privatePageLabels,
@@ -36,10 +37,11 @@ export interface PrivatePagePlan {
 }
 
 export function privatePagePlan(theme: StorefrontThemeDocument, page: PrivatePageKey, language: string, asset: PrivateAssetUrl): PrivatePagePlan {
-  const arrangement = privatePageArrangement(theme.privatePages, page);
+  const privatePages = servedPrivatePages(theme.privatePages);
+  const arrangement = privatePageArrangement(privatePages, page);
   const spec = PRIVATE_PAGES[page];
   const icons = Object.fromEntries(spec.icons.flatMap((key) => {
-    const ref = theme.privatePages.icons[key];
+    const ref = privatePages.icons[key];
     const url = ref ? asset(ref) : null;
     return url ? [[key, url]] : [];
   }));
@@ -48,7 +50,7 @@ export function privatePagePlan(theme: StorefrontThemeDocument, page: PrivatePag
     frame: privateFrame(page, arrangement),
     layout: privateLayoutIsDefault(page, arrangement) ? null : arrangement!.layout!,
     items: Object.fromEntries(Object.keys(spec.items).map((item) => [item, privateItemIsDefault(page, item, arrangement) ? null : arrangement!.items![item]!])),
-    labels: privatePageLabels(theme.privatePages, page, language),
+    labels: privatePageLabels(privatePages, page, language),
     icons,
   };
 }

@@ -194,8 +194,8 @@ function assetReference(key: string, context: ValueContext): CssNode {
 
 // ─── Properties ───────────────────────────────────────────────────────────
 
-/** Properties no rule may set: each places a box against something outside its region. */
-const ANCHORING = new Set(["anchor-name", "anchor-scope", "position-anchor", "position-area", "position-try", "position-try-fallbacks", "position-try-order", "position-visibility", "view-transition-name", "view-transition-class", "overlay"]);
+/** Properties no rule may set: each places a box against something outside its region, or takes the page's scrolling. */
+const ANCHORING = new Set(["touch-action", "overscroll-behavior", "overscroll-behavior-x", "overscroll-behavior-y", "overscroll-behavior-block", "overscroll-behavior-inline", "anchor-name", "anchor-scope", "position-anchor", "position-area", "position-try", "position-try-fallbacks", "position-try-order", "position-visibility", "view-transition-name", "view-transition-class", "overlay"]);
 /** Never: script-era or non-standard properties. */
 const FORBIDDEN = new Set(["behavior", "-moz-binding", "zoom"]);
 /** Words `animation` may hold besides the theme's own keyframes. */

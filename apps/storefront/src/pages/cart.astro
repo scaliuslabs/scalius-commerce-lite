@@ -52,6 +52,7 @@ import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import TemplateSections from "@/components/homepage/TemplateSections.astro";
 import { shopCopy } from "@/lib/storefront-shop-copy";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { servedPrivatePages } from "@scalius/shared/storefront-theme";
 import { templateSectionData } from "@/lib/template-sections";
 import { markRenderUncacheable } from "@/lib/cache-policy";
 import { getRuntimePresence } from "@/lib/api/runtime";
@@ -374,7 +375,7 @@ const cartTemplate = cartRequestTheme.resolved.pages.templates.cart;
 // The phone summary bar's words (the theme may reword them).
 const foldWords = { show: cartPlan.labels["cart.showSummary"] ?? cartWords.showSummary, hide: cartPlan.labels["cart.hideSummary"] ?? cartWords.hideSummary };
 // The theme's own header and footer (`privatePages.chrome: theme`), script-free; else the store's checkout header.
-const themeChrome = cartRequestTheme.theme.privatePages.chrome === "theme";
+const themeChrome = servedPrivatePages(cartRequestTheme.theme.privatePages).chrome === "theme";
 // The theme's stylesheet for these pages, compiled when it was saved, and what its guard checks.
 const cartStyle = privateStyle(cartRequestTheme.theme, privateAsset);
 // The theme's words for the confirmation dialog's buttons (lib/cart/confirm-dialog.ts reads them).

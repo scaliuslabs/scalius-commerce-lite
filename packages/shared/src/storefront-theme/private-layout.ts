@@ -19,6 +19,7 @@
 //   store compiles it again (a save, or maintenance after a deploy).
 import { z } from "zod";
 import { PLUGIN_ID_PATTERN } from "../plugins/ids";
+import { storefrontBrowsingPath } from "../storefront-routes";
 import { parsePluginSurfaceKey } from "../plugins/storefront";
 import type { StorefrontThemeColors } from "./contrast";
 import { storefrontDarkPalette, type StorefrontThemeTokens } from "./tokens";
@@ -83,7 +84,7 @@ export const privateAssetRefSchema = z.object({
 const hook = z.string().max(PRIVATE_HOOK_MAX);
 const tone = z.enum(PRIVATE_CONTENT_TONES);
 /** A store path: one slash, then the path (no host, no scheme). */
-const storePath = z.string().max(300).regex(/^\/(?![/\\])[^\s"'<>\\]*$/, "A path on this store (/pages/help).");
+const storePath = z.string().max(300).refine(storefrontBrowsingPath, "A browsing path on this store: /, /products/…, /categories/…, /collections/…, /brands/…, /pages/…, /blog/… or /search (never an account action, /buy, the cart or checkout).");
 
 export const privateContentBlockSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("heading"), text: wordsSchema, level: z.union([z.literal(2), z.literal(3)]).optional() }).strict(),
@@ -163,6 +164,8 @@ export const storefrontPrivatePagesSchema = z.object({
     /** The checker's version (0: never compiled): a page never serves what an older checker compiled. */
     sanitizer: z.number().int().min(0),
     css: z.string().max(PRIVATE_COMPILED_CSS_MAX_BYTES),
+    /** The store's maintenance compile refused this source: the pages draw the default look until a save. */
+    refused: z.boolean().optional(),
   }).strict(),
 }).strict();
 
@@ -177,7 +180,7 @@ export interface StorefrontPrivatePages {
   labels: Partial<Record<string, PrivateWords>>;
   icons: Partial<Record<string, PrivateAssetRef>>;
   assets: Record<string, PrivateAssetRef>;
-  compiled: { anatomy: number; sanitizer: number; css: string };
+  compiled: { anatomy: number; sanitizer: number; css: string; refused?: boolean };
 }
 export type StorefrontPrivatePagesTemplate = Partial<Omit<StorefrontPrivatePages, "compiled">>;
 
@@ -346,7 +349,9 @@ function contentLimitIssues(page: PrivatePageKey, arrangement: PrivatePageArrang
   const blocks = order.filter((node) => node.type === "content").length;
   const last = order.reduce((at, node, index) => node.type === "part" && spec.parts[node.part]?.mandatory ? index : at, -1);
   const before = order.slice(0, last).filter((node) => node.type === "content").length;
+  const after = order.slice(last + 1).filter((node) => node.type === "content").length;
   if (blocks > PRIVATE_CONTENT_LIMITS.perPage) issues.push({ path: [...base, "layout"], reason: "content_limit", message: `At most ${PRIVATE_CONTENT_LIMITS.perPage} content blocks on a page.` });
+  if (after > PRIVATE_CONTENT_LIMITS.afterLastMandatory) issues.push({ path: [...base, "layout"], reason: "content_limit", message: `At most ${PRIVATE_CONTENT_LIMITS.afterLastMandatory} content blocks after the page's last part a buyer must reach.` });
   if (before > PRIVATE_CONTENT_LIMITS.beforeLastMandatory) issues.push({ path: [...base, "layout"], reason: "content_limit", message: `At most ${PRIVATE_CONTENT_LIMITS.beforeLastMandatory} content blocks before the page's last part a buyer must reach.` });
   for (const [item, nodes] of Object.entries(arrangement.items ?? {})) {
     const inside: PrivateNode[] = [];
@@ -366,7 +371,16 @@ function imageRefs(nodes: readonly PrivateNode[], path: Array<string | number>):
 
 /** Whether `compiled` was written by this build's checker and anatomy (else maintenance compiles it again). */
 export function privatePagesCompiledCurrent(privatePages: Pick<StorefrontPrivatePages, "compiled">): boolean {
-  return privatePages.compiled.sanitizer === PRIVATE_CSS_SANITIZER_VERSION;
+  return privatePages.compiled.sanitizer === PRIVATE_CSS_SANITIZER_VERSION && privatePages.compiled.anatomy === PRIVATE_ANATOMY_VERSION;
+}
+
+/**
+ * The private pages a buyer's page draws: the theme's when this build
+ * compiled them and they passed, else the store's default look entirely
+ * (arrangement, chrome, words, icons and look), never a half of the theme.
+ */
+export function servedPrivatePages(privatePages: StorefrontPrivatePages): StorefrontPrivatePages {
+  return privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused ? privatePages : storefrontPrivatePagesDefault();
 }
 
 // ─── Reading on the page ──────────────────────────────────────────────────
@@ -384,7 +398,7 @@ export function privatePageArrangement(privatePages: StorefrontPrivatePages, pag
  * until the store compiles it again. A buyer's request never compiles.
  */
 export function privatePagesCss(privatePages: Pick<StorefrontPrivatePages, "compiled">): string {
-  return privatePagesCompiledCurrent(privatePages) ? privatePages.compiled.css : "";
+  return privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused ? privatePages.compiled.css : "";
 }
 
 /** Words in the page's language: its base language, else English, else the first the theme wrote. */

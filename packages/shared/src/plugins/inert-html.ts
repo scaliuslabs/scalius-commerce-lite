@@ -27,6 +27,7 @@
 // The host draws the result inside a sealed free region (`data-free`).
 import { isTag, isText, type ChildNode, type Element } from "domhandler";
 import { parseDocument } from "htmlparser2";
+import { storefrontBrowsingPath } from "../storefront-routes";
 import { UNTRUSTED_HTML_PARSING, VOID_ELEMENTS, escapeHtmlText, untrustedHtml, writeStartTag } from "../html-writer";
 
 export interface InertChromeOptions {
@@ -96,7 +97,7 @@ const own = (name: string) => `${CHROME_NAME_PREFIX}${name}`;
 const ownList = (value: string) => value.split(/\s+/).filter((name) => NAME.test(name)).map(own).join(" ");
 
 /** A clean path on this store: one leading slash, no `//` anywhere, no dot segment, nothing a browser would rewrite. */
-const storePath = (href: string) => /^\/(?!.*\/\/)[^\s"<>\\#]*(?:#[^\s"<>\\]*)?$/.test(href)
+const storePath = (href: string) => /^(?!.*\/\/)\/[^\s"<>\\#]*(?:#[^\s"<>\\]*)?$/.test(href)
   && !href.split(/[?#]/)[0]!.split("/").some((segment) => segment === "." || segment === ".." || /^%2e/i.test(segment));
 
 function allowedSrcset(value: string, options: InertChromeOptions): boolean {
@@ -132,7 +133,7 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
     if (name === "href") {
       if (tag !== "a") continue;
       if (value.startsWith("#")) { if (NAME.test(value.slice(1))) out.push([name, `#${own(value.slice(1))}`]); continue; }
-      if (storePath(value)) out.push([name, value]);
+      if (storePath(value) && storefrontBrowsingPath(value)) out.push([name, value]);
       continue;
     }
     if (LOUD_ARIA.has(name) || (name === "role" && LOUD_ROLES.has(value.trim().toLowerCase()))) continue;

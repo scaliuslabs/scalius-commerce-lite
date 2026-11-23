@@ -42,27 +42,41 @@ export const PROJECTION_DRIFT_CURSOR_KEY = "catalog:projections:drift-cursor";
  * old definition. An unchanged definition requests nothing, so a store that
  * deploys often never keeps a whole-catalogue lap running. The version and
  * the definition are each claimed in the database first (compare-and-set),
- * so overlapping ticks request it once. The same first run compiles the
- * published theme's private pages with this version's checker when an
- * older one compiled them (`recompilePublishedPrivatePages`).
+ * so overlapping ticks request it once. Independently, the version's runs
+ * compile the published theme's private pages with this version's checker
+ * (`recompilePublishedPrivatePages`) until that settles; neither blocks the other.
  */
 export async function requestPostDeployProjectionRebuild(env: Env): Promise<boolean> {
   const version = env.CF_VERSION_METADATA?.id;
   if (!version) return false;
   const db = getDb(env);
-  if ((await getSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY)) === version) return false;
-  // The theme's private pages, compiled by this version's checker (a buyer's request never compiles,
-  // and serves the default look until this runs or the merchant saves). The version is claimed only
-  // after it succeeds: a failure (a database blip) is tried again on the next run.
-  const { recompilePublishedPrivatePages } = await import("@scalius/core/modules/settings");
-  const outcome = await recompilePublishedPrivatePages(db);
-  if (outcome === "recompiled" || outcome === "refused") console.log(`[scheduled] Private pages compiled for this version: ${outcome}`);
-  if (!(await claimSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version))) return false;
-  const { catalogProjectionDefinition } = await import("@scalius/core/modules/products");
-  const definition = await sha256Hex(catalogProjectionDefinition(db));
-  if (!(await claimSystemKv(db, PROJECTION_DEFINITION_KEY, definition))) return false;
-  await requestCatalogProjectionRebuild(db);
-  return true;
+  const current = await getSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY);
+  if (current === version) return false;
+  // The version's own value while its theme compile is still to settle (`<version>:theme`).
+  const pending = `${version}:theme`;
+  let requested = false;
+  if (current !== pending) {
+    // First tick of this version: claimed (compare-and-set) so overlapping ticks rebuild once.
+    if (!(await claimSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, pending))) return false;
+    const { catalogProjectionDefinition } = await import("@scalius/core/modules/products");
+    const definition = await sha256Hex(catalogProjectionDefinition(db));
+    if (await claimSystemKv(db, PROJECTION_DEFINITION_KEY, definition)) {
+      await requestCatalogProjectionRebuild(db);
+      requested = true;
+    }
+  }
+  // The theme's private pages, compiled by this version's checker, independent of the rebuild above:
+  // a transient failure is tried again next tick (the version stays pending); a theme that cannot be
+  // read is settled with one log line for this version.
+  try {
+    const { recompilePublishedPrivatePages } = await import("@scalius/core/modules/settings");
+    const outcome = await recompilePublishedPrivatePages(db);
+    if (outcome !== "none" && outcome !== "current") console.log(`[scheduled] Private pages for this version: ${outcome}`);
+    await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version);
+  } catch (error) {
+    console.warn("[scheduled] Private pages compile failed; retried next run", error instanceof Error ? error.name : "unknown");
+  }
+  return requested;
 }
 
 /**

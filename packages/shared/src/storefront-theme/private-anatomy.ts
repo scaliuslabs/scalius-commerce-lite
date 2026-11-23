@@ -376,8 +376,8 @@ export const PRIVATE_SCOPES = ["dialog", "header", "footer"] as const;
  */
 export const PRIVATE_FREE_REGIONS = ["block", "header", "footer"] as const;
 
-/** The most content blocks a page holds, and the most before its last mandatory part (each is at most 30rem tall). */
-export const PRIVATE_CONTENT_LIMITS = { perPage: 8, beforeLastMandatory: 3 } as const;
+/** The most content blocks a page holds, and the most before and after its last mandatory part (each is at most 30rem tall). */
+export const PRIVATE_CONTENT_LIMITS = { perPage: 8, beforeLastMandatory: 3, afterLastMandatory: 3 } as const;
 
 /**
  * An app's buyer UI block is host-drawn from typed nodes: a host part. A

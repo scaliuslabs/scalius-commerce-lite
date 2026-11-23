@@ -6353,6 +6353,9 @@
        "css": {
         "type": "string",
         "maxLength": 65536
+       },
+       "refused": {
+        "type": "boolean"
        }
       },
       "required": [
@@ -6557,8 +6560,7 @@
            },
            "href": {
             "type": "string",
-            "maxLength": 300,
-            "pattern": "^\\/(?![/\\\\])[^\\s\"'<>\\\\]*$"
+            "maxLength": 300
            }
           },
           "required": [

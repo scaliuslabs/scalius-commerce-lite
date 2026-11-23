@@ -435,10 +435,12 @@ export async function getThemeSettings(db: Database): Promise<ThemeSettingsDocum
  * longer passes keeps its source and serves no compiled look until the
  * merchant saves it again.
  */
-export async function recompilePublishedPrivatePages(db: Database): Promise<"none" | "current" | "recompiled" | "refused"> {
+export async function recompilePublishedPrivatePages(db: Database): Promise<"none" | "current" | "recompiled" | "refused" | "unreadable"> {
   const row = (await selectThemeSettingsRows(db))[0];
   if (!row) return "none";
-  const theme = parseAuthoritativeThemeSettings(row.colors);
+  // A document this build cannot read is left as it is (the merchant re-saves it); nothing to compile.
+  const theme = parseStoredStorefrontThemeDocument(row.colors);
+  if (!theme) return "unreadable";
   if (privatePagesCompiledCurrent(theme.privatePages)) return "current";
   // Every path stores arrangements filled for this anatomy: a newly mandatory part is never missing.
   const filled = {
@@ -451,7 +453,7 @@ export async function recompilePublishedPrivatePages(db: Database): Promise<"non
   const result = compileStorefrontPrivatePages(filled, privatePagesContextOf(theme));
   const privatePages = result.ok
     ? result.value
-    : { ...filled, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CSS_SANITIZER_VERSION, css: "" } };
+    : { ...filled, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CSS_SANITIZER_VERSION, css: "", refused: true } };
   await db.update(themeSettings)
     .set({ colors: JSON.stringify({ ...theme, privatePages }), updatedAt: sql`unixepoch()` })
     .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)));
