@@ -282,7 +282,7 @@ const answerWords = longAnswerWords(pageLanguage());
                   </ul>
                 )}
                 <p class="text-sm text-muted-foreground mt-1">
-                  {checkoutText(copy.orderReceiptQuantityText, { quantity: quantityText(item.quantity) })} × {savedLine
+                  {checkoutText(copy.orderReceiptQuantityText, { quantity: quantityText(item.quantity) })} × {savedLine && savedLine.unitPriceMinor !== null
                     ? formatReceiptMinor(savedLine.unitPriceMinor)
                     : formatReceiptAmount(item.price)}
                 </p>

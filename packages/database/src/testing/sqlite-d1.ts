@@ -142,6 +142,47 @@ function totalChanges(sqlite: DatabaseSync): number {
   return Number((statement.get() as { n: number }).n);
 }
 
+/** A copy of the connection's main database, for `openSqliteImage` (node:sqlite serialize, Node 24). */
+export function sqliteImage(sqlite: DatabaseSync): Uint8Array {
+  return (sqlite as DatabaseSync & { serialize(): Uint8Array }).serialize();
+}
+
+/** A new connection on an image from `sqliteImage`, with D1's foreign keys and limits. */
+export function openSqliteImage(image: Uint8Array): DatabaseSync {
+  const sqlite = new DatabaseSync(":memory:");
+  restoreMigratedImage(sqlite, image);
+  sqlite.exec("PRAGMA foreign_keys = ON");
+  applyD1Limits(sqlite);
+  return sqlite;
+}
+
+/**
+ * A connection handle whose database a harness can replace (a checkpoint's rewind): the D1
+ * binding, Drizzle and the test keep the handle, `replace` swaps the connection behind it and
+ * closes the old one. node:sqlite crashes (SIGBUS) when a connection that has prepared
+ * statements deserializes an image, so a rewind opens a new connection (`openSqliteImage`):
+ * register the connection's functions (a test clock) on it again.
+ */
+export function replaceableSqlite(first: DatabaseSync): { sqlite: DatabaseSync; replace(next: DatabaseSync): void } {
+  let current = first;
+  const sqlite = new Proxy(Object.create(DatabaseSync.prototype) as DatabaseSync, {
+    get: (_target, key) => {
+      const value = Reflect.get(current, key, current) as unknown;
+      return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(current) : value;
+    },
+    set: (_target, key, value) => Reflect.set(current, key, value, current),
+  });
+  return {
+    sqlite,
+    replace(next) {
+      const previous = current;
+      current = next;
+      totalChangesStatements.delete(sqlite);
+      previous.close();
+    },
+  };
+}
+
 function execute(
   sqlite: DatabaseSync,
   query: string,

@@ -31,7 +31,8 @@ export interface SavedOrderLineMoneyFields {
 }
 
 type CompleteSavedOrderLineMoney = {
-  unitPriceMinor: number;
+  /** Null on a buyer's row of a kit's split item whose total does not divide by its quantity: show the line total. */
+  unitPriceMinor: number | null;
   lineSubtotalMinor: number;
   discountAmountMinor: number;
   taxableAmountMinor: number;
@@ -39,7 +40,8 @@ type CompleteSavedOrderLineMoney = {
 };
 
 export interface SavedOrderLineMoneyPresentation {
-  unitPriceMinor: number;
+  /** Null when the row has no whole unit price (a kit's item charged as two lines, shown as one). */
+  unitPriceMinor: number | null;
   grossSubtotalMinor: number;
   discountMinor: number;
   taxableMinor: number;
@@ -99,8 +101,8 @@ export function hasSavedOrderLineMoney(
   summary: SavedOrderMoneySummary | null,
 ): line is SavedOrderLineMoneyFields & CompleteSavedOrderLineMoney {
   if (!summary) return false;
+  if (line.unitPriceMinor !== null && !isNonNegativeSafeInteger(line.unitPriceMinor)) return false;
   const amounts = [
-    line.unitPriceMinor,
     line.lineSubtotalMinor,
     line.discountAmountMinor,
     line.taxableAmountMinor,
@@ -120,7 +122,7 @@ export function resolveSavedOrderLineMoney(
 ): SavedOrderLineMoneyPresentation | null {
   if (!hasSavedOrderLineMoney(line, summary) || !summary) return null;
   return {
-    unitPriceMinor: line.unitPriceMinor,
+    unitPriceMinor: line.unitPriceMinor ?? null,
     grossSubtotalMinor: line.lineSubtotalMinor,
     discountMinor: line.discountAmountMinor,
     taxableMinor: line.taxableAmountMinor,

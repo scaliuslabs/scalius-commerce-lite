@@ -165,13 +165,30 @@ export async function composeOrderLineExtras(
   return composed;
 }
 
-/** The item with `extras` added only when the line has any. */
-export function withOrderLineExtras<T extends { id: string }>(
+/**
+ * The item with `extras` added only when its lines have any. A buyer's row
+ * of several lines (`lineIds`, a kit's split item) shows all their files,
+ * keys, cards and warranties, and the review of whichever line has one.
+ */
+export function withOrderLineExtras<T extends { id: string; lineIds?: readonly string[] }>(
   item: T,
   extras: ReadonlyMap<string, OrderLineExtras>,
 ): T & { extras?: OrderLineExtras } {
-  const lineExtrasForItem = extras.get(item.id);
-  return lineExtrasForItem ? { ...item, extras: lineExtrasForItem } : item;
+  const found = (item.lineIds ?? [item.id]).flatMap((lineId) => extras.get(lineId) ?? []);
+  if (found.length === 0) return item;
+  if (found.length === 1) return { ...item, extras: found[0]! };
+  const merged: OrderLineExtras = {};
+  const review = found.find((entry) => entry.review?.review) ?? found.find((entry) => entry.review);
+  if (review?.review) merged.review = review.review;
+  const downloads = found.flatMap((entry) => entry.downloads ?? []);
+  const licenceKeys = found.flatMap((entry) => entry.licenceKeys ?? []);
+  const giftCards = found.flatMap((entry) => entry.giftCards ?? []);
+  const warranty = found.flatMap((entry) => entry.warranty ?? []);
+  if (downloads.length > 0) merged.downloads = downloads;
+  if (licenceKeys.length > 0) merged.licenceKeys = licenceKeys;
+  if (giftCards.length > 0) merged.giftCards = giftCards;
+  if (warranty.length > 0) merged.warranty = warranty;
+  return { ...item, extras: merged };
 }
 
 /** The gift cards still paying for an order (receipt and account order page): last 4 and amount only. */

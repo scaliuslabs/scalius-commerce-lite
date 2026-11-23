@@ -2,7 +2,7 @@
 // payment (with online payment recovery) and order help.
 
 import { checkoutText, pageOrderNumber, pagePhone } from "@/lib/checkout-text";
-import { frozenAddOnTotals } from "@scalius/shared/add-on-totals";
+import { addOnRowsOver, readAddOnRows } from "@scalius/shared/add-on-totals";
 import {
   createCustomerOrderPaymentSession,
   createCustomerOrderSupportRequest,
@@ -573,7 +573,8 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   const words = accountCopy().order;
   if (items) {
     const lineMarkup = (item: AccountOrderDetail["items"][number]) => {
-      const hasMinor = item.lineSubtotalMinor != null && item.unitPriceMinor != null;
+      // A kit's item charged as two lines is one row here, its unit price null when its total does not divide.
+      const hasMinor = item.lineSubtotalMinor != null;
       const amounts = hasMinor
         ? { grossSubtotalMinor: item.lineSubtotalMinor!, discountMinor: item.discountAmountMinor ?? 0 }
         : null;
@@ -584,7 +585,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       const struck = amounts && isFreeOrderLine(amounts)
         ? `<s class="me-1.5 text-muted-foreground">${escapeHtml(minor(amounts.grossSubtotalMinor))}</s>`
         : "";
-      const unit = hasMinor ? minor(item.unitPriceMinor!) : accountMoney(item.unitPrice, order.currencyCode);
+      const unit = item.unitPriceMinor != null ? minor(item.unitPriceMinor) : accountMoney(item.unitPrice, order.currencyCode);
       const name = escapeHtml(item.productName || words.product);
       // Buyer inputs: display only, escaped, never in links or data attributes.
       const properties = orderLinePropertyRows(item.properties, (property) => minor(property.priceMinor), copy);
@@ -640,8 +641,8 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
     // Nothing to deliver and nothing charged: no delivery row.
     const showsDeliveryRow = !(deliveryMode === "none" && !order.shippingMethodName && delivery.charged === 0 && delivery.fee === 0);
     const deliveryRow = orderDeliveryRow({ mode: deliveryMode, methodName: order.shippingMethodName, ...delivery }, copy, money);
-    // The apps' add-ons as their own rows, from what the order's lines froze: Subtotal is the items alone, as on the receipt.
-    const addOns = frozenAddOnTotals(detail.items, order.subtotalAmountMinor ?? 0, document.documentElement.lang);
+    // The apps' add-ons as their own rows, as the server folded them from the order's frozen lines: Subtotal is the items alone, as on the receipt.
+    const addOns = addOnRowsOver(order.subtotalAmountMinor ?? 0, readAddOnRows(detail.addOns));
     summary.innerHTML = [
       row(words.subtotal, cell(minor(addOns.itemsSubtotalMinor)), "subtotal"),
       ...addOns.rows.map((addOn) => row(addOn.title, cell(minor(addOn.amountMinor)), "add-on")),

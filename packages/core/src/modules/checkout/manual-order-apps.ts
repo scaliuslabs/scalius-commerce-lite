@@ -44,13 +44,15 @@ import type {
     ManualOrderAppOutcome,
 } from "@scalius/shared/checkout-app-facts";
 import { ValidationError } from "@scalius/core/errors";
-import { LINE_ADJUSTMENT_PROPERTY_KEY, LINE_PURCHASE_OPTION_PROPERTY_KEY, readLinePurchaseOptions } from "@scalius/shared/line-properties";
+import { LINE_ADJUSTMENT_PROPERTY_KEY, LINE_PURCHASE_OPTION_PROPERTY_KEY, readLinePurchaseOptions, readOrderLineBundle } from "@scalius/shared/line-properties";
 import {
     APP_COMMITS_CONFLICT_REASON,
     CHECKOUT_APP_UNAVAILABLE_REASON,
     checkoutAppObjectCommits,
     applyAppPaymentMethodOperations,
     applyAppShippingRateOperations,
+    appCartFactIds,
+    appLineTargets,
     buildAppFunctionCart,
     checkoutLineInputs,
     checkoutPurchaseOptions,
@@ -134,8 +136,8 @@ function destinationOf(input: CartSource) {
 
 function loadCartFacts(db: Database, input: CartSource, apps?: CheckoutAppFunctions) {
     return loadAppFunctionCartFacts(db, {
-        productIds: input.lines.map((line) => line.productId),
-        variantIds: input.lines.map((line) => line.variantId),
+        // Each kit's own SKU and product too: apps see a kit as one line.
+        ...appCartFactIds(input.lines.map((line) => ({ productId: line.productId, variantId: line.variantId, bundle: kitOf(line) }))),
         // A staff order belongs to no signed-in account: apps see a guest, as at a guest checkout.
         customerId: null,
         // The market the order is priced and placed in (the billing country for an order that ships nothing).
@@ -146,13 +148,21 @@ function loadCartFacts(db: Database, input: CartSource, apps?: CheckoutAppFuncti
     });
 }
 
+/** A staff order line's kit, as its frozen membership names it (null for any other line). */
+function kitOf(line: Pick<ManualOrderAppLine, "properties" | "quantity">) {
+    const bundle = readOrderLineBundle(line.properties ?? null, line.quantity);
+    return bundle?.kind === "kit" && bundle.kit ? { id: bundle.id, title: bundle.title, kind: "kit" as const, units: bundle.units, kit: bundle.kit } : null;
+}
+
 /** The app cart of a manual order: line totals after the staff discount, before the apps'. */
 function cartOf(
     input: CartSource,
     facts: AppFunctionCartFacts,
     platformLine: ReadonlyMap<string, number>,
+    kits: "line" | "items" = "line",
 ): FunctionCart {
     return buildAppFunctionCart({
+        kits,
         currency: input.currency,
         // A staff order is priced in the store's own currency.
         storeCurrency: input.currency,
@@ -170,6 +180,7 @@ function cartOf(
             discountMinor: platformLine.get(line.lineId) ?? 0,
             properties: parseLineInputs(line.properties),
             purchaseOptions: readLinePurchaseOptions(line.properties),
+            bundle: kitOf(line),
         })),
         facts,
         destination: destinationOf(input),
@@ -241,8 +252,11 @@ export async function applyManualOrderAppFunctions(
         wantsRates ? listRateOptions(db, input, chosenMethod) : Promise.resolve([] as CheckoutRateOption[]),
     ]);
     let cart: FunctionCart;
+    let itemCart: FunctionCart;
     try {
         cart = cartOf(input, facts, platformLine);
+        // Shipping reads a kit's items, each naming the kit.
+        itemCart = input.lines.some((line) => kitOf(line)) ? cartOf(input, facts, platformLine, "items") : cart;
     } catch (error) {
         // A cart that fails its own schema is a platform fault: no app runs (fail-open).
         console.error(`[orders] manual order app cart could not be built: ${error instanceof Error ? error.name : "error"}`);
@@ -257,7 +271,7 @@ export async function applyManualOrderAppFunctions(
         apps.points.has("checkout.discounts") ? apps.run("checkout.discounts", { cart }) : Promise.resolve([]),
         wantsRates && rateOptions.length > 0
             ? apps.run("checkout.shipping_rates", {
-                cart,
+                cart: itemCart,
                 rates: rateOptions.slice(0, 50).map((rate) => ({ rateId: rate.rateId, name: rate.name.slice(0, 80), amountMinor: rate.amountMinor, kind: rate.kind })),
             })
             : Promise.resolve([]),
@@ -292,7 +306,7 @@ export async function applyManualOrderAppFunctions(
 
     const ruleErrors = collectCheckoutRuleErrors(
         validations,
-        new Map(input.lines.map((line, index) => [line.lineId, { index, cartKey: null }])),
+        appLineTargets(input.lines.map((line, index) => ({ index, variantId: line.variantId, bundle: kitOf(line) })), input.lines.map((line) => line.lineId)),
         apps,
     );
     if (ruleErrors.length > 0) {
@@ -325,6 +339,7 @@ export async function applyManualOrderAppFunctions(
                 grossMinor: line.unitPriceMinor * line.quantity,
                 platformDiscountMinor: platformLine.get(line.lineId) ?? 0,
                 giftCard: line.isGiftCard,
+                ...(kitOf(line) ? { kit: kitOf(line)!.id } : {}),
             })),
             shippingMinor,
             platformShippingDiscountMinor: 0,

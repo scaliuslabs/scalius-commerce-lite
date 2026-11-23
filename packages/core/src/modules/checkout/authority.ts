@@ -38,7 +38,8 @@ import {
   selectCheckoutProductMediaProjectionRows,
 } from "../products";
 import {
-    resolveStorefrontCartValidationFromRows,
+    cartItemsWithKitComponents,
+    resolveStorefrontCartLines,
     selectStorefrontCartProductRows,
     selectStorefrontCartVariantRows,
     type StorefrontCartProductRow,
@@ -60,8 +61,8 @@ import {
 } from "../delivery";
 import { createStorefrontTaxAuthorityReadPlan, type StorefrontTaxAuthoritySnapshot } from "../tax";
 import { resolveCheckoutPriceScope, type CheckoutMarketAuthority } from "../price-lists";
-import { resolveCartWithAppLinePrices, type AppLinePricer } from "./app-line-prices";
-import type { CartTransformer } from "./cart-transform";
+import type { AppLinePricer } from "./app-line-prices";
+import { presentTransformedCart, type CartTransformer } from "./cart-transform";
 import {
   ga4MeasurementDocument,
   ga4ServerEnabled,
@@ -140,11 +141,18 @@ function selectCheckoutFenceRows(db: Database, scopes: readonly string[]) {
         .where(sql`${checkoutFences.scope} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(scopes)}))`);
 }
 
-/** The scopes' fence rows as one JSON array, a column of a row the read already runs. */
-function checkoutFenceRowsJsonSql(scopes: readonly string[]) {
+/**
+ * The scopes' fence rows as one JSON array, a column of a row the read
+ * already runs; with the cart's SKUs, the products of its kits' components
+ * too (checkout prices a kit from them).
+ */
+function checkoutFenceRowsJsonSql(scopes: readonly string[], variantIds: readonly string[] = []) {
     return sql<string>`(SELECT COALESCE(json_group_array(json_object('scope', ${checkoutFences.scope}, 'revision', ${checkoutFences.revision})), '[]')
         FROM ${checkoutFences}
-        WHERE ${checkoutFences.scope} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(scopes)})))`;
+        WHERE ${checkoutFences.scope} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(scopes)})
+            UNION SELECT ${CHECKOUT_FENCE_PRODUCT_PREFIX} || kit_fence_sku.product_id FROM variant_components AS kit_fence
+            JOIN product_variants AS kit_fence_sku ON kit_fence_sku.id = kit_fence.component_variant_id
+            WHERE kit_fence.kit_variant_id IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...new Set(variantIds)])}))))`;
 }
 
 /**
@@ -399,7 +407,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
     const statements = [
         selectSettingsDocuments(db, CHECKOUT_SETTINGS_DOCUMENTS),
         selectSettingsDocuments(db, [checkoutDocument]),
-        selectStorefrontCartProductRows(db, productIds, salesChannelId),
+        selectStorefrontCartProductRows(db, productIds, salesChannelId, undefined, variantIds),
         selectStorefrontCartVariantRows(db, productIds, variantIds, salesChannelId),
         selectCheckoutProductMediaProjectionRows(db, productIds, variantIds),
         selectActiveDeliveryLocationRowsByIds(db, locationIds),
@@ -417,7 +425,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 OR EXISTS(SELECT 1 FROM push_subscriptions WHERE audience = 'staff'))`,
             // The fence rows of every checkout of the batch, read with its facts
             // in this row (no statement of their own).
-            fenceRows: checkoutFenceRowsJsonSql(allFenceScopes),
+            fenceRows: checkoutFenceRowsJsonSql(allFenceScopes, variantIds),
         })
             .from(sql`(SELECT 1) AS checkout_store_source`),
         ...taxPlan.statements,
@@ -541,7 +549,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             // Each checkout's market prices its lines (the order's market rule);
             // segment membership is read only when a segment list applies.
             const priceScopes = await Promise.all(inputs.map((input) => resolveCheckoutPriceScope(db, {
-                items: input.items,
+                // A kit ships what its components ship.
+                items: cartItemsWithKitComponents(input.items, variantRows),
                 productRows,
                 variantRows,
                 currency: { code: currency.currencyCode, incrementMinor: currency.priceIncrementMinor },
@@ -559,7 +568,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 try {
                     const priceScope = priceScopes[inputIndex];
                     if (priceScope && "error" in priceScope) throw priceScope.error;
-                    const cartValidation = await resolveCartWithAppLinePrices(input.linePricer?.(), (pass) => resolveStorefrontCartValidationFromRows(
+                    // A kit line is sold as its components, priced from these rows (`resolveStorefrontCartLines`).
+                    const cartValidation = await resolveStorefrontCartLines(
                         input.items,
                         {
                             inventoryPool: input.inventoryPool,
@@ -568,17 +578,19 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                             priceScope,
                             purchaseOptions: input.purchaseOptions?.(),
                             lineInputs: input.lineInputs?.(),
-                            ...pass,
-                            deferSubmittedPriceCheck: input.deferSubmittedPriceCheck?.() || pass.deferSubmittedPriceCheck,
+                            deferSubmittedPriceCheck: input.deferSubmittedPriceCheck?.() ?? false,
                         },
-                        productRows,
-                        variantRows,
-                        mediaByProduct,
-                        bundleRows,
-                    ), input.beforeTransform?.() ? "before_transform" : "final");
-                    if (!cartValidation.valid) {
+                        { productRows, variantRows, mediaByProduct, bundleRows },
+                        input.linePricer?.(),
+                        input.beforeTransform?.() ? "before_transform" : "final",
+                    );
+                    // The buyer's lines: a kit's issues speak for its line, and its price is the one shown.
+                    const buyerView = cartValidation.transform
+                        ? presentTransformedCart(cartValidation, cartValidation.transform, input.items)
+                        : cartValidation;
+                    if (!cartValidation.valid || !buyerView.valid) {
                         throw new ValidationError("Some items in your cart need attention.", {
-                            itemIssues: cartValidation.issues,
+                            itemIssues: buyerView.issues,
                         });
                     }
                     // A transform may remove or add physical components. Only its
@@ -605,7 +617,10 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                     return {
                         ok: true,
                         snapshot: {
-                            authorityFence: resolveCheckoutFence(fenceScopes[inputIndex]!, fenceRevisions),
+                            // A kit is priced from its components: their products are fenced too.
+                            authorityFence: resolveCheckoutFence(checkoutFenceScopes(
+                                cartItemsWithKitComponents(input.items, variantRows).map((item) => item.productId),
+                            ), fenceRevisions),
                             currency,
                             cartValidation,
                             get deliveryPreflight() {

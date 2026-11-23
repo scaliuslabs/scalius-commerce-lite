@@ -28,6 +28,7 @@ import {
   assertNoActivePaymentSessionAttempt,
   assertNoRefundLocksOrder,
   assertNoActiveShipmentClaim,
+  foldBuyerOrderLines,
   isShipmentClaimLeaseLive,
   requeueShipmentClaimParkedPaymentEvents,
   shipmentClaimShipmentStatusSql,
@@ -487,6 +488,30 @@ export async function lookupShipmentByMerchantOrderId(
  * record exists even when the provider succeeds but the subsequent DB
  * write fails (e.g. due to a worker timeout).
  */
+/**
+ * What a courier is told the parcel holds: the count and "Shark Card x2,
+ * Guide x1". It lists the buyer's rows, so a kit's item charged as two lines
+ * is one (`foldBuyerOrderLines`).
+ */
+export async function readCourierItems(db: Database, orderId: string): Promise<{ itemCount: number; itemDescription: string }> {
+  const items = foldBuyerOrderLines(await db
+    .select({
+      id: orderItems.id,
+      variantId: orderItems.variantId,
+      properties: orderItems.properties,
+      unitPriceMinor: orderItems.unitPriceMinor,
+      quantity: orderItems.quantity,
+      productName: products.name,
+    })
+    .from(orderItems)
+    .leftJoin(products, eq(products.id, orderItems.productId))
+    .where(eq(orderItems.orderId, orderId)));
+  return {
+    itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
+    itemDescription: items.map((item) => `${item.productName || "Product"} x${item.quantity}`).join(", "),
+  };
+}
+
 export async function createShipment(
   db: Database,
   orderId: string,
@@ -534,20 +559,7 @@ export async function createShipment(
     throw error;
   }
 
-  // Load order items with product names for item description and count
-  const items = await db
-    .select({
-      quantity: orderItems.quantity,
-      productName: products.name,
-    })
-    .from(orderItems)
-    .leftJoin(products, eq(products.id, orderItems.productId))
-    .where(eq(orderItems.orderId, orderId));
-
-  const totalItemCount = items.reduce((sum, i) => sum + i.quantity, 0);
-  const itemDescription = items
-    .map((i) => `${i.productName || "Product"} x${i.quantity}`)
-    .join(", ");
+  const { itemCount: totalItemCount, itemDescription } = await readCourierItems(db, orderId);
 
   // The local shipment id is the booking's idempotency key: a retry after a
   // lost answer names the same booking.

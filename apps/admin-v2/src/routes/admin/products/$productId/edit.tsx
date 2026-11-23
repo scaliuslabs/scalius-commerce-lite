@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm, type ProductDraftReader } from "~/components/admin/ProductForm";
@@ -30,6 +30,7 @@ import { pageHead } from "~/i18n/page-titles";
 import { loadEditorRecord } from "~/lib/route-query-warming";
 import { PresenceSlot, announceSave, presenceKey } from "~/lib/realtime/store";
 import { sameFormValue } from "~/lib/form-values";
+import { productSkuSummaries } from "~/components/admin/product-form/kits/kit-types";
 
 /**
  * Fields that change together under the aggregate revision: the product's
@@ -196,6 +197,21 @@ function ProductEditor({ productId, initialProduct, categories }: {
     costsRef.current.sync(latest.variants);
   }, [productId, queryClient]);
 
+  /**
+   * A section that saves on its own (bundle offers, page offers) moved the
+   * revision: a bundle stops tracking its own stock, so a clean variant
+   * editor takes the saved SKUs, but only when no one else saved meanwhile
+   * (then the next save meets the conflict instead).
+   */
+  const handleSectionSaved = useCallback(async (revision: number) => {
+    if (currentMatrix.current.dirty) return;
+    const latest = await queryClient.fetchQuery({ ...productQueryOptions(productId), staleTime: 0 }) as ProductDetail;
+    if (latest.aggregateRevision !== revision || currentMatrix.current.dirty) return;
+    setMatrixSnapshot(latest);
+    setMatrixGeneration((value) => value + 1);
+    costsRef.current.sync(latest.variants);
+  }, [productId, queryClient]);
+
   const handleProductSaved = useCallback((values: ProductFormValues, revision: number) => {
     setFormSnapshot((current) => ({
       ...current,
@@ -224,6 +240,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
   }, [matrixDirty, refreshMatrix]);
 
   const defaultValues = toFormValues(formSnapshot);
+  const skus = useMemo(() => productSkuSummaries(matrixSnapshot.variants), [matrixSnapshot]);
 
   /**
    * "Apply my changes": load the other save and put the merchant's changed fields back on
@@ -385,6 +402,9 @@ function ProductEditor({ productId, initialProduct, categories }: {
         optionMatrixSaving={matrixSaving}
         matrixRef={matrixRef}
         variantIds={matrixSnapshot.variants.filter((variant) => !variant.deletedAt).map((variant) => variant.id)}
+        skus={skus}
+        pageOfferCount={formSnapshot.pageOfferCount}
+        onSectionSaved={(revision) => void handleSectionSaved(revision).catch(() => {})}
         customizationSchemaInvalid={formSnapshot.customizationSchemaInvalid}
         brandName={formSnapshot.brandName}
         relatedObjects={formSnapshot.relatedObjects}

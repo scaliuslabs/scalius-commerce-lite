@@ -24,7 +24,7 @@ export type BoundedBody<T> =
   | { ok: true; value: T }
   | { ok: false; reason: "too_large" | "invalid" };
 
-/** A body that carries a cart's lines (the cart check, the order, the tax quote, the discount preview): the API's cart class. */
+/** A body that carries a cart's lines (the cart check, the order, the tax quote): the API's cart class. */
 export const CART_REQUEST_MAX_BYTES = REQUEST_BODY_CLASS_BYTES.cart;
 /** A buyer form forwarded to the API (a token, an order id, a support request): the API's form class. */
 export const FORM_REQUEST_MAX_BYTES = REQUEST_BODY_CLASS_BYTES.form;

@@ -5,6 +5,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { fromMinor } from "@scalius/shared/money";
 import { effectivePriceMinorSql } from "./money";
 import { channelAvailableStockSql, skuStockRefs } from "./channel-publications";
+import { sellableUnitsSql } from "./kits";
 
 type DiscountColumns = { discountType: SQL; discountBps: SQL; discountAmountMinor: SQL };
 
@@ -104,12 +105,11 @@ export function buildBuyerCatalogPricingProjection(
     const pricingProduct = alias(products, "buyer_pricing_product");
     const pricingSku = alias(productVariants, "buyer_pricing_sku");
     const availableStock = channelAvailableStockSql(skuStockRefs("buyer_pricing_sku"), options.channelId);
-
-    const skuAvailable = sql<number>`CASE
-        WHEN ${pricingSku.trackInventory} = 0
-          OR ${availableStock} > 0
-        THEN 1 ELSE 0
-    END`;
+    // Sellable units: -1 untracked, else available (at least 0); a kit's from its items (`sellableUnitsSql`).
+    const units = sellableUnitsSql(sql`${pricingSku.id}`, sql`(CASE
+        WHEN ${pricingSku.trackInventory} = 0 THEN -1
+        ELSE MAX(${availableStock}, 0)
+    END)`, options.channelId);
     const effectivePrice = effectivePriceMinorSql({
         priceMinor: sql`${pricingSku.priceMinor}`,
         discountType: sql`${pricingSku.discountType}`,
@@ -142,9 +142,10 @@ export function buildBuyerCatalogPricingProjection(
         .select({
             productId: pricingSku.productId,
             skuId: pricingSku.id,
+            // Every SKU's own price, a kit's too: a card shows a kit at its price, its saving on the pages that list its items.
             basePriceMinor: pricingSku.priceMinor,
             effectivePriceMinor: effectivePrice.as("buyer_sku_effective_price"),
-            available: skuAvailable.as("buyer_sku_available"),
+            units: units.as("buyer_sku_units"),
             customerOption: sql<number>`CASE
                 WHEN ${pricingSku.isDefault} = 0
                   AND trim(coalesce(${pricingSku.optionCombinationKey}, '')) <> ''
@@ -182,7 +183,8 @@ export function buildBuyerCatalogPricingProjection(
         skuId: sql`${skuFacts.skuId}`,
         basePriceMinor: sql`${skuFacts.basePriceMinor}`,
         effectivePrice: sql`${skuFacts.effectivePriceMinor}`,
-        available: sql`${skuFacts.available}`,
+        // Available: untracked (-1) or at least one unit.
+        available: sql`(CASE WHEN abs(${skuFacts.units}) >= 1 THEN 1 ELSE 0 END)`,
     };
     const rankedSkus = db
         .select({
@@ -209,6 +211,7 @@ export function buildBuyerCatalogPricingProjection(
             maxEffectivePrice: sql<number>`MAX(${facts.effectivePrice}) OVER (
                 PARTITION BY ${facts.productId}
             )`.as("buyer_max_effective_price"),
+            units: sql<number>`${skuFacts.units}`.as("buyer_units"),
             buyerRank: sql<number>`ROW_NUMBER() OVER (
                 PARTITION BY ${facts.productId}
                 ORDER BY ${facts.available} DESC, ${facts.effectivePrice} ASC, ${facts.skuId} ASC
@@ -228,6 +231,8 @@ export function buildBuyerCatalogPricingProjection(
             discountAmountMinor: sql<number>`${rankedSkus.discountAmountMinor}`.as("buyer_discount_amount"),
             availableForSale: sql<number>`${rankedSkus.availableForSale}`.as("buyer_available_for_sale"),
             hasCustomerOptions: sql<number>`${rankedSkus.hasCustomerOptions}`.as("buyer_has_customer_options"),
+            /** The card SKU's sellable units: -1 untracked, else available (a kit's from its items). */
+            cardUnits: sql<number>`${rankedSkus.units}`.as("buyer_card_units"),
             hasDiscount: sql<number>`CASE
                 WHEN ${rankedSkus.availableForSale} = 1
                     THEN ${rankedSkus.hasAvailableDiscount}

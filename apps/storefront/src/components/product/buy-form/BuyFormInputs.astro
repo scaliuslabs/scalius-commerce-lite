@@ -23,7 +23,7 @@ const { formId, slug, variantId, inputs } = Astro.props;
 {inputs ? (
   <ProductBuyerInputs formId={formId} slug={slug} variantId={variantId || null} {...inputs} />
 ) : (
-  <form id={formId} method="post" action={`/buy/${encodeURIComponent(slug)}`} data-product-buy-form data-sx-buy-form>
+  <form id={formId} method="post" action={`/buy/${encodeURIComponent(slug)}`} data-product-buy-form data-sx-buy-form data-buy-part="inputs" data-empty>
     <input type="hidden" name="variant" value={variantId} />
   </form>
 )}

@@ -78,13 +78,15 @@ export const PRIVATE_WORDS_LIMITS = { languages: 8, text: 500 } as const;
 
 const language = z.string().regex(/^[a-z]{2,3}$/, "A base language code: en, bn.");
 const wordsSchema = z.record(language, z.string().trim().min(1).max(PRIVATE_WORDS_LIMITS.text))
-  .refine((words) => Object.keys(words).length >= 1 && Object.keys(words).length <= PRIVATE_WORDS_LIMITS.languages, `Words in 1 to ${PRIVATE_WORDS_LIMITS.languages} languages.`);
+  .refine((words) => Object.keys(words).length >= 1 && Object.keys(words).length <= PRIVATE_WORDS_LIMITS.languages, `Words in 1 to ${PRIVATE_WORDS_LIMITS.languages} languages.`)
+  // Named, as the asset and the arrangement are: the contract states each shape once, not at every use.
+  .meta({ id: "StorefrontPrivateWords" });
 
 /** A file of the theme's own app (`public/<file>`): the app whose template the theme is. */
 export const privateAssetRefSchema = z.object({
   app: z.string().regex(PLUGIN_ID_PATTERN),
   file: z.string().regex(/^[A-Za-z0-9_-][A-Za-z0-9._/-]{0,200}$/).refine((file) => !file.split("/").includes(".."), "A file inside public/."),
-}).strict();
+}).strict().meta({ id: "StorefrontPrivateAsset" });
 
 const hook = z.string().max(PRIVATE_HOOK_MAX);
 const tone = z.enum(PRIVATE_CONTENT_TONES);
@@ -140,7 +142,7 @@ export const privatePageArrangementSchema = z.preprocess(
     layout: z.array(privateNodeSchema).max(24).optional(),
     items: z.record(z.string().regex(/^[a-z]{1,24}$/), z.array(privateNodeSchema).max(24)).optional(),
   }).strict(),
-);
+).meta({ id: "StorefrontPrivateArrangement" });
 
 /** Each label's value: one of the host's variants for an action or an amount, the theme's words per language for the rest. */
 const labelsSchema = z.object(Object.fromEntries(privateLabelKeys().map(({ key, spec }) => [key, spec.variants ? z.enum(spec.variants) : wordsSchema]))).partial().strict();

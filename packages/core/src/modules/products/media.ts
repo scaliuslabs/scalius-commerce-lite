@@ -1,7 +1,7 @@
 import { media, productMedia, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { storedMediaUrl } from "../../integrations/storage";
-import { and, asc, eq, inArray, notInArray, sql, type SQLWrapper } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { deps } from "../../cache-deps";
 
@@ -322,8 +322,27 @@ export function selectCheckoutProductMediaProjectionRows(
 ) {
     const uniqueProductIds = [...new Set(productIds.map((id) => id.trim()).filter(Boolean))];
     const uniqueVariantIds = [...new Set(variantIds.map((id) => id.trim()).filter(Boolean))];
-    const productIdSet = JSON.stringify(uniqueProductIds);
     const variantIdSet = JSON.stringify(uniqueVariantIds);
+    // A kit line is ordered as its components (products/kits.ts): their pictures too.
+    const kitComponents = sql`SELECT kit_component.component_variant_id FROM variant_components AS kit_component
+        WHERE kit_component.kit_variant_id IN (SELECT CAST(value AS TEXT) FROM json_each(${variantIdSet}))`;
+    return selectSkuMediaProjectionRows(db, {
+        productIds: sql`SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(uniqueProductIds)})
+            UNION SELECT kit_component_sku.product_id FROM product_variants AS kit_component_sku WHERE kit_component_sku.id IN (${kitComponents})`,
+        variantIds: sql`SELECT CAST(value AS TEXT) FROM json_each(${variantIdSet}) UNION ${kitComponents}`,
+    });
+}
+
+/**
+ * `selectCheckoutProductMediaProjectionRows` for products and SKUs a
+ * subquery names (each a `SELECT <id>` statement), so a read that finds its
+ * SKUs in the same statement (a product page's kits and placed offers) needs
+ * no round trip of its own for their pictures.
+ */
+export function selectSkuMediaProjectionRows(
+    db: Database,
+    scope: { productIds: SQL; variantIds: SQL },
+) {
     const poster = alias(media, "product_media_poster");
     return db
         .select({
@@ -361,17 +380,13 @@ export function selectCheckoutProductMediaProjectionRows(
         .innerJoin(media, eq(media.id, productMedia.mediaId))
         .leftJoin(poster, eq(poster.id, media.posterMediaId))
         .where(and(
-            sql`${productMedia.productId} IN (
-                SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
-            )`,
+            sql`${productMedia.productId} IN (${scope.productIds})`,
             retainedMediaCondition(),
             sql`(
                 ${productMedia.id} IN (
                     SELECT pv.image_id
                     FROM product_variants AS pv
-                    WHERE pv.id IN (
-                        SELECT CAST(value AS TEXT) FROM json_each(${variantIdSet})
-                    )
+                    WHERE pv.id IN (${scope.variantIds})
                       AND pv.deleted_at IS NULL
                       AND pv.image_id IS NOT NULL
                 )

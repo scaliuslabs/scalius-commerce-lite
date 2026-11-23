@@ -162,6 +162,8 @@ export type CartValidationResult = {
   requiresShipping?: boolean;
   /** Payment methods this cart may use (no cash on delivery when nothing is handed over). */
   allowedPaymentMethods?: string[];
+  /** The cart's discounts, answered when the check sent `discountCodes` (read by `readCartCheckDiscount`). */
+  discount?: unknown;
   delivery?: {
     kind?: DeliveryMethodKind;
     shippingCharge: number;
@@ -196,6 +198,10 @@ export type CartValidationOptions = {
   cod?: boolean;
   /** The page's subfolder presence (`en-in`): before an address, its market prices the cart. */
   presence?: string | null;
+  /** The buyer's applied codes: sent (even empty), the check answers the cart's discounts. */
+  discountCodes?: string[];
+  /** The buyer's phone, for codes limited per customer. */
+  customerPhone?: string;
 };
 
 type CreateOrderOptions = {

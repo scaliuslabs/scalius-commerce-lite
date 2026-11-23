@@ -24,7 +24,6 @@ import type {
   GetApiV1PagesSlugBySlugResponse as GetPagesSlugBySlugResponse,
   GetApiV1SeoResponse as GetSeoResponse,
   GetApiV1CheckoutLanguagesActiveResponse as GetCheckoutLanguagesActiveResponse,
-  PostApiV1DiscountsValidateResponse as PostDiscountsValidateResponse,
   GetApiV1AnalyticsConfigurationsResponse as GetAnalyticsConfigurationsResponse,
   GetApiV1LocationsCitiesResponse as GetLocationsCitiesResponse,
   GetApiV1LocationsZonesResponse as GetLocationsZonesResponse,
@@ -56,7 +55,6 @@ export type {
   GetPagesSlugBySlugResponse,
   GetSeoResponse,
   GetCheckoutLanguagesActiveResponse,
-  PostDiscountsValidateResponse,
   GetAnalyticsConfigurationsResponse,
   GetLocationsCitiesResponse,
   GetLocationsZonesResponse,
@@ -329,7 +327,17 @@ export interface Product {
   warranties?: Array<ProductWarranty & { id: string }>;
   /** Product page only: storefront-visible custom fields, in the merchant's order. */
   customFields?: StorefrontCustomField[];
+  /**
+   * Product page only: other products' SKUs placed under this page's own
+   * offers, in order (a kit, a cross-sold SKU); one that cannot be bought now is left out.
+   */
+  placedOffers?: StorefrontPlacedOffer[];
 }
+
+/** A SKU made of other SKUs, as the product read gives it (`variants[].kit`). */
+export type StorefrontKit = import("@scalius/api-client/types").StorefrontKit;
+/** Another product's SKU placed under a page's own offers (`product.placedOffers`). */
+export type StorefrontPlacedOffer = import("@scalius/api-client/types").StorefrontPlacedOffer;
 
 export type ProductPageContentBlock = import("@scalius/api-client/types").ProductPageContentBlock;
 
@@ -466,6 +474,8 @@ export interface ProductVariant {
   fulfillmentKind?: FulfillmentKind;
   /** Product page only: this SKU's warranty, an id in the product's `warranties`; null without one. */
   warrantyId?: string | null;
+  /** Product page only: its contents, price against them and band when it is a kit; null otherwise. */
+  kit?: StorefrontKit | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -734,6 +744,20 @@ export interface OrderLineFulfilmentFacts {
   propertiesPrice?: number;
   propertiesPriceMinor?: number;
   baseUnitPriceMinor?: number | null;
+  /** The bundle the line was bought in: a store kit names its own SKU and product (`kit`); null for a plain line. */
+  bundle?: OrderLineBundleFacts | null;
+}
+
+export interface OrderLineBundleFacts {
+  id: string;
+  /** The bundle's title as the order froze it: a kit's own name. */
+  title?: string;
+  kind: "expand" | "merge" | "kit";
+  kit: { variantId: string; productId: string } | null;
+  anchor: boolean;
+  /** Bundles bought; null when the line's quantity no longer reads as whole bundles. */
+  units: number | null;
+  perUnit: number | null;
 }
 
 export interface OrderPickup {

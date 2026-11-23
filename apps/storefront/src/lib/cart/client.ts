@@ -44,8 +44,9 @@ import type {
 } from "@/lib/api/orders";
 import type { CheckoutLanguageData } from "@/lib/api/types";
 import {
-  previewCartDiscounts,
+  readCartCheckDiscount,
   saveAbandonedCheckoutFromBrowser as saveAbandonedCheckout,
+  type DiscountPreview,
 } from "./browser-api";
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
@@ -202,6 +203,29 @@ let discountValidationSequence = 0;
 let pendingDiscountValidation: number | null = null;
 /** The latest server discount facts, for the applied-code list. */
 let latestDiscountFacts: CheckoutDiscountFacts | null = null;
+/** The cart's discounts as a cart check answered them, with each line's share by cart key. */
+interface CartCheckDiscount {
+  preview: DiscountPreview;
+  sharesByKey: ReadonlyMap<string, number>;
+}
+/**
+ * The cart check that carried the applied codes, for the cart state it priced
+ * (`cartDiscountKey`): before an address the estimate reads the cart's
+ * discounts from it, and asks for a check only when that state changed.
+ */
+let cartCheckDiscount: {
+  key: string;
+  result: Promise<CartCheckDiscount>;
+  resolve: (answer: CartCheckDiscount) => void;
+  settled: CartCheckDiscount | null;
+} | null = null;
+const NO_CART_CHECK_DISCOUNT: CartCheckDiscount = { preview: { ok: false, message: null }, sharesByKey: new Map() };
+/** A pending answer whose cart is gone (another check replaced it): not a failure, just unanswered. */
+const STALE_CART_CHECK_DISCOUNT: CartCheckDiscount = { preview: { ok: false, message: null }, sharesByKey: new Map() };
+/** The buyer asked to price the discounts again after a check that could not (Retry). */
+let retryFailedCartDiscount = false;
+/** The estimate shows the totals and waits for a check to price its discounts: the next check carries the codes. */
+let estimateWaitsForCheck = false;
 /**
  * Payment methods the server allows for this cart (cash on delivery only when
  * something is shipped, collected or performed); null until it has answered.
@@ -298,6 +322,11 @@ function resetCartRuntimeListeners(): AbortSignal {
   discountValidationSequence += 1;
   pendingDiscountValidation = null;
   latestDiscountFacts = null;
+  settleCartCheckDiscount(null, STALE_CART_CHECK_DISCOUNT);
+  cartCheckDiscount = null;
+  estimateWaitsForCheck = false;
+  estimateAwaitingCheck = null;
+  retryFailedCartDiscount = false;
   latestAllowedPaymentMethods = null;
   // A page opened anew has revealed nothing yet and holds no quote.
   revealedRepairs = "";
@@ -859,6 +888,8 @@ function setTaxStatus(elements: TotalsElements, message: string): void {
     // A clear state while it asks again: the button says so and cannot be pressed twice.
     retry.disabled = true;
     retry.textContent = activeCheckoutCopy().calculatingText;
+    // The estimate asks the cart check again for discounts it could not price.
+    retryFailedCartDiscount = true;
     void updateTotals();
   });
   status.append(retry);
@@ -880,6 +911,89 @@ function cartValidationDeliveryPayload() {
   const destination = deliveryDestinationPayload();
   if (!destination || method.kind !== "delivery") return {};
   return { ...destination, shippingMethodId: method.id };
+}
+
+/** What the cart check sends; with the applied codes, it answers the cart's discounts too. */
+function cartCheckBody(items: Record<string, VariantCartItem>, attributes: Record<string, string>, discountCodes: readonly string[] | null) {
+  const phone = discountCodes ? formCanonicalPhoneValue() : null;
+  return {
+    items: cartValidationPayload(items),
+    ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
+    ...cartValidationDeliveryPayload(),
+    // The page's market prices the cart (MARKETS-DESIGN D5).
+    ...cartPresencePayload(),
+    // One-use codes are checked against the phone.
+    ...(discountCodes ? { discountCodes: [...discountCodes], ...(phone ? { customerPhone: phone } : {}) } : {}),
+  };
+}
+
+/** The cart state a check's discounts priced: what the server prices them from (never the page's own prices or names). */
+function cartDiscountKey(body: ReturnType<typeof cartCheckBody>): string {
+  return JSON.stringify({ ...body, items: body.items.map(({ price: _price, productName: _name, variantLabel: _label, ...line }) => line) });
+}
+
+/**
+ * The pending discount answer for `key`: the one already asked for, or a new
+ * one. A pending answer for another cart state is settled as no answer (its
+ * readers are for a cart that is gone), so no total ever waits on it.
+ */
+function claimCartCheckDiscount(key: string): void {
+  if (cartCheckDiscount && !cartCheckDiscount.settled && cartCheckDiscount.key === key) return;
+  settleCartCheckDiscount(null, STALE_CART_CHECK_DISCOUNT);
+  let resolve!: (answer: CartCheckDiscount) => void;
+  const result = new Promise<CartCheckDiscount>((done) => { resolve = done; });
+  cartCheckDiscount = { key, result, resolve, settled: null };
+}
+
+/** Settles the pending answer (for `key`, or whichever is pending when null). */
+function settleCartCheckDiscount(key: string | null, answer: CartCheckDiscount): void {
+  if (!cartCheckDiscount || cartCheckDiscount.settled || (key !== null && cartCheckDiscount.key !== key)) return;
+  cartCheckDiscount.settled = answer;
+  cartCheckDiscount.resolve(answer);
+}
+
+/**
+ * The discounts of a code being applied (`discountCodes`): the latest cart
+ * check's answer when it priced this cart with them, else a new check. A
+ * failed answer is not reused.
+ */
+function cartCheckDiscountFor(discountCodes: readonly string[]): Promise<CartCheckDiscount> {
+  const key = cartDiscountKey(cartCheckBody(cartStore.get().items, readBuyerAttributes(), discountCodes));
+  const known = cartCheckDiscount?.key === key ? cartCheckDiscount : null;
+  if (known && (!known.settled || known.settled.preview.ok)) return known.result;
+  void validateCartSnapshot({ renderUnchanged: false, discountCodes });
+  // The check claims its answer before its first wait.
+  return cartCheckDiscount?.key === key ? cartCheckDiscount.result : Promise.resolve(NO_CART_CHECK_DISCOUNT);
+}
+
+/**
+ * The cart's discounts for its current state, never waiting: the latest cart
+ * check's answer when it priced this state, else null while a check prices it
+ * (started here when none is on its way); the totals redraw when it answers.
+ * A failed answer stands until the cart changes or the buyer retries.
+ */
+function cartCheckDiscountNow(discountCodes: readonly string[]): CartCheckDiscount | null {
+  const key = cartDiscountKey(cartCheckBody(cartStore.get().items, readBuyerAttributes(), discountCodes));
+  const known = cartCheckDiscount?.key === key ? cartCheckDiscount : null;
+  const retry = retryFailedCartDiscount;
+  retryFailedCartDiscount = false;
+  const settled = known?.settled === STALE_CART_CHECK_DISCOUNT ? null : known?.settled;
+  if (settled && (settled.preview.ok || !retry)) return settled;
+  estimateWaitsForCheck = true;
+  // A check already asked for (pending, or scheduled after an edit) carries the codes.
+  if ((!known || known.settled) && cartValidationTimer === null) void validateCartSnapshot({ renderUnchanged: false, discountCodes });
+  return null;
+}
+
+/** The estimate drawn without its discounts yet, while a check prices them (redrawn, never re-quoted, when it answers). */
+let estimateAwaitingCheck: { sequence: number; redraw: () => void } | null = null;
+
+/** The estimate takes a check's discounts for the page's own codes (a code being applied waits until it is). */
+function redrawEstimateFor(pricedCodes: readonly string[] | null): void {
+  if (JSON.stringify(pricedCodes) !== JSON.stringify(cartStore.get().discountCodes)) return;
+  const waiting = estimateAwaitingCheck;
+  estimateAwaitingCheck = null;
+  if (waiting && waiting.sequence === cartTaxQuoteSequence) waiting.redraw();
 }
 
 function issueKeyForCart(
@@ -1136,21 +1250,54 @@ async function refreshBuyerUi(): Promise<void> {
   await validateCartSnapshot();
 }
 
-export async function validateCartSnapshot(
-  /** Re-render the lines even when the check changed nothing (a page shown again). */
-  { renderUnchanged = true }: { renderUnchanged?: boolean } = {},
-): Promise<boolean> {
-  const { items } = cartStore.get();
+/** What a cart check sends now: before an address it prices the applied codes (once a quote can be asked, the quote prices them). */
+function cartCheckRequest(discountCodes?: readonly string[]) {
+  const { items, discountCodes: appliedCodes } = cartStore.get();
   const attributes = readBuyerAttributes();
+  const pricedCodes = discountCodes ?? (cartTaxQuoteInput() && !estimateWaitsForCheck ? null : appliedCodes);
+  return { attributes, pricedCodes, body: cartCheckBody(items, attributes, pricedCodes) };
+}
+
+/** The latest cart check: what it sent and its run, so a caller for the same cart joins it. */
+let latestCartCheck: { body: string; run: Promise<boolean>; done: boolean } | null = null;
+
+export function validateCartSnapshot(
+  options: {
+    /** Re-render the lines even when the check changed nothing (a page shown again). */
+    renderUnchanged?: boolean;
+    /** The codes to price (a code being applied); absent: the applied ones, when the estimate shows the totals. */
+    discountCodes?: readonly string[];
+  } = {},
+): Promise<boolean> {
+  const request = cartCheckRequest(options.discountCodes);
+  const check = { body: JSON.stringify(request.body), run: runCartCheck(options.renderUnchanged ?? true, request), done: false };
+  latestCartCheck = check;
+  const done = () => { check.done = true; };
+  check.run.then(done, done);
+  return check.run;
+}
+
+/** The cart check for the cart as it is now: the one in flight for it (the totals may have asked already), else a new one. */
+function checkCartNow(): Promise<boolean> {
+  const latest = latestCartCheck;
+  return latest && !latest.done && latest.body === JSON.stringify(cartCheckRequest().body) ? latest.run : validateCartSnapshot();
+}
+
+async function runCartCheck(renderUnchanged: boolean, { attributes, pricedCodes, body }: ReturnType<typeof cartCheckRequest>): Promise<boolean> {
   const attributesInput = document.getElementById("attributesInput") as HTMLInputElement | null;
   if (attributesInput) attributesInput.value = JSON.stringify(attributes);
-  const payloadItems = cartValidationPayload(items);
+  const payloadItems = body.items;
+  const discountKey = pricedCodes ? cartDiscountKey(body) : null;
+  if (discountKey) claimCartCheckDiscount(discountKey);
+  else settleCartCheckDiscount(null, STALE_CART_CHECK_DISCOUNT);
+  if (JSON.stringify(pricedCodes) === JSON.stringify(cartStore.get().discountCodes)) estimateWaitsForCheck = false;
   const sequence = ++cartValidationSequence;
   cartValidationAbort?.abort();
   const controller = new AbortController();
   cartValidationAbort = controller;
 
   if (payloadItems.length === 0) {
+    settleCartCheckDiscount(null, STALE_CART_CHECK_DISCOUNT);
     latestCartBuyerUi = [];
     latestAddOnRows = [];
     void renderBuyerUiWhenNeeded([]);
@@ -1172,13 +1319,7 @@ export async function validateCartSnapshot(
       {
         method: "POST",
         headers: { "Content-Type": "application/json", ...await buyerUiLocaleHeaders() },
-        body: JSON.stringify({
-          items: payloadItems,
-          ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
-          ...cartValidationDeliveryPayload(),
-          // The page's market prices the cart (MARKETS-DESIGN D5).
-          ...cartPresencePayload(),
-        }),
+        body: JSON.stringify(body),
       },
       QUOTE_RETRY_DELAYS_MS,
       { timeoutMs: CART_VALIDATION_TIMEOUT_MS, signal: controller.signal },
@@ -1194,6 +1335,15 @@ export async function validateCartSnapshot(
       return !hasBlockingCartIssues();
     }
     cartValidationRetryable = false;
+    // The cart's discounts, for the estimate (and a code being applied), before the lines redraw it.
+    if (discountKey) {
+      const preview = await readCartCheckDiscount(response, json, payloadItems.length);
+      if (sequence !== cartValidationSequence) return !hasBlockingCartIssues();
+      settleCartCheckDiscount(discountKey, {
+        preview,
+        sharesByKey: new Map(preview.ok ? payloadItems.map((line, index) => [line.cartKey, preview.lineDiscountsMinor?.[index] ?? 0]) : []),
+      });
+    }
 
     // What the lines show: a check that changes none of it re-renders (and
     // re-prices) nothing, so choosing a delivery option quotes once.
@@ -1266,8 +1416,12 @@ export async function validateCartSnapshot(
       updateCartValidationMessage();
     }
     if (renderUnchanged || shown() !== shownBefore) await renderCartItems();
-    // The check names the inputs each line takes, whether or not the lines changed.
-    else paintLineInputs();
+    else {
+      // The check names the inputs each line takes, whether or not the lines changed.
+      paintLineInputs();
+      // Lines that did not redraw did not re-price: the estimate reads the new discounts now.
+      if (discountKey) redrawEstimateFor(pricedCodes);
+    }
     updateCheckoutButtonState();
 
     if (!response.ok || !json?.success) {
@@ -1278,8 +1432,12 @@ export async function validateCartSnapshot(
 
     return json.data?.valid !== false && !hasBlockingCartIssues();
   } catch (error) {
-    // A newer check (or a page reset) replaced this one; it speaks for itself.
+    // A newer check (or a page reset) replaced this one; it speaks for itself (and for its discounts).
     if (sequence !== cartValidationSequence || controller.signal.aborted) return !hasBlockingCartIssues();
+    if (discountKey) {
+      settleCartCheckDiscount(discountKey, NO_CART_CHECK_DISCOUNT);
+      redrawEstimateFor(pricedCodes);
+    }
     console.warn("Could not refresh cart availability before checkout.", error);
     cartValidationRetryable = true;
     cartValidationIssues = {};
@@ -1298,6 +1456,7 @@ function scheduleCartValidation() {
   cartValidationAbort?.abort();
   if (cartValidationTimer) clearTimeout(cartValidationTimer);
   cartValidationTimer = setTimeout(() => {
+    cartValidationTimer = null;
     void validateCartSnapshot({ renderUnchanged: false });
   }, 350);
 }
@@ -1347,8 +1506,8 @@ function renderEstimateNote(leftOut: readonly string[]): void {
 
 /**
  * Totals are always the server's: the authoritative tax quote once a
- * destination is chosen, otherwise the discount preview for the chosen
- * delivery method. Applied codes stay applied through every cart edit.
+ * destination is chosen, otherwise the cart check's discounts (the check
+ * prices the applied codes). Applied codes stay applied through every cart edit.
  */
 export function updateTotals(): Promise<void> {
   const run = refreshTotals();
@@ -1425,18 +1584,19 @@ async function refreshTotals() {
   // The drawer prices the same lines (`cartPreviewLines`): the estimate's.
   const previewLines = cartPreviewLines(cartItems, cartValidationIssues);
   const renderEstimate = async (failure: string) => {
-    const preview = await previewCartDiscounts(
-      discountCodes,
-      previewLines.map(([, line]) => line),
-      // No delivery option yet: delivery discounts wait for the address instead of failing.
-      selectedMethod && !pendingShipping ? shippingFee : undefined,
-      formCanonicalPhoneValue() || undefined,
-    );
+    // The cart check prices the applied codes with its own lines and delivery (no request of its own);
+    // until it answers the totals stay as they are, and it draws them again when it does.
+    const answer = cartCheckDiscountNow(discountCodes);
     if (quoteSequence !== cartTaxQuoteSequence) return;
+    if (!answer) {
+      estimateAwaitingCheck = { sequence: quoteSequence, redraw: () => void renderEstimate(failure) };
+      return;
+    }
+    const { preview, sharesByKey } = answer;
     const discount = preview.ok ? preview.totalDiscount : 0;
     if (preview.ok) {
       estimateShipping(preview.discounts);
-      setLineDiscounts(cartLineDiscountsOf(previewLines, preview.lineDiscountsMinor));
+      setLineDiscounts(cartLineDiscountsOf(previewLines, previewLines.map(([key]) => sharesByKey.get(key) ?? 0)));
     }
     totalEl.textContent = formatMoney(Math.max(0, totalAmount + shippingFee - discount));
     // No quote, so no buyer's methods: the cart page keeps its payment step.
@@ -1511,9 +1671,8 @@ function setQuotedLineDiscounts(quote: CheckoutTaxQuote): void {
 }
 
 /**
- * Before an address the discount preview names the same shares by line
- * position, so a free gift reads free from the first paint, as it does once
- * the quote answers.
+ * Before an address the cart check names the same shares by line, so a free
+ * gift reads free before the quote, as it does once the quote answers.
  */
 
 
@@ -1859,19 +2018,8 @@ async function handleApplyDiscount() {
   notifyDiscountValidationState();
 
   try {
-    const preview = await previewCartDiscounts(
-      [...discountCodes, code],
-      cartPreviewLines(items, cartValidationIssues).map(([, line]) => line),
-      window.lastShippingEventDetail
-        ? getEffectiveCartShippingFee(
-            items,
-            window.lastShippingEventDetail.fee,
-            window.lastShippingEventDetail.freeOver,
-            window.lastShippingEventDetail.quoted,
-          )
-        : undefined,
-      formCanonicalPhoneValue() || undefined,
-    );
+    // The cart check prices the code with the cart, as the estimate will show it once applied.
+    const { preview } = await cartCheckDiscountFor([...discountCodes, code]);
     if (pendingDiscountValidation !== requestSequence) return;
     if (!preview.ok) {
       showDiscountMessage(preview.message || copy.discountApplyFailedText, "error", "attempt");
@@ -2174,7 +2322,8 @@ export async function initCartFunctionality() {
   if (applyPendingCartRepairState()) {
     await renderCartItems();
   }
-  await validateCartSnapshot();
+  // The totals may have asked for this check already (the cart's discounts before an address).
+  await checkCartNow();
   await recoveryCheck;
   updateCheckoutButtonState();
 }

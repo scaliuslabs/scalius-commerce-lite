@@ -1,0 +1,91 @@
+---
+// What a kit (a SKU made of other SKUs) holds, as a native disclosure: each
+// item's picture, its product (a link while its page is public), its option
+// values, quantity and how it reaches the buyer, then the items' price
+// bought separately and the saving. Drawn from the page's projection
+// (`StorefrontKit`), the same data a product_main skin gets: under a kit
+// SKU of the page's own (one per kit SKU, `variantId`, the chosen one shown
+// by product-controller.ts) and inside each placed offer that is a kit.
+// No script: `<details>` opens with the keyboard and a screen reader.
+import type { StorefrontKit } from "@scalius/shared/plugins/storefront-protocol";
+import { STOREFRONT_KIT_DELIVERY_KINDS } from "@scalius/shared/plugins/storefront-protocol";
+import { formatNumber } from "@scalius/shared/locale-format";
+import type { CatalogCopy } from "@/lib/catalog-copy";
+
+interface Props {
+  kit: StorefrontKit;
+  words: CatalogCopy["product"]["kit"];
+  /** The page's language: counts and percents in its digits. */
+  language: string;
+  /** A kit SKU of the page's own: shown while it is the chosen SKU (`data-sx-sku`). */
+  variantId?: string;
+  hidden?: boolean;
+  /** Open from the start (a page whose one SKU is the kit). */
+  open?: boolean;
+  /** The kit's own page, for the items a placed offer's summary leaves out. */
+  moreUrl?: string;
+}
+
+const { kit, words, language, variantId, hidden = false, open = false, moreUrl } = Astro.props;
+const count = kit.componentCount;
+// A summary (a placed offer on a host page) lists the first items; the kit's own page lists them all.
+const unlisted = count - kit.unavailableItems - kit.components.length;
+const deliveryWords = (kind: string) =>
+  (STOREFRONT_KIT_DELIVERY_KINDS as readonly string[]).includes(kind) ? words.delivery[kind as keyof typeof words.delivery] : null;
+---
+
+{count > 0 && (
+  <details class="group kit-contents rounded-lg border border-border bg-card" data-kit-contents data-sx-sku={variantId} hidden={hidden} open={open}>
+    <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden" data-kit-part="summary">
+      <span>{words.included(formatNumber(count, language), count === 1)}</span>
+      <svg class="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+    </summary>
+    <ul class="divide-y divide-border border-t border-border" data-kit-part="items">
+      {kit.components.map((item) => {
+        const facts = item.options.map((option) => option.value).filter(Boolean).join(" / ");
+        const delivery = deliveryWords(item.delivery);
+        return (
+          <li class="flex items-start gap-3 px-3 py-2.5" data-kit-part="item" data-kit-delivery={item.delivery}>
+            {item.image ? (
+              <img
+                src={item.image.url}
+                srcset={item.image.srcset ?? undefined}
+                sizes="3.5rem"
+                width="56"
+                height="56"
+                alt=""
+                loading="lazy"
+                decoding="async"
+                class="size-14 shrink-0 rounded-md border border-border bg-muted object-cover"
+              />
+            ) : (
+              <span class="size-14 shrink-0 rounded-md border border-border bg-muted" aria-hidden="true"></span>
+            )}
+            <div class="min-w-0 flex-1 text-sm">
+              {item.url
+                ? <a href={item.url} class="font-medium text-foreground underline-offset-2 hover:underline" data-kit-part="title">{item.title}</a>
+                : <span class="font-medium text-foreground" data-kit-part="title">{item.title}</span>}
+              {facts && <p class="text-muted-foreground" data-kit-part="options">{facts}</p>}
+              <p class="flex flex-wrap gap-x-3 text-muted-foreground">
+                <span data-kit-part="quantity">{words.quantity(formatNumber(item.quantity, language))}</span>
+                {delivery && <span data-kit-part="delivery">{delivery}</span>}
+              </p>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+    {kit.unavailableItems > 0 && (
+      <p class="border-t border-border px-3 py-2 text-sm text-muted-foreground" data-kit-part="unavailable">{words.unavailable(formatNumber(kit.unavailableItems, language), kit.unavailableItems === 1)}</p>
+    )}
+    {unlisted > 0 && moreUrl && (
+      <p class="border-t border-border px-3 py-2 text-sm"><a href={moreUrl} class="font-medium text-primary underline underline-offset-2" data-kit-part="more">{words.seeAll(formatNumber(count, language))}</a></p>
+    )}
+    {kit.saving.amountMinor > 0 && (
+      <p class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-3 py-2 text-sm" data-kit-part="saving">
+        <span class="text-muted-foreground">{words.worth(kit.compareAt.formatted)}</span>
+        <span class="font-semibold text-primary-ink">{words.save(kit.saving.formatted, formatNumber(kit.savingPercent, language))}</span>
+      </p>
+    )}
+  </details>
+)}

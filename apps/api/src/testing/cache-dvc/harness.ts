@@ -1038,10 +1038,10 @@ export class DvcHarness {
     return this.clock.current();
   }
 
-  /** Move one SKU's stock across its band edges (0, low level, above). */
+  /** Move one SKU's stock across its band edges (0, low level, above); a kit holds none (0224 refuses it), its items move it. */
   private bandWalk(): boolean {
     const variants = this.sqlite.prepare(
-      "SELECT id, stock, reserved_stock AS reserved, coalesce(low_stock_threshold, 2) AS low FROM product_variants",
+      "SELECT id, stock, reserved_stock AS reserved, coalesce(low_stock_threshold, 2) AS low FROM product_variants AS walk_sku WHERE NOT EXISTS (SELECT 1 FROM variant_components AS walk_kit WHERE walk_kit.kit_variant_id = walk_sku.id)",
     ).all() as Array<{ id: string; stock: number; reserved: number; low: number }>;
     if (variants.length === 0) return false;
     const variant = this.rng.pick(variants);

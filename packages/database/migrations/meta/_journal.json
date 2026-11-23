@@ -1569,6 +1569,13 @@
       "when": 1795347445511,
       "tag": "0223_otp_delivery_receipt_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 224,
+      "version": "6",
+      "when": 1795367967598,
+      "tag": "0224_kits_and_page_offers",
+      "breakpoints": true
     }
   ]
 }

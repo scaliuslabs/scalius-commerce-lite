@@ -1,4 +1,6 @@
 // One signed-in customer order: claim a receipt, detail, support requests and payment sessions.
+import { frozenAddOnTotals } from "@scalius/shared/add-on-folding";
+import { ADD_ON_ROWS_MAX } from "@scalius/shared/add-on-totals";
 import { checkoutAttributeAppsSchema } from "../../schemas/checkout-attribute-apps";
 import { readCheckoutAttributeApps } from "@scalius/core/modules/order-kernel";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
@@ -25,6 +27,7 @@ import { buyerOrderShippingAddressShape } from "../../schemas/entities";
 import {
     buyerOrderFulfilmentSchema,
     orderFulfilmentShape,
+    orderLineBundleSchema,
     orderLineFulfilmentShape,
 } from "../../schemas/order-lines";
 import { created, ok } from "../../utils/api-response";
@@ -252,6 +255,8 @@ const customerOrderDetailSchema = z.object({
     taxAmountMinor: z.number().int(),
     ...orderLineFulfilmentShape,
     ...orderLineExtrasShape,
+    /** The bundle the line was bought in: a store kit's lines name its SKU and product, so Buy again puts the kit back. */
+    bundle: orderLineBundleSchema.nullable().optional(),
     createdAt: nullableTimestampSchema,
   }).passthrough()),
   /** Each handed-over action: a parcel sent, a pickup, a performed service. */
@@ -319,6 +324,15 @@ const customerOrderDetailSchema = z.object({
   buyerView: buyerOrderDetailViewSchema,
   /** Gift cards still paying for the order, in commit order (released or refunded ones are left out). */
   giftCardTenders: z.array(orderGiftCardTenderSchema),
+  /**
+   * The apps' add-ons as rows of the money summary, from what the order's
+   * lines froze, folded here in the buyer's language: the page draws them
+   * as they are, after Subtotal (the items alone).
+   */
+  addOns: z.object({
+    itemsSubtotalMinor: z.number().int(),
+    rows: z.array(z.object({ appId: z.string().nullable(), title: z.string(), amountMinor: z.number().int() })).max(ADD_ON_ROWS_MAX),
+  }),
 });
 
 const getCustomerOrderDetailRoute = createRoute({
@@ -406,6 +420,8 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
 
   // The apps' answers the buyer gave, with their words (one read, only when there are answers).
   const appAnswers = readCheckoutAttributes(order.attributes);
+  // The add-on rows the page draws, folded here from the frozen lines (the page folds nothing).
+  const addOns = frozenAddOnTotals(detail.items, detail.order.subtotalAmountMinor ?? 0, requestBuyerLanguage(null, c.req.header("x-storefront-language")));
   const attributeApps = await readCheckoutAttributeApps(db, appAnswers);
   return ok(c, {
     ...detail,
@@ -413,6 +429,7 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
     appAnswers,
     attributeApps,
     giftCardTenders,
+    addOns,
     items: detail.items.map((item) => withOrderLineExtras(item, lineExtras)),
     discounts: presentOrderDiscountLines(discountLines, order.currencyDecimalPlaces),
     paymentRecovery,

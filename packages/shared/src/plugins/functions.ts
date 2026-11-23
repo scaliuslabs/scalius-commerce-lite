@@ -31,7 +31,7 @@ import type { PluginFunctionPoint } from "./manifest";
 import { PLUGIN_CUSTOMER_ROLE_PATTERN, PLUGIN_CUSTOMER_ROLE_REF_PATTERN, PLUGIN_CUSTOMER_ROLES_MAX } from "./customer-roles";
 import { PROTECTED_FIELD_KEYWORD, protectedPathsOf, type ProtectedCustomerData, type ProtectedPath } from "./protected-data";
 import { ORDER_CHANNELS } from "../order-channel";
-import { LINE_ADD_ONS_MAX } from "../add-on-totals";
+import { LINE_ADD_ONS_MAX } from "../line-identity";
 import { ONLINE_STORE_CHANNEL_ID, SALES_CHANNEL_ID_MAX_LENGTH, SALES_CHANNEL_ID_PATTERN } from "../sales-channels";
 
 const id = z.string().min(1).max(128);
@@ -82,7 +82,8 @@ export const functionCartLineSchema = z.object({
   }).strict()).optional(),
   /**
    * The bundle the line belongs to (`cart.transform`): an expanded bundle's
-   * components (`kind: "expand"`) or merged lines (`"merge"`), null for a
+   * components (`kind: "expand"`), merged lines (`"merge"`) or a store kit
+   * (`"kit"`, below), null for a
    * plain line. An expanded bundle's buyer inputs are the bundle's: every
    * component carries them in `properties`, and `anchor` marks the one
    * component the order freezes them (and the bundle's add-on) on, so a rule
@@ -92,7 +93,21 @@ export const functionCartLineSchema = z.object({
    * component's. The host always sends it; optional so a cart an app's
    * tests build by hand still reads.
    */
-  bundle: z.object({ id, title: z.string().max(300), kind: z.enum(["expand", "merge"]), anchor: z.boolean() }).strict().nullable().optional(),
+  bundle: z.object({
+    id,
+    title: z.string().max(300),
+    kind: z.enum(["expand", "merge", "kit"]),
+    anchor: z.boolean(),
+    /**
+     * A store kit (`kind: "kit"`): its own SKU, product and SKU code. To the
+     * functions that read what the buyer chose and pays (`cart.validate`,
+     * `checkout.discounts`, `cart.line_prices`, payment methods, the cart's
+     * per-line slot and offers) a kit is one line (its `lineId` the buyer's
+     * kit line, `anchor: true`); shipping rates see its item lines, each
+     * naming the kit.
+     */
+    kit: z.object({ variantId: id, productId: id, sku: z.string().max(200).nullable() }).strict().nullable().optional(),
+  }).strict().nullable().optional(),
   /**
    * The SKU is a physical good (not digital, a service or a gift card),
    * whatever delivery the buyer picks: a pickup line still requires shipping

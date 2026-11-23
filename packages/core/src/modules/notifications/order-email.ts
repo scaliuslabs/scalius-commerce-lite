@@ -3,7 +3,7 @@ import { countryDisplayName, usesDeliveryHierarchy } from "@scalius/shared/addre
 import { addressRulesFor, formatAddressLines } from "@scalius/shared/address-metadata";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { deliveryShipments, orderDiscountAllocations, orders, orderItems } from "@scalius/database/schema";
-import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../order-kernel";
+import { foldBuyerOrderLines, type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../order-kernel";
 import { formatMoney, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { cashCollectionPoint } from "@scalius/shared/order-payment-methods";
@@ -153,6 +153,8 @@ function orderFactStatements(db: Database, orderId: string) {
     // The merchant's checkout copies: a line's own words ("Yes", "Add-on") in the message's language.
     ...messageLineCopyColumns(),
   }, item: {
+    id: orderItems.id,
+    variantId: orderItems.variantId,
     productName: orderItems.productName,
     variantLabel: orderItems.variantLabel,
     quantity: orderItems.quantity,
@@ -196,7 +198,8 @@ function resolveOrderFacts([orderRows, discountRows, appRows]: OrderFactRows) {
   if (!order) return null;
   return {
     order,
-    items: orderRows.flatMap((row) => row.item ? [row.item] : []),
+    // The buyer's rows: a kit's item split into two lines is one (`foldBuyerOrderLines`).
+    items: foldBuyerOrderLines(orderRows.flatMap((row) => row.item ? [row.item] : []), { sum: ["lineSubtotalMinor", "fulfilledQuantity"] }),
     discounts: [
       ...discountRows.map((row) => ({ ...row, appId: null as string | null, amountMinor: Number(row.amountMinor) || 0 })),
       ...resolveOrderAppFacts(appRows as OrderAppFactRow[]).discounts.flatMap((fact, position) => {
@@ -449,7 +452,8 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
           name: item.productName?.trim() || null,
           variant: item.variantLabel?.trim() || null,
           quantity: item.quantity,
-          unitPrice: money ? money(item.unitPriceMinor) : null,
+          // A folded row with no whole unit price shows its quantity and line total.
+          unitPrice: money && item.unitPriceMinor !== null ? money(item.unitPriceMinor) : null,
           subtotal: money ? money(item.lineSubtotalMinor) : null,
           properties: linePropertiesText(item.properties, money, messageLineWords(order, lang), (value) => formatNumber(value, lang === "bn" ? "bn-BD" : "en-US")),
         })),

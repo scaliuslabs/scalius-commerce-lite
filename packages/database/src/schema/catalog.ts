@@ -341,6 +341,62 @@ export const productBundles = sqliteTable("product_bundles", {
     uniqueIndex("product_bundles_product_quantity_unique").on(table.productId, table.quantity),
 ]);
 
+/** The most components a kit has (as many as `cart.transform` expand takes). */
+export const KIT_COMPONENTS_MAX = 20;
+/** The most units of one component in a kit. */
+export const KIT_COMPONENT_QUANTITY_MAX = 100;
+/** The most SKUs of other products a product page shows as offers under its own. */
+export const PRODUCT_PAGE_OFFERS_MAX = 20;
+
+/**
+ * A kit (0224): a SKU made of other SKUs. A kit is an ordinary SKU of an
+ * ordinary product (its own title, price, images, status and URL) with no
+ * stock of its own: it is available while every component is, and checkout
+ * sells it as its components (`cart.transform` expand), so stock, tax,
+ * delivery, warranty and refunds stay per component. Guard triggers make an
+ * illegal kit unrepresentable: no SKU of its own, no kit inside a kit, no gift
+ * card, at most `KIT_COMPONENTS_MAX` components, each a live SKU when added.
+ * `component_variant_id` has no foreign key: a component removed later stays
+ * named, so the kit reads unavailable and the merchant read says why.
+ */
+export const variantComponents = sqliteTable("variant_components", {
+    kitVariantId: text("kit_variant_id")
+        .notNull()
+        .references(() => productVariants.id, { onDelete: "cascade" }),
+    componentVariantId: text("component_variant_id").notNull(),
+    quantity: integer("quantity").notNull(),
+    position: integer("position").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    primaryKey({ columns: [table.kitVariantId, table.componentVariantId] }),
+    index("variant_components_component_idx").on(table.componentVariantId),
+    check("variant_components_quantity_range", sql`${table.quantity} BETWEEN 1 AND 100`),
+    check("variant_components_not_self", sql`${table.kitVariantId} <> ${table.componentVariantId}`),
+    check("variant_components_position_range", sql`${table.position} BETWEEN 0 AND 19`),
+]);
+
+/**
+ * Offers on a product page (0224): SKUs of other products the page shows
+ * under its own, in order (a kit, a cross-sold SKU). A placed SKU that is
+ * gone, hidden or unavailable is simply not shown.
+ */
+export const productPageOffers = sqliteTable("product_page_offers", {
+    productId: text("product_id")
+        .notNull()
+        .references(() => products.id, { onDelete: "cascade" }),
+    variantId: text("variant_id").notNull(),
+    position: integer("position").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    primaryKey({ columns: [table.productId, table.variantId] }),
+    index("product_page_offers_variant_idx").on(table.variantId),
+    check("product_page_offers_position_range", sql`${table.position} BETWEEN 0 AND 19`),
+]);
+
 export type CategoryClosure = InferSelectModel<typeof categoryClosure>;
 export type CategoryAttributeSet = InferSelectModel<typeof categoryAttributeSets>;
 export type ProductFacetValue = InferSelectModel<typeof productFacetValues>;
@@ -349,3 +405,5 @@ export type ProductRecommendation = InferSelectModel<typeof productRecommendatio
 export type ProductSalesStats = InferSelectModel<typeof productSalesStats>;
 export type ProductContentBlock = InferSelectModel<typeof productContentBlocks>;
 export type ProductBundle = InferSelectModel<typeof productBundles>;
+export type VariantComponent = InferSelectModel<typeof variantComponents>;
+export type ProductPageOffer = InferSelectModel<typeof productPageOffers>;

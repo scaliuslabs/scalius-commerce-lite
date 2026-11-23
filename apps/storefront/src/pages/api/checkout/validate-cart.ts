@@ -100,6 +100,19 @@ function normalizeOptions(payload: unknown): CartValidationOptions {
   return shippingMethodId ? { shippingMethodId, ...rateQuote, ...presence } : presence;
 }
 
+/**
+ * The applied codes (and phone) the cart page and drawer send so the check
+ * answers the cart's discounts; absent, none is asked for. The API checks the
+ * codes exactly (how many, how long); this only keeps the shape.
+ */
+function discountOptions(payload: unknown): Pick<CartValidationOptions, "discountCodes" | "customerPhone"> | null {
+  if (!isRecord(payload) || payload.discountCodes === undefined) return {};
+  const codes = payload.discountCodes;
+  if (!Array.isArray(codes) || codes.length > 10 || codes.some((code) => typeof code !== "string" || code.length > 64)) return null;
+  const phone = optionalString(payload, "customerPhone");
+  return { discountCodes: codes as string[], ...(phone && phone.length <= 32 ? { customerPhone: phone } : {}) };
+}
+
 /** Whether the cart's buyer answers pass what the API takes together (`CART_LINE_INPUT_LIMITS`). */
 function cartAnswersOverLimit(items: readonly CartValidationRequestItem[]): boolean {
   let entries = 0;
@@ -156,9 +169,17 @@ export const POST: APIRoute = async ({ request }) => {
         status: 400, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
       });
     }
+    const discount = discountOptions(payload);
+    if (!discount) {
+      return new Response(JSON.stringify({ success: false, error: "Discount codes are invalid" }), {
+        status: 400, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      });
+    }
+    // The signed-in buyer's session goes with the check: segment discounts and per-customer limits price as checkout will.
     const result = await validateCartItems(items, {
       ...normalizeOptions(payload),
       ...(attributes ? { attributes } : {}),
+      ...discount,
     }, getCustomerSessionTokenFromCookie(request.headers.get("cookie")), request.headers);
     if (!result.success) {
       // The API's rate limit keeps its wait, in the details and in Retry-After (`rate-limited.ts`).

@@ -272,6 +272,11 @@ function seedSql(): string {
   INSERT INTO product_bundles (id, product_id, quantity, discount_type, discount_bps, label, position, is_active) VALUES
     ('pbd_linen_pair', 'p_linen', 2, 'percentage', 1000, 'Pair', 0, 1),
     ('pbd_bag_three', 'p_bag', 3, 'percentage', 1500, NULL, 0, 1);
+  -- A kit (0224): the kurta set is a linen panjabi and two totes; the loafer's page places it and a cotton panjabi.
+  INSERT INTO variant_components (kit_variant_id, component_variant_id, quantity, position) VALUES
+    ('v_kurta', 'v_linen_m', 1, 0), ('v_kurta', 'v_bag', 2, 1);
+  INSERT INTO product_page_offers (product_id, variant_id, position) VALUES
+    ('p_shoe', 'v_kurta', 0), ('p_shoe', 'v_cotton', 1);
 
   INSERT INTO attribute_groups (id, name, sort_order) VALUES ('atg_specs001', 'Specifications', 0);
   INSERT INTO product_attributes (id, name, slug, filterable, group_id, value_type, sort_order, key_spec, highlight, facet_display) VALUES

@@ -15,6 +15,7 @@ import {
   productBundleTiersByProduct,
   productEmiOffer,
   type ProductMediaProjection,
+  type ProductMediaProjectionRow,
   type ProductPageBlockMedia,
   type ProductPageContentBlockRow,
   channelOnHandSql,
@@ -28,6 +29,7 @@ import {
   selectProductPageContentBlockRows,
   storeEmiSettingsSql,
   type SkuWarrantyMode,
+  buyerStockColumns,
 } from "../products";
 import {
     products,
@@ -71,6 +73,15 @@ import {
     type ProductRecommendations,
 } from "./recommendations";
 import { declareProductGallery, deps } from "./declare-deps";
+import {
+    pageSkuBuyerMinor,
+    productPageHasKitsSql,
+    resolveProductPageKits,
+    selectProductPageKitMediaRows,
+    selectProductPageKitRows,
+    type ProductPageKitRow,
+    type StorefrontKit,
+} from "./kit-offers";
 import {
     applyTranslation,
     foldedProductChains,
@@ -157,6 +168,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             storeEmiSettings: storeEmiSettingsSql(),
             storeCurrencyCode: storeCurrencyCodeSql(),
             storePriceIncrementMinor: storePriceIncrementSql(),
+            // Kits or placed offers on this page: only then does the content wave read them.
+            hasKits: productPageHasKitsSql(sql`${products.id}`),
             deletedAt: sql<number | null>`CAST(${products.deletedAt} AS INTEGER)`,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
             category: {
@@ -231,6 +244,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         brand,
         storeCurrencyCode,
         storePriceIncrementMinor,
+        hasKits,
         customizationSchema: storedCustomization,
         pageTemplate,
         emiEligible,
@@ -308,10 +322,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         sku: productVariants.sku,
         priceMinor: productVariants.priceMinor,
         // The units the online store sells (its linked locations' on-hand).
-        stock: channelOnHandSql({ id: sql`${productVariants.id}`, stock: sql`${productVariants.stock}` }).mapWith(Number),
-        reservedStock: productVariants.reservedStock,
+        // A kit's stock is its items' (`buyerStockColumns`), any other SKU's its own.
+        ...buyerStockColumns(),
         isDefault: productVariants.isDefault,
-        trackInventory: productVariants.trackInventory,
         lowStockThreshold: effectiveLowStockThresholdSql(),
         barcode: productVariants.barcode,
         barcodeType: productVariants.barcodeType,
@@ -347,23 +360,30 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
     // Content blocks (page order), active bundle tiers and the storefront-visible
     // custom fields of the product and its SKUs: one round trip in the second
     // wave, where the legacy rich-content read used to be.
+    // A page with kits or placed offers reads them in the same batch (two statements more).
+    const withKits = Number(hasKits) === 1;
     const contentPromise = db.batch([
         selectProductPageContentBlockRows(db, product.id),
         selectActiveProductBundleRows(db, [product.id]),
         selectStorefrontCustomFieldRows(db, "product", product.id),
         selectStorefrontVariantCustomFieldRows(db, product.id),
+        ...(withKits ? [selectProductPageKitRows(db, product.id, pricing, translation), selectProductPageKitMediaRows(db, product.id)] : []),
     ] as never).then((results) => {
-        const [blockRows, bundleRows, productFieldRows, variantFieldRows] = results as unknown as [
+        const [blockRows, bundleRows, productFieldRows, variantFieldRows, kitRows, kitMediaRows] = results as unknown as [
             ProductPageContentBlockRow[],
             ProductBundleRow[],
             StorefrontCustomFieldRow[],
             StorefrontCustomFieldRow[],
+            ProductPageKitRow[] | undefined,
+            ProductMediaProjectionRow[] | undefined,
         ];
         return {
             blocks: resolveProductPageContentBlocks(blockRows),
             bundles: productBundleTiersByProduct(bundleRows).get(product.id) ?? [],
             customFields: presentStorefrontCustomFields(productFieldRows),
             variantCustomFields: groupStorefrontCustomFields(variantFieldRows),
+            kitRows: kitRows ?? [],
+            kitMediaRows: kitMediaRows ?? [],
         };
     });
     // Files the blocks show: a third-wave read, only when a block names one.
@@ -502,6 +522,25 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
     );
     const typedVariants = marketPage.variants;
     const pricedProduct = marketPage.product;
+    // Kits (its own kit SKUs and theirs) and the SKUs placed under its offers, priced in the page's market.
+    const pageKits = withKits
+        ? resolveProductPageKits(content.kitRows, content.kitMediaRows, {
+            market: pageMarket,
+            storeIncrementMinor: storeCurrency.priceIncrementMinor,
+            decimalPlaces,
+            translation,
+            ownKitPrices: new Map((variants as VariantResult[]).map((variant) => [variant.id, {
+                priceMinor: pageSkuBuyerMinor({
+                    ...variant,
+                    productId: product.id,
+                    productDiscountType: product.discountType,
+                    productDiscountBps: product.discountBps,
+                    productDiscountAmountMinor: product.discountAmountMinor,
+                }, pageMarket, storeCurrency.priceIncrementMinor),
+                lowStockThreshold: variant.lowStockThreshold,
+            }])),
+        })
+        : { kits: new Map<string, StorefrontKit>(), placedOffers: [] };
     const productImage = resolveProductImageRepresentation(mediaItems);
     const publicMedia = mediaItems.map((item) => ({
         id: item.id,
@@ -536,6 +575,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
 
     const formattedVariants = typedVariants.map((variant) => {
         const { warrantyMode: _warrantyMode, ownWarranty: _ownWarranty, ...sku } = variant;
+        const kit = pageKits.kits.get(variant.id) ?? null;
+        // A kit's stock facts are its items' (`buyerStockColumns`): its band comes out as any SKU's.
         const v = maskPublicBuyerAvailability(normalizeDefaultSkuOptions(
             presentCatalogPrice(sku, decimalPlaces),
         ));
@@ -553,6 +594,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             deletedAt: v.deletedAt ? unixToDate(v.deletedAt)?.toISOString() : null,
             /** This SKU's effective warranty (an id in `product.warranties`); null without one. */
             warrantyId: effectiveWarrantyId(variant),
+            /** A kit's contents, its price against them and its band; null for a SKU that is not a kit. */
+            kit,
         };
     });
     const productPrice = presentCatalogPrice(pricedProduct, decimalPlaces);
@@ -592,6 +635,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             contentBlocks: content.blocks.blocks,
             /** The ready files those blocks name. */
             contentBlockMedia: blockMedia satisfies ProductPageBlockMedia[],
+            /** SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU). */
+            placedOffers: pageKits.placedOffers,
             /** Active quantity tiers, priced by checkout exactly as shown. */
             bundles: content.bundles.map((tier) => presentProductBundleTier(
                 priced && tier.discountType === "fixed_price" ? { ...tier, priceMinor: presentTierPrice(tier.priceMinor) } : tier,

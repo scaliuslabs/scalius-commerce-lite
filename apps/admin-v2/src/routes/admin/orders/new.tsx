@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { OrderForm } from "~/components/admin/OrderForm";
+import { OrderCreateSections } from "~/components/admin/order-form/OrderCreateSections";
 import { customerQueryOptions } from "~/lib/api-query-options/customers";
 import { OrderFormRouteError } from "./-OrderFormRouteError";
 import { pageHead } from "~/i18n/page-titles";
@@ -30,6 +31,7 @@ function NewOrderPage() {
     <OrderForm
       key={data?.id ?? "blank"}
       mode="create"
+      createSections={<OrderCreateSections />}
       defaultValues={data ? { customerName: data.name, customerPhone: data.phone ?? "", customerEmail: data.email } : undefined}
     />
   );

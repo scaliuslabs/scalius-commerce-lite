@@ -261,18 +261,16 @@ const BUDGET_COUNTERS = {
 /** An operation with this many runs is a steady state (an idle hour of cron ticks): its mean is a cost too. */
 const STEADY_RUNS = 30;
 
-/**
- * Rows written and read move a few percent between runs (an event backlog another test left, a clock second),
- * so their budgets carry 5% and one row of headroom: a row more per operation still fails, a stray row does not.
- */
-const withHeadroom = (value) => Math.ceil(value * 1.05 - 1e-6) + 1;
-const ROW_BUDGETS = new Set(["rowsWritten", "rowsRead"]);
-const round2 = (value) => Math.ceil(value * 1.05 * 100 - 1e-6) / 100;
+/** A steady-state mean, a floating point sum: its ceiling to 1/100. */
+const round2 = (value) => Math.ceil(value * 100 - 1e-6) / 100;
 
-/** Source of apps/api/src/testing/free-plan-budgets.ts from a report: each operation's measured counters. */
+/**
+ * Source of apps/api/src/testing/free-plan-budgets.ts from a report: each operation's measured counters, exactly
+ * (every case measures from one checkpoint with a still clock and seeded randomness, so its counters never move).
+ */
 export function budgetsSource(report) {
   const fields = (row) => {
-    const parts = Object.entries(BUDGET_COUNTERS).map(([key, counter]) => `${key}: ${ROW_BUDGETS.has(key) ? withHeadroom(row.counters[counter]) : row.counters[counter]}`);
+    const parts = Object.entries(BUDGET_COUNTERS).map(([key, counter]) => `${key}: ${row.counters[counter]}`);
     if (row.runs >= STEADY_RUNS && row.mean) {
       parts.push(`meanRowsWritten: ${round2(row.mean.d1RowsChanged)}`, `meanRowsRead: ${round2(row.mean.d1RowsRead)}`);
     }

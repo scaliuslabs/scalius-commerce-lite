@@ -4,7 +4,9 @@
 // emails and the CSV export so every surface reads the snapshot the same way.
 import {
     LINE_INPUT_FIELD_TYPES,
+    readOrderLineBundle,
     type LineInputFieldType,
+    type OrderLineBundle,
     type ResolvedLineProperty,
 } from "@scalius/shared/line-properties";
 import { isFulfillmentType, type DeliveryMethodKind, type FulfillmentType } from "@scalius/shared/fulfilment";
@@ -63,6 +65,8 @@ export interface OrderLineFulfilmentFacts {
     propertiesPrice: number;
     propertiesPriceMinor: number;
     baseUnitPriceMinor: number | null;
+    /** The bundle the line was bought in (a store kit or an app's), as apps read it; null for a plain line. Only when asked for. */
+    bundle?: OrderLineBundle | null;
 }
 
 export interface OrderLineFulfilmentRow {
@@ -71,6 +75,8 @@ export interface OrderLineFulfilmentRow {
     properties: string | null;
     propertiesPriceMinor: number | null;
     baseUnitPriceMinor: number | null;
+    /** The line's quantity, to read its bundle (its units are read against it); absent: no bundle is read. */
+    bundleQuantity?: number;
 }
 
 export function presentOrderLineFulfilment(
@@ -88,6 +94,7 @@ export function presentOrderLineFulfilment(
         propertiesPrice: fromMinor(propertiesPriceMinor, decimalPlaces),
         propertiesPriceMinor,
         baseUnitPriceMinor: row.baseUnitPriceMinor ?? null,
+        ...(row.bundleQuantity === undefined ? {} : { bundle: readOrderLineBundle(row.properties, row.bundleQuantity) }),
     };
 }
 

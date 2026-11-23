@@ -161,7 +161,7 @@ export const SECTION_CONTENT: Record<StorefrontSectionType, SectionContent> = {
       cards: [
         { title: "Track your order", text: "Enter your phone number and order number", href: "/track-order" },
         { title: "Find a store", text: "Dhanmondi, Uttara, Chattogram", href: "/pages/stores" },
-        { title: "Warranty claims", text: "Start a claim online", href: "/warranty-claims" },
+        { title: "Warranty claims", text: "Start a claim online", href: "/account/warranties" },
         { title: "Gift cards", text: "Check your balance", href: "/gift-card-balance" },
       ],
     },

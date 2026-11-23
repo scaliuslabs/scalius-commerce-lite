@@ -168,7 +168,9 @@ const orderLineSchema = z.object({
   bundle: z.object({
     id,
     title: text,
-    kind: z.enum(["expand", "merge"]),
+    kind: z.enum(["expand", "merge", "kit"]),
+    /** A kit's own SKU and product (`kind: "kit"`, the store's kit sold as its items); null for an app's bundle. */
+    kit: z.object({ variantId: id, productId: id }).nullable(),
     anchor: z.boolean(),
     units: z.number().int().positive().nullable(),
     perUnit: z.number().int().positive().nullable(),

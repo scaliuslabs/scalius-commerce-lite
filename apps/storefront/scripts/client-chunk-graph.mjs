@@ -59,7 +59,15 @@ export const FORBIDDEN_RUNTIMES = {
 export const HEAVY_TABLES = {
   "the plan profile table (@scalius/shared/plan-limits)": (code) => /algorithm:`pbkdf2-sha256`/.test(code) || /sameOriginMedia:!?[01]/.test(code),
   "the English checkout catalogue (@scalius/shared/checkout-language)": (code) => /checkoutSectionTitle:`Checkout information`/.test(code),
+  // Came in through the cart store's line bound (0.7 KiB gzip of the product
+  // page's first paint until 2026-11-23): pages read rows (add-on-totals.ts).
+  "the add-on summary folding (@scalius/shared/add-on-folding)": holdsAddOnFolding,
 };
+
+/** The add-on folding (a server's and a receipt's code): no buyer page's first paint or first add to cart carries it. */
+function holdsAddOnFolding(code) {
+  return code.includes("[add-ons] the lines' add-ons exceed their subtotal");
+}
 
 /** The static import chain from `roots` to `target`, as chunk names (shortest). */
 export function importChain(graph, roots, target) {
@@ -463,6 +471,12 @@ export function buyerPageProblems(graph, budgets = BUDGET_GZIP_KIB) {
       }
     }
     const { chunks: afterAdd } = graph.withLazy(firstPaint, ADD_TO_CART_LAZY_CHUNKS);
+    // The drawer draws the check's add-on rows as they are: the folding never loads with the first add either.
+    for (const id of afterAdd) {
+      if (!firstPaint.has(id) && holdsAddOnFolding(graph.chunk(id).code)) {
+        fail(`heavy:${page}`, `the ${page} page's first add to cart downloads the add-on summary folding (@scalius/shared/add-on-folding) in ${chunkName(id)}: the drawer reads rows from add-on-totals.ts`);
+      }
+    }
     for (const found of forbiddenRuntimes(graph, afterAdd)) fail(`runtimes:${page}`, `first paint or the first add to cart downloads ${found}`);
     const others = [...graph.lazyLoads(afterAdd)].filter(([target]) =>
       OTHER_ACTION_LAZY_CHUNKS.some((name) => chunkName(target).startsWith(`${name}.`)));

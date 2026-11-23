@@ -4,6 +4,7 @@
  * They live apart from the catalog's revision conflicts so the product and
  * customer pages do not carry them.
  */
+import { kitLineRefusalOf } from "./kit-line-refusal-reason";
 import { readAdminApiError } from "./admin-api-error";
 
 export type AdminOrderCreateRequestMismatch =
@@ -137,6 +138,25 @@ export function readManualOrderItemIssues(error: unknown): ManualOrderItemIssue[
     if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || typeof message !== "string") return [];
     return [{ index, code: typeof code === "string" ? code : "", message }];
   });
+  return issues.length > 0 ? issues : null;
+}
+
+/**
+ * An amendment that changed a bundle's lines in part (`kit_amended_in_part`) as
+ * one reason on each of the bundle's lines in the form (`details.orderItemIds`
+ * are the saved lines; the form's lines carry them), worded `message` (the
+ * dashboard's sentence, loaded when the refusal arrives).
+ */
+export function readKitAmendedInPartIssues(
+  error: unknown,
+  lines: ReadonlyArray<{ orderItemId?: string | null }>,
+  message: string,
+): ManualOrderItemIssue[] | null {
+  const refusal = kitLineRefusalOf(error);
+  if (refusal?.reason !== "kit_amended_in_part") return null;
+  const named = new Set(refusal.orderItemIds);
+  const issues = lines.flatMap((line, index): ManualOrderItemIssue[] =>
+    line.orderItemId && named.has(line.orderItemId) ? [{ index, code: refusal.reason, message }] : []);
   return issues.length > 0 ? issues : null;
 }
 

@@ -183,6 +183,7 @@ async function loadRetainedUnitPrices(db: Database, orderId: string) {
     const rows = await db.select({
         id: orderItems.id,
         variantId: orderItems.variantId,
+        quantity: orderItems.quantity,
         unitPriceMinor: orderItems.unitPriceMinor,
         fulfillmentType: orderItems.fulfillmentType,
         properties: orderItems.properties,
@@ -413,7 +414,8 @@ export async function confirmManualOrderAmendment(
     const existingById = new Map(existingItems.map((item) => [item.id, item]));
     const retainedIds = new Set<string>();
     const preparedItems = prepared.trackedItems.map((item, index) => {
-        const requested = data.items[index]!;
+        // The lines as asked for, a kit's line as its items (aligned with the priced lines).
+        const requested = prepared.inputItems[index]! as { orderItemId?: string | null };
         const existing = requested.orderItemId
             ? existingById.get(requested.orderItemId)
             : undefined;

@@ -663,6 +663,21 @@ const CACHE_DEP_TABLE_RULES = {
   product_rich_content: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
   product_content_blocks: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
   product_bundles: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
+  variant_components: {
+    kinds: ["p"],
+    noise: ["created_at"],
+    note: "A kit's components (0224) are its product page's contents. A page that shows a kit (its own SKU or a placed offer) declares the kit's product and each component's product, so a component's price, band or status reaches it through that product's own key.",
+    rules: everyChange([{
+      prefix: "p:",
+      lookup: { table: "product_variants", select: "product_id", key: "id", column: "kit_variant_id" },
+    }]),
+  },
+  product_page_offers: {
+    kinds: ["p"],
+    noise: ["created_at"],
+    note: "The SKUs a product page shows under its own (0224); the placed SKUs' products are declared by the page that shows them.",
+    rules: everyChange([p("product_id")]),
+  },
   product_reviews: {
     kinds: ["p"],
     // `app_id` (0204) names the app that wrote a review; no page shows it, and it never changes.

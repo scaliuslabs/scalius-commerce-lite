@@ -14,6 +14,7 @@ import {
   resolveSkuImageRepresentation,
   selectCheckoutProductMediaProjectionRows,
   channelOnHandSql,
+  buyerStockColumns,
 } from "../products";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
@@ -735,10 +736,9 @@ export async function getStorefrontProductSection(
                 sku: productVariants.sku,
                 priceMinor: productVariants.priceMinor,
                 // The units the online store sells (its linked locations' on-hand).
-                stock: channelOnHandSql({ id: sql`${productVariants.id}`, stock: sql`${productVariants.stock}` }).mapWith(Number),
-                reservedStock: productVariants.reservedStock,
+                // A kit's stock is its items' (`buyerStockColumns`), any other SKU's its own.
+                ...buyerStockColumns(),
                 isDefault: productVariants.isDefault,
-                trackInventory: productVariants.trackInventory,
                 lowStockThreshold: effectiveLowStockThresholdSql(),
                 barcode: productVariants.barcode,
                 barcodeType: productVariants.barcodeType,

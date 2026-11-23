@@ -45,7 +45,7 @@ export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Rend
 export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
 export {
   BuyForm, BuyFormPart, CartCount, Deferred, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, ProductModule, Recommendations, Reviews, Slot, Toolbar,
-  accountLink, asset, buyVariant, chooseVariant, colorSchemeToggle, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, whenSignedIn, whenSignedOut,
+  accountLink, asset, buyOffer, buyVariant, chooseVariant, colorSchemeToggle, editable, menuDrawer, openCart, quickAdd, searchForm, searchOpener, stickyHeader, whenSignedIn, whenSignedOut,
 } from "./components";
 export { currencyDecimalPlaces, formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
 /** The product modules `<ProductModule name="…" />` can place: the theme's own module ids. */
@@ -58,6 +58,8 @@ export { STOREFRONT_BUY_FORM_OPTION_LAYOUTS } from "@scalius/shared/plugins/stor
 export { STOREFRONT_WARRANTY_DURATION_UNITS, STOREFRONT_WARRANTY_PROVIDERS } from "@scalius/shared/plugins/storefront-protocol";
 /** The kinds of a card's typed facts (`card.cardFacts`). */
 export { STOREFRONT_CARD_FACT_KINDS } from "@scalius/shared/plugins/storefront-protocol";
+/** How a kit's item reaches the buyer (`kit.components[].delivery`), and what a gallery item is (`media[].kind`): lists that grow at their end. */
+export { STOREFRONT_KIT_DELIVERY_KINDS, STOREFRONT_PLACED_KIT_ITEMS_MAX, STOREFRONT_PRODUCT_MEDIA_KINDS } from "@scalius/shared/plugins/storefront-protocol";
 /** The budgets the packer, the upload and the storefront hold a render to (`islandPropsBytes`, `htmlBytes`, …). */
 export { STOREFRONT_COMPONENT_LIMITS } from "@scalius/shared/plugins/storefront-protocol";
 /** The most product suggestions one `context.searchSuggestions` call answers. */
@@ -100,6 +102,14 @@ export type {
   StorefrontWarrantyProvider,
   StorefrontCardFactKind,
   StorefrontWarranty,
+  StorefrontAvailability,
+  StorefrontKit,
+  StorefrontKitComponent,
+  StorefrontKitDelivery,
+  StorefrontPlacedOffer,
+  StorefrontProductMedia,
+  StorefrontProductMediaKind,
+  StorefrontRoutes,
   StorefrontProductError,
   StorefrontProductPage,
   StorefrontProductSlot,

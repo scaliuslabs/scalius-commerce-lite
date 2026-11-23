@@ -35,7 +35,9 @@ import { readCheckoutCopy } from "./store-copy";
 import {
   applyAppPaymentMethodOperations,
   applyAppShippingRateOperations,
+  appCartFactIds,
   appCartMarketCountry,
+  appLineTargets,
   buildAppFunctionCart,
   functionStoreCurrency,
   APP_COMMITS_CONFLICT_REASON,
@@ -48,6 +50,7 @@ import {
   platformDiscountClasses,
   resolveAppDiscounts,
   wantsAppCart,
+  type AppCartLineSource,
   type AppDiscountResolution,
   type AppliedAppDiscount,
   type AppObjectCommit,
@@ -244,6 +247,87 @@ function safeAppCart(build: () => FunctionCart): FunctionCart | null {
   }
 }
 
+/** A validated line as promotions read it. */
+type PromotionLineSource = Pick<StorefrontCartValidationResult["items"][number], "index" | "productId" | "variantId" | "unitPriceMinor" | "quantity" | "isGiftCard" | "bundle">;
+
+/**
+ * The cart's lines as the store's promotions read them, by tax allocation
+ * line id: what each line is charged, and for a kit's line the kit it was
+ * bought as (`pricedAs`: promotions judge the kit, its product and SKU, its
+ * quantity, at its price). Gift cards are
+ * marked (outside every promotion). One builder for the quote, the order,
+ * the agent quote and the cart's discount preview.
+ */
+export function promotionCartLines(items: readonly PromotionLineSource[]) {
+  return items.map((item) => ({
+    id: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
+    productId: item.productId,
+    variantId: item.variantId,
+    unitPriceMinor: item.unitPriceMinor,
+    quantity: item.quantity,
+    // Gift-card lines are outside every promotion (§4.2).
+    ...(item.isGiftCard ? { giftCard: true } : {}),
+    ...(item.bundle?.kit && item.bundle.units
+      ? { pricedAs: { id: item.bundle.id, productId: item.bundle.kit.productId, variantId: item.bundle.kit.variantId, quantity: item.bundle.units } }
+      : {}),
+  }));
+}
+
+/**
+ * The store's own discounts on a priced cart: its promotions and codes, then
+ * quantity bundles, whichever saves more (`resolveBundlePromotionInterplay`).
+ * The one authority the checkout price, the agent quote and the cart's
+ * discount preview call.
+ */
+export async function quotePlatformDiscount(
+  db: Database,
+  input: {
+    items: readonly (PromotionLineSource & { bundleDiscountMinor?: number })[];
+    currency: { code: string; priceIncrementMinor: number };
+    money?: PresentmentMoney;
+    codes: readonly string[];
+    customerId?: string | null;
+    segmentCustomerId?: string | null;
+    customerPhone?: string | null;
+    shippingMinor: number;
+    shippingShares?: Array<{ profileId: string; amountMinor: number }>;
+    shippingKnown?: boolean;
+  },
+): Promise<{ typed: StorefrontDiscountQuote; lineIds: string[] } & BundlePromotionInterplay> {
+  const lines = promotionCartLines(input.items);
+  const discount = await quoteStorefrontDiscount(db, {
+    codes: [...input.codes],
+    customerId: input.customerId,
+    segmentCustomerId: input.segmentCustomerId ?? null,
+    customerPhone: input.customerPhone,
+    ...(input.shippingKnown === undefined ? {} : { shippingKnown: input.shippingKnown }),
+    cart: {
+      currencyCode: input.currency.code,
+      priceIncrementMinor: input.currency.priceIncrementMinor,
+      // Shop-currency amounts of a promotion convert at the locked rate (Shopify).
+      ...(input.money && input.money.currencyCode !== input.money.shopCurrencyCode ? { money: input.money } : {}),
+      lines,
+      shippingAmountMinor: input.shippingMinor,
+      // One default-profile share is the whole charge: nothing for an exclusion to split.
+      ...(input.shippingShares && input.shippingShares.some((share) => share.profileId !== DEFAULT_SHIPPING_PROFILE_ID) ? { shippingShares: input.shippingShares } : {}),
+    },
+  });
+  // Promotions or quantity bundles price the order, never both (bundle-discounts.ts).
+  return {
+    typed: discount,
+    lineIds: lines.map((line) => line.id),
+    ...resolveBundlePromotionInterplay(
+      input.items.map((item, position) => ({
+        lineId: lines[position]!.id,
+        unitPriceMinor: item.unitPriceMinor,
+        quantity: item.quantity,
+        bundleDiscountMinor: item.bundleDiscountMinor ?? 0,
+      })),
+      discount,
+    ),
+  };
+}
+
 export async function priceStorefrontCheckout(
   db: Database,
   input: StorefrontCheckoutPricingInput,
@@ -254,47 +338,17 @@ export async function priceStorefrontCheckout(
   const apps = input.apps;
   const lineIds = cartValidation.items.map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId));
 
-  const platformPricing = async (shippingMinor: number, shippingShares?: Array<{ profileId: string; amountMinor: number }>) => {
-    const discount = await quoteStorefrontDiscount(db, {
-      codes: [...input.discountCodes],
-      customerId: input.customerId,
-      segmentCustomerId: input.segmentCustomerId ?? null,
-      customerPhone: input.customerPhone,
-      cart: {
-        currencyCode: currency.code,
-        priceIncrementMinor: currency.priceIncrementMinor,
-        // Shop-currency amounts of a promotion convert at the locked rate (Shopify).
-        ...(cartValidation.money && cartValidation.money.currencyCode !== cartValidation.money.shopCurrencyCode
-          ? { money: cartValidation.money }
-          : {}),
-        lines: cartValidation.items.map((item, position) => ({
-          id: lineIds[position]!,
-          productId: item.productId,
-          variantId: item.variantId,
-          unitPriceMinor: item.unitPriceMinor,
-          quantity: item.quantity,
-          // Gift-card lines are outside every promotion (§4.2).
-          ...(item.isGiftCard ? { giftCard: true } : {}),
-        })),
-        shippingAmountMinor: shippingMinor,
-        // One default-profile share is the whole charge: nothing for an exclusion to split.
-        ...(shippingShares && shippingShares.some((share) => share.profileId !== DEFAULT_SHIPPING_PROFILE_ID) ? { shippingShares } : {}),
-      },
-    });
-    // Promotions or quantity bundles price the order, never both (bundle-discounts.ts).
-    return {
-      typed: discount,
-      ...resolveBundlePromotionInterplay(
-        cartValidation.items.map((item, position) => ({
-          lineId: lineIds[position]!,
-          unitPriceMinor: item.unitPriceMinor,
-          quantity: item.quantity,
-          bundleDiscountMinor: item.bundleDiscountMinor ?? 0,
-        })),
-        discount,
-      ),
-    };
-  };
+  const platformPricing = (shippingMinor: number, shippingShares?: Array<{ profileId: string; amountMinor: number }>) => quotePlatformDiscount(db, {
+    items: cartValidation.items,
+    currency: { code: currency.code, priceIncrementMinor: currency.priceIncrementMinor },
+    money: cartValidation.money,
+    codes: input.discountCodes,
+    customerId: input.customerId,
+    segmentCustomerId: input.segmentCustomerId ?? null,
+    customerPhone: input.customerPhone,
+    shippingMinor,
+    shippingShares,
+  });
 
   let shippingMinor = delivery.shippingMinor;
   let shippingMethod = delivery.shippingMethod;
@@ -318,8 +372,8 @@ export async function priceStorefrontCheckout(
       : null;
     const [facts, rateOptions] = await Promise.all([
       loadAppFunctionCartFacts(db, {
-        productIds: cartValidation.items.map((item) => item.productId),
-        variantIds: cartValidation.items.map((item) => item.variantId),
+        // Each kit's own SKU and product too: the buyer-facing points see a kit as one line.
+        ...appCartFactIds(cartValidation.items),
         customerId: input.customerId,
         // An order that ships nothing is placed in its billing country, where it is taxed.
         marketCountry: appCartMarketCountry(appDestination, input.billing?.countryCode),
@@ -332,7 +386,8 @@ export async function priceStorefrontCheckout(
       wantsRates ? listRateOptions(db, input) : Promise.resolve([] as CheckoutRateOption[]),
     ]);
     const platformLine = new Map((platform.allocation?.lines ?? []).map((line) => [line.lineId, line.amountMinor]));
-    appCart = safeAppCart(() => buildAppFunctionCart({
+    const appCartOf = (kits: "line" | "items") => safeAppCart(() => buildAppFunctionCart({
+      kits,
       currency,
       // Without a market's money the cart is in the store's own currency.
       storeCurrency: cartValidation.money ? functionStoreCurrency(cartValidation.money) : input.currency,
@@ -356,23 +411,22 @@ export async function priceStorefrontCheckout(
       discountCodes: input.discountCodes,
       attributes: input.attributes,
     }));
+    // What the buyer chose and pays (a kit one line); shipping reads the items, each naming its kit.
+    appCart = appCartOf("line");
     const cart = appCart;
+    const itemCart = cartValidation.items.some((item) => item.bundle?.kit) ? appCartOf("items") : cart;
     // One wave of app calls: every point sees the same cart.
     const [validations, discounts, rates] = !cart ? [[], [], []] as const : await Promise.all([
       apps.points.has("cart.validate") ? apps.run("cart.validate", { cart, contact: input.contact ?? null }) : Promise.resolve([]),
       apps.points.has("checkout.discounts") ? apps.run("checkout.discounts", { cart }) : Promise.resolve([]),
-      wantsRates && rateOptions.length > 0
+      wantsRates && rateOptions.length > 0 && itemCart
         ? apps.run("checkout.shipping_rates", {
-          cart,
+          cart: itemCart,
           rates: rateOptions.slice(0, 50).map((rate) => ({ rateId: rate.rateId, name: rate.name.slice(0, 80), amountMinor: rate.amountMinor, kind: rate.kind })),
         })
         : Promise.resolve([]),
     ]);
-    ruleErrors = collectCheckoutRuleErrors(
-      validations,
-      new Map(cartValidation.items.map((item, position) => [lineIds[position]!, { index: item.index, cartKey: item.cartKey ?? null }])),
-      apps,
-    );
+    ruleErrors = collectCheckoutRuleErrors(validations, appLineTargets(cartValidation.items, lineIds), apps);
 
     if (rates.length > 0 && shippingMethod) {
       const adjusted = applyAppShippingRateOperations(rateOptions, rates, currency.priceIncrementMinor, apps);
@@ -414,6 +468,7 @@ export async function priceStorefrontCheckout(
           grossMinor: item.unitPriceMinor * item.quantity,
           platformDiscountMinor: platformLines.get(lineIds[position]!) ?? 0,
           giftCard: item.isGiftCard,
+          ...(item.bundle?.kit ? { kit: item.bundle.id } : {}),
         })),
         shippingMinor,
         platformShippingDiscountMinor: platform.allocation?.shippingMinor ?? 0,
@@ -555,8 +610,7 @@ export async function checkStorefrontCartRules(
     ? { country: input.delivery.address?.countryCode ?? null, city: input.delivery.cityName, zone: input.delivery.zoneName }
     : null;
   const facts = await loadAppFunctionCartFacts(db, {
-    productIds: cartValidation.items.map((item) => item.productId),
-    variantIds: cartValidation.items.map((item) => item.variantId),
+    ...appCartFactIds(cartValidation.items),
     customerId: input.customerId,
     marketCountry: appCartMarketCountry(destination),
     market: cartValidation.marketContext,
@@ -591,18 +645,15 @@ export async function checkStorefrontCartRules(
   if (!cart) return [];
   input.onCart?.(cart);
   if (!apps?.points.has("cart.validate")) return [];
-  return collectCheckoutRuleErrors(
-    await apps.run("cart.validate", { cart, contact: null }),
-    new Map(cartValidation.items.map((item, position) => [lineIds[position]!, { index: item.index, cartKey: item.cartKey ?? null }])),
-    apps,
-  );
+  return collectCheckoutRuleErrors(await apps.run("cart.validate", { cart, contact: null }), appLineTargets(cartValidation.items, lineIds), apps);
 }
 
 /**
- * The cart's discount preview (`POST /discounts/validate`) with the apps'
- * discounts stacked the way checkout stacks them. Prices are the cart's own
- * (a preview); the checkout quote is authoritative. Null when no app
- * implements `checkout.discounts` (no read, no call).
+ * The cart's discounts before checkout (the cart check's, a buyer agent's
+ * cart) with the apps' discounts stacked the way checkout stacks them. Prices
+ * are the cart's own; the checkout quote is authoritative. Given the cart's
+ * destination, attributes, buyer and line facts, apps see the cart the quote
+ * shows them. Null when no app implements `checkout.discounts` (no read, no call).
  */
 export async function previewStorefrontAppDiscounts(
   db: Database,
@@ -613,7 +664,17 @@ export async function previewStorefrontAppDiscounts(
     currency: PricingCurrency;
     /** The store's own currency (`functionStoreCurrency(money)`), which a market's preview is not in. */
     storeCurrency: { code: string; decimalPlaces: number };
-    lines: ReadonlyArray<{ lineId: string; productId: string; variantId: string; unitPriceMinor: number; quantity: number; giftCard?: boolean }>;
+    lines: ReadonlyArray<{
+      lineId: string; productId: string; variantId: string; unitPriceMinor: number; quantity: number; giftCard?: boolean;
+      /** The line's bundle: a store kit's item lines are one line to apps. */
+      bundle?: AppCartLineSource["bundle"];
+    } & Partial<Pick<AppCartLineSource, "title" | "properties" | "purchaseOptions" | "adjustments">>>;
+    /** Where the cart ships (`AppCartDestinationSource`); absent: not known yet. */
+    destination?: Parameters<typeof buildAppFunctionCart>[0]["destination"];
+    attributes?: Record<string, string>;
+    /** The signed-in buyer (their facts) and the segments that price the cart. */
+    customerId?: string | null;
+    segmentIds?: readonly string[];
     platformAllocation: TaxDiscountAllocationInput | undefined;
     /** The classes the platform's discounts applied in (`platformDiscountClasses`); absent: read from the allocation. */
     platformClasses?: ReturnType<typeof platformDiscountClasses>;
@@ -626,32 +687,38 @@ export async function previewStorefrontAppDiscounts(
   const { apps } = input;
   if (!apps?.points.has("checkout.discounts") || input.lines.length === 0) return null;
   const facts = await loadAppFunctionCartFacts(db, {
-    productIds: input.lines.map((line) => line.productId),
-    variantIds: input.lines.map((line) => line.variantId),
-    // Use the same selected market as the preview's prices when known.
-    marketCountry: null,
+    ...appCartFactIds(input.lines),
+    customerId: input.customerId,
+    marketCountry: appCartMarketCountry(input.destination ?? null),
+    // The validated cart's market, so facts read the market its prices are in.
     market: input.marketContext,
     apps,
     points: ["checkout.discounts"],
+    attributes: input.attributes,
   });
   const platformLines = new Map((input.platformAllocation?.lines ?? []).map((line) => [line.lineId, line.amountMinor]));
   const cart = safeAppCart(() => buildAppFunctionCart({
     currency: input.currency,
     storeCurrency: input.storeCurrency,
     channel: input.channel ?? "online_store",
+    ...(input.segmentIds ? { segmentIds: input.segmentIds } : {}),
     lines: input.lines.map((line) => ({
       lineId: line.lineId,
       productId: line.productId,
       variantId: line.variantId,
-      title: "",
+      title: line.title ?? "",
       quantity: line.quantity,
       unitPriceMinor: line.unitPriceMinor,
       discountMinor: platformLines.get(line.lineId) ?? 0,
-      properties: [],
+      properties: line.properties ?? [],
+      ...(line.purchaseOptions ? { purchaseOptions: line.purchaseOptions } : {}),
+      bundle: line.bundle ?? null,
+      ...(line.adjustments ? { adjustments: line.adjustments } : {}),
     })),
     facts,
-    destination: null,
+    destination: input.destination ?? null,
     discountCodes: input.discountCodes,
+    attributes: input.attributes,
   }));
   if (!cart) return null;
   return resolveAppDiscounts({
@@ -662,6 +729,7 @@ export async function previewStorefrontAppDiscounts(
       grossMinor: line.unitPriceMinor * line.quantity,
       platformDiscountMinor: platformLines.get(line.lineId) ?? 0,
       giftCard: line.giftCard,
+      ...(line.bundle?.kit && line.bundle.id ? { kit: line.bundle.id } : {}),
     })),
     shippingMinor: input.shippingMinor,
     platformShippingDiscountMinor: input.platformAllocation?.shippingMinor ?? 0,

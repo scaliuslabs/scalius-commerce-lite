@@ -39,3 +39,5 @@ export * from "./invoices/printable-artifact";
 export * from "./fulfilment-reads";
 export * from "./holds";
 export * from "./line-types";
+// The buyer's rows of an order (a kit's split item is one), for buyer reads outside this domain.
+export { buyerLineUnitPrice, foldBuyerOrderLines } from "../order-kernel";

@@ -305,9 +305,12 @@ export function createScanEstimator(sqlite: DatabaseSync): ScanEstimator {
 }
 
 /** FREE_PLAN_BUDGET_TRACE=1 prints every D1 call's statements (one line each) to stderr. */
-function trace(call: number, queries: ReadonlyArray<string | undefined>): void {
+function trace(call: number, queries: ReadonlyArray<string | undefined>, results: readonly unknown[]): void {
   if (process.env.FREE_PLAN_BUDGET_TRACE !== "1") return;
-  const lines = queries.map((query) => `    ${(query ?? "?").replace(/\s+/g, " ").slice(0, 160)}`);
+  const lines = queries.map((query, index) => {
+    const written = (results[index] as { meta?: { rows_written?: number } } | undefined)?.meta?.rows_written;
+    return `    ${written ? `[${written} written] ` : ""}${(query ?? "?").replace(/\s+/g, " ").slice(0, 160)}`;
+  });
   process.stderr.write(`[d1 #${call}${queries.length > 1 ? ` batch ${queries.length}` : ""}]\n${lines.join("\n")}\n`);
 }
 
@@ -339,9 +342,10 @@ export function meterD1(
           c.d1Calls += 1;
           c.d1Statements += 1;
           const query = (target as { query?: string }).query;
-          trace(c.d1Calls, [query]);
+          const call = c.d1Calls;
           const pending = timedEngine(clock, () => (value as AnyFn).apply(target, args)) as Promise<unknown>;
           return pending.then((result) => {
+            trace(call, [query], [result]);
             c.d1RowsChanged += rowsChanged(result);
             read(query, result);
             return result;
@@ -361,9 +365,10 @@ export function meterD1(
           const c = counters();
           c.d1Calls += 1;
           c.d1Statements += statements.length;
-          trace(c.d1Calls, statements.map((statement) => (statement as { query?: string }).query));
+          const call = c.d1Calls;
           const pending = timedEngine(clock, () => target.batch(statements)) as Promise<unknown[]>;
           return pending.then((results) => {
+            trace(call, statements.map((statement) => (statement as { query?: string }).query), results);
             results.forEach((result, index) => {
               c.d1RowsChanged += rowsChanged(result);
               read((statements[index] as { query?: string } | undefined)?.query, result);
@@ -388,8 +393,7 @@ export function meterD1(
 
 // ── R2 ──────────────────────────────────────────────────────────────────────
 
-export function meterR2(counters: () => FreePlanCounters): R2Bucket {
-  const objects = new Map<string, Uint8Array>();
+export function meterR2(counters: () => FreePlanCounters, objects = new Map<string, Uint8Array>()): R2Bucket {
   const bump = (): void => { counters().r2Ops += 1; };
   const bucket = {
     head: async (key: string) => { bump(); return objects.has(key) ? { key, size: objects.get(key)!.byteLength } : null; },
@@ -466,6 +470,10 @@ export interface FreePlanMeter {
   readonly ctx: ExecutionContext;
   /** Await the `waitUntil` work of unmetered setup, so it does not run into the next measurement. */
   settle(): Promise<void>;
+  /** Whether a measurement is running (its `waitUntil` work belongs to it). */
+  readonly measuring: boolean;
+  /** Remember the Cache API entries and R2 objects; the returned function puts them back. */
+  checkpoint(): () => void;
   /**
    * Run `operation`, await everything it scheduled with `waitUntil`, and
    * return the counters it produced (counters restart for every call).
@@ -487,9 +495,11 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
   const counters = () => current;
   const clock: EngineClock = { engineMicros: 0 };
   const pending: Promise<unknown>[] = [];
+  let measuring = false;
   const limiter = { limit: async () => ({ success: true }) };
   const cache = meterCache(counters);
   const named = new Map<string, MeteredCache>();
+  const objects = new Map<string, Uint8Array>();
   const caches = {
     default: cache,
     async open(name: string) {
@@ -505,7 +515,7 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
   const scan = options.sqlite ? createScanEstimator(options.sqlite) : undefined;
   const bindings = {
     DB: meterD1(options.d1, counters, clock, scan),
-    BUCKET: meterR2(counters),
+    BUCKET: meterR2(counters, objects),
     RL_STRICT: limiter,
     RL_STANDARD: limiter,
   } as unknown as FreePlanMeter["bindings"];
@@ -523,9 +533,24 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
     caches,
     service: (binding) => meterService(binding, counters),
     ctx,
+    get measuring() { return measuring; },
     async settle() {
       for (let index = 0; index < pending.length; index += 1) await pending[index];
       pending.length = 0;
+    },
+    checkpoint() {
+      const every = () => new Map<string, MeteredCache>([...named, ["", cache]]);
+      const copy = (entries: ReadonlyMap<string, Response>) => [...entries].map(([key, response]) => [key, response.clone()] as const);
+      const entries = new Map([...every()].map(([name, opened]) => [name, new Map(copy(opened.entries))]));
+      const stored = new Map(objects);
+      return () => {
+        for (const [name, opened] of every()) {
+          opened.entries.clear();
+          for (const [key, response] of copy(entries.get(name) ?? new Map())) opened.entries.set(key, response);
+        }
+        objects.clear();
+        for (const [key, bytes] of stored) objects.set(key, bytes);
+      };
     },
     async measure<T>(operation: () => Promise<T>) {
       current = emptyCounters();
@@ -541,6 +566,7 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
         return answer(new Request(input, init));
       }) as typeof fetch;
       const changesBefore = totalChanges();
+      measuring = true;
       const cpuStart = process.cpuUsage();
       const wallStart = performance.now();
       try {
@@ -554,6 +580,7 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
         // Setup for the next run uses these bindings too; freeze this invocation's report.
         return { value, counters: { ...current } };
       } finally {
+        measuring = false;
         globalThis.fetch = originalFetch;
         (globalThis as { caches?: unknown }).caches = originalCaches;
       }

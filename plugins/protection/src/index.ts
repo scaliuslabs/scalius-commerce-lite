@@ -348,7 +348,7 @@ const itemUnitMinor = (line: OrderRead["lines"][number]) =>
  */
 function protectedUnitsOf(line: OrderRead["lines"][number], lines: OrderRead["lines"]) {
   const bundle = line.bundle;
-  if (bundle?.kind === "expand" && bundle.anchor && bundle.units !== null && bundle.perUnit !== null) {
+  if ((bundle?.kind === "expand" || bundle?.kind === "kit") && bundle.anchor && bundle.units !== null && bundle.perUnit !== null) {
     const members = lines.filter((member) => member.bundle?.id === bundle.id);
     const whole = members.every((member) => member.bundle!.perUnit !== null);
     return {

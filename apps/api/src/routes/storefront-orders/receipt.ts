@@ -1,6 +1,6 @@
 // Order lookup OTP, the guest receipt, and the account-owner receipt proof.
 import { checkoutAttributeAppsSchema } from "../../schemas/checkout-attribute-apps";
-import { readCheckoutAttributeApps } from "@scalius/core/modules/order-kernel";
+import { buyerLineUnitPrice, foldBuyerOrderLines, readCheckoutAttributeApps } from "@scalius/core/modules/order-kernel";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { orders, orderItems, media } from "@scalius/database/schema";
 import { listOrderDiscountLines } from "@scalius/core/modules/promotions";
@@ -51,6 +51,7 @@ import {
   presentShippingMethodKind,
 } from "@scalius/core/modules/orders/browser";
 import {
+  buyerLineIdsSchema,
   buyerOrderFulfilmentSchema,
   orderFulfilmentShape,
   orderLineFulfilmentShape,
@@ -169,6 +170,7 @@ const orderReceiptSchema = z.object({
   updatedAt: z.string().nullable(),
   items: z.array(z.object({
     id: z.string(),
+    lineIds: buyerLineIdsSchema,
     productId: z.string(),
     variantId: z.string().nullable(),
     quantity: z.number(),
@@ -327,6 +329,10 @@ app.openapi(orderLookupStatusRoute, async (c) => {
   const [items, { tracking }, identity] = await Promise.all([
     db
       .select({
+        id: orderItems.id,
+        variantId: orderItems.variantId,
+        properties: orderItems.properties,
+        unitPriceMinor: orderItems.unitPriceMinor,
         productName: orderItems.productName,
         variantLabel: orderItems.variantLabel,
         quantity: orderItems.quantity,
@@ -361,7 +367,8 @@ app.openapi(orderLookupStatusRoute, async (c) => {
       total: money.totalAmount,
       paid: money.paidAmount,
       balanceDue: money.balanceDue,
-      items: items.map((item) => ({
+      // A kit's item split into two lines is one row (`foldBuyerOrderLines`).
+      items: foldBuyerOrderLines(items).map((item) => ({
         productName: item.productName,
         variantLabel: item.variantLabel,
         quantity: item.quantity,
@@ -723,7 +730,11 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       giftCardTenders,
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
-      items: items.map(({
+      // A kit's item split into two lines is one row (`foldBuyerOrderLines`).
+      items: foldBuyerOrderLines(items, {
+        sum: ["lineSubtotalMinor", "discountAmountMinor", "taxableAmountMinor", "taxAmountMinor", "fulfilledQuantity"],
+        perUnit: ["baseUnitPriceMinor"],
+      }).map(({
         productImageObjectKey,
         productImageStatus,
         fulfillmentType,
@@ -731,6 +742,8 @@ app.openapi(getOrderReceiptRoute, async (c) => {
         properties,
         propertiesPriceMinor,
         baseUnitPriceMinor,
+        unitsTotalMinor,
+        bundle: _bundle,
         ...item
       }) => withOrderLineExtras({
         ...item,
@@ -741,7 +754,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
           propertiesPriceMinor,
           baseUnitPriceMinor,
         }, order.currencyDecimalPlaces),
-        price: fromMinor(item.unitPriceMinor, order.currencyDecimalPlaces),
+        price: buyerLineUnitPrice({ ...item, unitsTotalMinor }, order.currencyDecimalPlaces),
         productImage:
           productImageObjectKey &&
           (productImageStatus === "ready" || productImageStatus === "trashed")

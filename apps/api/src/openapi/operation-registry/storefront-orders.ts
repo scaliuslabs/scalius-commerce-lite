@@ -80,12 +80,6 @@ export const STOREFRONT_ORDER_OPERATIONS = {
   "storefront.delivery.set": { revision: "required" },
   "storefront.discount.apply": { revision: "required" },
   "storefront.discount.remove": { revision: "required" },
-  "storefront.discounts_validate.validate": {
-    exposure: "excluded",
-    risk: "read",
-    reason:
-      "Legacy browser helper accepts client-asserted cart values and buyer phone; use storefront.discount.apply against the server-owned context cart.",
-  },
   "storefront.locations.area_summaries": { limits: { request: 16_384, response: 32_768 } },
   "storefront.locations.areas": {
     exposure: "excluded",

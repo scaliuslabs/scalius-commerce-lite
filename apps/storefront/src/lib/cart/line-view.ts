@@ -276,9 +276,9 @@ export function cartLineIssues<Issue extends CartValidationIssue>(
 }
 
 /**
- * The lines the store's discount preview prices on both surfaces: the
- * estimate's lines (a sold-out line left out, a short one at what is left),
- * in the one order. The preview answers each line's share by position.
+ * The lines the estimate counts on both surfaces: a sold-out line left out,
+ * a short one at what is left, in the one order. The cart check's discounts
+ * name each line's share; a line it cannot sell has none.
  */
 export function cartPreviewLines(
   items: Record<string, CartItem>,

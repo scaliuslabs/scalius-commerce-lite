@@ -10,11 +10,14 @@ import type {
   StorefrontFooterData,
   StorefrontHeaderData,
   StorefrontImage,
+  StorefrontKit,
   StorefrontLink,
   StorefrontListingPage,
   StorefrontMenuItem,
   StorefrontMoney,
+  StorefrontPlacedOffer,
   StorefrontProductCard,
+  StorefrontProductMedia,
   StorefrontProductPage,
   StorefrontRenderJob,
   StorefrontResolvedSettings,
@@ -24,8 +27,8 @@ import type {
   StorefrontTile,
   StorefrontWarranty,
 } from "@scalius/shared/plugins/storefront-protocol";
-import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_SECTION_SKIN_PROJECTIONS } from "@scalius/shared/plugins/storefront-protocol";
-import { STOREFRONT_CORE_ROUTES, STOREFRONT_SEARCH_SCOPE_PARAM as SEARCH_SCOPE_PARAM } from "@scalius/shared/storefront-routes";
+import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_PLACED_KIT_ITEMS_MAX, STOREFRONT_SECTION_SKIN_PROJECTIONS } from "@scalius/shared/plugins/storefront-protocol";
+import { STOREFRONT_SEARCH_SCOPE_PARAM as SEARCH_SCOPE_PARAM, storefrontThemeRoutes } from "@scalius/shared/storefront-routes";
 import {
   HOME_PRODUCT_LIST_LIMIT,
   coreSectionSkinSettings,
@@ -56,6 +59,7 @@ import type {
   SocialLink,
   StorefrontCustomField,
 } from "@/lib/api";
+import type { StorefrontKit as ProductKit, StorefrontPlacedOffer as ProductPlacedOffer } from "@/lib/api/types";
 import type { StorefrontBusinessInfo } from "@/lib/commerce-structured-data";
 import { productCardModel, type ProductCardModel, type ProductCardProduct } from "@/components/cards/card-model";
 import { socialProfileIconUrl } from "@/components/footer/footer-model";
@@ -196,14 +200,7 @@ export function headerData(input: {
     menu: menuItems(sourceNavigation(resolved.blocks.navigation.source as NavigationSource, input.navigation, nodes)),
     categories: menuItems(navigationFromCategoryTree(nodes)),
     announcement: text ? { text, url: typeof settings.link === "string" && settings.link ? settings.link : null } : null,
-    routes: {
-      home: STOREFRONT_CORE_ROUTES.home,
-      search: STOREFRONT_CORE_ROUTES.search,
-      cart: STOREFRONT_CORE_ROUTES.cart,
-      account: STOREFRONT_CORE_ROUTES.account,
-      orders: STOREFRONT_CORE_ROUTES.orders,
-      trackOrder: STOREFRONT_CORE_ROUTES.trackOrder,
-    },
+    routes: storefrontThemeRoutes(),
     searchParam: "q",
     searchScopes,
     searchScopeParam: SEARCH_SCOPE_PARAM,
@@ -316,7 +313,7 @@ export function footerData(input: {
     menus: input.menus.map((menu) => ({ title: menu.title, items: menuItems(menu.links) })).filter((menu) => menu.items.length > 0),
     policies: input.policies.filter((policy) => policy.path.startsWith("/")).map((policy) => ({ title: policy.title, url: policy.path })),
     newsletter: true,
-    routes: { home: "/", newsletter: "/newsletter" },
+    routes: { ...storefrontThemeRoutes(), newsletter: "/newsletter" },
     year: new Date().getUTCFullYear(),
   };
 }
@@ -336,6 +333,58 @@ export function storefrontMoneyOf(money: CustomFieldMoney, page: StorefrontPageM
 /** A page-currency amount as the API reads it (decimal major units) as protocol money. */
 function pageAmount(amount: number, page: StorefrontPageMoney): StorefrontMoney {
   return storefrontMoneyOf({ amountMinor: toMinor(Math.max(0, amount), getDecimalPlaces(page.currencyCode)), currency: page.currencyCode }, page);
+}
+
+/** A product page's own path from its handle. */
+const productPath = (slug: string) => `/products/${encodeURIComponent(slug)}`;
+
+/**
+ * A kit as a skin gets it (`StorefrontKit`), from the product read's: its
+ * items in the page's language with their pictures, its price, compare-at
+ * and saving in the page's currency, and its band.
+ */
+export function storefrontKitOf(kit: ProductKit, page: StorefrontPageMoney): StorefrontKit {
+  return {
+    components: kit.components.map((item) => ({
+      productId: item.productId,
+      variantId: item.variantId,
+      title: item.productName,
+      url: item.productSlug ? productPath(item.productSlug) : null,
+      image: item.imageUrl ? storefrontImageOf({ url: item.imageUrl, alt: item.imageAlt || item.productName }) : null,
+      options: item.options.map(({ name, value }) => ({ name, value })),
+      quantity: item.quantity,
+      delivery: item.delivery,
+      price: pageAmount(item.price, page),
+    })),
+    componentCount: kit.componentCount,
+    unavailableItems: kit.unavailableItems,
+    price: pageAmount(kit.price, page),
+    compareAt: pageAmount(kit.compareAtPrice, page),
+    saving: pageAmount(kit.saving, page),
+    savingPercent: Math.max(0, Math.trunc(kit.savingPercent)),
+    availability: kit.availabilityBand,
+  };
+}
+
+/** A placed offer as a skin gets it (`StorefrontPlacedOffer`): what it is, its price and band, and its contents when a kit. */
+export function storefrontPlacedOfferOf(offer: ProductPlacedOffer, page: StorefrontPageMoney): StorefrontPlacedOffer {
+  // A host page's offer is a summary: its kit's first items (its own page lists them all).
+  const kit = offer.kit ? storefrontKitOf({ ...offer.kit, components: offer.kit.components.slice(0, STOREFRONT_PLACED_KIT_ITEMS_MAX) }, page) : null;
+  return {
+    productId: offer.productId,
+    variantId: offer.variantId,
+    title: offer.productName,
+    url: productPath(offer.productSlug),
+    sku: offer.sku.trim() || null,
+    options: offer.options.map(({ name, value }) => ({ name, value })),
+    image: offer.imageUrl ? storefrontImageOf({ url: offer.imageUrl, alt: offer.imageAlt || offer.productName }) : null,
+    price: pageAmount(offer.price, page),
+    compareAt: offer.compareAtPrice !== null && offer.compareAtPrice > offer.price ? pageAmount(offer.compareAtPrice, page) : null,
+    available: offer.availabilityBand !== "out_of_stock",
+    needsChoices: offer.requiresCustomization,
+    availability: offer.availabilityBand,
+    kit,
+  };
 }
 
 /** A custom field value as apps get it: money (and lists of it) with the store's text; anything else as the API sent it. */
@@ -479,11 +528,13 @@ export function productPageData(input: {
     const { compareAt } = priceLineClaim({ current, regular, from });
     return compareAt === null ? null : amount(compareAt);
   };
-  const media = productGalleryItems(product, input.media).flatMap((item) => {
+  // The gallery's items in its order: a photo, or a video's poster with its file (a video without a poster is left out).
+  const media = productGalleryItems(product, input.media).flatMap((item): StorefrontProductMedia[] => {
     const url = item.kind === "video" ? item.posterUrl : item.url;
     const source = input.media.find((each) => each.id === item.id);
     const image = url ? storefrontImageOf({ url, alt: item.altText, width: source?.width ?? null, height: source?.height ?? null }) : null;
-    return image ? [image] : [];
+    if (!image) return [];
+    return [{ ...image, kind: item.kind, video: item.kind === "video" ? { url: item.url, durationMs: source?.durationMs ?? null } : null }];
   }).slice(0, PRODUCT_PAGE_MEDIA_MAX);
   const bands = input.variants.map((variant) => variant.availabilityBand ?? resolveBuyerAvailabilityBand(variant));
   const availability = BAND_ORDER.find((band) => bands.includes(band)) ?? "out_of_stock";
@@ -492,7 +543,7 @@ export function productPageData(input: {
   const emi = product.emi;
   // A product without options sells one SKU: its code is the product's.
   const only = input.options.length === 0 && input.variants.length === 1 ? input.variants[0] : undefined;
-  return {
+  const projection = {
     product: {
       id: product.id,
       title: product.name,
@@ -533,8 +584,10 @@ export function productPageData(input: {
           warrantyId: perSku.byVariant[variant.id] ?? null,
           // The SKU's storefront-visible custom fields (an app's own per-SKU flag), from the product read already made.
           fields: storefrontFieldValues(variant.customFields, page),
+          kit: variant.kit ? storefrontKitOf(variant.kit, page) : null,
         };
       }),
+      placedOffers: (product.placedOffers ?? []).map((offer) => storefrontPlacedOfferOf(offer, page)),
       warranties,
       fields: storefrontFieldValues(product.customFields, page),
       breadcrumbs: input.breadcrumbs,
@@ -555,7 +608,21 @@ export function productPageData(input: {
         keySpec: row.keySpec,
       })),
     },
-  };
+  } satisfies StorefrontProductPage as StorefrontProductPage;
+  // The details tabs the store's description module draws, as data a skin builds one tab set from:
+  // sanitized when a skin or an app first reads them (its job's JSON), never on a page only core draws,
+  // whose description module sanitizes them itself.
+  const tabs = product.additionalInfo ?? [];
+  Object.defineProperty(projection.product, "tabs", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      const value = tabs.flatMap((tab) => (tab.title.trim() && tab.content ? [{ title: tab.title.trim(), html: sanitizeHtml(tab.content) }] : []));
+      Object.defineProperty(projection.product, "tabs", { value, enumerable: true, configurable: true, writable: true });
+      return value;
+    },
+  });
+  return projection;
 }
 
 /** A listing page's projection (`StorefrontListingPage`): what a listing_main skin gets. */

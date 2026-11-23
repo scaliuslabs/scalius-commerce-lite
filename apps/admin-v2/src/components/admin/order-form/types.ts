@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
 import { z } from "zod";
 import { adminPhoneSchema } from "~/lib/admin-phone-schema";
@@ -65,6 +66,8 @@ export interface OrderItem {
   properties?: LinePropertyInput[];
   /** Display only: the inputs as the order will print them, with their surcharges. */
   propertiesDisplay?: ResolvedLineProperty[];
+  /** A saved line sold in a store bundle: the form shows the bundle's lines as one row, changed in whole bundles. Never sent. */
+  bundle?: { id: string; title: string; perUnit: number } | null;
 }
 
 /**
@@ -79,8 +82,17 @@ export type OrderFormMode = "create" | "amend";
  * is converted in it.
  */
 export type OrderFormProps = OrderFormCommonProps & (
-  | { mode: "create"; currencyCode?: never }
-  | { mode: "amend"; currencyCode: string }
+  | {
+      mode: "create";
+      currencyCode?: never;
+      /**
+       * The parts only a new order asks for (app questions, payment, sales
+       * channel: `OrderCreateSections`), handed in by the create route so an
+       * amendment never downloads them.
+       */
+      createSections: ReactNode;
+    }
+  | { mode: "amend"; currencyCode: string; createSections?: never }
 );
 
 interface OrderFormCommonProps {
@@ -168,6 +180,7 @@ export const orderFormSchema = z.object({
         fulfillmentKind: z.enum(["physical", "digital", "service"]).optional(),
         properties: z.array(z.object({ key: z.string(), value: z.string(), revision: z.string().optional() })).max(10).optional(),
         propertiesDisplay: z.array(z.custom<ResolvedLineProperty>()).optional(),
+        bundle: z.object({ id: z.string(), title: z.string(), perUnit: z.number() }).nullable().optional(),
       }),
     )
     .min(1, msg("itemsRequired"))

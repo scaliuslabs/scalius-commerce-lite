@@ -1,3 +1,4 @@
+import { allocateProportionalMinor } from "@scalius/shared/money-allocation";
 import { normalizeDiscountCode } from "@scalius/shared/discount-code";
 import type { Database } from "@scalius/database/client";
 import {
@@ -387,6 +388,72 @@ async function resolveLineCollections(
     return byProduct;
 }
 
+type DiscountCartLine = StorefrontDiscountInput["cart"]["lines"][number];
+
+/**
+ * The cart as promotions judge it: the lines priced as one item (a kit's
+ * component lines) become that item, at their summed price over its quantity
+ * (exact: a kit's shares sum to its price per kit). A group whose sum does
+ * not divide is left as its lines.
+ */
+export function groupPricedAsLines(lines: readonly DiscountCartLine[]): {
+    lines: DiscountCartLine[];
+    groups: Map<string, DiscountCartLine[]>;
+} {
+    const groups = new Map<string, DiscountCartLine[]>();
+    for (const line of lines) {
+        if (!line.pricedAs) continue;
+        groups.set(line.pricedAs.id, [...(groups.get(line.pricedAs.id) ?? []), line]);
+    }
+    const out: DiscountCartLine[] = [];
+    const emitted = new Set<string>();
+    for (const line of lines) {
+        const as = line.pricedAs;
+        if (as && emitted.has(as.id)) continue;
+        const group = as ? groups.get(as.id) : undefined;
+        if (!as || !group) {
+            out.push(line);
+            continue;
+        }
+        const total = group.reduce((sum, member) => sum + member.unitPriceMinor * member.quantity, 0);
+        if (as.quantity < 1 || total % as.quantity !== 0) {
+            groups.delete(as.id);
+            out.push(...group);
+            emitted.add(as.id);
+            continue;
+        }
+        emitted.add(as.id);
+        out.push({ id: as.id, productId: as.productId, variantId: as.variantId, unitPriceMinor: total / as.quantity, quantity: as.quantity });
+    }
+    return { lines: out, groups };
+}
+
+/**
+ * An evaluation's allocations on its lines: one on a priced-as item is split
+ * over the item's lines in proportion to their prices (the conserving
+ * allocator, whole increments when every amount aligns), so each line holds
+ * an ordinary per-line discount row and the totals are unchanged.
+ */
+export function splitPricedAsAllocations(
+    applied: AppliedPromotion,
+    groups: ReadonlyMap<string, readonly DiscountCartLine[]>,
+    incrementMinor: number,
+): AppliedPromotion {
+    const allocations = applied.allocations.flatMap((allocation) => {
+        const members = allocation.lineId ? groups.get(allocation.lineId) : undefined;
+        if (!members) return [allocation];
+        const totals = members.map((member) => member.unitPriceMinor * member.quantity);
+        const aligned = allocation.discountAmountMinor % incrementMinor === 0 && totals.every((total) => total % incrementMinor === 0);
+        const weights = totals.map((total) => BigInt(total));
+        const amounts = allocateProportionalMinor(allocation.discountAmountMinor, weights, aligned ? incrementMinor : 1);
+        const bases = allocateProportionalMinor(allocation.baseAmountMinor, weights);
+        return members.flatMap((member, index) => amounts[index]! > 0
+            ? [{ ...allocation, lineId: member.id, quantity: member.quantity, baseAmountMinor: bases[index]!, discountAmountMinor: amounts[index]! }]
+            : []);
+    });
+    return { ...applied, allocations };
+}
+
 export function buildPromotionTaxAllocation(applied: AppliedPromotion): TaxDiscountAllocationInput {
     const lineAmounts = new Map<string, number>();
     let shippingMinor = 0;
@@ -593,12 +660,15 @@ export async function quoteStorefrontDiscount(
     // Gift-card lines are outside every promotion (Wave B §4.2): no target,
     // no threshold, no share of an order discount. Dropping them here keeps
     // the snapshot (and its commit re-check) to the lines promotions priced.
-    const input: StorefrontDiscountInput = submittedInput.cart.lines.some((line) => line.giftCard === true)
+    const priced: StorefrontDiscountInput = submittedInput.cart.lines.some((line) => line.giftCard === true)
         ? {
             ...submittedInput,
             cart: { ...submittedInput.cart, lines: submittedInput.cart.lines.filter((line) => line.giftCard !== true) },
         }
         : submittedInput;
+    // A line priced as part of an item (a kit) is judged as that item.
+    const pricedAs = groupPricedAsLines(priced.cart.lines);
+    const input: StorefrontDiscountInput = pricedAs.groups.size === 0 ? priced : { ...priced, cart: { ...priced.cart, lines: pricedAs.lines } };
     const codes = normalizeCodes(input.codes);
     const now = input.evaluatedAtEpochSeconds ?? Math.floor(Date.now() / 1_000);
     const { currencyCode } = input.cart;
@@ -644,7 +714,9 @@ export async function quoteStorefrontDiscount(
         },
         candidates: loaded,
     });
-    const applied = evaluation.applied;
+    const applied = evaluation.applied && pricedAs.groups.size > 0
+        ? splitPricedAsAllocations(evaluation.applied, pricedAs.groups, input.cart.priceIncrementMinor)
+        : evaluation.applied;
     const appliedIds = new Set(applied?.discounts.map(({ promotionId }) => promotionId));
     const merchandiseMinor = input.cart.lines.reduce((total, line) => total + line.unitPriceMinor * line.quantity, 0);
     const nonShippingSavings = (applied?.discounts ?? [])
@@ -823,8 +895,9 @@ export async function quoteStorefrontDiscount(
             cart: {
                 currencyCode,
                 priceIncrementMinor: input.cart.priceIncrementMinor,
-                lines: input.cart.lines.map(({ id, productId, variantId, unitPriceMinor, quantity }) => ({
-                    id, productId, variantId, unitPriceMinor, quantity,
+                // The lines as checkout prices them (the commit's re-check groups them again).
+                lines: priced.cart.lines.map(({ id, productId, variantId, unitPriceMinor, quantity, pricedAs: as }) => ({
+                    id, productId, variantId, unitPriceMinor, quantity, ...(as ? { pricedAs: as } : {}),
                 })),
                 shippingAmountMinor: input.cart.shippingAmountMinor,
                 ...(input.cart.money ? { money: input.cart.money } : {}),

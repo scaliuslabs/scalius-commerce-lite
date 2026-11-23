@@ -170,8 +170,8 @@ function LineRow({ line, money, order, returned }: {
   const { item, quantity } = line;
   const saved = resolveSavedOrderMoneySummary(order);
   const lineMoney = resolveSavedOrderLineMoney(item, saved);
-  const unit = lineMoney ? money.minor(lineMoney.unitPriceMinor) : money.major(item.price);
-  const total = lineMoney ? money.minor(lineMoney.unitPriceMinor * quantity) : money.major(item.price * quantity);
+  const unit = lineMoney?.unitPriceMinor != null ? money.minor(lineMoney.unitPriceMinor) : money.major(item.price);
+  const total = lineMoney?.unitPriceMinor != null ? money.minor(lineMoney.unitPriceMinor * quantity) : money.major(item.price * quantity);
   // A free gift reads free, its price struck, as the payment counts it.
   const free = isFreeOrderLine(lineMoney);
   return (

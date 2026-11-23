@@ -197,11 +197,51 @@
                "type": "string",
                "enum": [
                 "expand",
-                "merge"
+                "merge",
+                "kit"
                ]
               },
               "anchor": {
                "type": "boolean"
+              },
+              "kit": {
+               "anyOf": [
+                {
+                 "type": "object",
+                 "properties": {
+                  "variantId": {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 128
+                  },
+                  "productId": {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 128
+                  },
+                  "sku": {
+                   "anyOf": [
+                    {
+                     "type": "string",
+                     "maxLength": 200
+                    },
+                    {
+                     "type": "null"
+                    }
+                   ]
+                  }
+                 },
+                 "required": [
+                  "variantId",
+                  "productId",
+                  "sku"
+                 ],
+                 "additionalProperties": false
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -905,11 +945,51 @@
                "type": "string",
                "enum": [
                 "expand",
-                "merge"
+                "merge",
+                "kit"
                ]
               },
               "anchor": {
                "type": "boolean"
+              },
+              "kit": {
+               "anyOf": [
+                {
+                 "type": "object",
+                 "properties": {
+                  "variantId": {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 128
+                  },
+                  "productId": {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 128
+                  },
+                  "sku": {
+                   "anyOf": [
+                    {
+                     "type": "string",
+                     "maxLength": 200
+                    },
+                    {
+                     "type": "null"
+                    }
+                   ]
+                  }
+                 },
+                 "required": [
+                  "variantId",
+                  "productId",
+                  "sku"
+                 ],
+                 "additionalProperties": false
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -1811,11 +1891,51 @@
                "type": "string",
                "enum": [
                 "expand",
-                "merge"
+                "merge",
+                "kit"
                ]
               },
               "anchor": {
                "type": "boolean"
+              },
+              "kit": {
+               "anyOf": [
+                {
+                 "type": "object",
+                 "properties": {
+                  "variantId": {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 128
+                  },
+                  "productId": {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 128
+                  },
+                  "sku": {
+                   "anyOf": [
+                    {
+                     "type": "string",
+                     "maxLength": 200
+                    },
+                    {
+                     "type": "null"
+                    }
+                   ]
+                  }
+                 },
+                 "required": [
+                  "variantId",
+                  "productId",
+                  "sku"
+                 ],
+                 "additionalProperties": false
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -2592,11 +2712,51 @@
                "type": "string",
                "enum": [
                 "expand",
-                "merge"
+                "merge",
+                "kit"
                ]
               },
               "anchor": {
                "type": "boolean"
+              },
+              "kit": {
+               "anyOf": [
+                {
+                 "type": "object",
+                 "properties": {
+                  "variantId": {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 128
+                  },
+                  "productId": {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 128
+                  },
+                  "sku": {
+                   "anyOf": [
+                    {
+                     "type": "string",
+                     "maxLength": 200
+                    },
+                    {
+                     "type": "null"
+                    }
+                   ]
+                  }
+                 },
+                 "required": [
+                  "variantId",
+                  "productId",
+                  "sku"
+                 ],
+                 "additionalProperties": false
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -3377,11 +3537,51 @@
                "type": "string",
                "enum": [
                 "expand",
-                "merge"
+                "merge",
+                "kit"
                ]
               },
               "anchor": {
                "type": "boolean"
+              },
+              "kit": {
+               "anyOf": [
+                {
+                 "type": "object",
+                 "properties": {
+                  "variantId": {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 128
+                  },
+                  "productId": {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 128
+                  },
+                  "sku": {
+                   "anyOf": [
+                    {
+                     "type": "string",
+                     "maxLength": 200
+                    },
+                    {
+                     "type": "null"
+                    }
+                   ]
+                  }
+                 },
+                 "required": [
+                  "variantId",
+                  "productId",
+                  "sku"
+                 ],
+                 "additionalProperties": false
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -4142,11 +4342,51 @@
                "type": "string",
                "enum": [
                 "expand",
-                "merge"
+                "merge",
+                "kit"
                ]
               },
               "anchor": {
                "type": "boolean"
+              },
+              "kit": {
+               "anyOf": [
+                {
+                 "type": "object",
+                 "properties": {
+                  "variantId": {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 128
+                  },
+                  "productId": {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 128
+                  },
+                  "sku": {
+                   "anyOf": [
+                    {
+                     "type": "string",
+                     "maxLength": 200
+                    },
+                    {
+                     "type": "null"
+                    }
+                   ]
+                  }
+                 },
+                 "required": [
+                  "variantId",
+                  "productId",
+                  "sku"
+                 ],
+                 "additionalProperties": false
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -4922,11 +5162,51 @@
                 "type": "string",
                 "enum": [
                  "expand",
-                 "merge"
+                 "merge",
+                 "kit"
                 ]
                },
                "anchor": {
                 "type": "boolean"
+               },
+               "kit": {
+                "anyOf": [
+                 {
+                  "type": "object",
+                  "properties": {
+                   "variantId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                   },
+                   "productId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                   },
+                   "sku": {
+                    "anyOf": [
+                     {
+                      "type": "string",
+                      "maxLength": 200
+                     },
+                     {
+                      "type": "null"
+                     }
+                    ]
+                   }
+                  },
+                  "required": [
+                   "variantId",
+                   "productId",
+                   "sku"
+                  ],
+                  "additionalProperties": false
+                 },
+                 {
+                  "type": "null"
+                 }
+                ]
                }
               },
               "required": [
@@ -20942,7 +21222,8 @@
    "inputs",
    "purchase_options",
    "stock",
-   "status"
+   "status",
+   "variant_title"
   ],
   "STOREFRONT_BUY_FORM_OPTION_LAYOUTS": [
    "buttons",
@@ -21009,6 +21290,17 @@
    "months",
    "years",
    "lifetime"
+  ],
+  "STOREFRONT_PRODUCT_MEDIA_KINDS": [
+   "image",
+   "video"
+  ],
+  "STOREFRONT_PLACED_KIT_ITEMS_MAX": 6,
+  "STOREFRONT_KIT_DELIVERY_KINDS": [
+   "physical",
+   "service",
+   "digital_key",
+   "digital_file"
   ],
   "STOREFRONT_PRODUCT_ERRORS": [
    "option_required",

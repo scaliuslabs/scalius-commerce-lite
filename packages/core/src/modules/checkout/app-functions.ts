@@ -361,11 +361,86 @@ function functionBundleAnchors(lines: readonly AppCartLineSource[]): Map<string,
   for (const line of lines) {
     const bundle = line.bundle;
     if (!bundle?.id) continue;
-    const perUnit = bundle.kind === "expand" && bundle.units ? line.quantity / bundle.units : Number.POSITIVE_INFINITY;
+    const perUnit = (bundle.kind === "expand" || bundle.kind === "kit") && bundle.units ? line.quantity / bundle.units : Number.POSITIVE_INFINITY;
     const current = anchors.get(bundle.id);
     if (!current || perUnit < current.perUnit) anchors.set(bundle.id, { lineId: line.lineId, perUnit });
   }
   return new Map([...anchors].map(([id, anchor]) => [id, anchor.lineId]));
+}
+
+/**
+ * A cart's lines with each store kit as one line, as the buyer chose and pays
+ * it: the buyer's kit line id (its bundle id), the kit's SKU and product, the
+ * kits bought, the kit's price (its items' line totals over its units, add-ons
+ * included), the platform's discount summed, the bundle's inputs and options.
+ * `members` names each kit line's item lines, for answers to land on them.
+ */
+export function mergeKitLines(lines: readonly AppCartLineSource[]): { lines: AppCartLineSource[]; members: Map<string, string[]> } {
+  const members = new Map<string, string[]>();
+  const groups = new Map<string, AppCartLineSource[]>();
+  for (const line of lines) {
+    const bundle = line.bundle;
+    if (!bundle?.kit || bundle.merged || !bundle.id) continue;
+    groups.set(bundle.id, [...(groups.get(bundle.id) ?? []), line]);
+  }
+  if (groups.size === 0) return { lines: [...lines], members };
+  const merged: AppCartLineSource[] = [];
+  for (const line of lines) {
+    const bundle = line.bundle;
+    const group = bundle?.id ? groups.get(bundle.id) : undefined;
+    if (!group || !bundle?.kit) {
+      merged.push(line);
+      continue;
+    }
+    if (members.has(bundle.id!)) continue;
+    members.set(bundle.id!, group.map((member) => member.lineId));
+    const units = Math.max(1, bundle.units ?? 1);
+    const totalMinor = group.reduce((sum, member) => sum + member.unitPriceMinor * member.quantity, 0);
+    const addOns = new Map<string, { value: string; priceMinor: number; appId?: string }>();
+    for (const member of group) {
+      for (const adjustment of member.adjustments ?? []) {
+        const key = `${adjustment.appId ?? ""}\u0000${adjustment.value}`;
+        const current = addOns.get(key);
+        addOns.set(key, { ...adjustment, priceMinor: (current?.priceMinor ?? 0) + Math.round((adjustment.priceMinor * member.quantity) / units) });
+      }
+    }
+    merged.push({
+      lineId: bundle.id!,
+      productId: bundle.kit.productId,
+      variantId: bundle.kit.variantId,
+      title: bundle.title ?? line.title,
+      quantity: units,
+      unitPriceMinor: Math.round(totalMinor / units),
+      discountMinor: group.reduce((sum, member) => sum + member.discountMinor, 0),
+      properties: [],
+      ...(line.purchaseOptions ? { purchaseOptions: line.purchaseOptions } : {}),
+      bundle: { ...bundle, merged: true, units },
+      ...(addOns.size > 0 ? { adjustments: [...addOns.values()] } : {}),
+    });
+  }
+  return { lines: merged, members };
+}
+
+/** The lines app answers name, by line id: each line's request index and cart key, a kit's one line its first item's. */
+export function appLineTargets(
+  items: ReadonlyArray<{ index: number; variantId: string; cartKey?: string | null; bundle?: { id?: string; kit?: unknown } | null }>,
+  lineIds: readonly string[],
+): Map<string, { index: number; cartKey: string | null }> {
+  const targets = new Map<string, { index: number; cartKey: string | null }>();
+  items.forEach((item, position) => {
+    const target = { index: item.index, cartKey: item.cartKey ?? null };
+    targets.set(lineIds[position]!, target);
+    if (item.bundle?.kit && item.bundle.id && !targets.has(item.bundle.id)) targets.set(item.bundle.id, target);
+  });
+  return targets;
+}
+
+/** The product and SKU ids an app cart's facts are read for: every line's, and each kit's own. */
+export function appCartFactIds(items: ReadonlyArray<{ productId: string; variantId: string; bundle?: { kit?: { productId: string; variantId: string } | null } | null }>) {
+  return {
+    productIds: [...new Set(items.flatMap((item) => [item.productId, ...(item.bundle?.kit ? [item.bundle.kit.productId] : [])]))],
+    variantIds: [...new Set(items.flatMap((item) => [item.variantId, ...(item.bundle?.kit ? [item.bundle.kit.variantId] : [])]))],
+  };
 }
 
 export interface AppCartLineSource {
@@ -388,8 +463,12 @@ export interface AppCartLineSource {
    * component lines after the line's own, as the buyer's line carried them.
    */
   bundle?: {
-    id?: string; title?: string; kind?: "expand" | "merge"; units?: number;
+    id?: string; title?: string; kind?: "expand" | "merge" | "kit"; units?: number | null;
     properties?: ReadonlyArray<{ key: string; value: string; textRevision?: string; revision?: string }>;
+    /** A store kit's own SKU and product: its lines are one line to the buyer-facing functions (`mergeKitLines`). */
+    kit?: { variantId: string; productId: string } | null;
+    /** This line is a kit's one line (merged), not one of its items. */
+    merged?: boolean;
   } | null;
   /** The apps' add-ons priced into `unitPriceMinor` (`lineAdjustmentProperty` entries); absent before pricing. */
   adjustments?: ReadonlyArray<{ value: string; priceMinor: number; appId?: string }>;
@@ -432,9 +511,15 @@ export function buildAppFunctionCart(input: {
   destination: AppCartDestinationSource | null;
   discountCodes: readonly string[];
   attributes?: Record<string, string>;
+  /**
+   * How a store kit reads: `line` (the default), one line, as the buyer chose and pays it (`mergeKitLines`);
+   * `items`, its item lines, each naming the kit (shipping weights, fulfilment).
+   */
+  kits?: "line" | "items";
 }): FunctionCart {
-  const anchors = functionBundleAnchors(input.lines);
-  const lines = input.lines.map((line) => {
+  const sources = input.kits === "items" ? input.lines : mergeKitLines(input.lines).lines;
+  const anchors = functionBundleAnchors(sources);
+  const lines = sources.map((line) => {
     const product = input.facts.products.get(line.productId);
     const variant = input.facts.variants?.get(line.variantId);
     const grossMinor = line.unitPriceMinor * line.quantity;
@@ -466,7 +551,15 @@ export function buildAppFunctionCart(input: {
       // A physical SKU that is not a gift card (the rule `summarizeStorefrontCartFulfilment` reads).
       // Which bundle the line is part of, and whether it is the one line the bundle's answers count on.
       bundle: line.bundle?.id && line.bundle.kind
-        ? { id: line.bundle.id, title: (line.bundle.title ?? "").slice(0, 300), kind: line.bundle.kind, anchor: anchors.get(line.bundle.id) === line.lineId }
+        ? {
+          id: line.bundle.id,
+          title: (line.bundle.title ?? "").slice(0, 300),
+          kind: line.bundle.kit ? "kit" as const : line.bundle.kind,
+          anchor: line.bundle.merged === true || anchors.get(line.bundle.id) === line.lineId,
+          ...(line.bundle.kit
+            ? { kit: { variantId: line.bundle.kit.variantId, productId: line.bundle.kit.productId, sku: input.facts.skus.get(line.bundle.kit.variantId) ?? null } }
+            : {}),
+        }
         : null,
       requiresShipping: (variant?.physical ?? true) && product?.isGiftCard !== true,
       weightGrams: variant?.weightGrams ?? null,
@@ -576,6 +669,8 @@ export function checkoutAppObjectCommits(
 
 export interface AppDiscountLineInput {
   lineId: string;
+  /** A store kit's item line: apps see the kit as one line (this id); its discount lands on the items by what each has left. */
+  kit?: string;
   /** Unit price × quantity. */
   grossMinor: number;
   /** What the platform already took off the line. */
@@ -665,11 +760,22 @@ export function resolveAppDiscounts(input: {
   ].map((discountClass) => ({ discountClass, combinesWith: COMBINES_WITH_EVERYTHING }));
   const remaining = new Map<string, number>();
   const eligible: string[] = [];
+  // A kit's item lines are one target, the kit's line (apps never see its items).
+  const kitItems = new Map<string, string[]>();
   for (const line of input.lines) {
     const left = Math.max(0, line.grossMinor - Math.min(line.grossMinor, Math.max(0, line.platformDiscountMinor)));
     remaining.set(line.lineId, line.giftCard ? 0 : left);
+    if (line.kit) {
+      if (!kitItems.has(line.kit)) eligible.push(line.kit);
+      kitItems.set(line.kit, [...(kitItems.get(line.kit) ?? []), line.lineId]);
+      continue;
+    }
     if (!line.giftCard) eligible.push(line.lineId);
   }
+  const insideKits = new Set([...kitItems.values()].flat());
+  const left = (target: string) => kitItems.has(target)
+    ? kitItems.get(target)!.reduce((sum, lineId) => sum + (remaining.get(lineId) ?? 0), 0)
+    : remaining.get(target) ?? 0;
   let shippingLeft = Math.max(0, input.shippingMinor - Math.min(input.shippingMinor, Math.max(0, input.platformShippingDiscountMinor)));
   const applied: AppliedAppDiscount[] = [];
   const claimed = new Set<string>();
@@ -700,7 +806,8 @@ export function resolveAppDiscounts(input: {
       }
       let targets: string[];
       if (discount.target.kind === "lines") {
-        const unknown = discount.target.lineIds.filter((lineId) => !remaining.has(lineId));
+        // A line apps saw: a target, or a gift card's line; never an item inside a kit.
+        const unknown = discount.target.lineIds.filter((lineId) => !eligible.includes(lineId) && !(remaining.has(lineId) && !insideKits.has(lineId)));
         if (unknown.length > 0) {
           input.apps?.report(result.pluginId, "checkout.discounts", `Discount "${discount.title}" names line ${unknown[0]}, which is not in the cart; it was skipped.`);
           continue;
@@ -710,16 +817,22 @@ export function resolveAppDiscounts(input: {
         targets = eligible;
       }
       const weights = targets
-        .map((lineId) => ({ key: lineId, weightMinor: remaining.get(lineId) ?? 0 }))
+        .map((lineId) => ({ key: lineId, weightMinor: left(lineId) }))
         .filter((weight) => weight.weightMinor > 0);
       const baseMinor = weights.reduce((total, weight) => total + weight.weightMinor, 0);
       const amount = discountAmount(discount.value, discount.maxAmountMinor, baseMinor, input.priceIncrementMinor);
       if (code) claimed.add(code);
       if (amount <= 0) continue;
       const split = allocateMinorAmount(amount, weights, input.priceIncrementMinor);
-      const lines = weights
-        .map((weight) => ({ lineId: weight.key, amountMinor: Math.min(split.get(weight.key) ?? 0, weight.weightMinor) }))
-        .filter((line) => line.amountMinor > 0);
+      // A kit's share lands on its item lines by what each has left, with the same conserving split.
+      const lines = weights.flatMap((weight) => {
+        const share = Math.min(split.get(weight.key) ?? 0, weight.weightMinor);
+        const items = kitItems.get(weight.key);
+        if (!items) return [{ lineId: weight.key, amountMinor: share }];
+        const parts = items.map((lineId) => ({ key: lineId, weightMinor: remaining.get(lineId) ?? 0 })).filter((part) => part.weightMinor > 0);
+        const onItems = allocateMinorAmount(share, parts, 1);
+        return parts.map((part) => ({ lineId: part.key, amountMinor: Math.min(onItems.get(part.key) ?? 0, part.weightMinor) }));
+      }).filter((line) => line.amountMinor > 0);
       for (const line of lines) remaining.set(line.lineId, (remaining.get(line.lineId) ?? 0) - line.amountMinor);
       const total = lines.reduce((sum, line) => sum + line.amountMinor, 0);
       if (total <= 0) continue;
