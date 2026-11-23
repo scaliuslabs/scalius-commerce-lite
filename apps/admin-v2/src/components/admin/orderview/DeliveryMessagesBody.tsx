@@ -14,7 +14,8 @@ import { resourceMessages } from "~/i18n/resource";
 import { apiData } from "~/lib/api";
 import { invalidateOrder, orderErrorMessage, useOrderCommand } from "~/lib/api-mutations/orders";
 import { DeliveryMessageDialog, type RevealedMessage, type SaveMessage } from "./DeliveryMessageDialog";
-import { messagesExpectedOn, type MessageLine } from "./delivery-messages";
+import { messageLinesOf, messagesExpectedOn, type MessageLine } from "./delivery-messages";
+import type { Order } from "./types";
 import { formatOrderTimestamp } from "./formatters";
 
 /**
@@ -22,7 +23,10 @@ import { formatOrderTimestamp } from "./formatters";
  * whether it has one, a link, when it changed; Add, Edit and Remove. The text
  * itself is never here: the dialog reads it back when staff edit.
  */
-export function DeliveryMessagesBody({ orderId, lines }: { orderId: string; lines: MessageLine[] }) {
+export function DeliveryMessagesBody({ order }: { order: Order }) {
+  const orderId = order.id;
+  // Read here, not in the card: the order page loads this file only for staff who write messages.
+  const lines = messageLinesOf(order);
   const t = useMessages(orderDeliveryMessageMessages);
   const r = useMessages(resourceMessages);
   const queryClient = useQueryClient();

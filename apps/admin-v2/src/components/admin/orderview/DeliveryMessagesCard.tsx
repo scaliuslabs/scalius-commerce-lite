@@ -1,6 +1,5 @@
 import { lazy, Suspense } from "react";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
-import { messageLinesOf } from "./delivery-messages";
 import type { Order } from "./types";
 
 // Loaded only for staff who may write the messages.
@@ -13,11 +12,11 @@ const DeliveryMessagesBody = lazy(() => import("./DeliveryMessagesBody").then((m
  */
 export function DeliveryMessagesCard({ order }: { order: Order }) {
   const { canManageDigitalAccess } = useOrderActionPermissions();
-  const lines = messageLinesOf(order);
-  if (!canManageDigitalAccess || lines.length === 0) return null;
+  // Every line can carry a message, so the card has lines whenever the order has items.
+  if (!canManageDigitalAccess || order.items.length === 0) return null;
   return (
     <Suspense fallback={null}>
-      <DeliveryMessagesBody orderId={order.id} lines={lines} />
+      <DeliveryMessagesBody order={order} />
     </Suspense>
   );
 }
