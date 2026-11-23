@@ -203,7 +203,8 @@ export const MUTATIONS = {
   },
   "R5-B1 the seal follows the theme's look": {
     why: "the layout seals the free regions only when the theme compiled a look: its chrome and blocks with none draw unsealed",
-    rewrites: [rewrite(PLAN, '  return served.chrome === "theme" || PRIVATE_PAGE_KEYS.some((page) => {', '  return Boolean(privatePagesCss(theme.privatePages)) && PRIVATE_PAGE_KEYS.some((page) => {')],
+    // Only the fix reverted: the chrome and the blocks still count, the seal waits on a compiled look.
+    rewrites: [rewrite(PLAN, "  const served = servedPrivatePages(theme.privatePages);\n  const holds", "  const served = servedPrivatePages(theme.privatePages);\n  if (!privatePagesCss(theme.privatePages)) return false;\n  const holds")],
     cases: ["review 5, B1: the theme's chrome and a 2000px image block with no look of its own"],
     expect: /not sealed/,
   },
