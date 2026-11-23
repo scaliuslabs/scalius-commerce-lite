@@ -50,16 +50,14 @@ export async function requestPostDeployProjectionRebuild(env: Env): Promise<bool
   const version = env.CF_VERSION_METADATA?.id;
   if (!version) return false;
   const db = getDb(env);
+  if ((await getSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY)) === version) return false;
+  // The theme's private pages, compiled by this version's checker (a buyer's request never compiles,
+  // and serves the default look until this runs or the merchant saves). The version is claimed only
+  // after it succeeds: a failure (a database blip) is tried again on the next run.
+  const { recompilePublishedPrivatePages } = await import("@scalius/core/modules/settings");
+  const outcome = await recompilePublishedPrivatePages(db);
+  if (outcome === "recompiled" || outcome === "refused") console.log(`[scheduled] Private pages compiled for this version: ${outcome}`);
   if (!(await claimSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version))) return false;
-  // The theme's private pages, compiled by this version's checker: a buyer's request never
-  // compiles, and serves the default look until this runs (or the merchant saves).
-  try {
-    const { recompilePublishedPrivatePages } = await import("@scalius/core/modules/settings");
-    const outcome = await recompilePublishedPrivatePages(db);
-    if (outcome === "recompiled" || outcome === "refused") console.log(`[scheduled] Private pages compiled for this version: ${outcome}`);
-  } catch (error) {
-    console.warn("[scheduled] Private pages compile failed", error instanceof Error ? error.name : "unknown");
-  }
   const { catalogProjectionDefinition } = await import("@scalius/core/modules/products");
   const definition = await sha256Hex(catalogProjectionDefinition(db));
   if (!(await claimSystemKv(db, PROJECTION_DEFINITION_KEY, definition))) return false;
