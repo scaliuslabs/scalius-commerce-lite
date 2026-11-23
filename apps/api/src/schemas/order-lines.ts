@@ -221,8 +221,11 @@ export const buyerLineAddOnSchema = z.object({
   details: addOnDetailsSchema.optional(),
 }).openapi("BuyerLineAddOn", { description: "What an app's `cart.line_prices` charged on this row (\"Protection ৳350\"), from the order's real lines." });
 
+/** A buyer's row holds at most two real lines (a split kit item), each with a line's add-ons. */
+const ROW_ADD_ONS_MAX = 2 * LINE_ADD_ONS_MAX;
+
 /** The add-ons of a buyer's row: its lines' (a split kit item is two lines). */
-export const buyerLineAddOnsSchema = z.array(buyerLineAddOnSchema).max(LINE_ADD_ONS_MAX * 2).openapi({
+export const buyerLineAddOnsSchema = z.array(buyerLineAddOnSchema).max(ROW_ADD_ONS_MAX).openapi({
   description: "Every app add-on the row was charged, exactly; empty: none. The app's own line answers are in `properties` (entries with its `appId`); an add-on is never in `properties` unless it is what each unit pays.",
 });
 
