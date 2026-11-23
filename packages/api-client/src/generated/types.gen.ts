@@ -3396,7 +3396,14 @@ export type StorefrontPlacedOffer = {
     imageUrl: string | null;
     imageMediaId: string | null;
     imageAlt: string | null;
+    /**
+     * What it sells; a kit's from its items.
+     */
     fulfillmentKind: string;
+    /**
+     * Paid only online (a key, a download, or a kit holding one): where checkout takes no online payment, its buy action is off, as on its own page.
+     */
+    paidOnlineOnly: boolean;
     /**
      * One unit's price in the page's currency (a kit's: its own price).
      */
@@ -3480,6 +3487,14 @@ export type StorefrontKit = {
      * From its items: as many kits as the scarcest item allows; `out_of_stock` when an item can't be sold.
      */
     availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
+    /**
+     * What it sells, from all its items (never the kit SKU's own setting): physical when any item ships, else digital when any item is, else a service.
+     */
+    fulfillmentKind: 'physical' | 'digital' | 'service';
+    /**
+     * One of its items is paid only online (a key, a download): no cash on delivery or at the service buys it.
+     */
+    paidOnlineOnly: boolean;
 };
 
 export type PublicReviewSummary = {
@@ -22199,6 +22214,10 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                  * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
+                /**
+                 * Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it.
+                 */
+                paidOnlineOnly: boolean;
                 createdAt: string | null;
             }>;
             total: number;
@@ -22546,6 +22565,10 @@ export type GetApiV1ProductsBySlugResponses = {
                  * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
+                /**
+                 * Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it.
+                 */
+                paidOnlineOnly: boolean;
                 /**
                  * Storefront-visible custom fields with a value, in the merchant's order.
                  */

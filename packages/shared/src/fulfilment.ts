@@ -70,6 +70,39 @@ export function allowsCashOnDelivery(lineTypes: readonly (FulfillmentType | null
   return lineTypes.length > 0 && lineTypes.every((type) => type === null || !isAutoFulfillmentType(type));
 }
 
+/**
+ * Whether a SKU is paid only online: a download, a key or a gift card is sent
+ * once the order is paid, so no cash promise buys it (`allowsCashOnDelivery`).
+ * A kit is paid only online when any of its items is.
+ */
+export function paidOnlineOnly(source: { fulfillmentKind: string | null | undefined; isGiftCard?: boolean | null }): boolean {
+  return source.isGiftCard === true || source.fulfillmentKind === "digital";
+}
+
+/**
+ * What a kit sells, from its items (a kit has no fulfilment of its own): it
+ * ships when any item ships, else it is digital when any item is, else a
+ * service. Whether it is paid only online is `paidOnlineOnly` of any item.
+ */
+export function kitFulfillmentKind(itemKinds: readonly (string | null | undefined)[]): FulfillmentKind {
+  if (itemKinds.length === 0 || itemKinds.some((kind) => kind !== "digital" && kind !== "service")) return "physical";
+  return itemKinds.includes("digital") ? "digital" : "service";
+}
+
+/**
+ * The one type a buyer's line shows when it is sold as several lines (a kit,
+ * an app's bundle): one sent after payment (a gift card, a download) refuses
+ * cash for all of it, so it wins; then a physical line (null while it has
+ * no delivery method), then a service.
+ */
+export function strictestFulfillmentType(types: readonly (FulfillmentType | null)[]): FulfillmentType | null {
+  if (types.includes("gift_card")) return "gift_card";
+  if (types.includes("digital")) return "digital";
+  if (types.length === 0 || types.includes(null)) return null;
+  for (const type of ["ship", "pickup"] as const) if (types.includes(type)) return type;
+  return "service";
+}
+
 /** What a sellable line is, as read with its product and variant. */
 export interface FulfilmentLineSource {
   fulfillmentKind: FulfillmentKind;

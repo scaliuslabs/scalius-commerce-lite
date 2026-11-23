@@ -432,8 +432,11 @@ const productDetailVariantSchema = z.object({
   discountType: z.string().nullable(),
   discountPercentage: z.number().nullable(),
   discountAmount: z.number().nullable(),
-  /** physical (shipped or picked up), digital, or service (performed, no delivery). */
+  /** physical (shipped or picked up), digital, or service (performed, no delivery); a kit's from its items. */
   fulfillmentKind: fulfillmentKindSchema,
+  paidOnlineOnly: z.boolean().openapi({
+    description: "Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it.",
+  }),
   customFields: storefrontCustomFieldsSchema,
   /** This SKU's effective warranty: an id in the product's `warranties`, or null without one. */
   warrantyId: z.string().nullable(),

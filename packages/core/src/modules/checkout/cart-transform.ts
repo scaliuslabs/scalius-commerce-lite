@@ -53,6 +53,7 @@ import { LINE_BUNDLE_PROPERTY_KEY, lineAdjustmentProperty, lineBundleProperty, t
 import { aggregateLineAddOns, lineAddOnsOf } from "@scalius/shared/add-on-folding";
 import { and, inArray, isNull, sql } from "drizzle-orm";
 import { fromMinor, toMinor } from "@scalius/shared/money";
+import { strictestFulfillmentType, type FulfillmentType } from "@scalius/shared/fulfilment";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
 import { qualifiedColumn } from "../../utils/qualified-column";
 import { bundleAnchors } from "./app-line-prices";
@@ -442,19 +443,21 @@ export function presentTransformedCart(
 /**
  * `presentTransformedCart` and, per presented line, the position of its
  * (first) rewritten line, to pick per-line facts computed for the rewritten
- * cart (fulfilment types, input hashes).
+ * cart (input hashes), and the positions of all its rewritten lines
+ * (`members`: a kit's fulfilment type is its items', `presentedLineTypes`).
  */
 export function presentTransformedCartLines(
     result: StorefrontCartValidationResult,
     transform: TransformedCart,
     buyerItems: readonly StorefrontCartValidationItem[],
-): { cart: StorefrontCartValidationResult; positions: number[] } {
+): { cart: StorefrontCartValidationResult; positions: number[]; members: number[][] } {
     const decimalPlaces = result.money.decimalPlaces;
     const issues = issuesOnBuyerLines(result.issues, transform, buyerItems);
     const byPosition = new Map(result.items.map((item) => [item.index, item]));
     const expandedSources = new Map(transform.expansions.map((expansion) => [expansion.sourceIndex, expansion]));
     const items: StorefrontCartValidatedItem[] = [];
     const positions = new Map<number, number>();
+    const members = new Map<number, number[]>();
     const seen = new Set<number>();
     for (const item of result.items) {
         const source = item.sourceIndex;
@@ -462,6 +465,7 @@ export function presentTransformedCartLines(
         if (!expansion) {
             items.push({ ...item, index: source });
             positions.set(source, item.index);
+            members.set(source, [item.index]);
             continue;
         }
         if (seen.has(source)) continue;
@@ -500,6 +504,7 @@ export function presentTransformedCartLines(
             continue;
         }
         positions.set(source, first.index);
+        members.set(source, components.map((component) => component.item!.index));
         // The bundle's add-ons on each bundle unit: its anchor carries each at the fee over its units per
         // bundle unit, so the buyer's line shows the fee once ("Protection ৳350" on a box), whichever component is first.
         // Summed by app and title, never one entry per component, and within the one bound a line carries.
@@ -537,7 +542,20 @@ export function presentTransformedCartLines(
     return {
         cart: { ...result, valid: issues.length === 0, issues, items, subtotalMinor },
         positions: items.map((item) => positions.get(item.index)!),
+        members: items.map((item) => members.get(item.index)!),
     };
+}
+
+/**
+ * The fulfilment type of each presented line: the strictest of its rewritten
+ * lines' (`strictestFulfillmentType`), so a kit holding a key reads as paid
+ * online whatever item comes first.
+ */
+export function presentedLineTypes(
+    view: { members: readonly (readonly number[])[] },
+    lineTypes: readonly (FulfillmentType | null)[],
+): Array<FulfillmentType | null> {
+    return view.members.map((positions) => strictestFulfillmentType(positions.map((position) => lineTypes[position] ?? null)));
 }
 
 /**

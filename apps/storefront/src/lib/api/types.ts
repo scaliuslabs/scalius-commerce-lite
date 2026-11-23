@@ -470,8 +470,10 @@ export interface ProductVariant {
   discountType: "percentage" | "flat" | null;
   discountPercentage: number | null;
   discountAmount: number | null;
-  /** physical (shipped or picked up), digital, or service (performed, no delivery). */
+  /** physical (shipped or picked up), digital, or service (performed, no delivery); a kit's from its items. */
   fulfillmentKind?: FulfillmentKind;
+  /** Product page only: paid only online (a key, a download, a gift card, or a kit holding one). */
+  paidOnlineOnly?: boolean;
   /** Product page only: this SKU's warranty, an id in the product's `warranties`; null without one. */
   warrantyId?: string | null;
   /** Product page only: its contents, price against them and band when it is a kit; null otherwise. */

@@ -22,6 +22,7 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { defaultOrderSalesChannelId } from "@scalius/shared/sales-channels";
+import { readOrderLineBundle } from "@scalius/shared/line-properties";
 import { ConflictError, ValidationError } from "../../errors";
 import type { PreparedStockReservationBatch } from "../inventory";
 import {
@@ -175,13 +176,16 @@ function buildReservationItemIssues(
         .map((result) => {
             const index = payload.items.findIndex((item) => item.variantId === result.variantId);
             const item = index >= 0 ? payload.items[index] : undefined;
+            // A kit's item speaks for the kit's line (the buyer bought the kit) and names the item.
+            const kit = item ? readOrderLineBundle(item.properties, item.quantity)?.kit ?? null : null;
             const productName = item?.productName ?? "This item";
             const variantLabel = item?.variantLabel ?? null;
             return {
                 index: index >= 0 ? index : 0,
                 cartKey: item?.cartKey ?? null,
-                productId: item?.productId ?? "",
-                variantId: result.variantId,
+                productId: kit?.productId ?? item?.productId ?? "",
+                variantId: kit?.variantId ?? result.variantId,
+                ...(kit ? { componentVariantId: result.variantId } : {}),
                 code: "quantity_unavailable",
                 action: "remove",
                 message: `${productName}${variantLabel ? ` (${variantLabel})` : ""} is no longer available in the requested quantity.`,
