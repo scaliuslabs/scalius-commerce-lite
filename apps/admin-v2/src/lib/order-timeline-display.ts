@@ -112,8 +112,11 @@ export function describeTimelineEvent(
       // Never the text: only that a line's message was added, changed or removed.
       const change = text(data.change);
       return {
-        text: t(change === "changed" ? "timeline.deliveryMessageChanged" : change === "removed" ? "timeline.deliveryMessageRemoved" : "timeline.deliveryMessageAdded"),
-        detail: data.hasLink === true && change !== "removed" ? t("timeline.deliveryMessageLink") : null,
+        text: t(change === "changed" ? "timeline.deliveryMessageChanged"
+          : change === "removed" ? "timeline.deliveryMessageRemoved"
+            : change === "read" ? "timeline.deliveryMessageRead" : "timeline.deliveryMessageAdded"),
+        detail: text(data.reason) === "line_removed" ? t("timeline.deliveryMessageLineRemoved")
+          : data.hasLink === true && change !== "removed" && change !== "read" ? t("timeline.deliveryMessageLink") : null,
       };
     }
     case "stock_held": {

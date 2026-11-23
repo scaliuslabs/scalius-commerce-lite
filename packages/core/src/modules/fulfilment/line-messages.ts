@@ -3,7 +3,7 @@
 // instruction, an optional https link), as secret as a licence key.
 //
 // - Sealed with the licence keys' envelope under its own purpose key, bound to
-//   the message row and its line (digital/secrets.ts). Plaintext exists only
+//   the message row, its order and its line (digital/secrets.ts). Plaintext exists only
 //   in a write's input and a reveal's answer; nothing here logs it, and the
 //   order timeline records that a message was added, changed or removed, by
 //   whom, and whether it has a link, never its text or link.
@@ -123,6 +123,7 @@ function staffView(row: { id: string; orderItemId: string; revision: number; has
 async function readStoredMessage(db: Database, orderItemId: string) {
     return db.select({
         id: orderLineMessages.id,
+        orderId: orderLineMessages.orderId,
         orderItemId: orderLineMessages.orderItemId,
         ciphertext: orderLineMessages.bodyCiphertext,
         hasLink: orderLineMessages.hasLink,
@@ -188,7 +189,7 @@ export async function setOrderLineMessage(
     const id = stored?.id ?? `olm_${nanoid(24)}`;
     const revision = (stored?.revision ?? 0) + 1;
     const ciphertext = body
-        ? await (await orderLineMessageCrypto(credentialKey)).encrypt(serializeOrderLineMessageBody(body), orderLineMessageBinding(id, lineId))
+        ? await (await orderLineMessageCrypto(credentialKey)).encrypt(serializeOrderLineMessageBody(body), orderLineMessageBinding(id, input.orderId, lineId))
         : null;
     const hasLink = body?.link != null;
     const change = !body ? "removed" : current === 0 ? "added" : "changed";
@@ -230,21 +231,29 @@ export async function setOrderLineMessage(
     return { message: body && saved && saved.removedAt === null ? staffView(saved) : null, changed: true };
 }
 
-/** A line's message in the clear, for staff who may write it (a POST, never cached or logged). */
+/** A line's message in the clear, for staff who may write it (a POST, never cached or logged; the timeline records the read). */
 export async function revealStaffOrderLineMessage(
     db: Database,
     credentialKey: string | undefined,
-    input: { orderId: string; orderItemId: string },
+    input: { orderId: string; orderItemId: string; actorId: string | null },
 ): Promise<{ message: StaffOrderLineMessage; text: string; link: string | null }> {
     const lineId = await messageLineOf(db, input.orderId, input.orderItemId);
     const stored = await readStoredMessage(db, lineId);
     if (!stored || stored.removedAt !== null || !stored.ciphertext) throw messageNotFound();
-    const body = await openMessage(credentialKey, stored.ciphertext, stored.id, stored.orderItemId);
+    const body = await openMessage(credentialKey, stored.ciphertext, stored.id, stored.orderId, stored.orderItemId);
+    // Every staff read leaves its trace (who, when, which line), never the text; no trace, no text.
+    await buildOrderEventInsert(db, {
+        id: newOrderEventId(),
+        orderId: input.orderId,
+        kind: "delivery_message",
+        actorId: input.actorId,
+        data: { orderItemId: lineId, change: "read", hasLink: stored.hasLink },
+    }, sql`1 = 1`).run();
     return { message: staffView(stored), ...body };
 }
 
-async function openMessage(credentialKey: string | undefined, ciphertext: string, id: string, orderItemId: string): Promise<OrderLineMessageBody> {
-    const plain = await (await orderLineMessageCrypto(credentialKey)).decrypt(ciphertext, orderLineMessageBinding(id, orderItemId));
+async function openMessage(credentialKey: string | undefined, ciphertext: string, id: string, orderId: string, orderItemId: string): Promise<OrderLineMessageBody> {
+    const plain = await (await orderLineMessageCrypto(credentialKey)).decrypt(ciphertext, orderLineMessageBinding(id, orderId, orderItemId));
     const body = parseOrderLineMessageBody(plain);
     if (!body) throw new AppError(503, "service_unavailable", "A delivery message could not be read.");
     return body;
@@ -263,10 +272,13 @@ export async function revealBuyerOrderLineMessage(
 ): Promise<{ messageId: string; text: string; link: string | null }> {
     const row = await db.select({
         id: orderLineMessages.id,
+        orderId: orderLineMessages.orderId,
         orderItemId: orderLineMessages.orderItemId,
         ciphertext: orderLineMessages.bodyCiphertext,
     }).from(orderLineMessages)
-        .innerJoin(orders, eq(orders.id, orderLineMessages.orderId))
+        // Through its line: the message's order is its line's order, never its own column alone.
+        .innerJoin(orderItems, and(eq(orderItems.id, orderLineMessages.orderItemId), eq(orderItems.orderId, orderLineMessages.orderId)))
+        .innerJoin(orders, eq(orders.id, orderItems.orderId))
         .where(and(
             eq(orderLineMessages.id, input.messageId),
             isNull(orderLineMessages.removedAt),
@@ -275,7 +287,7 @@ export async function revealBuyerOrderLineMessage(
         ))
         .get();
     if (!row?.ciphertext) throw messageNotFound();
-    const body = await openMessage(credentialKey, row.ciphertext, row.id, row.orderItemId);
+    const body = await openMessage(credentialKey, row.ciphertext, row.id, row.orderId, row.orderItemId);
     return { messageId: row.id, ...body };
 }
 
@@ -299,7 +311,8 @@ export async function listLineMessages(db: Database, input: LineExtrasInput): Pr
     const messages = input.audience === "staff"
         ? await db.select(select).from(orderLineMessages).where(live).all()
         : await db.select(select).from(orderLineMessages)
-            .innerJoin(orders, eq(orders.id, orderLineMessages.orderId))
+            .innerJoin(orderItems, and(eq(orderItems.id, orderLineMessages.orderItemId), eq(orderItems.orderId, orderLineMessages.orderId)))
+            .innerJoin(orders, eq(orders.id, orderItems.orderId))
             .where(and(live, buyerReadableCondition(input.orderId)))
             .all();
     if (messages.length === 0) return result;

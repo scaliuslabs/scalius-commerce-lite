@@ -87,7 +87,7 @@ app.openapi(createRoute({
     operationId: "dashboard.orders.line_message_reveal",
     tags: ["Admin - Orders"],
     summary: "Show a line's delivery message to edit it",
-    description: "The text and link of the line's delivery message, for staff who may write it. Never cached.",
+    description: "The text and link of the line's delivery message, for staff who may write it. Never cached; the order timeline records who read it, never the text.",
     request: { params },
     responses: {
         200: {
@@ -111,6 +111,7 @@ app.openapi(createRoute({
     const revealed = await revealStaffOrderLineMessage(c.get("db"), getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>), {
         orderId: id,
         orderItemId: itemId,
+        actorId: requestActorId(c),
     });
     return ok(c, { message: present(revealed.message), text: revealed.text, link: revealed.link });
 });

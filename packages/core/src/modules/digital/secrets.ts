@@ -144,9 +144,9 @@ export function orderLineMessageCrypto(credentialKey: string | undefined): Promi
     return secretSealer(credentialKey, ORDER_LINE_MESSAGE_CIPHER_PURPOSE, { unavailable: ORDER_LINE_MESSAGES_UNAVAILABLE, unreadable: "A delivery message could not be read." });
 }
 
-/** The associated data of a message: its row and its line, so a ciphertext moved to another row or line does not open. */
-export function orderLineMessageBinding(messageId: string, orderItemId: string): string {
-    return `${messageId}\u0000${orderItemId}`;
+/** The associated data of a message: its row, its order and its line, so a ciphertext moved to another row, order or line does not open. */
+export function orderLineMessageBinding(messageId: string, orderId: string, orderItemId: string): string {
+    return `${messageId}\u0000${orderId}\u0000${orderItemId}`;
 }
 
 // ---------------------------------------------------------------------------
