@@ -1802,6 +1802,155 @@
                   "1440",
                   "full"
                 ]
+              },
+              "pagePaint": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "color"
+                        ]
+                      },
+                      "color": {
+                        "type": "string",
+                        "enum": [
+                          "background",
+                          "foreground",
+                          "card",
+                          "card-foreground",
+                          "popover",
+                          "popover-foreground",
+                          "primary",
+                          "primary-foreground",
+                          "secondary",
+                          "secondary-foreground",
+                          "muted",
+                          "muted-foreground",
+                          "accent",
+                          "accent-foreground",
+                          "destructive",
+                          "destructive-foreground",
+                          "border",
+                          "input",
+                          "ring"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "color"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "linear"
+                        ]
+                      },
+                      "angle": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 359
+                      },
+                      "stops": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "background",
+                            "foreground",
+                            "card",
+                            "card-foreground",
+                            "popover",
+                            "popover-foreground",
+                            "primary",
+                            "primary-foreground",
+                            "secondary",
+                            "secondary-foreground",
+                            "muted",
+                            "muted-foreground",
+                            "accent",
+                            "accent-foreground",
+                            "destructive",
+                            "destructive-foreground",
+                            "border",
+                            "input",
+                            "ring"
+                          ]
+                        },
+                        "minItems": 2,
+                        "maxItems": 4
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "angle",
+                      "stops"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "radial"
+                        ]
+                      },
+                      "at": {
+                        "type": "string",
+                        "enum": [
+                          "top",
+                          "center",
+                          "bottom"
+                        ]
+                      },
+                      "stops": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "background",
+                            "foreground",
+                            "card",
+                            "card-foreground",
+                            "popover",
+                            "popover-foreground",
+                            "primary",
+                            "primary-foreground",
+                            "secondary",
+                            "secondary-foreground",
+                            "muted",
+                            "muted-foreground",
+                            "accent",
+                            "accent-foreground",
+                            "destructive",
+                            "destructive-foreground",
+                            "border",
+                            "input",
+                            "ring"
+                          ]
+                        },
+                        "minItems": 2,
+                        "maxItems": 4
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "at",
+                      "stops"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
               }
             },
             "required": [
@@ -82367,7 +82516,7 @@
                                 "$ref": "#/components/schemas/StorefrontPlacedOffer"
                               },
                               "maxItems": 20,
-                              "description": "SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be sold is left out."
+                              "description": "SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be bought now (out of stock, a draft, unpublished) is left out."
                             },
                             "reviews": {
                               "type": "object",

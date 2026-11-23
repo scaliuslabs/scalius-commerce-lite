@@ -132,7 +132,7 @@ A skin is app markup for a core-owned unit. It gets the unit's public projection
 | `listing_main` | `StorefrontListingPage` | `filters`, `toolbar`, `pagination` (only an omitted `pagination` is appended; place `filters` and `toolbar` yourself) | empty: core |
 | `section:<type>` | `StorefrontSectionSkinData<StorefrontSectionSkinSettings[type]>` | none | empty: the core section |
 
-- **`product_main`** draws the product page's breadcrumbs, gallery and buy box. `<BuyForm />` is the store's real buy form: price, options, buyer inputs, quantity, buttons, delivery facts and the buy-box app components, kept current as the buyer chooses. `<Gallery />` is the theme's gallery (thumbnails and zoom on computers, a swipeable photo on phones, the chosen SKU's photo); its first photo is preloaded. Prefer it to drawing `product.media` yourself. To offer the SKUs your own way, see [Your own SKU controls](#your-own-sku-controls). The skin owns the description (`descriptionHtml`). Reviews and related products a skin places replace the template's modules of the same.
+- **`product_main`** draws the product page's breadcrumbs, gallery and buy box. `<BuyForm />` is the store's real buy form: price, options, buyer inputs, quantity, buttons, delivery facts, the offers placed under the product's own and the buy-box app components, kept current as the buyer chooses. `<Gallery />` is the theme's gallery (thumbnails and zoom on computers, a swipeable photo on phones, the chosen SKU's photo); its first photo is preloaded. Prefer it to drawing `product.media` yourself. To offer the SKUs your own way, see [Your own SKU controls](#your-own-sku-controls). The skin owns the description (`descriptionHtml`). Reviews and related products a skin places replace the template's modules of the same.
 - **Product modules in a skin.** `<ProductModule name="spec_table" />` draws one of the theme template's product modules where the skin puts it, with the store's own renderer, words and scripts, and leaves it out from below. Each renders once, and only when the template has it and the product has something for it; otherwise nothing renders there. Never move the store's markup with an island. The names (`STOREFRONT_PRODUCT_MODULE_EMBEDS`, exported by the SDK) are the theme's own module ids, as a template's `blocks.product.below` lists them:
 
   | Name | Draws | Renders when |
@@ -151,8 +151,9 @@ A skin is app markup for a core-owned unit. It gets the unit's public projection
   - Style the wrapper with `[data-catalog-embed="filters"][data-placement="sidebar"]` and `[data-catalog-embed="filters"][data-placement="bar"]`. A bar spans its row: a skin that puts `<Filters />` in a fixed-width column needs a `[data-placement="bar"]` rule that lets it run across the results.
   - The wrapper carries the style's measured numbers as `--catalog-filter-column` (a sidebar's width), `--catalog-filter-row` (a row's height) and `--catalog-filter-label` (the label size). Read or override them; a missing property means the theme's density token applies.
 - **Core sections.** Each skinnable section type has its own sealed projection (`StorefrontSectionSkinSettings`, `StorefrontHeroSkinSettings`, …) with its own version. Core's stored settings never reach a skin. Images arrive as `StorefrontImage | null`, product sources as `products` (`{ title, url, cards }`), categories and collections as tiles, a promotion as `{ endsAt } | null`. A projection only gains optional fields; when core changes a section, the host adapts it so your input stays the same. `aboveFold` is true for the homepage's lead section: load its first row of photos eagerly. `recently_viewed`, `endless_grid` and `objects` have no skin.
-- **The header** gets menu items (three levels, at most `STOREFRONT_COMPONENT_LIMITS.menuItems`: the store's header menu and category cut fit whole, a larger tree is cut top levels first and a parent's page lists the rest) with their category's photo, `routes.orders` and `routes.trackOrder`, `searchScopes` (the top published categories) with `searchScopeParam` (a form sending `category=<value>` to `routes.search` searches that category, no JavaScript needed), `market` (country, currency, language and the country form's selection), and the theme's phone navigation (`phoneNavigation.menu`: `accordion` or `drill`; `tabBar`). Signed-in state is not data, since one header serves every buyer: mark the two versions with `whenSignedIn()` and `whenSignedOut()` and the store shows the right one before first paint. On the homepage the header also gets `data.page.lead`, the first section when desktop and phone order agree.
-- **The product page** carries `sku` (a product without options), each variant's `sku`, each option value's swatch as the merchant set it in Products (`swatch`, a `#rrggbb` colour, and `swatchImage`, an image from Files; null without one, and never a colour guessed from the value's name), `installments` (`{ provider, months, monthly }`, the cheapest EMI plan) or null, and `specifications`: the specification table's rows in its order (`{ group, label, value, unit, keySpec }`, plain text). `value` is the stored text, canonical data (ASCII digits, a "." decimal): a number already carries its unit ("15.6 inch"), and `unit` names that unit ("inch"; null for other attributes), so never append it again. The store's own table writes a number in the page's digits ("১৫.৬ inch" on a Bangla page). A category listing carries `children` (published child categories with photos).
+- **The header** gets menu items (three levels, at most `STOREFRONT_COMPONENT_LIMITS.menuItems`: the store's header menu and category cut fit whole, a larger tree is cut top levels first and a parent's page lists the rest) with their category's photo, `routes` (below), `searchScopes` (the top published categories) with `searchScopeParam` (a form sending `category=<value>` to `routes.search` searches that category, no JavaScript needed), `market` (country, currency, language and the country form's selection), and the theme's phone navigation (`phoneNavigation.menu`: `accordion` or `drill`; `tabBar`). Signed-in state is not data, since one header serves every buyer: mark the two versions with `whenSignedIn()` and `whenSignedOut()` and the store shows the right one before first paint. On the homepage the header also gets `data.page.lead`, the first section when desktop and phone order agree.
+- **Routes.** A header and a footer get the same `routes` (`StorefrontRoutes`): `home`, `search`, `cart`, `account`, `orders` (the signed-in buyer's orders), `trackOrder` (the guest order lookup), `inbox` (the buyer's messages with the store: a support link) and `warrantyClaims`; the footer also `newsletter`. Link them; never write a path.
+- **The product page** carries `sku` (a product without options), each variant's `sku`, each option value's swatch as the merchant set it in Products (`swatch`, a `#rrggbb` colour, and `swatchImage`, an image from Files; null without one, and never a colour guessed from the value's name), `installments` (`{ provider, months, monthly }`, the cheapest EMI plan) or null, and `specifications`: the specification table's rows in its order (`{ group, label, value, unit, keySpec }`, plain text), each gallery item's `kind` (`image`, or `video` with its file in `video.url` and `video.durationMs`; the item itself is the poster: play the file only on the buyer's press), each kit SKU's contents (`variants[].kit`) and the offers placed under the product's own (`placedOffers`, see [Placed offers and kits](#placed-offers-and-kits)). `value` is the stored text, canonical data (ASCII digits, a "." decimal): a number already carries its unit ("15.6 inch"), and `unit` names that unit ("inch"; null for other attributes), so never append it again. The store's own table writes a number in the page's digits ("১৫.৬ inch" on a Bangla page). A category listing carries `children` (published child categories with photos).
 - **A card** carries `keySpecs` (`{ label, value, unit }`, the same shape), the key specs among its `facts` lines, which the card writes from these rows as `label: value` (a number in the page's digits; the rows stay canonical), and `cardFacts`, its other facts split from them and typed by `kind` (`STOREFRONT_CARD_FACT_KINDS`: `pack_size`, `condition` for a used or refurbished product, `delivery`), each `{ kind, text }` in the store card's own words. Read these instead of splitting `facts`; treat a kind you do not know as text.
 - **Each SKU's warranty.** `product.warranties` lists each warranty policy the SKUs have, once however many SKUs share it: `{ id, name, provider, duration, replacementDays, terms, summary }`, `summary` being the buy form's one line in the page's language. Each SKU names its own by `variants[].warrantyId` (`null` for none). `provider` (`STOREFRONT_WARRANTY_PROVIDERS`) and `duration.unit` (`STOREFRONT_WARRANTY_DURATION_UNITS`) are lists that grow at their end: show `summary` for a value you do not know. To show the chosen SKU's as the buyer chooses, place `<BuyFormPart name="warranty" />`; it opens its terms in place.
 - **Every unit's context** carries `context.store.logo` (`StorefrontImage | null`), the logo the store's header draws, and `context.store.darkLogo`, its version for dark pages (swap them as the header data's `darkLogo` says).
@@ -164,7 +165,8 @@ A skin is app markup for a core-owned unit. It gets the unit's public projection
 
 - Put `stickyHeader()` on the box with `position: sticky` or `fixed`. The host publishes its stuck height as `--header-height`. Use `--scalius-z-header` for its layer and `--scalius-z-content-bar` for subordinate sticky content.
 - `menuDrawer()` marks the header's menu drawer (a `popover` or `<dialog>`); the store's phone tab bar opens it.
-- `searchOpener()` and `accountLink()` opt your controls into the host's search and account actions. Use native buttons or links with real destinations.
+- **Search: one way, the store's.** Put `searchForm(data)` on a `<form>` holding a field named `data.searchParam` (and, for a department search, a select named `data.searchScopeParam` with `data.searchScopes`): a real `GET` form to `routes.search` that searches without JavaScript, whose first typed letters open the store's live search with them (a chosen department submits the form instead). Or put `searchOpener()` on a link to `routes.search` (an icon): it opens the live search. Draw no suggestion list of your own in the header.
+- `accountLink()` opts your account control into the host's sign-in. Use native buttons or links with real destinations.
 - `colorSchemeToggle()` makes a native `<button type="button">` the buyer's light or dark switch. It shows only when the theme offers the switch and JavaScript runs; the host flips `<html data-color-scheme>`, remembers the choice on the buyer's device and keeps the button `aria-pressed` while dark colours show, so give it one stable name ("Dark colours"), not one that flips.
 - Under a header skin the store installs its menu disclosure behaviour: a `button[data-disclosure="popup"][aria-controls]` inside `[data-disclosure-item]` shows and hides its `hidden` panel (click, Enter, Escape, a press outside, hover intent), and a `ul[data-nav-overflow]` row whose items carry `data-nav-index` gets arrow keys. `<html data-nav-disclosure>` appears once it runs.
 - A header that overlays an empty or failed lead must restore solid styling when it sees `data-scalius-lead-empty`.
@@ -285,8 +287,8 @@ The keys of `sections`, `components` and `skins` match the manifest's section ty
 - `Slot`: a unit's component slot, in place.
 - `whenSignedIn()`, `whenSignedOut()`: the two versions of a signed-in part.
 - `quickAdd(product)`, `openCart()`, `CartCount`: the store's cart behaviour with no app JavaScript.
-- `chooseVariant(variant)`, `buyVariant(variant, "add" | "buy")`: your own SKU controls on the product page, run by the store's buy form (below).
-- `searchOpener()`, `accountLink()`, `colorSchemeToggle()`, `menuDrawer()`, `stickyHeader()`: header behaviour (above).
+- `chooseVariant(variant)`, `buyVariant(variant, "add" | "buy")`: your own SKU controls on the product page, run by the store's buy form (below). `buyOffer(offer, "add" | "buy")`: a placed offer's button (below).
+- `searchForm(data)`, `searchOpener()`, `accountLink()`, `colorSchemeToggle()`, `menuDrawer()`, `stickyHeader()`: header behaviour (above).
 - `editable(context, key)`: marks the element that shows a text setting, so the editor edits it in place. Preview only; the published page has no marks.
 - `asset(context, "fonts/display.woff2")`: the URL of a file in your package's `public/` folder. The helper adds `public/` itself, so pass the path inside it.
 - `t(context, { en, bn, … })`: words in the page's language (the exact BCP 47 tag, then its language, then English).
@@ -322,7 +324,7 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 - An island's `props` are at most 16 KiB of JSON (`STOREFRONT_COMPONENT_LIMITS.islandPropsBytes`). Larger props are left out and the island mounts with `props` undefined; `storefrontShown`, `checkSkinHtml` and `pnpm plugin validate` name it. Load more with `fetchApp`, never by hiding data in extra markup.
 - Keep links out of an island's `props`. The store checks every link in your markup and keeps it on the page's market path (`/en-in/…`); a URL in props reaches the island unchecked and unrewritten. Put links in the markup the island enhances (an `<a>` it reads) or pass handles. `pnpm plugin validate` warns ("Island props") when a part's default render passes one.
 - On a product page, `context.product` gives `state()` and `onChange(listener)`, with or without buyer inputs. The state is `{ variantId, quantity, inputs, purchaseOptions, available, busy, error }`: `inputs` holds the product's answers and every app's line inputs (`<app id>.<key>`), `purchaseOptions` the options the buyer chose (one per app, sorted by id; test for yours with `includes`), `available` means the chosen SKU can be bought now, `busy` that an add or Buy now is running, and `error` why the form refused the last one (`StorefrontProductError`, one of `STOREFRONT_PRODUCT_ERRORS`: `option_required`, `input_invalid`, `unavailable`, `quantity_limit`, `failed`; null otherwise). The list only grows, at its end: treat a code you don't know as `failed`. `option_required` and `input_invalid` go when the buyer gives the option or fixes the field; the others go as soon as the buyer changes the SKU, quantity, an answer or the purchase option. A listener runs after the store has applied the change: the form, its SKU field and the gallery already show it, and `state()` equals the listener's state. Between a click and that moment, `state()` still returns what the page shows. To choose or buy from your own markup, use `chooseVariant` and `buyVariant`, not clicks on the form's elements.
-- Predictive search: `context.searchSuggestions(query, { limit?, signal? })` asks the store's own search for product suggestions, as its search palette does, instead of reading a listing page's markup (which another listing skin changes). It answers `StorefrontSearchSuggestion[]` (`productId`, `title`, `url` on this presence, `image` as `StorefrontImage` or `null`, `price` and `compareAt` as `StorefrontMoney` in the page's market and currency, `priceVaries`, `available`), at most `limit` (1 to `STOREFRONT_SEARCH_SUGGESTIONS_MAX`, 7; default 5), from the same public, cached request the palette makes (one per query, shared with it; the page remembers answers, so a repeated query asks nothing). A query too short to search (one Latin letter) answers `[]` and asks nothing; one Bangla, Han or Hangul grapheme that is a word searches. It rejects when the search fails, and `signal` stops waiting. Debounce keystrokes as the palette does (about 150ms). It is absent from older stores: check `context.searchSuggestions` before you call it. In tests, `fixtureSearchSuggestions(store, query, options?)` (from `@scalius/plugin-sdk/storefront/testing`) gives what each fixture store answers.
+- Product suggestions: `context.searchSuggestions(query, { limit?, signal? })` asks the store's own search for product suggestions, as its search palette does, instead of reading a listing page's markup (which another listing skin changes). It is for an island elsewhere on a page (a quick finder in a section), never the header's search: that is the store's live search (`searchForm`, `searchOpener`). It answers `StorefrontSearchSuggestion[]` (`productId`, `title`, `url` on this presence, `image` as `StorefrontImage` or `null`, `price` and `compareAt` as `StorefrontMoney` in the page's market and currency, `priceVaries`, `available`), at most `limit` (1 to `STOREFRONT_SEARCH_SUGGESTIONS_MAX`, 7; default 5), from the same public, cached request the palette makes (one per query, shared with it; the page remembers answers, so a repeated query asks nothing). A query too short to search (one Latin letter) answers `[]` and asks nothing; one Bangla, Han or Hangul grapheme that is a word searches. It rejects when the search fails, and `signal` stops waiting. Debounce keystrokes as the palette does (about 150ms). It is absent from older stores: check `context.searchSuggestions` before you call it. In tests, `fixtureSearchSuggestions(store, query, options?)` (from `@scalius/plugin-sdk/storefront/testing`) gives what each fixture store answers.
 - Buyer events: `context.events.on(name, listener, { replay? })` hears what the buyer does on the page ([Buyer events](#buyer-events)), the same events the store's own tags and app pixels hear, and returns the unsubscribe (the host also ends it when the island is removed). `replay: true` first hands you the page's earlier events (`page_viewed` first). Islands never get contact fields (they read `null`) and hear only their own app's `app_event`s. `context.events.publish(name, payload?)` emits your app's own event (`app_event`, `{ app, name, payload }`): a snake_case name and at most 4 KiB of JSON, heard by your islands and your pixel only; it answers `false` when refused or after removal.
 - `context.visitorId()` is the store's visitor id for [experiments](#experiments): a random id kept in this browser, only while the buyer allows analytics; `null` otherwise.
 - Return a cleanup for your listeners, timers and observers. The host cancels pending hydration on removal and mounts again when the element reconnects.
@@ -420,7 +422,7 @@ The store adds kinds, module names and error codes over time: `StorefrontEmbedKi
 
 | Kind (SDK) | Where | Renders |
 | --- | --- | --- |
-| `buy_form` (`<BuyForm title={false} options={false} actions={false} addLabel="…" buyLabel="…" />`) | `product_main` (required, one) | The real buy form |
+| `buy_form` (`<BuyForm title={false} options={false} actions={false} quantity={false} addLabel="…" buyLabel="…" />`) | `product_main` (required, one) | The real buy form |
 | `buy_form_part` (`<BuyFormPart name="…" layout="…" />`) | `product_main` (each part once) | One of the buy form's parts, drawn where you place it |
 | `gallery` (`<Gallery />`) | `product_main` (one) | The theme's gallery, in step with the chosen variant |
 | `reviews`, `recommendations` | `product_main` | The product's reviews and related products (style the latter by `[data-recs-part]`: `root`, `title`, `list`, and `data-recs-reason` on the root) |
@@ -463,7 +465,35 @@ A card that chooses and buys is a `<div>` holding the choice link and the buy bu
 - Enter in a buyer input or the quantity always adds the buyer's own choice, never one of your buy buttons' SKUs, wherever your buttons and the form's are: the store puts a hidden default submit ahead of your markup whenever you bind a buy button.
 - `optionsLayout` (`STOREFRONT_BUY_FORM_OPTION_LAYOUTS`) draws the form's option controls as `buttons` (the default), `select` (one dropdown per option, sold-out and unavailable values said in their text) or `swatches` (each value's swatch the merchant set in Products, its image or else its colour, and a text button for a value without one; never a colour guessed from the value's name). Each chooses through the form, so you need no `chooseVariant` controls for these layouts; without JavaScript the form's own picker shows instead.
 - `addLabel` and `buyLabel` give the form's buttons your words (60 characters at most, cut between characters as a reader sees them, never inside an emoji or a vowel sign; trimmed), the store's buy bar too; without them the store's own words in the page's language stay. Pass them from a text setting so the merchant words them in their language.
+- `<BuyForm quantity={false} />` leaves the quantity stepper out, a placed one too: each add is one unit, and the buyer changes it in the cart.
 - `data.product.variants` lists every SKU, up to the catalog's 150.
+
+### Placed offers and kits
+
+A merchant can place other products' SKUs under a product's own offers (a kit, a cross-sold SKU). `data.product.placedOffers` lists them in order, at most 20, each a `StorefrontPlacedOffer`: `productId`, `variantId`, `title`, `url`, `sku`, `options`, `image`, `price`, `compareAt` (a kit's items at their prices; null otherwise), `available`, `availability` and `kit`. One that cannot be bought now (out of stock, a draft) is left out. A SKU of the page's own that is a kit has `variants[].kit`.
+
+A kit (`StorefrontKit`) has `components` (each `title`, `url` or null when its page is not public, `image`, `options`, `quantity`, `delivery` and one unit's `price`), `price`, `compareAt`, `saving`, `savingPercent` and `availability`. `delivery` is a kind (`STOREFRONT_KIT_DELIVERY_KINDS`: `physical`, `service`, `digital_key`, `digital_file`): write the words yourself, and say nothing for a kind you do not know.
+
+```tsx
+{data.product.placedOffers?.map((offer) => (
+  <div class="acme-offer">
+    <a href={offer.url}>{offer.title}</a>
+    <Price price={offer.price} compareAt={offer.compareAt} context={context} />
+    {offer.kit && (
+      <details>
+        <summary>{t(context, { en: "What's included", bn: "যা যা থাকছে" })}</summary>
+        <ul>{offer.kit.components.map((item) => <li>{item.title} × {item.quantity}</li>)}</ul>
+      </details>
+    )}
+    <button {...buyOffer(offer, "add")}>{t(context, { en: "Add to cart", bn: "কার্টে যোগ করুন" })}</button>
+    <button {...buyOffer(offer, "buy")}>{t(context, { en: "Buy now", bn: "এখনই কিনুন" })}</button>
+  </div>
+))}
+```
+
+- `buyOffer(offer, "add" | "buy")` goes on a `<button>`. It adds one unit of the offer's own SKU, at the price and availability the store decides; it never takes the page's options, buyer inputs or quantity. Without JavaScript it posts the offer to its product's buy route. The host owns `type`, `form`, `formaction`, `name`, `value`, `disabled` and `aria-busy`; a button naming an offer the page does not carry stays yours, unbound.
+- The store's buy form draws the placed offers itself (an offer row with the contents in a `<details>`), unless your bound `buyOffer` buttons, outside `<Deferred>`, buy every one.
+- A card whose product's SKU is a kit shows the kit's price and band; it does not say "bundle" or the saving (that would cost a read on every card).
 
 ### Placing the buy form's parts
 
@@ -480,6 +510,7 @@ A card that chooses and buys is a `<div>` holding the choice link and the buy bu
 | `purchase_options` | The apps' ways to buy (a subscription); nothing when there are none |
 | `stock` | The chosen SKU's stock line |
 | `status` | Where the form says why it refused an add, announced |
+| `variant_title` | The chosen SKU's name as the cart line reads it ("Linen shirt, Sand / L"; the product's name until one is chosen). Only drawn where you place it |
 
 The part stays the form's: the store draws it with its own markup, words and `data-buy-part`, ties its fields and buttons to the one form (`form=`), and keeps it current as the buyer chooses (price, option states, stock, the chosen SKU's warranty and photo), with and without JavaScript. Nothing moves in the browser, so there is never a second form or a copied button. The form leaves a placed part out. A part placed twice, or without `<BuyForm />`, renders nothing; `options` renders nothing while `options={false}` is honoured. A refused add says why in `status`; when you place `actions` but not `status`, the message shows right above the placed buttons instead (announced either way).
 
@@ -494,21 +525,22 @@ The part stays the form's: the store draws it with its own markup, words and `da
 
 ### Styling the buy form
 
-The form's parts carry `data-buy-part`:
+The form has a public anatomy: style it through these hooks and states only. A test pins them, so their names are permanent; the nesting between them and the classes inside are not, so never depend on those.
 
-| Part | `data-state` |
-| --- | --- |
-| `price` | |
-| `options` | |
-| `inputs` | |
-| `purchase-options` | |
-| `quantity` | |
-| `actions` | `ready`, `busy`, `unavailable` |
-| `status` | `idle`, `error` |
-| `warranty` | |
-| `stock` | |
+| Part (`data-buy-part`) | Inside it | States |
+| --- | --- | --- |
+| `price` | `[data-price-current]`, `[data-price-regular]` (the struck price), `[data-price-badge]` (the discount) | |
+| `options` | each option `[data-buy-field="option"]` with its `label`, its `control` (the values' row, or the select), each `value`, and an `error` | a value: `aria-pressed="true"` when chosen, `data-option-availability` (`available`, `sold_out`, `incompatible`) |
+| `inputs` | each buyer input `[data-buy-field="input"]` (`data-buyer-input` holds its key, `data-buyer-input-type` its type) with its `label`, `control`, `help`, `error`, `counter` and `surcharge` | a control: `aria-invalid="true"`. The form with no buyer input: `data-empty` |
+| `purchase-options` | | |
+| `quantity` | `[data-buy-field="quantity"]` with its `label`, `control`, `decrease`, `increase` and `help` | |
+| `actions` | `[data-action="add-to-cart"]`, `[data-action="buy-now"]` | `data-state`: `ready`, `busy`, `unavailable` |
+| `status` | the form's message when it refuses an add | `data-state`: `idle`, `error` |
+| `warranty` | | |
+| `stock` | | `data-stock-tone` |
+| `variant-title` | | |
 
-`status` holds the form's message when it refuses an add. The part names and states are permanent. Their nesting and the classes inside them are not, so never depend on them.
+A field's pieces are `[data-buy-field-part="…"]` with the names above. The SDK's `<Price>` writes `[data-price]` (with `data-discounted` while the compare-at is higher), `[data-price-current]` and `[data-price-regular]`, so one rule styles a card's price and the form's.
 
 ### The single-page order
 
@@ -543,6 +575,7 @@ pnpm plugin pack ~/code/acme-studio --key <folder>    # dist/ and the signed upl
 - Fixtures: `fixtureContext`, `fixtureProductCard`, `fixtureProductPage`, `fixtureListingPage`, `fixtureHeaderData`, `fixtureFooterData`, `fixtureSkinData(target)`, `fixtureSectionSkinData(type)` and `fixtureSearchSuggestions(store, query)` (what an island's `context.searchSuggestions` answers in a fixture store). `fixtureSectionSkinData` returns a complete projection matching the sealed `StorefrontSectionSkinSettings[type]` for that section type, so a correctly typed section skin passes `validate`. `fixtureProductCard()` and `fixtureProductPage()` stay bare (no key specs or specifications); the sample fixture store carries them (`fixtureStore("sample").productPage().product.specifications`, its card's `keySpecs` and `facts`), as the other store does. Optional fields can be added to fixtures as the store gains them, so compare fixture output with `toMatchObject` rather than exact equality.
 - Fixture stores: `fixtureStore(name)` for each of `FIXTURE_STORES` (`sample`, `empty`, `other`) gives that store's `context()`, `productCards()`, `image()`, `productPage()` and `skinData(target)`, the data `pnpm plugin preview` renders with. Loop your skin and section tests over all three ([Build a theme](themes.md#test-on-more-than-one-store)).
 - Fixture changes, newest first. A snapshot of fixture output moves with these; update it once and check the diff is only this.
+  - November 2026 (plugin API 2026-10, wave 3): every fixture product page has `placedOffers` (`[]`; the sample store's shirt has one, a "Summer set" kit of the shirt and a scarf at ৳1,600 instead of ৳2,000), and its media items have `kind` and `video` (the other store's skillet has a video as its second item); every fixture header and footer has the full `routes` (`orders`, `trackOrder`, `inbox`, `warrantyClaims`; the footer's `search`, `cart`, `account` too).
   - November 2026 (plugin API 2026-10): `fixtureSearchSuggestions(store, query, options?)` is new: what `context.searchSuggestions` answers in a fixture store, its product cards whose title holds the query, typed as `StorefrontSearchSuggestion` (the empty store's always `[]`). No existing fixture changed.
   - November 2026 (plugin API 2026-10, before release): `data.store.footerLogo` is the footer logo the merchant set, or `null`; it no longer repeats `logo` when there is none. The fixtures' footer logos were already `null`; a footer skin draws `footerLogo ?? logo` and needs no URL comparison.
   - November 2026 (plugin API 2026-10): every fixture product page's option values have `swatchImage` (`null`, as no fixture value has a swatch image).

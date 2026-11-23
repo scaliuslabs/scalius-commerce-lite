@@ -515,6 +515,18 @@ export type StorefrontThemeDocument = {
         imageFit: 'contain' | 'cover';
         headerTone: 'light' | 'dark' | 'brand';
         container: '1200' | '1290' | '1360' | '1440' | 'full';
+        pagePaint?: {
+            kind: 'color';
+            color: 'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring';
+        } | {
+            kind: 'linear';
+            angle: number;
+            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring'>;
+        } | {
+            kind: 'radial';
+            at: 'top' | 'center' | 'bottom';
+            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring'>;
+        };
     };
     brand: {
         logo: string | null;
@@ -21980,7 +21992,7 @@ export type GetApiV1ProductsBySlugResponses = {
                     monthlyMinor: number;
                 } | null;
                 /**
-                 * SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be sold is left out.
+                 * SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be bought now (out of stock, a draft, unpublished) is left out.
                  */
                 placedOffers: Array<StorefrontPlacedOffer>;
                 /**

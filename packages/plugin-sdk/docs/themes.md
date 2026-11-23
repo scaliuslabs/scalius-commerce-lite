@@ -40,7 +40,7 @@ Your module is compiled once, when you pack, and the same code runs in every sto
 | Specifications, key specs | `product.specifications` (product page), `card.keySpecs` | Splitting `facts` on `": "` |
 | The store's product modules (spec table, details tabs, content blocks) in your layout | `<ProductModule name="spec_table" />`, `<ProductModule name="description" />` in a product skin | Moving the store's markup with an island |
 | Navigation | `data.menu`, `data.categories` (header), `data.menus` (footer) | A link list of your own |
-| Core routes | `data.routes` (`home`, `search`, `cart`, `account`, `orders`, `trackOrder`; footer `newsletter`) | Page paths such as `/about` |
+| Core routes | `data.routes` in the header and footer (`home`, `search`, `cart`, `account`, `orders`, `trackOrder`, `inbox`, `warrantyClaims`; footer `newsletter`) | Page paths such as `/about` or `/account/inbox` |
 | Products | A `products` or `product` setting, a section's product source, each card's own `url` | `/products/<slug>` |
 | A category or collection a template names | A handle: `/categories/@<handle>`, `{ "kind": "category", "handle": "<handle>" }` | `/categories/<slug>`, `/collections/<id>` |
 | Fields on a card | `product.fields` (the fields the merchant chose), your own `<app id>.<key>` fields | `custom.*` |
@@ -176,7 +176,7 @@ Validate warns about every bundled image over 200 KiB and every file name that s
 - A control that goes somewhere is an `<a href>` with a real destination. A control that acts on the page is a `<button>`. Never an `<a href="#">` that only an island makes work.
 - On the product page, buying happens only through the store's `<BuyForm />` (required, exactly one), which keeps price, options and stock current. To offer SKUs your own way (cards, a table), put `chooseVariant(variant)` on a link and `buyVariant(variant, "add" | "buy")` on a button: the store binds them to the form, and a buy button works without JavaScript too. Never script clicks on the form's own buttons or read its markup; read `context.product` instead. Style the form through its [`[data-buy-part]` hooks](storefront.md#styling-the-buy-form).
 - The card quick add is the one link that acts: `<a {...quickAdd(product)}>` adds a simple product in place when JavaScript runs and opens the product page when it does not.
-- Search is a `GET` form to `data.routes.search` with `name={data.searchParam}`. A menu that opens is a `<details>` or a `popover`, which open without JavaScript. Forms post to store paths.
+- Search is the store's: a `GET` form marked `searchForm(data)` with a field `name={data.searchParam}`, which the store makes its live search, or a link marked `searchOpener()`. No suggestion list of your own. A menu that opens is a `<details>` or a `popover`, which open without JavaScript. Forms post to store paths.
 - An island improves markup that already works: Escape to close, a carousel's arrows, a countdown. The page must read and work before the island loads and without it. Never put content buyers or crawlers need inside `<Deferred>`.
 - An island never moves or reads the store's markup (the header's logo, the spec table, the details tabs). Place a store module with `<ProductModule name="…" />` and read data from the projection or the context. Pass an island what it needs as `props` (16 KiB of JSON at most), not as hidden elements.
 
@@ -216,6 +216,7 @@ Its `tokens` can set the colour scheme too, checked like any theme when the merc
 | `colorScheme` | `light`, `dark`, `system` | `colors`, `darkColors`, or whichever the buyer's device asks for. |
 | `darkColors` | the same keys as `colors`, or `null` | Required, and held to the same readable-text checks, while `colorScheme` isn't `light` or the switch is on. |
 | `colorSchemeToggle` | `true`, `false` | A switch in the header (a header skin gets it in its `header.actions` slot); each buyer's choice is remembered on their device. |
+| `pagePaint` | `{ kind: "color", color }`, `{ kind: "linear", angle, stops }`, `{ kind: "radial", at, stops }`, or absent | The page's paint behind everything, on every page the store draws (the cart, checkout and account too): one palette colour, or a gradient of two to four (`stops`, palette names such as `"primary"`), straight at `angle` (0 to 359) or round from `at` (`top`, `center`, `bottom`). Dark pages paint it with the dark colours. Absent: the page colour. Never paint `body` in your stylesheet. |
 
 A template that leaves dark off (`light`, no switch) keeps the merchant's own scheme, dark colours and switch when applied; one that shows dark brings its own. A template written for version 12 reads as `light`, no dark colours and no switch.
 
