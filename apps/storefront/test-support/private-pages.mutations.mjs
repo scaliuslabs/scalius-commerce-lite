@@ -275,6 +275,12 @@ export const MUTATIONS = {
     cases: [DEPTH],
     expect: /^first screen: the page's first part starts at \d+px, below the 700px screen/,
   },
+  "R6-S3 the seal only on a private page": {
+    why: "the layout writes the free regions' seal only on a private page: the theme's blocks in the drawer over a public page draw unsealed",
+    rewrites: [rewrite("apps/storefront/src/layouts/Layout.astro", "const freeRegionSeal = (privateStyle !== undefined || drawerPlan !== null) && privateFreeRegions", "const freeRegionSeal = privateStyle !== undefined && privateFreeRegions")],
+    cases: ["review 6, S3: the theme's blocks in the drawer, on a public page"],
+    expect: /^drawer: \[data-free="block"\]: not sealed/,
+  },
   "P2 a page paint with no tokens draws the store's own page": {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",
     // With the layout's guard too (review 5, S4), which draws no paint on a cart not in token mode.

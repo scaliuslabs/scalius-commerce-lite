@@ -366,6 +366,17 @@ const REGRESSIONS = {
     items: { line: [LINE_IMAGE("line-top"), ...DEFAULT_LINE, LINE_IMAGE("line-end")] },
   } } } },
   "the store's own page with one, twenty and ninety-nine lines": { states: LENGTHS, privatePages: {} },
+  // Review 6, S3: the theme's blocks in the cart drawer, over a public page: the layout seals them there too.
+  "review 6, S3: the theme's blocks in the drawer, on a public page": { request: { page: "home" }, privatePages: {
+    css: '[data-hook="drawer-note"] p { min-block-size: 3000px; outline: 100vmax solid #fff }',
+    pages: { cartDrawer: { layout: [
+      { type: "part", part: "header" },
+      { type: "content", hook: "drawer-note", content: { kind: "banner", tone: "info", text: { en: "Delivered in 24 hours" } } },
+      { type: "layout", layout: "scroll", children: [{ type: "part", part: "lines" }] },
+      { type: "part", part: "undo" },
+      { type: "layout", layout: "group", children: [{ type: "part", part: "summary" }, { type: "target", target: "cart_drawer.footer" }, { type: "part", part: "actions" }] },
+    ] } },
+  } },
   // What the save must refuse (under a mutation that lets one through, the drawing must fail).
   "a stylesheet hiding a host part": { refused: "unscoped_selector", privatePages: { css: '[data-part="summary"] * { display: none } [data-part="details-submit"] * { visibility: hidden }' } },
   // Review 6, B2: a block shown or hidden by how far down it sits, which is the cart's length (a view timeline).
@@ -1174,6 +1185,7 @@ async function open(context, id, width, server5xx, height = 900) {
 async function draw({ context, id, state, width, height, focus, hover, interact, rows, chrome, search, controls, request }) {
   const problems = [];
   const server5xx = [];
+  if (request?.page === "home") return drawDrawer({ context, id, width, problems, server5xx });
   const page = await timed("load", () => open(context, id, width, server5xx, height));
   // With the theme's chrome its header region is drawn (else the seed tests nothing of the chrome), and the host's search where it says.
   // The store's controls beside the theme's regions where it draws them: the switch, and the market and language forms.
@@ -1270,6 +1282,38 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   return problems;
 }
 
+/** The drawer's parts a buyer must see and use. */
+const DRAWER_MANDATORY = ['[data-part="drawer-header"]', '[data-part="drawer-lines"]', '[data-part="drawer-total"]', '[data-part="drawer-checkout"]'];
+
+/**
+ * The cart drawer over a public page, its arrangement holding the theme's blocks: opened as a buyer opens it,
+ * its regions sealed and inert, its parts on screen and uncovered, its words whole and at their floor. Its
+ * look is the public page's (no colour table): the drawer claims what it draws.
+ */
+async function drawDrawer({ context, id, width, problems, server5xx }) {
+  const at = (label, list) => problems.push(...list.map((problem) => `${label}: ${problem}`));
+  const page = await timed("load", () => open(context, id, width, server5xx));
+  await page.waitForSelector("[data-cart-open], #cart-button", { timeout: 20_000 }).catch(() => {});
+  await settle(page);
+  await page.locator("[data-cart-open], #cart-button").filter({ visible: true }).first().click().catch(() => {});
+  const drawer = await page.waitForSelector('[data-private="cart-drawer"]', { state: "visible", timeout: 10_000 }).catch(() => null);
+  if (!drawer) at("drawer", ["the drawer did not open"]);
+  else {
+    await settle(page);
+    const scope = '[data-private="cart-drawer"]';
+    const walked = await page.evaluate(walk, { rows: [], anatomy: [{ name: "the drawer", selector: scope }], uiKinds: UI_KINDS, mandatory: DRAWER_MANDATORY, scope, exempt: EXEMPT });
+    at("drawer", walked.problems);
+    at("drawer", await page.evaluate(INERT_CHECK));
+    if (await page.evaluate(() => document.querySelectorAll('[data-private="cart-drawer"] [data-free]').length) === 0) at("drawer", ["the theme's blocks are not drawn"]);
+    at("drawer", await page.evaluate(wholeTexts));
+    at("drawer", await textContrast(page, walked.texts));
+    at("drawer", await page.evaluate(clicks));
+  }
+  at("5xx", server5xx);
+  await page.close();
+  return problems;
+}
+
 /** Place order on screen at scroll 0 and at three places down the cart (while the cart still meets the screen's bottom). */
 async function dockChecks(page) {
   const problems = [];
@@ -1360,7 +1404,7 @@ try {
       for (const scheme of SCHEMES) {
         const rows = tables.find((table) => table.scheme === scheme)?.rows ?? tables[0]?.rows ?? [];
         for (const touch of [true, false]) {
-          const plan = drawsOf(state).filter((each) => each.scheme === scheme && (each.width < 1280) === touch);
+          const plan = (entry.request?.page === "home" ? [{ width: 390, scheme: "light" }, { width: 1280, scheme: "dark" }] : drawsOf(state)).filter((each) => each.scheme === scheme && (each.width < 1280) === touch);
           if (plan.length === 0) continue;
           const context = await browser.newContext({ colorScheme: scheme, viewport: { width: 1280, height: 900 }, hasTouch: touch });
           await context.addInitScript((entries) => { for (const [key, value] of Object.entries(entries)) localStorage.setItem(key, value); }, storage);
