@@ -17,6 +17,7 @@ import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-form
 import { themePaint } from "@/lib/theme-paint";
 import { privateImageOrigins } from "@/lib/middleware-helper/csp-handler";
 import { cartDrawerPlan } from "@/lib/private-pages/drawer";
+import { PRIVATE_FREE_REGION_SEAL, privateFreeRegions } from "@/lib/private-pages/plan";
 import { privateAssetUrls } from "@/lib/private-pages/html";
 import { CART_DRAWER_PLAN_ID } from "@/lib/cart/drawer-plan";
 import type { AnalyticsConfig } from "@/lib/api";
@@ -382,6 +383,10 @@ const paint = themePaint(storefrontTheme, resolvedTheme);
 // The cart drawer's arrangement, words and icons where the theme set them (lib/cart/drawer-plan.ts):
 // the drawer mounts in the browser, so it reads them from the page. The default writes nothing.
 const drawerPlan = libraryPreview ? null : cartDrawerPlan(storefrontTheme, documentLanguage, privateAssetUrls(readStorefrontExtensions(layoutData?.appExtensions)));
+// The free regions' seal is host CSS: on every page that can draw one (a private page drawn from
+// parts, or the drawer's arrangement), whatever the theme's compiled look holds.
+const freeRegionSeal = (privateStyle !== undefined || drawerPlan !== null) && privateFreeRegions(storefrontTheme) ? PRIVATE_FREE_REGION_SEAL : "";
+const pageStyle = `${freeRegionSeal}${privateStyle ?? ""}`;
 const storefrontRouteKind = Astro.url.pathname.startsWith("/products/")
   ? "product"
   : "standard";
@@ -571,8 +576,8 @@ const pageStoreTimeZone = storeTimeZone();
 
     <ThemeHead paint={paint} preview={isThemePreview} />
     {appStylesheets.map((href) => <link rel="stylesheet" href={href} data-app-stylesheet />)}
-    {/* The theme's private-page stylesheet: checked and scoped on save (private-css.ts), after the store's own. */}
-    {privateStyle && <style is:inline data-private-style set:html={privateStyle} />}
+    {/* The free regions' seal, then the theme's private-page look: checked and scoped on save (private-css.ts), after the store's own. */}
+    {pageStyle && <style is:inline data-private-style set:html={pageStyle} />}
 
     <slot name="head" />
   </head>
@@ -580,7 +585,7 @@ const pageStoreTimeZone = storeTimeZone();
     class="flex flex-col min-h-screen site-root"
     {...paint.attributes}
     data-storefront-route={storefrontRouteKind}
-    data-private-body={privateStyle ? "" : undefined}
+    data-private-body={privateStyle !== undefined && pageStyle ? "" : undefined}
   >
     {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
 

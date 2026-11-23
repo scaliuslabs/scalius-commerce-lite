@@ -298,6 +298,8 @@ const REGRESSIONS = {
   // computed from the paint; with tokens, those that paint no page surface stand on it too.
   "a dark page paint, no private tokens": { states: "all", request: { palette: "retail", scheme: "dark", paint: DARK_PAINT }, privatePages: {} },
   "a dark page paint under dark tokens": { request: { palette: "retail", scheme: "dark", paint: DARK_PAINT }, privatePages: { tokens: { cart: { summary: DARK, lines: DARK } } } },
+  // Review 5, B1: the theme's chrome and a large image block, with no stylesheet, tokens or paint: the seal is the host's.
+  "review 5, B1: the theme's chrome and a 2000px image block with no look of its own": { request: { noor: true }, privatePages: { chrome: "theme", pages: { cart: { layout: [{ type: "part", part: "notices" }, { type: "content", hook: "big", content: { kind: "image", image: { app: NOOR, file: "pp/banner.svg" }, alt: { en: "A banner" }, width: 2000, height: 2000 } }, ...LEGAL_COLUMNS.slice(1)] } } } },
   // What the save must refuse (under a mutation that lets one through, the drawing must fail).
   "a stylesheet hiding a host part": { refused: "unscoped_selector", privatePages: { css: '[data-part="summary"] * { display: none } [data-part="details-submit"] * { visibility: hidden }' } },
   "summary rows that do not read on their summary": { refused: "contrast", privatePages: { tokens: { cart: { "summary-rows": { text: "#eeeeee" }, summary: { background: "#ffffff" } } } } },
@@ -390,6 +392,14 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, maxDepth, exempt }) {
   const root = scope ? document.querySelector(scope) : document.body;
   if (!root) return { problems: [`${scope}: not open`], texts: [], controls: [] };
   if (document.documentElement.scrollWidth > width + 1) problems.push(`the page scrolls sideways: ${document.documentElement.scrollWidth}px at ${width}px`);
+  // Every free region is sealed by the host, whatever the theme's look holds: its own containing block, paint
+  // contained and clipped, a bounded height.
+  for (const region of document.querySelectorAll("[data-free]")) {
+    const style = getComputedStyle(region);
+    if (!/paint|content|strict/.test(style.contain) || style.overflowY === "visible" || style.maxBlockSize === "none" || style.position === "static") {
+      problems.push(`[data-free="${region.dataset.free}"]: not sealed (contain: ${style.contain}, overflow: ${style.overflowY}, max-block-size: ${style.maxBlockSize})`);
+    }
+  }
   // Nothing of the host's is inside a free region, where the theme's stylesheet reaches.
   for (const element of document.querySelectorAll("[data-free] :is([data-part],[data-host],[data-buyer-ui-target],[data-private])")) {
     problems.push(`${element.tagName.toLowerCase()}[${["data-part", "data-host", "data-buyer-ui-target", "data-private"].map((name) => element.getAttribute(name)).find(Boolean)}]: the host's, inside a free region`);

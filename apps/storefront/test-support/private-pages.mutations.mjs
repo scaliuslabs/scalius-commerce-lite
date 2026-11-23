@@ -154,6 +154,12 @@ export const MUTATIONS = {
     cases: [B1],
     expect: /shows no hover/,
   },
+  "R5-B1 the seal follows the theme's look": {
+    why: "the layout seals the free regions only when the theme compiled a look: its chrome and blocks with none draw unsealed",
+    rewrites: [rewrite(PLAN, '  return served.chrome === "theme" || PRIVATE_PAGE_KEYS.some((page) => {', '  return Boolean(privatePagesCss(theme.privatePages)) && PRIVATE_PAGE_KEYS.some((page) => {')],
+    cases: ["review 5, B1: the theme's chrome and a 2000px image block with no look of its own"],
+    expect: /not sealed/,
+  },
   "P2 a page paint with no tokens draws the store's own page": {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",
     rewrites: [rewrite("packages/shared/src/storefront-theme/private-layout.ts", "painted && privatePageHasOwnPage(page) ? {} : null", "null")],

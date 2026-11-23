@@ -7,6 +7,7 @@
  */
 import {
   PRIVATE_PAGES,
+  PRIVATE_PAGE_KEYS,
   PRIVATE_TOKEN_MODE_CSS,
   privateAssetProperty,
   privateFrame,
@@ -75,21 +76,37 @@ const ASSET_PATH = /^\/_x\/[a-z0-9][a-z0-9.-]*\/[A-Za-z0-9._-]+\/public\/[A-Za-z
  * or a grid column (`min-inline-size: 0`, `max-inline-size: 100%`; inline-size
  * containment added nothing the rendered gate could find, so it is gone);
  * everything painted inside clipped (with the older browsers' overflow clip
- * first); and a bounded height. The stylesheet never selects a wrapper.
+ * first); and a bounded height. The stylesheet never selects a wrapper. It is
+ * host CSS: the layout writes it on every page that can draw a region
+ * (`privateFreeRegions`), whatever the theme's compile holds.
  */
 export const PRIVATE_FREE_REGION_SEAL =
   "[data-free]{display:block;position:relative;z-index:0;isolation:isolate;min-inline-size:0;max-inline-size:100%;overflow:hidden;overflow:clip;contain:layout paint style;max-block-size:30rem}"
   + '[data-free="header"]{max-block-size:24rem}[data-free="footer"]{max-block-size:80rem}';
 
 /**
- * The theme's look as the page writes it ("" for none): the region seal; in
- * token mode, the host's palette classes around the compiled colour table
- * (surfaces before it, every other colour after it: private-tokens.ts
- * `PRIVATE_TOKEN_MODE_CSS`); the theme's assets as the custom properties its
- * stylesheet names (each URL built here from the store's own origin; an
- * asset whose app is not active draws nothing); then the compiled table,
- * token rules and stylesheet. Only what this build's checker compiled is
- * served (`privatePagesCss`).
+ * Whether a page under this theme can draw a free region: the theme's
+ * chrome, or a content block anywhere in an arrangement it serves (the cart
+ * page, the drawer, their lines).
+ */
+export function privateFreeRegions(theme: StorefrontThemeDocument): boolean {
+  const served = servedPrivatePages(theme.privatePages);
+  const holds = (nodes: readonly PrivateNode[]): boolean => nodes.some((node) => node.type === "content" || (node.type === "layout" && holds(node.children)));
+  return served.chrome === "theme" || PRIVATE_PAGE_KEYS.some((page) => {
+    const arrangement = privatePageArrangement(served, page);
+    return holds(arrangement?.layout ?? []) || Object.values(arrangement?.items ?? {}).some(holds);
+  });
+}
+
+/**
+ * The theme's look as the page writes it ("" for none): in token mode, the
+ * host's palette classes around the compiled colour table (surfaces before
+ * it, every other colour after it: private-tokens.ts `PRIVATE_TOKEN_MODE_CSS`);
+ * the theme's assets as the custom properties its stylesheet names (each URL
+ * built here from the store's own origin; an asset whose app is not active
+ * draws nothing); then the compiled table, token rules and stylesheet. Only
+ * what this build's checker compiled is served (`privatePagesCss`). The seal
+ * is not part of it: the layout writes that.
  */
 export function privateStyle(theme: StorefrontThemeDocument, asset: PrivateAssetUrl, page: PrivatePageKey = "cart"): string {
   const css = privatePagesCss(theme.privatePages);
@@ -99,5 +116,5 @@ export function privateStyle(theme: StorefrontThemeDocument, asset: PrivateAsset
     const url = asset(ref);
     return url && ASSET_PATH.test(url) ? [`${privateAssetProperty(key)}:url("${url}")`] : [];
   });
-  return `${PRIVATE_FREE_REGION_SEAL}${tokens ? PRIVATE_TOKEN_MODE_CSS.before : ""}${properties.length > 0 ? `body[data-private-body]{${properties.join(";")}}` : ""}${css}${tokens ? PRIVATE_TOKEN_MODE_CSS.after : ""}`;
+  return `${tokens ? PRIVATE_TOKEN_MODE_CSS.before : ""}${properties.length > 0 ? `body[data-private-body]{${properties.join(";")}}` : ""}${css}${tokens ? PRIVATE_TOKEN_MODE_CSS.after : ""}`;
 }
