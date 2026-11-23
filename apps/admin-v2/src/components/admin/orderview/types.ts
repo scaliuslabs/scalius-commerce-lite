@@ -47,6 +47,8 @@ export interface OrderLineExtras {
   licenceKeys?: unknown;
   giftCards?: unknown;
   warranty?: unknown;
+  /** The line's delivery message: facts only, never the text. */
+  message?: unknown;
 }
 
 export interface OrderLineProperty {
