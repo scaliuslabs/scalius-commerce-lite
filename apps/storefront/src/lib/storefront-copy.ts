@@ -16,7 +16,7 @@ export { storefrontLanguage, type StorefrontLanguage } from "./storefront-langua
 
 export interface StorefrontCopy {
   price: PriceCopy;
-  badge: { sale: string; soldOut: string; new: string };
+  badge: { soldOut: string; new: string };
   stock: {
     inStock: string;
     /** `count` in the page's digits. */
@@ -101,7 +101,7 @@ export interface StorefrontCopy {
 
 const EN: StorefrontCopy = {
   price: priceCopy("en"),
-  badge: { sale: "Sale", soldOut: "Sold out", new: "New" },
+  badge: { soldOut: "Sold out", new: "New" },
   stock: {
     inStock: "In stock",
     low: (count) => `Only ${count} left`,
@@ -184,7 +184,7 @@ const EN: StorefrontCopy = {
 
 const BN: StorefrontCopy = {
   price: priceCopy("bn"),
-  badge: { sale: "সেল", soldOut: "স্টক শেষ", new: "নতুন" },
+  badge: { soldOut: "স্টক শেষ", new: "নতুন" },
   stock: {
     inStock: "স্টকে আছে",
     low: (count) => `মাত্র ${count}টি বাকি`,

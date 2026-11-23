@@ -85,12 +85,12 @@ export interface ProductCardModel {
   hoverImage: { url: string; maxWidth: number | undefined } | null;
   price: {
     current: string;
-    /** The struck regular price, when this one price is discounted (never beside a "From" price: priceLineClaim). */
+    /** The struck regular price of the SKU whose price this is, while it is discounted (priceLineClaim). */
     regular: string | null;
     /** The price varies by option ("From ৳2,450"). */
     from: boolean;
   };
-  /** The sale badge: "-20%", "Sale" beside a discounted "From" price, or null without a discount. */
+  /** The sale badge ("-20%") of the SKU whose price the card shows, or null without a discount. */
   percentOff: string | null;
   /** The product can be added from the card: in stock, a simple product, no buyer inputs, a real price. */
   quickAddEligible: boolean;
@@ -167,8 +167,8 @@ export function productCardModel(
 ): ProductCardModel {
   const money = (amount: number) => formatMoney(amount, { symbol: options.currencySymbol, code: options.currencyCode, language: options.language });
   const from = product.priceVaries === true;
-  // One rule with the product page: no struck price or percent beside a "From" price.
-  const claim = priceLineClaim({ current: product.discountedPrice, regular: product.price, from });
+  // One rule with the product page: the old price and percent are the card SKU's own (the API's pair).
+  const claim = priceLineClaim({ current: product.discountedPrice, regular: product.price });
   const soldOut = product.availableForSale === false;
   const photo = cardPhoto(product.imageUrl);
   const hoverPhoto = photo ? cardPhoto(product.secondaryImageUrl) : null;
@@ -198,9 +198,7 @@ export function productCardModel(
       regular: claim.compareAt === null ? null : money(claim.compareAt),
       from,
     },
-    percentOff: claim.percentOff !== null
-      ? formatDiscountBadge(product.price, product.discountedPrice, options.language)
-      : claim.onSale ? storefrontCopy(storefrontLanguage(options.language ?? pageLanguage())).badge.sale : null,
+    percentOff: claim.percentOff !== null ? formatDiscountBadge(product.price, product.discountedPrice, options.language) : null,
     quickAddEligible,
     needsOptions: !soldOut && product.hasVariants,
     facts: cardFactValues(product, money, options.ratings !== false),

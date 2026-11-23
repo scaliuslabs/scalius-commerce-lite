@@ -468,11 +468,13 @@ export interface StorefrontProductCard {
   id: string;
   title: string;
   url: string;
+  /** What the buyer pays: one SKU's price, the cheapest buyable SKU's when `priceVaries`. */
   price: StorefrontMoney;
-  /** The regular price while discounted. */
+  /** That same SKU's regular price while it is discounted, never another SKU's. */
   compareAt: StorefrontMoney | null;
   /** The price varies by option ("From …"). */
   priceVaries: boolean;
+  /** That same SKU's whole percent off ("-50%"), rounded down; null without a discount. */
   percentOff: number | null;
   image: StorefrontImage | null;
   /** The second photo when the product has one; the component decides whether to show it (on hover, in a gallery). */

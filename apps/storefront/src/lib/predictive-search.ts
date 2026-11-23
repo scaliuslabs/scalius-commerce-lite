@@ -243,7 +243,7 @@ export function searchSuggestionOf(item: PredictiveSearchItem): StorefrontSearch
     image: suggestionImage(item, title),
     price: money(paid),
     compareAt: (() => {
-      const { compareAt } = priceLineClaim({ current: paid, regular, from: item.priceVaries === true });
+      const { compareAt } = priceLineClaim({ current: paid, regular });
       return compareAt === null ? null : money(compareAt);
     })(),
     priceVaries: item.priceVaries === true,

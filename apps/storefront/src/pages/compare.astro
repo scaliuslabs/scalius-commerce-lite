@@ -81,8 +81,8 @@ const photo = (product: CompareProduct) =>
                 <td class="compare-label"></td>
                 {products.map((product) => {
                   const image = photo(product);
-                  const claim = priceLineClaim({ current: product.discountedPrice, regular: product.price, from: product.priceVaries === true });
-                  const discounted = claim.onSale;
+                  const claim = priceLineClaim({ current: product.discountedPrice, regular: product.price });
+                  const discounted = claim.compareAt !== null;
                   return (
                     <th scope="col" class="compare-product">
                       <a href={`/products/${product.slug}`} class="compare-photo">
