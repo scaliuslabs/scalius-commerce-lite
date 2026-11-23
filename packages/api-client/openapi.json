@@ -56246,7 +56246,7 @@
                   "phone": {
                     "type": "string",
                     "maxLength": 32,
-                    "description": "A new number for the account's phone: a code goes to how the account signs in now (its proven phone, else its email) and one to the new number, both for this change only. Absent: the account's own unproven phone."
+                    "description": "The number to make the account's sign-in phone. Absent: the account's own unproven phone. Either way two codes go out, both for this one change: one to how the account signs in now (its proven email, else its proven phone; `confirmWith`) and one to the number."
                   }
                 },
                 "additionalProperties": false
@@ -56279,13 +56279,11 @@
                         },
                         "confirmWith": {
                           "type": "string",
-                          "nullable": true,
                           "enum": [
                             "phone",
-                            "email",
-                            null
+                            "email"
                           ],
-                          "description": "For a change: where the code that confirms it went (send it back as `currentCode`); null for the account's own phone."
+                          "description": "Where the confirming code went: the account's proven email, else its proven phone. Send that code back as `currentCode`."
                         }
                       },
                       "required": [
@@ -56456,7 +56454,7 @@
         "tags": [
           "Customer Auth"
         ],
-        "summary": "Prove the account's phone (or the new number it moves to) and add orders placed with it",
+        "summary": "Make a proven number the account's sign-in phone (two codes); signs out every session and sets a new one",
         "requestBody": {
           "content": {
             "application/json": {
@@ -56471,13 +56469,13 @@
                   "phone": {
                     "type": "string",
                     "maxLength": 32,
-                    "description": "The new number of a change: `code` is the one sent to it."
+                    "description": "The number the codes were sent for (absent: the account's own phone); `code` is the one sent to it."
                   },
                   "currentCode": {
                     "type": "string",
                     "minLength": 4,
                     "maxLength": 12,
-                    "description": "For a change: the code sent to how the account signs in now."
+                    "description": "The code sent to how the account signs in now (required)."
                   }
                 },
                 "required": [

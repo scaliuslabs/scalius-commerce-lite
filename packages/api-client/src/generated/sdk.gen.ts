@@ -816,7 +816,7 @@ export const postApiV1CustomerAuthPhoneSendCode = <ThrowOnError extends boolean 
 });
 
 /**
- * Prove the account's phone (or the new number it moves to) and add orders placed with it
+ * Make a proven number the account's sign-in phone (two codes); signs out every session and sets a new one
  */
 export const postApiV1CustomerAuthPhoneVerify = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1CustomerAuthPhoneVerifyData, ThrowOnError>): RequestResult<PostApiV1CustomerAuthPhoneVerifyResponses, PostApiV1CustomerAuthPhoneVerifyErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1CustomerAuthPhoneVerifyResponses, PostApiV1CustomerAuthPhoneVerifyErrors, ThrowOnError>({
     url: '/api/v1/customer-auth/phone/verify',

@@ -15,6 +15,9 @@
 --   row per storefront store thread and one per order-scoped thread. Its
 --   index, and `conversations.topic`: the merchant topic a buyer chose.
 -- - `customers.whatsapp`: the buyer's WhatsApp number when not the phone.
+-- - `customers.phone_staff_set_at` / `email_staff_set_at`: a contact staff set on
+--   an account, which signs nothing in until the buyer proves it with a code
+--   (the proof then reaches this account), with their partial indexes.
 CREATE TABLE `account_order_totals` (
 	`customer_id` text NOT NULL,
 	`currency_code` text NOT NULL,
@@ -31,6 +34,14 @@ DROP INDEX `orders_account_owner_customer_id_idx`;
 CREATE INDEX `orders_account_owner_customer_id_idx` ON `orders` (`account_owner_customer_id`,`currency_code`) WHERE "orders"."account_owner_customer_id" IS NOT NULL;
 --> statement-breakpoint
 ALTER TABLE `customers` ADD `whatsapp` text;
+--> statement-breakpoint
+ALTER TABLE `customers` ADD `phone_staff_set_at` integer;
+--> statement-breakpoint
+ALTER TABLE `customers` ADD `email_staff_set_at` integer;
+--> statement-breakpoint
+CREATE INDEX `customers_staff_phone_idx` ON `customers` (`phone`) WHERE "customers"."phone_staff_set_at" IS NOT NULL AND "customers"."deleted_at" IS NULL;
+--> statement-breakpoint
+CREATE INDEX `customers_staff_email_idx` ON `customers` (lower("email")) WHERE "customers"."email_staff_set_at" IS NOT NULL AND "customers"."deleted_at" IS NULL;
 --> statement-breakpoint
 ALTER TABLE `conversations` ADD `buyer_account_id` text;
 --> statement-breakpoint
@@ -118,7 +129,7 @@ END;
 INSERT INTO account_order_totals (customer_id, currency_code, orders_count, spent_minor, updated_at)
     SELECT customers.id, orders.currency_code, count(orders.id), COALESCE(sum(max(orders.paid_amount_minor - orders.disputed_minor, 0)), 0), unixepoch()
     FROM orders INNER JOIN customers ON customers.id = orders.account_owner_customer_id
-    WHERE orders.deleted_at IS NULL AND orders.status <> 'incomplete'
+    WHERE orders.deleted_at IS NULL AND orders.status <> 'incomplete' AND customers.erased_at IS NULL
     GROUP BY customers.id, orders.currency_code;
 --> statement-breakpoint
 UPDATE conversations SET buyer_account_id = customer_id WHERE subject_type = 'store' AND channel IS NULL AND customer_id IS NOT NULL;
@@ -127,4 +138,4 @@ UPDATE conversations SET buyer_account_id = (SELECT owner_order.account_owner_cu
     WHERE owner_order.id = conversations.order_id AND owner_order.deleted_at IS NULL)
     WHERE subject_type <> 'store' AND order_id IS NOT NULL;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (225, '0225_account_data', '7ac043a3b2e6472df7a310462fc8eeb6c05440923676e2ca2bc4b17ab7fe617f');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (225, '0225_account_data', 'ef1e87b9cd080048fdb6dcb3af52ed109c236c8e1784d88c3835cabec032936e');

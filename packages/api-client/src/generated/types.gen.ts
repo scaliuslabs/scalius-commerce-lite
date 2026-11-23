@@ -14717,7 +14717,7 @@ export type GetApiV1CustomerAuthOrdersResponse = GetApiV1CustomerAuthOrdersRespo
 export type PostApiV1CustomerAuthPhoneSendCodeData = {
     body?: {
         /**
-         * A new number for the account's phone: a code goes to how the account signs in now (its proven phone, else its email) and one to the new number, both for this change only. Absent: the account's own unproven phone.
+         * The number to make the account's sign-in phone. Absent: the account's own unproven phone. Either way two codes go out, both for this one change: one to how the account signs in now (its proven email, else its proven phone; `confirmWith`) and one to the number.
          */
         phone?: string;
     };
@@ -14784,9 +14784,9 @@ export type PostApiV1CustomerAuthPhoneSendCodeResponses = {
             message: string;
             resendAfterSeconds: number;
             /**
-             * For a change: where the code that confirms it went (send it back as `currentCode`); null for the account's own phone.
+             * Where the confirming code went: the account's proven email, else its proven phone. Send that code back as `currentCode`.
              */
-            confirmWith: 'phone' | 'email' | null;
+            confirmWith: 'phone' | 'email';
         };
     };
 };
@@ -14797,11 +14797,11 @@ export type PostApiV1CustomerAuthPhoneVerifyData = {
     body?: {
         code: string;
         /**
-         * The new number of a change: `code` is the one sent to it.
+         * The number the codes were sent for (absent: the account's own phone); `code` is the one sent to it.
          */
         phone?: string;
         /**
-         * For a change: the code sent to how the account signs in now.
+         * The code sent to how the account signs in now (required).
          */
         currentCode?: string;
     };

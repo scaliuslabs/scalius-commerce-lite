@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "6b01c00a-6bec-4b4c-9fe9-396a0ee32f82",
+  "id": "a9991d78-c80f-455e-946e-0c004d78179b",
   "prevId": "c2e416b4-6804-49cb-ae49-edda3a2316d8",
   "tables": {
     "account": {
@@ -7761,6 +7761,20 @@
           "notNull": false,
           "autoincrement": false
         },
+        "phone_staff_set_at": {
+          "name": "phone_staff_set_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "email_staff_set_at": {
+          "name": "email_staff_set_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "last_authenticated_at": {
           "name": "last_authenticated_at",
           "type": "integer",
@@ -7858,6 +7872,22 @@
             "merged_into_customer_id"
           ],
           "isUnique": false
+        },
+        "customers_staff_phone_idx": {
+          "name": "customers_staff_phone_idx",
+          "columns": [
+            "phone"
+          ],
+          "isUnique": false,
+          "where": "\"customers\".\"phone_staff_set_at\" IS NOT NULL AND \"customers\".\"deleted_at\" IS NULL"
+        },
+        "customers_staff_email_idx": {
+          "name": "customers_staff_email_idx",
+          "columns": [
+            "lower(\"email\")"
+          ],
+          "isUnique": false,
+          "where": "\"customers\".\"email_staff_set_at\" IS NOT NULL AND \"customers\".\"deleted_at\" IS NULL"
         },
         "customers_phone_idx": {
           "name": "customers_phone_idx",
@@ -36080,6 +36110,13 @@
       "markets_handle_unique": {
         "columns": {
           "lower(trim(\"handle\"))": {
+            "isExpression": true
+          }
+        }
+      },
+      "customers_staff_email_idx": {
+        "columns": {
+          "lower(\"email\")": {
             "isExpression": true
           }
         }

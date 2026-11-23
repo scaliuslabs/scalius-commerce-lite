@@ -220,7 +220,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
             name="phone"
             render={({ field, fieldState }) => canSave ? (
               <div className="flex flex-col gap-2">
-                <Field label={t("phone")} help={phoneRequired ? undefined : t("phoneOptionalHint")} error={fieldState.error?.message}>
+                <Field label={t("phone")} help={record?.kind === "account" ? t("accountContactHint") : phoneRequired ? undefined : t("phoneOptionalHint")} error={fieldState.error?.message}>
                   <AdminPhoneInput
                     value={field.value}
                     onChange={(value) => {
@@ -240,7 +240,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
             control={form.control}
             name="email"
             render={({ field, fieldState }) => canSave ? (
-              <Field label={t("email")} error={fieldState.error?.message}>
+              <Field label={t("email")} help={record?.kind === "account" ? t("accountContactHint") : undefined} error={fieldState.error?.message}>
                 {/* Email is optional: clearing it removes it. */}
                 <Input
                   type="email"

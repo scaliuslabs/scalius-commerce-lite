@@ -14,7 +14,7 @@ import { storedObjectKeyUrl } from "../../integrations/storage";
 import { businessDocument, type BusinessInfo, storeDisplayName } from "../settings";
 import { platformDocument } from "../platform";
 import { rememberSettingsDocuments, selectSettingsDocuments } from "../../settings-store";
-import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
+import { MESSAGE_COPY, type MessageCopy, type MessageLanguage } from "./message-copy";
 import { storeHeaderHtml, type EmailStore } from "./notification-templates";
 
 export interface StoreIdentity extends EmailStore {
@@ -191,9 +191,11 @@ function absoluteHttpUrl(value: string): string | null {
  */
 export function composeAuthOtpMessage(
   store: Pick<StoreIdentity, "name" | "logoUrl" | "language">,
-  input: { purpose: string | undefined; code: string; name: string; orderNumber?: number | null },
+  input: { purpose: string | undefined; code: string; name: string; orderNumber?: number | null; maskedPhone?: string | null },
 ) {
   const copy = MESSAGE_COPY[store.language];
+  if (input.purpose === "phone_changed") return composePhoneChangedNotice(store, copy, input.name, input.maskedPhone ?? "");
+  if (input.purpose === "phone_change") return composePhoneChangeCode(store, copy, input.code, input.name, input.maskedPhone ?? "");
   const intro = copy.otp.intro[
     input.purpose === "order_payment_recovery" || input.purpose === "order_lookup" ? input.purpose : "sign_in"
   ](store.name, input.orderNumber ? formatOrderNumberIn(input.orderNumber, "", numberLocale(store.language)) : null);
@@ -213,6 +215,44 @@ ${storeHeaderHtml(store)}
     html,
     text: [store.name, greeting, intro, input.code, copy.otp.expires, copy.otp.ignore].filter(Boolean).join("\n\n"),
     sms: copy.otp.sms(input.code, store.name),
+    fromName: store.name ?? undefined,
+  };
+}
+
+function plainEmail(store: Pick<StoreIdentity, "name" | "logoUrl" | "language">, subject: string, paragraphs: string[], code: string | null): string {
+  return `<!doctype html><html lang="${store.language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;background:#ffffff;">
+<div role="main" style="max-width:560px;margin:0 auto;padding:24px 20px;overflow-wrap:anywhere;background:#ffffff;color:#202124;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5;">
+${storeHeaderHtml(store)}
+${paragraphs.map((text, index) => `<p style="margin:0 0 ${index === paragraphs.length - 1 ? 0 : 16}px;">${escapeHtml(text)}</p>`).join("\n")}
+${code ? `<p style="margin:16px 0 0;padding:20px;background:#f1f3f4;border-radius:8px;text-align:center;font-size:32px;font-weight:700;letter-spacing:8px;font-family:'Courier New',monospace;">${escapeHtml(code)}</p>` : ""}
+</div></body></html>`;
+}
+
+/** A phone change's code: names the new number's last digits and says not to share it. Never a sign-in wording. */
+function composePhoneChangeCode(store: Pick<StoreIdentity, "name" | "logoUrl" | "language">, copy: MessageCopy, code: string, name: string, phone: string) {
+  const subject = copy.otp.phoneChange.subject(code, store.name).replace(/[\r\n]+/g, " ");
+  const greeting = copy.greeting(name.trim());
+  const intro = copy.otp.phoneChange.intro(store.name, phone);
+  return {
+    subject,
+    html: plainEmail(store, subject, [greeting, intro, copy.otp.expires, copy.otp.phoneChange.warning], code),
+    text: [store.name, greeting, intro, code, copy.otp.expires, copy.otp.phoneChange.warning].filter(Boolean).join("\n\n"),
+    sms: copy.otp.phoneChange.sms(code, store.name, phone),
+    fromName: store.name ?? undefined,
+  };
+}
+
+/** The notice that the sign-in phone changed: no code. */
+function composePhoneChangedNotice(store: Pick<StoreIdentity, "name" | "logoUrl" | "language">, copy: MessageCopy, name: string, phone: string) {
+  const subject = copy.otp.phoneChanged.subject(store.name).replace(/[\r\n]+/g, " ");
+  const greeting = copy.greeting(name.trim());
+  const body = copy.otp.phoneChanged.body(store.name, phone);
+  return {
+    subject,
+    html: plainEmail(store, subject, [greeting, body], null),
+    text: [store.name, greeting, body].filter(Boolean).join("\n\n"),
+    sms: copy.otp.phoneChanged.sms(store.name, phone),
     fromName: store.name ?? undefined,
   };
 }

@@ -1,7 +1,9 @@
 // Adding and verifying a phone number on the customer account.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
-  hashCustomerSessionToken,
+  SESSION_TTL_SECONDS,
+  buildSetCookieHeader,
+  getCookieConfig,
   sendAccountPhoneCode,
   verifyAccountPhoneCode,
 } from "@scalius/core/modules/customers";
@@ -34,7 +36,7 @@ const sendAccountPhoneCodeRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            phone: z.string().trim().max(32).optional().openapi({ description: "A new number for the account's phone: a code goes to how the account signs in now (its proven phone, else its email) and one to the new number, both for this change only. Absent: the account's own unproven phone." }),
+            phone: z.string().trim().max(32).optional().openapi({ description: "The number to make the account's sign-in phone. Absent: the account's own unproven phone. Either way two codes go out, both for this one change: one to how the account signs in now (its proven email, else its proven phone; `confirmWith`) and one to the number." }),
           }).strict(),
         },
       },
@@ -48,7 +50,7 @@ const sendAccountPhoneCodeRoute = createRoute({
           schema: successEnvelope(z.object({
             message: z.string(),
             resendAfterSeconds: z.number().int(),
-            confirmWith: z.enum(["phone", "email"]).nullable().openapi({ description: "For a change: where the code that confirms it went (send it back as `currentCode`); null for the account's own phone." }),
+            confirmWith: z.enum(["phone", "email"]).openapi({ description: "Where the confirming code went: the account's proven email, else its proven phone. Send that code back as `currentCode`." }),
           })),
         },
       },
@@ -84,15 +86,15 @@ const verifyAccountPhoneCodeRoute = createRoute({
   method: "post",
   path: "/phone/verify",
   tags: ["Customer Auth"],
-  summary: "Prove the account's phone (or the new number it moves to) and add orders placed with it",
+  summary: "Make a proven number the account's sign-in phone (two codes); signs out every session and sets a new one",
   request: {
     body: {
       content: {
         "application/json": {
           schema: z.object({
             code: z.string().trim().min(4).max(12),
-            phone: z.string().trim().max(32).optional().openapi({ description: "The new number of a change: `code` is the one sent to it." }),
-            currentCode: z.string().trim().min(4).max(12).optional().openapi({ description: "For a change: the code sent to how the account signs in now." }),
+            phone: z.string().trim().max(32).optional().openapi({ description: "The number the codes were sent for (absent: the account's own phone); `code` is the one sent to it." }),
+            currentCode: z.string().trim().min(4).max(12).optional().openapi({ description: "The code sent to how the account signs in now (required)." }),
           }).strict(),
         },
       },
@@ -114,22 +116,27 @@ const verifyAccountPhoneCodeRoute = createRoute({
 
 app.openapi(verifyAccountPhoneCodeRoute, async (c) => {
   setPrivateNoStoreHeaders(c);
-  const { session, token } = await requireCustomerSession(c);
+  const { session } = await requireCustomerSession(c);
   if (!session.customerId) throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
   const env = c.env as unknown as Record<string, unknown>;
   const { code, phone, currentCode } = c.req.valid("json");
-  const { movedOrders } = await verifyAccountPhoneCode(c.get("db"), {
+  const db = c.get("db");
+  const proof = await verifyAccountPhoneCode(db, {
     accountId: session.customerId,
     code,
     phone,
     currentCode,
-    // A change signs out every other session of the account; this one stays.
-    currentSessionTokenHash: await hashCustomerSessionToken(token, getCustomerSessionHashKey(env)),
+    sessionHashKey: getCustomerSessionHashKey(env),
     encryptionKey: getCredentialEncryptionKey(env),
     credentialEncryptionKey: getCredentialEncryptionKey(env),
   });
+  // Every session of the account ended, this one too: the new one replaces its cookie.
+  const { sameSite, domainAttr } = getCookieConfig(c.env.STOREFRONT_URL as string | undefined, c.env.CUSTOMER_AUTH_COOKIE_DOMAIN as string | undefined);
+  c.header("Set-Cookie", buildSetCookieHeader(proof.session.token, SESSION_TTL_SECONDS, domainAttr, sameSite), { append: true });
+  if (proof.notice) await sendAuthOtp(c, db, proof.notice);
+  const { movedOrders } = proof;
   const added = movedOrders === 0 ? "" : movedOrders === 1 ? " 1 order was added to your account." : ` ${movedOrders} orders were added to your account.`;
-  return ok(c, { movedOrders, message: `Your phone number is verified.${added}` });
+  return ok(c, { movedOrders, message: `Your phone number is verified. You were signed out on other devices.${added}` });
 });
 
 export { app as customerPhoneRoutes };

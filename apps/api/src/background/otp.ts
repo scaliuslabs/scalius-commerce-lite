@@ -119,6 +119,8 @@ type ResolvedAuthOtp = {
   otpExpiresAt: number | null;
   /** The presence the code speaks for: the buyer's request's, else its order's (`buyerMessageScope`). */
   presence: string | null;
+  /** A phone change's new number, masked (its code and notice name it). */
+  maskedPhone: string | null;
 };
 
 type AuthOtpDeliveryChallengeRow = {
@@ -147,6 +149,7 @@ async function resolveAuthOtp(
     orderNumber: null,
     otpExpiresAt: null,
     presence: delivery.presence ?? null,
+    maskedPhone: delivery.maskedPhone ?? null,
   };
 
   const row = await selectAuthOtpDeliveryChallengeRow(db, delivery);
@@ -344,6 +347,7 @@ async function sendAuthOtpByChannel(
     code,
     name: payload.name,
     orderNumber: payload.orderNumber,
+    maskedPhone: payload.maskedPhone,
   });
   return payload.channel === "email"
     ? sendAuthOtpEmail(payload, message, target, db, env)

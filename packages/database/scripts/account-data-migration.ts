@@ -34,7 +34,10 @@ const HEADER = `-- What a buyer's account reads, at any order count (rules/order
 --   while the order is live), kept by three triggers. The backfill writes one
 --   row per storefront store thread and one per order-scoped thread. Its
 --   index, and \`conversations.topic\`: the merchant topic a buyer chose.
--- - \`customers.whatsapp\`: the buyer's WhatsApp number when not the phone.`;
+-- - \`customers.whatsapp\`: the buyer's WhatsApp number when not the phone.
+-- - \`customers.phone_staff_set_at\` / \`email_staff_set_at\`: a contact staff set on
+--   an account, which signs nothing in until the buyer proves it with a code
+--   (the proof then reaches this account), with their partial indexes.`;
 
 /** Drizzle's statements in the file it wrote, without breakpoints, comments, triggers, backfills or the ledger row. */
 function drizzleStatements(migration: string): string[] {

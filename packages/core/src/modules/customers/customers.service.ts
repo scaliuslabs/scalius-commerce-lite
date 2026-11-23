@@ -624,8 +624,19 @@ export async function updateCustomer(
     // A save that changes nothing writes nothing: no bumped timestamp, no empty "Updated" entry.
     if (taxUnchanged && (Object.keys(next) as Array<keyof typeof next>).every((key) => (next[key] ?? null) === (existing[key] ?? null))) return;
 
+    // A contact staff change on an account signs nothing in until the buyer proves it with a
+    // code (its proof then reaches this account: `resolveProofOwner`), and every session of the
+    // account ends in the same batch: whoever held one, the owner signs in again by the new contact.
+    const phoneMoved = Boolean(existing.accountClaimedAt) && data.phone != null && storedPhone(data.phone) !== existing.phone;
+    const emailMoved = Boolean(existing.accountClaimedAt) && data.email !== undefined
+        && normalizeContactEmail(data.email) !== normalizeContactEmail(existing.email);
+    const contactProof = {
+        ...(phoneMoved ? { phoneVerifiedAt: null, phoneStaffSetAt: sql`unixepoch()` } : {}),
+        ...(emailMoved ? { emailVerifiedAt: null, emailStaffSetAt: normalizeContactEmail(data.email) ? sql`unixepoch()` : null } : {}),
+    };
     // Only the fields the caller sent: a field another writer changed since the read keeps its value.
     const changes = {
+        ...contactProof,
         ...(data.name != null ? { name: data.name } : {}),
         ...(data.email !== undefined ? { email: data.email } : {}),
         ...(data.phone != null ? { phone: storedPhone(data.phone) } : {}),
@@ -648,6 +659,10 @@ export async function updateCustomer(
             customerNotErasedGuard(db, id),
             ...(expectsTax ? [buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${customers} WHERE ${customers.id} = ${id} AND ${taxAsRead})`, "CUSTOMER_TAX_MOVED")] : []),
             db.update(customers).set({ ...changes, updatedAt: sql`unixepoch()` }).where(and(eq(customers.id, id), live)),
+            ...(phoneMoved || emailMoved
+                ? [db.update(customerSessions).set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+                    .where(and(eq(customerSessions.customerId, id), isNull(customerSessions.revokedAt)))]
+                : []),
             historyFromLiveRow(db, id, "updated", actorId, live),
         ]);
     } catch (error) {

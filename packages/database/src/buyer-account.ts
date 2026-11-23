@@ -101,11 +101,11 @@ export function generateConversationBuyerAccountTriggers(): BuyerAccountTrigger[
 
 /** The rows as the triggers keep them, for orders and threads that exist before the triggers. */
 export const BUYER_ACCOUNT_BACKFILL = [
-  // One row per (account, currency) with a counted order; an owner id with no customer row is skipped.
+  // One row per (account, currency) with a counted order; an owner id with no customer row, or an erased one, is skipped.
   `INSERT INTO account_order_totals (customer_id, currency_code, orders_count, spent_minor, updated_at)
     SELECT customers.id, orders.currency_code, count(orders.id), COALESCE(sum(${ORDER_HELD}), 0), unixepoch()
     FROM orders INNER JOIN customers ON customers.id = orders.account_owner_customer_id
-    WHERE orders.deleted_at IS NULL AND orders.status <> 'incomplete'
+    WHERE orders.deleted_at IS NULL AND orders.status <> 'incomplete' AND customers.erased_at IS NULL
     GROUP BY customers.id, orders.currency_code`,
   // One write per storefront store thread, then one per order-scoped thread.
   "UPDATE conversations SET buyer_account_id = customer_id WHERE subject_type = 'store' AND channel IS NULL AND customer_id IS NOT NULL",

@@ -30,6 +30,13 @@ export const customers = sqliteTable("customers", {
     accountClaimedAt: integer("account_claimed_at", { mode: "timestamp" }),
     phoneVerifiedAt: integer("phone_verified_at", { mode: "timestamp" }),
     emailVerifiedAt: integer("email_verified_at", { mode: "timestamp" }),
+    /**
+     * Staff set this account's phone or email (0225): until the buyer proves it
+     * with a code it signs nothing in, and the first code that proves it signs
+     * into this account (`resolveProofOwner`), which then clears the mark.
+     */
+    phoneStaffSetAt: integer("phone_staff_set_at", { mode: "timestamp" }),
+    emailStaffSetAt: integer("email_staff_set_at", { mode: "timestamp" }),
     lastAuthenticatedAt: integer("last_authenticated_at", { mode: "timestamp" }),
     totalOrders: integer("total_orders").notNull().default(0),
     lastOrderAt: integer("last_order_at", { mode: "timestamp" }),
@@ -75,6 +82,11 @@ export const customers = sqliteTable("customers", {
 }, (table) => [
     index("customers_email_idx").on(table.email),
     index("customers_merged_into_idx").on(table.mergedIntoCustomerId),
+    // A staff-set contact awaiting its proof: a sign-in's fallback owner lookup (0225).
+    index("customers_staff_phone_idx").on(table.phone)
+        .where(sql`${table.phoneStaffSetAt} IS NOT NULL AND ${table.deletedAt} IS NULL`),
+    index("customers_staff_email_idx").on(sql`lower(${table.email})`)
+        .where(sql`${table.emailStaffSetAt} IS NOT NULL AND ${table.deletedAt} IS NULL`),
     index("customers_phone_idx").on(table.phone),
     // Store import dedupe matches emails as typed: trimmed, any case.
     index("customers_email_norm_idx").on(sql`lower(trim(${table.email}))`),
