@@ -401,7 +401,7 @@ function fieldValue(value: unknown, page: StorefrontPageMoney): unknown {
 /** A product as an app card gets it, from the core card model (same prices, photo and quick-add rules). */
 export function productCardData(product: ProductCardProduct, model: ProductCardModel, page: StorefrontPageMoney): StorefrontProductCard {
   // The core card's price rule (priceLineClaim), so a skin's "-13%" matches the store's own.
-  const claim = priceLineClaim({ current: product.discountedPrice, regular: product.price, from: model.price.from });
+  const claim = priceLineClaim({ current: product.discountedPrice, regular: product.price });
   const image = model.image
     ? { url: model.image.src, srcset: model.image.srcset ?? null, width: null, height: null, alt: model.image.alt }
     : null;
@@ -531,8 +531,8 @@ export function productPageData(input: {
     summary: warrantySummaryText(warrantyTerms(view), warrantyWords),
   }));
   const amount = (value: number): StorefrontMoney => pageAmount(value, page);
-  const compare = (current: number, regular: number, from: boolean) => {
-    const { compareAt } = priceLineClaim({ current, regular, from });
+  const compare = (current: number, regular: number) => {
+    const { compareAt } = priceLineClaim({ current, regular });
     return compareAt === null ? null : amount(compareAt);
   };
   // The gallery's items in its order: a photo, or a video's poster with its file (a video without a poster is left out).
@@ -559,7 +559,7 @@ export function productPageData(input: {
       descriptionHtml: product.description ? sanitizeHtml(product.description) : "",
       media,
       price: amount(input.price.current),
-      compareAt: compare(input.price.current, input.price.regular, input.price.from),
+      compareAt: compare(input.price.current, input.price.regular),
       priceVaries: input.price.from,
       sku: only?.sku?.trim() || null,
       installments: emi && emi.monthlyMinor > 0 && emi.months > 0
@@ -584,8 +584,8 @@ export function productPageData(input: {
           title: variant.selectedOptions.map((option) => option.value).join(" / ") || product.name,
           options: input.options.map((option) => variant.selectedOptions.find((each) => each.optionDefinitionId === option.id)?.value ?? ""),
           price: amount(price),
-          // One SKU's own price: a single price, never "From".
-          compareAt: compare(price, variant.price ?? product.price, false),
+          // The SKU's own price and regular price.
+          compareAt: compare(price, variant.price ?? product.price),
           available: isVariantAvailable(variant),
           image,
           warrantyId: perSku.byVariant[variant.id] ?? null,

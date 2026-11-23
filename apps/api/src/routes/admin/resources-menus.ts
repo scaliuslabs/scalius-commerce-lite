@@ -17,6 +17,7 @@
 //     (`published: false`, `publishError`). Where a published menu shows
 //     (header, footer columns) stays the merchant's choice.
 import { createRoute, z } from "@hono/zod-openapi";
+import { NAVIGATION_SYSTEM_KEYS } from "@scalius/shared/navigation-system-targets";
 import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
@@ -46,7 +47,6 @@ app.use("*", async (c, next) => {
   c.header("Cache-Control", "private, no-store");
 });
 
-const SYSTEM_KEYS = ["home", "catalog", "search", "account", "cart", "checkout", "order_lookup"] as const;
 const RESOURCE_TYPES = ["page", "category", "collection", "product"] as const;
 
 const targetInput = z.discriminatedUnion("type", [
@@ -58,7 +58,7 @@ const targetInput = z.discriminatedUnion("type", [
       .openapi({ description: "A category's or collection's handle, instead of `resourceId`." }),
     query: z.string().max(1024).optional(),
   }).strict(),
-  z.object({ type: z.literal("system"), key: z.enum(SYSTEM_KEYS) }).strict(),
+  z.object({ type: z.literal("system"), key: z.enum(NAVIGATION_SYSTEM_KEYS) }).strict(),
   z.object({ type: z.literal("internal_path"), path: z.string().trim().min(1).max(2048) }).strict(),
   z.object({ type: z.literal("external_url"), url: z.string().trim().min(1).max(2048) }).strict(),
   z.object({ type: z.literal("label") }).strict(),

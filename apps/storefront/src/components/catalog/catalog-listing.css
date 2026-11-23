@@ -117,8 +117,24 @@
   margin-bottom: 0.5rem;
 }
 
+/* The store's own listing: the band's controls are the computer's; its
+   phone bar carries them below 64rem. A skin's toolbar (data-every-width)
+   has no phone bar beside it, so it shows at every width and wraps. */
 .catalog-band-tools {
   display: none;
+}
+
+.catalog-band-tools[data-every-width] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+@media (max-width: 63.99rem) {
+  .catalog-band-tools[data-every-width] select {
+    min-height: 2.75rem;
+  }
 }
 
 @media (min-width: 64rem) {

@@ -283,7 +283,7 @@ The keys of `sections`, `components` and `skins` match the manifest's section ty
 ### Primitives
 
 - `Image`: a responsive `<img>` with `srcset` and intrinsic size (no layout shift). Lazy unless `loading="eager"`, which also sets `fetchpriority="high"`; pass `fetchpriority="auto"` for the rest of an eager first row.
-- `Price`: the market's formatted price with an accessible compare-at (`from` for "From …").
+- `Price`: the market's formatted price with an accessible compare-at (`from` for "From …"). A card's `price`, `compareAt` and `percentOff` are one SKU's: with `priceVaries`, the cheapest buyable SKU's price beside its own old price and saving ("From ৳650 ~~৳1,300~~ -50%"), or no old price when that SKU has none.
 - `Island`: interactive markup (`hydrate`: `visible` (default), `idle`, `load`, `interaction`). Its `props` are JSON in the page, at most 16 KiB (`islandPropsBytes`).
 - `Deferred`: markup laid out only at its moment (below).
 - `Slot`: a unit's component slot, in place.
@@ -427,9 +427,9 @@ The store adds kinds, module names and error codes over time: `StorefrontEmbedKi
 | `buy_form` (`<BuyForm title={false} options={false} actions={false} quantity={false} addLabel="…" buyLabel="…" />`) | `product_main` (required, one) | The real buy form |
 | `buy_form_part` (`<BuyFormPart name="…" layout="…" />`) | `product_main` (each part once) | One of the buy form's parts, drawn where you place it |
 | `gallery` (`<Gallery />`) | `product_main` (one) | The theme's gallery, in step with the chosen variant |
-| `reviews`, `recommendations` | `product_main` | The product's reviews and related products (style the latter by `[data-recs-part]`: `root`, `title`, `list`, and `data-recs-reason` on the root) |
+| `reviews`, `recommendations` | `product_main` | The product's reviews and related products. Related products take your column (no band or page gutters of their own) and lay the store's cards out at the merchant's grid density; style them by `[data-recs-part]`: `root`, `title`, `list`, and `data-recs-reason` on the root |
 | `product_module` (`<ProductModule name="…" />`) | `product_main` (each name once) | One of the template's product modules, left out from below |
-| `filters`, `toolbar`, `pagination` | `listing_main` | The filter form, sort and page size, page links |
+| `filters`, `toolbar`, `pagination` | `listing_main` | The filter form, sort and page size, page links. The toolbar shows at every width and wraps on phones: it is the buyer's only sort |
 | `order_form` (`<OrderForm product={…} />`) | sections (up to two each) | The single-page order form |
 | `slot` (`<Slot name="…" />`) | header, footer and card skins | A component slot |
 

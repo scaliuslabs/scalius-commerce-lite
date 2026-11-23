@@ -147,7 +147,9 @@ export function calculateVariantPrice(
 /**
  * The truthful price shown before an exact optioned SKU is selected: the
  * lowest buyer-actionable price (or, when all are sold out, the lowest of
- * all), with "From" only when the choices are priced differently.
+ * all), with "From" only when the choices are priced differently. At one
+ * price the higher regular price wins, as the card's SKU does
+ * (`buildBuyerCatalogPricingProjection`), so the page opens on the card's line.
  */
 export function getBuyerVariantPricePresentation(
   productPricing: ProductPricing,
@@ -160,7 +162,7 @@ export function getBuyerVariantPricePresentation(
   const priced = (available.length > 0 ? available : variants)
     .map((variant) => calculateVariantPrice(productPricing, variant));
   const pricing = priced.reduce((lowest, current) =>
-    current.finalPrice < lowest.finalPrice ? current : lowest,
+    current.finalPrice < lowest.finalPrice || (current.finalPrice === lowest.finalPrice && current.originalPrice > lowest.originalPrice) ? current : lowest,
   );
   return {
     isStartingAt: priced.some((price) => price.finalPrice !== pricing.finalPrice),
