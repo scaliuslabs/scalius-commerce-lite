@@ -321,6 +321,9 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     // Cart check, 20 lines, a code and a chosen delivery, one discount app (2026-11-23): the cart page's discounts
     // ride the check (no separate preview request): the one discount authority, then the app's facts and run; no write.
     "cart-check-20-code-app": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 0, rowsRead: 168, fullScans: 2 },
+    // Cart check, a 3-item kit beside two plain lines (2026-11-23): the kit line answers its items from the
+    // check's own statements (the items' products, SKUs and options ride them); no statement of its own.
+    "cart-check-kit": { d1Calls: 7, d1Statements: 7, externalFetches: 0, rowsWritten: 0, rowsRead: 17, fullScans: 2 },
     "staff-sign-in": { d1Calls: 9, d1Statements: 9, externalFetches: 0, rowsWritten: 5, rowsRead: 7, fullScans: 0 },
     // rowsRead grows with the bundled apps a deployment ships (Noor and the
     // Bangladesh pack today).
@@ -387,6 +390,9 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     // Cart check, 20 lines, a code and a chosen delivery, one discount app (2026-11-23): the cart page's discounts
     // ride the check (no separate preview request): the one discount authority, then the app's facts and run; no write.
     "cart-check-20-code-app": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 0, rowsRead: 168, fullScans: 2 },
+    // Cart check, a 3-item kit beside two plain lines (2026-11-23): the kit line answers its items from the
+    // check's own statements (the items' products, SKUs and options ride them); no statement of its own.
+    "cart-check-kit": { d1Calls: 7, d1Statements: 7, externalFetches: 0, rowsWritten: 0, rowsRead: 17, fullScans: 2 },
     "staff-sign-in": { d1Calls: 9, d1Statements: 9, externalFetches: 0, rowsWritten: 5, rowsRead: 7, fullScans: 0 },
     // rowsRead grows with the bundled apps a deployment ships (Noor and the
     // Bangladesh pack today).
@@ -461,4 +467,17 @@ export const BUYER_ORDER_READ_BUDGETS = {
   accountUnpaidThreeMethods: { d1Calls: 19, d1Statements: 26 },
   receiptPaid: { d1Calls: 17, d1Statements: 19 },
   receiptPoll: { d1Calls: 16, d1Statements: 18 },
+} as const;
+
+/**
+ * A kit's order with an add-on and an app drawing under each row (2026-11-23, wave 3 k1,
+ * storefront-orders/order-line-slot.d1.test.ts, recorded exactly): one run per slot the app
+ * draws, never one per row, only when the page's own read asks (`buyerUi=run`): neither form of
+ * the status poll (`paymentRecovery=omit`, or `include` when the page asks about a retry) runs one.
+ */
+export const BUYER_ORDER_KIT_APP_READ_BUDGETS = {
+  receiptKitApp: { d1Calls: 27, d1Statements: 29 },
+  receiptKitAppPoll: { d1Calls: 21, d1Statements: 23 },
+  receiptKitAppRetryPoll: { d1Calls: 21, d1Statements: 23 },
+  accountKitApp: { d1Calls: 20, d1Statements: 27 },
 } as const;

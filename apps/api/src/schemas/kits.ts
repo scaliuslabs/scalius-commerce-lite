@@ -3,7 +3,8 @@
 // sections (rules/catalog/kits-sell-as-components.md).
 import { z } from "@hono/zod-openapi";
 import { BUYER_AVAILABILITY_BANDS } from "@scalius/shared/buyer-availability";
-import { KIT_COMPONENT_PROBLEMS } from "@scalius/core/modules/products";
+import { KIT_COMPONENT_PROBLEMS, KIT_COMPONENTS_MAX } from "@scalius/core/modules/products";
+import { storefrontCustomFieldsSchema } from "./custom-fields";
 
 const optionValuesSchema = z.array(z.object({ name: z.string(), value: z.string() })).max(5).openapi({
   description: "The SKU's chosen option values (platform, format), in option order.",
@@ -13,20 +14,32 @@ const deliverySchema = z.enum(["physical", "service", "digital_key", "digital_fi
   description: "How the item reaches the buyer, from its own fulfilment setting: shipped or picked up, performed, a licence key, or a file. The theme words it.",
 });
 
+/** The most items a kit holds (`KIT_COMPONENTS_MAX`). */
+export const KIT_ITEMS_MAX = KIT_COMPONENTS_MAX;
+
+const kitItemShape = {
+  variantId: z.string(),
+  productId: z.string(),
+  productName: z.string().openapi({ description: "In the reader's language." }),
+  options: optionValuesSchema,
+  quantity: z.number().int().min(1).openapi({ description: "Its units in one kit." }),
+  imageUrl: z.string().nullable(),
+  imageMediaId: z.string().nullable(),
+  imageAlt: z.string().nullable(),
+};
+
+/** One included item of a kit as a buyer reads it: on a cart line (`kitItems`) and, with its page, delivery and price, on the product page. */
+export const kitItemSchema = z.object(kitItemShape).openapi("KitItem", {
+  description: "One included item of a kit: its name and option values in the reader's language, its units in one kit and its picture.",
+});
+
 export const storefrontKitSchema = z.object({
   components: z.array(z.object({
-    variantId: z.string(),
-    productId: z.string(),
-    productName: z.string(),
+    ...kitItemShape,
     productSlug: z.string().nullable().openapi({ description: "Its product page; null when that page is not public." }),
-    imageUrl: z.string().nullable(),
-    imageMediaId: z.string().nullable(),
-    imageAlt: z.string().nullable(),
-    options: optionValuesSchema,
-    quantity: z.number().int().min(1),
     delivery: deliverySchema,
     price: z.number().openapi({ description: "One unit's price in the page's currency." }),
-  })).max(20).openapi({
+  })).max(KIT_ITEMS_MAX).openapi({
     description: "Its items a buyer may read, in order: none whose product is a draft, archived or deleted (counted in `unavailableItems`); a host page's placed offer lists its first 6 (`componentCount` says how many it holds; its own page lists them all).",
   }),
   componentCount: z.number().int().min(1).max(20).openapi({ description: "How many items it holds, whatever `components` lists." }),
@@ -56,6 +69,7 @@ export const storefrontPlacedOfferSchema = z.object({
   requiresCustomization: z.boolean().openapi({ description: "Its product asks the buyer for inputs before buying: offer a link to its page, never a bare add." }),
   availabilityBand: z.enum(BUYER_AVAILABILITY_BANDS),
   kit: z.union([storefrontKitSchema, z.null()]),
+  customFields: storefrontCustomFieldsSchema.openapi({ description: "The offered SKU's storefront-visible custom fields, as `variants[].customFields` carries the page's own SKUs' (a chip from a flag)." }),
 }).openapi("StorefrontPlacedOffer", { description: "A SKU of another product shown under this page's own offers." });
 
 const problemSchema = z.enum(KIT_COMPONENT_PROBLEMS).openapi({

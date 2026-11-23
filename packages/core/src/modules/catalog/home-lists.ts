@@ -18,6 +18,7 @@ import type { Database } from "@scalius/database/client";
 import type { safeBatch } from "@scalius/database/client";
 import { and, asc, desc, eq, gte, inArray, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { HomeProductListRequest } from "@scalius/shared/storefront-theme";
+import { MIN_POPULAR_UNITS } from "@scalius/shared/listing-sorts";
 import {
   buildBuyerCatalogPricingProjection,
   type ProductMediaProjection,
@@ -49,8 +50,6 @@ type BatchStatement = Parameters<typeof safeBatch>[1][number];
 const ON_SALE_CANDIDATES_PER_CARD = 3;
 /** Discounted SKUs read per candidate: an optioned product often has several on sale. */
 const ON_SALE_SKUS_PER_CANDIDATE = 4;
-/** Popular: at least this many units sold in the last 30 days (product_sales_stats). */
-const MIN_POPULAR_UNITS = 2;
 
 export interface HomeProductList {
     key: string;

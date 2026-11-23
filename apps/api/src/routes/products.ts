@@ -52,6 +52,8 @@ import {
   listingPaginationSchema,
   listingPageInfoSchema,
   listingCursorQuerySchema,
+  searchSortSchema,
+  LISTING_SORT_DESCRIPTION,
   errorResponses,
 } from "../schemas/responses";
 import { customizationViewSchema, fulfillmentKindSchema } from "../schemas/order-lines";
@@ -119,10 +121,9 @@ const productFilterSchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
   ...listingCursorQuerySchema,
-  sort: z
-    .enum(["relevance", "newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount", "rating"])
+  sort: searchSortSchema
     .optional()
-    .openapi({ description: "Sort order. Defaults to relevance when `search` is set, otherwise newest. `rating`: the Bayesian review rank, unreviewed products last." }),
+    .openapi({ description: `${LISTING_SORT_DESCRIPTION} Defaults to relevance when \`search\` is set, otherwise newest.` }),
   minRating: minRatingQuerySchema,
   minPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
   maxPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Maximum effective buyer-SKU price" }),

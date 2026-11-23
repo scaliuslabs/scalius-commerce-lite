@@ -3,6 +3,7 @@
 // Used by all route files to define typed response schemas for createRoute().
 
 import { z } from "@hono/zod-openapi";
+import { STOREFRONT_LISTING_SORTS, STOREFRONT_SEARCH_SORTS } from "@scalius/shared/listing-sorts";
 
 // ─────────────────────────────────────────
 // Envelope helpers
@@ -100,9 +101,16 @@ export const listingPageInfoSchema = z.object({
 /** The `cursor` query parameter shared by every buyer-facing product listing. */
 export const listingCursorQuerySchema = {
   cursor: z.string().max(1024).optional().openapi({
-    description: "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
+    description: "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
   }),
 };
+
+/** A buyer listing's orders (`@scalius/shared/listing-sorts`). */
+export const listingSortSchema = z.enum(STOREFRONT_LISTING_SORTS);
+/** A search's orders: `relevance`, then every listing order. */
+export const searchSortSchema = z.enum(STOREFRONT_SEARCH_SORTS);
+/** What each listing order means, for the `sort` parameter's description. */
+export const LISTING_SORT_DESCRIPTION = "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.";
 
 /** The `after`/`before` query parameters shared by every keyset-paged list. */
 export const keysetQuerySchema = {

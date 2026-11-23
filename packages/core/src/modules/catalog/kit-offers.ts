@@ -22,6 +22,7 @@ import {
     storeDefaultLowStockThresholdSql,
     variantOptionValuesSql,
     type KitComponentDelivery,
+    type KitItem,
     type ProductMediaProjectionRow,
 } from "../products";
 import {
@@ -177,20 +178,10 @@ export function pageSkuBuyerPrice(row: PricedSkuRow, market: MarketPriceContext 
     return { amountMinor: resolved.amountMinor, compareAtMinor: resolved.compareAtMinor };
 }
 
-/** One included item of a kit as a buyer reads it. */
-export interface StorefrontKitComponent {
-    variantId: string;
-    productId: string;
-    /** In the page's language. */
-    productName: string;
+/** One included item of a kit as a product page reads it: the buyer's `KitItem`, with its page, delivery and price. */
+export interface StorefrontKitComponent extends KitItem {
     /** Its product's page (in the page's language); null when that page is not public. */
     productSlug: string | null;
-    imageUrl: string | null;
-    imageMediaId: string | null;
-    imageAlt: string | null;
-    /** The chosen option values (platform, format), in option order. */
-    options: Array<{ name: string; value: string }>;
-    quantity: number;
     /** How it reaches the buyer, from its own fulfilment setting: the theme words it. */
     delivery: KitComponentDelivery;
     /** One unit's price in the page's currency. */

@@ -1582,6 +1582,15 @@
            "type": "string",
            "minLength": 1,
            "maxLength": 80
+          },
+          "details": {
+           "maxItems": 10,
+           "type": "array",
+           "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+           }
           }
          },
          "required": [
@@ -1608,6 +1617,15 @@
            "type": "string",
            "minLength": 1,
            "maxLength": 80
+          },
+          "details": {
+           "maxItems": 10,
+           "type": "array",
+           "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+           }
           }
          },
          "required": [
@@ -4950,6 +4968,7 @@
       "cart.line.after",
       "order.confirmation",
       "account.order",
+      "order.line.after",
       "account.overview",
       "account.profile"
      ]
@@ -5646,6 +5665,210 @@
        "title",
        "quantity",
        "unitPriceMinor",
+       "bundle",
+       "addOns",
+       "inputs"
+      ],
+      "additionalProperties": false
+     }
+    },
+    "orderLines": {
+     "maxItems": 99,
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "lineKey": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "lineIds": {
+        "minItems": 1,
+        "maxItems": 2,
+        "type": "array",
+        "items": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 128
+        }
+       },
+       "productId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "variantId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "title": {
+        "type": "string",
+        "maxLength": 300
+       },
+       "quantity": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       },
+       "unitsTotalMinor": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+       },
+       "bundle": {
+        "anyOf": [
+         {
+          "type": "object",
+          "properties": {
+           "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+           },
+           "title": {
+            "type": "string",
+            "maxLength": 300
+           },
+           "kind": {
+            "type": "string",
+            "enum": [
+             "expand",
+             "merge",
+             "kit"
+            ]
+           },
+           "anchor": {
+            "type": "boolean"
+           },
+           "units": {
+            "anyOf": [
+             {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+             },
+             {
+              "type": "null"
+             }
+            ]
+           },
+           "perUnit": {
+            "anyOf": [
+             {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+             },
+             {
+              "type": "null"
+             }
+            ]
+           }
+          },
+          "required": [
+           "id",
+           "title",
+           "kind",
+           "anchor",
+           "units",
+           "perUnit"
+          ],
+          "additionalProperties": false
+         },
+         {
+          "type": "null"
+         }
+        ]
+       },
+       "addOns": {
+        "maxItems": 5,
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "appId": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 128
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "title": {
+           "type": "string",
+           "maxLength": 80
+          },
+          "totalMinor": {
+           "type": "integer",
+           "minimum": 0,
+           "maximum": 9007199254740991
+          },
+          "amountMinor": {
+           "anyOf": [
+            {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 9007199254740991
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "per": {
+           "type": "string",
+           "enum": [
+            "unit",
+            "bundle"
+           ]
+          }
+         },
+         "required": [
+          "appId",
+          "title",
+          "totalMinor",
+          "amountMinor",
+          "per"
+         ],
+         "additionalProperties": false
+        }
+       },
+       "inputs": {
+        "maxItems": 10,
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "key": {
+           "type": "string",
+           "maxLength": 160
+          },
+          "value": {
+           "type": "string",
+           "maxLength": 1000
+          }
+         },
+         "required": [
+          "key",
+          "value"
+         ],
+         "additionalProperties": false
+        }
+       }
+      },
+      "required": [
+       "lineKey",
+       "lineIds",
+       "productId",
+       "variantId",
+       "title",
+       "quantity",
+       "unitsTotalMinor",
        "bundle",
        "addOns",
        "inputs"
@@ -21168,6 +21391,7 @@
    "cart.line.after": "cart",
    "order.confirmation": "order",
    "account.order": "order",
+   "order.line.after": "order",
    "account.overview": "account",
    "account.profile": "account"
   },
@@ -21183,11 +21407,13 @@
    "cart.line.after",
    "order.confirmation",
    "account.order",
+   "order.line.after",
    "account.overview",
    "account.profile"
   ],
   "STOREFRONT_UI_LINE_SLOTS": [
-   "cart.line.after"
+   "cart.line.after",
+   "order.line.after"
   ],
   "STOREFRONT_EMBED_KINDS": [
    "buy_form",

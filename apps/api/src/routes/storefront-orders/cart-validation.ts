@@ -6,6 +6,7 @@ import { addOnFoldLabel } from "@scalius/shared/add-on-folding";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { InventoryPool } from "@scalius/database/schema";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
+import { translationScope } from "@scalius/core/modules/translations";
 import { readStoreOriginCountry } from "@scalius/core/modules/tax";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import {
@@ -47,6 +48,7 @@ import {
   orderLinePropertySchema,
 } from "../../schemas/order-lines";
 import { buyerCartLineSchema, validateBuyerCart } from "./buyer-cart";
+import { KIT_ITEMS_MAX, kitItemSchema } from "../../schemas/kits";
 import { cartDiscountSchema, priceCartDiscount } from "./cart-discount";
 import { discountCodeListSchema } from "../../schemas/storefront-discounts";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
@@ -226,6 +228,9 @@ const cartValidationRoute = createRoute({
               availableQuantity: z.number().nullable(),
               productImageMediaId: z.string().nullable(),
               productImage: z.string().url().nullable(),
+              kitItems: z.array(kitItemSchema).max(KIT_ITEMS_MAX).nullable().openapi({
+                description: "A kit line's items, in the kit's order: each one's name and option values in the page's language, its units in one kit and its picture. Null on any other line.",
+              }),
             })),
             subtotal: z.number(),
             addOns: addOnTotalsSchema,
@@ -381,6 +386,8 @@ app.openapi(cartValidationRoute, async (c) => {
       customerId: sessionCustomerId,
     },
     appContext,
+    // Every line in the page's language, and a kit line answers its items.
+    buyerRead: { translation: translationScope(data.presence) },
   });
   // Apps that rewrote the lines (`cart.transform`): the buyer sees their own
   // lines (a bundle priced as its components), checkout the rewritten ones.

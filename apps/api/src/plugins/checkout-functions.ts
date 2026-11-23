@@ -37,7 +37,7 @@ import { PLUGIN_EXTENSION_RUN, PLUGIN_FUNCTION_POINTS, type PluginFunctionInput,
 import type { PluginHost, PluginHostOptions } from "./host";
 import { prepareBuyerUiBlocks } from "./buyer-ui";
 import { BUYER_UI_BLOCKS_MAX, BUYER_UI_LINE_BLOCKS_MAX, BUYER_UI_RESPONSE_MAX_BYTES, type BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
-import { isStorefrontUiLineSlot } from "@scalius/shared/plugins/storefront-protocol";
+import { isStorefrontUiLineSlot, STOREFRONT_UI_SLOT_PAGES } from "@scalius/shared/plugins/storefront-protocol";
 import { CHECKOUT_APP_BUDGET_MS, CHECKOUT_APP_CEILING_MS, checkoutAppShare, optionalAppBudget, PLUGIN_FUNCTION_WALL_MS, createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
@@ -262,14 +262,20 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
       const slotBlocks: BuyerUiBlock[] = [];
       const lineBlocks: BuyerUiBlock[] = [];
       const cartLines = input.lines ?? [];
-      const lineKeys = new Set(cartLines.map((line) => line.lineKey));
+      const orderLines = input.orderLines ?? [];
       // The cart's other slots read every line without offer prices; the per-line slot with them.
       const withoutOffers = cartLines.map((entry) => ({ ...entry, inputs: entry.inputs.map((each) => ({ ...each, offers: [] })) }));
       for (const target of input.targets) {
         const perLine = isStorefrontUiLineSlot(target);
+        // An order's slots read its rows (`orderLines`), a cart's its lines: a per-line slot draws under them.
+        const onOrder = STOREFRONT_UI_SLOT_PAGES[target] === "order";
+        const lines: ReadonlyArray<{ lineKey: string }> = onOrder ? orderLines : cartLines;
+        const lineKeys = new Set(lines.map((line) => line.lineKey));
         // A per-line slot runs once per app for every line (never once per line), and only for an app that declares it.
-        if (perLine && (cartLines.length === 0 || runtime.buyerUiApps!(target).length === 0)) continue;
-        const facts = perLine ? { lines: [...cartLines] } : input.lines ? { lines: withoutOffers } : {};
+        if (perLine && (lines.length === 0 || runtime.buyerUiApps!(target).length === 0)) continue;
+        const facts = onOrder
+          ? (input.orderLines ? { orderLines: [...orderLines] } : {})
+          : perLine ? { lines: [...cartLines] } : input.lines ? { lines: withoutOffers } : {};
         const results = await runtime.run(PLUGIN_EXTENSION_RUN, { target, language: input.language ?? language, locale: input.locale ?? language, currency: input.currency, cart: input.cart ?? null, attributes: input.attributes ?? {}, ...facts, order: input.order ?? null, customer: input.customer ?? (input.cart?.customer ? { id: input.cart.customer.id } : null) });
         for (const result of results) {
           const installation = registrations.find((entry) => entry.installation.pluginId === result.pluginId)!.installation;
@@ -282,7 +288,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
           }
           // Each line's block, in the cart's order, for lines of this cart only, once each.
           const answered = new Map((result.output.lines ?? []).filter((entry) => entry.ui && lineKeys.has(entry.lineKey)).map((entry) => [entry.lineKey, entry.ui!.root]));
-          for (const line of cartLines) {
+          for (const line of lines) {
             const ui = answered.get(line.lineKey);
             if (ui) lineBlocks.push({ ...block, ui, lineKey: line.lineKey });
           }

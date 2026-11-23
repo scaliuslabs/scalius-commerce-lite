@@ -10,6 +10,7 @@ import { allOf } from "../utils/all-of";
 import { buyerState, publicBuyerStateCondition } from "../modules/catalog/buyer-state";
 import type * as ListingPlan from "../modules/catalog/listing-plan";
 import type { NarrowedPlan, NarrowedPlanInput } from "../modules/catalog/listing-plan";
+import { publicProductCount } from "../modules/catalog/popular-plan";
 
 export function oracleListingPageOf(ids: SQL): SQL {
     return sql`(WITH listing_page AS MATERIALIZED (${ids}) SELECT * FROM listing_page) AS listing_page`;
@@ -66,6 +67,8 @@ export function oracleNarrowedShopAllPlan(input: NarrowedPlanInput): NarrowedPla
             )
             SELECT * FROM listing_page) AS listing_page`;
         },
+        // The popular order's own plan reads the same sizes (not frozen: it never had a CTE).
+        size: { set: input.driving.publicCount, total: publicProductCount() },
     };
 }
 

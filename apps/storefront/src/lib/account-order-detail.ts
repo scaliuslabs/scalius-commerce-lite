@@ -65,6 +65,7 @@ import {
   showsOrderLineGroupHeadings,
   supportActionDescription,
 } from "@/lib/order-line-groups";
+import { buyerLineAddOnRows } from "@scalius/shared/buyer-line-add-on-text";
 import { pagePath } from "@/lib/presence-url";
 import { longAnswerHtml, longAnswerWords } from "@/lib/long-answer";
 import type { MoneySummaryRow } from "@/lib/money-summary-order";
@@ -588,7 +589,11 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       const unit = item.unitPriceMinor != null ? minor(item.unitPriceMinor) : accountMoney(item.unitPrice, order.currencyCode);
       const name = escapeHtml(item.productName || words.product);
       // Buyer inputs: display only, escaped, never in links or data attributes.
-      const properties = orderLinePropertyRows(item.properties, (property) => minor(property.priceMinor), copy);
+      const properties = [
+        ...orderLinePropertyRows(item.properties, (property) => minor(property.priceMinor), copy),
+        // What the apps charged on the row: its `addOns`, the one place a row says it.
+        ...buyerLineAddOnRows((item as { addOns?: unknown }).addOns, { label: copy.lineAddOnText, money: minor, language: pageLanguage() }),
+      ];
       const answerWords = longAnswerWords(pageLanguage());
       // Files, keys, card codes and the review form get the line's full width.
       const extras = lineExtrasMarkup(item, { orderId: order.id, access: "account", languageData: copy });
@@ -847,7 +852,7 @@ export async function loadOrderDetail(): Promise<void> {
     return showOnly("unauth");
   }
 
-  const [result, checkoutConfig] = await Promise.all([getCustomerOrderDetail(orderId), getCheckoutConfig()]);
+  const [result, checkoutConfig] = await Promise.all([getCustomerOrderDetail(orderId, { buyerUi: true }), getCheckoutConfig()]);
   if (detailWindow.__scaliusOrderDetailRun !== run) return;
   if (!result.success || !result.detail) {
     if (result.status === 401) return showOnly("unauth");

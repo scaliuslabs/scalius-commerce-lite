@@ -10,6 +10,7 @@ import type {
     SelectedProductOption,
 } from "./option-model";
 import type { ProductCondition } from "@scalius/shared/product-condition";
+import type { StorefrontSearchSort } from "@scalius/shared/listing-sorts";
 import type { ProductMediaProjection } from "./media";
 import type { BuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 import {
@@ -172,12 +173,15 @@ export interface StorefrontProductFilterInput {
     limit?: number;
     /**
      * Continue after the last card of the previous page (`pageInfo.endCursor`):
-     * newest, price-asc and price-desc only, never with `page` beyond 1.
+     * newest, price-asc, price-desc and popular only, never with `page` beyond 1.
      */
     cursor?: string;
-    /** Defaults to "relevance" when `search` is set, otherwise "newest". */
-    /** `rating`: the Bayesian review rank (`product_review_stats.rating_rank_milli`), unreviewed products last. */
-    sort?: "relevance" | "newest" | "price-asc" | "price-desc" | "name-asc" | "name-desc" | "discount" | "rating";
+    /**
+     * Defaults to "relevance" when `search` is set, otherwise "newest".
+     * `rating`: the Bayesian review rank (`product_review_stats.rating_rank_milli`), unreviewed products last.
+     * `popular`: units sold in 30 days (`product_sales_stats`) from MIN_POPULAR_UNITS, then newest.
+     */
+    sort?: StorefrontSearchSort;
     /**
      * "N★ & up": only products whose published-review average is at least N
      * (`rating_avg_centi >= N * 100`). Whole stars 1-4; anything else is ignored.

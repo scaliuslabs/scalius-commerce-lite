@@ -46,14 +46,20 @@ import {
 import {
   orderMoneyAmounts,
   orderMoneySelection,
+  buyerOrderAddOnTotals,
+  buyerUiOrderLines,
+  presentBuyerLineAddOns,
   presentOrderLineFulfilment,
   presentOrderPickup,
   presentShippingMethodKind,
 } from "@scalius/core/modules/orders/browser";
 import {
+  buyerLineAddOnsSchema,
   buyerLineIdsSchema,
   buyerOrderFulfilmentSchema,
+  orderAddOnTotalsSchema,
   orderFulfilmentShape,
+  orderLineBundleSchema,
   orderLineFulfilmentShape,
 } from "../../schemas/order-lines";
 import { fromMinor } from "@scalius/shared/money";
@@ -166,6 +172,8 @@ const orderReceiptSchema = z.object({
   }).nullable(),
   /** Gift cards still paying for the order, in commit order (released or refunded ones are left out). */
   giftCardTenders: z.array(orderGiftCardTenderSchema),
+  /** The apps' add-ons as summary rows, from the order's real lines: the page draws them as they are. */
+  addOns: orderAddOnTotalsSchema,
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
   items: z.array(z.object({
@@ -185,6 +193,9 @@ const orderReceiptSchema = z.object({
     taxAmountMinor: z.number().int(),
     ...orderLineFulfilmentShape,
     ...orderLineExtrasShape,
+    /** The kit or app bundle the row was bought in: a kit's items are the rows sharing its `id`. Null for a plain line. */
+    bundle: orderLineBundleSchema.nullable(),
+    addOns: buyerLineAddOnsSchema,
   })),
   supportRequests: z.array(receiptSupportRequestSchema),
   supportRequestActions: z.array(receiptSupportRequestActionSchema),
@@ -516,6 +527,9 @@ const getOrderReceiptRoute = createRoute({
       paymentRecovery: z.enum(["include", "omit"]).optional().openapi({
         description: "`omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind.",
       }),
+      buyerUi: z.enum(["run"]).optional().openapi({
+        description: "`run`: the apps draw their blocks for the receipt's slots (`buyerUi`), one run per slot. Only the page's own read asks; absent (a status poll, any other read), no app runs and `buyerUi` is empty.",
+      }),
     }),
   },
   responses: {
@@ -652,6 +666,20 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     ? await presentOrderGiftCardTenders(db, id, order.currencyDecimalPlaces)
     : [];
 
+  // A kit's item split into two lines is one row (`foldBuyerOrderLines`), with its frozen facts.
+  const rows = foldBuyerOrderLines(items, {
+    sum: ["lineSubtotalMinor", "discountAmountMinor", "taxableAmountMinor", "taxAmountMinor", "fulfilledQuantity"],
+    perUnit: ["baseUnitPriceMinor"],
+  }).map((row) => ({
+    row,
+    facts: presentOrderLineFulfilment({
+      fulfillmentType: row.fulfillmentType,
+      fulfilledQuantity: row.fulfilledQuantity,
+      properties: row.properties,
+      propertiesPriceMinor: row.propertiesPriceMinor,
+      baseUnitPriceMinor: row.baseUnitPriceMinor,
+    }, order.currencyDecimalPlaces),
+  }));
   const money = orderMoneyAmounts(order);
   const apps = createCheckoutAppFunctions({
     env: c.env,
@@ -662,9 +690,11 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     registrations,
     buyerRequest: c.req.raw,
   });
-  const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN)
+  // The apps draw only when the page's own read asks (`buyerUi=run`): a status poll never runs one.
+  const drawsApps = c.req.valid("query").buyerUi === "run";
+  const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN) && drawsApps
     ? await apps.buyerUi?.({
-      targets: ["order.confirmation", "account.order"],
+      targets: ["order.confirmation", "account.order", "order.line.after"],
       language: c.req.header("x-storefront-language"),
       locale: c.req.header("x-storefront-locale"),
       currency: order.currencyCode ?? (await readStoreCurrency(db)).code,
@@ -677,6 +707,8 @@ app.openapi(getOrderReceiptRoute, async (c) => {
           ? [{ productId: item.productId, variantId: item.variantId, quantity: item.quantity }]
           : []),
       },
+      // Each row's facts: the per-line slot draws under each row.
+      orderLines: buyerUiOrderLines(rows.map(({ row, facts }) => ({ ...row, properties: facts.properties }))),
       // Receipt proof authorizes this order, not the customer's account data.
       customer: null,
     }) ?? []
@@ -728,32 +760,27 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       balanceDue: fromMinor(getCustomerVisibleBalanceDueMinor(order), order.currencyDecimalPlaces),
       paymentTerms: presentBuyerPaymentTerms(order),
       giftCardTenders,
+      // The summary's add-on rows from the real lines, before any fold (a split kit item's add-on once).
+      addOns: buyerOrderAddOnTotals(items, order.subtotalAmountMinor ?? 0, requestBuyerLanguage(null, c.req.header("x-storefront-language"))),
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
-      // A kit's item split into two lines is one row (`foldBuyerOrderLines`).
-      items: foldBuyerOrderLines(items, {
-        sum: ["lineSubtotalMinor", "discountAmountMinor", "taxableAmountMinor", "taxAmountMinor", "fulfilledQuantity"],
-        perUnit: ["baseUnitPriceMinor"],
-      }).map(({
+      items: rows.map(({ row: {
         productImageObjectKey,
         productImageStatus,
-        fulfillmentType,
-        fulfilledQuantity,
-        properties,
-        propertiesPriceMinor,
-        baseUnitPriceMinor,
+        fulfillmentType: _fulfillmentType,
+        fulfilledQuantity: _fulfilledQuantity,
+        properties: _properties,
+        propertiesPriceMinor: _propertiesPriceMinor,
+        baseUnitPriceMinor: _baseUnitPriceMinor,
         unitsTotalMinor,
-        bundle: _bundle,
+        bundle,
+        addOns,
         ...item
-      }) => withOrderLineExtras({
+      }, facts }) => withOrderLineExtras({
         ...item,
-        ...presentOrderLineFulfilment({
-          fulfillmentType,
-          fulfilledQuantity,
-          properties,
-          propertiesPriceMinor,
-          baseUnitPriceMinor,
-        }, order.currencyDecimalPlaces),
+        ...facts,
+        bundle,
+        addOns: presentBuyerLineAddOns(addOns, order.currencyDecimalPlaces),
         price: buyerLineUnitPrice({ ...item, unitsTotalMinor }, order.currencyDecimalPlaces),
         productImage:
           productImageObjectKey &&
