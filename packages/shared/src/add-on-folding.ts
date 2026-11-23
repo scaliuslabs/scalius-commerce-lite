@@ -5,13 +5,21 @@
 // anchor's units per bundle unit, so its row counts it once per bundle unit.
 // The pages read the rows with add-on-totals.ts.
 import { LINE_ADJUSTMENT_KEY } from "./line-identity";
-import { ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX, type AddOnTotalRow, type AddOnTotals } from "./add-on-totals";
+import { ADD_ON_DETAILS_MAX, ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX, readAddOnDetails, type AddOnTotalRow, type AddOnTotals } from "./add-on-totals";
 
 /** One add-on on each unit of a line, in minor units of the summary's currency. */
 export interface LineAddOn {
   appId?: string | null;
   title: string;
   amountMinor: number;
+  /** The app's detail lines for it (at most `ADD_ON_DETAILS_MAX`); absent: none. */
+  details?: readonly string[];
+}
+
+/** Two lists of detail lines as one, in order, at most `max`. */
+function joinDetails(left: readonly string[] | undefined, right: readonly string[] | undefined, max: number = ADD_ON_ROWS_MAX): string[] | undefined {
+  if (!right?.length) return left?.length ? [...left] : undefined;
+  return [...(left ?? []), ...right].slice(0, max);
 }
 
 /**
@@ -19,13 +27,14 @@ export interface LineAddOn {
  * (`_adjustment`: value is the title, priceMinor each unit's amount). An
  * entry without a key is one of a list of add-ons (a stored cart line's).
  */
-export function lineAddOnsOf(entries: ReadonlyArray<{ key?: string; value?: string; displayValue?: string; priceMinor?: number; appId?: string | null }> | null | undefined): LineAddOn[] {
+export function lineAddOnsOf(entries: ReadonlyArray<{ key?: string; value?: string; displayValue?: string; priceMinor?: number; appId?: string | null; details?: unknown }> | null | undefined): LineAddOn[] {
   return (entries ?? []).flatMap((entry) => {
     if (entry.key !== undefined && entry.key !== LINE_ADJUSTMENT_KEY) return [];
     const amountMinor = entry.priceMinor;
     if (typeof amountMinor !== "number" || !Number.isSafeInteger(amountMinor) || amountMinor < 0) return [];
     const title = (entry.value ?? entry.displayValue ?? "").trim();
-    return title ? [{ appId: entry.appId ?? null, title, amountMinor }] : [];
+    const details = readAddOnDetails(entry.details, ADD_ON_DETAILS_MAX) ?? [];
+    return title ? [{ appId: entry.appId ?? null, title, amountMinor, ...(details.length > 0 ? { details } : {}) }] : [];
   });
 }
 
@@ -43,6 +52,9 @@ export function aggregateLineAddOns(entries: ReadonlyArray<LineAddOn & { perUnit
     const key = `${appId ?? ""}\u0000${entry.title}`;
     const row = sums.get(key) ?? { appId, title: entry.title, amountMinor: 0 };
     row.amountMinor += entry.amountMinor * (entry.perUnit ?? 1);
+    // A bundle's add-on is one per bundle unit: its components' detail lines join within one add-on's bound.
+    const details = joinDetails(row.details, entry.details, ADD_ON_DETAILS_MAX);
+    if (details) row.details = details;
     sums.set(key, row);
   }
   return [...sums.values()];
@@ -67,12 +79,16 @@ function foldRows(rows: AddOnTotalRow[], max: number, label: (appId: string | nu
     const [appId, count] = [...counts].sort((left, right) => right[1] - left[1])[0]!;
     if (count < 2) break;
     const first = list.find((row) => row.appId === appId)!;
-    const merged = { appId, title: label(appId).slice(0, ADD_ON_TITLE_MAX), amountMinor: list.filter((row) => row.appId === appId).reduce((sum, row) => sum + row.amountMinor, 0) };
+    const own = list.filter((row) => row.appId === appId);
+    const details = own.reduce<string[] | undefined>((joined, row) => joinDetails(joined, row.details), undefined);
+    const merged: AddOnTotalRow = { appId, title: label(appId).slice(0, ADD_ON_TITLE_MAX), amountMinor: own.reduce((sum, row) => sum + row.amountMinor, 0), ...(details ? { details } : {}) };
     list = list.flatMap((row) => (row === first ? [merged] : row.appId === appId ? [] : [row]));
   }
   if (list.length > max) {
     const kept = list.slice(0, max - 1);
-    kept.push({ appId: null, title: neutral.slice(0, ADD_ON_TITLE_MAX), amountMinor: list.slice(max - 1).reduce((sum, row) => sum + row.amountMinor, 0) });
+    const rest = list.slice(max - 1);
+    const details = rest.reduce<string[] | undefined>((joined, row) => joinDetails(joined, row.details), undefined);
+    kept.push({ appId: null, title: neutral.slice(0, ADD_ON_TITLE_MAX), amountMinor: rest.reduce((sum, row) => sum + row.amountMinor, 0), ...(details ? { details } : {}) });
     list = kept;
   }
   return list;
@@ -107,6 +123,9 @@ export function addOnTotals(
       const key = `${appId ?? ""}\u0000${addOn.title}`;
       const row = rows.get(key) ?? { appId, title: addOn.title, amountMinor: 0 };
       row.amountMinor += addOn.amountMinor * line.quantity;
+      // The row opens to its lines' detail lines, in line order (`ADD_ON_ROWS_MAX` at most).
+      const details = joinDetails(row.details, addOn.details);
+      if (details) row.details = details;
       rows.set(key, row);
     }
   }
@@ -132,4 +151,50 @@ export function frozenAddOnTotals(
   language: string | null | undefined,
 ): AddOnTotals {
   return addOnTotals(lines.map((line) => ({ quantity: line.quantity, addOns: lineAddOnsOf(line.properties) })), subtotalMinor, { foldLabel: addOnFoldLabel(language) });
+}
+
+/** One app add-on of a buyer's order row, as the receipt and the account order show it ("Protection ৳350"). */
+export interface BuyerLineAddOn {
+  appId: string | null;
+  title: string;
+  /** `per: "unit"`: on each unit of the row; `"bundle"`: once per bundle unit (an expanded bundle's or a kit's add-on, on its anchor's row). */
+  amountMinor: number;
+  per: "unit" | "bundle";
+  details?: string[];
+}
+
+/**
+ * A buyer row's add-ons from what its lines froze (`_adjustment` entries):
+ * every add-on's charge over the row's lines (each line's amount times its
+ * units), read back per unit of the row, or, for an expanded bundle's or a
+ * kit's row whose bundle units are known, once per bundle unit: checkout
+ * freezes such an add-on on the anchor at the fee over the anchor's units per
+ * bundle unit, so "Protection ৳350" reads ৳350 on a kit of three items, its
+ * anchor item split into two lines or not. A charge that does not divide
+ * reads per unit at the first line's amount.
+ */
+export function buyerLineAddOns(
+  lines: ReadonlyArray<{ entries: Parameters<typeof lineAddOnsOf>[0]; quantity: number }>,
+  bundle: { kind: string; units: number | null } | null | undefined,
+): BuyerLineAddOn[] {
+  const sums = new Map<string, { appId: string | null; title: string; totalMinor: number; firstMinor: number; details?: string[] }>();
+  let quantity = 0;
+  for (const line of lines) {
+    if (!Number.isSafeInteger(line.quantity) || line.quantity <= 0) continue;
+    quantity += line.quantity;
+    for (const addOn of lineAddOnsOf(line.entries)) {
+      const key = `${addOn.appId ?? ""}\u0000${addOn.title}`;
+      const sum = sums.get(key) ?? { appId: addOn.appId ?? null, title: addOn.title, totalMinor: 0, firstMinor: addOn.amountMinor };
+      sum.totalMinor += addOn.amountMinor * line.quantity;
+      const details = joinDetails(sum.details, addOn.details, ADD_ON_DETAILS_MAX);
+      if (details) sum.details = details;
+      sums.set(key, sum);
+    }
+  }
+  const units = bundle && bundle.kind !== "merge" && bundle.units ? bundle.units : null;
+  return [...sums.values()].map((sum) => {
+    const perBundle = units !== null && sum.totalMinor % units === 0;
+    const amountMinor = perBundle ? sum.totalMinor / units : quantity > 0 && sum.totalMinor % quantity === 0 ? sum.totalMinor / quantity : sum.firstMinor;
+    return { appId: sum.appId, title: sum.title, amountMinor, per: perBundle ? "bundle" : "unit", ...(sum.details?.length ? { details: sum.details } : {}) };
+  });
 }

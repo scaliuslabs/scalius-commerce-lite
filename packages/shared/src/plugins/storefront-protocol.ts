@@ -103,6 +103,10 @@ export const STOREFRONT_UI_SLOT_PAGES = {
   "order.confirmation": "order",
   // The order status page (signed in, or the receipt's status view).
   "account.order": "order",
+  // Under each row of a placed order, on the receipt and the account order:
+  // the extension runs once for the whole order with every row's facts
+  // (`input.orderLines`) and answers a block per row (`output.lines`).
+  "order.line.after": "order",
   "account.overview": "account",
   "account.profile": "account",
 } as const;
@@ -111,10 +115,12 @@ export type StorefrontUiSlotPage = (typeof STOREFRONT_UI_SLOT_PAGES)[StorefrontU
 export const STOREFRONT_UI_SLOTS = Object.keys(STOREFRONT_UI_SLOT_PAGES) as [StorefrontUiSlot, ...StorefrontUiSlot[]];
 
 /**
- * The UI slots drawn under each cart line: one run for the whole cart
- * (`input.lines`), each block of its answer for one line (`BuyerUiBlock.lineKey`).
+ * The UI slots drawn under each line: a cart's (`cart.line.after`, one run
+ * for the whole cart, `input.lines`) and a placed order's rows
+ * (`order.line.after`, one run for the whole order, `input.orderLines`); each
+ * block of the answer for one line (`BuyerUiBlock.lineKey`).
  */
-export const STOREFRONT_UI_LINE_SLOTS = ["cart.line.after"] as const satisfies readonly StorefrontUiSlot[];
+export const STOREFRONT_UI_LINE_SLOTS = ["cart.line.after", "order.line.after"] as const satisfies readonly StorefrontUiSlot[];
 export function isStorefrontUiLineSlot(slot: string): slot is (typeof STOREFRONT_UI_LINE_SLOTS)[number] {
   return (STOREFRONT_UI_LINE_SLOTS as readonly string[]).includes(slot);
 }
@@ -795,6 +801,12 @@ export interface StorefrontPlacedOffer {
   availability: StorefrontAvailability;
   /** Its contents when it is a kit; null otherwise. */
   kit: StorefrontKit | null;
+  /**
+   * The offered SKU's storefront-visible custom fields by `<namespace>.<key>`,
+   * as a variant's `fields` holds the page's own SKUs' (a chip from a flag).
+   * Absent from older stores.
+   */
+  fields?: StorefrontFieldValues;
 }
 
 /**

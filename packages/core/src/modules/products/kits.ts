@@ -30,19 +30,54 @@ export interface KitComponentRef {
     variantId: string;
     productId: string | null;
     quantity: number;
+    /**
+     * What a buyer reads of it, when the read asked (`kitComponentsSql`'s
+     * `items`): its option values (`variantOptionValuesSql`) and its
+     * product's translations (`productTranslationRowsSql`), as JSON text.
+     */
+    facts?: { options: string | null; translations: string | null };
+}
+
+/**
+ * One included item of a kit as a buyer reads it, on every surface that
+ * draws a kit's contents: the product page (`StorefrontKitComponent`, which
+ * adds its page, delivery and price) and the cart line (`kitItems`).
+ */
+export interface KitItem {
+    variantId: string;
+    productId: string;
+    /** In the reader's language. */
+    productName: string;
+    /** The chosen option values (platform, format), in option order, in the reader's language. */
+    options: Array<{ name: string; value: string }>;
+    /** Its units in one kit. */
+    quantity: number;
+    imageUrl: string | null;
+    imageMediaId: string | null;
+    imageAlt: string | null;
 }
 
 /**
  * A SKU's components as one JSON text (null for a SKU that is not a kit), in
  * the kit's order, on the row that reads the SKU: checkout learns a cart line
- * is a kit, and what it is made of, in the statement it already runs.
+ * is a kit, and what it is made of, in the statement it already runs. With
+ * `items` (a buyer's cart check) each component carries what the buyer reads
+ * of it too: its option values, and its product's translations when a
+ * presence asks (`translations`, the caller's fold). Only a kit's rows run
+ * them, at most `KIT_COMPONENTS_MAX` each: any other SKU pays nothing more.
  */
-export function kitComponentsSql(variantId: SQLWrapper): SQL<string | null> {
+export function kitComponentsSql(
+    variantId: SQLWrapper,
+    items?: { translations?: (productId: SQL) => SQL<string | null> },
+): SQL<string | null> {
+    const facts = items
+        ? sql`, 'l', ${variantOptionValuesSql(sql`kit_part.component_variant_id`)}, 't', ${items.translations ? items.translations(sql`kit_part.product_id`) : sql`NULL`}`
+        : sql``;
     return sql<string | null>`(SELECT '[' || group_concat(json_object(
         'v', kit_part.component_variant_id,
         'p', kit_part.product_id,
         'q', CAST(kit_part.quantity AS TEXT),
-        'o', CAST(kit_part.position AS TEXT)
+        'o', CAST(kit_part.position AS TEXT)${facts}
     ), ',') || ']'
     FROM (
         SELECT kit_row.component_variant_id, kit_sku.product_id, kit_row.quantity, kit_row.position
@@ -64,10 +99,13 @@ export function parseKitComponents(value: unknown): KitComponentRef[] | null {
     }
     if (!Array.isArray(parsed) || parsed.length === 0) return null;
     const components: Array<KitComponentRef & { position: number }> = [];
-    for (const entry of parsed as Array<{ v?: unknown; p?: unknown; q?: unknown; o?: unknown }>) {
+    for (const entry of parsed as Array<{ v?: unknown; p?: unknown; q?: unknown; o?: unknown; l?: unknown; t?: unknown }>) {
         const quantity = Number(entry.q);
         if (typeof entry.v !== "string" || !Number.isSafeInteger(quantity) || quantity < 1) return null;
-        components.push({ variantId: entry.v, productId: typeof entry.p === "string" ? entry.p : null, quantity, position: Number(entry.o) || 0 });
+        components.push({
+            variantId: entry.v, productId: typeof entry.p === "string" ? entry.p : null, quantity, position: Number(entry.o) || 0,
+            ...("l" in entry ? { facts: { options: typeof entry.l === "string" ? entry.l : null, translations: typeof entry.t === "string" ? entry.t : null } } : {}),
+        });
     }
     // The kit's order on every provider (an aggregate's order is not guaranteed everywhere).
     return components

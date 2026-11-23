@@ -46,14 +46,18 @@ import {
 import {
   orderMoneyAmounts,
   orderMoneySelection,
+  buyerUiOrderLines,
+  presentBuyerLineAddOns,
   presentOrderLineFulfilment,
   presentOrderPickup,
   presentShippingMethodKind,
 } from "@scalius/core/modules/orders/browser";
 import {
+  buyerLineAddOnsSchema,
   buyerLineIdsSchema,
   buyerOrderFulfilmentSchema,
   orderFulfilmentShape,
+  orderLineBundleSchema,
   orderLineFulfilmentShape,
 } from "../../schemas/order-lines";
 import { fromMinor } from "@scalius/shared/money";
@@ -185,6 +189,9 @@ const orderReceiptSchema = z.object({
     taxAmountMinor: z.number().int(),
     ...orderLineFulfilmentShape,
     ...orderLineExtrasShape,
+    /** The kit or app bundle the row was bought in: a kit's items are the rows sharing its `id`. Null for a plain line. */
+    bundle: orderLineBundleSchema.nullable(),
+    addOns: buyerLineAddOnsSchema,
   })),
   supportRequests: z.array(receiptSupportRequestSchema),
   supportRequestActions: z.array(receiptSupportRequestActionSchema),
@@ -652,6 +659,20 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     ? await presentOrderGiftCardTenders(db, id, order.currencyDecimalPlaces)
     : [];
 
+  // A kit's item split into two lines is one row (`foldBuyerOrderLines`), with its frozen facts.
+  const rows = foldBuyerOrderLines(items, {
+    sum: ["lineSubtotalMinor", "discountAmountMinor", "taxableAmountMinor", "taxAmountMinor", "fulfilledQuantity"],
+    perUnit: ["baseUnitPriceMinor"],
+  }).map((row) => ({
+    row,
+    facts: presentOrderLineFulfilment({
+      fulfillmentType: row.fulfillmentType,
+      fulfilledQuantity: row.fulfilledQuantity,
+      properties: row.properties,
+      propertiesPriceMinor: row.propertiesPriceMinor,
+      baseUnitPriceMinor: row.baseUnitPriceMinor,
+    }, order.currencyDecimalPlaces),
+  }));
   const money = orderMoneyAmounts(order);
   const apps = createCheckoutAppFunctions({
     env: c.env,
@@ -664,7 +685,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
   });
   const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN)
     ? await apps.buyerUi?.({
-      targets: ["order.confirmation", "account.order"],
+      targets: ["order.confirmation", "account.order", "order.line.after"],
       language: c.req.header("x-storefront-language"),
       locale: c.req.header("x-storefront-locale"),
       currency: order.currencyCode ?? (await readStoreCurrency(db)).code,
@@ -677,6 +698,8 @@ app.openapi(getOrderReceiptRoute, async (c) => {
           ? [{ productId: item.productId, variantId: item.variantId, quantity: item.quantity }]
           : []),
       },
+      // Each row's facts: the per-line slot draws under each row.
+      orderLines: buyerUiOrderLines(rows.map(({ row, facts }) => ({ ...row, properties: facts.properties }))),
       // Receipt proof authorizes this order, not the customer's account data.
       customer: null,
     }) ?? []
@@ -730,30 +753,23 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       giftCardTenders,
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
-      // A kit's item split into two lines is one row (`foldBuyerOrderLines`).
-      items: foldBuyerOrderLines(items, {
-        sum: ["lineSubtotalMinor", "discountAmountMinor", "taxableAmountMinor", "taxAmountMinor", "fulfilledQuantity"],
-        perUnit: ["baseUnitPriceMinor"],
-      }).map(({
+      items: rows.map(({ row: {
         productImageObjectKey,
         productImageStatus,
-        fulfillmentType,
-        fulfilledQuantity,
-        properties,
-        propertiesPriceMinor,
-        baseUnitPriceMinor,
+        fulfillmentType: _fulfillmentType,
+        fulfilledQuantity: _fulfilledQuantity,
+        properties: _properties,
+        propertiesPriceMinor: _propertiesPriceMinor,
+        baseUnitPriceMinor: _baseUnitPriceMinor,
         unitsTotalMinor,
-        bundle: _bundle,
+        bundle,
+        addOns,
         ...item
-      }) => withOrderLineExtras({
+      }, facts }) => withOrderLineExtras({
         ...item,
-        ...presentOrderLineFulfilment({
-          fulfillmentType,
-          fulfilledQuantity,
-          properties,
-          propertiesPriceMinor,
-          baseUnitPriceMinor,
-        }, order.currencyDecimalPlaces),
+        ...facts,
+        bundle,
+        addOns: presentBuyerLineAddOns(addOns, order.currencyDecimalPlaces),
         price: buyerLineUnitPrice({ ...item, unitsTotalMinor }, order.currencyDecimalPlaces),
         productImage:
           productImageObjectKey &&

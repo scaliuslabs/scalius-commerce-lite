@@ -22,6 +22,7 @@ export { replaceEmailAddresses, trimTrailingCharacter } from "@scalius/shared/te
 import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
 import type {
   BuyerUiLine,
+  BuyerUiOrderLine,
   FunctionCartLine,
   FunctionLinePriceFacts,
   FunctionReadRecord,
@@ -129,7 +130,7 @@ export { adminContext, adminLocale, adminNumber, ui, wantsPage, type PluginAdmin
 /** Your words in the buyer's or staff member's language (`input.language`, `adminContext(request).locale`), else English. */
 export { moneyFor, textFor } from "./text";
 /** The cart a checkout function sees (`cart` in every point's input). */
-export type { BuyerUiLine, FunctionCart, FunctionCartLine, FunctionLineOffer, FunctionLinePriceFacts, LineInputChange } from "@scalius/shared/plugins";
+export type { BuyerUiLine, BuyerUiOrderLine, FunctionCart, FunctionCartLine, FunctionLineOffer, FunctionLinePriceFacts, LineInputChange } from "@scalius/shared/plugins";
 export type { EventRepresentation, EventRepresentationType } from "@scalius/shared/events";
 import type { EventRepresentation } from "@scalius/shared/events";
 /**
@@ -222,6 +223,27 @@ export function perLine<Settings = Readonly<Record<string, PluginSettingValue>>>
     lines: (input.lines ?? []).flatMap((line) => {
       const drawn = render(line, input, settings);
       return drawn ? [{ lineKey: line.lineKey, ui: drawn }] : [];
+    }),
+  });
+}
+
+/**
+ * The render of the order's per-line slot (`order.line.after`, on the
+ * receipt and the account order), written for one row: `render(row, input,
+ * settings)` answers that row's `ui` (or null). The store runs your extension
+ * once for the whole order (`input.orderLines`: each row's add-ons as frozen
+ * and your own line answers on it) and draws each answer under its own row.
+ *
+ *   extensions: { "order.line.after": perOrderLine((row) => row.inputs.some((input) => input.key === "plan") ? ui.view([ui.text("Protected")]) : null) }
+ */
+export function perOrderLine<Settings = Readonly<Record<string, PluginSettingValue>>>(
+  render: (row: BuyerUiOrderLine, input: PluginFunctionRunInput<"buyer.ui">, settings: Settings) => PluginUiDocument | null,
+): PluginExtensionHandler<Settings> {
+  return (input, settings) => ({
+    ui: null,
+    lines: (input.orderLines ?? []).flatMap((row) => {
+      const drawn = render(row, input, settings);
+      return drawn ? [{ lineKey: row.lineKey, ui: drawn }] : [];
     }),
   });
 }

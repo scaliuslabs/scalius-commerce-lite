@@ -94,6 +94,7 @@ import type { AppObjectCommit } from "@scalius/shared/checkout-app-facts";
 import {
   PLUGIN_EXTENSION_RUN,
   buyerUiLinesSchema,
+  buyerUiOrderLinesSchema,
   functionInputProtectedPaths,
   pluginRunSchemas,
   pluginRunSource,
@@ -371,7 +372,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
   if (registered.length === 0) return [];
 
   // The cart's line facts carry every app's inputs: each app's own are checked after they are scoped to it.
-  const { lines: lineFacts, ...unscoped } = input as Record<string, unknown> & { lines?: unknown };
+  const { lines: lineFacts, orderLines: orderLineFacts, ...unscoped } = input as Record<string, unknown> & { lines?: unknown; orderLines?: unknown };
   const checked = pluginRunSchemas(point).input.safeParse(point === PLUGIN_EXTENSION_RUN ? unscoped : input);
   if (!checked.success) {
     throw new TypeError(`runPluginFunctions(${point}) received an input that does not match the point's schema.`);
@@ -463,6 +464,19 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
             continue;
           }
           scopedInput = { ...scopedInput, lines: own.data };
+        }
+        // An order's rows: likewise, of the apps' line answers only this app's own, by its own keys.
+        if (Array.isArray(orderLineFacts)) {
+          const own = buyerUiOrderLinesSchema.safeParse(orderLineFacts.map((line: { inputs?: Array<{ key: string }> }) => ({
+            ...line,
+            inputs: (line.inputs ?? []).filter((each) => each.key.startsWith(prefix)).map((each) => ({ ...each, key: each.key.slice(prefix.length) })),
+          })));
+          if (!own.success) {
+            const issue = own.error.issues[0];
+            settle(host.incident(installation, pluginRunSource(point, checked.data), `The order's row facts for this app do not fit (${issue?.path.join(".") || "orderLines"}: ${issue?.message ?? "invalid"}); its blocks were left out.`));
+            continue;
+          }
+          scopedInput = { ...scopedInput, orderLines: own.data };
         }
       }
       // A per-line slot's offers: only this app's own inputs' (`<app id>.<key>`), never another app's.

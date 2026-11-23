@@ -2200,6 +2200,21 @@ export type OrderLineWarrantyExtra = {
     } | null;
 };
 
+/**
+ * What an app's `cart.line_prices` charged on this row ("Protection ৳350"), as the order froze it.
+ */
+export type BuyerLineAddOn = {
+    appId: string | null;
+    title: string;
+    amount: number;
+    amountMinor: number;
+    /**
+     * `unit`: on each unit of the row; `bundle`: once per bundle unit (a kit's add-on, on the row of its anchor item).
+     */
+    per: 'unit' | 'bundle';
+    details?: Array<string>;
+};
+
 export type BuyerPaymentRecovery = {
     eligible: boolean;
     /**
@@ -2247,7 +2262,7 @@ export type CustomerAccountSummary = {
     buyerUi: Array<{
         appId: string;
         releaseId: string;
-        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'order.line.after' | 'account.overview' | 'account.profile';
         ui: {
             type: 'page';
             title?: string;
@@ -3332,6 +3347,10 @@ export type StorefrontPlacedOffer = {
     requiresCustomization: boolean;
     availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
     kit: StorefrontKit | null;
+    /**
+     * The offered SKU's storefront-visible custom fields, as `variants[].customFields` carries the page's own SKUs' (a chip from a flag).
+     */
+    customFields: Array<StorefrontCustomField>;
 };
 
 /**
@@ -3344,14 +3363,10 @@ export type StorefrontKit = {
     components: Array<{
         variantId: string;
         productId: string;
-        productName: string;
         /**
-         * Its product page; null when that page is not public.
+         * In the reader's language.
          */
-        productSlug: string | null;
-        imageUrl: string | null;
-        imageMediaId: string | null;
-        imageAlt: string | null;
+        productName: string;
         /**
          * The SKU's chosen option values (platform, format), in option order.
          */
@@ -3359,7 +3374,17 @@ export type StorefrontKit = {
             name: string;
             value: string;
         }>;
+        /**
+         * Its units in one kit.
+         */
         quantity: number;
+        imageUrl: string | null;
+        imageMediaId: string | null;
+        imageAlt: string | null;
+        /**
+         * Its product page; null when that page is not public.
+         */
+        productSlug: string | null;
         /**
          * How the item reaches the buyer, from its own fulfilment setting: shipped or picked up, performed, a licence key, or a file. The theme words it.
          */
@@ -3434,6 +3459,32 @@ export type ProductReviews = {
     summary: PublicReviewSummary;
     items: Array<PublicReview>;
     nextCursor: string | null;
+};
+
+/**
+ * One included item of a kit: its name and option values in the reader's language, its units in one kit and its picture.
+ */
+export type KitItem = {
+    variantId: string;
+    productId: string;
+    /**
+     * In the reader's language.
+     */
+    productName: string;
+    /**
+     * The SKU's chosen option values (platform, format), in option order.
+     */
+    options: Array<{
+        name: string;
+        value: string;
+    }>;
+    /**
+     * Its units in one kit.
+     */
+    quantity: number;
+    imageUrl: string | null;
+    imageMediaId: string | null;
+    imageAlt: string | null;
 };
 
 export type BuyerWarrantyClaim = {
@@ -6682,7 +6733,7 @@ export type AppSummary = {
      * Where the app shows content on the buyer's cart, checkout, receipt and account pages (storefront extensions).
      */
     extensions: Array<{
-        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'order.line.after' | 'account.overview' | 'account.profile';
         /**
          * The app's data the extension reads to draw its content.
          */
@@ -14930,7 +14981,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'order.line.after' | 'account.overview' | 'account.profile';
                 ui: {
                     type: 'page';
                     title?: string;
@@ -15628,6 +15679,10 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 variantLabel: string | null;
                 unitPrice: number;
                 lineTotal: number;
+                /**
+                 * The row's units at their unit prices (`lineTotal` in minor units).
+                 */
+                unitsTotalMinor: number;
                 unitPriceMinor: number | null;
                 lineSubtotalMinor: number | null;
                 discountAmountMinor: number | null;
@@ -15661,6 +15716,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     confirmation?: {
                         text: string;
                     };
+                    details?: Array<string>;
                 }>;
                 propertiesPrice: number;
                 propertiesPriceMinor: number;
@@ -15678,6 +15734,10 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     units: number | null;
                     perUnit: number | null;
                 } | null;
+                /**
+                 * Every app add-on the row was charged, from what its line froze; empty: none. The app's own line answers are in `properties` (entries with its `appId`).
+                 */
+                addOns: Array<BuyerLineAddOn>;
                 createdAt: NullableTimestamp;
                 [key: string]: unknown;
             }>;
@@ -23770,7 +23830,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 buyerUi: Array<{
                     appId: string;
                     releaseId: string;
-                    target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                    target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'order.line.after' | 'account.overview' | 'account.profile';
                     ui: {
                         type: 'page';
                         title?: string;
@@ -24574,11 +24634,28 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         confirmation?: {
                             text: string;
                         };
+                        details?: Array<string>;
                     }>;
                     propertiesPrice: number;
                     propertiesPriceMinor: number;
                     baseUnitPriceMinor: number | null;
                     extras?: OrderLineExtras;
+                    bundle: {
+                        id: string;
+                        title: string;
+                        kind: 'expand' | 'merge' | 'kit';
+                        kit: {
+                            variantId: string;
+                            productId: string;
+                        } | null;
+                        anchor: boolean;
+                        units: number | null;
+                        perUnit: number | null;
+                    } | null;
+                    /**
+                     * Every app add-on the row was charged, from what its line froze; empty: none. The app's own line answers are in `properties` (entries with its `appId`).
+                     */
+                    addOns: Array<BuyerLineAddOn>;
                 }>;
                 supportRequests: Array<{
                     id: string;
@@ -24917,7 +24994,7 @@ export type PostApiV1OrdersCartValidationResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'order.line.after' | 'account.overview' | 'account.profile';
                 ui: {
                     type: 'page';
                     title?: string;
@@ -25662,6 +25739,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                     confirmation?: {
                         text: string;
                     };
+                    details?: Array<string>;
                 }>;
                 adjustments: Array<{
                     key: string;
@@ -25686,6 +25764,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                     confirmation?: {
                         text: string;
                     };
+                    details?: Array<string>;
                 }>;
                 /**
                  * The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them.
@@ -25713,6 +25792,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                 availableQuantity: number | null;
                 productImageMediaId: string | null;
                 productImage: string | null;
+                /**
+                 * A kit line's items, in the kit's order: each one's name and option values in the page's language, its units in one kit and its picture. Null on any other line.
+                 */
+                kitItems: Array<KitItem> | null;
             }>;
             subtotal: number;
             /**
@@ -25726,6 +25809,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                     title: string;
                     amount: number;
                     amountMinor: number;
+                    /**
+                     * What the row opens to: its lines' detail lines, in order; absent: none.
+                     */
+                    details?: Array<string>;
                 }>;
             };
             currencyCode?: string;
@@ -25996,7 +26083,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'order.line.after' | 'account.overview' | 'account.profile';
                 ui: {
                     type: 'page';
                     title?: string;
@@ -26652,6 +26739,10 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     title: string;
                     amount: number;
                     amountMinor: number;
+                    /**
+                     * What the row opens to: its lines' detail lines, in order; absent: none.
+                     */
+                    details?: Array<string>;
                 }>;
             };
             shippingMinor: number;
@@ -26866,6 +26957,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     confirmation?: {
                         text: string;
                     };
+                    details?: Array<string>;
                 }>;
                 propertiesPriceMinor: number;
                 adjustments: Array<{
@@ -26891,6 +26983,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     confirmation?: {
                         text: string;
                     };
+                    details?: Array<string>;
                 }>;
                 /**
                  * The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them.
@@ -72337,6 +72430,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                     confirmation?: {
                         text: string;
                     };
+                    details?: Array<string>;
                 }>;
                 propertiesPrice: number;
                 propertiesPriceMinor: number;
@@ -72849,6 +72943,7 @@ export type GetApiV1AdminOrdersByIdItemsResponses = {
                 confirmation?: {
                     text: string;
                 };
+                details?: Array<string>;
             }>;
             propertiesPrice: number;
             propertiesPriceMinor: number;
@@ -73469,6 +73564,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                         confirmation?: {
                             text: string;
                         };
+                        details?: Array<string>;
                     }>;
                     /**
                      * The store bundle (kit) this line was sold in, as frozen at checkout; null for any other line. A bundle's lines change together, in whole bundles (`kit_amended_in_part`).

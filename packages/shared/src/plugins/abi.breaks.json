@@ -1768,5 +1768,71 @@
   "from": "e729a7e1579ba015",
   "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontPlacedOffer: an existing signature changed or gained a required member.",
   "reason": "Unreleased (same branch, review of wave 3): a placed offer says when its product asks for inputs first (needsChoices), so a theme links its page instead of adding a bare line."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ed5ad4d0141d319b",
+  "change": "sdk.packages/plugin-sdk/src/pixel-testing.d.ts#FunctionDeclaration:createPixelTestHarness: an existing signature changed or gained a required member.",
+  "reason": "The storefront slot list gains order.line.after, a per-line slot under each row of a placed order (receipt and account order; wave 3 k1, theme gaps H2): a type derived from the slot list widens, and a manifest or harness written before reads the same."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ed5ad4d0141d319b",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "The storefront slot list gains order.line.after, a per-line slot under each row of a placed order (receipt and account order; wave 3 k1, theme gaps H2): a type derived from the slot list widens, and a manifest or harness written before reads the same."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ed5ad4d0141d319b",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeature: an existing signature changed or gained a required member.",
+  "reason": "The storefront slot list gains order.line.after, a per-line slot under each row of a placed order (receipt and account order; wave 3 k1, theme gaps H2): a type derived from the slot list widens, and a manifest or harness written before reads the same."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ed5ad4d0141d319b",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeatureInput: an existing signature changed or gained a required member.",
+  "reason": "The storefront slot list gains order.line.after, a per-line slot under each row of a placed order (receipt and account order; wave 3 k1, theme gaps H2): a type derived from the slot list widens, and a manifest or harness written before reads the same."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ed5ad4d0141d319b",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "The storefront slot list gains order.line.after, a per-line slot under each row of a placed order (receipt and account order; wave 3 k1, theme gaps H2): a type derived from the slot list widens, and a manifest or harness written before reads the same."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ed5ad4d0141d319b",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "The storefront slot list gains order.line.after, a per-line slot under each row of a placed order (receipt and account order; wave 3 k1, theme gaps H2): a type derived from the slot list widens, and a manifest or harness written before reads the same."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ed5ad4d0141d319b",
+  "change": "sdk.packages/shared/src/plugins/translation-coverage.d.ts#TypeAliasDeclaration:Manifest: an existing signature changed or gained a required member.",
+  "reason": "The storefront slot list gains order.line.after, a per-line slot under each row of a placed order (receipt and account order; wave 3 k1, theme gaps H2): a type derived from the slot list widens, and a manifest or harness written before reads the same."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ed5ad4d0141d319b",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiInput: an existing signature changed or gained a required member.",
+  "reason": "An extension's input gains optional orderLines (BuyerUiOrderLine: each row of a placed order, its add-ons as frozen and the app's own line answers) on the order's slots, and the target order.line.after (wave 3 k1, theme gaps H2)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ed5ad4d0141d319b",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_EXTENSION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "The extension input schema gains optional orderLines and the target order.line.after (wave 3 k1, theme gaps H2)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ed5ad4d0141d319b",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "The extension input schema gains optional orderLines and the target order.line.after; cart.line_prices adjustments gain optional details (wave 3 k1, theme gaps H2 and F15)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ed5ad4d0141d319b",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "cart.line_prices adjustments gain optional details: at most ADD_ON_DETAILS_MAX (10) text lines frozen with the add-on, which its summary row opens to (wave 3 k1, theme gaps F15). An answer without them is unchanged."
  }
 ]

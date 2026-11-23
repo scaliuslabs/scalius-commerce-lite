@@ -3,56 +3,18 @@
 // Shared by the receipt, the account order, the dashboard detail, invoices,
 // emails and the CSV export so every surface reads the snapshot the same way.
 import {
-    LINE_INPUT_FIELD_TYPES,
+    isLineInputEntry,
     readOrderLineBundle,
-    type LineInputFieldType,
+    readOrderLineProperties,
     type OrderLineBundle,
     type ResolvedLineProperty,
 } from "@scalius/shared/line-properties";
+import { isAppScopedKey } from "@scalius/shared/plugins/ids";
+import type { BuyerUiOrderLine } from "@scalius/shared/plugins";
+import { MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { isFulfillmentType, type DeliveryMethodKind, type FulfillmentType } from "@scalius/shared/fulfilment";
 import { fromMinor } from "@scalius/shared/money";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/**
- * Reads the frozen `order_items.properties` snapshot. The column is written
- * only by the commit (and is immutable), so a malformed entry is skipped
- * rather than failing the whole order read.
- */
-export function parseOrderLineProperties(stored: string | null | undefined): ResolvedLineProperty[] {
-    if (!stored) return [];
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(stored);
-    } catch {
-        return [];
-    }
-    if (!Array.isArray(parsed)) return [];
-    const properties: ResolvedLineProperty[] = [];
-    for (const entry of parsed) {
-        if (!isRecord(entry)) continue;
-        const { key, type, label, value, displayValue, priceMinor } = entry;
-        if (
-            typeof key !== "string"
-            || typeof label !== "string"
-            || typeof value !== "string"
-            || !(LINE_INPUT_FIELD_TYPES as readonly string[]).includes(type as string)
-        ) continue;
-        properties.push({
-            key,
-            type: type as LineInputFieldType,
-            label,
-            value,
-            displayValue: typeof displayValue === "string" ? displayValue : value,
-            priceMinor: typeof priceMinor === "number" && Number.isSafeInteger(priceMinor) && priceMinor >= 0
-                ? priceMinor
-                : 0,
-        });
-    }
-    return properties;
-}
+import type { BuyerLineAddOn } from "@scalius/shared/add-on-folding";
 
 export interface PresentedOrderLineProperty extends ResolvedLineProperty {
     price: number;
@@ -87,7 +49,7 @@ export function presentOrderLineFulfilment(
     return {
         fulfillmentType: isFulfillmentType(row.fulfillmentType) ? row.fulfillmentType : "ship",
         fulfilledQuantity: row.fulfilledQuantity ?? 0,
-        properties: parseOrderLineProperties(row.properties).map((property) => ({
+        properties: readOrderLineProperties(row.properties).map((property) => ({
             ...property,
             price: fromMinor(property.priceMinor, decimalPlaces),
         })),
@@ -96,6 +58,58 @@ export function presentOrderLineFulfilment(
         baseUnitPriceMinor: row.baseUnitPriceMinor ?? null,
         ...(row.bundleQuantity === undefined ? {} : { bundle: readOrderLineBundle(row.properties, row.bundleQuantity) }),
     };
+}
+
+/** A buyer row's app add-ons (`BuyerOrderLine.addOns`) with their amounts in major units too: "Protection ৳350" per item. */
+export function presentBuyerLineAddOns(addOns: readonly BuyerLineAddOn[], decimalPlaces: number): Array<BuyerLineAddOn & { amount: number }> {
+    return addOns.map((addOn) => ({ ...addOn, amount: fromMinor(addOn.amountMinor, decimalPlaces) }));
+}
+
+/** A buyer's order row as the order's UI slots read it (`buyerUiOrderLines`). */
+export interface BuyerUiOrderRow {
+    id: string;
+    lineIds: readonly string[];
+    productId: string;
+    variantId: string | null;
+    productName: string | null;
+    variantLabel: string | null;
+    quantity: number;
+    unitsTotalMinor: number;
+    bundle: OrderLineBundle | null;
+    /** The row's app add-ons, as `foldBuyerOrderLines` reads them. */
+    addOns: readonly BuyerLineAddOn[];
+    properties: readonly ResolvedLineProperty[];
+}
+
+/**
+ * Every buyer row's facts for the order's UI slots (`input.orderLines`; the
+ * per-line slot `order.line.after` draws under each): its key and real
+ * lines, product, title, units and their total, bundle, every app's add-ons
+ * as frozen and the apps' line answers frozen on it (every app's here; each
+ * app's run is scoped to its own). A row whose SKU is gone is left out, as
+ * `order.lines` leaves it out.
+ */
+export function buyerUiOrderLines(rows: readonly BuyerUiOrderRow[]): BuyerUiOrderLine[] {
+    return rows.slice(0, MAX_ORDER_LINES).flatMap((row): BuyerUiOrderLine[] => {
+        if (!row.variantId || row.quantity < 1) return [];
+        const name = row.productName ?? "";
+        return [{
+            lineKey: row.id,
+            lineIds: [...row.lineIds],
+            productId: row.productId,
+            variantId: row.variantId,
+            title: (row.variantLabel ? `${name} (${row.variantLabel})` : name).slice(0, 300),
+            quantity: row.quantity,
+            unitsTotalMinor: Math.max(0, row.unitsTotalMinor),
+            bundle: row.bundle
+                ? { id: row.bundle.id, title: row.bundle.title.slice(0, 300), kind: row.bundle.kind, anchor: row.bundle.anchor, units: row.bundle.units, perUnit: row.bundle.perUnit }
+                : null,
+            addOns: row.addOns.map(({ appId, title, amountMinor, per }) => ({ appId, title, amountMinor, per })),
+            inputs: row.properties
+                .filter((property) => isAppScopedKey(property.key) && isLineInputEntry(property.key))
+                .map((property) => ({ key: property.key, value: property.value })),
+        }];
+    });
 }
 
 /** "Engraving: Anika (+৳200)" lines, for plain-text surfaces (CSV, SMS never). */

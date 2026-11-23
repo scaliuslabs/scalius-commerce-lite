@@ -5,7 +5,7 @@ import { checkoutAttributeAppsSchema } from "../../schemas/checkout-attribute-ap
 import { readCheckoutAttributeApps } from "@scalius/core/modules/order-kernel";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { claimGuestOrderToAccount } from "@scalius/core/modules/orders";
-import { getCustomerOrderDetailForOrder, getCustomerOwnedOrderForDetail, getCustomerPaymentSessionOrderForDetail } from "@scalius/core/modules/orders";
+import { buyerUiOrderLines, getCustomerOrderDetailForOrder, getCustomerOwnedOrderForDetail, getCustomerPaymentSessionOrderForDetail } from "@scalius/core/modules/orders";
 import { listOrderDiscountLines } from "@scalius/core/modules/promotions";
 import { orderDiscountLineSchema, presentOrderDiscountLines } from "../../schemas/storefront-discounts";
 import { buyerOrderProgressSchema, buyerOrderTimelineSchema } from "../../schemas/order-tracking";
@@ -25,6 +25,7 @@ import {
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { buyerOrderShippingAddressShape } from "../../schemas/entities";
 import {
+    buyerLineAddOnsSchema,
     buyerOrderFulfilmentSchema,
     orderFulfilmentShape,
     orderLineBundleSchema,
@@ -248,6 +249,7 @@ const customerOrderDetailSchema = z.object({
     variantLabel: z.string().nullable(),
     unitPrice: z.number(),
     lineTotal: z.number(),
+    unitsTotalMinor: z.number().int().openapi({ description: "The row's units at their unit prices (`lineTotal` in minor units)." }),
     unitPriceMinor: z.number().int().nullable(),
     lineSubtotalMinor: z.number().int().nullable(),
     discountAmountMinor: z.number().int().nullable(),
@@ -257,6 +259,7 @@ const customerOrderDetailSchema = z.object({
     ...orderLineExtrasShape,
     /** The bundle the line was bought in: a store kit's lines name its SKU and product, so Buy again puts the kit back. */
     bundle: orderLineBundleSchema.nullable().optional(),
+    addOns: buyerLineAddOnsSchema,
     createdAt: nullableTimestampSchema,
   }).passthrough()),
   /** Each handed-over action: a parcel sent, a pickup, a performed service. */
@@ -401,12 +404,14 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
   });
   const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN)
     ? await apps.buyerUi?.({
-      targets: ["account.order"],
+      targets: ["account.order", "order.line.after"],
       language: c.req.header("x-storefront-language"),
       locale: c.req.header("x-storefront-locale"),
       currency: order.currencyCode ?? (await readStoreCurrency(db)).code,
       attributes: readCheckoutAttributes(order.attributes),
       customer: { id: session.customerId },
+      // Each row's facts: the per-line slot draws under each row.
+      orderLines: buyerUiOrderLines(detail.items),
       order: {
         orderId,
         status: order.status,

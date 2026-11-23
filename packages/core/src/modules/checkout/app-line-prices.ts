@@ -91,8 +91,8 @@ export const ADD_ON_UNAVAILABLE_REASON = "add_on_unavailable";
  * known (`percentOfMinor`).
  */
 export type AppLineAddOn =
-    | { appId: string; title: string; amountMinor: number; bundle?: AppLineAddOnBundle }
-    | { appId: string; title: string; percent: number; bundle?: AppLineAddOnBundle };
+    | { appId: string; title: string; amountMinor: number; bundle?: AppLineAddOnBundle; details?: string[] }
+    | { appId: string; title: string; percent: number; bundle?: AppLineAddOnBundle; details?: string[] };
 
 /**
  * A bundle's add-on, on its anchor line: the amount (or share of the bundle
@@ -471,15 +471,17 @@ export function resolveAppLineAdjustments(
                 apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} already has ${LINE_ADJUSTMENTS_PER_LINE_MAX} add-ons; "${answer.title}" refused checkout.`);
                 throw addOnUnavailable();
             }
+            // The app's detail lines ride the add-on to the order line: what its summary row opens to.
+            const details = answer.details?.length ? { details: [...answer.details] } : {};
             if ("percent" in answer) {
-                list.push({ appId: result.pluginId, title: answer.title, percent: answer.percent, ...(bundle ? { bundle } : {}) });
+                list.push({ appId: result.pluginId, title: answer.title, percent: answer.percent, ...(bundle ? { bundle } : {}), ...details });
             } else {
                 const amountMinor = answer.currency === "store"
                     ? storeAmountMinor(answer.amountMinor, conversion, "add_on")
                     // A positive add-on never rounds to nothing: one increment, as a converted one.
                     // 0 is a free extra and stays 0, recorded on the line.
                     : answer.amountMinor === 0 ? 0 : Math.max(increment, roundToIncrementMinor(answer.amountMinor, increment));
-                list.push({ appId: result.pluginId, title: answer.title, amountMinor, ...(bundle ? { bundle } : {}) });
+                list.push({ appId: result.pluginId, title: answer.title, amountMinor, ...(bundle ? { bundle } : {}), ...details });
             }
             adjustments.set(target, list);
         }

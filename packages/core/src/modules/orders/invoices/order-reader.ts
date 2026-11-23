@@ -16,7 +16,7 @@ import { fromMinor } from "@scalius/shared/money";
 import type { InvoiceOrderSnapshot } from "./snapshot";
 import { listOrderDiscountLines } from "../../promotions";
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
-import { parseOrderLineProperties } from "../line-presentation";
+import { readOrderLineProperties } from "@scalius/shared/line-properties";
 import { buyerLineUnitPrice, foldBuyerOrderLines, readCheckoutAttributeApps } from "../../order-kernel";
 import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
 
@@ -170,10 +170,10 @@ export async function readInvoiceOrderSource(
     items: foldBuyerOrderLines(
       items.map((item) => ({ ...item, returnedQuantity: returnedByItem.get(item.id) ?? 0 })),
       { sum: ["lineSubtotalMinor", "discountAmountMinor", "taxableAmountMinor", "taxAmountMinor", "returnedQuantity"] },
-    ).map(({ properties, lineIds: _lineIds, bundle: _bundle, unitsTotalMinor, ...item }) => ({
+    ).map(({ properties, lineIds: _lineIds, bundle: _bundle, addOns: _addOns, unitsTotalMinor, ...item }) => ({
       ...item,
       // The frozen buyer inputs, labels as the buyer saw them.
-      properties: parseOrderLineProperties(properties),
+      properties: readOrderLineProperties(properties),
       price: buyerLineUnitPrice({ ...item, unitsTotalMinor }, order.currencyDecimalPlaces),
     })),
   };

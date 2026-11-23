@@ -41,6 +41,8 @@ export function validateBuyerCart(
     currency: { code: string; priceIncrementMinor: number };
     market: ValidateOptions["market"];
     appContext: AppContext;
+    /** The cart check: each kit line answers its items in this presence's language. */
+    kitItems?: ValidateOptions["kitItems"];
   },
 ) {
   return validateStorefrontCartItems(db, input.items, {
@@ -53,5 +55,6 @@ export function validateBuyerCart(
     // A line's purchase option must be one an active app offers.
     purchaseOptions: checkoutPurchaseOptions(apps),
     lineInputs: checkoutLineInputs(apps),
+    ...(input.kitItems ? { kitItems: input.kitItems } : {}),
   });
 }

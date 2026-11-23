@@ -4,7 +4,8 @@
 // (receipt, account order, order lookup, messages, invoices, courier items)
 // shows them as one row. Staff views and apps keep the real lines.
 import { fromMinor } from "@scalius/shared/money";
-import { readOrderLineBundle, type OrderLineBundle } from "@scalius/shared/line-properties";
+import { readOrderLineBundle, readOrderLineProperties, type OrderLineBundle } from "@scalius/shared/line-properties";
+import { buyerLineAddOns, type BuyerLineAddOn } from "@scalius/shared/add-on-folding";
 
 /** What the fold reads of an order line. */
 export interface BuyerFoldableLine {
@@ -31,6 +32,8 @@ export type BuyerOrderLine<T extends BuyerFoldableLine, P extends keyof T = neve
     lineIds: string[];
     /** The kit or app bundle the row was bought in, its units and per-unit share counted over the row's lines; null for a plain line. */
     bundle: OrderLineBundle | null;
+    /** What the apps charged on the row (`buyerLineAddOns`, over its lines; a bundle's once per bundle unit), in minor units. */
+    addOns: BuyerLineAddOn[];
   };
 
 function sumNullable(left: number | null, right: number | null): number | null {
@@ -43,8 +46,10 @@ function sumNullable(left: number | null, right: number | null): number | null {
  * quantity and the `sum` amounts added up. A per-unit amount (the unit price,
  * each `perUnit` key) reads the row's total over its quantity, or null when
  * that is not a whole minor unit: the surface shows the line total. Every
- * other field is the first line's (the lines are copies of one cart line).
- * Nothing else is ever folded.
+ * other field is the first line's (the lines are copies of one cart line),
+ * except its frozen entries (`properties`): the anchor line's, which holds
+ * the bundle's inputs and add-ons. Every row reads what the apps charged on
+ * it over its lines (`addOns`). Nothing else is ever folded.
  */
 export function foldBuyerOrderLines<
   T extends BuyerFoldableLine,
@@ -75,13 +80,18 @@ export function foldBuyerOrderLines<
     const [first, ...rest] = members as [T, ...T[]];
     const quantity = members.reduce((total, line) => total + line.quantity, 0);
     const unitsTotalMinor = members.reduce((total, line) => total + line.unitPriceMinor * line.quantity, 0);
+    const bundle = rest.length === 0 ? bundles[0] ?? null : foldedBundle(bundles);
+    // A split item's entries are its anchor line's: the bundle's inputs and add-ons are frozen there.
+    const anchor = rest.length === 0 ? first : members[bundles.findIndex((entry) => entry?.anchor === true)] ?? first;
     const row: Record<string, unknown> = {
       ...(first as object),
+      properties: anchor.properties,
       quantity,
       unitPriceMinor: rest.length === 0 ? first.unitPriceMinor : wholeUnit(unitsTotalMinor, quantity),
       unitsTotalMinor,
       lineIds: members.map((line) => line.id),
-      bundle: rest.length === 0 ? bundles[0] ?? null : foldedBundle(bundles),
+      bundle,
+      addOns: buyerLineAddOns(members.map((line) => ({ entries: readOrderLineProperties(line.properties), quantity: line.quantity })), bundle),
     };
     if (rest.length > 0) {
       for (const key of sum) {

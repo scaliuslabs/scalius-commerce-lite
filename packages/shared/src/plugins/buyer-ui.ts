@@ -225,9 +225,10 @@ export const checkoutAttributesSchema = z.record(z.string().max(160), z.string()
 export const BUYER_UI_LINES_MAX_BYTES = 128 * 1024;
 /**
  * What a storefront extension answers: a buyer-surface document, or null to
- * show nothing. A per-line slot (`cart.line.after`) answers `ui: null` and a
- * block per line it draws under (`lines`, by `input.lines[].lineKey`; a line
- * left out draws nothing), at most `BUYER_UI_LINES_MAX_BYTES` in all.
+ * show nothing. A per-line slot (`cart.line.after`, `order.line.after`)
+ * answers `ui: null` and a block per line it draws under (`lines`, by
+ * `input.lines[].lineKey` or `input.orderLines[].lineKey`; a line left out
+ * draws nothing), at most `BUYER_UI_LINES_MAX_BYTES` in all.
  */
 export const buyerUiOutputSchema = z.object({
   ui: pluginUiDocumentSchema("buyer").nullable(),
@@ -240,7 +241,8 @@ export type BuyerUiOutput = z.infer<typeof buyerUiOutputSchema>;
 /**
  * One app's tree for one UI slot, as the API hands it to the storefront
  * (references checked, media resolved). A per-line slot's block names its
- * line (`lineKey`, the cart line's key) and is drawn under that line only.
+ * line (`lineKey`: the cart line's key, or the order row's) and is drawn
+ * under that line only.
  */
 export interface BuyerUiBlock {
   appId: string; releaseId: string; target: StorefrontUiSlot; ui: PluginUiNode;

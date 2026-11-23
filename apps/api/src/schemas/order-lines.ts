@@ -9,7 +9,8 @@ import {
   FULFILLMENT_TYPES,
 } from "@scalius/shared/fulfilment";
 import { BUYER_UPLOAD_TYPES } from "@scalius/shared/buyer-uploads";
-import { CART_LINE_INPUT_LIMITS } from "@scalius/shared/line-identity";
+import { CART_LINE_INPUT_LIMITS, LINE_ADD_ONS_MAX } from "@scalius/shared/line-identity";
+import { ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX } from "@scalius/shared/add-on-totals";
 import {
   CUSTOMIZATION_FIELD_TYPES,
   LINE_INPUT_FIELD_TYPES,
@@ -90,6 +91,9 @@ export const linePurchaseOptionsSchema = z.array(z.object({
   title: z.string(),
 })).openapi({ description: "The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them." });
 
+/** An add-on's detail lines: plain text an app wrote, never HTML. */
+const addOnDetailsSchema = z.array(buyerText(z.string().max(ADD_ON_TITLE_MAX))).max(ADD_ON_ROWS_MAX);
+
 /** A resolved buyer input as priced and frozen on the order line. */
 export const orderLinePropertySchema = z.object({
   key: z.string(),
@@ -107,6 +111,8 @@ export const orderLinePropertySchema = z.object({
   revision: z.string().optional().openapi({ description: "The revision of the words the buyer answered (absent: none named)." }),
   /** A choice that needs confirmation: the agreement the buyer accepted, as shown. */
   confirmation: z.object({ text: z.string() }).optional(),
+  /** An app add-on's (`_adjustment`) detail lines, text the app wrote; absent: none. */
+  details: addOnDetailsSchema.optional(),
 });
 
 /**
@@ -123,7 +129,8 @@ export const addOnTotalsSchema = z.object({
     title: z.string(),
     amount: z.number(),
     amountMinor: z.number().int(),
-  })),
+    details: addOnDetailsSchema.optional().openapi({ description: "What the row opens to: its lines' detail lines, in order; absent: none." }),
+  })).max(ADD_ON_ROWS_MAX),
 }).openapi({ description: "The apps' add-ons as their own summary rows (\"Protection ৳350\"), grouped by app and title, and `itemsSubtotal`: the subtotal less them. Draw Subtotal as `itemsSubtotal`, then each row: together they are the subtotal." });
 
 /**
@@ -182,6 +189,21 @@ export const orderLineBundleSchema = z.object({
   anchor: z.boolean(),
   units: z.number().int().nullable(),
   perUnit: z.number().int().nullable(),
+});
+
+/** One app add-on of a buyer's order row, read from what the line froze (`buyerLineAddOns`). */
+export const buyerLineAddOnSchema = z.object({
+  appId: z.string().nullable(),
+  title: buyerText(z.string()),
+  amount: z.number(),
+  amountMinor: z.number().int(),
+  per: z.enum(["unit", "bundle"]).openapi({ description: "`unit`: on each unit of the row; `bundle`: once per bundle unit (a kit's add-on, on the row of its anchor item)." }),
+  details: addOnDetailsSchema.optional(),
+}).openapi("BuyerLineAddOn", { description: "What an app's `cart.line_prices` charged on this row (\"Protection ৳350\"), as the order froze it." });
+
+/** The add-ons of a buyer's row: every app's, at most a line's. */
+export const buyerLineAddOnsSchema = z.array(buyerLineAddOnSchema).max(LINE_ADD_ONS_MAX).openapi({
+  description: "Every app add-on the row was charged, from what its line froze; empty: none. The app's own line answers are in `properties` (entries with its `appId`).",
 });
 
 /** The real order lines a buyer's row shows (`foldBuyerOrderLines`). */

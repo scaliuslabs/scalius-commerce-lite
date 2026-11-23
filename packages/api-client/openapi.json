@@ -11016,6 +11016,50 @@
           "claim"
         ]
       },
+      "BuyerLineAddOn": {
+        "type": "object",
+        "properties": {
+          "appId": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "x-scalius-buyer-text": true
+          },
+          "amount": {
+            "type": "number"
+          },
+          "amountMinor": {
+            "type": "integer"
+          },
+          "per": {
+            "type": "string",
+            "enum": [
+              "unit",
+              "bundle"
+            ],
+            "description": "`unit`: on each unit of the row; `bundle`: once per bundle unit (a kit's add-on, on the row of its anchor item)."
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "x-scalius-buyer-text": true
+            },
+            "maxItems": 50
+          }
+        },
+        "required": [
+          "appId",
+          "title",
+          "amount",
+          "amountMinor",
+          "per"
+        ],
+        "description": "What an app's `cart.line_prices` charged on this row (\"Protection ৳350\"), as the order froze it."
+      },
       "BuyerPaymentRecovery": {
         "type": "object",
         "properties": {
@@ -11182,6 +11226,7 @@
                     "cart.line.after",
                     "order.confirmation",
                     "account.order",
+                    "order.line.after",
                     "account.overview",
                     "account.profile"
                   ]
@@ -16961,6 +17006,13 @@
               }
             ],
             "nullable": true
+          },
+          "customFields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorefrontCustomField"
+            },
+            "description": "The offered SKU's storefront-visible custom fields, as `variants[].customFields` carries the page's own SKUs' (a chip from a flag)."
           }
         },
         "required": [
@@ -16978,7 +17030,8 @@
           "compareAtPrice",
           "requiresCustomization",
           "availabilityBand",
-          "kit"
+          "kit",
+          "customFields"
         ],
         "description": "A SKU of another product shown under this page's own offers."
       },
@@ -16997,24 +17050,8 @@
                   "type": "string"
                 },
                 "productName": {
-                  "type": "string"
-                },
-                "productSlug": {
                   "type": "string",
-                  "nullable": true,
-                  "description": "Its product page; null when that page is not public."
-                },
-                "imageUrl": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "imageMediaId": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "imageAlt": {
-                  "type": "string",
-                  "nullable": true
+                  "description": "In the reader's language."
                 },
                 "options": {
                   "type": "array",
@@ -17038,7 +17075,25 @@
                 },
                 "quantity": {
                   "type": "integer",
-                  "minimum": 1
+                  "minimum": 1,
+                  "description": "Its units in one kit."
+                },
+                "imageUrl": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "imageMediaId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "imageAlt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "productSlug": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "Its product page; null when that page is not public."
                 },
                 "delivery": {
                   "type": "string",
@@ -17059,12 +17114,12 @@
                 "variantId",
                 "productId",
                 "productName",
-                "productSlug",
+                "options",
+                "quantity",
                 "imageUrl",
                 "imageMediaId",
                 "imageAlt",
-                "options",
-                "quantity",
+                "productSlug",
                 "delivery",
                 "price"
               ]
@@ -17259,6 +17314,69 @@
           "items",
           "nextCursor"
         ]
+      },
+      "KitItem": {
+        "type": "object",
+        "properties": {
+          "variantId": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string",
+            "description": "In the reader's language."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "value"
+              ]
+            },
+            "maxItems": 5,
+            "description": "The SKU's chosen option values (platform, format), in option order."
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Its units in one kit."
+          },
+          "imageUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageMediaId": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageAlt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "variantId",
+          "productId",
+          "productName",
+          "options",
+          "quantity",
+          "imageUrl",
+          "imageMediaId",
+          "imageAlt"
+        ],
+        "description": "One included item of a kit: its name and option values in the reader's language, its units in one kit and its picture."
       },
       "BuyerWarrantyClaim": {
         "type": "object",
@@ -29887,6 +30005,7 @@
                     "cart.line.after",
                     "order.confirmation",
                     "account.order",
+                    "order.line.after",
                     "account.overview",
                     "account.profile"
                   ]
@@ -56799,6 +56918,7 @@
                                   "cart.line.after",
                                   "order.confirmation",
                                   "account.order",
+                                  "order.line.after",
                                   "account.overview",
                                   "account.profile"
                                 ]
@@ -60838,6 +60958,10 @@
                               "lineTotal": {
                                 "type": "number"
                               },
+                              "unitsTotalMinor": {
+                                "type": "integer",
+                                "description": "The row's units at their unit prices (`lineTotal` in minor units)."
+                              },
                               "unitPriceMinor": {
                                 "type": "integer",
                                 "nullable": true
@@ -60928,6 +61052,15 @@
                                       "required": [
                                         "text"
                                       ]
+                                    },
+                                    "details": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "maxLength": 80,
+                                        "x-scalius-buyer-text": true
+                                      },
+                                      "maxItems": 50
                                     }
                                   },
                                   "required": [
@@ -61011,6 +61144,14 @@
                                   "perUnit"
                                 ]
                               },
+                              "addOns": {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/components/schemas/BuyerLineAddOn"
+                                },
+                                "maxItems": 5,
+                                "description": "Every app add-on the row was charged, from what its line froze; empty: none. The app's own line answers are in `properties` (entries with its `appId`)."
+                              },
                               "createdAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               }
@@ -61027,6 +61168,7 @@
                               "variantLabel",
                               "unitPrice",
                               "lineTotal",
+                              "unitsTotalMinor",
                               "unitPriceMinor",
                               "lineSubtotalMinor",
                               "discountAmountMinor",
@@ -61038,6 +61180,7 @@
                               "propertiesPrice",
                               "propertiesPriceMinor",
                               "baseUnitPriceMinor",
+                              "addOns",
                               "createdAt"
                             ],
                             "additionalProperties": {}
@@ -88476,6 +88619,7 @@
                                       "cart.line.after",
                                       "order.confirmation",
                                       "account.order",
+                                      "order.line.after",
                                       "account.overview",
                                       "account.profile"
                                     ]
@@ -92824,6 +92968,15 @@
                                           "required": [
                                             "text"
                                           ]
+                                        },
+                                        "details": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "maxLength": 80,
+                                            "x-scalius-buyer-text": true
+                                          },
+                                          "maxItems": 50
                                         }
                                       },
                                       "required": [
@@ -92850,6 +93003,70 @@
                                   },
                                   "extras": {
                                     "$ref": "#/components/schemas/OrderLineExtras"
+                                  },
+                                  "bundle": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "expand",
+                                          "merge",
+                                          "kit"
+                                        ]
+                                      },
+                                      "kit": {
+                                        "type": "object",
+                                        "nullable": true,
+                                        "properties": {
+                                          "variantId": {
+                                            "type": "string"
+                                          },
+                                          "productId": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "variantId",
+                                          "productId"
+                                        ]
+                                      },
+                                      "anchor": {
+                                        "type": "boolean"
+                                      },
+                                      "units": {
+                                        "type": "integer",
+                                        "nullable": true
+                                      },
+                                      "perUnit": {
+                                        "type": "integer",
+                                        "nullable": true
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "title",
+                                      "kind",
+                                      "kit",
+                                      "anchor",
+                                      "units",
+                                      "perUnit"
+                                    ]
+                                  },
+                                  "addOns": {
+                                    "type": "array",
+                                    "items": {
+                                      "$ref": "#/components/schemas/BuyerLineAddOn"
+                                    },
+                                    "maxItems": 5,
+                                    "description": "Every app add-on the row was charged, from what its line froze; empty: none. The app's own line answers are in `properties` (entries with its `appId`)."
                                   }
                                 },
                                 "required": [
@@ -92872,7 +93089,9 @@
                                   "properties",
                                   "propertiesPrice",
                                   "propertiesPriceMinor",
-                                  "baseUnitPriceMinor"
+                                  "baseUnitPriceMinor",
+                                  "bundle",
+                                  "addOns"
                                 ]
                               }
                             },
@@ -94093,6 +94312,7 @@
                                   "cart.line.after",
                                   "order.confirmation",
                                   "account.order",
+                                  "order.line.after",
                                   "account.overview",
                                   "account.profile"
                                 ]
@@ -98166,6 +98386,15 @@
                                       "required": [
                                         "text"
                                       ]
+                                    },
+                                    "details": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "maxLength": 80,
+                                        "x-scalius-buyer-text": true
+                                      },
+                                      "maxItems": 50
                                     }
                                   },
                                   "required": [
@@ -98236,6 +98465,15 @@
                                       "required": [
                                         "text"
                                       ]
+                                    },
+                                    "details": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "maxLength": 80,
+                                        "x-scalius-buyer-text": true
+                                      },
+                                      "maxItems": 50
                                     }
                                   },
                                   "required": [
@@ -98322,6 +98560,15 @@
                                 "type": "string",
                                 "nullable": true,
                                 "format": "uri"
+                              },
+                              "kitItems": {
+                                "type": "array",
+                                "nullable": true,
+                                "items": {
+                                  "$ref": "#/components/schemas/KitItem"
+                                },
+                                "maxItems": 20,
+                                "description": "A kit line's items, in the kit's order: each one's name and option values in the page's language, its units in one kit and its picture. Null on any other line."
                               }
                             },
                             "required": [
@@ -98344,7 +98591,8 @@
                               "freeDelivery",
                               "availableQuantity",
                               "productImageMediaId",
-                              "productImage"
+                              "productImage",
+                              "kitItems"
                             ]
                           }
                         },
@@ -98377,6 +98625,16 @@
                                   },
                                   "amountMinor": {
                                     "type": "integer"
+                                  },
+                                  "details": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "maxLength": 80,
+                                      "x-scalius-buyer-text": true
+                                    },
+                                    "maxItems": 50,
+                                    "description": "What the row opens to: its lines' detail lines, in order; absent: none."
                                   }
                                 },
                                 "required": [
@@ -98385,7 +98643,8 @@
                                   "amount",
                                   "amountMinor"
                                 ]
-                              }
+                              },
+                              "maxItems": 50
                             }
                           },
                           "required": [
@@ -99301,6 +99560,7 @@
                                   "cart.line.after",
                                   "order.confirmation",
                                   "account.order",
+                                  "order.line.after",
                                   "account.overview",
                                   "account.profile"
                                 ]
@@ -103067,6 +103327,16 @@
                                   },
                                   "amountMinor": {
                                     "type": "integer"
+                                  },
+                                  "details": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "maxLength": 80,
+                                      "x-scalius-buyer-text": true
+                                    },
+                                    "maxItems": 50,
+                                    "description": "What the row opens to: its lines' detail lines, in order; absent: none."
                                   }
                                 },
                                 "required": [
@@ -103075,7 +103345,8 @@
                                   "amount",
                                   "amountMinor"
                                 ]
-                              }
+                              },
+                              "maxItems": 50
                             }
                           },
                           "required": [
@@ -103712,6 +103983,15 @@
                                       "required": [
                                         "text"
                                       ]
+                                    },
+                                    "details": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "maxLength": 80,
+                                        "x-scalius-buyer-text": true
+                                      },
+                                      "maxItems": 50
                                     }
                                   },
                                   "required": [
@@ -103785,6 +104065,15 @@
                                       "required": [
                                         "text"
                                       ]
+                                    },
+                                    "details": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "maxLength": 80,
+                                        "x-scalius-buyer-text": true
+                                      },
+                                      "maxItems": 50
                                     }
                                   },
                                   "required": [
@@ -252696,6 +252985,15 @@
                                       "required": [
                                         "text"
                                       ]
+                                    },
+                                    "details": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "maxLength": 80,
+                                        "x-scalius-buyer-text": true
+                                      },
+                                      "maxItems": 50
                                     }
                                   },
                                   "required": [
@@ -254708,6 +255006,15 @@
                                   "required": [
                                     "text"
                                   ]
+                                },
+                                "details": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "maxLength": 80,
+                                    "x-scalius-buyer-text": true
+                                  },
+                                  "maxItems": 50
                                 }
                               },
                               "required": [
@@ -257224,6 +257531,15 @@
                                           "required": [
                                             "text"
                                           ]
+                                        },
+                                        "details": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "maxLength": 80,
+                                            "x-scalius-buyer-text": true
+                                          },
+                                          "maxItems": 50
                                         }
                                       },
                                       "required": [

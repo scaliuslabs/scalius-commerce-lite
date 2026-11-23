@@ -32,6 +32,7 @@ import { PLUGIN_CUSTOMER_ROLE_PATTERN, PLUGIN_CUSTOMER_ROLE_REF_PATTERN, PLUGIN_
 import { PROTECTED_FIELD_KEYWORD, protectedPathsOf, type ProtectedCustomerData, type ProtectedPath } from "./protected-data";
 import { ORDER_CHANNELS } from "../order-channel";
 import { LINE_ADD_ONS_MAX } from "../line-identity";
+import { ADD_ON_DETAILS_MAX } from "../add-on-totals";
 import { ONLINE_STORE_CHANNEL_ID, SALES_CHANNEL_ID_MAX_LENGTH, SALES_CHANNEL_ID_PATTERN } from "../sales-channels";
 
 const id = z.string().min(1).max(128);
@@ -40,6 +41,13 @@ const nonNegativeMinor = minor.min(0);
 const code = z.string().regex(/^[a-z0-9][a-z0-9_.-]{0,63}$/);
 const message = z.string().trim().min(1).max(200);
 const label = z.string().trim().min(1).max(80);
+/**
+ * An add-on's detail lines (`cart.line_prices` `details`): plain text, one
+ * fact a line ("#1 · ৳350", "Covers accidental damage"), at most
+ * ADD_ON_DETAILS_MAX. They ride the add-on to the order line, and the money
+ * summary's row for the add-on opens to them (every line's, in order).
+ */
+const addOnDetails = z.array(label).max(ADD_ON_DETAILS_MAX).optional();
 
 /** Add-ons one line carries: the one bound the cart, the page and checkout share (`LINE_ADD_ONS_MAX`). */
 const LINE_ADJUSTMENTS_ON_LINE_MAX = LINE_ADD_ONS_MAX;
@@ -514,7 +522,9 @@ const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT
  * unit refuses checkout. Merged lines keep their own add-ons. The
  * buyer sees each as a line component ("Add-on: <title>") in the cart,
  * checkout, receipt and emails; tax, discounts, totals and refunds include it
- * as part of the unit price.
+ * as part of the unit price. An add-on may carry `details`: up to
+ * ADD_ON_DETAILS_MAX short text lines (no HTML) frozen with it on the order
+ * line; the summary row of its app and title opens to them.
  *
  * Amounts are in the cart's currency unless the answer says
  * `currency: "store"`: then core converts them with the catalogue's own
@@ -567,12 +577,14 @@ export const cartLinePricesOutputSchema = z.object({
       currency: amountCurrency,
       /** What the buyer sees on the line ("Engraving, 6 letters"). */
       title: label,
+      details: addOnDetails,
     }).strict(),
     z.object({
       lineId: id,
       /** Added to each unit: this share of the unit price checkout charges for the item. */
       percent: percentOfUnit,
       title: label,
+      details: addOnDetails,
     }).strict(),
   ])).max(250).default([]),
   /**
@@ -663,6 +675,50 @@ export const buyerUiLineSchema = z.object({
 export const buyerUiLinesSchema = z.array(buyerUiLineSchema).max(MAX_ORDER_LINES);
 export type BuyerUiLine = z.infer<typeof buyerUiLineSchema>;
 
+/**
+ * One row of a placed order as the order's UI slots read it
+ * (`input.orderLines`): the buyer's row (a kit's item charged as two lines is
+ * one row), from what the order froze, never from live settings. Money is in
+ * the order's currency (`currency`). Of the apps' line answers, only the
+ * extension's own app's reach it (keys without the app id), as on a cart line.
+ */
+export const buyerUiOrderLineSchema = z.object({
+  /** The row's key (its first order line): what an answer's `lines[].lineKey` names. */
+  lineKey: id,
+  /** The real order lines the row shows: returns, keys and warranties name these. */
+  lineIds: z.array(id).min(1).max(2),
+  productId: id,
+  variantId: id,
+  title: z.string().max(300),
+  quantity: z.number().int().min(1),
+  /** The row's units at their unit prices, every add-on included, before discounts. */
+  unitsTotalMinor: nonNegativeMinor,
+  /** The kit or app bundle the row was bought in (a kit's items share its `id`); null for a plain line. */
+  bundle: z.object({
+    id,
+    title: z.string().max(300),
+    kind: z.enum(["expand", "merge", "kit"]),
+    anchor: z.boolean(),
+    units: z.number().int().min(1).nullable(),
+    perUnit: z.number().int().min(1).nullable(),
+  }).strict().nullable(),
+  /** Every app's add-ons the row was charged ("Protection ৳350"): `per: "bundle"`, once per bundle unit, on a bundle's anchor row. */
+  addOns: z.array(z.object({
+    appId: z.string().max(128).nullable(),
+    title: z.string().max(80),
+    amountMinor: nonNegativeMinor,
+    per: z.enum(["unit", "bundle"]),
+  }).strict()).max(LINE_ADJUSTMENTS_ON_LINE_MAX),
+  /** The app's own line answers frozen on the row (keys without the app id): what the buyer chose for it. */
+  inputs: z.array(z.object({
+    key: z.string().max(APP_SCOPED_KEY_MAX_LENGTH),
+    value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength),
+  }).strict()).max(LINE_INPUTS_MAX),
+}).strict();
+/** Every row of an order, as one app's run reads them: at most an order's lines. */
+export const buyerUiOrderLinesSchema = z.array(buyerUiOrderLineSchema).max(MAX_ORDER_LINES);
+export type BuyerUiOrderLine = z.infer<typeof buyerUiOrderLineSchema>;
+
 export const buyerUiInputSchema = z.object({
   target: z.enum(STOREFRONT_UI_SLOTS), language: z.string().min(1).max(35), locale: z.string().min(1).max(35), currency: z.string().length(3),
   cart: functionCartSchema.nullable(), attributes: checkoutAttributesSchema,
@@ -674,6 +730,13 @@ export const buyerUiInputSchema = z.object({
    * each line in one run (`output.lines`; the SDK's `perLine`). Absent elsewhere.
    */
   lines: buyerUiLinesSchema.optional(),
+  /**
+   * Every row's facts (`BuyerUiOrderLine`) on the order's slots (the
+   * thank-you page, the receipt and the account order): a per-line slot
+   * (`order.line.after`) answers a block for each row in one run
+   * (`output.lines`, by `lineKey`; the SDK's `perOrderLine`). Absent elsewhere.
+   */
+  orderLines: buyerUiOrderLinesSchema.optional(),
   order: z.object({ orderId: id, status: z.string().max(64), paymentStatus: z.string().max(64), lines: z.array(z.object({ productId: id, variantId: id, quantity: z.number().int().min(1) }).strict()).max(250) }).strict().nullable(),
   customer: z.object({ id }).strict().nullable(), reads, now,
 }).strict();

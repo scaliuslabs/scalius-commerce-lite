@@ -4053,7 +4053,7 @@
         },
         "extensions": {
          "default": [],
-         "maxItems": 13,
+         "maxItems": 14,
          "type": "array",
          "items": {
           "type": "string",
@@ -4069,6 +4069,7 @@
            "cart.line.after",
            "order.confirmation",
            "account.order",
+           "order.line.after",
            "account.overview",
            "account.profile"
           ]
@@ -5900,7 +5901,7 @@
      },
      "extensions": {
       "default": [],
-      "maxItems": 13,
+      "maxItems": 14,
       "type": "array",
       "items": {
        "type": "object",
@@ -5919,6 +5920,7 @@
           "cart.line.after",
           "order.confirmation",
           "account.order",
+          "order.line.after",
           "account.overview",
           "account.profile"
          ]

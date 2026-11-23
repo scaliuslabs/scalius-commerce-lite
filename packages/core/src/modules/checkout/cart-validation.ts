@@ -41,6 +41,7 @@ import {
   kitComponentsSql,
   kitPrice,
   parseKitComponents,
+  type KitItem,
   type ProductMediaProjection,
   resolveSkuImageRepresentation,
   selectActiveProductBundleRows,
@@ -57,6 +58,7 @@ import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 import { resolvePrice, storeAmountMinor, type AppLinePrice, type ResolvedPriceSource, type StoreAmountConversion } from "@scalius/shared/market-pricing";
 import { addOnUnavailable, bundleAnchors, resolveCartWithAppLinePrices, type AppLineAddOn, type AppLinePricer } from "./app-line-prices";
 import { expandCartKits, type CartTransformer, type TransformedCart } from "./cart-transform";
+import { cartKitItems, cartKitItemsFold, type CartKitItemsRead } from "./kit-items";
 import {
     checkoutListPricesSql,
     marketPricingMatrixSql,
@@ -294,6 +296,12 @@ export interface StorefrontCartValidatedItem {
      * them (`expandCartKits`, `cart.transform`); never on an order line.
      */
     kitComponents?: Array<{ variantId: string; productId: string; quantity: number }>;
+    /**
+     * A kit's items as the buyer reads them (`cartKitItems`), when the cart
+     * check asked (`kitItems`): on the kit's first pass line, then on the
+     * buyer's kit line. Never on an order line.
+     */
+    kitItems?: KitItem[];
 }
 
 /** A product whose cart quantity reached one of its bundle tiers. */
@@ -607,6 +615,8 @@ export function selectStorefrontCartVariantRows(
     productIds: readonly string[],
     variantIds: readonly string[],
     salesChannelId: string = ONLINE_STORE_CHANNEL_ID,
+    /** A buyer's cart check: its kits' components carry what the buyer reads of them (`cartKitItems`). */
+    kitItems?: CartKitItemsRead,
 ) {
     return db
         .select({
@@ -641,7 +651,7 @@ export function selectStorefrontCartVariantRows(
             // The app flags its app line inputs follow, over its product's (`appLineInputApplies`).
             appFlags: appFlagsSql("variant", sql`${productVariants.id}`),
             // A kit's components (null for any other SKU): checkout sells the line as them.
-            kitComponents: kitComponentsSql(sql`${productVariants.id}`),
+            kitComponents: kitComponentsSql(sql`${productVariants.id}`, kitItems ? cartKitItemsFold(kitItems) : undefined),
         })
         .from(productVariants)
         // One id set (the cart's SKUs and its products' live SKUs), read by
@@ -676,6 +686,8 @@ export function resolveStorefrontCartValidationFromRows(
         kitPrices?: ReadonlyMap<string, AppLinePrice>;
         /** Kit items whose lines must be laid out again to match the kit's split (`priceKitLines`). */
         onKitSplits?: (splits: KitLineSplit[]) => void;
+        /** A buyer's cart check: a kit line carries its items as the buyer reads them (`kitItems`). */
+        kitItems?: CartKitItemsRead;
         /** The purchase options the active apps declare, id → title (`checkoutPurchaseOptions`); absent: none. */
         purchaseOptions?: ReadonlyMap<string, string>;
         /** The active apps' line inputs (`checkoutLineInputs`): resolved with the product's own inputs. Absent: none. */
@@ -1064,7 +1076,7 @@ export function resolveStorefrontCartValidationFromRows(
         // A bundle's add-on is priced on its anchor after the loop (`priceBundleAddOns`).
         const bundleAddOns = lineAddOns.filter((addOn) => addOn.bundle);
         const adjustments = lineAddOns.filter((addOn) => !addOn.bundle).map((addOn) =>
-            lineAdjustmentProperty(addOn.title, "percent" in addOn ? addOnShareMinor(itemUnitMinor, addOn.percent, money.incrementMinor) : addOn.amountMinor, addOn.appId));
+            lineAdjustmentProperty(addOn.title, "percent" in addOn ? addOnShareMinor(itemUnitMinor, addOn.percent, money.incrementMinor) : addOn.amountMinor, addOn.appId, addOn.details));
         const adjustmentsMinor = adjustments.reduce((total, adjustment) => total + adjustment.priceMinor, 0);
         const unitPriceMinor = baseUnitPriceMinor + propertiesPriceMinor + adjustmentsMinor;
         const submittedPriceMinor = typeof item.price === "number"
@@ -1132,6 +1144,11 @@ export function resolveStorefrontCartValidationFromRows(
             productImageMediaId: image?.mediaId ?? null,
             productImage: image?.url ?? null,
             ...(kit ? { kitComponents: kit.map((component) => ({ variantId: component.variantId, productId: component.productId!, quantity: component.quantity })) } : {}),
+            ...(() => {
+                // What the buyer reads of the kit's items, from the rows this pass already holds.
+                const kitItems = kit && options.kitItems ? cartKitItems(kit, { products: productMap, variants: variantMap, mediaByProduct }, options.kitItems) : null;
+                return kitItems ? { kitItems } : {};
+            })(),
         });
         if (bundleAddOns.length > 0) {
             bundleAnchors.push({
@@ -1160,7 +1177,7 @@ export function resolveStorefrontCartValidationFromRows(
             const perUnit = addOn.bundle!.perUnit;
             const perAnchorUnit = perBundleUnit / perUnit;
             if (!Number.isSafeInteger(perAnchorUnit) || perAnchorUnit % money.incrementMinor !== 0) throw addOnUnavailable();
-            return lineAdjustmentProperty(addOn.title, perAnchorUnit, addOn.appId);
+            return lineAdjustmentProperty(addOn.title, perAnchorUnit, addOn.appId, addOn.details);
         });
         const line = anchor.validated;
         const addedMinor = priced.reduce((total, adjustment) => total + adjustment.priceMinor, 0);
@@ -1428,6 +1445,8 @@ export async function validateStorefrontCartItems(
         purchaseOptions?: ReadonlyMap<string, string>;
         /** The active apps' line inputs (`checkoutLineInputs`); absent: none, so a line naming one is refused as unknown. */
         lineInputs?: readonly AppLineInputs[];
+        /** A buyer's cart check: each kit line answers its items (`kitItems`), in the presence's language. */
+        kitItems?: CartKitItemsRead;
     } = {},
 ): Promise<StorefrontCartValidationResult> {
     if (items.length === 0 || items.some((item) => !isPersistedVariantId(item.variantId))) {
@@ -1460,6 +1479,7 @@ async function validateCartLines(
         purchaseOptions?: ReadonlyMap<string, string>;
         lineInputs?: readonly AppLineInputs[];
         outerTransform?: TransformedCart;
+        kitItems?: CartKitItemsRead;
     },
 ): Promise<StorefrontCartValidationResult> {
     const productIds = [...new Set(items.map((item) => item.productId))];
@@ -1467,7 +1487,7 @@ async function validateCartLines(
     // The cart's kits' components ride in the same statements (`cartProductIdsSql`).
     const [productRows, variantRows, bundleRows] = await Promise.all([
         selectStorefrontCartProductRows(db, productIds, options.salesChannelId, options.market?.shippingMethodId, variantIds),
-        selectStorefrontCartVariantRows(db, productIds, variantIds, options.salesChannelId),
+        selectStorefrontCartVariantRows(db, productIds, variantIds, options.salesChannelId, options.kitItems),
         selectActiveProductBundleRows(db, productIds),
     ]);
     // Media is presentation snapshot data, so keep it outside catalog authority
@@ -1648,6 +1668,7 @@ export function presentStorefrontCartValidation(
             isGiftCard: _isGiftCard,
             bundleDiscountMinor: _bundleDiscountMinor,
             kitComponents: _kitComponents,
+            kitItems,
             priceSource: _priceSource,
             bundle: _bundle,
             sourceIndex: _sourceIndex,
@@ -1655,6 +1676,8 @@ export function presentStorefrontCartValidation(
             ...item
         }, position) => ({
             ...item,
+            // A kit line's items (the cart check's); null on any other line.
+            kitItems: kitItems ?? null,
             lineInputs: item.lineInputs ?? [],
             unitPrice: fromMinor(unitPriceMinor, decimalPlaces),
             baseUnitPrice: fromMinor(baseUnitPriceMinor, decimalPlaces),

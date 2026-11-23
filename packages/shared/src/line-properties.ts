@@ -1,6 +1,7 @@
 import { appScopedKey, appScopedKeyAppId, isAppScopedKey } from "./plugins/ids";
 import { sha256HexSync } from "./hash";
 import { LINE_ADJUSTMENT_KEY, LINE_BUNDLE_KEY, LINE_ENTRY_WORDS_EN } from "./line-entry-words";
+import { ADD_ON_DETAILS_MAX, readAddOnDetails } from "./add-on-totals";
 import {
   LINE_PROPERTY_INPUT_LIMITS,
   LINE_PROPERTY_REVISION_PATTERN,
@@ -457,9 +458,13 @@ export const LINE_ADJUSTMENT_PROPERTY_KEY = LINE_ADJUSTMENT_KEY;
 /** Stored in English for the API; every surface draws it in its reader's language (`presentLineEntry`). */
 export const LINE_ADJUSTMENT_LABEL = LINE_ENTRY_WORDS_EN.lineAddOnText;
 
-export function lineAdjustmentProperty(title: string, amountMinor: number, appId?: string): ResolvedLineProperty {
+export function lineAdjustmentProperty(title: string, amountMinor: number, appId?: string, details?: readonly string[]): ResolvedLineProperty {
   const text = title.trim().slice(0, 80);
-  return { key: LINE_ADJUSTMENT_PROPERTY_KEY, type: "text", label: LINE_ADJUSTMENT_LABEL, value: text, displayValue: text, priceMinor: amountMinor, ...(appId ? { appId } : {}) };
+  return {
+    key: LINE_ADJUSTMENT_PROPERTY_KEY, type: "text", label: LINE_ADJUSTMENT_LABEL, value: text, displayValue: text, priceMinor: amountMinor,
+    ...(appId ? { appId } : {}),
+    ...(details?.length ? { details: details.slice(0, ADD_ON_DETAILS_MAX) } : {}),
+  };
 }
 
 /**
@@ -584,24 +589,32 @@ export function isLineInputEntry(key: string): boolean {
     && key !== LINE_BUNDLE_PROPERTY_KEY && !key.startsWith(RESERVED_PROPERTY_KEY_PREFIX);
 }
 
-/** The frozen entries of an order line, as stored: `[]` for none or a malformed column. */
+/**
+ * The frozen entries of an order line, as stored: `[]` for none or a
+ * malformed column. The column is written only by the commit and is
+ * immutable, so a malformed entry is skipped rather than failing the read; an
+ * entry without its display text reads its value, an amount that is not a
+ * whole non-negative number reads 0. Every reader of an order line's entries
+ * (receipt, account order, dashboard, invoices, CSV, apps) reads them here.
+ */
 export function readOrderLineProperties(properties: string | readonly unknown[] | null | undefined): ResolvedLineProperty[] {
   const resolved: ResolvedLineProperty[] = [];
   for (const entry of frozenEntries(properties)) {
     if (
       !isRecord(entry) || typeof entry.key !== "string" || typeof entry.label !== "string"
-      || typeof entry.value !== "string" || typeof entry.displayValue !== "string"
-      || typeof entry.priceMinor !== "number" || !Number.isSafeInteger(entry.priceMinor)
+      || typeof entry.value !== "string"
       || !(LINE_INPUT_FIELD_TYPES as readonly unknown[]).includes(entry.type)
     ) continue;
+    const details = entry.key === LINE_ADJUSTMENT_PROPERTY_KEY ? readAddOnDetails(entry.details, ADD_ON_DETAILS_MAX) ?? [] : [];
     resolved.push({
       key: entry.key,
       type: entry.type as LineInputFieldType,
       label: entry.label,
       value: entry.value,
-      displayValue: entry.displayValue,
-      priceMinor: entry.priceMinor,
+      displayValue: typeof entry.displayValue === "string" ? entry.displayValue : entry.value,
+      priceMinor: typeof entry.priceMinor === "number" && Number.isSafeInteger(entry.priceMinor) && entry.priceMinor >= 0 ? entry.priceMinor : 0,
       ...(typeof entry.appId === "string" && entry.appId ? { appId: entry.appId } : {}),
+      ...(details.length > 0 ? { details } : {}),
       ...(typeof entry.textRevision === "string" && LINE_PROPERTY_REVISION_PATTERN.test(entry.textRevision) ? { textRevision: entry.textRevision } : {}),
       ...(typeof entry.revision === "string" && LINE_PROPERTY_REVISION_PATTERN.test(entry.revision) ? { revision: entry.revision } : {}),
       ...(isRecord(entry.confirmation) && typeof entry.confirmation.text === "string" ? { confirmation: { text: entry.confirmation.text } } : {}),
@@ -848,6 +861,8 @@ export interface ResolvedLineProperty {
   revision?: string;
   /** A choice that needs confirmation: the agreement the buyer accepted, as shown. */
   confirmation?: { text: string };
+  /** An app add-on's detail lines (`cart.line_prices` `details`, text): what its summary row opens to. */
+  details?: string[];
 }
 
 /**
