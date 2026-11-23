@@ -21222,7 +21222,8 @@
    "inputs",
    "purchase_options",
    "stock",
-   "status"
+   "status",
+   "variant_title"
   ],
   "STOREFRONT_BUY_FORM_OPTION_LAYOUTS": [
    "buttons",
@@ -21289,6 +21290,16 @@
    "months",
    "years",
    "lifetime"
+  ],
+  "STOREFRONT_PRODUCT_MEDIA_KINDS": [
+   "image",
+   "video"
+  ],
+  "STOREFRONT_KIT_DELIVERY_KINDS": [
+   "physical",
+   "service",
+   "digital_key",
+   "digital_file"
   ],
   "STOREFRONT_PRODUCT_ERRORS": [
    "option_required",

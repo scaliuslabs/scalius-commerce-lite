@@ -23,6 +23,15 @@
 //   own Add to cart and Buy now out only when buy buttons (`buyVariant`)
 //   cover every buyable SKU; otherwise the form draws them.
 //
+// - an offer button (`buyOffer(offer, "add" | "buy")` on a `<button>`, one of
+//   the page's placed offers) becomes a submit button of the page's empty
+//   offer form posting that offer's SKU to its product's buy route
+//   (`formaction`), so it buys without JavaScript and never sends the page's
+//   own options or inputs; product-controller.ts adds it in place. Off while
+//   the offer cannot be bought. When offer buttons (outside deferred markup)
+//   buy every placed offer, the buy form draws no offer rows of its own
+//   (`data-offers="false"` on its embed, which only the host writes).
+//
 // A skin with bound buy buttons gets a hidden default submit button ahead of
 // all its markup, so Enter in a buyer input or the quantity (the browser's
 // implicit submission takes the form's first submit button in page order)
@@ -33,7 +42,7 @@
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { decodeAttribute, deferredAt } from "@scalius/shared/plugins/storefront-embeds";
-import { BUY_FORM_ID, BUY_FORM_VARIANT_FIELDS } from "@/components/product/lib/buy-form";
+import { BUY_FORM_ID, BUY_FORM_VARIANT_FIELDS, OFFER_FORM_ID, offerBuyPath } from "@/components/product/lib/buy-form";
 import { SKIN_CHOICE_PREPAINT_SCRIPT } from "@/lib/inline-boot-scripts";
 import { warnOnce } from "./host";
 import type { AppMarkup } from "./index";
@@ -43,7 +52,7 @@ const CONTROL_TAG = /<(a|button)\b([^<>]*)>/g;
 const ATTRIBUTE = /\s([^\s"'<>/=]+)(?:="([^"]*)")?/g;
 const BOUND = "data-sx-bound";
 /** What the host writes on a bound control: the app's own values of these go. */
-const HOST_ATTRIBUTES = new Set(["href", "type", "name", "value", "form", "disabled", "aria-pressed", "aria-current", "aria-busy", "data-state", "data-availability"]);
+const HOST_ATTRIBUTES = new Set(["href", "type", "name", "value", "form", "formaction", "formmethod", "disabled", "aria-pressed", "aria-current", "aria-busy", "data-state", "data-availability"]);
 
 /** Ahead of skin buttons in the buy form's tree order: Enter submits the buyer's choice (off, as the form's own, where nothing can be bought). */
 const defaultSubmit = (blocked: boolean) => `<button type="submit" form="${BUY_FORM_ID}" class="sr-only" tabindex="-1" aria-hidden="true"${blocked ? " disabled" : ""} ${BOUND}></button>`;
@@ -74,6 +83,9 @@ export interface PurchasePage {
  */
 export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProductPage["product"], page: PurchasePage): AppMarkup {
   const variants = new Map(product.variants.map((variant) => [variant.id, variant]));
+  const offers = new Map((product.placedOffers ?? []).map((offer) => [offer.variantId, offer]));
+  /** The placed offers a bound offer button (outside deferred markup) buys. */
+  const offered = new Set<string>();
   const covered = new Set<string>();
   /** The SKUs a bound buy button (outside deferred markup) buys. */
   const bought = new Set<string>();
@@ -85,6 +97,29 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
   const bindTag = (whole: string, tag: string, rest: string, deferred: boolean): string => {
     const attributes = [...rest.matchAll(ATTRIBUTE)].map(([, name, value]): [string, string | null] => [name!, value === undefined ? null : decodeAttribute(value)]);
     const read = (name: string) => attributes.find(([key]) => key === name)?.[1] ?? null;
+    const offerId = tag === "button" ? read("data-buy-offer") : null;
+    if (offerId !== null) {
+      const offer = offers.get(offerId);
+      const action = offer ? offerBuyPath(offer.url) : null;
+      // An offer this page does not carry: the button stays the app's, unbound.
+      if (!offer || !action) return whole;
+      if (!deferred) offered.add(offer.variantId);
+      const intent = read("data-buy-intent") === "buy" ? "buy" : "add";
+      const off = !offer.available;
+      return write(tag, [
+        ...attributes.filter(([name]) => !HOST_ATTRIBUTES.has(name) && !["data-buy-intent", "hidden", "data-buy-variant", "data-choose-variant"].includes(name)),
+        ["data-buy-intent", intent],
+        ["type", "submit"],
+        ["form", OFFER_FORM_ID],
+        ["formaction", action],
+        ["name", "variant"],
+        ["value", offer.variantId],
+        ["data-availability", off ? "sold-out" : "available"],
+        ...(off ? [["disabled", null] as [string, null]] : []),
+        ...(off && intent === "buy" ? [["hidden", null] as [string, null]] : []),
+        [BOUND, null],
+      ]);
+    }
     const choice = read("data-choose-variant");
     const buy = tag === "button" ? read("data-buy-variant") : null;
     const id = buy ?? choice;
@@ -137,7 +172,7 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
 
   const parts = markup.parts.map((part) => {
     if (part.kind === "embed") return part;
-    if (!part.html.includes("data-choose-variant") && !part.html.includes("data-buy-variant")) return part;
+    if (!part.html.includes("data-choose-variant") && !part.html.includes("data-buy-variant") && !part.html.includes("data-buy-offer")) return part;
     const inDeferred = deferredAt(part.html);
     return { ...part, html: part.html.replace(CONTROL_TAG, (whole: string, tag: string, rest: string, at: number) => {
       // Still bound (the nearest bound control wins a press), but a button in a link is invalid HTML that
@@ -153,8 +188,13 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
   const coversEvery = (controls: ReadonlySet<string>) => controls.size > 0 && product.variants.every((variant) => !variant.available || controls.has(variant.id));
   const coversEveryBuyableSku = coversEvery(covered);
   const buysEveryBuyableSku = coversEvery(bought);
-  const bound = parts.map((part) => {
-    if (part.kind !== "embed" || part.embed !== "buy_form") return part;
+  // Every placed offer has a bound offer button: the form draws no offer rows of its own.
+  const buysEveryOffer = offers.size > 0 && [...offers.keys()].every((id) => offered.has(id));
+  const bound = parts.map((original) => {
+    if (original.kind !== "embed" || original.embed !== "buy_form") return original;
+    // Only the host says the skin draws the offers.
+    const { offers: _asked, ...data } = original.data;
+    const part = { ...original, data: buysEveryOffer ? { ...data, offers: "false" } : data };
     const dropped = new Set<string>();
     if (part.data.options === "false" && !coversEveryBuyableSku) {
       dropped.add("options");

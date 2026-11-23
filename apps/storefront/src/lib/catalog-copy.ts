@@ -202,6 +202,21 @@ export interface CatalogCopy {
     compareThese: string;
     storePolicies: string;
     recentlyViewed: string;
+    /** A kit (a SKU made of other SKUs) and the offers placed under a page's own. */
+    kit: {
+      /** The heading of the offers placed under the page's own. */
+      moreOffers: string;
+      /** The contents disclosure: "What's included (3 items)" (`count` in the page's digits). */
+      included: (count: string, one: boolean) => string;
+      /** An item's quantity in a kit: "Qty 2". */
+      quantity: (count: string) => string;
+      /** The items' price bought separately (`amount` formatted). */
+      worth: (amount: string) => string;
+      /** The saving: "Save ৳1,755 (43%)". */
+      save: (amount: string, percent: string) => string;
+      /** How an item reaches the buyer (`STOREFRONT_KIT_DELIVERY_KINDS`). */
+      delivery: { physical: string; service: string; digital_key: string; digital_file: string };
+    };
     /** Why a quick buy came back to the product page (`?error=`). */
     quickBuy: {
       productUnavailable: string;
@@ -410,6 +425,19 @@ const EN: CatalogCopy = {
     compareThese: "Compare these with this item",
     storePolicies: "Store policies",
     recentlyViewed: "Recently viewed",
+    kit: {
+      moreOffers: "More offers",
+      included: (count, one) => `What's included (${count} ${one ? "item" : "items"})`,
+      quantity: (count) => `Qty ${count}`,
+      worth: (amount) => `${amount} bought separately`,
+      save: (amount, percent) => `Save ${amount} (${percent}%)`,
+      delivery: {
+        physical: "Delivered or picked up",
+        service: "A service: nothing to deliver",
+        digital_key: "Licence key after payment",
+        digital_file: "Download after payment",
+      },
+    },
     quickBuy: {
       productUnavailable: "This item is not available right now.",
       variantRequired: "Please choose an available option before buying.",
@@ -623,6 +651,19 @@ const BN: CatalogCopy = {
     compareThese: "এগুলোর সাথে এই পণ্যটি তুলনা করুন",
     storePolicies: "স্টোরের নীতিমালা",
     recentlyViewed: "সম্প্রতি দেখা পণ্য",
+    kit: {
+      moreOffers: "আরও অফার",
+      included: (count) => `যা যা থাকছে (${count}টি পণ্য)`,
+      quantity: (count) => `পরিমাণ ${count}`,
+      worth: (amount) => `আলাদা কিনলে ${amount}`,
+      save: (amount, percent) => `সাশ্রয় ${amount} (${percent}%)`,
+      delivery: {
+        physical: "ডেলিভারি বা পিকআপ",
+        service: "সেবা: ডেলিভারির কিছু নেই",
+        digital_key: "পেমেন্টের পর লাইসেন্স কী",
+        digital_file: "পেমেন্টের পর ডাউনলোড",
+      },
+    },
     quickBuy: {
       productUnavailable: "এই পণ্যটি এখন পাওয়া যাচ্ছে না।",
       variantRequired: "কেনার আগে পাওয়া যায় এমন একটি অপশন বেছে নিন।",

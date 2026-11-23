@@ -243,6 +243,7 @@ export function init() {
   state.selection = requested?.selection ??
     createInitialSelection(state.options, state.variants);
   hideExpiredOffers();
+  installPlacedOfferButtons();
   warranty = readWarranty();
 
   state.purchaseBlocked = Boolean(part("blocked"));
@@ -346,6 +347,46 @@ function checkedPurchaseOptions(): CartLinePurchaseOption[] {
     .filter((entry) => entry.checked && entry.value)
     .map((input) => ({ id: input.value, title: input.dataset.purchaseOptionTitle || input.value }))
     .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+}
+
+let placedOfferButtons = false;
+
+/**
+ * A placed offer's buttons (another product's SKU: PlacedOffers.astro, a
+ * skin's `buyOffer`, both bound by the host) add it in place: one listener,
+ * its code loaded on the first press. When that cannot add it, the button
+ * posts the offer to its product's buy route, as without JavaScript.
+ */
+function installPlacedOfferButtons() {
+  if (placedOfferButtons) return;
+  placedOfferButtons = true;
+  document.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-sx-bound][data-buy-offer]") : null;
+    if (!button || button.disabled || event.defaultPrevented || button.hasAttribute("aria-busy")) return;
+    event.preventDefault();
+    button.setAttribute("aria-busy", "true");
+    void import("./offer-buy")
+      .then(({ buyPlacedOffer }) => buyPlacedOffer(button))
+      .catch(() => false)
+      .then((added) => {
+        button.removeAttribute("aria-busy");
+        if (!added) button.form?.requestSubmit(button);
+      });
+  });
+}
+
+/**
+ * The parts that follow the chosen SKU: a kit SKU's contents
+ * (`data-sx-sku`, shown while it is the chosen one) and the chosen SKU's
+ * name (`variant_title`: "Product, Black / XL", the product's name until an
+ * exact SKU is chosen).
+ */
+function updateSkuParts() {
+  const exact = exactVariant();
+  for (const part of buyFormQueryAll(cache.scopes, "[data-sx-sku]")) part.hidden = part.dataset.sxSku !== exact?.id;
+  const name = cache.container?.dataset.productName ?? "";
+  const values = exact?.selectedOptions.map((option) => option.value).filter(Boolean).join(" / ");
+  for (const title of parts("variant-title")) title.textContent = values ? `${name}, ${values}` : name;
 }
 
 /** Offers end on their own schedule: hide one that ended while the page was cached. */
@@ -664,6 +705,7 @@ function refresh(revealSelection = false) {
     updatePrice();
     updateVariantImage();
     updateWarrantyRows();
+    updateSkuParts();
     updateBuyerInputSkus();
     publish();
   });

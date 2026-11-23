@@ -20,6 +20,7 @@ import {
   type StorefrontImage,
   type StorefrontListingPage,
   type StorefrontModule,
+  type StorefrontPlacedOffer,
   type StorefrontProductCard,
   type StorefrontProductCardData,
   type StorefrontProductPage,
@@ -40,6 +41,7 @@ import {
 } from "@scalius/shared/plugins/storefront-protocol";
 import { splitStorefrontEmbeds } from "@scalius/shared/plugins/storefront-embeds";
 import { isSearchableQuery } from "@scalius/shared/search-query";
+import { storefrontThemeRoutes } from "@scalius/shared/storefront-routes";
 import { storefrontSectionDefault, storefrontVisibleSection } from "@scalius/shared/storefront-theme/sections";
 import { coreSectionSkinSettings, type CoreSectionResolver } from "@scalius/shared/storefront-theme/skins";
 import { checkStorefrontHeaderHtml, type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
@@ -146,7 +148,7 @@ export function fixtureHeaderData(overrides: Partial<StorefrontHeaderData> = {})
     ],
     categories: [{ title: "Women", url: "/categories/women", children: [] }],
     announcement: { text: "Free delivery over ৳2,000", url: null },
-    routes: { home: "/", search: "/search", cart: "/cart", account: "/account" },
+    routes: storefrontThemeRoutes(),
     searchParam: "q",
     ...overrides,
   };
@@ -169,7 +171,7 @@ export function fixtureFooterData(overrides: Partial<StorefrontFooterData> = {})
     menus: [{ title: "Help", items: [{ title: "Shipping", url: "/pages/shipping", children: [] }] }],
     policies: [{ title: "Privacy", url: "/policies/privacy" }],
     newsletter: true,
-    routes: { home: "/", newsletter: "/newsletter" },
+    routes: { ...storefrontThemeRoutes(), newsletter: "/newsletter" },
     year: 2026,
     ...overrides,
   };
@@ -184,7 +186,7 @@ export function fixtureProductPage(overrides: Partial<StorefrontProductPage["pro
       url: card.url,
       brand: { title: "Acme", url: "/brands/acme" },
       descriptionHtml: "<p>Breathable linen, cut for the heat.</p>",
-      media: card.image ? [card.image] : [],
+      media: card.image ? [{ ...card.image, kind: "image", video: null }] : [],
       price: card.price,
       compareAt: card.compareAt,
       priceVaries: false,
@@ -197,6 +199,7 @@ export function fixtureProductPage(overrides: Partial<StorefrontProductPage["pro
       ],
       fields: {},
       warranties: [],
+      placedOffers: [],
       breadcrumbs: [{ title: "Home", url: "/" }, { title: "Shirts", url: "/categories/shirts" }, { title: card.title, url: card.url }],
       ...overrides,
     },
@@ -371,6 +374,22 @@ const SAMPLE_WARRANTY: StorefrontWarranty = {
   summary: "6 months store warranty · 7-day replacement",
 };
 
+const bdt = (amountMinor: number) => ({ amountMinor, currency: "BDT", formatted: `৳${(amountMinor / 100).toLocaleString("en-US")}` });
+
+/** The sample shop's summer set placed under its shirt: a kit of the shirt and a scarf. */
+const SAMPLE_PLACED_KIT: StorefrontPlacedOffer = {
+  productId: "prod_set", variantId: "sku_set", title: "Summer set", url: "/products/summer-set", sku: "SET-1", options: [],
+  image: { url: "https://media.example.com/set-480.webp", srcset: null, width: 960, height: 960, alt: "Summer set" },
+  price: bdt(160000), compareAt: bdt(200000), available: true, availability: "in_stock",
+  kit: {
+    components: [
+      { productId: "prod_1", variantId: "sku_m", title: "Linen shirt", url: "/products/linen-shirt", image: null, options: [{ name: "Size", value: "M" }], quantity: 1, delivery: "physical", price: bdt(120000) },
+      { productId: "prod_scarf", variantId: "sku_scarf", title: "Cotton scarf", url: null, image: null, options: [], quantity: 1, delivery: "physical", price: bdt(80000) },
+    ],
+    price: bdt(160000), compareAt: bdt(200000), saving: bdt(40000), savingPercent: 20, availability: "in_stock",
+  },
+};
+
 const SAMPLE_STORE: FixtureStore = {
   name: "sample",
   description: "A sample shop: Acme Store, clothing, prices in BDT; its shirt has specifications and key specs.",
@@ -380,7 +399,7 @@ const SAMPLE_STORE: FixtureStore = {
   productPage: (overrides) => {
     const page = fixtureProductPage({ specifications: SAMPLE_SPECIFICATIONS });
     const variants = page.product.variants.map((variant) => ({ ...variant, warrantyId: variant.available ? SAMPLE_WARRANTY.id : null }));
-    return { product: { ...page.product, variants, warranties: [SAMPLE_WARRANTY], ...overrides } };
+    return { product: { ...page.product, variants, warranties: [SAMPLE_WARRANTY], placedOffers: [SAMPLE_PLACED_KIT], ...overrides } };
   },
   skinData: (target) => {
     switch (target) {
@@ -420,7 +439,7 @@ const EMPTY_STORE: FixtureStore = {
       product: {
         id: card.id, title: card.title, url: card.url, brand: null, descriptionHtml: "", media: [],
         price: card.price, compareAt: null, priceVaries: false, availability: "in_stock", rating: null,
-        options: [], variants: [{ id: "sku_bare", title: card.title, options: [], price: card.price, compareAt: null, available: true, image: null, warrantyId: null }], warranties: [],
+        options: [], variants: [{ id: "sku_bare", title: card.title, options: [], price: card.price, compareAt: null, available: true, image: null, warrantyId: null }], warranties: [], placedOffers: [],
         fields: {}, breadcrumbs: [{ title: "Home", url: "/" }, { title: card.title, url: card.url }], specifications: [],
         ...overrides,
       },
@@ -507,14 +526,16 @@ const OTHER_STORE: FixtureStore = {
     return {
       product: {
         id: card.id, title: card.title, url: card.url, brand: { title: "Harbor Goods", url: "/brands/harbor-goods" },
-        descriptionHtml: "<p>Pre-seasoned and oven-safe to 500°F.</p>", media: [card.image!, otherImage("skillet-side", "Skillet from the side")],
+        descriptionHtml: "<p>Pre-seasoned and oven-safe to 500°F.</p>",
+        // A photo, then the maker's video by its poster.
+        media: [{ ...card.image!, kind: "image", video: null }, { ...otherImage("skillet-side", "Skillet from the side"), kind: "video", video: { url: "https://media.example.com/harbor/skillet.mp4", durationMs: 41_000 } }],
         price: card.price, compareAt: null, priceVaries: true, availability: "in_stock", rating: card.rating,
         options: [{ name: "Diameter", values: [{ label: "10 in", swatch: null, swatchImage: null }, { label: "12 in", swatch: null, swatchImage: null }] }],
         variants: [
           { id: "sku_10", title: "10 in", options: ["10 in"], price: usd(4800), compareAt: null, available: true, image: null, warrantyId: OTHER_WARRANTY.id },
           { id: "sku_12", title: "12 in", options: ["12 in"], price: usd(5800), compareAt: null, available: true, image: null, warrantyId: OTHER_WARRANTY.id },
         ],
-        fields: {}, warranties: [OTHER_WARRANTY], breadcrumbs: [{ title: "Home", url: "/" }, { title: "Kitchen", url: "/categories/kitchen" }, { title: card.title, url: card.url }], specifications: OTHER_SPECIFICATIONS,
+        fields: {}, warranties: [OTHER_WARRANTY], placedOffers: [], breadcrumbs: [{ title: "Home", url: "/" }, { title: "Kitchen", url: "/categories/kitchen" }, { title: card.title, url: card.url }], specifications: OTHER_SPECIFICATIONS,
         ...overrides,
       },
     };

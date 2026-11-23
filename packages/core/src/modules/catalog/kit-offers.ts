@@ -218,8 +218,9 @@ export interface StorefrontPlacedOffer {
  * The page's kits (by kit SKU id) and placed offers (in order) from the two
  * statements. `ownKitPrices` are the page's own kit SKUs' buyer prices. A
  * placed offer whose SKU or product can't be sold (deleted, a draft,
- * unpublished) is left out, and so is a placed kit with such a component;
- * a kit of the page's own with one reads `out_of_stock`.
+ * unpublished) is left out, and so is a placed kit with such a component
+ * and any placed offer out of stock (a kit's scarcest item gone); a kit of
+ * the page's own with one reads `out_of_stock`.
  */
 export function resolveProductPageKits(
     rows: readonly ProductPageKitRow[],
@@ -330,9 +331,14 @@ export function resolveProductPageKits(
         const kit = Number(row.isKit) === 1 ? kitOf(row.variantId, unitMinor, threshold) : null;
         // A placed kit with a component that can't be sold is not offered.
         if (Number(row.isKit) === 1 && (!kit || !kit.sellable)) continue;
+        const own = available(row);
+        const availabilityBand: BuyerAvailabilityBand = kit
+            ? kit.kit.availabilityBand
+            : own === null ? "untracked" : resolveTrackedBuyerAvailabilityBand(own, threshold);
+        // Nor is one that can't be bought now (a kit whose scarcest item is gone): the host offers what sells.
+        if (availabilityBand === "out_of_stock") continue;
         const picture = image(row);
         const name = named(row);
-        const own = available(row);
         placedOffers.push({
             variantId: row.variantId,
             productId: row.productId,
@@ -346,9 +352,7 @@ export function resolveProductPageKits(
             fulfillmentKind: row.fulfillmentKind ?? "physical",
             price: kit ? kit.kit.price : money(unitMinor),
             compareAtPrice: kit ? kit.kit.compareAtPrice : null,
-            availabilityBand: kit
-                ? kit.kit.availabilityBand
-                : own === null ? "untracked" : resolveTrackedBuyerAvailabilityBand(own, threshold),
+            availabilityBand,
             kit: kit?.kit ?? null,
         });
     }

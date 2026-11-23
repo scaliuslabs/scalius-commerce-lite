@@ -467,6 +467,39 @@ export function storefrontDarkPalette(colors: StorefrontThemeColors): Storefront
   };
 }
 
+// ─── Page paint ───────────────────────────────────────────────────────────
+
+/** Where a radial page paint is centred (symmetric, so it reads the same right to left). */
+export const STOREFRONT_PAGE_PAINT_ORIGINS = ["top", "center", "bottom"] as const;
+
+const paletteColorSchema = z.enum(STOREFRONT_THEME_COLOR_KEYS);
+const paintStopsSchema = z.array(paletteColorSchema).min(2).max(4);
+
+/**
+ * The page's paint behind every part, on every page the store draws, public
+ * and the buyer's own (cart, checkout, account): one of the theme's own
+ * colours, or a gradient of two to four of them, straight at an angle or
+ * round from the top, centre or bottom. Colours are named, never written, so
+ * the paint follows the colour scheme (dark pages paint with the dark
+ * colours) and holds the same readable-text rules. Absent: the page colour.
+ */
+export const storefrontPagePaintSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("color"), color: paletteColorSchema }).strict(),
+  z.object({ kind: z.literal("linear"), angle: z.number().int().min(0).max(359), stops: paintStopsSchema }).strict(),
+  z.object({ kind: z.literal("radial"), at: z.enum(STOREFRONT_PAGE_PAINT_ORIGINS), stops: paintStopsSchema }).strict(),
+]);
+export type StorefrontPagePaint = z.infer<typeof storefrontPagePaintSchema>;
+
+/** The paint's CSS: only palette variables, constants and a whole angle. */
+export function storefrontPagePaintCss(paint: StorefrontPagePaint): string {
+  const color = (key: string) => `var(--${key})`;
+  switch (paint.kind) {
+    case "color": return color(paint.color);
+    case "linear": return `linear-gradient(${paint.angle}deg, ${paint.stops.map(color).join(", ")})`;
+    case "radial": return `radial-gradient(ellipse at ${paint.at}, ${paint.stops.map(color).join(", ")})`;
+  }
+}
+
 // ─── Schema ───────────────────────────────────────────────────────────────
 
 const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/, "Use a #rrggbb colour.");
@@ -506,6 +539,8 @@ export const storefrontThemeTokensSchemaOf = (colorsSchema: typeof storefrontThe
   imageFit: z.enum(STOREFRONT_IMAGE_FITS),
   headerTone: z.enum(STOREFRONT_HEADER_TONES),
   container: z.enum(STOREFRONT_CONTAINERS),
+  /** The page's paint (`storefrontPagePaintSchema`); absent: the page colour. */
+  pagePaint: storefrontPagePaintSchema.optional(),
 }).strict();
 
 export const storefrontThemeTokensSchema = storefrontThemeTokensSchemaOf();
@@ -632,5 +667,7 @@ export function buildStorefrontTokenCss(tokens: StorefrontThemeTokens): Record<s
     "theme-duration-fast": `${STOREFRONT_MOTION_MS.fast}ms`,
     "theme-duration-base": `${STOREFRONT_MOTION_MS.base}ms`,
     ...Object.fromEntries(Object.entries(STOREFRONT_TYPE_STEPS).map(([step, px]) => [`theme-text-${step}`, `${px / 16}rem`])),
+    // The page's paint, from the palette's own variables (the dark colours repaint it); without one the page colour paints.
+    ...(tokens.pagePaint ? { "theme-page-paint": storefrontPagePaintCss(tokens.pagePaint) } : {}),
   };
 }

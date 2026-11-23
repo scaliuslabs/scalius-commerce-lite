@@ -108,6 +108,7 @@ import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import RichTextStyles from "@/components/RichTextStyles.astro";
+import { OFFER_FORM_ID } from "@/components/product/lib/buy-form";
 
 const { slug } = Astro.params;
 // Handles are lowercase: a mis-cased link redirects to the one real URL.
@@ -653,6 +654,8 @@ const skinBuyLabels = { add: buyFormLabel(skinBuyFormData["add-label"]), buy: bu
 const skinBuyBox = {
   ...buyBox,
   placed: [...skinBuyParts],
+  // The skin's own `buyOffer` buttons buy every placed offer (the host checked): the form draws none.
+  placedOffers: skinBuyFormData.offers !== "false",
   summary: {
     ...buyBox.summary,
     details: false,
@@ -660,6 +663,7 @@ const skinBuyBox = {
     nativeOptions: skinBuyFormData.options !== "false",
     optionsLayout: buyFormOptionLayoutOf(skinBuyFormData["options-layout"]) ?? "buttons",
     nativeActions: skinBuyFormData.actions !== "false",
+    nativeQuantity: skinBuyFormData.quantity !== "false",
     actionCopy: {
       ...buyBox.summary.actionCopy,
       ...(skinBuyLabels.add ? { addToCartText: skinBuyLabels.add } : {}),
@@ -808,6 +812,23 @@ const breadcrumbJsonLd =
       })
     : null;
 
+// The offers placed under the page's own (another product's SKU): one empty form their buttons post
+// with (no JavaScript), and each one's cart line facts for product-controller.ts to add it in place.
+const placedOffers = product.placedOffers ?? [];
+const placedOfferLines = placedOffers.length > 0
+  ? serializeJsonForInlineScript(placedOffers.map((offer) => ({
+      id: offer.productId,
+      variantId: offer.variantId,
+      slug: offer.productSlug,
+      name: offer.productName,
+      price: offer.price,
+      image: offer.imageUrl ? getProductImageUrl(offer.imageUrl, 160) : "",
+      ...(offer.imageMediaId ? { imageMediaId: offer.imageMediaId } : {}),
+      options: offer.options.map((option) => ({ name: option.name, label: option.value })),
+      fulfillmentKind: offer.fulfillmentKind,
+    })))
+  : null;
+
 const productCategoryAnalytics = productCategory
   ? {
       id: productCategory.id,
@@ -860,7 +881,7 @@ const productCategoryAnalytics = productCategory
   />
 
   <div
-    class="min-h-screen bg-background product-container"
+    class="min-h-screen product-container"
     id="product-container"
     data-sx-product-container
     data-product-id={product.id}
@@ -929,6 +950,13 @@ const productCategoryAnalytics = productCategory
 
     {/* The template's modules below the fold, in its order (each a preview mark in the theme editor). */}
     {shownModules.map((module) => <ProductPageModule {...moduleProps(module)} />)}
+
+    {placedOfferLines && (
+      <Fragment>
+        <form id={OFFER_FORM_ID} method="post" hidden></form>
+        <script is:inline type="application/json" id="product-offer-lines" set:html={placedOfferLines} />
+      </Fragment>
+    )}
 
     {/* Installed apps' blocks after the template's modules. */}
     <ThemeEditorMark id={editorMarks && appsBelow ? THEME_EDITOR_MARKS.productApps : null}>

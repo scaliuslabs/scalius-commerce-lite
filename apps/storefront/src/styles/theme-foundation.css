@@ -128,8 +128,13 @@ body {
   --text-4xl: clamp(1.625rem, calc((1.3rem + 1.7vw) * var(--theme-type-scale, 1)), 2.25rem);
 }
 
+/* The page's paint (the theme's `pagePaint` token: a palette colour or a
+   gradient of them, repainted by the dark colours), on every page the store
+   draws, the buyer's own too. A theme sets the token; no theme rule touches
+   the body. */
 body {
-  @apply bg-background text-foreground;
+  @apply text-foreground;
+  background: var(--theme-page-paint, var(--background));
   font-size: var(--text-base);
   font-feature-settings:
     "rlig" 1,

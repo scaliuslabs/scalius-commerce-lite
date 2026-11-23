@@ -327,7 +327,17 @@ export interface Product {
   warranties?: Array<ProductWarranty & { id: string }>;
   /** Product page only: storefront-visible custom fields, in the merchant's order. */
   customFields?: StorefrontCustomField[];
+  /**
+   * Product page only: other products' SKUs placed under this page's own
+   * offers, in order (a kit, a cross-sold SKU); one that cannot be bought now is left out.
+   */
+  placedOffers?: StorefrontPlacedOffer[];
 }
+
+/** A SKU made of other SKUs, as the product read gives it (`variants[].kit`). */
+export type StorefrontKit = import("@scalius/api-client/types").StorefrontKit;
+/** Another product's SKU placed under a page's own offers (`product.placedOffers`). */
+export type StorefrontPlacedOffer = import("@scalius/api-client/types").StorefrontPlacedOffer;
 
 export type ProductPageContentBlock = import("@scalius/api-client/types").ProductPageContentBlock;
 
@@ -464,6 +474,8 @@ export interface ProductVariant {
   fulfillmentKind?: FulfillmentKind;
   /** Product page only: this SKU's warranty, an id in the product's `warranties`; null without one. */
   warrantyId?: string | null;
+  /** Product page only: its contents, price against them and band when it is a kit; null otherwise. */
+  kit?: StorefrontKit | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
