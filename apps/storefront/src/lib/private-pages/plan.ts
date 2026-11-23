@@ -76,13 +76,16 @@ const ASSET_PATH = /^\/_x\/[a-z0-9][a-z0-9.-]*\/[A-Za-z0-9._-]+\/public\/[A-Za-z
  * or a grid column (`min-inline-size: 0`, `max-inline-size: 100%`; inline-size
  * containment added nothing the rendered gate could find, so it is gone);
  * everything painted inside clipped (with the older browsers' overflow clip
- * first); and a bounded height. The stylesheet never selects a wrapper. It is
+ * first); and a bounded height (a block in a cart line 4rem, as it repeats with
+ * every line). The stylesheet never selects a wrapper. It is
  * host CSS: the layout writes it on every page that can draw a region
  * (`privateFreeRegions`), whatever the theme's compile holds.
  */
 export const PRIVATE_FREE_REGION_SEAL =
   "[data-free]{display:block;position:relative;z-index:0;isolation:isolate;min-inline-size:0;max-inline-size:100%;overflow:hidden;overflow:clip;contain:layout paint style;max-block-size:30rem}"
-  + '[data-free="header"]{max-block-size:24rem}[data-free="footer"]{max-block-size:80rem}';
+  + '[data-free="header"]{max-block-size:24rem}[data-free="footer"]{max-block-size:80rem}'
+  // A cart line's blocks repeat with every line: each is short.
+  + '[data-part="line"] [data-free]{max-block-size:4rem}';
 
 /**
  * Whether a page under this theme can draw a free region: the theme's

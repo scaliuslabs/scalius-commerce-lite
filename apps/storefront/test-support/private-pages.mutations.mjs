@@ -182,6 +182,12 @@ export const MUTATIONS = {
     cases: ["review 5, S4: a page paint behind a look this build has not compiled"],
     expect: /shows a paint of its own/,
   },
+  "R5-S5 a line's blocks take a page block's height": {
+    why: "the seal gives a block in a cart line the page's 30rem: twenty lines of them bury Place order",
+    rewrites: [rewrite(PLAN, "[data-part=\"line\"] [data-free]{max-block-size:4rem}", "[data-part=\"line\"] [data-free]{max-block-size:30rem}")],
+    cases: ["review 5, S5: twenty lines, each with two 2000px image blocks"],
+    expect: /px down \(the cart's own lines/,
+  },
   "P2 a page paint with no tokens draws the store's own page": {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",
     rewrites: [rewrite("packages/shared/src/storefront-theme/private-layout.ts", "painted && privatePageHasOwnPage(page) ? {} : null", "null")],

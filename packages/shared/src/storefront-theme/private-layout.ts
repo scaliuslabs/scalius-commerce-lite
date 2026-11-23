@@ -363,12 +363,25 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
  * Content blocks may not bury what a buyer must reach: at most
  * PRIVATE_CONTENT_LIMITS.perPage on a page, and at most `beforeLastMandatory`
  * before its last mandatory part in reading order (each at most 30rem tall),
- * at most 2 in a repeated unit.
+ * at most `perUnit` in a repeated unit (each at most 4rem tall there). A
+ * unit's blocks count in the page's limits too, where the part that draws
+ * the unit sits (a line's under `lines`).
  */
 function contentLimitIssues(page: PrivatePageKey, arrangement: PrivatePageArrangement, base: Array<string | number>): PrivatePagesIssue[] {
   const spec: PrivatePageSpec = PRIVATE_PAGES[page];
   const order: PrivateNode[] = [];
-  const flatten = (nodes: readonly PrivateNode[]) => { for (const node of nodes) node.type === "layout" ? flatten(node.children) : order.push(node); };
+  const unitBlocks = (part: string) => Object.entries(spec.items).filter(([, unit]) => unit.part === part).flatMap(([item, unit]) => {
+    const inside: PrivateNode[] = [];
+    const walk = (list: readonly PrivateNode[]) => { for (const node of list) node.type === "layout" ? walk(node.children) : node.type === "content" && inside.push(node); };
+    walk(arrangement.items?.[item] ?? unit.layout);
+    return inside;
+  });
+  const flatten = (nodes: readonly PrivateNode[]) => {
+    for (const node of nodes) {
+      if (node.type === "layout") flatten(node.children);
+      else order.push(node, ...(node.type === "part" ? unitBlocks(node.part) : []));
+    }
+  };
   flatten(arrangement.layout ?? spec.layout);
   const issues: PrivatePagesIssue[] = [];
   const blocks = order.filter((node) => node.type === "content").length;
@@ -382,7 +395,7 @@ function contentLimitIssues(page: PrivatePageKey, arrangement: PrivatePageArrang
     const inside: PrivateNode[] = [];
     const walk = (list: readonly PrivateNode[]) => { for (const node of list) node.type === "layout" ? walk(node.children) : inside.push(node); };
     walk(nodes);
-    if (inside.filter((node) => node.type === "content").length > 2) issues.push({ path: [...base, "items", item], reason: "content_limit", message: "At most 2 content blocks in a repeated unit." });
+    if (inside.filter((node) => node.type === "content").length > PRIVATE_CONTENT_LIMITS.perUnit) issues.push({ path: [...base, "items", item], reason: "content_limit", message: `At most ${PRIVATE_CONTENT_LIMITS.perUnit} content blocks in a repeated unit.` });
   }
   return issues;
 }

@@ -170,7 +170,7 @@ Your stylesheet styles **free regions** only, and only what is inside them:
 
 A selector starts at one wrapper (written as just that attribute), then a space or `>`, then what it selects inside. A root state may come first: `:root[data-color-scheme="dark"] [data-free="header"] .logo`. The wrapper itself is the store's: you never select it, and a selector that starts anywhere else is refused (`unscoped_selector`). Nothing of the store's is ever inside a region: its search sits beside your header and takes the `search` tokens. Class names and ids are your region's own: `.logo` matches what your header skin wrote as `class="logo"` (both are written `tc-logo`), so they never meet a store or utility class.
 
-Inside a region you may use what CSS offers for a design: layout, colour, gradients, transforms, absolute positioning, animations, pseudo-elements, `@media`, `@supports`, `@container` and `@keyframes`. The store **seals** every region, on every page that draws one and whatever your look holds (no stylesheet, tokens or paint included): it is its own containing block and stacking context; its layout and paint are contained and it is never wider than its column, so nothing inside widens the page or a column; what is painted inside is clipped to it; and its height is bounded (a content block 30rem, the header 24rem, the footer 80rem).
+Inside a region you may use what CSS offers for a design: layout, colour, gradients, transforms, absolute positioning, animations, pseudo-elements, `@media`, `@supports`, `@container` and `@keyframes`. The store **seals** every region, on every page that draws one and whatever your look holds (no stylesheet, tokens or paint included): it is its own containing block and stacking context; its layout and paint are contained and it is never wider than its column, so nothing inside widens the page or a column; what is painted inside is clipped to it; and its height is bounded (a content block 30rem, one in a cart line 4rem, the header 24rem, the footer 80rem).
 
 ```css
 [data-hook="cart-intro"] p { color: #b9b0d6; margin: 0 }
@@ -181,7 +181,7 @@ Inside a region you may use what CSS offers for a design: layout, colour, gradie
 
 `url(<asset>)` names one of your listed `assets`, only as the direct value of a property that paints an image in its box (`background`, `background-image`, `border-image`, `border-image-source`, `list-style`, `list-style-image`, `mask`, `mask-image`, `content`): never in a custom property, inside a function or as a cursor, which takes no `var()`. The page loads it from the store's own origin. Your animations name only your own `@keyframes` (written `t-<name>`). Custom properties are named `--t-<name>`.
 
-A page holds at most **8 content blocks**, at most **3 before its last part a buyer must reach** (the details form on the cart page), and at most 2 in a cart line (`content_limit`).
+A page holds at most **8 content blocks**, at most **3 before its last part a buyer must reach** (the details form on the cart page), and at most 2 in a cart line (`content_limit`). A line's blocks repeat with every line: they count once in the page's limits, where its lines sit, and each is at most 4rem tall.
 
 The stylesheet is parsed by a CSS Syntax 3 parser and written back from what was checked, never copied, then read back and compared: anything that disagrees serves nothing. It never throws: oversize, too many tokens and deep nesting are refusals too.
 
@@ -216,7 +216,7 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (`ap
 
 | Check | Fails when |
 | --- | --- |
-| Mandatory parts | One (with `chrome: theme`, your header's region and the store's search too) is missing, under 8px, outside the viewport, more than 9000px down, or covered by a free region; the page scrolls sideways; a free region is not sealed, or holds an element or attribute the inert rebuild never writes (a form, a field, a submit button, a store control, an embed). |
+| Mandatory parts | One (with `chrome: theme`, your header's region and the store's search too) is missing, under 8px, outside the viewport, more than 9000px down (a longer cart's own lines past the second not counted; your blocks in them counted), or covered by a free region; the page scrolls sideways; a free region is not sealed, or holds an element or attribute the inert rebuild never writes (a form, a field, a submit button, a store control, an embed). |
 | Coverage walk | A text or a focusable control belongs to no row of the colour table (token mode: its words are none of its row's colours, its row's element paints something other than the row's paint, the body included, a surface the table does not know lies between it and its row, or an app's node of a styled kind has no row of its own at its target), or, with no tokens, to no surface the anatomy names, or the page shows a paint of its own. |
 | Contrast | Any text, with no budget, reads under 4.5:1 (3:1 large) against the pixels behind it (every text hidden, the page photographed). |
 | Whole text | A text is cut off at the side, a glyph is cut by its box, or a word breaks inside itself. |

@@ -921,7 +921,7 @@ export function galleryEntry(id: string): GalleryEntry | null {
 }
 
 /** The states the private pages' rendered tests draw a theme in (each a cart the buyer can hold). */
-export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar"] as const;
+export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many"] as const;
 export type PrivatePagesState = (typeof PRIVATE_PAGES_STATES)[number];
 
 /** Long Bangla titles: a line's words at their longest in the store's second language. */
@@ -942,6 +942,15 @@ function linesCart(): string {
   return JSON.stringify(cart);
 }
 
+/** Twenty lines the store sells (a theme's blocks under every line repeat twenty times). */
+function manyCart(): string {
+  const products = Array.from({ length: 60 }, (_, index) => cardProduct(index)).filter((product) => product.availableForSale).slice(0, 20);
+  return JSON.stringify({ items: Object.fromEntries(products.map((product) => [
+    `line:v3:${product.id}:variant:var_${product.id}:p:none`,
+    { id: product.id, slug: product.slug, name: product.name, price: product.discountedPrice, quantity: 1, variantId: `var_${product.id}`, propertiesHash: "none" },
+  ])) });
+}
+
 /**
  * Registers a cart page drawn with a theme's private pages (a test's
  * generated document, compiled by the caller with the store's compiler) in
@@ -949,14 +958,14 @@ function linesCart(): string {
  * every kind of app block (`base`); a line asking for a decision, a store kit
  * with an add-on once per kit and an app's offer row, and a sold-out line (`lines`); the base cart with a
  * line asking for a decision and nothing sold out (`decide`); no cart (`empty`); long Bangla
- * titles (`bn`); an Arabic, right-to-left presence (`ar`). With `noor`, the
+ * titles (`bn`); an Arabic, right-to-left presence (`ar`); twenty lines (`many`). With `noor`, the
  * store has Noor installed, so a theme from it draws its header and footer;
  * with `localization`, the store sells in two markets.
  */
 export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean } = {}): GalleryEntry {
   const base = galleryEntry(entryId("app", "buyer-ui"))!;
   // `decide`: the base cart, whose first line asks for a decision and every line sells, so Place order reaches the question.
-  const cart: Record<string, string> = state === "empty" ? {} : { "cart:v3": state === "bn" ? BANGLA_LONG_CART : state === "lines" ? linesCart() : GALLERY_CART };
+  const cart: Record<string, string> = state === "empty" ? {} : { "cart:v3": state === "bn" ? BANGLA_LONG_CART : state === "lines" ? linesCart() : state === "many" ? manyCart() : GALLERY_CART };
   const scenario: GalleryScenario = {
     ...base.scenario, delivering: true, buyerUiKinds: true, storage: cart,
     // Noor installed and active: its header and footer skins draw the theme's chrome.

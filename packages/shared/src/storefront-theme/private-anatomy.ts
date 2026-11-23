@@ -165,6 +165,8 @@ export interface PrivateUnitSpec {
   readonly layouts: readonly PrivateLayoutKind[];
   /** The layout the host draws without an arrangement: today's page. */
   readonly layout: readonly PrivateNode[];
+  /** A repeated unit's: the page's part that draws it (its content blocks count where that part sits). */
+  readonly part?: string;
 }
 
 /**
@@ -299,6 +301,7 @@ const CART_PAGE: PrivatePageSpec = {
   ],
   items: {
     line: {
+      part: "lines",
       parts: CART_LINE_PARTS,
       targets: ["cart.line.after"],
       layouts: ["stack", "columns", "grid", "group"],
@@ -358,6 +361,7 @@ const CART_DRAWER: PrivatePageSpec = {
   ],
   items: {
     line: {
+      part: "lines",
       parts: CART_LINE_PARTS,
       targets: ["cart.line.after"],
       layouts: ["stack", "columns", "grid", "group"],
@@ -427,8 +431,13 @@ export const PRIVATE_FREE_REGIONS = ["block", "header", "footer"] as const;
 export const PRIVATE_SEARCH_PLACES = ["before", "after"] as const;
 export type PrivateSearchPlace = (typeof PRIVATE_SEARCH_PLACES)[number];
 
-/** The most content blocks a page holds, and the most before and after its last mandatory part (each is at most 30rem tall). */
-export const PRIVATE_CONTENT_LIMITS = { perPage: 8, beforeLastMandatory: 3, afterLastMandatory: 3 } as const;
+/**
+ * The most content blocks a page holds, and the most before and after its
+ * last mandatory part (each at most 30rem tall), and in one repeated unit
+ * (each at most 4rem tall there, as many times as the cart has lines). A
+ * unit's blocks count once in the page's limits, where its part sits.
+ */
+export const PRIVATE_CONTENT_LIMITS = { perPage: 8, beforeLastMandatory: 3, afterLastMandatory: 3, perUnit: 2 } as const;
 
 /** An app node kind's style target (`ui.<kind>`): what it is to the colour table, by tone. */
 export interface PrivateBuyerUiStyle {

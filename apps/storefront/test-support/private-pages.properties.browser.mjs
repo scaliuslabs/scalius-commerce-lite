@@ -68,8 +68,13 @@ let bailed = false;
 const JOBS = number("jobs", 4);
 const WIDTHS = [320, 390, 1280];
 const SCHEMES = ["light", "dark"];
+/** The states a seed or `states: "all"` draws; a named case may ask for others (`states: ["many"]`: twenty lines). */
 const STATES = ["base", "lines", "decide", "empty", "bn", "ar"];
-/** How far below the top a mandatory part may sit (24rem header, 3 blocks of 30rem, the host's own page). */
+/**
+ * How far below the top a mandatory part may sit (24rem header, 3 blocks of 30rem, the host's own page with
+ * two lines): a longer cart's own lines do not count, the theme's blocks inside them do (they repeat with
+ * every line, so a line's blocks are short).
+ */
 const MAX_DEPTH_PX = 9000;
 
 // ─── The gate tests itself ─────────────────────────────────────────────────
@@ -255,6 +260,9 @@ function generate(seed) {
 
 const LEGAL_COLUMNS = [{ type: "part", part: "notices" }, { type: "layout", layout: "columns", children: [{ type: "layout", layout: "stack", children: [{ type: "layout", layout: "fold", children: [{ type: "part", part: "lines" }, { type: "part", part: "summary" }, { type: "target", target: "cart.page.summary" }] }, { type: "target", target: "cart.page.below" }] }, { type: "part", part: "details" }] }];
 const DARK = { background: "#111111", text: "#ffffff", muted: "#d4d4d4", link: "#c4b5fd", error: "#fca5a5" };
+/** The cart line's default arrangement (private-anatomy.ts), and the largest image block a line may hold. */
+const DEFAULT_LINE = [{ type: "part", part: "image" }, { type: "layout", layout: "stack", children: [{ type: "layout", layout: "columns", children: [{ type: "layout", layout: "stack", children: [{ type: "part", part: "title" }, { type: "part", part: "details" }, { type: "part", part: "inputs" }, { type: "target", target: "cart.line.after" }] }, { type: "part", part: "remove" }] }, { type: "layout", layout: "columns", children: [{ type: "part", part: "quantity" }, { type: "part", part: "price" }] }, { type: "part", part: "limit" }, { type: "part", part: "issue" }, { type: "part", part: "rule" }] }];
+const LINE_IMAGE = (hook) => ({ type: "content", hook, content: { kind: "image", image: { app: NOOR, file: "pp/banner.svg" }, alt: { en: "A banner" }, width: 2000, height: 2000 } });
 const PAINT = { kind: "linear", angle: 160, stops: ["background", "muted", "secondary"] };
 const DARK_PAINT = { kind: "radial", at: "top", stops: ["muted", "background", "secondary"] };
 
@@ -306,6 +314,12 @@ const REGRESSIONS = {
   // Review 5, S4: between a deploy and the maintenance compile the default look is served: it stands on the page colour,
   // never on the theme's page paint, which no table checked it on.
   "review 5, S4: a page paint behind a look this build has not compiled": { request: { paint: PAINT, scheme: "light", stale: true }, privatePages: { tokens: { cart: { summary: DARK } } } },
+  // Review 5, S5: a line's blocks repeat with every line. Twenty lines, each with the two largest legal blocks, and the
+  // page's one block before the form: Place order is still within reach.
+  "review 5, S5: twenty lines, each with two 2000px image blocks": { states: ["many"], request: { noor: true }, privatePages: { pages: { cart: {
+    layout: [{ type: "part", part: "notices" }, { type: "content", hook: "lead", content: { kind: "image", image: { app: NOOR, file: "pp/banner.svg" }, alt: { en: "A banner" }, width: 2000, height: 2000 } }, ...LEGAL_COLUMNS.slice(1)],
+    items: { line: [LINE_IMAGE("line-top"), ...DEFAULT_LINE, LINE_IMAGE("line-end")] },
+  } } } },
   // What the save must refuse (under a mutation that lets one through, the drawing must fail).
   "a stylesheet hiding a host part": { refused: "unscoped_selector", privatePages: { css: '[data-part="summary"] * { display: none } [data-part="details-submit"] * { visibility: hidden }' } },
   "summary rows that do not read on their summary": { refused: "contrast", privatePages: { tokens: { cart: { "summary-rows": { text: "#eeeeee" }, summary: { background: "#ffffff" } } } } },
@@ -414,6 +428,11 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, maxDepth, exempt }) {
     return bits.join(">");
   };
   for (const old of document.querySelectorAll("[data-pt-text],[data-pt-control]")) { old.removeAttribute("data-pt-text"); old.removeAttribute("data-pt-control"); }
+  // The host's own height of each line past the second (the line less the theme's blocks in it): not the theme's depth.
+  const ownLines = [...document.querySelectorAll('[data-private="cart"] [data-part="line"]')].slice(2).map((line) => ({
+    line,
+    own: line.getBoundingClientRect().height - [...line.querySelectorAll("[data-free]")].reduce((sum, region) => sum + region.getBoundingClientRect().height, 0),
+  }));
   // Mandatory parts: on screen, within reach, of a size, uncovered.
   for (const selector of mandatory) {
     const element = root.querySelector(selector);
@@ -422,7 +441,8 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, maxDepth, exempt }) {
     const box = element.getBoundingClientRect();
     if (!element.checkVisibility({ opacityProperty: true, visibilityProperty: true }) || box.width < 8 || box.height < 8) { problems.push(`${selector}: not visible (${Math.round(box.width)}×${Math.round(box.height)})`); continue; }
     if (box.left < -1 || box.right > width + 1) problems.push(`${selector}: outside the viewport (${Math.round(box.left)}..${Math.round(box.right)} of ${width})`);
-    if (box.top + scrollY > maxDepth) problems.push(`${selector}: ${Math.round(box.top + scrollY)}px down`);
+    const depth = box.top + scrollY - ownLines.reduce((sum, { line, own }) => sum + (line.getBoundingClientRect().bottom <= box.top && !line.contains(element) ? own : 0), 0);
+    if (depth > maxDepth) problems.push(`${selector}: ${Math.round(depth)}px down (the cart's own lines past the second not counted)`);
     for (const [fx, fy] of [[0.5, 0.5], [0.2, 0.3], [0.8, 0.3], [0.2, 0.7], [0.8, 0.7]]) {
       const x = Math.min(width - 1, Math.max(0, box.left + box.width * fx));
       const y = Math.min(innerHeight - 1, Math.max(0, box.top + box.height * fy));
@@ -1176,7 +1196,7 @@ try {
   const cases = [...(ONLY !== null || args.includes("--no-named") ? [] : named), ...seeds.map((seed) => ({ name: `seed ${seed}`, seed, ...generate(seed) }))];
   /** One case: its document saved, then drawn in each of its states. */
   const runCase = async (entry, index) => {
-    const states = entry.states === "all" || ALL_STATES ? STATES : entry.seed !== undefined ? ["base", STATES[1 + (entry.seed % (STATES.length - 1))]] : ["base"];
+    const states = entry.states === "all" || ALL_STATES ? STATES : Array.isArray(entry.states) ? entry.states : entry.seed !== undefined ? ["base", STATES[1 + (entry.seed % (STATES.length - 1))]] : ["base"];
     for (const state of states) {
       const id = `pp-${index}-${state}`;
       const answer = await fetch(`${gallery.url}/__gallery/private-theme`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, state, ...entry.request, privatePages: entry.privatePages }) });
