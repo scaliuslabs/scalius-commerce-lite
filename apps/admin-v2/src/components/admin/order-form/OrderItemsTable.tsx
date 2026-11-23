@@ -111,6 +111,7 @@ export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTablePr
               itemName={name}
               onQuantityChange={(quantity) => handleQuantityChange(index, quantity)}
               maxQuantity={maximumQuantity ?? undefined}
+              describedBy={issue ? issueId : undefined}
               maximumExceededMessage={maximumQuantity === null
                 ? undefined
                 : exceededStockMessage(maximumQuantity)}

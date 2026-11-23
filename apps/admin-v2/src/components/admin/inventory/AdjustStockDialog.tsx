@@ -22,6 +22,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { apiData, type ApiBody } from "~/lib/api";
 import { useCommand } from "~/lib/use-command";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
+import { readKitLineRefusal } from "~/i18n/kit-line-refusals";
 import type { InventoryAdjustmentReason, InventoryVariant } from "~/lib/api-query-options/inventory";
 import type { InventoryLocation, VariantInventoryLevels } from "~/lib/api-query-options/inventory-locations";
 import { formatNumber, useMessages } from "~/i18n";
@@ -202,6 +203,13 @@ export function AdjustStockDialog({
       onClose();
     } catch (error) {
       if (saved.alertLevel) onSaved();
+      // A bundle holds no stock: the dashboard's sentence under the count, never the server's text.
+      const bundle = readKitLineRefusal(error);
+      if (bundle?.reason === "kit_stock_movement") {
+        setServerErrors({ quantity: bundle.message });
+        fieldRefs.quantity.current?.focus();
+        return;
+      }
       // Never show server text: name the field the merchant can fix, else say nothing changed.
       const fields = (readApiFieldIssues(error) ?? []).flatMap((issue) => {
         const field = FIELD_BY_PATH[issue.path];

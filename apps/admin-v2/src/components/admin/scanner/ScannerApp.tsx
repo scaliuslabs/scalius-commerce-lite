@@ -32,6 +32,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { cn } from "@scalius/shared/utils";
 import { formatDateTime, formatNumber, translate, useMessages } from "~/i18n";
+import { readKitLineRefusal } from "~/i18n/kit-line-refusals";
 import { scannerMessages } from "~/i18n/scanner";
 import {
   pickScannerLocation,
@@ -442,11 +443,13 @@ export function ScannerApp({ token }: ScannerAppProps) {
           adjustment: quantity,
           reason: isAdd ? "Quick Receive" : "Quick Deduct",
         }, product.location);
-      } catch {
+      } catch (error) {
+        // A bundle holds no stock: say so, not just "not saved".
+        const why = readKitLineRefusal(error)?.message ?? tr("notSaved");
         setHistory((prev) =>
           prev.map((r) =>
             r.id === result.id
-              ? { ...r, action: "error" as const, reason: tr("notSaved") }
+              ? { ...r, action: "error" as const, reason: why }
               : r,
           ),
         );

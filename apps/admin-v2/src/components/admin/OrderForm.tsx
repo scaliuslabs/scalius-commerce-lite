@@ -77,7 +77,8 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { queryKeys } from "@/lib/query-keys";
 import { getServerFnError } from "@/lib/api-mutations/shared";
 import { readAdminApiErrorCode } from "@/lib/admin-api-error";
-import { isAdminApiRetryableReadError, readCheckoutRuleErrors, readManualOrderDiscountLimitError, readManualOrderItemIssues } from "@/lib/manual-order-errors";
+import { isAdminApiRetryableReadError, readCheckoutRuleErrors, readKitAmendedInPartIssues, readManualOrderDiscountLimitError, readManualOrderItemIssues } from "@/lib/manual-order-errors";
+import { readKitLineRefusal } from "~/i18n/kit-line-refusals";
 import { useCurrency } from "@/hooks/use-currency";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
@@ -514,8 +515,11 @@ function OrderEditor({
     : null;
   // An installed app's rule refused the quote: the summary lists the app's messages.
   const ruleErrors = currentQuoteError ? readCheckoutRuleErrors(currentQuoteError) : null;
-  // Lines the API refused (a download on a cash on delivery order, a SKU out of stock): said on each line.
-  const itemIssues = currentQuoteError ? readManualOrderItemIssues(currentQuoteError) : null;
+  // Lines the API refused (a download on a cash on delivery order, a SKU out of stock, a bundle's items
+  // changed in part): said on each line.
+  const itemIssues = currentQuoteError
+    ? readManualOrderItemIssues(currentQuoteError) ?? readKitAmendedInPartIssues(currentQuoteError, quoteItems)
+    : null;
   const manualQuote = {
     data: quoteQuery.data ?? null,
     isCurrent: canRequestQuote && quoteQuery.isSuccess,
@@ -813,7 +817,7 @@ function OrderEditor({
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   });
 
-  const amendError = amendMutation.error ? orderErrorMessage(amendMutation.error) : null;
+  const amendError = amendMutation.error ? readKitLineRefusal(amendMutation.error)?.message ?? orderErrorMessage(amendMutation.error) : null;
 
   return (
     <Page width="form">
