@@ -4,15 +4,16 @@
 // buyer-state.ts): the public set, the card SKU's prices, discount depth and
 // availability are indexed columns, so a listing never evaluates the public
 // eligibility predicate or ranks SKUs per request.
-import { products, categories } from "@scalius/database/schema";
+import { products, categories, productSalesStats } from "@scalius/database/schema";
 import { and, sql, desc, eq, type SQL, type SQLWrapper } from "drizzle-orm";
+import { MIN_POPULAR_UNITS } from "@scalius/shared/listing-sorts";
 import { suggestSearchCorrection } from "./search-correction";
 import { marketPriceOrder } from "./market-price-order";
 import { productSearchRank, productSearchRelevanceOrder } from "./search-relevance";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
 import { planLimits } from "@scalius/shared/plan-limits";
-import { cappedCountLimit, capTotal, encodeListCursor } from "@scalius/shared/pagination";
+import { cappedCountLimit, capTotal, encodeListCursor, type ListCursor } from "@scalius/shared/pagination";
 import { invalidCursor, keysetCondition, readListCursor, type KeysetOrder } from "../../utils/keyset";
 import {
   presentBuyerPricing,
@@ -150,15 +151,121 @@ function getStorefrontProductOrderBy(sort: StorefrontProductSort = "newest", sor
 
 /**
  * The orders a listing can continue from with a `cursor`: the buyer state's own
- * indexed columns, ties broken by product id ascending (the page's ORDER BY).
- * Name, discount, rating and search relevance order by joined or computed
- * values and page by number only.
+ * indexed columns, ties broken by product id ascending (the page's ORDER BY),
+ * and `popular` (its own key, `popularPageIds`). Name, discount, rating and
+ * search relevance order by joined or computed values and page by number only.
  */
 const LISTING_KEYSET_SORTS = {
     newest: { column: buyerState.productCreatedAt, direction: "desc" },
     "price-asc": { column: buyerState.fromMinor, direction: "asc" },
     "price-desc": { column: buyerState.fromMinor, direction: "desc" },
 } as const satisfies Record<string, { column: SQLWrapper; direction: "asc" | "desc" }>;
+
+/**
+ * The `popular` order's one number: a popular product (MIN_POPULAR_UNITS or
+ * more sold in 30 days) ranks by its units above every creation time
+ * (seconds), the rest by creation time. Descending, ties by product id
+ * ascending, it is the home "popular" list's order (units, then id) followed
+ * by the newest order, and a cursor carries it like any keyset value.
+ */
+const POPULAR_TIER_KEY = 2 ** 40;
+const POPULAR_UNITS = sql.raw(String(MIN_POPULAR_UNITS));
+
+function popularityKey(sold: SQLWrapper, createdAt: SQLWrapper): SQL<number> {
+    return sql<number>`CASE WHEN ${sold} >= ${POPULAR_UNITS} THEN ${sql.raw(String(POPULAR_TIER_KEY))} + ${sold} ELSE ${createdAt} END`;
+}
+
+/**
+ * A `popular` page's ids and keys (`page_product_id`, `popularity_key`),
+ * ordered by the key, then product id.
+ *
+ * - A scope (a category, brand, collection, search or id set) is read
+ *   through its own index with each row's sales stats by primary key, then
+ *   sorted, as the `rating` order is: bounded by the scope.
+ * - The whole catalogue (shop-all, with or without filters) is two bounded
+ *   walks merged: the popular products down the sales stats' popularity
+ *   index (`product_sales_stats_popular_idx`, each row's buyer state by
+ *   primary key), and the newest page of the rest (`restIds`: the newest
+ *   index, or the narrowed plan's chosen form), each stopping at
+ *   `offset + limit + 1` rows.
+ *
+ * A cursor's key tells its tier: in the popular tier it continues the
+ * popularity walk and starts the rest from the top; in the rest it skips the
+ * popular walk and continues the newest one.
+ */
+export function popularPageIds(input: {
+    /** The listing's conditions; the first is the public condition. */
+    conditions: SQL[];
+    needsProducts: boolean;
+    /**
+     * The whole public catalogue: the first `rows` ids of the rest in the
+     * newest order, under `extra(driven)` (driven: read from a set, then sorted).
+     */
+    restIds?: (extra: (driven: boolean) => Array<SQL | undefined>, rows: number) => SQL;
+    boundary: Pick<ListCursor, "values" | "id"> | undefined;
+    limit: number;
+    offset: number;
+}): SQL {
+    const joinProducts = input.needsProducts ? sql`INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}` : sql``;
+    const rows = input.offset + input.limit + 1;
+    const value = input.boundary ? Number(input.boundary.values[0]) : null;
+    const inPopularTier = value !== null && value >= POPULAR_TIER_KEY;
+    if (!input.restIds) {
+        const key = popularityKey(productSalesStats.sold30d, buyerState.productCreatedAt);
+        const cursor = input.boundary
+            ? keysetCondition({ column: key, id: buyerState.productId, direction: "desc", idDirection: "asc" }, input.boundary)
+            : undefined;
+        return sql`
+            SELECT ${buyerState.productId} AS page_product_id, ${key} AS popularity_key
+            FROM ${buyerState}
+            ${joinProducts}
+            LEFT JOIN ${productSalesStats} ON ${productSalesStats.productId} = ${buyerState.productId}
+            WHERE ${allOf([...input.conditions, cursor])}
+            ORDER BY ${key} DESC, ${buyerState.productId}
+            LIMIT ${sql.raw(String(input.limit + 1))} OFFSET ${sql.raw(String(input.offset))}`;
+    }
+    // The popular products in the catalogue's order. The public test is a
+    // filter (`+`), so the popularity index drives (D1 has no statistics).
+    const popularCursor = inPopularTier
+        ? keysetCondition({ column: productSalesStats.sold30d, id: productSalesStats.productId, direction: "desc", idDirection: "asc" },
+            { values: [value! - POPULAR_TIER_KEY], id: input.boundary!.id })
+        : undefined;
+    const popularTop = sql`
+                SELECT popular_top.page_product_id, popular_top.popularity_key FROM (
+                    SELECT ${productSalesStats.productId} AS page_product_id,
+                        ${sql.raw(String(POPULAR_TIER_KEY))} + ${productSalesStats.sold30d} AS popularity_key
+                    FROM ${productSalesStats}
+                    INNER JOIN ${buyerState} ON ${buyerState.productId} = ${productSalesStats.productId}
+                    ${joinProducts}
+                    WHERE ${allOf([sql`${productSalesStats.sold30d} >= ${POPULAR_UNITS}`, publicBuyerStateCondition({ drivenByIdSet: true }),
+                        ...input.conditions.slice(1), popularCursor])}
+                    ORDER BY ${productSalesStats.sold30d} DESC, ${productSalesStats.productId}
+                    LIMIT ${sql.raw(String(rows))}
+                ) AS popular_top
+                UNION ALL`;
+    const notPopular = sql`NOT EXISTS (
+        SELECT 1 FROM ${productSalesStats} AS popular_probe
+        WHERE popular_probe.product_id = ${buyerState.productId} AND popular_probe.sold_30d >= ${POPULAR_UNITS}
+    )`;
+    const restCursor = (driven: boolean) => input.boundary && !inPopularTier
+        ? keysetCondition({
+            column: driven ? sql`+${buyerState.productCreatedAt}` : buyerState.productCreatedAt,
+            id: buyerState.productId,
+            direction: "desc",
+            idDirection: "asc",
+        }, input.boundary)
+        : undefined;
+    return sql`
+            SELECT popular_page.page_product_id AS page_product_id, popular_page.popularity_key AS popularity_key
+            FROM (
+                ${value === null || inPopularTier ? popularTop : sql``}
+                SELECT newest_rest.page_product_id, rest_state.product_created_at AS popularity_key
+                FROM (${input.restIds((driven) => [notPopular, restCursor(driven)], rows)}) AS newest_rest
+                INNER JOIN ${buyerState} AS rest_state ON rest_state.product_id = newest_rest.page_product_id
+            ) AS popular_page
+            ORDER BY popular_page.popularity_key DESC, popular_page.page_product_id
+            LIMIT ${sql.raw(String(input.limit + 1))} OFFSET ${sql.raw(String(input.offset))}`;
+}
 
 // ─────────────────────────────────────────
 // Storefront queries
@@ -377,6 +484,9 @@ async function readStorefrontCatalogResults(
     const keysetSort = !scope.orderBy && !(sort === "relevance" && search) && !listedPriceOrder
         ? LISTING_KEYSET_SORTS[sort as keyof typeof LISTING_KEYSET_SORTS]
         : undefined;
+    // `popular` pages by its own key (`popularPageIds`), in its own plan.
+    const popularSort = sort === "popular" && !scope.orderBy;
+    const cursorDirection = keysetSort?.direction ?? (popularSort ? "desc" : undefined);
     const keysetOrder: KeysetOrder | undefined = keysetSort && {
         // A scope read through its own index and then sorted keeps the order off the sortable
         // index; the keyset predicate must not hand it back (the unary `+`, see above).
@@ -387,14 +497,17 @@ async function readStorefrontCatalogResults(
     };
     let cursorCondition: SQL | undefined;
     let plainCursorCondition: SQL | undefined;
+    let boundary: ListCursor | undefined;
     if (cursor) {
-        if (!keysetSort || !keysetOrder) {
-            throw invalidCursor("A cursor continues the newest, price-asc and price-desc orders of a listing; other orders (relevance, name, discount, rating) page by number.");
+        if (!cursorDirection) {
+            throw invalidCursor("A cursor continues the newest, price-asc, price-desc and popular orders of a listing; other orders (relevance, name, discount, rating) page by number.");
         }
         if (page > 1) throw invalidCursor("Use either page or a cursor, not both.");
-        const boundary = readListCursor(cursor, { sort, direction: keysetSort.direction, kinds: ["number"] });
-        cursorCondition = keysetCondition(keysetOrder, boundary);
-        plainCursorCondition = keysetCondition({ ...keysetOrder, column: keysetSort.column }, boundary);
+        boundary = readListCursor(cursor, { sort, direction: cursorDirection, kinds: ["number"] });
+        if (keysetSort && keysetOrder) {
+            cursorCondition = keysetCondition(keysetOrder, boundary);
+            plainCursorCondition = keysetCondition({ ...keysetOrder, column: keysetSort.column }, boundary);
+        }
     }
     const offset = cursor ? 0 : (page - 1) * limit;
     // A numbered page this deep is empty: past the last countable page, so the
@@ -476,7 +589,7 @@ async function readStorefrontCatalogResults(
     // them), so a scope read in full before its sort reads index rows, not
     // card rows. A category subtree pages newest or by price from each of its
     // categories' own index (`subtreePageIds`).
-    const standardPage = !relevancePage && !shelfPreview && !scope.orderBy && !pageTooDeep;
+    const standardPage = !relevancePage && !shelfPreview && !scope.orderBy && !pageTooDeep && !popularSort;
     const idsNeedProducts = countNeedsProducts || sort === "name-asc" || sort === "name-desc";
     const pageIdsFor = (order: SQL, where: Array<SQL | undefined>, scopeConditions: SQL[] = conditions, rows: SQL = sql`${limit + 1}`) => sql`
             SELECT ${buyerState.productId} AS page_product_id
@@ -524,10 +637,31 @@ async function readStorefrontCatalogResults(
         SELECT CAST(market_page.value AS TEXT) AS page_product_id, CAST(market_page.key AS INTEGER) AS page_position
         FROM json_each(${JSON.stringify(marketOrder.slice(offset).map((row) => row.id))}) AS market_page
     ) AS listing_page` : null;
-    const idPage = relevancePage ?? marketPage ?? standardPageIds;
+    // Popular: the scope sorted by the key, or across the whole catalogue the
+    // popular walk merged with the newest page of the rest (the narrowed
+    // plan's chosen form when a facet value narrows shop-all).
+    const popularRestIds = (extra: (driven: boolean) => Array<SQL | undefined>, rows: number) => {
+        const restIds = (form: "driven" | "walking", rowCount: SQL) => sql`
+            SELECT ${buyerState.productId} AS page_product_id FROM ${buyerState}
+            ${countNeedsProducts ? sql`INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}` : sql``}
+            WHERE ${allOf([...(form === "driven" ? narrowedPlan!.drivenConditions : conditions), ...extra(form === "driven")])}
+            ORDER BY ${getStorefrontProductOrderBy("newest", form === "driven")}, ${buyerState.productId}
+            LIMIT ${rowCount}`;
+        return narrowedPlan ? narrowedPlan.pageIds(rows, restIds) : restIds("walking", sql.raw(String(rows)));
+    };
+    const popularPage = popularSort && !pageTooDeep ? listingPageOf(popularPageIds({
+        conditions,
+        needsProducts: countNeedsProducts,
+        restIds: unscoped ? popularRestIds : undefined,
+        boundary,
+        limit,
+        offset,
+    })) : null;
+    const idPage = relevancePage ?? marketPage ?? popularPage ?? standardPageIds;
     const cardOrderBy = relevancePage
         ? [sql`listing_page.relevance_tier`, sql`listing_page.relevance_score`, sql`${products.name}`, desc(buyerState.productCreatedAt)]
-        : marketPage ? [sql`listing_page.page_position`] : orderBy;
+        : marketPage ? [sql`listing_page.page_position`]
+            : popularPage ? [sql`listing_page.popularity_key DESC`] : orderBy;
     const cardSku = buyerStateCardSku();
     // A presence page's cards in its language (MARKETS-DESIGN D9); none at the root.
     const translation = translationScopeOf(pricing);
@@ -554,7 +688,9 @@ async function readStorefrontCatalogResults(
             // The sort column as stored: a cursor compares what the ORDER BY compared.
             keysetValue: keysetSort
                 ? sql<number | null>`${keysetSort.column}`.as("keyset_value")
-                : sql<number | null>`NULL`.as("keyset_value"),
+                : popularPage
+                    ? sql<number | null>`listing_page.popularity_key`.as("keyset_value")
+                    : sql<number | null>`NULL`.as("keyset_value"),
         })
         .from(idPage ?? buyerState)
         .$dynamic();
@@ -797,10 +933,10 @@ async function readStorefrontCatalogResults(
             hasNextPage: !pageTooDeep && (shelfPreview
                 ? totalIsCapped || total > limit
                 : fetchedList.length > limit),
-            endCursor: keysetSort && productsList.length > 0
+            endCursor: cursorDirection && productsList.length > 0
                 ? encodeListCursor({
                     sort,
-                    direction: keysetSort.direction,
+                    direction: cursorDirection,
                     values: [productsList[Math.min(limit, productsList.length) - 1]!.keysetValue],
                     id: productsList[Math.min(limit, productsList.length) - 1]!.id,
                 })

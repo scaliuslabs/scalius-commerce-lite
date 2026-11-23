@@ -205,9 +205,9 @@ function sourceTitleAndHref(
       return { title: copy.newArrivals, href: "/search" };
     case "on-sale":
       return { title: copy.onSale, href: "/search?hasDiscount=true" };
-    // No listing sorts by popularity, so the list has no "View all".
+    // The search page in the same order continues the list.
     case "popular":
-      return { title: copy.popular, href: null };
+      return { title: copy.popular, href: "/search?sortBy=popular" };
     case "collection":
       return list?.collection
         ? { title: list.collection.title, href: `/collections/${encodeURIComponent(list.collection.id)}` }

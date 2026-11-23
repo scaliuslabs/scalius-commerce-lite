@@ -35821,10 +35821,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -35838,7 +35838,8 @@
                 "name-asc",
                 "name-desc",
                 "discount",
-                "rating"
+                "rating",
+                "popular"
               ]
             },
             "required": false,
@@ -37126,10 +37127,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -37143,13 +37144,14 @@
                 "name-asc",
                 "name-desc",
                 "discount",
-                "rating"
+                "rating",
+                "popular"
               ],
               "default": "newest",
-              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last."
+              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest."
             },
             "required": false,
-            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last.",
+            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.",
             "name": "sort",
             "in": "query"
           },
@@ -37686,7 +37688,8 @@
                                 "name-asc",
                                 "name-desc",
                                 "discount",
-                                "rating"
+                                "rating",
+                                "popular"
                               ]
                             },
                             "minRating": {
@@ -78336,10 +78339,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -78354,12 +78357,13 @@
                 "name-asc",
                 "name-desc",
                 "discount",
-                "rating"
+                "rating",
+                "popular"
               ],
-              "description": "Sort order. Defaults to relevance when `search` is set, otherwise newest. `rating`: the Bayesian review rank, unreviewed products last."
+              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Defaults to relevance when `search` is set, otherwise newest."
             },
             "required": false,
-            "description": "Sort order. Defaults to relevance when `search` is set, otherwise newest. `rating`: the Bayesian review rank, unreviewed products last.",
+            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Defaults to relevance when `search` is set, otherwise newest.",
             "name": "sort",
             "in": "query"
           },
@@ -85046,10 +85050,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -85063,13 +85067,14 @@
                 "name-asc",
                 "name-desc",
                 "discount",
-                "rating"
+                "rating",
+                "popular"
               ],
               "default": "newest",
-              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last."
+              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest."
             },
             "required": false,
-            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last.",
+            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.",
             "name": "sort",
             "in": "query"
           },
@@ -85853,7 +85858,8 @@
                                 "name-asc",
                                 "name-desc",
                                 "discount",
-                                "rating"
+                                "rating",
+                                "popular"
                               ]
                             },
                             "minRating": {
@@ -86061,10 +86067,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -86078,7 +86084,8 @@
                 "name-asc",
                 "name-desc",
                 "discount",
-                "rating"
+                "rating",
+                "popular"
               ],
               "default": "newest"
             },
@@ -86548,7 +86555,8 @@
                                 "name-asc",
                                 "name-desc",
                                 "discount",
-                                "rating"
+                                "rating",
+                                "popular"
                               ]
                             },
                             "minRating": {

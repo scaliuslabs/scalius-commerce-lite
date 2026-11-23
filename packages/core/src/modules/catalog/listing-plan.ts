@@ -42,6 +42,8 @@ export interface NarrowedPlan {
     summary(extra: SQL): SQL;
     /** The page's ids as the card statement's FROM item (`listing_page.page_product_id`), one form read. */
     page(pageRows: number, ids: (form: "driven" | "walking", rows: SQL) => SQL): SQL;
+    /** The same ids as a statement (`page_product_id`), for a page that merges them with other rows. */
+    pageIds(pageRows: number, ids: (form: "driven" | "walking", rows: SQL) => SQL): SQL;
 }
 
 /**
@@ -113,18 +115,20 @@ export function narrowedShopAllPlan(input: NarrowedPlanInput): NarrowedPlan {
                 ${range(sql`${buyerState.toMinor}`, " DESC")} AS max
                 ${extra}
             FROM ${plan}`,
-        page: (pageRows, ids) => {
-            const rows = sql.raw(String(pageRows));
-            const listed = (form: "driven" | "walking") =>
-                sql`(SELECT json_group_array(${sql.raw(`${form}_page`)}.page_product_id) FROM (${ids(form, rows)}) AS ${sql.raw(`${form}_page`)})`;
-            return sql`(
+        page: (pageRows, ids) => listingPageOf(pageIds(pageRows, ids)),
+        pageIds,
+    };
+
+    function pageIds(pageRows: number, ids: (form: "driven" | "walking", rows: SQL) => SQL): SQL {
+        const rows = sql.raw(String(pageRows));
+        const listed = (form: "driven" | "walking") =>
+            sql`(SELECT json_group_array(${sql.raw(`${form}_page`)}.page_product_id) FROM (${ids(form, rows)}) AS ${sql.raw(`${form}_page`)})`;
+        return sql`
                 SELECT CAST(page_id.value AS TEXT) AS page_product_id
                 FROM (
                     SELECT CASE WHEN ${driven(input.pageRowsNeeded)} THEN ${listed("driven")} ELSE ${listed("walking")} END AS page_ids
                     FROM ${plan}
                 ) AS listing_choice
-                CROSS JOIN json_each(listing_choice.page_ids) AS page_id
-            ) AS listing_page`;
-        },
-    };
+                CROSS JOIN json_each(listing_choice.page_ids) AS page_id`;
+    }
 }

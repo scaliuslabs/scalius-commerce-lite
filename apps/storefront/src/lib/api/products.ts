@@ -15,6 +15,7 @@ import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
 import { isIdentifierNotFound } from "./identifier-read";
 import { LIST_CURSOR_ERROR_CODE } from "@scalius/shared/pagination";
+import type { StorefrontSearchSort } from "@scalius/shared/listing-sorts";
 import {
   getApiV1ProductsBySlug,
   getApiV1Products,
@@ -201,15 +202,7 @@ export interface ProductListOptions {
   page?: number;
   cursor?: string;
   limit?: number;
-  sort?:
-    | "relevance"
-    | "newest"
-    | "price-asc"
-    | "price-desc"
-    | "name-asc"
-    | "name-desc"
-    | "discount"
-    | "rating";
+  sort?: StorefrontSearchSort;
   /** "N★ & up": whole stars 1-4. */
   minRating?: number;
   search?: string;

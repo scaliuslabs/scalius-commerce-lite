@@ -13,6 +13,7 @@ import { publicCategorySubtreeCondition } from "../categories";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
 import { buildCatalogFacetCountQuery, groupCatalogFacets, groupCatalogRatingFacet, resolvePublicAttributeFilters } from "./facets";
 import { getStorefrontBrandProducts, getStorefrontCategoryProducts, getStorefrontProducts } from "./listing";
+import { MIN_POPULAR_UNITS } from "@scalius/shared/listing-sorts";
 
 const CATEGORIES = ["cat_root", "cat_a", "cat_b", "cat_c", "cat_draft"] as const;
 const PRODUCTS = 180;
@@ -29,8 +30,11 @@ export function listingScaleSeed(): string {
     const fulfillments: string[] = [];
     const fulfilled: string[] = [];
     const reviews: string[] = [];
+    // Units sold in 30 days on 1 in 4 products, 1 to 6 (1 is below the popular threshold), with ties.
+    const sales: string[] = [];
     for (let index = 0; index < PRODUCTS; index += 1) {
         const id = `prd_${String(index).padStart(4, "0")}`;
+        if (index % 4 === 0) sales.push(`('${id}', ${1 + (index * 7 % 6)})`);
         const price = 1000 + (index * 37 % 23) * 250;
         const brand = index % 3 === 0 ? "NULL" : index % 3 === 1 ? "'brd_scale0001'" : "'brd_scale0002'";
         products.push(`('${id}', 'Product ${index}', ${price}, 'product-${index}', '${CATEGORIES[index % CATEGORIES.length]}', ${brand}, 1, ${1_700_000_000 + (index * 13 % 29) * 60})`);
@@ -64,20 +68,23 @@ export function listingScaleSeed(): string {
         INSERT INTO order_fulfillments (id, order_id, kind, request_key, actor_type) VALUES ${fulfillments.join(", ")};
         INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity) VALUES ${fulfilled.join(", ")};
         UPDATE orders SET status = 'delivered';
+        INSERT INTO product_sales_stats (product_id, sold_30d) VALUES ${sales.join(", ")};
         INSERT INTO product_reviews (id, product_id, variant_id, order_id, order_item_id, reviewer_key, author_type,
             author_display_name, rating, status, published_at) VALUES ${reviews.join(", ")}
     `;
 }
 
-export type ListingScaleRow = { id: string; category: string; brand: string | null; createdAt: number; price: number; color: string };
+export type ListingScaleRow = { id: string; category: string; brand: string | null; createdAt: number; price: number; color: string; sold: number };
 
 /** In a PostgreSQL plan, a correlated subquery tested as a filter: it runs once per row walked. */
 export const CORRELATED_SUBQUERY_FILTER = /Filter: .*SubPlan/;
 
 /** Every public product with its order keys and colour, to compare listings with. */
 export const LISTING_SCALE_ROWS = `SELECT p.id AS "id", p.category_id AS "category", p.brand_id AS "brand", p.created_at AS "createdAt",
-    b.from_minor AS "price", v.value_key AS "color" FROM products p JOIN product_buyer_state b ON b.product_id = p.id AND b.is_public = 1
-    JOIN product_facet_values v ON v.product_id = p.id AND v.facet_key = 'attr_color'`;
+    b.from_minor AS "price", v.value_key AS "color", COALESCE(s.sold_30d, 0) AS "sold"
+    FROM products p JOIN product_buyer_state b ON b.product_id = p.id AND b.is_public = 1
+    JOIN product_facet_values v ON v.product_id = p.id AND v.facet_key = 'attr_color'
+    LEFT JOIN product_sales_stats s ON s.product_id = p.id`;
 
 export interface ListingScaleStore {
     db: Database;
@@ -91,6 +98,36 @@ const ORDERS = {
     "price-asc": (a: ListingScaleRow, b: ListingScaleRow) => compareSqliteValues(Number(a.price), Number(b.price)) || compareSqliteValues(a.id, b.id),
     "price-desc": (a: ListingScaleRow, b: ListingScaleRow) => compareSqliteValues(Number(b.price), Number(a.price)) || compareSqliteValues(a.id, b.id),
 } as const;
+
+/** Best selling: MIN_POPULAR_UNITS or more sold by units, then the rest newest; ties by id. */
+function popularOrder(a: ListingScaleRow, b: ListingScaleRow): number {
+    const popular = (row: ListingScaleRow) => Number(row.sold) >= MIN_POPULAR_UNITS;
+    if (popular(a) !== popular(b)) return popular(a) ? -1 : 1;
+    return popular(a)
+        ? compareSqliteValues(Number(b.sold), Number(a.sold)) || compareSqliteValues(a.id, b.id)
+        : ORDERS.newest(a, b);
+}
+
+/** Every page by number, then the whole walk by cursor: both must list `expected`. */
+async function expectPagedAndWalked(
+    read: (params: { page?: number; limit: number; cursor?: string }) => Promise<{ products: Array<{ id: string }>; pageInfo: { hasNextPage: boolean; endCursor: string | null } }>,
+    expected: string[],
+): Promise<void> {
+    const pages: string[] = [];
+    for (let page = 1; page <= Math.ceil(expected.length / 20) + 1; page += 1) {
+        pages.push(...(await read({ page, limit: 20 })).products.map((product) => product.id));
+    }
+    expect(pages).toEqual(expected);
+    const walked: string[] = [];
+    let cursor: string | undefined;
+    for (let step = 0; step < 20; step += 1) {
+        const result = await read({ limit: 25, ...(cursor ? { cursor } : {}) });
+        walked.push(...result.products.map((product) => product.id));
+        if (!result.pageInfo.hasNextPage) break;
+        cursor = result.pageInfo.endCursor!;
+    }
+    expect(walked).toEqual(expected);
+}
 
 const root = {
     id: "cat_root", name: "Root", slug: "root", description: null, imageUrl: null,
@@ -173,6 +210,33 @@ export function listingScaleScenarios(setup: () => Promise<ListingScaleStore>): 
                 }
             }
             expect(seen).toEqual(expected);
+        }
+    });
+
+    it("sorts every listing by popularity: popular products by units, then the rest newest, by page and by cursor", async () => {
+        const { db, rows } = await setup();
+        const popular = (list: ListingScaleRow[]) => [...list].sort(popularOrder).map((row) => row.id);
+        // Both tiers are on more than one page, and units tie.
+        expect(rows.filter((row) => Number(row.sold) >= MIN_POPULAR_UNITS).length).toBeGreaterThan(25);
+        expect(rows.some((row) => Number(row.sold) === 1)).toBe(true);
+        // Shop-all: the popular walk merged with the newest rest.
+        await expectPagedAndWalked((params) => getStorefrontProducts(db, { ...params, sort: "popular" }), popular(rows));
+        // Scopes: a subtree, a brand and a search, each sorted after its own index.
+        await expectPagedAndWalked(
+            (params) => getStorefrontCategoryProducts(db, root, { ...params, sort: "popular" }, { includeDescendants: true }),
+            popular(rows.filter((row) => row.category !== "cat_draft")),
+        );
+        await expectPagedAndWalked(
+            (params) => getStorefrontBrandProducts(db, { id: "brd_scale0001" }, { ...params, sort: "popular" }),
+            popular(rows.filter((row) => row.brand === "brd_scale0001")),
+        );
+        // Shop-all narrowed by a few values (driven) and by many (walking).
+        for (const color of ["red", "blue"]) {
+            const filters = await resolvePublicAttributeFilters(db, { color }, []);
+            await expectPagedAndWalked(
+                (params) => getStorefrontProducts(db, { ...params, sort: "popular", attributeFilters: filters }),
+                popular(rows.filter((row) => row.color === color)),
+            );
         }
     });
 }

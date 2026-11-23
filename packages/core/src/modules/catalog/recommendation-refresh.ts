@@ -15,9 +15,12 @@
 //   pick the same products every time).
 // - `recentlySoldPublicProducts`: products with new co-purchases.
 // - `refreshProductSalesStats`: units sold in the last 30 days from real
-//   order lines, reconciled in one batch without churning unchanged rows.
+//   order lines net of accepted returns, reconciled in one batch without
+//   churning unchanged rows.
 import {
     orderItems,
+    orderReturnLines,
+    orderReturns,
     orders,
     productBuyerState,
     productRecommendations,
@@ -220,8 +223,10 @@ export async function recommendationRotationBatch(
 
 /**
  * Units sold per product in the last 30 days, from real orders (placed and
- * kept: not cancelled, refunded, returned or unfinished), reconciling the
- * table in one batch. The upsert stamps every product sold in the window with
+ * kept: not cancelled, refunded, returned or unfinished), each line net of
+ * its units in accepted return cases (approved, receiving or completed, as
+ * the sales reports count returns; a line returned in full counts nothing),
+ * reconciling the table in one batch. The upsert stamps every product sold in the window with
  * this refresh's time (unchanged projections only refresh their timestamp),
  * so the rows it did not stamp are the products that no longer sold: the
  * delete reads the stats table alone, never each product's line history.
@@ -239,15 +244,27 @@ export async function refreshProductSalesStats(db: Database): Promise<{ products
     const statuses = sql.join(REAL_ORDER_STATUSES.map((status) => sql`${status}`), sql`, `);
     const results = await safeBatch(db, [
         db.insert(productSalesStats).select(sql`
-            SELECT sales_line.product_id, SUM(sales_line.quantity), ${refreshAt}
-            FROM ${orders} AS sales_order
-            INNER JOIN ${orderItems} AS sales_line ON sales_line.order_id = sales_order.id
-            WHERE sales_order.status IN (${statuses})
-              AND sales_order.deleted_at IS NULL
-              AND sales_order.created_at >= ${refreshAt - SALES_WINDOW_SECONDS}
-              AND sales_line.quantity > 0
-              AND EXISTS (SELECT 1 FROM ${products} WHERE ${products.id} = sales_line.product_id)
-            GROUP BY sales_line.product_id
+            SELECT kept_line.product_id, SUM(kept_line.units), ${refreshAt}
+            FROM (
+                SELECT sales_line.product_id AS product_id, sales_line.quantity - COALESCE((
+                    -- The line's accepted return units, through the returns' sales index.
+                    SELECT SUM(returned_line.approved_quantity)
+                    FROM ${orderReturnLines} AS returned_line
+                    INNER JOIN ${orderReturns} AS returned_case ON returned_case.id = returned_line.return_id
+                    WHERE returned_line.order_id = sales_order.id
+                      AND returned_line.order_item_id = sales_line.id
+                      AND returned_case.status IN ('approved', 'receiving', 'completed')
+                ), 0) AS units
+                FROM ${orders} AS sales_order
+                INNER JOIN ${orderItems} AS sales_line ON sales_line.order_id = sales_order.id
+                WHERE sales_order.status IN (${statuses})
+                  AND sales_order.deleted_at IS NULL
+                  AND sales_order.created_at >= ${refreshAt - SALES_WINDOW_SECONDS}
+                  AND sales_line.quantity > 0
+                  AND EXISTS (SELECT 1 FROM ${products} WHERE ${products.id} = sales_line.product_id)
+            ) AS kept_line
+            WHERE kept_line.units > 0
+            GROUP BY kept_line.product_id
         `).onConflictDoUpdate({
             target: productSalesStats.productId,
             set: { sold30d: sql`excluded.sold_30d`, computedAt: sql`${refreshAt}` },

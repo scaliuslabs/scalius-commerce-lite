@@ -56,17 +56,20 @@ export function oracleNarrowedShopAllPlan(input: NarrowedPlanInput): NarrowedPla
             FROM ${count.from}
             ${range("lowest", sql`${buyerState.fromMinor}`, "")}
             ${range("highest", sql`${buyerState.toMinor}`, " DESC")}`,
-        page: (pageRows, ids) => {
-            const rows = sql.raw(String(pageRows));
-            return sql`(WITH ${plan},
+        page: (pageRows, ids) => sql`(${pageIds(pageRows, ids)}) AS listing_page`,
+        pageIds,
+    };
+
+    function pageIds(pageRows: number, ids: (form: "driven" | "walking", rows: SQL) => SQL): SQL {
+        const rows = sql.raw(String(pageRows));
+        return sql`WITH ${plan},
             listing_page AS MATERIALIZED (
                 SELECT * FROM (${ids("driven", rowsFor("driven", input.pageRowsNeeded, rows))}) AS driven_page
                 UNION ALL
                 SELECT * FROM (${ids("walking", rowsFor("walking", input.pageRowsNeeded, rows))}) AS walking_page
             )
-            SELECT * FROM listing_page) AS listing_page`;
-        },
-    };
+            SELECT * FROM listing_page`;
+    }
 }
 
 /**
