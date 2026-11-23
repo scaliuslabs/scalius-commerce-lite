@@ -4,7 +4,7 @@ cart part notices mandatory hooks=notice
 cart part lines mandatory hooks=lines,lines-heading,lines-continue,lines-loading,lines-list,lines-clear,lines-undo,cart-empty,cart-empty-icon
 cart part summary mandatory hooks=summary,summary-validation
 cart part discount hooks=discount
-cart part details mandatory hooks=details,details-sign-in,details-form,contact,delivery,details-errors,details-submit,legal
+cart part details mandatory hooks=details,details-sign-in,details-form,contact,delivery,details-errors,dock,details-submit,legal
 cart part empty hooks=empty-extras
 cart fields in discount,details
 cart target cart.page.summary
@@ -33,6 +33,7 @@ cart style summary-rows <root> [data-summary-row]:not([data-summary-row="total"]
 cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,case,tracking
 cart style details-form <root> [data-part="details-form"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding targets=checkout.contact.after,checkout.delivery.after
 cart style section-heading <root> :is([data-part="contact"],[data-part="delivery"]) h2 tokens=text,font,weight,size,case,tracking
+cart style dock [data-private="cart"] [data-part="dock"] tokens=background,text,muted,link,error,border,border-width,shadow
 cart style submit <root> [data-part="details-submit"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,font,weight,size,case,tracking
 cart style legal <root> [data-part="legal"] tokens=text,size,align
 cart style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow fields

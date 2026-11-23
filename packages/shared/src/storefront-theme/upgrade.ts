@@ -162,7 +162,7 @@ function privatePageBlocks(document: Json): Json {
  * no tokens, and nothing compiles to nothing under any checker, so its
  * empty output is this build's checker's.
  */
-const V15_ANATOMY = 1;
+const V15_ANATOMY = 2;
 const V15_SANITIZER = PRIVATE_CSS_SANITIZER_VERSION;
 
 /**

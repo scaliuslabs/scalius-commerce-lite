@@ -1079,23 +1079,6 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 tabindex="-1"
               >
               </p>
-              <button
-                type="submit"
-                class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
-                id="submitButton"
-                data-part="details-submit"
-                aria-describedby={checkoutUnavailable ? "submitButtonReason" : undefined}
-                disabled
-              >
-                <span id="submitButtonText">
-                  {isProcessing ? copy.processingText : submitLabel}
-                </span>
-                {/* "Place order · ৳1,500": the total the summary shows, beside the label (the cart page script fills it). */}
-                <span id="submitButtonTotal" class="tabular-nums" hidden><span aria-hidden="true" class="mx-1.5">·</span><span data-amount></span></span>
-              </button>
-              {/* Why Place order is disabled, in the checkout language (lib/cart/checkout-button-state.ts). */}
-              <p id="submitButtonReason" class="mt-2 text-center text-sm font-medium text-muted-foreground" hidden={!checkoutUnavailable}>{checkoutUnavailable ? checkoutUnavailableMessage : ""}</p>
-
               {
                 // A cash-on-delivery-only store places the order here; a gift
                 // card is used on the payment step (script only: without it
@@ -1105,32 +1088,60 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                     type="button"
                     id="giftCardCheckoutStep"
                     hidden
-                    class="mt-3 inline-flex min-h-11 w-full items-center justify-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    class="inline-flex min-h-11 w-full items-center justify-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   >
                     {giftCopy.giftCardCheckoutStepText}
                   </button>
                 )
               }
 
-              {
-                // Buyers are only asked to agree to policies the store has published.
-                codPlaceable && hasAgreementPolicies && (
-                  <p id={codOnly ? undefined : "cashAgreement"} class="mt-3 text-center text-sm text-muted-foreground" hidden={!codOnly} data-part="legal">
-                    {agreement.map((segment) =>
-                      segment.href ? (
-                        <a href={segment.href} target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-foreground">{segment.text}</a>
-                      ) : (
-                        segment.text
-                      ),
-                    )}
-                  </p>
-                )
-              }
             </div>
           </form>
         </div>
       </Fragment>
     </CartPageLayout>
+    {/* Place order with its total, the agreement and why it may be off: the page's last box, docked at the bottom
+        edge (`position: sticky`) whenever its place is not in view, at every width and under every arrangement,
+        with no script. Its box is the cart's own, so it is there from the first screen; it stays on the layout
+        viewport (a phone's keyboard covers it, never the field) and clear of the safe area. */}
+    <div
+      data-part="dock"
+      class="sticky bottom-0 z-20 mt-4 hidden border-t border-border bg-background pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] group-data-[cart-state=items]:block"
+    >
+      <div class="space-y-3 lg:ms-auto lg:max-w-md">
+        <button
+          type="submit"
+          form="checkoutForm"
+          class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
+          id="submitButton"
+          data-part="details-submit"
+          aria-describedby={checkoutUnavailable ? "submitButtonReason" : undefined}
+          disabled
+        >
+          <span id="submitButtonText">
+            {isProcessing ? copy.processingText : submitLabel}
+          </span>
+          {/* "Place order · ৳1,500": the total the summary shows, beside the label (the cart page script fills it). */}
+          <span id="submitButtonTotal" class="tabular-nums" hidden><span aria-hidden="true" class="mx-1.5">·</span><span data-amount></span></span>
+        </button>
+        {/* Why Place order is disabled, in the checkout language (lib/cart/checkout-button-state.ts). */}
+        <p id="submitButtonReason" class="text-center text-sm font-medium text-muted-foreground" hidden={!checkoutUnavailable}>{checkoutUnavailable ? checkoutUnavailableMessage : ""}</p>
+        {
+          // Buyers are only asked to agree to policies the store has published.
+          codPlaceable && hasAgreementPolicies && (
+            <p id={codOnly ? undefined : "cashAgreement"} class="text-center text-sm text-muted-foreground" hidden={!codOnly} data-part="legal">
+              {agreement.map((segment) =>
+                segment.href ? (
+                  <a href={segment.href} target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-foreground">{segment.text}</a>
+                ) : (
+                  segment.text
+                ),
+              )}
+            </p>
+          )
+        }
+      </div>
+    </div>
     {/* Before first paint: the cart column sits where it shows (after the form
         on wide screens). On a phone the summary starts folded behind its
         "Show order summary" bar (Dawn's checkout), so the first screen is the
@@ -1152,7 +1163,10 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     {/* With saved lines the form is part of the first paint; the cart script
         then shows or hides it as the checked cart says. */}
     <style is:global>
-      #cartPageRoot[data-cart-prepaint="items"][data-cart-state="loading"] #checkoutPanel { display: block; }
+      #cartPageRoot[data-cart-prepaint="items"][data-cart-state="loading"] :is(#checkoutPanel, [data-part="dock"]) { display: block; }
+      #cartPageRoot:has(#checkoutFormCard.hidden) [data-part="dock"] { display: none; }
+      /* Focus moved by keyboard is never left under the docked Place order. */
+      html:has([data-part="dock"]) { scroll-padding-block-end: 9rem; }
     </style>
     <style is:global>
       @media (max-width: 63.99rem) {

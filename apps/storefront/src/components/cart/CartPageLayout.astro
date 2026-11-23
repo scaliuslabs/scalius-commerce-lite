@@ -10,11 +10,12 @@
 import {
   layoutBox,
   privateContentHtml,
+  privateLeadBlocks,
   renderPrivateNodes,
   type PrivateAssetUrl,
 } from "@/lib/private-pages/html";
 import type { PrivatePagePlan } from "@/lib/private-pages/plan";
-import type { PrivateNode } from "@scalius/shared/storefront-theme";
+import { PRIVATE_PAGES, type PrivateNode } from "@scalius/shared/storefront-theme";
 
 interface Props {
   plan: PrivatePagePlan;
@@ -53,10 +54,12 @@ if (custom) {
   collect(plan.layout!);
   for (const name of names) if (parts[name]) rendered.set(name, await parts[name]!());
   const foldBar = await slot("foldBar");
+  // The blocks above the page's first part share one height in screen terms (the seal's `data-lead`).
+  const lead = privateLeadBlocks(plan.layout!, PRIVATE_PAGES.cart.lead ?? []);
   html = renderPrivateNodes(plan.layout!, {
     part: (name) => rendered.get(name) ?? "",
     target: (name) => targets[name] ?? "",
-    content: (block, hook) => privateContentHtml(block, hook, language, asset),
+    content: (block, hook) => privateContentHtml(block, hook, language, asset, lead.has(block) ? lead.size : 0),
     // The phone fold: its bar states the total; its body folds below 64rem until opened.
     layout: (kind, inner, hook) => kind === "fold"
       ? layoutBox("fold", `${foldBar}<div id="orderSummaryBody" data-summary-body data-part="fold-body" class="flex min-w-0 flex-col gap-4">${inner}</div>`, hook)

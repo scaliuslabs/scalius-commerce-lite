@@ -37,6 +37,7 @@ const WIDE = "review 3: a block widens the page";
 const COVERS = "review 2: shadows, outlines and covers from a block";
 const COLUMNS = "review 3: two 480px columns on a phone";
 const HEADER = "the store's own header under dark tokens";
+const DEPTH = "review 6, B3: a tall header, a 2000px block first and unfolded lines with two blocks each";
 
 export const MUTATIONS = {
   // The reviews' fixes, each reverted: its named case must fail again.
@@ -216,7 +217,7 @@ export const MUTATIONS = {
     why: "the seal gives a block in a cart line the page's 30rem: twenty lines of them bury Place order",
     rewrites: [rewrite(PLAN, "[data-part=\"line\"] [data-free]{max-block-size:4rem}", "[data-part=\"line\"] [data-free]{max-block-size:30rem}")],
     cases: ["review 5, S5: twenty lines, each with two 2000px image blocks"],
-    expect: /px down \(the cart's own lines/,
+    expect: /^depth: the theme adds \d+px above Place order/,
   },
   "R5-S6 the phone tab bar on a private page": {
     why: "the theme's chrome draws the phone tab bar on the cart, outside token scope: its surface and words belong to no row",
@@ -258,6 +259,21 @@ export const MUTATIONS = {
     ],
     cases: ["a block whose look follows the page"],
     expect: /the save took it; it must be refused \(unknown_property\)/,
+  },
+  "R6-B3a Place order is not docked": {
+    why: "Place order stays at the end of the cart: on a phone with a tall theme and many lines it is screens away",
+    rewrites: [rewrite("apps/storefront/src/pages/cart.astro", 'class="sticky bottom-0 z-20 mt-4 hidden', 'class="relative z-20 mt-4 hidden')],
+    cases: [DEPTH],
+    expect: /^dock: scroll 0: Place order is not on screen/,
+  },
+  "R6-B3b the header and the blocks above the cart have no screen cap": {
+    why: "the header region keeps 24rem and a block before the cart 30rem: on a 700px phone the first screen is all theme",
+    rewrites: [
+      rewrite(PLAN, '[data-free="header"]{max-block-size:min(24rem,25svh)}', '[data-free="header"]{max-block-size:24rem}'),
+      rewrite(PLAN, "max-block-size:min(30rem,${Math.floor(2500 / (index + 1)) / 100}svh)", "max-block-size:30rem"),
+    ],
+    cases: [DEPTH],
+    expect: /^first screen: the page's first part starts at \d+px, below the 700px screen/,
   },
   "P2 a page paint with no tokens draws the store's own page": {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",

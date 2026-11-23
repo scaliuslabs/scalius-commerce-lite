@@ -27,7 +27,7 @@
 // mandatory part and target exactly once. Nothing else is per page.
 
 /** Rises when a page gains a mandatory part or target (a stored arrangement then fills it in on read). */
-export const PRIVATE_ANATOMY_VERSION = 1 as const;
+export const PRIVATE_ANATOMY_VERSION = 2 as const;
 
 /**
  * The host's layout nodes. `stack`: one column. `columns`: one column on
@@ -167,6 +167,13 @@ export interface PrivateUnitSpec {
   readonly layout: readonly PrivateNode[];
   /** A repeated unit's: the page's part that draws it (its content blocks count where that part sits). */
   readonly part?: string;
+  /**
+   * The parts a buyer's first screen reaches (a page's): the content blocks
+   * the arrangement puts before the first of them share one height in
+   * viewport terms (`data-lead`, the seal), so one of them starts inside the
+   * first screen at every width.
+   */
+  readonly lead?: readonly string[];
 }
 
 /**
@@ -255,8 +262,12 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   "summary-total": { selector: '[data-summary-row="total"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary" },
   "details-form": { selector: '[data-part="details-form"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "details", targets: ["checkout.contact.after", "checkout.delivery.after"] },
   "section-heading": { selector: ':is([data-part="contact"],[data-part="delivery"]) h2', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "details-form" },
-  submit: { selector: '[data-part="details-submit"]', tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "details-form" },
-  legal: { selector: '[data-part="legal"]', tokens: ["text", "size", "align"], kind: "text", surface: "under", ink: "muted-foreground", on: "details-form" },
+  // Place order with its total, the agreement and why it may be off: the page's last box, docked at the bottom
+  // edge whenever its place is not in view (`position: sticky`), at every width, under every arrangement. It
+  // stands over whatever scrolls beneath it, so it always paints its own surface (as a dialog does).
+  dock: { selector: '[data-private="cart"] [data-part="dock"]', absolute: true, tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "shadow"], kind: "box", surface: "background", ink: "foreground", on: "page" },
+  submit: { selector: '[data-part="details-submit"]', tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "dock" },
+  legal: { selector: '[data-part="legal"]', tokens: ["text", "size", "align"], kind: "text", surface: "under", ink: "muted-foreground", on: "dock" },
   // The store's dialogs over the page (confirmation, sign-in): their surface, words, fields and buttons.
   dialog: { selector: '[data-private="dialog"]', absolute: true, tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "shadow"], kind: "box", surface: "card", ink: "foreground", on: "page", fields: true },
   "dialog-back": { selector: '[data-private="dialog"] [data-part="dialog-back"]', absolute: true, tokens: ["background", "text", "border", "border-width", "radius", "ring", "weight"], kind: "control", surface: "under", ink: "foreground", on: "dialog" },
@@ -285,10 +296,11 @@ const CART_PAGE: PrivatePageSpec = {
     // Its money rows carry `data-summary-row` (subtotal, add-on, delivery, discount, tax, total), as on every surface.
     summary: part(true, ["summary", "summary-validation"]),
     discount: part(false, ["discount"], "fields"),
-    details: part(true, ["details", "details-sign-in", "details-form", "contact", "delivery", "details-errors", "details-submit", "legal"], "fields"),
+    details: part(true, ["details", "details-sign-in", "details-form", "contact", "delivery", "details-errors", "dock", "details-submit", "legal"], "fields"),
     empty: part(false, ["empty-extras"]),
   },
   targets: ["cart.page.summary", "cart.page.below"],
+  lead: ["lines", "summary", "details"],
   layouts: ["stack", "columns", "grid", "group", "fold"],
   styles: CART_STYLES,
   layout: [

@@ -921,7 +921,7 @@ export function galleryEntry(id: string): GalleryEntry | null {
 }
 
 /** The states the private pages' rendered tests draw a theme in (each a cart the buyer can hold). */
-export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many"] as const;
+export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many", "one", "max"] as const;
 export type PrivatePagesState = (typeof PRIVATE_PAGES_STATES)[number];
 
 /** Long Bangla titles: a line's words at their longest in the store's second language. */
@@ -943,6 +943,15 @@ function linesCart(): string {
 }
 
 /** Twenty lines the store sells (a theme's blocks under every line repeat twenty times). */
+/** The base cart's first line alone (`one`), or as `count` lines of their own (`max`: the most a buyer is likely to hold). */
+function repeatedCart(count: number): string {
+  const [line] = Object.values(JSON.parse(GALLERY_CART).items as Record<string, Record<string, unknown>>);
+  return JSON.stringify({ items: Object.fromEntries(Array.from({ length: count }, (_, index) => [
+    `line:v3:prod_${index}:variant:var_prod_${index}:p:none`,
+    { ...line, id: `prod_${index}`, slug: undefined, variantId: `var_prod_${index}` },
+  ])) });
+}
+
 function manyCart(): string {
   const products = Array.from({ length: 60 }, (_, index) => cardProduct(index)).filter((product) => product.availableForSale).slice(0, 20);
   return JSON.stringify({ items: Object.fromEntries(products.map((product) => [
@@ -958,14 +967,15 @@ function manyCart(): string {
  * every kind of app block (`base`); a line asking for a decision, a store kit
  * with an add-on once per kit and an app's offer row, and a sold-out line (`lines`); the base cart with a
  * line asking for a decision and nothing sold out (`decide`); no cart (`empty`); long Bangla
- * titles (`bn`); an Arabic, right-to-left presence (`ar`); twenty lines (`many`). With `noor`, the
+ * titles (`bn`); an Arabic, right-to-left presence (`ar`); twenty lines (`many`); one line (`one`) and
+ * 99 (`max`). With `noor`, the
  * store has Noor installed, so a theme from it draws its header and footer;
  * with `localization`, the store sells in two markets.
  */
 export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean } = {}): GalleryEntry {
   const base = galleryEntry(entryId("app", "buyer-ui"))!;
   // `decide`: the base cart, whose first line asks for a decision and every line sells, so Place order reaches the question.
-  const cart: Record<string, string> = state === "empty" ? {} : { "cart:v3": state === "bn" ? BANGLA_LONG_CART : state === "lines" ? linesCart() : state === "many" ? manyCart() : GALLERY_CART };
+  const cart: Record<string, string> = state === "empty" ? {} : { "cart:v3": state === "bn" ? BANGLA_LONG_CART : state === "lines" ? linesCart() : state === "many" ? manyCart() : state === "one" ? repeatedCart(1) : state === "max" ? repeatedCart(99) : GALLERY_CART };
   const scenario: GalleryScenario = {
     ...base.scenario, delivering: true, buyerUiKinds: true, storage: cart,
     // Noor installed and active: its header and footer skins draw the theme's chrome.

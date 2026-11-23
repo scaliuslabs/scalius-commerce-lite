@@ -6,6 +6,7 @@
  * no query; the stylesheet was checked and scoped when the theme was saved.
  */
 import {
+  PRIVATE_CONTENT_LIMITS,
   PRIVATE_PAGES,
   PRIVATE_PAGE_KEYS,
   PRIVATE_TOKEN_MODE_CSS,
@@ -77,13 +78,18 @@ const ASSET_PATH = /^\/_x\/[a-z0-9][a-z0-9.-]*\/[A-Za-z0-9._-]+\/public\/[A-Za-z
  * containment added nothing the rendered gate could find, so it is gone);
  * everything painted inside clipped (with the older browsers' overflow clip
  * first); and a bounded height (a block in a cart line 4rem, as it repeats with
- * every line). The stylesheet never selects a wrapper. It is
+ * every line). What stands above the page's first part is bounded in screen
+ * terms, so one of the page's parts starts inside the first screen at every
+ * width: the header a quarter of the screen's height, and the blocks before
+ * the page's first part (`data-lead`, their number) another quarter between
+ * them. The stylesheet never selects a wrapper. It is
  * host CSS: the layout writes it on every page that can draw a region
  * (`privateFreeRegions`), whatever the theme's compile holds.
  */
 export const PRIVATE_FREE_REGION_SEAL =
   "[data-free]{display:block;position:relative;z-index:0;isolation:isolate;min-inline-size:0;max-inline-size:100%;overflow:hidden;overflow:clip;contain:layout paint style;max-block-size:30rem}"
-  + '[data-free="header"]{max-block-size:24rem}[data-free="footer"]{max-block-size:80rem}'
+  + '[data-free="header"]{max-block-size:min(24rem,25svh)}[data-free="footer"]{max-block-size:80rem}'
+  + Array.from({ length: PRIVATE_CONTENT_LIMITS.beforeLastMandatory }, (_, index) => `[data-lead="${index + 1}"]{max-block-size:min(30rem,${Math.floor(2500 / (index + 1)) / 100}svh)}`).join("")
   // A cart line's blocks repeat with every line: each is short.
   + '[data-part="line"] [data-free]{max-block-size:4rem}';
 

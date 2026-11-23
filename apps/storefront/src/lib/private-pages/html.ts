@@ -90,9 +90,29 @@ export function privateAssetUrls(extensions: ReadonlyArray<{ pluginId: string; r
  * styles the theme's blocks and the apps' alike. A block whose words or
  * image this language and store cannot fill draws nothing.
  */
-export function privateContentHtml(block: PrivateContentBlock, hook: string | undefined, language: string, asset: PrivateAssetUrl): string {
+export function privateContentHtml(block: PrivateContentBlock, hook: string | undefined, language: string, asset: PrivateAssetUrl, lead = 0): string {
   const html = contentHtml(block, language, asset);
-  return html ? `<div data-free="block"${hookAttribute(hook)}>${html}</div>` : "";
+  return html ? `<div data-free="block"${hookAttribute(hook)}${lead > 0 ? ` data-lead="${lead}"` : ""}>${html}</div>` : "";
+}
+
+/**
+ * The content blocks before the first of a page's lead parts (`lead`, in
+ * reading order): they share one height in screen terms (`data-lead`, their
+ * number, sealed by the layout), so a part a buyer needs starts inside the
+ * first screen whatever the theme put above it.
+ */
+export function privateLeadBlocks(nodes: readonly PrivateNode[], lead: readonly string[]): Set<PrivateContentBlock> {
+  const blocks = new Set<PrivateContentBlock>();
+  const visit = (list: readonly PrivateNode[]): boolean => {
+    for (const node of list) {
+      if (node.type === "part" && lead.includes(node.part)) return true;
+      if (node.type === "content") blocks.add(node.content);
+      if (node.type === "layout" && visit(node.children)) return true;
+    }
+    return false;
+  };
+  visit(nodes);
+  return blocks;
 }
 
 function contentHtml(block: PrivateContentBlock, language: string, asset: PrivateAssetUrl): string {

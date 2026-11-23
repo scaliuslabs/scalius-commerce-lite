@@ -137,7 +137,7 @@ A page with no token, in a theme with no page paint, is drawn exactly as the sto
 
 A layout node takes `background`, `gradient`, `border`, `border-width`, `border-style`, `radius`, `shadow`, `padding`, `gap`, `columns` and `columns-wide` through its hook: `"@studio-grid": { "columns": [64, "1fr", 88] }`. A hook with a colour is a row of the table. The store's own layouts split into columns by the width of the box they sit in, never the screen's.
 
-`action` is every filled button the store draws without a target of its own, `input` every field on the page and in its dialogs (one row per box that holds fields: the discount part, the details form, a line's inputs, a dialog, an app's target), `dialog` the store's dialogs (the confirmation an app's choice asks for, sign-in) with `dialog-back` and `dialog-confirm` their buttons, `chrome` the store's own header (`chrome: core`), and `search` the store's search in your header (see `search` above).
+`dock` is the page's last box, which holds Place order (`submit`), the agreement (`legal`) and why Place order may be off; it is docked at the bottom edge while its place is not in view, so give it a surface of its own. `action` is every filled button the store draws without a target of its own, `input` every field on the page and in its dialogs (one row per box that holds fields: the discount part, the details form, a line's inputs, a dialog, an app's target), `dialog` the store's dialogs (the confirmation an app's choice asks for, sign-in) with `dialog-back` and `dialog-confirm` their buttons, `chrome` the store's own header (`chrome: core`), and `search` the store's search in your header (see `search` above).
 
 **Apps' blocks.** The store draws an app's block from typed nodes, so it is one of the store's parts: you give it a look by node kind, under `ui.<kind>`, narrowed by tone, app and target: `"ui.banner.warning@acme.protection/cart.page.summary": { "background": "#3a2a0a", "text": "#fde68a" }`. Every kind and tone has a row at each of the page's targets (`cart.page.summary`, `cart.page.below`, `cart.line.after`), on whatever that target sits on, whether you name it or not.
 
@@ -226,6 +226,8 @@ The stylesheet is parsed by a CSS Syntax 3 parser and written back from what was
 | --- | --- |
 | No rule of your stylesheet matches a store part, an app's block, a layout node, the page, the body or the store's search. | Everything inside your regions: your words, your pictures, your header's markup. |
 | A region is sealed: what it paints is clipped to it and its content does not widen the page; its height is bounded. | A region that clips its own content because you made it bigger than its bound. |
+| Place order with its total is always on screen: it is the page's last box, docked at the bottom edge while its place is not in view, at every width and under every arrangement, with no script; nothing of yours covers it. | Its look: the `dock` and `submit` tokens. |
+| One of the cart's parts starts inside the first screen: your header region is at most a quarter of the screen's height (and 24rem), and the blocks you put before the cart's first part share another quarter (and 30rem each). | Blocks that read well in that room on a short phone. |
 | A token is a typed value the store writes as its own CSS; in token mode every colour comes from the one table the save checks. | Choosing tokens that read well together beyond the floors. |
 | Every row of the table reads at its floor: words at 4.5:1, a field's marks and focus rings at 3:1. | The drawer's look on public pages (your public stylesheet). |
 | A buyer's request never compiles; a look an older checker wrote is not served. | Re-saving after a store update if you want your look before the next maintenance run. |
@@ -240,12 +242,15 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (`ap
 
 | Check | Fails when |
 | --- | --- |
-| Mandatory parts | One (with `chrome: theme`, your header's region and the store's search too) is missing, under 8px, outside the viewport, more than 9000px down (a longer cart's own lines past the second not counted; your blocks in them counted), or covered by a free region; the page scrolls sideways; a free region is not sealed, or holds an element, attribute or value the inert rebuild never writes (a form, a field, a button, a store behaviour, an embed). |
+| Mandatory parts | One (with `chrome: theme`, your header's region and the store's search too) is missing, under 8px, outside the viewport or covered by a free region; the page scrolls sideways; a free region is not sealed, or holds an element, attribute or value the inert rebuild never writes (a form, a field, a button, a store behaviour, an embed). |
 | Coverage walk | A text or a focusable control belongs to no row of the colour table (token mode: its words are none of its row's colours, its row's element paints something other than the row's paint, the body included, a surface the table does not know lies between it and its row, or an app's node of a styled kind has no row of its own at its target), or, with no tokens, to no surface the anatomy names, or the page shows a paint of its own. |
 | Contrast | Any text, with no budget, reads under 4.5:1 (3:1 large) against the pixels behind it (every text hidden, the page photographed). |
 | Whole text | A text is cut off at the side, a glyph is cut by its box, or a word breaks inside itself. |
 | Controls | A click at a control's centre lands elsewhere; Tab does not reach it, or reaches it out of document order; its focus ring changes under three quarters of its perimeter at 3:1. |
 | Hover | Under the pointer (1280 px, dark), a control's words read under their floor, or a control the store gives a hover surface changes under a quarter of its box. |
+| Place order | At scroll 0 and at three places down the cart, Place order or its total is off screen, does not take a click there, or shows no total. |
+| First screen | At scroll 0, none of the page's lead parts (the cart, its folded bar, the summary, the details form) starts inside the screen. |
+| Depth | What your theme adds above Place order (its place under your theme less its place under the default look, same cart, the fold open) is over 3200px and 448px a line. Drawn at one, twenty and ninety-nine lines on a 390×700 phone, a 768×1024 tablet and a 1280×800 laptop. |
 | Touch | On a phone, swiping from the top does not reach Place order. |
 | Server | Any request answers 5xx. |
 
@@ -339,7 +344,7 @@ cart part notices mandatory hooks=notice
 cart part lines mandatory hooks=lines,lines-heading,lines-continue,lines-loading,lines-list,lines-clear,lines-undo,cart-empty,cart-empty-icon
 cart part summary mandatory hooks=summary,summary-validation
 cart part discount hooks=discount
-cart part details mandatory hooks=details,details-sign-in,details-form,contact,delivery,details-errors,details-submit,legal
+cart part details mandatory hooks=details,details-sign-in,details-form,contact,delivery,details-errors,dock,details-submit,legal
 cart part empty hooks=empty-extras
 cart fields in discount,details
 cart target cart.page.summary
@@ -368,6 +373,7 @@ cart style summary-rows <root> [data-summary-row]:not([data-summary-row="total"]
 cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,case,tracking
 cart style details-form <root> [data-part="details-form"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding targets=checkout.contact.after,checkout.delivery.after
 cart style section-heading <root> :is([data-part="contact"],[data-part="delivery"]) h2 tokens=text,font,weight,size,case,tracking
+cart style dock [data-private="cart"] [data-part="dock"] tokens=background,text,muted,link,error,border,border-width,shadow
 cart style submit <root> [data-part="details-submit"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,font,weight,size,case,tracking
 cart style legal <root> [data-part="legal"] tokens=text,size,align
 cart style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow fields

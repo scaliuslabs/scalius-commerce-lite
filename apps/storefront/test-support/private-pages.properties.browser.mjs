@@ -23,8 +23,14 @@
 // presence) at 320, 390 and 1280 px, light and dark, and with validation
 // errors showing, the sign-in dialog open and the confirmation dialog open.
 // Every draw must hold:
-// - every mandatory part inside the viewport, at most MAX_DEPTH_PX down, not
-//   tiny, not covered by a free region; the page never scrolls sideways;
+// - every mandatory part inside the viewport, not tiny, not covered by a free
+//   region; the page never scrolls sideways;
+// - Place order with its total on screen and taking a click at scroll 0 and at
+//   three scroll positions down the cart (docked at the bottom edge while its
+//   place is not in view); one of the page's lead parts starting inside the
+//   first screen at scroll 0; and what the theme adds above Place order (its
+//   place under the theme less its place under the default look, same cart)
+//   at most THEME_DEPTH_PX and LINE_DEPTH_PX a line;
 // - the coverage walk: every text and every focusable control the host draws
 //   belongs to a row of the page's colour table (in token mode its words are
 //   one of the row's colours and no surface the table does not know lies
@@ -71,11 +77,16 @@ const SCHEMES = ["light", "dark"];
 /** The states a seed or `states: "all"` draws; a named case may ask for others (`states: ["many"]`: twenty lines). */
 const STATES = ["base", "lines", "decide", "empty", "bn", "ar"];
 /**
- * How far below the top a mandatory part may sit (24rem header, 3 blocks of 30rem, the host's own page with
- * two lines): a longer cart's own lines do not count, the theme's blocks inside them do (they repeat with
- * every line, so a line's blocks are short).
+ * What a theme may add above Place order, against the default look holding the same cart (both with the
+ * phone's fold open): its header (24rem at most), three blocks of 30rem before the page's last part, and its
+ * layouts' padding and gaps and its tokens' larger type (1000px); and per line, the line's two blocks (4rem
+ * each) and its tokens (a 320px image for the default's 96px, 48px padding each side): 448px.
  */
-const MAX_DEPTH_PX = 9000;
+const THEME_DEPTH_PX = 3200;
+const LINE_DEPTH_PX = 448;
+/** The states drawn on a phone's short screen and two wider ones: one line, twenty and ninety-nine. */
+const LENGTHS = ["one", "many", "max"];
+const LENGTH_VIEWPORTS = [[390, 700, "light"], [768, 1024, "dark"], [1280, 800, "light"]];
 
 // ─── The gate tests itself ─────────────────────────────────────────────────
 
@@ -331,7 +342,7 @@ const REGRESSIONS = {
   "review 5, S4: a page paint behind a look this build has not compiled": { request: { paint: PAINT, scheme: "light", stale: true }, privatePages: { tokens: { cart: { summary: DARK } } } },
   // Review 5, S5: a line's blocks repeat with every line. Twenty lines, each with the two largest legal blocks, and the
   // page's one block before the form: Place order is still within reach.
-  "review 5, S5: twenty lines, each with two 2000px image blocks": { states: ["many"], request: { noor: true }, privatePages: { pages: { cart: {
+  "review 5, S5: twenty lines, each with two 2000px image blocks": { states: ["many", "max"], request: { noor: true }, privatePages: { pages: { cart: {
     layout: [{ type: "part", part: "notices" }, { type: "content", hook: "lead", content: { kind: "image", image: { app: NOOR, file: "pp/banner.svg" }, alt: { en: "A banner" }, width: 2000, height: 2000 } }, ...LEGAL_COLUMNS.slice(1)],
     items: { line: [LINE_IMAGE("line-top"), ...DEFAULT_LINE, LINE_IMAGE("line-end")] },
   } } } },
@@ -347,6 +358,14 @@ const REGRESSIONS = {
   // stylesheet hides that switch in dark colours and on a phone. The region keeps no host behaviour, so the store's
   // switch never yields to it: it shows at every width, in both schemes.
   "review 6, B1: the theme's header draws its own scheme switch and hides it": { request: { noor: true, toggle: true, skinSwitch: true, scheme: "system" }, privatePages: { chrome: "theme", css: ':root[data-color-scheme="dark"] [data-free="header"] button { display: none } @media (max-width: 500px) { [data-free="header"] button { visibility: hidden } }' } },
+  // Review 6, B3: a header at its cap, a 2000px block first, the lines unfolded on a phone with two blocks in every
+  // line, at one, twenty and ninety-nine lines on a 390×700 phone, a tablet and a laptop. Place order with its total is
+  // on screen at every scroll, the cart starts inside the first screen, and the theme adds a bounded depth.
+  "review 6, B3: a tall header, a 2000px block first and unfolded lines with two blocks each": { states: LENGTHS, request: { noor: true }, privatePages: { chrome: "theme", css: '[data-free="header"] > * { min-height: 24rem }', pages: { cart: {
+    layout: [LINE_IMAGE("lead"), { type: "part", part: "progress" }, { type: "part", part: "notices" }, { type: "layout", layout: "columns", children: [{ type: "layout", layout: "stack", children: [{ type: "part", part: "lines" }, { type: "part", part: "summary" }, { type: "part", part: "discount" }, { type: "target", target: "cart.page.summary" }, { type: "target", target: "cart.page.below" }, { type: "part", part: "empty" }] }, { type: "part", part: "details" }] }],
+    items: { line: [LINE_IMAGE("line-top"), ...DEFAULT_LINE, LINE_IMAGE("line-end")] },
+  } } } },
+  "the store's own page with one, twenty and ninety-nine lines": { states: LENGTHS, privatePages: {} },
   // What the save must refuse (under a mutation that lets one through, the drawing must fail).
   "a stylesheet hiding a host part": { refused: "unscoped_selector", privatePages: { css: '[data-part="summary"] * { display: none } [data-part="details-submit"] * { visibility: hidden }' } },
   // Review 6, B2: a block shown or hidden by how far down it sits, which is the cart's length (a view timeline).
@@ -435,7 +454,7 @@ const EXEMPT = "script,style,template,noscript,[data-free],#gallery-page-end,vit
  * the host draws, checks each against the colour table (or, with no tokens,
  * the anatomy's style targets) and returns them for the pixel checks.
  */
-function walk({ rows, anatomy, uiKinds, mandatory, scope, maxDepth, exempt }) {
+function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt }) {
   const problems = [];
   const width = innerWidth;
   const root = scope ? document.querySelector(scope) : document.body;
@@ -457,11 +476,6 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, maxDepth, exempt }) {
     return bits.join(">");
   };
   for (const old of document.querySelectorAll("[data-pt-text],[data-pt-control]")) { old.removeAttribute("data-pt-text"); old.removeAttribute("data-pt-control"); }
-  // The host's own height of each line past the second (the line less the theme's blocks in it): not the theme's depth.
-  const ownLines = [...document.querySelectorAll('[data-private="cart"] [data-part="line"]')].slice(2).map((line) => ({
-    line,
-    own: line.getBoundingClientRect().height - [...line.querySelectorAll("[data-free]")].reduce((sum, region) => sum + region.getBoundingClientRect().height, 0),
-  }));
   // Mandatory parts: on screen, within reach, of a size, uncovered.
   for (const selector of mandatory) {
     const element = root.querySelector(selector);
@@ -470,8 +484,6 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, maxDepth, exempt }) {
     const box = element.getBoundingClientRect();
     if (!element.checkVisibility({ opacityProperty: true, visibilityProperty: true }) || box.width < 8 || box.height < 8) { problems.push(`${selector}: not visible (${Math.round(box.width)}×${Math.round(box.height)})`); continue; }
     if (box.left < -1 || box.right > width + 1) problems.push(`${selector}: outside the viewport (${Math.round(box.left)}..${Math.round(box.right)} of ${width})`);
-    const depth = box.top + scrollY - ownLines.reduce((sum, { line, own }) => sum + (line.getBoundingClientRect().bottom <= box.top && !line.contains(element) ? own : 0), 0);
-    if (depth > maxDepth) problems.push(`${selector}: ${Math.round(depth)}px down (the cart's own lines past the second not counted)`);
     for (const [fx, fy] of [[0.5, 0.5], [0.2, 0.3], [0.8, 0.3], [0.2, 0.7], [0.8, 0.7]]) {
       const x = Math.min(width - 1, Math.max(0, box.left + box.width * fx));
       const y = Math.min(innerHeight - 1, Math.max(0, box.top + box.height * fy));
@@ -674,6 +686,51 @@ function clicks() {
   return problems;
 }
 
+/** The page's lead parts: one of them starts inside the first screen at scroll 0 (a folded cart shows its bar). */
+const LEAD = ['[data-part="fold-toggle"]', '[data-part="lines"]', '[data-part="summary"]', '[data-part="details-form"]', '[data-part="cart-empty"]'];
+
+/** At scroll 0: the first lead part the page shows starts inside the first screen. */
+function firstScreen(lead) {
+  const shown = lead.map((selector) => document.querySelector(`[data-private="cart"] ${selector}`)).filter((element) => element?.checkVisibility({ visibilityProperty: true }));
+  const top = Math.min(...shown.map((element) => element.getBoundingClientRect().top));
+  return shown.length === 0 ? ["the page shows none of its lead parts"]
+    : top < innerHeight - 24 ? [] : [`the page's first part starts at ${Math.round(top)}px, below the ${innerHeight}px screen`];
+}
+
+/**
+ * Place order with its total, at this scroll: on screen whole, the topmost thing at its centre and its
+ * total's words, and taking no cover (the docked bar is the host's; nothing of a region paints over it).
+ */
+function actionOnScreen(where) {
+  const action = document.querySelector('[data-part="details-submit"]');
+  const total = document.querySelector("#submitButtonTotal");
+  if (!action) return [`${where}: Place order is missing`];
+  const box = action.getBoundingClientRect();
+  const problems = [];
+  if (box.top < -1 || box.bottom > innerHeight + 1 || box.height < 8) problems.push(`${where}: Place order is not on screen (${Math.round(box.top)}..${Math.round(box.bottom)} of ${innerHeight}px)`);
+  else {
+    for (const element of [action, total?.querySelector("[data-amount]")].filter(Boolean)) {
+      const at = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(at.left + at.width / 2, at.top + at.height / 2);
+      if (!hit || !action.contains(hit)) problems.push(`${where}: a click on Place order${element === action ? "" : "'s total"} lands on ${hit ? `${hit.tagName.toLowerCase()}${hit.closest("[data-free]") ? " in a free region" : ""}` : "nothing"}`);
+    }
+  }
+  if (!total || total.hidden || !/\p{Nd}/u.test(total.textContent ?? "")) problems.push(`${where}: Place order shows no total`);
+  return problems;
+}
+
+/** Where Place order sits in the page's flow (its docked bar's own place), and the cart's line count. */
+function actionInFlow() {
+  const dock = document.querySelector('[data-part="dock"]');
+  const action = document.querySelector('[data-part="details-submit"]');
+  if (!dock || !action) return null;
+  const previous = dock.style.position;
+  dock.style.position = "static";
+  const top = action.getBoundingClientRect().top + scrollY;
+  dock.style.position = previous;
+  return { top, lines: document.querySelectorAll('[data-private="cart"] [data-part="line"]').length };
+}
+
 // ─── The checks, from outside ─────────────────────────────────────────────
 
 /**
@@ -688,7 +745,8 @@ async function textContrast(page, texts) {
   // No focus ring of an earlier check lies over a text.
   await page.evaluate(() => document.activeElement instanceof HTMLElement && !document.activeElement.closest("dialog,[role=dialog]") && document.activeElement.blur());
   const pending = new Map(texts.map((text) => [text.id, text]));
-  for (let guard = 0; pending.size > 0 && guard < 80; guard += 1) {
+  // A screen at a time: as many as a long cart's texts need.
+  for (let guard = 0, most = Math.max(80, texts.length + 20); pending.size > 0 && guard < most; guard += 1) {
     const first = pending.keys().next().value;
     // Scroll the first text left to the middle; every pending text's boxes now, and whether it is drawn on top there.
     const boxes = await page.evaluate(({ first, ids }) => {
@@ -724,10 +782,11 @@ async function textContrast(page, texts) {
         const { element, rects } = boxesOf(id);
         if (rects.length === 0) return id === first ? [{ id, rects, whole: false, top: false }] : [];
         const whole = rects.every((rect) => rect.x >= 0 && rect.y >= 0 && rect.x + rect.w <= innerWidth && rect.y + rect.h <= innerHeight);
-        const top = whole && rects.every((rect) => {
-          const hit = document.elementFromPoint(rect.x + rect.w / 2, rect.y + rect.h / 2);
+        // Drawn on top all over (a docked bar or a sticky header over part of it is not what it is read on).
+        const top = whole && rects.every((rect) => [[0.5, 0.5], [0.05, 0.03], [0.95, 0.03], [0.05, 0.97], [0.95, 0.97]].every(([fx, fy]) => {
+          const hit = document.elementFromPoint(rect.x + rect.w * fx, rect.y + rect.h * fy);
           return !hit || element.contains(hit) || hit.contains(element);
-        });
+        }));
         return whole || id === first ? [{ id, rects, whole, top }] : [];
       });
     }, { first, ids: [...pending.keys()] });
@@ -1047,6 +1106,7 @@ function drawsOf(state) {
   // The confirmation dialog in the same way; the other states on a phone and the wide page, crossed over the schemes.
   if (state === "lines") return [[390, "dark"], [1280, "light"]].map(([width, scheme]) => ({ width, scheme, focus: false, interact: true }));
   if (state === "decide") return [[390, "light"], [1280, "dark"]].map(([width, scheme]) => ({ width, scheme, focus: false, interact: true }));
+  if (LENGTHS.includes(state)) return LENGTH_VIEWPORTS.map(([width, height, scheme]) => ({ width, height, scheme, focus: false, interact: false }));
   return [[320, "light"], [1280, "dark"]].map(([width, scheme]) => ({ width, scheme, focus: false, interact: false }));
 }
 
@@ -1100,10 +1160,10 @@ function still(page) {
   }));
 }
 
-async function open(context, id, width, server5xx) {
+async function open(context, id, width, server5xx, height = 900) {
   const page = await context.newPage();
   page.on("response", (answer) => { if (answer.status() >= 500) server5xx.push(`${answer.status()} ${answer.request().method()} ${new URL(answer.url()).pathname}`); });
-  await page.setViewportSize({ width, height: 900 });
+  await page.setViewportSize({ width, height });
   const answer = await page.goto(`${gallery.url}/__gallery/e/${id}`, { waitUntil: "load" });
   if (answer && answer.status() >= 500) server5xx.push(`${answer.status()} the page`);
   await page.waitForSelector('[data-private="cart"][data-cart-state="items"],[data-private="cart"][data-cart-state="empty"]', { timeout: 20_000 }).catch(() => {});
@@ -1111,10 +1171,10 @@ async function open(context, id, width, server5xx) {
 }
 
 /** One draw: the page in one state at one width and scheme, with its interactions. */
-async function draw({ context, id, state, width, focus, hover, interact, rows, chrome, search, controls }) {
+async function draw({ context, id, state, width, height, focus, hover, interact, rows, chrome, search, controls, request }) {
   const problems = [];
   const server5xx = [];
-  const page = await timed("load", () => open(context, id, width, server5xx));
+  const page = await timed("load", () => open(context, id, width, server5xx, height));
   // With the theme's chrome its header region is drawn (else the seed tests nothing of the chrome), and the host's search where it says.
   // The store's controls beside the theme's regions where it draws them: the switch, and the market and language forms.
   const chromeParts = [...(chrome ? ['[data-free="header"]'] : ['[data-private="core-header"]']), ...(search ? ['[data-host="search"]'] : []), ...(controls ?? [])];
@@ -1122,7 +1182,7 @@ async function draw({ context, id, state, width, focus, hover, interact, rows, c
   const at = (label, list) => problems.push(...list.map((problem) => `${label}: ${problem}`));
   const check = async (label, scope, list, { controls: wantControls = true } = {}) => {
     await timed("settle", () => settle(page));
-    const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: list, scope, maxDepth: MAX_DEPTH_PX, exempt: EXEMPT }));
+    const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: list, scope, exempt: EXEMPT }));
     at(label, walked.problems);
     at(label, await page.evaluate(INERT_CHECK));
     at(label, await timed("whole", () => page.evaluate(wholeTexts)));
@@ -1131,10 +1191,13 @@ async function draw({ context, id, state, width, focus, hover, interact, rows, c
     return walked;
   };
   await timed("settle", () => settle(page));
+  // The first screen and Place order, as a buyer arrives: at scroll 0, then down the cart.
+  at("first screen", await page.evaluate(firstScreen, LEAD));
+  if (state !== "empty") at("dock", await timed("dock", () => dockChecks(page)));
   // Phones: Tab order and the touch scroll run before anything is clicked.
   if (width < 1280 && state !== "empty") at("touch", await timed("touch", () => touchScroll(page, '[data-part="details-submit"]')));
   if (focus) {
-    const { controls } = await page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: [], scope: null, maxDepth: MAX_DEPTH_PX, exempt: EXEMPT });
+    const { controls } = await page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: [], scope: null, exempt: EXEMPT });
     at("focus order", await timed("tab", () => focusOrder(page, controls)));
   }
   // On a phone the cart folds behind its bar: open it, as a buyer does.
@@ -1142,6 +1205,16 @@ async function draw({ context, id, state, width, focus, hover, interact, rows, c
   if (await toggle.isVisible().catch(() => false)) await toggle.click().catch(() => {});
   await page.waitForTimeout(150);
   const page0 = await check(state, null, mandatory);
+  // What the theme adds above Place order, against the default look with the same cart (the fold open in both).
+  if (state !== "empty") {
+    const here = await page.evaluate(actionInFlow);
+    const before = await timed("default", () => defaultInFlow(request, state, width, height));
+    if (here && before) {
+      const added = here.top - before.top;
+      const allowed = THEME_DEPTH_PX + LINE_DEPTH_PX * here.lines;
+      if (added > allowed) problems.push(`depth: the theme adds ${Math.round(added)}px above Place order (${here.lines} lines: at most ${allowed}px)`);
+    }
+  }
   if (focus) at(`${state} focus`, await timed("rings", () => focusRings(page, page0.controls)));
   if (hover) at(`${state} hover`, await timed("hover", () => hovers(page, page0.controls)));
   if (interact && state === "base") {
@@ -1195,6 +1268,49 @@ async function draw({ context, id, state, width, focus, hover, interact, rows, c
   at("5xx", server5xx);
   await page.close();
   return problems;
+}
+
+/** Place order on screen at scroll 0 and at three places down the cart (while the cart still meets the screen's bottom). */
+async function dockChecks(page) {
+  const problems = [];
+  const end = await page.evaluate(() => Math.max(0, (document.querySelector('[data-private="cart"]')?.getBoundingClientRect().bottom ?? 0) + scrollY - innerHeight));
+  for (const [index, fraction] of [0, 1 / 3, 2 / 3, 1].entries()) {
+    await page.evaluate((y) => window.scrollTo({ top: y, behavior: "instant" }), Math.round(end * fraction));
+    await still(page);
+    problems.push(...await page.evaluate(actionOnScreen, index === 0 ? "scroll 0" : `scroll ${Math.round(end * fraction)}px`));
+  }
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  return problems;
+}
+
+/** Place order's place under the default look, for the same store and cart at this size (measured once each). */
+const defaults = new Map();
+function defaultInFlow(request = {}, state, width, height = 900) {
+  const { noor, headerSkin, localization, tabs, toggle, skinSwitch } = request;
+  const shape = { noor, headerSkin, localization, tabs, toggle, skinSwitch };
+  const key = `${JSON.stringify(shape)}|${state}|${width}|${height}`;
+  if (!defaults.has(key)) {
+    defaults.set(key, (async () => {
+      const id = `pp-default-${defaults.size}`;
+      const answer = await fetch(`${gallery.url}/__gallery/private-theme`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, state, ...shape, privatePages: {} }) });
+      if (answer.status !== 200) return null;
+      const { storage } = await answer.json();
+      const context = await browser.newContext({ viewport: { width, height } });
+      try {
+        await context.addInitScript((entries) => { for (const [name, value] of Object.entries(entries)) localStorage.setItem(name, value); }, storage);
+        const page = await open(context, id, width, [], height);
+        await settle(page);
+        const toggle = page.locator('[data-part="fold-toggle"][aria-expanded="false"]');
+        if (await toggle.isVisible().catch(() => false)) await toggle.click().catch(() => {});
+        await page.waitForTimeout(150);
+        await settle(page);
+        return await page.evaluate(actionInFlow);
+      } finally {
+        await context.close();
+      }
+    })());
+  }
+  return defaults.get(key);
 }
 
 /** The details form filled as a buyer does (name, phone, address, city and thana from their lists, a delivery option); a problem, or null. */
@@ -1256,7 +1372,7 @@ try {
               ...(themeChrome && entry.request?.headerSkin !== false && entry.request?.toggle ? ['[data-host="scheme"] button'] : []),
               ...(themeChrome && entry.request?.localization ? ['[data-host="localization"] select'] : []),
             ];
-            const problems = await draw({ context, id, state, ...each, rows, chrome: entry.privatePages.chrome === "theme" && entry.request?.headerSkin !== false, search: entry.privatePages.chrome === "theme" && entry.privatePages.search, controls });
+            const problems = await draw({ context, id, state, ...each, rows, request: entry.request, chrome: entry.privatePages.chrome === "theme" && entry.request?.headerSkin !== false, search: entry.privatePages.chrome === "theme" && entry.privatePages.search, controls });
             if (problems.length > 0) {
               failures.push({ index, name: entry.name, where: `${state} at ${each.width}px, ${scheme}`, problems, document: entry });
               // `--bail` (the mutations' runs): one failing draw is the answer.
