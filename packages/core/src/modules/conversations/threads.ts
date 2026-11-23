@@ -30,7 +30,11 @@ import {
   type ConversationMessageKind,
   type ConversationMessageVisibility,
   type ConversationStatus,
+  type ConversationStatusMove,
   type ConversationSubjectType,
+  CONVERSATION_MACHINE,
+  conversationStatusMove,
+  staffStatusMove,
 } from "@scalius/shared/conversation";
 import { parseOrderNumberSearch } from "@scalius/shared/order-utils";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
@@ -45,8 +49,10 @@ import {
   ForbiddenError,
   NotFoundError,
   RateLimitError,
+  StateConflictError,
   ValidationError,
 } from "../../errors";
+import { chosenConversationTopic, readConversationTopics } from "./topics";
 import {
   buildNotificationOutboxInsert,
   type NotificationInput,
@@ -193,7 +199,8 @@ export async function assertBuyerOrderAccess(
  * are not confirmed). Store threads belong to their verified account. Every
  * other thread with an `order_id` (order, warranty_claim, review) derives
  * buyer access from that order, so one rule covers them all and a claimed
- * order carries its threads into the claiming account with no thread write.
+ * order carries its threads into the claiming account (a trigger moves
+ * their `buyer_account_id`, which the buyer's list and counts read).
  */
 export async function resolveBuyerThread(
   db: Database,
@@ -249,11 +256,11 @@ interface PlannedAppend {
   outboxIds: string[];
 }
 
-/** The status a line leaves the thread in, or null when it changes nothing. */
-function statusAfter(line: ConversationLine): ConversationStatus | null {
+/** The status move a line makes (`CONVERSATION_MACHINE`), or null: internal notes and events move nothing. */
+function statusMoveOf(line: ConversationLine): ConversationStatusMove | null {
   if ((line.kind !== "message" && line.eventKind !== "product_reply") || line.visibility !== "public") return null;
-  if (line.authorType === "customer" || line.authorType === "guest_receipt") return "open";
-  if (line.authorType === "staff") return "pending";
+  if (line.authorType === "customer" || line.authorType === "guest_receipt") return "buyer_message";
+  if (line.authorType === "staff") return "staff_reply";
   return null;
 }
 
@@ -293,7 +300,7 @@ export function planConversationAppend(
   db: Database,
   thread: { id: string; lastSeq: number },
   lines: readonly ConversationLine[],
-  options: { notify: boolean },
+  options: { notify: boolean; /** A topic the thread takes when it has none yet (`chosenConversationTopic`). */ topic?: string | null },
 ): PlannedAppend {
   const statements: Statement[] = [];
   const planned: PlannedLine[] = [];
@@ -303,7 +310,8 @@ export function planConversationAppend(
   lines.forEach((line, index) => {
     const seq = thread.lastSeq + index + 1;
     const id = newConversationMessageId();
-    const status = statusAfter(line);
+    const move = statusMoveOf(line);
+    const status = move ? conversationStatusMove(move) : null;
     const readBy = new Set(line.readBy ?? []);
     const internalNote = line.visibility === "internal";
 
@@ -313,7 +321,12 @@ export function planConversationAppend(
       lastAuthorType: line.authorType,
       version: sql`${conversations.version} + 1`,
       updatedAt: now,
-      ...(status ? { status, closedAt: null } : {}),
+      // The move's target, written only from its source states (a thread already there keeps its status).
+      ...(status ? {
+        status: sql`CASE WHEN ${inArray(conversations.status, [...status.from])} THEN ${status.to} ELSE ${conversations.status} END`,
+        closedAt: null,
+      } : {}),
+      ...(index === 0 && options.topic ? { topic: sql`coalesce(${conversations.topic}, ${options.topic})` } : {}),
       // Posting, including a reply or note, does not prove staff saw earlier incoming lines.
       ...(readBy.has("customer")
         ? { customerReadSeq: seq }
@@ -475,6 +488,8 @@ export interface PostMessageInput {
   attachmentIds?: readonly string[];
   /** A staff line an app posts through the app API (`conversations.create_message`). */
   authorAppId?: string | null;
+  /** A buyer's topic for a thread that has none yet (one of the merchant's keys). */
+  topic?: unknown;
 }
 
 export interface PostMessageResult {
@@ -517,6 +532,9 @@ export async function postConversationMessage(
     }
   }
   if (buyer) await assertBuyerDailyCap(db, thread.id);
+  const topic = buyer && !thread.topic && input.topic != null && input.topic !== ""
+    ? chosenConversationTopic(await readConversationTopics(db), input.topic)
+    : null;
   await assertAttachable(db, thread.id, input.actor, attachmentIds);
   const eventData = products.length ? { v: 1, cards: products } : null;
   if (eventData && JSON.stringify(eventData).length > CONVERSATION_LIMITS.eventDataLength) {
@@ -539,7 +557,7 @@ export async function postConversationMessage(
 
   let current = thread;
   for (let attempt = 1; attempt <= POST_ATTEMPTS; attempt += 1) {
-    const plan = planConversationAppend(db, current, [line], { notify: true });
+    const plan = planConversationAppend(db, current, [line], { notify: true, topic });
     if (channelReply) {
       plan.statements.push(planChannelReply(db, { conversationId: thread.id, messageId: plan.lines[0]!.id, providerId: channelReply.providerId }));
     }
@@ -635,7 +653,7 @@ export async function postStaffOrderMessage(
 export async function createStoreThread(
   db: Database,
   customerId: string,
-  input: { subject: unknown; body: unknown; clientMessageKey?: string | null },
+  input: { subject: unknown; body: unknown; clientMessageKey?: string | null; topic?: unknown },
   options: { send?: NotificationSender } = {},
 ): Promise<PostMessageResult> {
   if (!await isVerifiedCustomerAccount(db, customerId)) {
@@ -653,6 +671,7 @@ export async function createStoreThread(
       ? `Messages can be up to ${CONVERSATION_LIMITS.bodyLength} characters.`
       : "Write a message first.");
   }
+  const topic = input.topic == null || input.topic === "" ? null : chosenConversationTopic(await readConversationTopics(db), input.topic);
   const clientMessageKey = input.clientMessageKey?.trim() || null;
   if (clientMessageKey) {
     const existing = await db
@@ -698,6 +717,7 @@ export async function createStoreThread(
       subjectType: "store",
       customerId,
       subject: subject.value,
+      topic,
       status: "open",
       createdAt: now,
       updatedAt: now,
@@ -859,6 +879,7 @@ export async function getBuyerThread(
     id: thread.id,
     subjectType: thread.subjectType,
     subject: thread.subject,
+    topic: thread.topic,
     orderId: thread.orderId,
     orderNumber: thread.orderId ? numbers.get(thread.orderId) ?? null : null,
     status: thread.status,
@@ -924,6 +945,7 @@ export async function listBuyerThreads(
       id: row.id,
       subjectType: row.subjectType,
       subject: row.subject,
+      topic: row.topic,
       orderId: row.orderId,
       orderNumber: row.orderId ? numbers.get(row.orderId) ?? null : null,
       status: row.status,
@@ -941,18 +963,14 @@ export async function listBuyerThreads(
  * every order-scoped thread of orders the account owns, once a line exists.
  */
 async function buyerThreadsCondition(db: Database, customerId: string): Promise<SQL> {
-  const owned = db.select({ id: orders.id }).from(orders)
-    .where(and(eq(orders.accountOwnerCustomerId, customerId), isNull(orders.deletedAt)));
-  const orderScoped = and(ne(conversations.subjectType, "store"), inArray(conversations.orderId, owned));
+  // `buyer_account_id` (kept by triggers, 0225) is the store thread's customer
+  // or the live order's owner, so this walks the buyer's threads through
+  // `conversations_buyer_account_idx`, never their orders.
   const verified = await isVerifiedCustomerAccount(db, customerId);
   return and(
+    eq(conversations.buyerAccountId, customerId),
     isNotNull(conversations.lastMessageAt),
-    verified
-      ? or(
-        and(eq(conversations.customerId, customerId), eq(conversations.subjectType, "store"), isNull(conversations.channel)),
-        orderScoped,
-      )
-      : orderScoped,
+    verified ? undefined : ne(conversations.subjectType, "store"),
   )!;
 }
 
@@ -975,6 +993,50 @@ export async function countBuyerUnread(db: Database, customerId: string): Promis
     ))
     .all();
   return Number(row?.count ?? 0);
+}
+
+/**
+ * The account summary's conversation counts in one read of the buyer's
+ * threads: unread public store lines (the Inbox badge) and the threads that
+ * are not closed. Both cost the buyer's threads, never their orders.
+ */
+export async function readBuyerInboxCounts(db: Database, customerId: string): Promise<{ unread: number; open: number }> {
+  const threads = await buyerThreadsCondition(db, customerId);
+  const [unread, open] = await db.batch([
+    db.select({ count: sql<number>`count(*)` })
+      .from(conversationMessages)
+      .innerJoin(conversations, eq(conversations.id, conversationMessages.conversationId))
+      .where(and(
+        threads,
+        eq(conversationMessages.visibility, "public"),
+        sql`${conversationMessages.seq} > ${conversations.customerReadSeq}`,
+        inArray(conversationMessages.authorType, ["staff", "system"]),
+      )),
+    db.select({ count: sql<number>`count(*)` }).from(conversations).where(and(threads, ne(conversations.status, "closed"))),
+  ] as unknown as BatchStatements) as unknown as [Array<{ count: number }>, Array<{ count: number }>];
+  return { unread: Number(unread[0]?.count ?? 0), open: Number(open[0]?.count ?? 0) };
+}
+
+/**
+ * The buyer closes their own conversation (`close`, by the buyer): it leaves
+ * the account's open count and the staff inbox's open view, and their next
+ * message reopens it. Closing a closed thread changes nothing.
+ */
+export async function closeBuyerThread(db: Database, thread: ThreadRow): Promise<ThreadRow> {
+  const move = conversationStatusMove("close");
+  const now = nowSeconds();
+  const rows = await db.update(conversations).set({
+    status: move.to,
+    closedAt: now,
+    version: sql`${conversations.version} + 1`,
+    updatedAt: now,
+  }).where(and(eq(conversations.id, thread.id), inArray(conversations.status, [...move.from])))
+    .returning();
+  if (rows[0]) return rows[0];
+  const current = await readThread(db, thread.id);
+  if (!current) throw new NotFoundError("Conversation not found");
+  if (current.status === "closed") return current;
+  throw new StateConflictError(CONVERSATION_MACHINE, current.status, "close");
 }
 
 /**
@@ -1053,6 +1115,7 @@ async function staffSummaries(db: Database, rows: Array<{
     subjectType: thread.subjectType,
     subjectId: thread.subjectId,
     subject: thread.subject,
+    topic: thread.topic,
     status: thread.status,
     orderId: thread.orderId,
     orderNumber: thread.orderId ? orderNumber ?? null : null,
@@ -1313,20 +1376,35 @@ export async function updateStaffThread(
   input: { version: number; status?: ConversationStatus; assigneeUserId?: string | null },
 ): Promise<StaffConversationThread> {
   const now = nowSeconds();
+  // A status is written only as the staff move to it, from the move's sources.
+  const move = input.status ? conversationStatusMove(staffStatusMove(input.status)) : null;
+  const assigning = input.assigneeUserId !== undefined;
   const rows = await db.update(conversations).set({
-    ...(input.status ? { status: input.status, closedAt: input.status === "closed" ? now : null } : {}),
-    ...(input.assigneeUserId !== undefined ? { assigneeUserId: input.assigneeUserId } : {}),
+    ...(move ? {
+      status: sql`CASE WHEN ${inArray(conversations.status, [...move.from])} THEN ${move.to} ELSE ${conversations.status} END`,
+      closedAt: move.to === "closed"
+        ? sql`CASE WHEN ${conversations.status} = 'closed' THEN ${conversations.closedAt} ELSE ${now} END`
+        : null,
+    } : {}),
+    ...(assigning ? { assigneeUserId: input.assigneeUserId } : {}),
     version: sql`${conversations.version} + 1`,
     updatedAt: now,
   }).where(and(
     eq(conversations.id, conversationId),
     eq(conversations.version, input.version),
+    // Without an assignment the write is the move alone: a thread already in its target is not touched.
+    move && !assigning ? inArray(conversations.status, [...move.from]) : undefined,
     input.assigneeUserId ? staffPermissionSql(sql`${input.assigneeUserId}`, "conversations.reply") : undefined,
   )).returning({ id: conversations.id });
   if (rows.length === 0) {
     const exists = await readThread(db, conversationId);
     if (!exists) throw new NotFoundError("Conversation not found");
-    if (input.assigneeUserId && exists.version === input.version) throw new ValidationError("Choose an active teammate who can reply to conversations.");
+    if (exists.version !== input.version) throw new ConflictError("Someone else changed this conversation. Refresh and try again.");
+    if (move && exists.status === move.to) return getStaffThread(db, conversationId);
+    if (move && !move.from.includes(exists.status)) {
+      throw new StateConflictError(CONVERSATION_MACHINE, exists.status, staffStatusMove(input.status!));
+    }
+    if (input.assigneeUserId) throw new ValidationError("Choose an active teammate who can reply to conversations.");
     throw new ConflictError("Someone else changed this conversation. Refresh and try again.");
   }
   return getStaffThread(db, conversationId);

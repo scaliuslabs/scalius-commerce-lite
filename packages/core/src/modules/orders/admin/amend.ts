@@ -33,7 +33,7 @@ import {
     type ReservationEntry,
 } from "../../inventory";
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
-import { customerAddressColumns, guestRecordForContact, type ResolvedAddress } from "../../customers";
+import { customerAddressColumns, guestRecordForContact, insertCustomer, type ResolvedAddress } from "../../customers";
 import { orderShippingAddressColumns, resolveOrderAddress } from "../shipping-address";
 import {
     orderBillingAddressColumns,
@@ -518,7 +518,7 @@ export async function confirmManualOrderAmendment(
         ...releasePlan.statements,
     ];
     if (newCustomerId) {
-        statements.push(db.insert(customers).values({
+        statements.push(insertCustomer(db, {
             id: newCustomerId,
             name: data.customerName,
             email: data.customerEmail,

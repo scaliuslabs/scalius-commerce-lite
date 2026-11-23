@@ -46,6 +46,23 @@ export const conversations = sqliteTable("conversations", {
      * buyer never reads on the storefront: replies go out on the channel.
      */
     channel: text("channel"),
+    /**
+     * The account that reads this thread on the storefront (migration 0225),
+     * kept by triggers: a storefront store thread's customer; an order-scoped
+     * thread's order owner (`orders.account_owner_customer_id`) while the
+     * order is live, null otherwise; null on a chat-channel thread. The
+     * buyer's list, unread and open counts read it through
+     * `conversations_buyer_account_idx`, so they cost the buyer's threads,
+     * never their orders. No foreign key (a column added later cannot take
+     * one with a delete action); application code never writes it.
+     */
+    buyerAccountId: text("buyer_account_id"),
+    /**
+     * The merchant's topic the buyer chose (`ConversationTopic.key`, its
+     * grammar checked by the writer: a CHECK here would rebuild the table),
+     * or null.
+     */
+    topic: text("topic"),
 }, (table) => [
     uniqueIndex("conversations_order_thread_unique")
         .on(table.orderId)
@@ -58,6 +75,9 @@ export const conversations = sqliteTable("conversations", {
     index("conversations_customer_idx")
         .on(table.customerId, sql`${table.lastMessageAt} DESC`)
         .where(sql`${table.customerId} IS NOT NULL`),
+    index("conversations_buyer_account_idx")
+        .on(table.buyerAccountId, sql`${table.lastMessageAt} DESC`, table.id)
+        .where(sql`${table.buyerAccountId} IS NOT NULL`),
     index("conversations_order_idx")
         .on(table.orderId)
         .where(sql`${table.orderId} IS NOT NULL`),

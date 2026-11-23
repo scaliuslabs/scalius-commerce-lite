@@ -7,6 +7,8 @@
  * KV keys or queue payloads.
  */
 
+import { defineMachine } from "./machine";
+
 export const CONVERSATION_SUBJECT_TYPES = ["order", "store", "warranty_claim", "review"] as const;
 export type ConversationSubjectType = (typeof CONVERSATION_SUBJECT_TYPES)[number];
 
@@ -148,33 +150,111 @@ export function normalizeConversationSubject(input: unknown): ConversationTextRe
   return normalizeText(input, CONVERSATION_LIMITS.subjectLength, { multiline: false });
 }
 
-export type ConversationStatusEvent =
-  /** A buyer posted a public message: staff need to act, reopening a closed thread. */
-  | { type: "buyer_message" }
-  /** Staff posted: a public reply waits on the buyer; an internal note changes nothing. */
-  | { type: "staff_message"; visibility: ConversationMessageVisibility }
-  /** A system event line never changes who the thread waits on. */
-  | { type: "system_event" }
-  | { type: "close" }
-  | { type: "reopen" };
+/** Who makes a status move: the buyer (signed in or holding the order's receipt) or staff (and apps on their behalf). */
+export type ConversationStatusActor = "buyer" | "staff";
 
-/** The one status rule for posting and staff actions (§4.1). */
-export function nextConversationStatus(
-  current: ConversationStatus,
-  event: ConversationStatusEvent,
-): ConversationStatus {
-  switch (event.type) {
-    case "buyer_message":
-      return "open";
-    case "staff_message":
-      return event.visibility === "public" ? "pending" : current;
-    case "system_event":
-      return current;
-    case "close":
-      return "closed";
-    case "reopen":
-      return current === "closed" ? "open" : current;
+/**
+ * The one status machine of a conversation. A buyer's message (re)opens it
+ * for the store, a public staff reply leaves it waiting on the buyer; staff
+ * mark it waiting or needing the store, and staff or the buyer close it. No
+ * state is final: a new message reopens a closed conversation. Internal
+ * notes and event lines move nothing. Every writer names a move and its
+ * update names the move's source states (`conversationStatusMove`).
+ */
+export const CONVERSATION_MACHINE = defineMachine({
+  name: "conversation",
+  states: CONVERSATION_STATUSES,
+  initial: ["open"],
+  final: [],
+  moves: {
+    // A move's sources never include its target: a message to a thread already in it moves nothing.
+    buyer_message: { from: ["pending", "closed"], to: "open", by: ["buyer"] },
+    staff_reply: { from: ["open", "closed"], to: "pending", by: ["staff"] },
+    await_buyer: { from: ["open", "closed"], to: "pending", by: ["staff"] },
+    reopen: { from: ["pending", "closed"], to: "open", by: ["staff"] },
+    close: { from: ["open", "pending"], to: "closed", by: ["staff", "buyer"] },
+  },
+});
+
+export type ConversationStatusMove = keyof typeof CONVERSATION_MACHINE.moves & string;
+
+/** The moves staff choose by their target in the inbox (a reply moves by `staff_reply`). */
+const STAFF_STATUS_MOVES: Readonly<Record<ConversationStatus, ConversationStatusMove>> = {
+  open: "reopen",
+  pending: "await_buyer",
+  closed: "close",
+};
+
+/** The move staff make to put a conversation in `status`. */
+export function staffStatusMove(status: ConversationStatus): ConversationStatusMove {
+  return STAFF_STATUS_MOVES[status];
+}
+
+/** A move's target and the states it may leave from: the write names them (`status IN from`). */
+export function conversationStatusMove(move: ConversationStatusMove): { to: ConversationStatus; from: readonly ConversationStatus[] } {
+  const declared = CONVERSATION_MACHINE.moves[move];
+  return { to: declared.to, from: declared.from };
+}
+
+// ── Topics ────────────────────────────────────────────────────────────────
+
+/**
+ * A topic the merchant lists for buyer conversations ("Payment", "Delivery"):
+ * a stable key the conversation keeps, a label in the store's default
+ * language, and its labels in the store's other languages (by two-letter
+ * code), edited with the list. A reader in a language with no label of its
+ * own reads `label`.
+ */
+export interface ConversationTopic {
+  key: string;
+  label: string;
+  labels?: Record<string, string>;
+}
+
+export const CONVERSATION_TOPIC_LIMITS = { topics: 12, keyLength: 40, labelLength: 60, languages: 20 } as const;
+
+/** A topic's label in `locale` (a two-letter language), else its default label. */
+export function conversationTopicLabel(topic: ConversationTopic, locale: string | null | undefined): string {
+  return (locale && topic.labels?.[locale]) || topic.label;
+}
+
+const TOPIC_KEY = /^[a-z0-9](?:[a-z0-9_-]{0,39})$/;
+
+export function isConversationTopicKey(value: unknown): value is string {
+  return typeof value === "string" && TOPIC_KEY.test(value);
+}
+
+export type ConversationTopicsResult =
+  | { ok: true; value: ConversationTopic[] }
+  | { ok: false; reason: "too_many" | "invalid_key" | "duplicate_key" | "invalid_label"; index?: number };
+
+/** The merchant's topic list: at most 12, each a unique key (a-z, 0-9, `_`, `-`) and a one-line label. */
+export function normalizeConversationTopics(input: unknown): ConversationTopicsResult {
+  if (!Array.isArray(input)) return { ok: true, value: [] };
+  if (input.length > CONVERSATION_TOPIC_LIMITS.topics) return { ok: false, reason: "too_many" };
+  const seen = new Set<string>();
+  const topics: ConversationTopic[] = [];
+  for (const [index, raw] of input.entries()) {
+    const record = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const key = typeof record.key === "string" ? record.key.trim() : "";
+    if (!isConversationTopicKey(key)) return { ok: false, reason: "invalid_key", index };
+    if (seen.has(key)) return { ok: false, reason: "duplicate_key", index };
+    const label = normalizeText(record.label, CONVERSATION_TOPIC_LIMITS.labelLength, { multiline: false });
+    if (!label.ok) return { ok: false, reason: "invalid_label", index };
+    const labels: Record<string, string> = {};
+    const given = record.labels && typeof record.labels === "object" && !Array.isArray(record.labels) ? Object.entries(record.labels as Record<string, unknown>) : [];
+    if (given.length > CONVERSATION_TOPIC_LIMITS.languages) return { ok: false, reason: "invalid_label", index };
+    for (const [locale, value] of given) {
+      if (!/^[a-z]{2}$/.test(locale)) return { ok: false, reason: "invalid_label", index };
+      if (typeof value === "string" && !value.trim()) continue;
+      const translated = normalizeText(value, CONVERSATION_TOPIC_LIMITS.labelLength, { multiline: false });
+      if (!translated.ok) return { ok: false, reason: "invalid_label", index };
+      labels[locale] = translated.value;
+    }
+    seen.add(key);
+    topics.push(Object.keys(labels).length ? { key, label: label.value, labels } : { key, label: label.value });
   }
+  return { ok: true, value: topics };
 }
 
 /** Buyer projections show public lines only; staff notes never leave the dashboard. */

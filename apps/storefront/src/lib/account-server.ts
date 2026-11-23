@@ -75,9 +75,20 @@ function failed(answer: ApiAnswer | null): { ok: false; reason: "signed_out" | "
   return { ok: false, reason: answer?.status === 401 || answer?.status === 403 ? "signed_out" : "unavailable" };
 }
 
+/** One account-summary call per page request: the tabs and the order count read the same answer. */
+const summaryAnswers = new WeakMap<Request, Promise<ApiAnswer | null>>();
+function accountSummaryAnswer(request: Request): Promise<ApiAnswer | null> {
+  let answer = summaryAnswers.get(request);
+  if (!answer) {
+    answer = callAccountApi(request, "/api/v1/customer-auth/account-summary");
+    summaryAnswers.set(request, answer);
+  }
+  return answer;
+}
+
 /** The account tab counts; null when signed out or unreachable (the tabs then show only what always shows). */
 export async function readAccountSummaryForRequest(request: Request): Promise<(AccountSummary & { buyerUi?: BuyerUiBlock[] }) | null> {
-  const answer = await callAccountApi(request, "/api/v1/customer-auth/account-summary");
+  const answer = await accountSummaryAnswer(request);
   const summary = answer?.status === 200 ? readAccountSummary(answer.data) : null;
   if (!summary) return null;
   const buyerUi = (answer?.data as { buyerUi?: BuyerUiBlock[] } | null)?.buyerUi;
@@ -95,11 +106,15 @@ export interface AccountOrdersPage {
 /** One page of the account's orders, newest first (`cursor` is the API's opaque cursor). */
 export async function readAccountOrders(request: Request, cursor: string | null): Promise<AccountRead<AccountOrdersPage>> {
   const query = cursor ? `?${new URLSearchParams({ cursor })}` : "";
-  const answer = await callAccountApi(request, `/api/v1/customer-auth/orders${query}`);
+  const [answer, summary] = await Promise.all([
+    callAccountApi(request, `/api/v1/customer-auth/orders${query}`),
+    accountSummaryAnswer(request),
+  ]);
+  // The account's order count is the summary's (placed orders, any page); a page alone cannot count them.
+  const counted = summary?.status === 200 ? (summary.data as { orders?: unknown } | null)?.orders : undefined;
   const data = answer?.status === 200 ? answer.data as Partial<{
     orders: CustomerOrder[];
     customer: CustomerInfo;
-    summary: { totalOrders?: number };
     pagination: CustomerOrdersPagination;
     phoneVerification: { phone?: unknown } | null;
   }> | null : null;
@@ -110,7 +125,7 @@ export async function readAccountOrders(request: Request, cursor: string | null)
     data: {
       customer: data.customer ?? null,
       orders: data.orders,
-      totalOrders: data.summary?.totalOrders ?? data.orders.length,
+      totalOrders: typeof counted === "number" ? counted : data.orders.length,
       pagination: data.pagination ?? null,
       phoneVerification: typeof phone === "string" && phone.trim() ? { phone: phone.trim() } : null,
     },

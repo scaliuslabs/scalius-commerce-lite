@@ -5,8 +5,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { PaymentMethod, PaymentStatus, InventoryPool } from "@scalius/database/schema";
 import { discountCodesSchema } from "../../schemas/storefront-discounts";
 import { isOnlinePaymentMethod, isPaymentMethodId, type PaymentProviders } from "@scalius/core/modules/payments";
-import { assertPhoneCountryAllowed, validateAndFormatPhone } from "@scalius/shared/customer-utils";
-import { BD_MOBILE_REQUIRED_MESSAGE } from "@scalius/shared/phone-input";
+import { assertPhoneCountryAllowed, parseContactPhone } from "@scalius/shared/customer-utils";
 import { refineDeliveryLine } from "@scalius/core/modules/orders";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { workerCacheHint } from "@scalius/shared/worker-cache-hint";
@@ -352,21 +351,11 @@ const createOrderSchema = z.object({
   // payment are known (core checkout `assertOrderContact`).
   const rawPhone = order.customerPhone?.trim() || null;
   if (!rawPhone) return { ...order, customerPhone: null };
-  if (rawPhone.length < 7) {
-    context.addIssue({ code: "custom", path: ["customerPhone"], message: "Phone number too short" });
-    return z.NEVER;
-  }
-  try {
-    // An order that ships nothing reads it in its billing country.
-    return { ...order, customerPhone: validateAndFormatPhone(rawPhone, undefined, { defaultCountry: order.shippingCountryCode ?? order.billingCountryCode }) };
-  } catch (error: unknown) {
-    context.addIssue({
-      code: "custom",
-      path: ["customerPhone"],
-      message: error instanceof Error && error.message === BD_MOBILE_REQUIRED_MESSAGE ? error.message : "Enter a valid phone number",
-    });
-    return z.NEVER;
-  }
+  // An order that ships nothing reads it in its billing country.
+  const phone = parseContactPhone(rawPhone, { defaultCountry: order.shippingCountryCode ?? order.billingCountryCode });
+  if (phone.ok) return { ...order, customerPhone: phone.value };
+  context.addIssue({ code: "custom", path: ["customerPhone"], message: phone.reason === "too_short" || phone.reason === "bd_mobile_required" ? phone.message : "Enter a valid phone number" });
+  return z.NEVER;
 });
 
 type CreateOrderInput = z.infer<typeof createOrderSchema>;

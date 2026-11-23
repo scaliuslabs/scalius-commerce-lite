@@ -380,6 +380,22 @@ export function signedUpHistory(db: Database, input: { accountId: string; via: V
     }).from(customers).where(eq(customers.id, input.accountId)));
 }
 
+/** The buyer moved their sign-in phone to a number they proved (with a code to the identity they signed in with). */
+export function phoneChangedHistory(db: Database, input: { accountId: string }) {
+    return db.insert(customerHistory).select(db.select({
+        id: historyId(sql`${customers.id}`),
+        customerId: customers.id,
+        ...customerSnapshot(customers),
+        changeType: sql<string>`'updated'`.as("change_type"),
+        orderId: sql<string | null>`NULL`.as("order_id"),
+        relatedCustomerId: sql<string | null>`NULL`.as("related_customer_id"),
+        verifiedContact: sql<string>`'phone'`.as("verified_contact"),
+        actor: sql<string>`'buyer'`.as("actor"),
+        actorId: sql<string | null>`NULL`.as("actor_id"),
+        createdAt: sql<number>`unixepoch()`.as("created_at"),
+    }).from(customers).where(eq(customers.id, input.accountId)));
+}
+
 /** Links verified-contact guest orders for a signed-in account (any device). */
 export async function linkVerifiedContactOrders(db: Database, customerId: string): Promise<void> {
     const account = await db

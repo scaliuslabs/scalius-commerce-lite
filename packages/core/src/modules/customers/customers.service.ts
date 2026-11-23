@@ -18,6 +18,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { fromMinor } from "@scalius/shared/money";
 import { customerKind, guestRecordForContact, normalizeContactEmail } from "./customer-identity";
+import { insertCustomer, isSignInChangedError, SIGN_IN_RECOVERY_DAYS, signInChangedConflict, trashCustomers, writeCustomerWhere, writeSignIn } from "./sign-in-writes";
 import { storedPhone } from "@scalius/shared/customer-auth-policy";
 import { currentMarketingContactSql, segmentWhereSql } from "./customer-segments";
 import {
@@ -496,7 +497,7 @@ export async function createCustomer(
 
     const customerId = "cust_" + nanoid();
     await db.batch([
-        db.insert(customers).values({
+        insertCustomer(db, {
             id: customerId,
             name: data.name,
             email: data.email,
@@ -567,6 +568,17 @@ export async function getCustomerDetail(db: Database, id: string, relatedObjects
         mergedInto,
         kind: customerKind(customer),
         latestOrderName: latest?.name ?? null,
+        // How the account signs in, for the dashboard: a proven contact is locked to ordinary edits.
+        signIn: {
+            phoneProven: Boolean(customer.accountClaimedAt && customer.phoneVerifiedAt),
+            emailProven: Boolean(customer.accountClaimedAt && customer.emailVerifiedAt),
+            recovery: customer.signInRecovery && customer.signInRecoveryAt
+                ? {
+                    method: customer.signInRecovery,
+                    expiresAt: Math.floor(new Date(customer.signInRecoveryAt).getTime() / 1000) + SIGN_IN_RECOVERY_DAYS * 86_400,
+                }
+                : null,
+        },
         totalSpent: spend ? paidSpendAmount(spend) : 0,
         tags,
         /** The address book, the default first. */
@@ -624,14 +636,38 @@ export async function updateCustomer(
     // A save that changes nothing writes nothing: no bumped timestamp, no empty "Updated" entry.
     if (taxUnchanged && (Object.keys(next) as Array<keyof typeof next>).every((key) => (next[key] ?? null) === (existing[key] ?? null))) return;
 
+    // An ordinary edit never touches how a buyer signs in: a sign-in contact (a proven one, or
+    // the live recovery contact of a reset) is refused (only a sign-in reset changes it,
+    // `resetCustomerSignIn`); another contact is a plain edit that stays unproven, so it can
+    // never sign anyone in until the buyer proves it. The write names the version this read:
+    // a proof or reset that lands first refuses it (409 `sign_in_changed`).
+    const phoneMoved = data.phone != null && storedPhone(data.phone) !== existing.phone;
+    const emailMoved = data.email !== undefined && normalizeContactEmail(data.email) !== normalizeContactEmail(existing.email);
+    const recoveryLive = existing.signInRecovery && existing.signInRecoveryAt
+        && new Date(existing.signInRecoveryAt).getTime() + SIGN_IN_RECOVERY_DAYS * 86_400_000 > Date.now()
+        ? existing.signInRecovery
+        : null;
+    const signsIn = (kind: "phone" | "email") => Boolean(existing.accountClaimedAt)
+        && (recoveryLive === kind || Boolean(kind === "phone" ? existing.phoneVerifiedAt : existing.emailVerifiedAt));
+    const signInMoved = phoneMoved && signsIn("phone") ? "phone" : emailMoved && signsIn("email") ? "email" : null;
+    if (signInMoved) {
+        throw new AppError(409, "contact_is_sign_in", `The customer signs in with this ${signInMoved}. Reset their sign-in to change it.`, {
+            field: signInMoved,
+            reason: "contact_is_sign_in",
+            allowed: ["reset_sign_in"],
+        });
+    }
     // Only the fields the caller sent: a field another writer changed since the read keeps its value.
-    const changes = {
+    const fields = {
         ...(data.name != null ? { name: data.name } : {}),
-        ...(data.email !== undefined ? { email: data.email } : {}),
-        ...(data.phone != null ? { phone: storedPhone(data.phone) } : {}),
         ...(data.taxExempt !== undefined || data.taxExemptionId !== undefined ? tax : {}),
         // Naming a checkout guest record in the dashboard makes it the merchant's customer.
         ...(!existing.accountClaimedAt && next.name !== existing.name ? { origin: "merchant" as const } : {}),
+    };
+    // A contact is written only when it changes (emails as stored: trimmed, lower case): how the buyer signs in is versioned.
+    const contact = {
+        ...(emailMoved ? { email: normalizeContactEmail(data.email) } : {}),
+        ...(phoneMoved ? { phone: storedPhone(data.phone!) } : {}),
     };
     const live = isNull(customers.erasedAt);
     // The exemption the caller read, checked in the write itself.
@@ -647,10 +683,13 @@ export async function updateCustomer(
             // An erasure committed since the read refuses the edit.
             customerNotErasedGuard(db, id),
             ...(expectsTax ? [buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${customers} WHERE ${customers.id} = ${id} AND ${taxAsRead})`, "CUSTOMER_TAX_MOVED")] : []),
-            db.update(customers).set({ ...changes, updatedAt: sql`unixepoch()` }).where(and(eq(customers.id, id), live)),
+            ...(phoneMoved || emailMoved
+                ? writeSignIn(db, existing, { ...fields, ...contact }, live)
+                : [writeCustomerWhere(db, and(eq(customers.id, id), live)!, { ...fields, updatedAt: sql`unixepoch()` })]),
             historyFromLiveRow(db, id, "updated", actorId, live),
         ]);
     } catch (error) {
+        if (isSignInChangedError(error)) throw signInChangedConflict();
         if (isBatchGuardError(error, "CUSTOMER_TAX_MOVED")) {
             throw new AppError(409, "tax_exemption_changed", "The customer's tax exemption changed since it was read. Read the customer again and repeat the change.");
         }
@@ -726,7 +765,8 @@ export async function deleteCustomer(db: Database, id: string, actorId: string |
 
     const live = isNull(customers.erasedAt);
     await safeBatch(db, [
-        db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(and(eq(customers.id, id), live)),
+        // Through the sign-in writer: a sign-in decided before the delete commits no session a restore would revive.
+        trashCustomers(db, and(eq(customers.id, id), live)!),
         db
             .update(customerSessions)
             .set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
@@ -843,7 +883,7 @@ export async function bulkDeleteCustomers(db: Database, ids: string[], permanent
         ] as Parameters<Database["batch"]>[0]);
     } else {
         await db.batch([
-            db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(inSet(customers.id)),
+            trashCustomers(db, inSet(customers.id)),
             db
                 .update(customerSessions)
                 .set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })

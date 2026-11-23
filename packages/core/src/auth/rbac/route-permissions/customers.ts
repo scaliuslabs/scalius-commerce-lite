@@ -39,6 +39,10 @@ export const CUSTOMER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/customers/*/erase": {
     POST: { permission: PERMISSIONS.CUSTOMERS_DELETE },
   },
+  // A sign-in reset changes how a customer signs in: its own sensitive permission.
+  "/api/v1/admin/customers/*/reset-sign-in": {
+    POST: { permission: PERMISSIONS.CUSTOMERS_RESET_SIGN_IN },
+  },
   // Customers & marketing: tags, saved segments, export, consent.
   "/api/v1/admin/customers/tags": {
     GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },

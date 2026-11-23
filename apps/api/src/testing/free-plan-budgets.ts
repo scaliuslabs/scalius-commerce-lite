@@ -62,6 +62,33 @@
  * its events dispatched and its messages sent before the measured write (a refund with 3 webhooks
  * on Paid drained them: 116 -> 89 calls).
  *
+ * Measured cases draw from a fixed point of the seeded sequence (2026-11-23,
+ * `checkpointState`), never from wherever the setup left it: a new permission's seed rows
+ * (each draws an id before the checkpoint) had shifted every later id, and on Free a bounded
+ * webhook drain takes due deliveries by id, so another event's payload was built in the measured
+ * run. Re-recorded on the fixed point, four Free cases moved by one or two statements and their
+ * rows: order-refund-subscribers-1 (64 -> 65 statements, 56 -> 54 rows read) and -3 (62),
+ * order-full-refund-cancel-subscribers-1 (81) and -3 (78, 108 rows read). Traced per run, the
+ * statement counts differ by 1 to 2 with which delivery's payload the drain reads first (the
+ * order's: orders, order_items; or the refund's: order_refunds, order_refund_lines,
+ * refund_attempts), and the rows read by 1 to 3 with it; at three other fixed points the same
+ * cases land within those ranges. order-3-line-commit-subscribers-8 reads 98 or 101 rows by the
+ * run (both within one case); its worst run is 101. Paid is unchanged.
+ *
+ * Recovery contacts (2026-11-23): a new buyer's email code also asks, in the round trip that
+ * already asks whether the email is a closed account's, whether a sign-in reset named it
+ * (`customer-otp-verify` 19 -> 20 statements, the same 8 calls).
+ *
+ * Account summary (2026-11-23): a signed-in buyer's numbers read one row per currency
+ * (`account_order_totals`) and their threads, so 300 orders cost what one does: 12 calls, 13
+ * statements, 10 rows read on both plans (`account-summary`, `account-summary-300`). A signed-in
+ * buyer's order writes fire the account totals triggers, which the guest cases never do:
+ * `checkout-3-commit-signed-in` (the insert refreshes one totals row) and `order-refund-signed-in`
+ * (the refund's paid amount refreshes it again). `order-refund-signed-in-300` is that refund for an
+ * account with 300 more orders in the currency: the same calls, statements and rows written. The
+ * refresh inside the trigger reads one index entry and one row per order the account has in the
+ * currency; this meter counts the rows statements return, not a trigger's reads, so it shows none.
+ *
  * order-lifecycle (2026-10-14, queue retirement): one 3-line order costs 34 D1
  * calls, the commit and its after-response work together; with the queue it
  * was 40 (13 for the commit, the rest in the queue consumer).
@@ -320,7 +347,12 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     // Bangladesh pack today).
     "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 3, rowsRead: 8, fullScans: 17 },
     "customer-otp-request": { d1Calls: 16, d1Statements: 20, externalFetches: 0, rowsWritten: 8, rowsRead: 20, fullScans: 2 },
-    "customer-otp-verify": { d1Calls: 8, d1Statements: 19, externalFetches: 0, rowsWritten: 12, rowsRead: 4, fullScans: 1 },
+    "customer-otp-verify": { d1Calls: 8, d1Statements: 20, externalFetches: 0, rowsWritten: 12, rowsRead: 4, fullScans: 1 },
+    "account-summary": { d1Calls: 12, d1Statements: 13, externalFetches: 0, rowsWritten: 0, rowsRead: 10, fullScans: 0 },
+    "account-summary-300": { d1Calls: 12, d1Statements: 13, externalFetches: 0, rowsWritten: 0, rowsRead: 10, fullScans: 0 },
+    "checkout-3-commit-signed-in": { d1Calls: 14, d1Statements: 70, externalFetches: 0, rowsWritten: 46, rowsRead: 60, fullScans: 16 },
+    "order-refund-signed-in": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 20, rowsRead: 26, fullScans: 3 },
+    "order-refund-signed-in-300": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 20, rowsRead: 26, fullScans: 3 },
     "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 0, rowsRead: 41, fullScans: 11 },
     "page-home-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
     "page-product-miss": { d1Calls: 19, d1Statements: 36, externalFetches: 0, rowsWritten: 0, rowsRead: 49, fullScans: 10 },
@@ -361,18 +393,18 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "event-drain-lapsed-backlog-5-apps-3-webhooks": { d1Calls: 30, d1Statements: 49, externalFetches: 3, rowsWritten: 39, rowsRead: 52, fullScans: 0 },
     "order-3-line-commit-subscribers-0": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 54, rowsRead: 57, fullScans: 16 },
     "order-3-line-commit-subscribers-3": { d1Calls: 27, d1Statements: 86, externalFetches: 2, rowsWritten: 72, rowsRead: 81, fullScans: 16 },
-    "order-3-line-commit-subscribers-8": { d1Calls: 27, d1Statements: 86, externalFetches: 2, rowsWritten: 82, rowsRead: 98, fullScans: 16 },
+    "order-3-line-commit-subscribers-8": { d1Calls: 27, d1Statements: 86, externalFetches: 2, rowsWritten: 82, rowsRead: 101, fullScans: 16 },
     "order-status-change-subscribers-1": { d1Calls: 24, d1Statements: 44, externalFetches: 1, rowsWritten: 15, rowsRead: 41, fullScans: 1 },
-    "order-refund-subscribers-1": { d1Calls: 36, d1Statements: 64, externalFetches: 2, rowsWritten: 49, rowsRead: 56, fullScans: 3 },
+    "order-refund-subscribers-1": { d1Calls: 36, d1Statements: 65, externalFetches: 2, rowsWritten: 49, rowsRead: 54, fullScans: 3 },
     "order-status-change-subscribers-3": { d1Calls: 27, d1Statements: 49, externalFetches: 2, rowsWritten: 20, rowsRead: 48, fullScans: 1 },
-    "order-refund-subscribers-3": { d1Calls: 35, d1Statements: 62, externalFetches: 2, rowsWritten: 61, rowsRead: 76, fullScans: 3 },
+    "order-refund-subscribers-3": { d1Calls: 35, d1Statements: 62, externalFetches: 2, rowsWritten: 61, rowsRead: 78, fullScans: 3 },
     "order-3-line-commit-app-subscriber": { d1Calls: 24, d1Statements: 83, externalFetches: 0, rowsWritten: 61, rowsRead: 66, fullScans: 16 },
     "order-cancel-stock-subscribers-0": { d1Calls: 23, d1Statements: 56, externalFetches: 0, rowsWritten: 23, rowsRead: 55, fullScans: 7 },
     "order-full-refund-cancel-subscribers-0": { d1Calls: 25, d1Statements: 60, externalFetches: 0, rowsWritten: 30, rowsRead: 49, fullScans: 5 },
     "order-cancel-stock-subscribers-1": { d1Calls: 35, d1Statements: 75, externalFetches: 2, rowsWritten: 37, rowsRead: 75, fullScans: 7 },
-    "order-full-refund-cancel-subscribers-1": { d1Calls: 37, d1Statements: 80, externalFetches: 2, rowsWritten: 64, rowsRead: 82, fullScans: 5 },
+    "order-full-refund-cancel-subscribers-1": { d1Calls: 37, d1Statements: 81, externalFetches: 2, rowsWritten: 64, rowsRead: 82, fullScans: 5 },
     "order-cancel-stock-subscribers-3": { d1Calls: 34, d1Statements: 73, externalFetches: 2, rowsWritten: 41, rowsRead: 79, fullScans: 7 },
-    "order-full-refund-cancel-subscribers-3": { d1Calls: 36, d1Statements: 78, externalFetches: 2, rowsWritten: 78, rowsRead: 106, fullScans: 5 },
+    "order-full-refund-cancel-subscribers-3": { d1Calls: 36, d1Statements: 78, externalFetches: 2, rowsWritten: 78, rowsRead: 108, fullScans: 5 },
   },
   paid: {
     // Cart check, 20 lines, one bundled app drawing under each line (2026-11-23): one run of the app for the
@@ -389,7 +421,12 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     // Bangladesh pack today).
     "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 3, rowsRead: 8, fullScans: 17 },
     "customer-otp-request": { d1Calls: 16, d1Statements: 20, externalFetches: 0, rowsWritten: 8, rowsRead: 20, fullScans: 2 },
-    "customer-otp-verify": { d1Calls: 8, d1Statements: 19, externalFetches: 0, rowsWritten: 12, rowsRead: 4, fullScans: 1 },
+    "customer-otp-verify": { d1Calls: 8, d1Statements: 20, externalFetches: 0, rowsWritten: 12, rowsRead: 4, fullScans: 1 },
+    "account-summary": { d1Calls: 12, d1Statements: 13, externalFetches: 0, rowsWritten: 0, rowsRead: 10, fullScans: 0 },
+    "account-summary-300": { d1Calls: 12, d1Statements: 13, externalFetches: 0, rowsWritten: 0, rowsRead: 10, fullScans: 0 },
+    "checkout-3-commit-signed-in": { d1Calls: 14, d1Statements: 70, externalFetches: 0, rowsWritten: 46, rowsRead: 60, fullScans: 16 },
+    "order-refund-signed-in": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 20, rowsRead: 26, fullScans: 3 },
+    "order-refund-signed-in-300": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 20, rowsRead: 26, fullScans: 3 },
     "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 0, rowsRead: 41, fullScans: 11 },
     "page-home-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
     "page-product-miss": { d1Calls: 19, d1Statements: 36, externalFetches: 0, rowsWritten: 0, rowsRead: 49, fullScans: 10 },

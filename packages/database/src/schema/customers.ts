@@ -20,10 +20,32 @@ export const customers = sqliteTable("customers", {
      * record is keyed by email instead, and it is read back as null.
      */
     phone: contactPhone("phone").notNull(),
+    /**
+     * The buyer's WhatsApp number (E.164) when it is not their phone (null:
+     * the phone), as an order's `customer_whatsapp` (migration 0225). A
+     * contact, never a sign-in identity; the buyer edits it on their profile.
+     */
+    whatsapp: text("whatsapp"),
     // Addresses live in the address book (`customer_addresses`, migration 0113).
     accountClaimedAt: integer("account_claimed_at", { mode: "timestamp" }),
     phoneVerifiedAt: integer("phone_verified_at", { mode: "timestamp" }),
     emailVerifiedAt: integer("email_verified_at", { mode: "timestamp" }),
+    /**
+     * A sign-in reset (0225, `resetCustomerSignIn`): staff named one recovery
+     * contact (`phone` or `email`) after clearing every proof of the account.
+     * For `SIGN_IN_RECOVERY_DAYS` from `sign_in_recovery_at`, and only while
+     * the account proves nothing, a sign-in code to that contact reaches this
+     * account (`resolveProofOwner`), proves it and clears the mark.
+     */
+    signInRecovery: text("sign_in_recovery", { enum: ["phone", "email"] }),
+    signInRecoveryAt: integer("sign_in_recovery_at", { mode: "timestamp" }),
+    /**
+     * Advanced by every write of how the customer signs in (`phone`, `email`,
+     * their proofs, the recovery mark, linked identities: 0225). Each such
+     * write names the version it read and fails when another landed since
+     * (`sign-in-writes.ts` in core is their one writer).
+     */
+    signInVersion: integer("sign_in_version").notNull().default(0),
     lastAuthenticatedAt: integer("last_authenticated_at", { mode: "timestamp" }),
     totalOrders: integer("total_orders").notNull().default(0),
     lastOrderAt: integer("last_order_at", { mode: "timestamp" }),
@@ -69,6 +91,11 @@ export const customers = sqliteTable("customers", {
 }, (table) => [
     index("customers_email_idx").on(table.email),
     index("customers_merged_into_idx").on(table.mergedIntoCustomerId),
+    // A recovery contact a sign-in reset named: a sign-in's fallback owner lookup (0225).
+    index("customers_recovery_phone_idx").on(table.phone)
+        .where(sql`${table.signInRecovery} = 'phone' AND ${table.deletedAt} IS NULL`),
+    index("customers_recovery_email_idx").on(sql`lower(${table.email})`)
+        .where(sql`${table.signInRecovery} = 'email' AND ${table.deletedAt} IS NULL`),
     index("customers_phone_idx").on(table.phone),
     // Store import dedupe matches emails as typed: trimmed, any case.
     index("customers_email_norm_idx").on(sql`lower(trim(${table.email}))`),
@@ -200,19 +227,22 @@ export const customerHistory = sqliteTable("customer_history", {
      * order_linked: `orderId` was filed to this account at checkout by a verified contact.
      * order_moved_in / order_moved_out: `orderId` moved between this record and `relatedCustomerId`.
      * erased: staff erased the customer's personal data (every earlier entry is scrubbed too).
+     * sign_in_reset: staff (or an approved agent) reset how the account signs in; `verifiedContact`
+     * is the kind of recovery contact named (0225; the column has no CHECK).
      */
     changeType: text("change_type", {
-        enum: ["created", "updated", "deleted", "restored", "signed_up", "order_linked", "order_moved_in", "order_moved_out", "erased"],
+        enum: ["created", "updated", "deleted", "restored", "signed_up", "order_linked", "order_moved_in", "order_moved_out", "erased", "sign_in_reset"],
     }).notNull(),
     orderId: text("order_id"),
     relatedCustomerId: text("related_customer_id"),
-    /** The proven contact behind signed_up / order_linked / order_moved_*. */
+    /** The proven contact behind signed_up / order_linked / order_moved_*; a sign_in_reset's recovery contact kind. */
     verifiedContact: text("verified_contact", { enum: ["email", "phone"] }),
     /**
      * Who made the change: a staff member (actor_id is their user id), an app
-     * (actor_id is `app:<plugin id>`), the buyer, or the system.
+     * (actor_id is `app:<plugin id>`), an agent the merchant approved
+     * (actor_id is `agent:<grant id>:<owner user id>`), the buyer, or the system.
      */
-    actor: text("actor", { enum: ["staff", "app", "buyer", "system"] }),
+    actor: text("actor", { enum: ["staff", "app", "agent", "buyer", "system"] }),
     actorId: text("actor_id"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()

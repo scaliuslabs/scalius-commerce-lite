@@ -130,10 +130,17 @@ function agentVia(data: Record<string, unknown> | null | undefined): { connectio
   };
 }
 
-/** Who made a customer record change; the buyer's own changes are worded by the customer page. */
-export function customerChangeAuthor(author: { kind: string; name: string | null; appId?: string | null }): Actor | "buyer" {
+/**
+ * Who made a customer record change; the buyer's own changes are worded by the
+ * customer page. An agent's change (a sign-in reset) ran as its connection's
+ * owner, and only after the owner approved it: a security write always waits.
+ */
+export function customerChangeAuthor(author: { kind: string; name: string | null; appId?: string | null; connection?: string | null; client?: string | null }): Actor | "buyer" {
   if (author.kind === "buyer") return "buyer";
   if (author.kind === "app" && author.appId) return { kind: "app", appId: author.appId };
+  if (author.kind === "agent") {
+    return { kind: "agent", staff: staffActor(author.name) as Extract<Actor, { kind: "staff" | "former-staff" }>, connection: author.connection ?? "", client: author.client ?? null, approved: true };
+  }
   if (author.kind === "staff") return staffActor(author.name);
   return SYSTEM;
 }

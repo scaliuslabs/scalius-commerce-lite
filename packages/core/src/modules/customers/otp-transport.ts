@@ -17,6 +17,12 @@ export interface OtpDelivery {
    * language. Absent at the root; an order's code falls back to the order's.
    */
   presence?: string | null;
+  /**
+   * A phone change's new number, masked to its last three digits (`022`): the
+   * change's code and its notice name it, so its owner can tell what a code
+   * is for. Never the number itself.
+   */
+  maskedPhone?: string;
 }
 
 /** One reference-only OTP delivery for a challenge on one channel. */
@@ -25,11 +31,13 @@ export function buildOtpDelivery(input: {
   purpose: string;
   challengeKey: string;
   deliveryKey: string;
+  maskedPhone?: string;
 }): OtpDelivery {
   return {
     purpose: input.purpose,
     challengeKey: input.challengeKey,
     deliveryKey: input.deliveryKey,
     channel: input.channel,
+    ...(input.maskedPhone ? { maskedPhone: input.maskedPhone } : {}),
   };
 }

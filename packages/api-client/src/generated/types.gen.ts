@@ -2286,7 +2286,24 @@ export type OrderGiftCardTender = {
     amountMinor: number;
 };
 
+export type ConversationTopic = {
+    key: string;
+    label: string;
+};
+
 export type CustomerAccountSummary = {
+    /**
+     * Live orders the account owns that are not unfinished checkouts (any currency).
+     */
+    orders: number;
+    /**
+     * Lifetime spend per currency the account bought in, by currency code. Empty before the first order.
+     */
+    spent: Array<CustomerAccountSpend>;
+    /**
+     * The account's conversations that are not closed (store threads and the threads of its orders).
+     */
+    openConversations: number;
     unreadInbox: number;
     reviewsToWrite: number;
     reviewsWritten: number;
@@ -2906,6 +2923,19 @@ export type CustomerAccountSummary = {
         };
         lineKey?: string;
     }>;
+};
+
+export type CustomerAccountSpend = {
+    /**
+     * ISO 4217: the currency these orders were charged in.
+     */
+    currencyCode: string;
+    orders: number;
+    /**
+     * What the store holds of these orders: paid (net of refunds) less what banks took back in disputes, in major units.
+     */
+    amount: number;
+    amountMinor: number;
 };
 
 export type BuyerReviews = {
@@ -14381,6 +14411,8 @@ export type PostApiV1CustomerAuthVerifyOtpResponses = {
                 email: string;
                 name: string;
                 phone?: string | null;
+                whatsapp?: string | null;
+                phoneVerified: boolean;
                 customerId?: string | null;
                 defaultAddress: {
                     id: string;
@@ -14477,6 +14509,8 @@ export type GetApiV1CustomerAuthMeResponses = {
                 email: string;
                 name: string;
                 phone?: string | null;
+                whatsapp?: string | null;
+                phoneVerified: boolean;
                 customerId?: string | null;
                 defaultAddress: {
                     id: string;
@@ -14565,6 +14599,8 @@ export type PostApiV1CustomerAuthLogoutResponse = PostApiV1CustomerAuthLogoutRes
 export type PutApiV1CustomerAuthProfileData = {
     body?: {
         name?: string;
+        phone?: string | null;
+        whatsapp?: string | null;
     };
     path?: never;
     query?: never;
@@ -14588,6 +14624,10 @@ export type PutApiV1CustomerAuthProfileErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
     /**
      * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
      */
@@ -14622,6 +14662,8 @@ export type PutApiV1CustomerAuthProfileResponses = {
                 email: string;
                 name: string;
                 phone?: string | null;
+                whatsapp?: string | null;
+                phoneVerified: boolean;
                 customerId?: string | null;
                 defaultAddress: {
                     id: string;
@@ -14776,12 +14818,6 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 }>;
                 [key: string]: unknown;
             }>;
-            summary: {
-                totalOrders: number;
-                totalSpent: number;
-                completedOrders: number;
-                pendingOrders: number;
-            };
             pagination: {
                 limit: number;
                 returned: number;
@@ -14836,7 +14872,12 @@ export type GetApiV1CustomerAuthOrdersResponses = {
 export type GetApiV1CustomerAuthOrdersResponse = GetApiV1CustomerAuthOrdersResponses[keyof GetApiV1CustomerAuthOrdersResponses];
 
 export type PostApiV1CustomerAuthPhoneSendCodeData = {
-    body?: never;
+    body?: {
+        /**
+         * The number to make the account's sign-in phone. Absent: the account's own unproven phone. Either way two codes go out, both for this one change: one to how the account signs in now (its proven email, else its proven phone; `confirmWith`) and one to the number.
+         */
+        phone?: string;
+    };
     path?: never;
     query?: never;
     url: '/api/v1/customer-auth/phone/send-code';
@@ -14864,6 +14905,17 @@ export type PostApiV1CustomerAuthPhoneSendCodeErrors = {
      */
     409: ErrorResponse;
     /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -14888,6 +14940,10 @@ export type PostApiV1CustomerAuthPhoneSendCodeResponses = {
         data: {
             message: string;
             resendAfterSeconds: number;
+            /**
+             * Where the confirming code went: the account's proven email, else its proven phone. Send that code back as `currentCode`.
+             */
+            confirmWith: 'phone' | 'email';
         };
     };
 };
@@ -14897,6 +14953,14 @@ export type PostApiV1CustomerAuthPhoneSendCodeResponse = PostApiV1CustomerAuthPh
 export type PostApiV1CustomerAuthPhoneVerifyData = {
     body?: {
         code: string;
+        /**
+         * The number the codes were sent for (absent: the account's own phone); `code` is the one sent to it.
+         */
+        phone?: string;
+        /**
+         * The code sent to how the account signs in now (required).
+         */
+        currentCode?: string;
     };
     path?: never;
     query?: never;
@@ -16265,6 +16329,10 @@ export type GetApiV1CustomerAuthConversationsData = {
     path?: never;
     query?: {
         cursor?: string;
+        /**
+         * The page's presence (`bn-bd`): the store's topics are named in its language.
+         */
+        presence?: string;
     };
     url: '/api/v1/customer-auth/conversations';
 };
@@ -16300,7 +16368,7 @@ export type GetApiV1CustomerAuthConversationsError = GetApiV1CustomerAuthConvers
 
 export type GetApiV1CustomerAuthConversationsResponses = {
     /**
-     * Conversations (20 per page) and whether the account may start a store conversation
+     * Conversations (20 per page), whether the account may start a store conversation, and the topics a buyer may choose (in the presence's language)
      */
     200: {
         success: true;
@@ -16309,6 +16377,10 @@ export type GetApiV1CustomerAuthConversationsResponses = {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                } | null;
                 orderId: string | null;
                 /**
                  * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
@@ -16320,6 +16392,7 @@ export type GetApiV1CustomerAuthConversationsResponses = {
             }>;
             nextCursor: string | null;
             canStartStoreConversation: boolean;
+            topics: Array<ConversationTopic>;
         };
     };
 };
@@ -16330,6 +16403,10 @@ export type PostApiV1CustomerAuthConversationsData = {
     body: {
         subject: string;
         body: string;
+        /**
+         * One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it.
+         */
+        topic?: string | null;
         clientMessageKey: string;
     };
     path?: never;
@@ -16396,6 +16473,10 @@ export type PostApiV1CustomerAuthConversationsResponses = {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                } | null;
                 orderId: string | null;
                 /**
                  * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
@@ -16528,6 +16609,10 @@ export type GetApiV1CustomerAuthConversationsByIdData = {
     query?: {
         beforeSeq?: number;
         afterSeq?: number | null;
+        /**
+         * The page's presence (`bn-bd`): the topic is named in its language.
+         */
+        presence?: string;
     };
     url: '/api/v1/customer-auth/conversations/{id}';
 };
@@ -16572,6 +16657,10 @@ export type GetApiV1CustomerAuthConversationsByIdResponses = {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                } | null;
                 orderId: string | null;
                 /**
                  * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
@@ -16646,9 +16735,153 @@ export type GetApiV1CustomerAuthConversationsByIdResponses = {
 
 export type GetApiV1CustomerAuthConversationsByIdResponse = GetApiV1CustomerAuthConversationsByIdResponses[keyof GetApiV1CustomerAuthConversationsByIdResponses];
 
+export type PostApiV1CustomerAuthConversationsByIdCloseData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * The page's presence (`bn-bd`): the store's topics are named in its language.
+         */
+        presence?: string;
+    };
+    url: '/api/v1/customer-auth/conversations/{id}/close';
+};
+
+export type PostApiV1CustomerAuthConversationsByIdCloseErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1CustomerAuthConversationsByIdCloseError = PostApiV1CustomerAuthConversationsByIdCloseErrors[keyof PostApiV1CustomerAuthConversationsByIdCloseErrors];
+
+export type PostApiV1CustomerAuthConversationsByIdCloseResponses = {
+    /**
+     * The conversation, closed
+     */
+    200: {
+        success: true;
+        data: {
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                } | null;
+                orderId: string | null;
+                /**
+                 * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
+                 */
+                orderNumber: number | null;
+                status: 'open' | 'pending' | 'closed';
+                lastMessageAt: number | null;
+                unread: number;
+                lastSeq: number;
+                readSeq: number;
+                messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    from: 'buyer' | 'store' | 'system';
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+                hasNewer?: boolean;
+                cartShare?: {
+                    lines: Array<{
+                        productId: string;
+                        skuId: string;
+                        quantity: number;
+                    }>;
+                    sharedAt: number;
+                    withdrawnAt: number | null;
+                    version: number;
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
+                } | null;
+            };
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthConversationsByIdCloseResponse = PostApiV1CustomerAuthConversationsByIdCloseResponses[keyof PostApiV1CustomerAuthConversationsByIdCloseResponses];
+
 export type PostApiV1CustomerAuthConversationsByIdMessagesData = {
     body: {
         body: string;
+        /**
+         * One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it.
+         */
+        topic?: string | null;
         clientMessageKey: string;
         attachmentIds?: Array<string>;
     };
@@ -16718,6 +16951,10 @@ export type PostApiV1CustomerAuthConversationsByIdMessagesResponses = {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                } | null;
                 orderId: string | null;
                 /**
                  * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
@@ -16865,6 +17102,10 @@ export type GetApiV1CustomerAuthOrdersByIdConversationData = {
     query?: {
         beforeSeq?: number;
         afterSeq?: number | null;
+        /**
+         * The page's presence (`bn-bd`): the topic is named in its language.
+         */
+        presence?: string;
     };
     url: '/api/v1/customer-auth/orders/{id}/conversation';
 };
@@ -16909,6 +17150,10 @@ export type GetApiV1CustomerAuthOrdersByIdConversationResponses = {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                } | null;
                 orderId: string | null;
                 /**
                  * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
@@ -16986,6 +17231,10 @@ export type GetApiV1CustomerAuthOrdersByIdConversationResponse = GetApiV1Custome
 export type PostApiV1CustomerAuthOrdersByIdConversationData = {
     body: {
         body: string;
+        /**
+         * One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it.
+         */
+        topic?: string | null;
         clientMessageKey: string;
         attachmentIds?: Array<string>;
     };
@@ -17055,6 +17304,10 @@ export type PostApiV1CustomerAuthOrdersByIdConversationResponses = {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                } | null;
                 orderId: string | null;
                 /**
                  * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
@@ -27224,6 +27477,10 @@ export type GetApiV1OrdersReceiptByIdConversationData = {
     query?: {
         beforeSeq?: number;
         afterSeq?: number | null;
+        /**
+         * The page's presence (`bn-bd`): the topic is named in its language.
+         */
+        presence?: string;
     };
     url: '/api/v1/orders/receipt/{id}/conversation';
 };
@@ -27268,6 +27525,10 @@ export type GetApiV1OrdersReceiptByIdConversationResponses = {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                } | null;
                 orderId: string | null;
                 /**
                  * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
@@ -27345,6 +27606,10 @@ export type GetApiV1OrdersReceiptByIdConversationResponse = GetApiV1OrdersReceip
 export type PostApiV1OrdersReceiptByIdConversationData = {
     body: {
         body: string;
+        /**
+         * One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it.
+         */
+        topic?: string | null;
         clientMessageKey: string;
         attachmentIds?: Array<string>;
         token?: string;
@@ -27414,6 +27679,10 @@ export type PostApiV1OrdersReceiptByIdConversationResponses = {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                } | null;
                 orderId: string | null;
                 /**
                  * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
@@ -28629,6 +28898,10 @@ export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdData = {
     query?: {
         beforeSeq?: number;
         afterSeq?: number | null;
+        /**
+         * The page's presence (`bn-bd`): the topic is named in its language.
+         */
+        presence?: string;
     };
     url: '/api/v1/orders/receipt/{id}/warranty-claims/{claimId}';
 };
@@ -28674,6 +28947,10 @@ export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdResponses = {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                } | null;
                 orderId: string | null;
                 /**
                  * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
@@ -28751,6 +29028,10 @@ export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdResponse = GetApiV1O
 export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesData = {
     body: {
         body: string;
+        /**
+         * One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it.
+         */
+        topic?: string | null;
         clientMessageKey: string;
         attachmentIds?: Array<string>;
     };
@@ -28825,6 +29106,10 @@ export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesResponses =
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subject: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                } | null;
                 orderId: string | null;
                 /**
                  * The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla).
@@ -43629,6 +43914,23 @@ export type GetApiV1AdminCustomersByIdResponses = {
             accountClaimedAt: NullableTimestamp;
             kind: 'account' | 'guest' | 'merchant';
             latestOrderName: string | null;
+            /**
+             * On the customer read (not the history page's header).
+             */
+            signIn?: {
+                phoneProven: boolean;
+                emailProven: boolean;
+                recovery: {
+                    /**
+                     * Which of the customer's contacts recovers the account (the phone or the email shown above).
+                     */
+                    method: 'phone' | 'email';
+                    /**
+                     * Unix seconds: after it the recovery contact reaches nothing.
+                     */
+                    expiresAt: number;
+                } | null;
+            };
             totalOrders: number;
             totalSpent: number;
             lastOrderAt: NullableTimestamp;
@@ -43886,6 +44188,85 @@ export type PostApiV1AdminCustomersByIdEraseResponses = {
 };
 
 export type PostApiV1AdminCustomersByIdEraseResponse = PostApiV1AdminCustomersByIdEraseResponses[keyof PostApiV1AdminCustomersByIdEraseResponses];
+
+export type PostApiV1AdminCustomersByIdResetSignInData = {
+    /**
+     * The one recovery contact: a phone or an email.
+     */
+    body: {
+        phone: string;
+    } | {
+        email: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/reset-sign-in';
+};
+
+export type PostApiV1AdminCustomersByIdResetSignInErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminCustomersByIdResetSignInError = PostApiV1AdminCustomersByIdResetSignInErrors[keyof PostApiV1AdminCustomersByIdResetSignInErrors];
+
+export type PostApiV1AdminCustomersByIdResetSignInResponses = {
+    /**
+     * Reset
+     */
+    200: {
+        success: true;
+        data: {
+            recovery: 'phone' | 'email';
+            /**
+             * Unix seconds: after it the recovery contact reaches nothing.
+             */
+            expiresAt: number;
+            recoveryDays: number;
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersByIdResetSignInResponse = PostApiV1AdminCustomersByIdResetSignInResponses[keyof PostApiV1AdminCustomersByIdResetSignInResponses];
 
 export type GetApiV1AdminCustomersByIdAddressesData = {
     body?: never;
@@ -44538,6 +44919,23 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 accountClaimedAt: NullableTimestamp;
                 kind: 'account' | 'guest' | 'merchant';
                 latestOrderName: string | null;
+                /**
+                 * On the customer read (not the history page's header).
+                 */
+                signIn?: {
+                    phoneProven: boolean;
+                    emailProven: boolean;
+                    recovery: {
+                        /**
+                         * Which of the customer's contacts recovers the account (the phone or the email shown above).
+                         */
+                        method: 'phone' | 'email';
+                        /**
+                         * Unix seconds: after it the recovery contact reaches nothing.
+                         */
+                        expiresAt: number;
+                    } | null;
+                };
                 totalOrders: number;
                 totalSpent: number;
                 lastOrderAt: NullableTimestamp;
@@ -44562,14 +44960,16 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 email: string | null;
                 phone: string | null;
                 /**
-                 * created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, or erased (see `order`, `relatedCustomer` and `verifiedContact`)
+                 * created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, erased, or sign_in_reset (see `order`, `relatedCustomer` and `verifiedContact`)
                  */
                 changeType: string;
                 verifiedContact: 'email' | 'phone' | null;
                 author: {
-                    kind: 'staff' | 'app' | 'buyer' | 'system';
+                    kind: 'staff' | 'app' | 'agent' | 'buyer' | 'system';
                     name: string | null;
                     appId: string | null;
+                    connection: string | null;
+                    client: string | null;
                 } | null;
                 order: {
                     id: string;
@@ -66995,6 +67395,171 @@ export type PutApiV1AdminSettingsCustomerRequestsResponses = {
 
 export type PutApiV1AdminSettingsCustomerRequestsResponse = PutApiV1AdminSettingsCustomerRequestsResponses[keyof PutApiV1AdminSettingsCustomerRequestsResponses];
 
+export type GetApiV1AdminSettingsConversationTopicsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/conversation-topics';
+};
+
+export type GetApiV1AdminSettingsConversationTopicsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsConversationTopicsError = GetApiV1AdminSettingsConversationTopicsErrors[keyof GetApiV1AdminSettingsConversationTopicsErrors];
+
+export type GetApiV1AdminSettingsConversationTopicsResponses = {
+    /**
+     * The topics and their revision
+     */
+    200: {
+        success: true;
+        data: {
+            messageTopics: Array<{
+                /**
+                 * Stable id kept on conversations: lowercase letters, digits, - and _.
+                 */
+                key: string;
+                /**
+                 * The name in the store's default language.
+                 */
+                label: string;
+                /**
+                 * The name in the store's other languages, by two-letter code. A language with none reads `label`.
+                 */
+                labels?: {
+                    [key: string]: string;
+                };
+            }>;
+            revision: number;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsConversationTopicsResponse = GetApiV1AdminSettingsConversationTopicsResponses[keyof GetApiV1AdminSettingsConversationTopicsResponses];
+
+export type PutApiV1AdminSettingsConversationTopicsData = {
+    body: {
+        messageTopics: Array<{
+            /**
+             * Stable id kept on conversations: lowercase letters, digits, - and _.
+             */
+            key: string;
+            /**
+             * The name in the store's default language.
+             */
+            label: string;
+            /**
+             * The name in the store's other languages, by two-letter code. A language with none reads `label`.
+             */
+            labels?: {
+                [key: string]: string;
+            };
+        }>;
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/conversation-topics';
+};
+
+export type PutApiV1AdminSettingsConversationTopicsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PutApiV1AdminSettingsConversationTopicsError = PutApiV1AdminSettingsConversationTopicsErrors[keyof PutApiV1AdminSettingsConversationTopicsErrors];
+
+export type PutApiV1AdminSettingsConversationTopicsResponses = {
+    /**
+     * The saved topics
+     */
+    200: {
+        success: true;
+        data: {
+            messageTopics: Array<{
+                /**
+                 * Stable id kept on conversations: lowercase letters, digits, - and _.
+                 */
+                key: string;
+                /**
+                 * The name in the store's default language.
+                 */
+                label: string;
+                /**
+                 * The name in the store's other languages, by two-letter code. A language with none reads `label`.
+                 */
+                labels?: {
+                    [key: string]: string;
+                };
+            }>;
+            revision: number;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsConversationTopicsResponse = PutApiV1AdminSettingsConversationTopicsResponses[keyof PutApiV1AdminSettingsConversationTopicsResponses];
+
 export type GetApiV1AdminSettingsPoliciesData = {
     body?: never;
     path?: never;
@@ -74199,6 +74764,7 @@ export type GetApiV1AdminConversationsResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
+                topic: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**
@@ -74595,6 +75161,7 @@ export type PostApiV1AdminConversationsQueryResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
+                topic: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**
@@ -75031,6 +75598,7 @@ export type GetApiV1AdminConversationsOrderByOrderIdResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
+                topic: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**
@@ -75191,6 +75759,7 @@ export type PostApiV1AdminConversationsOrderByOrderIdMessagesResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
+                topic: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**
@@ -75330,6 +75899,7 @@ export type GetApiV1AdminConversationsByIdResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
+                topic: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**
@@ -75485,6 +76055,7 @@ export type PatchApiV1AdminConversationsByIdResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
+                topic: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**
@@ -75645,6 +76216,7 @@ export type PostApiV1AdminConversationsByIdMessagesResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
+                topic: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**

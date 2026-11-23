@@ -38,7 +38,7 @@ import { presentBuyerPaymentTerms } from "./payment-terms-columns";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { storedObjectKeyUrl } from "../../integrations/storage";
 import { publishedMediaObjectKey } from "../media-references";
-import { customerAddressFromRow, paidSpendAmount, paidSpendProjection } from "../customers";
+import { customerAddressFromRow } from "../customers";
 import { orderShippingAddressSelection } from "./shipping-address";
 import { orderLineTypesSql, parseOrderLineTypes } from "./line-types";
 import type { OrderShippingAddressFields } from "./types";
@@ -357,28 +357,10 @@ const CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUSES = [
 ] as const;
 const CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUS_SET = new Set<string>(CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUSES);
 
-const CUSTOMER_COMPLETED_ORDER_STATUSES = [
-    OrderStatus.DELIVERED,
-    OrderStatus.COMPLETED,
-] as const;
-
-const CUSTOMER_PENDING_ORDER_STATUSES = [
-    OrderStatus.PENDING,
-    OrderStatus.PROCESSING,
-    OrderStatus.CONFIRMED,
-] as const;
-
 type CustomerOrderMoneyState = {
     status: string;
     paymentStatus: string;
     balanceDueMinor: number;
-};
-
-export type CustomerAccountOrderSummary = {
-    totalOrders: number;
-    totalSpent: number;
-    completedOrders: number;
-    pendingOrders: number;
 };
 
 type CustomerOrdersCursor = {
@@ -540,16 +522,6 @@ export async function getCustomerOrders(
         }
         : null;
 
-    const accountSummaryQuery = db
-        .select({
-            totalOrders: sql<number>`CAST(count(*) AS INTEGER)`,
-            ...paidSpendProjection(),
-            completedOrders: sql<number>`CAST(COALESCE(SUM(CASE WHEN ${inArray(orders.status, [...CUSTOMER_COMPLETED_ORDER_STATUSES])} THEN 1 ELSE 0 END), 0) AS INTEGER)`,
-            pendingOrders: sql<number>`CAST(COALESCE(SUM(CASE WHEN ${inArray(orders.status, [...CUSTOMER_PENDING_ORDER_STATUSES])} THEN 1 ELSE 0 END), 0) AS INTEGER)`,
-        })
-        .from(orders)
-        .where(customerAccountOrderVisibilityCondition(customerId));
-
     const orderListLimit = normalizeCustomerOrdersLimit(options.limit);
     const cursor = decodeCustomerOrdersCursor(options.cursor);
     const orderWhereConditions: SQL[] = [
@@ -601,14 +573,9 @@ export async function getCustomerOrders(
         .orderBy(desc(orders.createdAt), desc(orders.id))
         .limit(orderListLimit + 1);
 
-    const [accountSummaryRows, customerOrdersWithLookahead] = await db.batch([
-        accountSummaryQuery,
-        customerOrdersQuery,
-    ] as Parameters<Database["batch"]>[0]) as [
-        Array<Omit<CustomerAccountOrderSummary, "totalSpent"> & {
-            totalSpentMinor: number;
-            spendDecimalPlaces: number;
-        }>,
+    // The account's counts and spend are the account summary's (`readAccountOrderTotals`):
+    // a page of history never walks the rest of it.
+    const customerOrdersWithLookahead = await customerOrdersQuery.all() as unknown as
         Array<{
             id: string;
             orderNumber: number | null;
@@ -640,27 +607,11 @@ export async function getCustomerOrders(
             holdExpired: number;
             pickupReadyAt: Date | null;
             createdAt: number | null;
-        } & OrderShippingAddressFields>,
-    ];
+        } & OrderShippingAddressFields>;
 
     const customerOrders = customerOrdersWithLookahead.slice(0, orderListLimit);
     const hasMore = customerOrdersWithLookahead.length > orderListLimit;
     const nextCursor = hasMore ? encodeCustomerOrdersCursor(customerOrders[customerOrders.length - 1]!) : null;
-    const accountSummary = accountSummaryRows[0];
-    const summary: CustomerAccountOrderSummary = accountSummary
-        ? {
-            totalOrders: Number(accountSummary.totalOrders ?? 0),
-            totalSpent: paidSpendAmount(accountSummary),
-            completedOrders: Number(accountSummary.completedOrders ?? 0),
-            pendingOrders: Number(accountSummary.pendingOrders ?? 0),
-        }
-        : {
-            totalOrders: 0,
-            totalSpent: 0,
-            completedOrders: 0,
-            pendingOrders: 0,
-        };
-
     // Fetch items for all orders in one batch
     const orderIds = customerOrders.map((o) => o.id);
     const itemsByOrder = new Map<string, CustomerOrderListItem[]>();
@@ -797,7 +748,6 @@ export async function getCustomerOrders(
     return {
         orders: formattedOrders,
         customerProfile,
-        summary,
         pagination: {
             limit: orderListLimit,
             returned: formattedOrders.length,

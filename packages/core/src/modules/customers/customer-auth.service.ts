@@ -13,7 +13,7 @@ import { isEmailAddress, trimTrailingCharacter } from "@scalius/shared/text-scan
 import { nanoid } from "nanoid";
 import { customerAddresses, customerIdentities, customers, customerSessions, firstCustomerAddressId, orders } from "@scalius/database/schema";
 import { and, desc, eq, gt, isNotNull, isNull, lte, sql } from "drizzle-orm";
-import { safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
     ValidationError,
@@ -37,8 +37,18 @@ import {
     enforceOtpSendRateLimits,
     OtpContactCeilingError,
 } from "./customer-auth-rate-limit";
-import { buildVerifiedContactOrderLink, signedUpHistory } from "./customer-identity";
-import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
+import { buildVerifiedContactOrderLink, phoneChangedHistory, signedUpHistory } from "./customer-identity";
+import { recoveryOwnerQuery } from "./sign-in-recovery";
+import {
+    insertCustomer,
+    isSignInChangedError,
+    linkIdentity,
+    proveSignIn,
+    signInChangedConflict,
+    signInWithLinkedIdentity,
+    writeSignIn,
+} from "./sign-in-writes";
+import { parseContactPhone, validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import { isQualifiedProviderId, type IdentityExchangeOutput } from "@scalius/shared/plugins/providers";
 import {
     newAccountPhoneNeed,
@@ -51,13 +61,7 @@ import {
 import type { EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
 import { assertCustomerChannelReady, phoneCodeChannel } from "./customer-code-channels";
-import {
-    acceptedCustomerCountries,
-    customerAuthDocument,
-    customerCountriesDocument,
-    readAcceptedCustomerCountries,
-    selectDocumentsWithSellingCountries,
-} from "../settings";
+import { readSignInPolicy } from "./sign-in-policy";
 import { formatAddressInline, usesDeliveryHierarchy } from "@scalius/shared/address";
 import { customerAddressFromRow, type CustomerAddress } from "./addresses";
 import { otpHmacSha256Hex } from "../../utils/credential-encryption";
@@ -105,6 +109,17 @@ export interface SendOtpInput {
     credentialEncryptionKey?: string;
     /** The app providers a saved SMS or email choice may name. */
     appProviders?: AppProviders;
+    /**
+     * Binds the code to one change (`phoneChangeBinding`): its challenge is
+     * keyed by the contact and the change, so it proves nothing else. A bound
+     * code is not a sign-in: it goes out on any channel of its method the
+     * store can send on, whether or not sign-in offers it.
+     */
+    bind?: string;
+    /** The message the code goes out with (`phone_change` names the new number); default sign-in. */
+    purpose?: "customer_login" | "phone_change";
+    /** For `phone_change`: the new number, masked (`•••022`). */
+    maskedPhone?: string;
 }
 
 export interface SendOtpResult {
@@ -235,27 +250,6 @@ export function getCookieConfig(
     };
 }
 
-async function getCustomerAuthRuntimePolicy(db: Database): Promise<{
-    identity: CustomerIdentitySettings;
-    phoneCountryPolicy: PhoneCountryPolicy;
-}> {
-    // The countries the markets sell to ride in the same statement: a phone
-    // from any of them is accepted whatever the merchant's list says.
-    const { rows, sellingCountries } = await selectDocumentsWithSellingCountries(db, [customerAuthDocument, customerCountriesDocument]);
-    const [auth, countries] = await Promise.all([
-        customerAuthDocument.fromRows(rows),
-        customerCountriesDocument.fromRows(rows),
-    ]);
-    const accepted = acceptedCustomerCountries(countries.value, sellingCountries);
-    return {
-        identity: auth.value,
-        phoneCountryPolicy: {
-            countries: accepted.allowedCountries,
-            mode: accepted.allowedCountriesMode,
-        },
-    };
-}
-
 function isValidEmailAddress(value: string): boolean {
     return isEmailAddress(value.trim());
 }
@@ -315,6 +309,10 @@ export interface CustomerAuthProfile {
     name: string;
     email: string;
     phone?: string;
+    /** The WhatsApp number when it is not the phone (absent: the phone). */
+    whatsapp?: string;
+    /** The phone is proven by code: the account signs in with it, and changing it takes a code. */
+    phoneVerified: boolean;
     customerId?: string;
     /** The address book's default address (checkout prefills it), or null. */
     defaultAddress: CustomerAddress | null;
@@ -341,6 +339,8 @@ function buildCustomerAuthProfile(row: CustomerRow, addressRow: CustomerAddressR
         name: row.name,
         email: row.email ?? "",
         phone: phoneOrNull(row.phone) ?? undefined,
+        whatsapp: row.whatsapp ?? undefined,
+        phoneVerified: Boolean(row.phoneVerifiedAt),
         customerId: row.id,
         defaultAddress,
         profileComplete: isCompleteDeliveryAddress(defaultAddress),
@@ -408,21 +408,25 @@ async function resolveProofOwner(
             ))
             .limit(1);
         if (verified) return { kind: "account", row: verified.customer, address: verified.address };
-        // Only on a miss: is this the email of a closed account? Exactly the
-        // terms of the partial index `customers_deleted_verified_email_idx`
-        // (lower(email); deleted, email verified, claimed), so it is one index
-        // SEARCH of the closed verified accounts, never a walk of the trash.
-        const [closed] = await db
-            .select({ id: customers.id })
-            .from(customers)
-            .where(and(
-                sql`lower(${customers.email}) = ${identifier}`,
-                isNotNull(customers.deletedAt),
-                isNotNull(customers.emailVerifiedAt),
-                isNotNull(customers.accountClaimedAt),
-            ))
-            .limit(1);
-        return closed ? { kind: "deleted" } : { kind: "none" };
+        // Only on a miss, in one round trip: an account a sign-in reset named this email on, and whether it is
+        // the email of a closed account. The closed-account read uses exactly the terms of the
+        // partial index `customers_deleted_verified_email_idx` (lower(email); deleted, email
+        // verified, claimed), so it is one index SEARCH of the closed verified accounts.
+        const [staffRows, closedRows] = await db.batch([
+            recoveryOwnerQuery(db, "email", identifier),
+            db.select({ id: customers.id })
+                .from(customers)
+                .where(and(
+                    sql`lower(${customers.email}) = ${identifier}`,
+                    isNotNull(customers.deletedAt),
+                    isNotNull(customers.emailVerifiedAt),
+                    isNotNull(customers.accountClaimedAt),
+                ))
+                .limit(1),
+        ] as unknown as Parameters<Database["batch"]>[0]) as unknown as [RecoveryRows, Array<{ id: string }>];
+        const recovered = await recoveryOwner(db, staffRows);
+        if (recovered) return recovered;
+        return closedRows[0] ? { kind: "deleted" } : { kind: "none" };
     }
 
     // A phone owns an account only once proven. Accounts that merely typed
@@ -439,7 +443,25 @@ async function resolveProofOwner(
         ));
     const verified = rows.find((row) => !row.customer.deletedAt);
     if (verified) return { kind: "account", row: verified.customer, address: verified.address };
-    return rows.length > 0 ? { kind: "deleted" } : { kind: "none" };
+    if (rows.length > 0) return { kind: "deleted" };
+    // Only on a miss: an account a sign-in reset named this phone on.
+    return await recoveryOwner(db, await recoveryOwnerQuery(db, "phone", identifier)) ?? { kind: "none" };
+}
+
+type RecoveryRows = Awaited<ReturnType<typeof recoveryOwnerQuery>>;
+
+/**
+ * The one account a sign-in reset named this contact on, while that reset
+ * stands, as the statement that matched it read it (`recoveryOwnerQuery`:
+ * the version a proof names is the one that matched). Two such accounts
+ * reach neither. Its default address is read after, for the profile.
+ */
+async function recoveryOwner(db: Database, rows: RecoveryRows): Promise<ProofOwner | null> {
+    if (rows.length !== 1) return null;
+    const row = rows[0]!;
+    const address = await db.select().from(customerAddresses)
+        .where(and(eq(customerAddresses.customerId, row.id), eq(customerAddresses.isDefault, true))).get();
+    return { kind: "account", row, address: address ?? null };
 }
 
 /**
@@ -468,10 +490,13 @@ export async function sendOtp(
     db: Database,
     input: SendOtpInput,
 ): Promise<SendOtpResult> {
-    const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await readSignInPolicy(db);
     const identifier = normalizeIdentifier(input.method, input.identifier, phoneCountryPolicy);
     // Only the channels the store chose in Customer accounts; never another one.
-    const channel = resolveSignInChannel(identity.channels, input.method, input.channel);
+    // A bound change code is not a sign-in: email goes out wherever the store can send it.
+    const channel = input.bind && input.method === "email"
+        ? "email" as const
+        : resolveSignInChannel(identity.channels, input.method, input.channel);
     if (!channel) {
         throw new ForbiddenError(
             input.method === "email"
@@ -487,7 +512,7 @@ export async function sendOtp(
 
     // D1 is the OTP authority: the challenge row counts attempts and
     // consumes codes atomically. The raw code is never stored or queued.
-    const otpKey = await buildCustomerAuthOtpStorageKey(channel, identifier, input.encryptionKey);
+    const otpKey = await buildCustomerAuthOtpStorageKey(channel, boundIdentifier(identifier, input.bind), input.encryptionKey);
     let allowance: Awaited<ReturnType<typeof enforceOtpSendRateLimits>>;
     try {
         allowance = await enforceOtpSendRateLimits(db, {
@@ -547,9 +572,10 @@ export async function sendOtp(
         resendAfterSeconds,
         otpDelivery: buildOtpDelivery({
             channel,
-            purpose: "customer_login",
+            purpose: input.purpose ?? "customer_login",
             challengeKey: otpKey,
             deliveryKey,
+            ...(input.maskedPhone ? { maskedPhone: input.maskedPhone } : {}),
         }),
     };
 }
@@ -572,7 +598,7 @@ export async function verifyOtp(
     if (!input.code?.trim()) {
         throw new ValidationError("Enter the 6-digit code.");
     }
-    const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await readSignInPolicy(db);
     const identifier = normalizeIdentifier(input.method, input.identifier, phoneCountryPolicy);
     const channel = resolveSignInChannel(identity.channels, input.method, input.channel);
     if (!channel) throw new ValidationError("There's no active code. Send a new code.");
@@ -608,7 +634,8 @@ export async function verifyOtp(
     if (owner.kind === "account") {
         row = markProven(owner.row, input.method, authenticatedAt);
         address = owner.address;
-        statements.push(db.update(customers).set(proofUpdate(input.method)).where(eq(customers.id, row.id)) as SQLiteBatchItem);
+        // Decided from the row as read: the contact it holds is the one the code went to.
+        statements.push(...proveSignIn(db, owner.row, input.method, identifier));
     } else {
         row = newAccount!.row;
         address = newAccount!.address;
@@ -668,13 +695,7 @@ export async function signInWithIdentity(
     const closed = () => new ValidationError("This account was closed. Contact the store to restore it.");
     const now = new Date();
     const nowSeconds = Math.floor(now.getTime() / 1000);
-    const identityRow = (customerId: string) => db.insert(customerIdentities).values({
-        providerId: input.providerId,
-        subject,
-        customerId,
-        createdAt: nowSeconds,
-        lastUsedAt: nowSeconds,
-    }) as SQLiteBatchItem;
+    const linked = { providerId: input.providerId, subject, at: nowSeconds };
 
     const known = await db
         .select({ customer: customers, address: customerAddresses })
@@ -686,14 +707,8 @@ export async function signInWithIdentity(
     if (known) {
         if (known.customer.deletedAt) throw closed();
         const row: CustomerRow = { ...known.customer, lastAuthenticatedAt: now };
-        const session = await createSessionForCustomer(db, row, known.address, input.sessionHashKey, [
-            db.update(customers)
-                .set({ lastAuthenticatedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
-                .where(eq(customers.id, row.id)) as SQLiteBatchItem,
-            db.update(customerIdentities)
-                .set({ lastUsedAt: nowSeconds })
-                .where(and(eq(customerIdentities.providerId, input.providerId), eq(customerIdentities.subject, subject))) as SQLiteBatchItem,
-        ]);
+        const session = await createSessionForCustomer(db, row, known.address, input.sessionHashKey,
+            signInWithLinkedIdentity(db, known.customer, linked));
         return { status: "signed_in", session, customer: buildCustomerAuthProfile(row, known.address), isNewUser: false, via: "known" };
     }
 
@@ -718,10 +733,8 @@ export async function signInWithIdentity(
         if (owner.kind === "deleted") throw closed();
         if (owner.kind !== "account") continue;
         const row = markProven(owner.row, method, now);
-        const session = await createSessionForCustomer(db, row, owner.address, input.sessionHashKey, [
-            db.update(customers).set(proofUpdate(method)).where(eq(customers.id, row.id)) as SQLiteBatchItem,
-            identityRow(row.id),
-        ]);
+        const session = await createSessionForCustomer(db, row, owner.address, input.sessionHashKey,
+            proveSignIn(db, owner.row, method, identifier, linked));
         return { status: "signed_in", session, customer: buildCustomerAuthProfile(row, owner.address), isNewUser: false, via: "linked" };
     }
 
@@ -729,7 +742,7 @@ export async function signInWithIdentity(
     const name = input.facts.name?.trim();
     const method: "email" | "phone" | null = email ? "email" : phone ? "phone" : null;
     if (!name || !method) return { status: "needs_account_details" };
-    const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await readSignInPolicy(db);
     let accountPhone: string | null = null;
     if (phone) {
         try {
@@ -756,9 +769,9 @@ export async function signInWithIdentity(
     };
     const row = { totalOrders: 0, lastOrderAt: null, deletedAt: null, ...values } as CustomerRow;
     const session = await createSessionForCustomer(db, row, null, input.sessionHashKey, [
-        db.insert(customers).values(values) as SQLiteBatchItem,
+        insertCustomer(db, values) as SQLiteBatchItem,
         signedUpHistory(db, { accountId: row.id, via: method }) as SQLiteBatchItem,
-        identityRow(row.id),
+        linkIdentity(db, { ...linked, customerId: row.id }),
     ]);
     return { status: "signed_in", session, customer: buildCustomerAuthProfile(row, null), isNewUser: true, via: "created" };
 }
@@ -778,25 +791,123 @@ export async function getAccountPhoneVerificationPrompt(
     const account = await getActiveCustomerById(db, accountId);
     const phone = phoneOrNull(account?.phone);
     if (!account?.accountClaimedAt || account.phoneVerifiedAt || !phone) return null;
-    const { identity } = await getCustomerAuthRuntimePolicy(db);
+    const { identity } = await readSignInPolicy(db);
     return await phoneCodeChannel(db, identity, credentialEncryptionKey, appProviders) ? { phone } : null;
 }
 
-/** Sends a code to the signed-in account's own (unproven) phone. */
+/** A challenge's key identifier: the contact, or the contact and the one change it proves. */
+function boundIdentifier(identifier: string, bind: string | undefined): string {
+    return bind ? `${identifier}#${bind}` : identifier;
+}
+
+/** The one change a pair of codes proves: this account's phone becoming this number. */
+function phoneChangeBinding(accountId: string, phone: string): string {
+    return `phone-change:${accountId}:${phone}`;
+}
+
+/** `details.reason` when a phone change is asked for without the codes it needs. */
+export const PHONE_CHANGE_NEEDS_CODES_REASON = "phone_change_needs_codes";
+
+/**
+ * The identity the account already signs in with, which adding or changing a
+ * sign-in phone must be confirmed from: its proven email, else its proven
+ * phone (the one being replaced).
+ */
+function currentSignIn(account: CustomerRow): { method: "phone" | "email"; identifier: string } | null {
+    if (account.emailVerifiedAt && account.email) return { method: "email", identifier: account.email.trim().toLowerCase() };
+    const phone = phoneOrNull(account.phone);
+    if (account.phoneVerifiedAt && phone) return { method: "phone", identifier: phone };
+    return null;
+}
+
+function noSignInToConfirm(): ConflictError {
+    return new ConflictError("We can't send a code to how you sign in now. Ask the store to change your phone for you.", {
+        field: "phone",
+        reason: "no_sign_in_to_confirm",
+        allowed: ["ask_store"],
+    });
+}
+
+/** A number as a code message names it: its last three digits ("the number ending 022"). */
+function maskedNumber(phone: string): string {
+    return phone.replace(/\D/g, "").slice(-3);
+}
+
+/**
+ * The number an account phone code is for: the account's own phone, or a new
+ * number the buyer is moving their phone to (read as checkout reads it).
+ */
+function accountPhoneTarget(account: CustomerRow, typed: string | null | undefined, policy: PhoneCountryPolicy): { phone: string; changing: boolean } {
+    const own = phoneOrNull(account.phone);
+    const phone = typed?.trim() ? contactNumberOrThrow(typed, "phone", policy) : own;
+    if (!phone) throw new ValidationError("Add a phone number to your account first.");
+    return { phone, changing: phone !== own };
+}
+
+async function assertPhoneFree(db: Database, accountId: string, phone: string): Promise<void> {
+    const otherOwner = await db.select({ id: customers.id }).from(customers).where(and(
+        eq(customers.phone, phone),
+        isNotNull(customers.phoneVerifiedAt),
+        isNotNull(customers.accountClaimedAt),
+        isNull(customers.deletedAt),
+    )).get();
+    if (otherOwner && otherOwner.id !== accountId) {
+        throw new ConflictError("This phone number is verified on another account. Sign in with it instead.", { field: "phone", reason: "phone_on_another_account" });
+    }
+}
+
+export interface AccountPhoneCodeResult {
+    message: string;
+    resendAfterSeconds: number;
+    /** The codes to send after the response: the one to how the account signs in now, then the one to the number. */
+    otpDeliveries: OtpDelivery[];
+    /** Where the confirming code went (`email` or `phone`); the verify call sends it as `currentCode`. */
+    confirmWith: "phone" | "email";
+}
+
+/**
+ * Starts making a phone the account's sign-in phone: its own unproven phone,
+ * or with `phone` a new number. Adding or changing a sign-in identity on an
+ * account that already has one always takes two codes, both bound to this
+ * account and this number and as short-lived as a sign-in code: one to the
+ * identity the account signs in with now (its proven email, else its proven
+ * phone) and one to the number. A session alone, or a code to a planted
+ * number alone, never adds a way in. The codes go out as a phone change
+ * (purpose `phone_change`), naming the new number's last digits.
+ */
 export async function sendAccountPhoneCode(
     db: Database,
-    input: Omit<SendOtpInput, "method" | "identifier" | "channel"> & { accountId: string },
-): Promise<SendOtpResult> {
+    input: Omit<SendOtpInput, "method" | "identifier" | "channel" | "bind" | "purpose" | "maskedPhone"> & { accountId: string; phone?: string | null },
+): Promise<AccountPhoneCodeResult> {
     const account = await getActiveCustomerById(db, input.accountId);
     if (!account?.accountClaimedAt) throw new UnauthorizedError("Please sign in again.");
-    if (account.phoneVerifiedAt) throw new ConflictError("Your phone number is already verified.");
-    const phone = phoneOrNull(account.phone);
-    if (!phone) throw new ValidationError("Add a phone number to your account first.");
-    const { identity } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await readSignInPolicy(db);
+    const { phone, changing } = accountPhoneTarget(account, input.phone, phoneCountryPolicy);
+    if (account.phoneVerifiedAt && !changing) throw new ConflictError("Your phone number is already verified.");
+    // Whether the number is proven on another account is answered only at verify, after both
+    // codes: a send says the same for a free and a taken number.
     const channel = await phoneCodeChannel(db, identity, input.credentialEncryptionKey, input.appProviders);
     if (!channel) throw new ServiceUnavailableError("Text message codes aren't available right now.");
-    const sent = await sendOtp(db, { ...input, method: "phone", identifier: phone, channel });
-    return { ...sent, message: `We sent a code to ${formatAccountPhone(phone)}.` };
+    const current = currentSignIn(account);
+    if (!current) throw noSignInToConfirm();
+    const { accountId: _accountId, phone: _phone, ...send } = input;
+    const bound = { bind: phoneChangeBinding(account.id, phone), purpose: "phone_change" as const, maskedPhone: maskedNumber(phone) };
+    let confirm: SendOtpResult;
+    try {
+        confirm = await sendOtp(db, { ...send, ...bound, method: current.method, identifier: current.identifier, ...(current.method === "phone" ? { channel } : {}) });
+    } catch (error) {
+        // The store cannot send to the identity the account signs in with: only the store can change it.
+        if (error instanceof ForbiddenError || error instanceof ServiceUnavailableError) throw noSignInToConfirm();
+        throw error;
+    }
+    const prove = await sendOtp(db, { ...send, ...bound, method: "phone", identifier: phone, channel });
+    const where = current.method === "phone" ? `your current phone ${formatAccountPhone(current.identifier)}` : "your email";
+    return {
+        message: `We sent a code to ${where} and one to ${formatAccountPhone(phone)}.`,
+        resendAfterSeconds: Math.max(confirm.resendAfterSeconds, prove.resendAfterSeconds),
+        otpDeliveries: [confirm.otpDelivery, prove.otpDelivery].filter((delivery): delivery is OtpDelivery => delivery !== null),
+        confirmWith: current.method,
+    };
 }
 
 function formatAccountPhone(phone: string): string {
@@ -805,73 +916,173 @@ function formatAccountPhone(phone: string): string {
     return /^01\d{9}$/.test(local) ? `${local.slice(0, 5)}-${local.slice(5)}` : phone;
 }
 
+export interface AccountPhoneProof {
+    movedOrders: number;
+    /** The session that replaces the caller's: every session of the account, the caller's too, is revoked. */
+    session: CustomerSession;
+    /** Notices to every identity proven before the change, sent after the response. */
+    notices: OtpDelivery[];
+}
+
 /**
- * Proves the signed-in account's own phone: it becomes verified, and every
- * unowned order placed with it joins the account (both change logs written,
- * an emptied guest record merged).
+ * Finishes `sendAccountPhoneCode`: `code` (sent to the number) and
+ * `currentCode` (sent to how the account signs in now) must both be the
+ * codes of this one change; both are checked before either is used, and the
+ * number must not be proven on another account. Then, in one batch: the
+ * number becomes the account's proven phone (an old proven phone stops
+ * signing in; a WhatsApp number equal to it becomes none), the orders placed
+ * with it join, every session of the account is revoked and a new one is
+ * issued for the caller, and the change is written to the customer's
+ * history. After the batch, a notice goes to the identity that signed in
+ * before (the proven email, else the old phone by text message).
  */
 export async function verifyAccountPhoneCode(
     db: Database,
-    input: { accountId: string; code: string; encryptionKey?: string; credentialEncryptionKey?: string },
-): Promise<{ movedOrders: number }> {
+    input: {
+        accountId: string;
+        code: string;
+        encryptionKey?: string;
+        credentialEncryptionKey?: string;
+        sessionHashKey?: string;
+        phone?: string | null;
+        /** The code sent to how the account signs in now. */
+        currentCode?: string | null;
+        /** The caller's session: the new session is issued only while it is still live. */
+        callerSessionTokenHash?: string | null;
+    },
+): Promise<AccountPhoneProof> {
     if (!input.code?.trim()) throw new ValidationError("Enter the 6-digit code.");
-    const account = await getActiveCustomerById(db, input.accountId);
+    const loaded = await getActiveCustomerProfileRow(db, input.accountId);
+    const account = loaded?.customer;
     if (!account?.accountClaimedAt) throw new UnauthorizedError("Please sign in again.");
-    const phone = phoneOrNull(account.phone);
-    if (!phone) throw new ValidationError("Add a phone number to your account first.");
-    const { identity } = await getCustomerAuthRuntimePolicy(db);
+    const { identity, phoneCountryPolicy } = await readSignInPolicy(db);
+    const { phone } = accountPhoneTarget(account, input.phone, phoneCountryPolicy);
+    const current = currentSignIn(account);
+    if (!current) throw noSignInToConfirm();
+    if (!input.currentCode?.trim()) {
+        throw new ValidationError(`Enter the code we sent to your ${current.method === "email" ? "email" : "current phone"}.`, {
+            field: "currentCode",
+            reason: "current_sign_in_code_required",
+        });
+    }
     const channel = resolveSignInChannel(identity.channels, "phone");
     if (!channel) throw new ValidationError("There's no active code. Send a new code.");
-    const otpKey = await buildCustomerAuthOtpStorageKey(channel, phone, input.encryptionKey);
-    await claimCustomerAuthOtpChallenge(db, {
-        otpKey,
-        method: "phone",
-        channel,
-        identifier: phone,
-        code: input.code,
-        encryptionKey: input.encryptionKey,
-    });
-
-    const [otherOwner, joining] = await Promise.all([
-        db.select({ id: customers.id }).from(customers).where(and(
-            eq(customers.phone, phone),
-            isNotNull(customers.phoneVerifiedAt),
-            isNotNull(customers.accountClaimedAt),
-            isNull(customers.deletedAt),
-        )).get(),
-        db.select({ count: sql<number>`count(*)` }).from(orders).where(and(
-            eq(orders.customerPhone, phone),
-            isNull(orders.accountOwnerCustomerId),
-            isNull(orders.deletedAt),
-        )).get(),
-    ]);
-    if (otherOwner && otherOwner.id !== account.id) {
-        throw new ConflictError("This phone number is verified on another account. Sign in with it instead.");
-    }
-
-    const statements: SQLiteBatchItem[] = [
-        db.update(customers).set(proofUpdate("phone")).where(eq(customers.id, account.id)) as SQLiteBatchItem,
-        ...buildVerifiedContactOrderLink(db, { customerId: account.id, phone }) as SQLiteBatchItem[],
+    const bind = phoneChangeBinding(account.id, phone);
+    const currentChannel = current.method === "email" ? "email" as const : channel;
+    const claims: Array<Parameters<typeof claimCustomerAuthOtpChallenge>[1]> = [
+        {
+            otpKey: await buildCustomerAuthOtpStorageKey(channel, boundIdentifier(phone, bind), input.encryptionKey),
+            method: "phone", channel, identifier: phone, code: input.code, encryptionKey: input.encryptionKey,
+        },
+        {
+            otpKey: await buildCustomerAuthOtpStorageKey(currentChannel, boundIdentifier(current.identifier, bind), input.encryptionKey),
+            method: current.method, channel: currentChannel, identifier: current.identifier, code: input.currentCode, encryptionKey: input.encryptionKey,
+        },
     ];
+    // Both codes are checked before either is used up (a check never extends a code's life).
+    for (const claim of claims) await claimCustomerAuthOtpChallenge(db, { ...claim, consume: false, extend: false });
+    // Only a buyer holding both codes learns whether the number is proven on another account; neither code is used up then.
+    await assertPhoneFree(db, account.id, phone);
+    for (const claim of claims) await claimCustomerAuthOtpChallenge(db, claim);
+
+    const joining = await db.select({ count: sql<number>`count(*)` }).from(orders).where(and(
+        eq(orders.customerPhone, phone),
+        isNull(orders.accountOwnerCustomerId),
+        isNull(orders.deletedAt),
+    )).get();
+    const now = new Date();
+    const whatsapp = account.whatsapp && account.whatsapp !== phone ? account.whatsapp : null;
+    const proven: CustomerRow = { ...account, phone, whatsapp, phoneVerifiedAt: now, signInRecovery: null, signInRecoveryAt: null, lastAuthenticatedAt: now };
+    let session: CustomerSession;
     try {
-        await safeBatch(db, statements as unknown as Parameters<typeof safeBatch>[1]);
+        session = await createSessionForCustomer(db, proven, loaded!.address, input.sessionHashKey, [
+            // Two finishes of one change race: only the one whose session is still live writes.
+            ...(input.callerSessionTokenHash ? [buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${customerSessions}
+                WHERE ${customerSessions.tokenHash} = ${input.callerSessionTokenHash} AND ${customerSessions.revokedAt} IS NULL)`, CALLER_SESSION_ENDED) as SQLiteBatchItem] : []),
+            // Decided from the account as read: a sign-in write since (a reset, a staff edit) refuses it.
+            ...writeSignIn(db, account, {
+                phone,
+                whatsapp,
+                phoneVerifiedAt: sql`unixepoch()`,
+                signInRecovery: null,
+                signInRecoveryAt: null,
+                lastAuthenticatedAt: sql`unixepoch()`,
+            }),
+            // Every session ends, the caller's too (its cookie may be a copy); the new one is written after.
+            db.update(customerSessions).set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+                .where(and(eq(customerSessions.customerId, account.id), isNull(customerSessions.revokedAt))) as SQLiteBatchItem,
+            phoneChangedHistory(db, { accountId: account.id }) as SQLiteBatchItem,
+        ]);
     } catch (error) {
-        if (error instanceof Error && error.message.includes("customers_verified_phone_unique")) {
-            throw new ConflictError("This phone number is verified on another account. Sign in with it instead.");
+        if (error instanceof ValidationError) {
+            throw new ConflictError("This phone number is verified on another account. Sign in with it instead.", { field: "phone", reason: "phone_on_another_account" });
         }
         throw error;
     }
-    return { movedOrders: Number(joining?.count ?? 0) };
+    // The change is committed: a notice that cannot be queued is logged, never the buyer's failure.
+    const notices: OtpDelivery[] = [];
+    for (const target of previousSignIns(account, channel === "sms" ? "sms" : null)) {
+        try {
+            notices.push(await queuePhoneChangedNotice(db, {
+                target,
+                accountId: account.id,
+                maskedPhone: maskedNumber(phone),
+                encryptionKey: input.encryptionKey,
+                credentialEncryptionKey: input.credentialEncryptionKey,
+            }));
+        } catch (error) {
+            console.warn("[CustomerAuth] Phone change notice not queued:", error instanceof Error ? error.name : typeof error);
+        }
+    }
+    return { movedOrders: Number(joining?.count ?? 0), session, notices };
 }
 
-function proofUpdate(method: "email" | "phone") {
-    return {
-        ...(method === "email"
-            ? { emailVerifiedAt: sql`coalesce(${customers.emailVerifiedAt}, unixepoch())` }
-            : { phoneVerifiedAt: sql`coalesce(${customers.phoneVerifiedAt}, unixepoch())` }),
-        lastAuthenticatedAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-    };
+const CALLER_SESSION_ENDED = "CALLER_SESSION_ENDED";
+
+type NoticeTarget = { method: "email" | "phone"; channel: "email" | "sms"; identifier: string };
+
+/**
+ * Every identity proven before a phone change: the proven email, and the old
+ * proven phone by text message (a WhatsApp channel carries only code
+ * templates: no notice there).
+ */
+function previousSignIns(account: CustomerRow, smsChannel: "sms" | null): NoticeTarget[] {
+    const targets: NoticeTarget[] = [];
+    if (account.emailVerifiedAt && account.email) targets.push({ method: "email", channel: "email", identifier: account.email.trim().toLowerCase() });
+    const oldPhone = account.phoneVerifiedAt ? phoneOrNull(account.phone) : null;
+    if (oldPhone && smsChannel) targets.push({ method: "phone", channel: smsChannel, identifier: oldPhone });
+    return targets;
+}
+
+/**
+ * The notice that the sign-in phone changed, to one identity proven before.
+ * It rides the code delivery (receipts, retries) as purpose `phone_changed`,
+ * whose message carries no code; its challenge is keyed to this notice
+ * alone, so nothing can prove it.
+ */
+async function queuePhoneChangedNotice(
+    db: Database,
+    input: { target: NoticeTarget; accountId: string; maskedPhone: string; encryptionKey?: string; credentialEncryptionKey?: string },
+): Promise<OtpDelivery> {
+    const { target } = input;
+    requireKey(input.credentialEncryptionKey, "Customer OTP delivery target encryption key is not configured.");
+    const otpKey = await buildCustomerAuthOtpStorageKey(target.channel, boundIdentifier(target.identifier, `notice:phone-changed:${input.accountId}:${nanoid()}`), input.encryptionKey);
+    const deliveryKey = createAuthOtpDeliveryKey();
+    await persistCustomerAuthOtpChallenge(db, {
+        otpKey,
+        deliveryKey,
+        method: target.method,
+        channel: target.channel,
+        identifier: target.identifier,
+        deliveryTarget: target.identifier,
+        code: await deriveCustomerAuthOtpDeliveryCode({ otpKey, deliveryKey, encryptionKey: input.encryptionKey }),
+        encryptionKey: input.encryptionKey,
+        contactEncryptionKey: input.credentialEncryptionKey,
+        ttlSeconds: OTP_TTL_SECONDS,
+        resendCooldownSeconds: 0,
+        maxAttempts: 1,
+    });
+    return buildOtpDelivery({ channel: target.channel, purpose: "phone_changed", challengeKey: otpKey, deliveryKey, maskedPhone: input.maskedPhone });
 }
 
 function markProven(row: CustomerRow, method: "email" | "phone", at: Date): CustomerRow {
@@ -1055,7 +1266,7 @@ async function prepareNewAccount(
         } as CustomerRow,
         address,
         writes: [
-            db.insert(customers).values(values) as SQLiteBatchItem,
+            insertCustomer(db, values) as SQLiteBatchItem,
             ...(address ? [db.insert(customerAddresses).values(address) as SQLiteBatchItem] : []),
         ],
     };
@@ -1098,6 +1309,8 @@ async function createSessionForCustomer(
     try {
         await safeBatch(db, statements);
     } catch (error: unknown) {
+        if (isBatchGuardError(error, CALLER_SESSION_ENDED)) throw new UnauthorizedError("Your session ended. Sign in again.");
+        if (isSignInChangedError(error)) throw signInChangedConflict();
         const message = error instanceof Error ? error.message : String(error);
         // Only a proven identifier is unique: a concurrent sign-up proved it first.
         if (message.includes("customers_verified_") || message.includes("UNIQUE constraint failed: customers.")) {
@@ -1192,13 +1405,22 @@ export async function deleteCustomerSession(
 }
 
 /**
- * Updates a customer's name and returns a fresh session projection from D1.
- * Addresses are the address book's (`createCustomerAddress` and friends).
+ * Updates the signed-in buyer's name and WhatsApp number and returns a fresh
+ * session projection from D1. A phone on an account can become how it signs
+ * in, so a session alone never changes it: a different `phone` is a 409
+ * `phone_change_needs_codes` naming the change flow (`sendAccountPhoneCode` /
+ * `verifyAccountPhoneCode` with `phone`: a code to the identity the account
+ * signs in with and one to the new number), or the store when the buyer
+ * cannot reach that identity. The WhatsApp number is read as checkout reads
+ * it, is a contact and never an identity, is kept only while the store
+ * collects one apart from the phone (a stored one is dropped on the next save
+ * once it does not), and is null when it is the phone. Addresses are the
+ * address book's.
  */
 export async function updateCustomerProfile(
     db: Database,
     session: CustomerSession,
-    updates: { name?: string },
+    updates: { name?: string; phone?: string | null; whatsapp?: string | null },
 ): Promise<{ session: CustomerSession; customer: CustomerAuthProfile }> {
     if (!session.customerId) {
         throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
@@ -1209,14 +1431,6 @@ export async function updateCustomerProfile(
         throw new UnauthorizedError("Customer profile is no longer available. Please log in again.");
     }
 
-    const allowedCountriesConfig = await readAcceptedCustomerCountries(db);
-    if (existing.phone) {
-        normalizePhoneOrThrow(existing.phone, {
-            countries: allowedCountriesConfig.allowedCountries,
-            mode: allowedCountriesConfig.allowedCountriesMode,
-        });
-    }
-
     const nextName = updates.name !== undefined
         ? normalizeOptionalProfileText(updates.name)
         : existing.name;
@@ -1224,12 +1438,49 @@ export async function updateCustomerProfile(
         throw new ValidationError("Enter your name.");
     }
 
+    let whatsapp: string | null | undefined;
+    const phone = phoneOrNull(existing.phone);
+    if (updates.whatsapp !== undefined || existing.whatsapp || updates.phone !== undefined) {
+        const { identity, phoneCountryPolicy } = await readSignInPolicy(db);
+        if (updates.phone !== undefined) {
+            const typed = updates.phone?.trim() ? contactNumberOrThrow(updates.phone, "phone", phoneCountryPolicy) : null;
+            if (typed !== phone) {
+                throw new ConflictError("Changing your phone takes a code to how you sign in now and one to the new number. If you can't get the first code, ask the store to change it for you.", {
+                    field: "phone",
+                    reason: PHONE_CHANGE_NEEDS_CODES_REASON,
+                    allowed: ["phone_change_codes", "ask_store"],
+                });
+            }
+        }
+        const typedWhatsapp = updates.whatsapp !== undefined
+            ? (updates.whatsapp?.trim() ? contactNumberOrThrow(updates.whatsapp, "whatsapp") : null)
+            : undefined;
+        if (identity.whatsapp !== "separate") {
+            if (typedWhatsapp) {
+                throw new ValidationError("This store doesn't ask for a separate WhatsApp number.", { field: "whatsapp", reason: "whatsapp_not_collected" });
+            }
+            whatsapp = null;
+        } else {
+            const kept = typedWhatsapp === undefined ? existing.whatsapp : typedWhatsapp;
+            // Null means "the phone", as on an order.
+            whatsapp = kept && kept !== phone ? kept : null;
+        }
+    }
+
+    // Name and WhatsApp only: how the buyer signs in is never written here.
     await db
         .update(customers)
-        .set({ name: nextName, updatedAt: sql`unixepoch()` })
+        .set({ name: nextName, whatsapp: whatsapp === undefined ? sql`${customers.whatsapp}` : whatsapp, updatedAt: sql`unixepoch()` })
         .where(and(eq(customers.id, session.customerId), isNull(customers.deletedAt)));
 
     return readCustomerProfile(db, session);
+}
+
+/** A typed number in E.164 as checkout reads it, or a refusal naming the field and why. */
+function contactNumberOrThrow(value: string, field: "phone" | "whatsapp", policy?: PhoneCountryPolicy): string {
+    const parsed = parseContactPhone(value, { allowedCountries: policy });
+    if (parsed.ok) return parsed.value;
+    throw new ValidationError(field === "whatsapp" ? "Enter a valid WhatsApp number." : parsed.message, { field, reason: parsed.reason });
 }
 
 /** The signed-in customer's fresh profile (one statement, the default address joined). */
