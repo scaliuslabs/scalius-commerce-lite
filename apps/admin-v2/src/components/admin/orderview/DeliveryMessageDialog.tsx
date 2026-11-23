@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { postApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageReveal } from "@scalius/api-client/sdk";
+import { useState } from "react";
 import { ORDER_LINE_MESSAGE_TEXT_MAX, readOrderLineMessageDraft } from "@scalius/shared/order-line-message";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -10,7 +9,6 @@ import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { orderDeliveryMessageMessages } from "~/i18n/order-delivery-message";
 import { resourceMessages } from "~/i18n/resource";
-import { apiData } from "~/lib/api";
 import { readAdminApiError } from "~/lib/admin-api-error";
 import { orderErrorMessage } from "~/lib/api-mutations/orders";
 import type { Command } from "~/lib/use-command";
@@ -33,18 +31,29 @@ const REASONS = new Set([
   "message_link_too_long",
 ]);
 
+/** A message read back for an edit: its text and link, held in component state only. */
+export interface RevealedMessage {
+  text: string;
+  link: string;
+}
+
 /**
- * Add or edit one line's delivery message. The text is read back (revealed)
- * when an edit opens and lives only in this component's state: no query cache,
- * no storage, no URL, no log. The form mounts with each opening and unmounts
- * when the dialog is gone, so a closed dialog holds nothing.
+ * Add or edit one line's delivery message. An edit's text is read back once,
+ * by the Edit press itself (the card's reveal command, which also refreshes
+ * the order: the read is on its timeline), and handed in as `revealed`; it
+ * lives only in component state: no query cache, no storage, no URL, no log.
+ * The form mounts with each opening and unmounts when the dialog is gone, so
+ * a closed dialog holds nothing.
  */
-export function DeliveryMessageDialog({ open, session, orderId, line, save, onClose, onSaved, onConflict }: {
+export function DeliveryMessageDialog({ open, session, line, revealed, revealFailed, save, onClose, onSaved, onConflict }: {
   open: boolean;
   /** A new one for each opening: the form starts fresh. */
   session: number;
-  orderId: string;
   line: MessageLine | null;
+  /** The message read back for this opening; null while it is being read (or for an add). */
+  revealed: RevealedMessage | null;
+  /** Reading it back failed for this opening. */
+  revealFailed: boolean;
   save: Command<SaveMessage, unknown>;
   onClose: () => void;
   onSaved: () => void;
@@ -54,15 +63,16 @@ export function DeliveryMessageDialog({ open, session, orderId, line, save, onCl
   return (
     <Dialog open={open} onOpenChange={save.guardClose((next) => { if (!next) onClose(); })}>
       <DialogContent>
-        {line ? <MessageForm key={`${session}:${line.item.id}`} orderId={orderId} line={line} save={save} onClose={onClose} onSaved={onSaved} onConflict={onConflict} /> : null}
+        {line ? <MessageForm key={`${session}:${line.item.id}:${revealed ? "read" : "waiting"}`} line={line} revealed={revealed} revealFailed={revealFailed} save={save} onClose={onClose} onSaved={onSaved} onConflict={onConflict} /> : null}
       </DialogContent>
     </Dialog>
   );
 }
 
-function MessageForm({ orderId, line, save, onClose, onSaved, onConflict }: {
-  orderId: string;
+function MessageForm({ line, revealed, revealFailed, save, onClose, onSaved, onConflict }: {
   line: MessageLine;
+  revealed: RevealedMessage | null;
+  revealFailed: boolean;
   save: Command<SaveMessage, unknown>;
   onClose: () => void;
   onSaved: () => void;
@@ -73,25 +83,12 @@ function MessageForm({ orderId, line, save, onClose, onSaved, onConflict }: {
   const itemId = line.item.id;
   // Fixed when the form opens: a message someone else adds meanwhile never replaces the draft.
   const [editing] = useState(line.message !== null);
-  const [text, setText] = useState("");
-  const [link, setLink] = useState("");
+  // The read-back text fills the form when it mounts: the dialog mounts it again once the text arrives.
+  const [text, setText] = useState(revealed?.text ?? "");
+  const [link, setLink] = useState(revealed?.link ?? "");
   // Reading the current message back: an edit waits for it, an add has nothing to read.
-  const [state, setState] = useState<"loading" | "ready" | "failed">(editing ? "loading" : "ready");
+  const state: "loading" | "ready" | "failed" = !editing || revealed ? "ready" : revealFailed ? "failed" : "loading";
   const [errors, setErrors] = useState<{ text?: string; link?: string; form?: string }>({});
-
-  useEffect(() => {
-    if (!editing) return;
-    let current = true;
-    apiData(postApiV1AdminOrdersByIdItemsByItemIdDeliveryMessageReveal({ path: { id: orderId, itemId } }))
-      .then((revealed) => {
-        if (!current) return;
-        setText(revealed.text ?? "");
-        setLink(revealed.link ?? "");
-        setState("ready");
-      })
-      .catch(() => { if (current) setState("failed"); });
-    return () => { current = false; };
-  }, [editing, orderId, itemId]);
 
   const refusal = (error: Error) => {
     const api = readAdminApiError(error);

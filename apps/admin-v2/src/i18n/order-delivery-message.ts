@@ -36,6 +36,8 @@ export const orderDeliveryMessageMessages = defineMessages({
     removed: "Message removed",
     removeTitle: "Remove the message for {name}?",
     removeBody: "The buyer will no longer see it in their account.",
+    closedNote: "Send a buyer sign-in details or steps for an item, shown in their account.",
+    showLines: "Write a message",
   },
   bn: {
     title: "ডেলিভারি বার্তা",
@@ -71,5 +73,7 @@ export const orderDeliveryMessageMessages = defineMessages({
     removed: "বার্তা সরানো হয়েছে",
     removeTitle: "{name}-এর বার্তা সরাবেন?",
     removeBody: "ক্রেতা আর নিজের অ্যাকাউন্টে এটি দেখতে পাবেন না।",
+    closedNote: "কোনো আইটেমের সাইন-ইন তথ্য বা নির্দেশনা ক্রেতাকে পাঠান, তাঁর অ্যাকাউন্টে দেখা যাবে।",
+    showLines: "মেসেজ লিখুন",
   },
 });

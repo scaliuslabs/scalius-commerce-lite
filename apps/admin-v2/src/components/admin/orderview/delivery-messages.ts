@@ -14,7 +14,7 @@ export interface LineMessage {
 }
 
 export interface MessageLine {
-  item: Pick<OrderItem, "id" | "productName" | "variantLabel">;
+  item: Pick<OrderItem, "id" | "productName" | "variantLabel" | "fulfillmentType">;
   message: LineMessage | null;
 }
 
@@ -34,15 +34,26 @@ export function lineMessageOf(item: Pick<OrderItem, "extras">): LineMessage | nu
 }
 
 /**
- * The lines staff can write a delivery message for: digital lines, and any
- * line that already has one. A kit split into two lines shares one message;
- * it is listed once, on the line that holds it.
+ * The lines staff can write a delivery message for: every line (a digital
+ * key, a service like an account handed over by hand, even a parcel whose
+ * device needs a sign-in). A kit split into two lines shares one message; it
+ * is listed once, on the line that holds it.
  */
 export function messageLinesOf(order: Pick<Order, "items">): MessageLine[] {
   const ids = new Set(order.items.map((item) => item.id));
   return order.items.flatMap((item) => {
     const message = lineMessageOf(item);
     if (message && message.orderItemId !== item.id && ids.has(message.orderItemId)) return [];
-    return message || item.fulfillmentType === "digital" ? [{ item, message }] : [];
+    return [{ item, message }];
   });
+}
+
+/**
+ * Whether the card opens with its lines listed: some line is handed over by
+ * the store itself rather than as a parcel or at the counter (digital, a
+ * service, a gift card), or already has a message. An order of parcels only
+ * shows the card closed, one press from adding a message.
+ */
+export function messagesExpectedOn(lines: readonly MessageLine[]): boolean {
+  return lines.some((line) => line.message !== null || (line.item.fulfillmentType !== "ship" && line.item.fulfillmentType !== "pickup"));
 }
