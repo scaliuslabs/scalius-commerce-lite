@@ -23,7 +23,6 @@ export const STOREFRONT_THEME_COLOR_KEYS = [
   "destructive-foreground",
   "border",
   "input",
-  "ring",
 ] as const;
 
 export type StorefrontThemeColorKey = (typeof STOREFRONT_THEME_COLOR_KEYS)[number];

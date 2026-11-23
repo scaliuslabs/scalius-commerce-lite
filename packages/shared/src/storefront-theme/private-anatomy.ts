@@ -96,7 +96,7 @@ export type PrivateTokenName = (typeof PRIVATE_TOKEN_NAMES)[number];
 export type PrivatePaletteRole =
   | "background" | "foreground" | "card" | "card-foreground" | "popover" | "popover-foreground" | "primary" | "primary-foreground"
   | "secondary" | "secondary-foreground" | "muted" | "muted-foreground" | "accent" | "accent-foreground" | "destructive" | "destructive-foreground"
-  | "border" | "input" | "ring";
+  | "border" | "input";
 
 /**
  * What a style target is to the colour table (private-tokens.ts): a `box`

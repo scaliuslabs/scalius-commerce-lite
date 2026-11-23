@@ -16,7 +16,7 @@ export const REFERENCE_PALETTE: StorefrontThemeColors = {
   muted: "#2a2140", "muted-foreground": "#b9b0d6",
   accent: "#2a2140", "accent-foreground": "#f4f1ff",
   destructive: "#f87171", "destructive-foreground": "#0b0915",
-  border: "#524179", input: "#8b7bb8", ring: "#a78bfa",
+  border: "#524179", input: "#8b7bb8",
 };
 
 export const REFERENCE_PRIVATE_PAGES = {

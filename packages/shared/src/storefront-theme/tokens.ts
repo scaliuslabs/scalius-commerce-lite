@@ -294,24 +294,24 @@ type Palette = Readonly<StorefrontThemeColors>;
  * palette names, taken toward the ink until it shows against the page and
  * the card (WCAG 1.4.11): the border is the only edge a text field has.
  */
-function palette(colors: Omit<Palette, "popover" | "popover-foreground" | "ring"> & Partial<Palette>): Palette {
+function palette(colors: Omit<Palette, "popover" | "popover-foreground"> & Partial<Palette>): Palette {
   const input = storefrontThemeFieldBorder(colors);
   return {
     popover: colors.card,
     "popover-foreground": colors["card-foreground"],
     ...colors,
     input,
-    ring: storefrontThemeFocusRing({ ...colors, ring: colors.ring ?? colors.primary, input }),
   } as Palette;
 }
 
 /**
- * A colour set's focus ring as the palettes give it: a field's border turns
- * this colour when it has focus, so it shows (3:1) against that border and
- * on the page and the card; its tint taken toward the ink until it does.
+ * A colour set's focus ring, made when its colours are read and never
+ * stored: a field's border turns this colour when it has focus, so it shows
+ * (3:1) against that border and on the page and the card. The action
+ * colour, taken toward the ink until it does.
  */
-export function storefrontThemeFocusRing(colors: Pick<StorefrontThemeColors, "ring" | "input" | "background" | "card" | "foreground">): string {
-  return readableOn(colors.ring, [colors.input, colors.background, colors.card], colors.foreground, STOREFRONT_THEME_MIN_FIELD_BORDER_CONTRAST);
+export function storefrontThemeFocusRing(colors: Pick<StorefrontThemeColors, "primary" | "input" | "background" | "card" | "foreground">): string {
+  return readableOn(colors.primary, [colors.input, colors.background, colors.card], colors.foreground, STOREFRONT_THEME_MIN_FIELD_BORDER_CONTRAST);
 }
 
 /**
@@ -341,7 +341,7 @@ export const STOREFRONT_THEME_PALETTES = {
     muted: "#f1eee8", "muted-foreground": "#5d5850",
     accent: "#e9e3d8", "accent-foreground": "#1d1c1a",
     destructive: "#b42318", "destructive-foreground": "#ffffff",
-    border: "#e5e0d6", input: "#d3ccbf", ring: "#1d1c1a",
+    border: "#e5e0d6", input: "#d3ccbf",
   }),
   // Daraz/Target: bright white, near-black ink, cool neutral panels
   // for density, one saturated orange reserved for buying actions.
@@ -352,7 +352,7 @@ export const STOREFRONT_THEME_PALETTES = {
     muted: "#f2f4f5", "muted-foreground": "#565959",
     accent: "#fff1e6", "accent-foreground": "#7a2e0e",
     destructive: "#b12704", "destructive-foreground": "#ffffff",
-    border: "#e3e6e6", input: "#c7cccc", ring: "#c2410c",
+    border: "#e3e6e6", input: "#c7cccc",
   }),
   // COS/Aesop/Ssense: linen page, espresso ink, no colour at all; hierarchy
   // comes from type and space.
@@ -363,7 +363,7 @@ export const STOREFRONT_THEME_PALETTES = {
     muted: "#ebe7df", "muted-foreground": "#5a554d",
     accent: "#e3ddd2", "accent-foreground": "#242220",
     destructive: "#9b1c1c", "destructive-foreground": "#ffffff",
-    border: "#d9d3c7", input: "#c9c1b3", ring: "#242220",
+    border: "#d9d3c7", input: "#c9c1b3",
   }),
   // Instacart/Ocado/Chaldal: clean white with a fresh leaf green for buying,
   // soft green-tinted panels for categories and delivery facts.
@@ -374,7 +374,7 @@ export const STOREFRONT_THEME_PALETTES = {
     muted: "#f1f6f1", "muted-foreground": "#4b5a51",
     accent: "#e3f4e6", "accent-foreground": "#0b4f2a",
     destructive: "#c0262d", "destructive-foreground": "#ffffff",
-    border: "#dde8de", input: "#c6d6c8", ring: "#0b7a3e",
+    border: "#dde8de", input: "#c6d6c8",
   }),
   // Glossier/Sephora: black type and black pill buttons on white, a blush
   // accent used sparingly on surfaces, never on text.
@@ -385,7 +385,7 @@ export const STOREFRONT_THEME_PALETTES = {
     muted: "#fbf4f3", "muted-foreground": "#625a5b",
     accent: "#f8e1e1", "accent-foreground": "#5c1f2a",
     destructive: "#b4232c", "destructive-foreground": "#ffffff",
-    border: "#f0e2e1", input: "#e2cfcd", ring: "#1a1718",
+    border: "#f0e2e1", input: "#e2cfcd",
   }),
   // Aarong/Fabindia/Anthropologie: hand-made paper, umber ink and a madder
   // terracotta for actions; jute-tinted neutrals.
@@ -396,7 +396,7 @@ export const STOREFRONT_THEME_PALETTES = {
     muted: "#f2eadd", "muted-foreground": "#665646",
     accent: "#ecdfc9", "accent-foreground": "#4a2c14",
     destructive: "#a3191b", "destructive-foreground": "#ffffff",
-    border: "#e2d5bf", input: "#d2c2a6", ring: "#8a3b1e",
+    border: "#e2d5bf", input: "#d2c2a6",
   }),
   // Apple/Nothing/Linear: layered near-blacks (page, card, panel), white ink
   // and white buttons; one soft zinc for secondary text.
@@ -408,7 +408,7 @@ export const STOREFRONT_THEME_PALETTES = {
     accent: "#232327", "accent-foreground": "#f4f4f5",
     // Error text sits on the dark page, so the red must be light.
     destructive: "#f87171", "destructive-foreground": "#0a0a0b",
-    border: "#27272b", input: "#34343a", ring: "#d4d4d8",
+    border: "#27272b", input: "#34343a",
   }),
 } as const satisfies Record<string, Palette>;
 
@@ -487,8 +487,7 @@ export function storefrontDarkPalette(colors: StorefrontThemeColors): Storefront
     muted, "muted-foreground": mutedForeground,
     accent, "accent-foreground": foreground,
     destructive, "destructive-foreground": background,
-    // A field's focus turns its border the ring colour: it shows on that border, lifted from the action colour.
-    border: mix(background, paper, 0.16), input, ring: storefrontThemeFocusRing({ ring: primary, input, background, card, foreground }),
+    border: mix(background, paper, 0.16), input,
   };
 }
 
@@ -590,7 +589,7 @@ export function storefrontPagePaintCss(paint: StorefrontPagePaint, color: (key: 
 
 const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/, "Use a #rrggbb colour.");
 
-/** One colour set: the 19 colour tokens. `colors` and `darkColors` are each one. */
+/** One colour set: the 18 colour tokens (the focus ring is made from them, never stored). `colors` and `darkColors` are each one. */
 export const storefrontThemeColorsSchema = z.object(
   Object.fromEntries(STOREFRONT_THEME_COLOR_KEYS.map((key) => [key, hexColorSchema])) as Record<
     StorefrontThemeColorKey,
@@ -680,6 +679,8 @@ export function buildStorefrontColorCss(colors: StorefrontThemeColors, headerTon
   const dark = storefrontThemeColorsAreDark(colors);
   return {
     ...colors,
+    // The focus ring is made from the colours (never stored): a focused field's border shows on its own border.
+    ring: storefrontThemeFocusRing(colors),
     "theme-header-background": colors[header.background],
     "theme-header-foreground": colors[header.foreground],
     "theme-header-deep": bands.deep,
@@ -711,6 +712,7 @@ export function buildStorefrontTokenCss(tokens: StorefrontThemeTokens): Record<s
   const colors = buildStorefrontColorCss(tokens.colors, tokens.headerTone);
   return {
     ...tokens.colors,
+    ring: colors.ring,
     "theme-font-heading": fontStack(type.heading, type.bangla),
     "theme-font-body": fontStack(type.body, type.bangla),
     "theme-heading-weight": String(type.headingWeight),

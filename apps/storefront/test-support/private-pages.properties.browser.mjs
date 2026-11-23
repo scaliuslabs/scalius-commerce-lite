@@ -352,6 +352,9 @@ const REGRESSIONS = {
   // Review 5: the default look under a palette whose action colour is a mid tone. A field's focus turns its border
   // the ring colour, which must read at 3:1 on the field's own border, in the derived dark colours too.
   "review 5: the store's own page under the marketplace palette's dark colours": { request: { palette: "marketplace", scheme: "dark" }, privatePages: {} },
+  // Review 6, S1: the same colours as a store saved them at version 14, its focus ring the action colour (1.6 to 2.3:1
+  // on a field's border in three templates): the ring is made when the colours are read, never served from the save.
+  "review 6, S1: a colour set saved with the action colour as its ring, dark": { request: { palette: "marketplace", scheme: "dark", saved: true }, privatePages: {} },
   // A filled button's hover once mixed its colour with the page (`bg-primary/90`): white on it read 4.42:1.
   "review 5: the store's own page under the marketplace palette's light colours": { request: { palette: "marketplace", scheme: "light" }, privatePages: {} },
   // Review 6, B1: a header skin draws its own light or dark switch (and the host sign-in's account link), and its

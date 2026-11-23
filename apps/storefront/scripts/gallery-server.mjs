@@ -319,7 +319,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       // one of its states, under a palette, colour scheme and page paint, with Noor's chrome when asked (its
       // header skin dropped with `headerSkin: false`), a store of two markets (`localization`), a look an older
       // checker compiled (`stale`), the phone tab bar (`tabs`) and Noor's header drawing its own scheme switch and
-      // account link (`skinSwitch`), and the homepage, where the cart drawer opens (`page: "home"`). The answer
+      // account link (`skinSwitch`), the homepage, where the cart drawer opens (`page: "home"`), and a colour set
+      // saved at version 14 (`saved`). The answer
       // carries the page's colour table (each row's key, selector and kind) for the coverage walk.
       if (url.pathname === `${GALLERY_PREFIX}/private-theme` && request.method === "POST") {
         const body = JSON.parse(await readBody(request) || "{}");
@@ -332,7 +333,18 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         if (body.noor && body.headerSkin === false && base.apps?.skins) delete base.apps.skins.header;
         if (body.noor && body.skinSwitch === true && base.apps?.skins?.header) base.apps.skins.header = { ...base.apps.skins.header, values: { ...base.apps.skins.header.values, landing_label: SKIN_SWITCH } };
         const colors = body.palette && shared.STOREFRONT_THEME_PALETTES[body.palette] ? { ...shared.STOREFRONT_THEME_PALETTES[body.palette] } : base.tokens.colors;
-        const tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors: shared.storefrontDarkPalette(colors), ...(body.paint ? { pagePaint: body.paint } : {}) };
+        let tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors: shared.storefrontDarkPalette(colors), ...(body.paint ? { pagePaint: body.paint } : {}) };
+        // A colour set a store saved at version 14 (`saved`): its colours and made dark colours kept the action
+        // colour as their focus ring. Read as the store reads a stored document.
+        if (body.saved === true) {
+          const { privatePages: _privatePages, ...document } = structuredClone({ ...base, tokens });
+          const read = shared.readStoredStorefrontThemeDocument({
+            ...document, version: 14, blocks: { ...document.blocks, cart: { summary: "side" }, cartDrawer: { width: "standard", recommendations: "shown" } },
+            tokens: { ...tokens, colors: { ...tokens.colors, ring: tokens.colors.primary }, darkColors: { ...tokens.darkColors, ring: tokens.darkColors.primary } },
+          });
+          if (!read.ok) return sendJson(response, 400, { error: "The saved colour set did not read." });
+          tokens = read.document.tokens;
+        }
         // A page paint the palette cannot read on is dropped by a save: a case that asks for one names a readable paint.
         if (body.paint && !shared.storefrontTokensWithReadablePaint(tokens).pagePaint) return sendJson(response, 400, { error: "The page paint does not read on this palette." });
         // The phone tab bar (`tabs`: the theme's bottom-tabs phone navigation).

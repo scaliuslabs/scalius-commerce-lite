@@ -166,6 +166,25 @@ const V15_ANATOMY = 2;
 const V15_SANITIZER = PRIVATE_CSS_SANITIZER_VERSION;
 
 /**
+ * Version 14 → 15 too: the colours and the dark colours (a document's, or an
+ * app template's tokens) drop their stored `ring`. A store saved before kept
+ * the action colour there, which a focused field's border did not show on
+ * (1.6 to 2.3:1 in three templates); the ring is now made from the colours
+ * when they are read (tokens.ts `storefrontThemeFocusRing`), so every stored
+ * set, the dark colours made from it included, reads at 3:1.
+ */
+function unstoredFocusRing(document: Json): Json {
+  const { tokens } = document;
+  if (!isRecord(tokens)) return document;
+  const without = (colors: unknown) => {
+    if (!isRecord(colors)) return colors;
+    const { ring: _ring, ...rest } = colors;
+    return rest;
+  };
+  return { ...document, tokens: { ...tokens, ...("colors" in tokens ? { colors: without(tokens.colors) } : {}), ...("darkColors" in tokens ? { darkColors: without(tokens.darkColors) } : {}) } };
+}
+
+/**
  * Version 14 → 15: the cart page and the drawer are arranged from their
  * parts. `blocks.cart` and `blocks.cartDrawer` go; each choice becomes the
  * arrangement that draws the same page (`summary: top` the cart above the
@@ -225,14 +244,16 @@ function privatePageLayouts(document: Json): Json {
  *   templates and page presets are left as they are.
  * - 14 → 15: the cart page and drawer are arranged from their parts
  *   (`privatePageLayouts`): their blocks become the arrangements that draw
- *   the same pages, under the document's new `privatePages`.
+ *   the same pages, under the document's new `privatePages`; and the colours
+ *   no longer store a focus ring (`unstoredFocusRing`): it is made from them
+ *   when they are read.
  */
 export const STOREFRONT_THEME_DOCUMENT_UPGRADES: Readonly<Record<number, StorefrontThemeDocumentUpgrade>> = {
   10: (document) => snakeAppKeys(document) as Json,
   11: snakeCoreNames,
   12: lightColorScheme,
   13: privatePageBlocks,
-  14: privatePageLayouts,
+  14: (document) => unstoredFocusRing(privatePageLayouts(document)),
 };
 
 /** A chain: the versions it reads, its document steps and each section type's own. */

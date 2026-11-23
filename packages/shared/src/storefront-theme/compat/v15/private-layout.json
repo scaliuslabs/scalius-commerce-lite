@@ -21,8 +21,7 @@
     "destructive": "#b42318",
     "destructive-foreground": "#ffffff",
     "border": "#e5e0d6",
-    "input": "#d3ccbf",
-    "ring": "#1d1c1a"
+    "input": "#d3ccbf"
    },
    "colorScheme": "light",
    "darkColors": null,
@@ -445,8 +444,7 @@
     "destructive": "#9b1c1c",
     "destructive-foreground": "#ffffff",
     "border": "#d9d3c7",
-    "input": "#c9c1b3",
-    "ring": "#242220"
+    "input": "#c9c1b3"
    },
    "colorScheme": "light",
    "darkColors": null,
@@ -766,8 +764,7 @@
     "destructive": "#b12704",
     "destructive-foreground": "#ffffff",
     "border": "#e3e6e6",
-    "input": "#c7cccc",
-    "ring": "#c2410c"
+    "input": "#c7cccc"
    },
    "colorScheme": "light",
    "darkColors": null,
@@ -1125,8 +1122,7 @@
     "destructive": "#9b1c1c",
     "destructive-foreground": "#ffffff",
     "border": "#d9d3c7",
-    "input": "#c9c1b3",
-    "ring": "#242220"
+    "input": "#c9c1b3"
    },
    "colorScheme": "light",
    "darkColors": null,

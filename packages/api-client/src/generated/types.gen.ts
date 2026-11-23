@@ -517,15 +517,15 @@ export type StorefrontThemeDocument = {
         container: '1200' | '1290' | '1360' | '1440' | 'full';
         pagePaint?: {
             kind: 'color';
-            color: 'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring';
+            color: 'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input';
         } | {
             kind: 'linear';
             angle: number;
-            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring'>;
+            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input'>;
         } | {
             kind: 'radial';
             at: 'top' | 'center' | 'bottom';
-            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring'>;
+            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input'>;
         };
     };
     brand: {
@@ -875,7 +875,6 @@ export type StorefrontThemeColors = {
     'destructive-foreground': string;
     border: string;
     input: string;
-    ring: string;
 };
 
 export type StorefrontSettingBindings = {

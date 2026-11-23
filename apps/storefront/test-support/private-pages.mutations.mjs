@@ -230,9 +230,19 @@ export const MUTATIONS = {
     expect: /nav#mobile-tab-bar paints .* no row of the table claims that surface/,
   },
   "R5-A3 the dark colours' ring is the action colour": {
-    why: "the derived dark colours ring a focused field in the action colour, which shows under 3:1 on the field's own border",
-    rewrites: [rewrite("packages/shared/src/storefront-theme/tokens.ts", "ring: storefrontThemeFocusRing({ ring: primary, input, background, card, foreground }),", "ring: primary,")],
+    why: "the colours' focus ring is the action colour, which shows under 3:1 on a focused field's own border",
+    rewrites: [rewrite("packages/shared/src/storefront-theme/tokens.ts", "    ring: storefrontThemeFocusRing(colors),\n", "    ring: colors.primary,\n")],
     cases: ["review 5: the store's own page under the marketplace palette's dark colours"],
+    expect: /input#\w+: its focus ring reads at 3:1 on/,
+  },
+  "R6-S1 a saved colour set serves its stored ring": {
+    why: "the store serves the focus ring a colour set was saved with (the action colour), not the one made from its colours",
+    rewrites: [
+      rewrite("packages/shared/src/storefront-theme/tokens.ts", "    ring: storefrontThemeFocusRing(colors),\n", "    ring: (colors as { ring?: string }).ring ?? storefrontThemeFocusRing(colors),\n"),
+      rewrite("packages/shared/src/storefront-theme/upgrade.ts", "  14: (document) => unstoredFocusRing(privatePageLayouts(document)),", "  14: privatePageLayouts,"),
+      rewrite("packages/shared/src/storefront-theme/tokens.ts", "  Object.fromEntries(STOREFRONT_THEME_COLOR_KEYS.map((key) => [key, hexColorSchema]))", "  { ...Object.fromEntries(STOREFRONT_THEME_COLOR_KEYS.map((key) => [key, hexColorSchema])), ring: hexColorSchema.optional() }"),
+    ],
+    cases: ["review 6, S1: a colour set saved with the action colour as its ring, dark"],
     expect: /input#\w+: its focus ring reads at 3:1 on/,
   },
   "R5-A4 a filled button's hover is its colour over the page": {

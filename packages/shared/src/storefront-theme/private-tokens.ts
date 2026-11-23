@@ -25,7 +25,7 @@
 // colour never decides a colour there.
 import { z } from "zod";
 import { STOREFRONT_THEME_COLOR_KEYS, storefrontThemeContrast, storefrontThemeHoverSurface, storefrontThemeMix, type StorefrontThemeColors } from "./contrast";
-import { storefrontPagePaintColors, storefrontPagePaintCss, type StorefrontPagePaint } from "./tokens";
+import { storefrontPagePaintColors, storefrontPagePaintCss, storefrontThemeFocusRing, type StorefrontPagePaint } from "./tokens";
 import {
   PRIVATE_BUYER_UI_STYLES,
   PRIVATE_HOOK_PATTERN,
@@ -568,7 +568,7 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     const around = parents.length > 0 ? parents.flatMap((row) => row.surface) : surface;
     const marked = place.kind === "field" || place.kind === "control";
     // A control's or a field's own ring is drawn outside it; a box's rings are its children's, drawn on it.
-    const ring = take("ring", "ring", [under?.ring, colors.ring, text, colors.foreground, colors.background], marked ? around : surface, PRIVATE_MARK_CONTRAST_FLOOR);
+    const ring = take("ring", "ring", [under?.ring, storefrontThemeFocusRing(colors), text, colors.foreground, colors.background], marked ? around : surface, PRIVATE_MARK_CONTRAST_FLOOR);
     const border = place.kind === "field"
       ? take("border", "border", [colors.input, colors.border, muted, text], around, PRIVATE_MARK_CONTRAST_FLOOR)
       : take("border", "border", [under?.border ?? colors.border], surface, 1);

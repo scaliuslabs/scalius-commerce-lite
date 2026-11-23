@@ -1834,8 +1834,7 @@
                           "destructive",
                           "destructive-foreground",
                           "border",
-                          "input",
-                          "ring"
+                          "input"
                         ]
                       }
                     },
@@ -1881,8 +1880,7 @@
                             "destructive",
                             "destructive-foreground",
                             "border",
-                            "input",
-                            "ring"
+                            "input"
                           ]
                         },
                         "minItems": 2,
@@ -1935,8 +1933,7 @@
                             "destructive",
                             "destructive-foreground",
                             "border",
-                            "input",
-                            "ring"
+                            "input"
                           ]
                         },
                         "minItems": 2,
@@ -3759,10 +3756,6 @@
           "input": {
             "type": "string",
             "pattern": "^#[0-9a-f]{6}$"
-          },
-          "ring": {
-            "type": "string",
-            "pattern": "^#[0-9a-f]{6}$"
           }
         },
         "required": [
@@ -3783,8 +3776,7 @@
           "destructive",
           "destructive-foreground",
           "border",
-          "input",
-          "ring"
+          "input"
         ],
         "additionalProperties": false
       },

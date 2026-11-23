@@ -32,7 +32,6 @@ import {
   storefrontThemeColorDistance,
   storefrontThemeContrast,
   storefrontThemeFieldBorder,
-  storefrontThemeFocusRing,
   storefrontThemeLab,
   storefrontThemeLuminance,
   storefrontThemeMix,
@@ -70,7 +69,7 @@ import { sameFormValue } from "~/lib/form-values";
 export const COLOR_ROLES = {
   background: ["background"],
   text: ["foreground", "card-foreground", "popover-foreground", "secondary-foreground"],
-  // The focus ring is made from it (`storefrontThemeFocusRing`): a focused field's border shows on its own border.
+  // The focus ring is made from it when the colours are read (`storefrontThemeFocusRing`), never stored.
   buttons: ["primary"],
   buttonText: ["primary-foreground"],
   highlight: ["accent"],
@@ -304,7 +303,6 @@ export function fitThemeColors(
   next.muted = untilRead(next.muted, onPage([text, ink]), page);
   next.secondary = untilRead(next.secondary, onPage([text, ink]), page);
   if (page !== previous.background || text !== previous.foreground || next.card !== previous.card) next.input = storefrontThemeFieldBorder(next);
-  next.ring = storefrontThemeFocusRing({ ...next, ring: primary });
   const surfaces = [page, next.muted, next.card];
   let muted = readableOn(next["muted-foreground"], surfaces, text);
   if (storefrontThemeChroma(muted) > STOREFRONT_THEME_MAX_MUTED_CHROMA) muted = readableOn(greyLike(muted), surfaces, ink);
