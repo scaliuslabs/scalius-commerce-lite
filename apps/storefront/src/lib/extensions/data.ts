@@ -27,7 +27,7 @@ import type {
   StorefrontTile,
   StorefrontWarranty,
 } from "@scalius/shared/plugins/storefront-protocol";
-import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_SECTION_SKIN_PROJECTIONS } from "@scalius/shared/plugins/storefront-protocol";
+import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_PLACED_KIT_ITEMS_MAX, STOREFRONT_SECTION_SKIN_PROJECTIONS } from "@scalius/shared/plugins/storefront-protocol";
 import { STOREFRONT_SEARCH_SCOPE_PARAM as SEARCH_SCOPE_PARAM, storefrontThemeRoutes } from "@scalius/shared/storefront-routes";
 import {
   HOME_PRODUCT_LIST_LIMIT,
@@ -356,6 +356,8 @@ export function storefrontKitOf(kit: ProductKit, page: StorefrontPageMoney): Sto
       delivery: item.delivery,
       price: pageAmount(item.price, page),
     })),
+    componentCount: kit.componentCount,
+    unavailableItems: kit.unavailableItems,
     price: pageAmount(kit.price, page),
     compareAt: pageAmount(kit.compareAtPrice, page),
     saving: pageAmount(kit.saving, page),
@@ -366,6 +368,8 @@ export function storefrontKitOf(kit: ProductKit, page: StorefrontPageMoney): Sto
 
 /** A placed offer as a skin gets it (`StorefrontPlacedOffer`): what it is, its price and band, and its contents when a kit. */
 export function storefrontPlacedOfferOf(offer: ProductPlacedOffer, page: StorefrontPageMoney): StorefrontPlacedOffer {
+  // A host page's offer is a summary: its kit's first items (its own page lists them all).
+  const kit = offer.kit ? storefrontKitOf({ ...offer.kit, components: offer.kit.components.slice(0, STOREFRONT_PLACED_KIT_ITEMS_MAX) }, page) : null;
   return {
     productId: offer.productId,
     variantId: offer.variantId,
@@ -377,8 +381,9 @@ export function storefrontPlacedOfferOf(offer: ProductPlacedOffer, page: Storefr
     price: pageAmount(offer.price, page),
     compareAt: offer.compareAtPrice !== null && offer.compareAtPrice > offer.price ? pageAmount(offer.compareAtPrice, page) : null,
     available: offer.availabilityBand !== "out_of_stock",
+    needsChoices: offer.requiresCustomization,
     availability: offer.availabilityBand,
-    kit: offer.kit ? storefrontKitOf(offer.kit, page) : null,
+    kit,
   };
 }
 
@@ -538,15 +543,13 @@ export function productPageData(input: {
   const emi = product.emi;
   // A product without options sells one SKU: its code is the product's.
   const only = input.options.length === 0 && input.variants.length === 1 ? input.variants[0] : undefined;
-  return {
+  const projection = {
     product: {
       id: product.id,
       title: product.name,
       url: input.url,
       brand: brand && product.brand ? { title: brand, url: `/brands/${encodeURIComponent(product.brand.slug)}` } : null,
       descriptionHtml: product.description ? sanitizeHtml(product.description) : "",
-      // The details tabs the store's description module draws, as data: a skin builds one tab set of its own.
-      tabs: (product.additionalInfo ?? []).flatMap((tab) => (tab.title.trim() && tab.content ? [{ title: tab.title.trim(), html: sanitizeHtml(tab.content) }] : [])),
       media,
       price: amount(input.price.current),
       compareAt: compare(input.price.current, input.price.regular, input.price.from),
@@ -605,7 +608,21 @@ export function productPageData(input: {
         keySpec: row.keySpec,
       })),
     },
-  };
+  } satisfies StorefrontProductPage as StorefrontProductPage;
+  // The details tabs the store's description module draws, as data a skin builds one tab set from:
+  // sanitized when a skin or an app first reads them (its job's JSON), never on a page only core draws,
+  // whose description module sanitizes them itself.
+  const tabs = product.additionalInfo ?? [];
+  Object.defineProperty(projection.product, "tabs", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      const value = tabs.flatMap((tab) => (tab.title.trim() && tab.content ? [{ title: tab.title.trim(), html: sanitizeHtml(tab.content) }] : []));
+      Object.defineProperty(projection.product, "tabs", { value, enumerable: true, configurable: true, writable: true });
+      return value;
+    },
+  });
+  return projection;
 }
 
 /** A listing page's projection (`StorefrontListingPage`): what a listing_main skin gets. */

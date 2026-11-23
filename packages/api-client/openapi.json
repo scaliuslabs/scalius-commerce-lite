@@ -16939,7 +16939,11 @@
           "compareAtPrice": {
             "type": "number",
             "nullable": true,
-            "description": "A kit's items summed; null for a SKU that is not a kit."
+            "description": "A kit's items summed, or a SKU's regular price while it is on sale; null otherwise."
+          },
+          "requiresCustomization": {
+            "type": "boolean",
+            "description": "Its product asks the buyer for inputs before buying: offer a link to its page, never a bare add."
           },
           "availabilityBand": {
             "type": "string",
@@ -16972,6 +16976,7 @@
           "fulfillmentKind",
           "price",
           "compareAtPrice",
+          "requiresCustomization",
           "availabilityBand",
           "kit"
         ],
@@ -17064,7 +17069,20 @@
                 "price"
               ]
             },
-            "maxItems": 20
+            "maxItems": 20,
+            "description": "Its items a buyer may read, in order: none whose product is a draft, archived or deleted (counted in `unavailableItems`); a host page's placed offer lists its first 6 (`componentCount` says how many it holds; its own page lists them all)."
+          },
+          "componentCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "How many items it holds, whatever `components` lists."
+          },
+          "unavailableItems": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20,
+            "description": "Items withheld because their product is not for sale; the kit is out of stock then."
           },
           "price": {
             "type": "number",
@@ -17093,6 +17111,8 @@
         },
         "required": [
           "components",
+          "componentCount",
+          "unavailableItems",
           "price",
           "compareAtPrice",
           "saving",
@@ -61765,6 +61785,42 @@
                           "items": {
                             "$ref": "#/components/schemas/OrderGiftCardTender"
                           }
+                        },
+                        "addOns": {
+                          "type": "object",
+                          "properties": {
+                            "itemsSubtotalMinor": {
+                              "type": "integer"
+                            },
+                            "rows": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "appId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "amountMinor": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "appId",
+                                  "title",
+                                  "amountMinor"
+                                ]
+                              },
+                              "maxItems": 50
+                            }
+                          },
+                          "required": [
+                            "itemsSubtotalMinor",
+                            "rows"
+                          ]
                         }
                       },
                       "required": [
@@ -61788,7 +61844,8 @@
                         "discounts",
                         "paymentRecovery",
                         "buyerView",
-                        "giftCardTenders"
+                        "giftCardTenders",
+                        "addOns"
                       ]
                     }
                   },

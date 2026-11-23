@@ -105,9 +105,15 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
       if (!offer || !action) return whole;
       if (!deferred) offered.add(offer.variantId);
       const intent = read("data-buy-intent") === "buy" ? "buy" : "add";
+      const kept = attributes.filter(([name]) => !HOST_ATTRIBUTES.has(name) && !["data-buy-intent", "hidden", "data-buy-variant", "data-choose-variant", "data-needs-choices"].includes(name));
+      // Its product asks for inputs first: the button opens its page (the offer's SKU chosen), with or without JavaScript.
+      if (offer.needsChoices) {
+        return write(tag, [...kept, ["data-buy-intent", intent], ["type", "submit"], ["form", OFFER_FORM_ID], ["formaction", offer.url], ["formmethod", "get"],
+          ["name", "variant"], ["value", offer.variantId], ["data-needs-choices", null], ["data-availability", offer.available ? "available" : "sold-out"], [BOUND, null]]);
+      }
       const off = !offer.available;
       return write(tag, [
-        ...attributes.filter(([name]) => !HOST_ATTRIBUTES.has(name) && !["data-buy-intent", "hidden", "data-buy-variant", "data-choose-variant"].includes(name)),
+        ...kept,
         ["data-buy-intent", intent],
         ["type", "submit"],
         ["form", OFFER_FORM_ID],

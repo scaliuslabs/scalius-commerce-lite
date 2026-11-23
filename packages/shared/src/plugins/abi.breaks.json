@@ -1756,5 +1756,17 @@
   "from": "d621e0f07489d52c",
   "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontProductPage: an existing signature changed or gained a required member.",
   "reason": "The product page gains placedOffers and a variant's kit (issue 5), media items say their kind and carry a video's file (StorefrontProductMedia extends StorefrontImage), and availability is the named StorefrontAvailability union: every old reader keeps working."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e729a7e1579ba015",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontKit: an existing signature changed or gained a required member.",
+  "reason": "Unreleased (same branch, review of wave 3): a kit says how many items it holds (componentCount) and how many it withholds as not for sale (unavailableItems), so a placed offer lists a summary of its first items and a draft item is never named."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e729a7e1579ba015",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontPlacedOffer: an existing signature changed or gained a required member.",
+  "reason": "Unreleased (same branch, review of wave 3): a placed offer says when its product asks for inputs first (needsChoices), so a theme links its page instead of adding a bare line."
  }
 ]

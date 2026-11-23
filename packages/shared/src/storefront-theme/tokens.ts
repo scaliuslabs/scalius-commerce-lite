@@ -481,7 +481,9 @@ const paintStopsSchema = z.array(paletteColorSchema).min(2).max(4);
  * colours, or a gradient of two to four of them, straight at an angle or
  * round from the top, centre or bottom. Colours are named, never written, so
  * the paint follows the colour scheme (dark pages paint with the dark
- * colours) and holds the same readable-text rules. Absent: the page colour.
+ * colours). The store's text on the page (`STOREFRONT_PAGE_PAINT_TEXT_ROLES`)
+ * must read on every colour the paint shows, in each colour set buyers see
+ * (`listStorefrontPagePaintContrastProblems`). Absent: the page colour.
  */
 export const storefrontPagePaintSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("color"), color: paletteColorSchema }).strict(),
@@ -489,6 +491,62 @@ export const storefrontPagePaintSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("radial"), at: z.enum(STOREFRONT_PAGE_PAINT_ORIGINS), stops: paintStopsSchema }).strict(),
 ]);
 export type StorefrontPagePaint = z.infer<typeof storefrontPagePaintSchema>;
+
+/** The text roles the store draws straight on the page: each must read on the whole paint. */
+export const STOREFRONT_PAGE_PAINT_TEXT_ROLES = ["foreground", "muted-foreground", "primary", "destructive"] as const satisfies readonly StorefrontThemeColorKey[];
+
+/** Samples between two neighbouring stops: dense enough that no band between samples hides a dip. */
+const PAINT_SAMPLES_PER_SPAN = 32;
+
+/**
+ * Every colour a page paint shows in one colour set: its one colour, or a
+ * gradient sampled along its whole length. Hex colours are legacy colours,
+ * which browsers interpolate in gamma-encoded sRGB, so the samples are
+ * mixed there (`storefrontThemeMix`). Absent paint: the page colour. The one
+ * base surface any check of text on the page reads (the private pages' too).
+ */
+export function storefrontPagePaintColors(paint: StorefrontPagePaint | undefined, colors: StorefrontThemeColors): string[] {
+  if (!paint) return [colors.background];
+  if (paint.kind === "color") return [colors[paint.color]];
+  const stops = paint.stops.map((key) => colors[key]);
+  const samples = new Set<string>([stops[0]!]);
+  for (let index = 1; index < stops.length; index += 1) {
+    for (let step = 1; step <= PAINT_SAMPLES_PER_SPAN; step += 1) samples.add(storefrontThemeMix(stops[index - 1]!, stops[index]!, step / PAINT_SAMPLES_PER_SPAN));
+  }
+  return [...samples];
+}
+
+export interface StorefrontPagePaintContrastProblem {
+  text: (typeof STOREFRONT_PAGE_PAINT_TEXT_ROLES)[number];
+  /** The paint's colour where the text reads worst. */
+  surface: string;
+  ratio: number;
+}
+
+/** The store's page text roles below AA somewhere on the paint, worst point each (empty when all read). */
+export function listStorefrontPagePaintContrastProblems(paint: StorefrontPagePaint | undefined, colors: StorefrontThemeColors): StorefrontPagePaintContrastProblem[] {
+  if (!paint) return [];
+  const surfaces = storefrontPagePaintColors(paint, colors);
+  return STOREFRONT_PAGE_PAINT_TEXT_ROLES.flatMap((text) => {
+    const worst = surfaces
+      .map((surface) => ({ text, surface, ratio: storefrontThemeContrast(colors[text], surface) }))
+      .reduce((low, next) => (next.ratio < low.ratio ? next : low));
+    return worst.ratio < STOREFRONT_THEME_MIN_CONTRAST ? [worst] : [];
+  });
+}
+
+/**
+ * The tokens without a page paint their colours no longer read on (in any
+ * colour set buyers see): a colour edit or a new look never leaves a theme
+ * the merchant cannot save over a paint no field of theirs shows.
+ */
+export function storefrontTokensWithReadablePaint<Tokens extends Pick<StorefrontThemeTokens, "colors" | "darkColors" | "colorScheme" | "colorSchemeToggle" | "pagePaint">>(tokens: Tokens): Tokens {
+  if (!tokens.pagePaint) return tokens;
+  const sets = [tokens.colors, ...(storefrontThemeShowsDarkColors(tokens) && tokens.darkColors ? [tokens.darkColors] : [])];
+  if (sets.every((colors) => listStorefrontPagePaintContrastProblems(tokens.pagePaint, colors).length === 0)) return tokens;
+  const { pagePaint: _unreadable, ...rest } = tokens;
+  return rest as Tokens;
+}
 
 /** The paint's CSS: only palette variables, constants and a whole angle. */
 export function storefrontPagePaintCss(paint: StorefrontPagePaint): string {

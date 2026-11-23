@@ -815,8 +815,9 @@ const breadcrumbJsonLd =
 // The offers placed under the page's own (another product's SKU): one empty form their buttons post
 // with (no JavaScript), and each one's cart line facts for product-controller.ts to add it in place.
 const placedOffers = product.placedOffers ?? [];
+// An offer whose product asks for inputs first opens its page instead: it has no line here.
 const placedOfferLines = placedOffers.length > 0
-  ? serializeJsonForInlineScript(placedOffers.map((offer) => ({
+  ? serializeJsonForInlineScript(placedOffers.filter((offer) => !offer.requiresCustomization).map((offer) => ({
       id: offer.productId,
       variantId: offer.variantId,
       slug: offer.productSlug,

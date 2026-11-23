@@ -21295,6 +21295,7 @@
    "image",
    "video"
   ],
+  "STOREFRONT_PLACED_KIT_ITEMS_MAX": 6,
   "STOREFRONT_KIT_DELIVERY_KINDS": [
    "physical",
    "service",

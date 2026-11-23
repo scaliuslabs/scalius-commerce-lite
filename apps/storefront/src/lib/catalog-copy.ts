@@ -214,6 +214,12 @@ export interface CatalogCopy {
       worth: (amount: string) => string;
       /** The saving: "Save ৳1,755 (43%)". */
       save: (amount: string, percent: string) => string;
+      /** Items withheld because they are not for sale: "1 item is unavailable". */
+      unavailable: (count: string, one: boolean) => string;
+      /** The link to a kit's own page for the items a summary leaves out: "See all 12 items". */
+      seeAll: (count: string) => string;
+      /** An offer whose product asks for inputs first: a link to its page. */
+      chooseOptions: string;
       /** How an item reaches the buyer (`STOREFRONT_KIT_DELIVERY_KINDS`). */
       delivery: { physical: string; service: string; digital_key: string; digital_file: string };
     };
@@ -431,6 +437,9 @@ const EN: CatalogCopy = {
       quantity: (count) => `Qty ${count}`,
       worth: (amount) => `${amount} bought separately`,
       save: (amount, percent) => `Save ${amount} (${percent}%)`,
+      unavailable: (count, one) => `${count} ${one ? "item is" : "items are"} unavailable`,
+      seeAll: (count) => `See all ${count} items`,
+      chooseOptions: "Choose options",
       delivery: {
         physical: "Delivered or picked up",
         service: "A service: nothing to deliver",
@@ -657,6 +666,9 @@ const BN: CatalogCopy = {
       quantity: (count) => `পরিমাণ ${count}`,
       worth: (amount) => `আলাদা কিনলে ${amount}`,
       save: (amount, percent) => `সাশ্রয় ${amount} (${percent}%)`,
+      unavailable: (count) => `${count}টি পণ্য এখন পাওয়া যাচ্ছে না`,
+      seeAll: (count) => `সব ${count}টি পণ্য দেখুন`,
+      chooseOptions: "অপশন বেছে নিন",
       delivery: {
         physical: "ডেলিভারি বা পিকআপ",
         service: "সেবা: ডেলিভারির কিছু নেই",

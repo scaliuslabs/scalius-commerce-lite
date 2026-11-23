@@ -71,7 +71,10 @@ const headingId = "placed-offers-title";
                 </p>
               </div>
             </div>
-            {offer.kit && <KitContents kit={offer.kit} words={words} language={language} />}
+            {offer.kit && <KitContents kit={offer.kit} words={words} language={language} moreUrl={offer.url} />}
+            {offer.needsChoices ? (
+              <a href={offer.url} class="flex min-h-11 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-background px-2 text-sm font-medium text-primary hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" data-offer-part="choose" aria-describedby={titleId}>{words.chooseOptions}</a>
+            ) : (
             <div class="flex gap-2" data-offer-part="actions">
               <button
                 type="submit"
@@ -101,6 +104,7 @@ const headingId = "placed-offers-title";
                 class="flex min-h-11 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-primary px-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >{buyLabel}</button>
             </div>
+            )}
           </li>
         );
       })}

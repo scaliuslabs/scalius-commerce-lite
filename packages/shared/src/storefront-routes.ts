@@ -21,8 +21,8 @@ export const STOREFRONT_CORE_ROUTES = Object.freeze({
   trackOrder: "/track-order",
   /** The buyer's messages with the store (support): signed-in, a guest signs in first. */
   inbox: "/account/inbox",
-  /** Start a warranty claim with an order's details. */
-  warrantyClaims: "/warranty-claims",
+  /** The buyer's warranties, where a claim starts (signed-in; a guest signs in first). */
+  warrantyClaims: "/account/warranties",
 });
 
 export type StorefrontCoreRoutes = typeof STOREFRONT_CORE_ROUTES;

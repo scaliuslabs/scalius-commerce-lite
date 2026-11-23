@@ -361,7 +361,7 @@ function installPlacedOfferButtons() {
   if (placedOfferButtons) return;
   placedOfferButtons = true;
   document.addEventListener("click", (event) => {
-    const button = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-sx-bound][data-buy-offer]") : null;
+    const button = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-sx-bound][data-buy-offer]:not([data-needs-choices])") : null;
     if (!button || button.disabled || event.defaultPrevented || button.hasAttribute("aria-busy")) return;
     event.preventDefault();
     button.setAttribute("aria-busy", "true");
@@ -408,9 +408,18 @@ function typedQuantity(value: string): number {
   return /^[-−]/u.test(latin) ? 0 : Number.parseInt(latin.replace(/\D/g, ""), 10);
 }
 
+/**
+ * Without a quantity field (`<BuyForm quantity={false} />`): one unit, or
+ * the edited cart line's own quantity, which an edit keeps.
+ */
+function fieldlessQuantity(): number {
+  return clampQuantity(state.edit?.quantity ?? 1);
+}
+
 /** The quantity the field means now, without touching it. */
 function currentQuantity(): number {
-  const typed = typedQuantity(cache.quantity?.value ?? "1");
+  if (!cache.quantity) return fieldlessQuantity();
+  const typed = typedQuantity(cache.quantity.value);
   return clampQuantity(Number.isFinite(typed) ? typed : 1);
 }
 
@@ -418,7 +427,7 @@ function currentQuantity(): number {
 function readQuantity(): number {
   const input = cache.quantity;
   const message = part("quantity-message");
-  if (!input) return 1;
+  if (!input) return fieldlessQuantity();
   const typed = typedQuantity(input.value);
   const quantity = currentQuantity();
   input.value = String(quantity);

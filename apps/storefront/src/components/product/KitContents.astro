@@ -22,15 +22,19 @@ interface Props {
   hidden?: boolean;
   /** Open from the start (a page whose one SKU is the kit). */
   open?: boolean;
+  /** The kit's own page, for the items a placed offer's summary leaves out. */
+  moreUrl?: string;
 }
 
-const { kit, words, language, variantId, hidden = false, open = false } = Astro.props;
-const count = kit.components.reduce((sum, item) => sum + item.quantity, 0);
+const { kit, words, language, variantId, hidden = false, open = false, moreUrl } = Astro.props;
+const count = kit.componentCount;
+// A summary (a placed offer on a host page) lists the first items; the kit's own page lists them all.
+const unlisted = count - kit.unavailableItems - kit.components.length;
 const deliveryWords = (kind: string) =>
   (STOREFRONT_KIT_DELIVERY_KINDS as readonly string[]).includes(kind) ? words.delivery[kind as keyof typeof words.delivery] : null;
 ---
 
-{kit.components.length > 0 && (
+{count > 0 && (
   <details class="group kit-contents rounded-lg border border-border bg-card" data-kit-contents data-sx-sku={variantId} hidden={hidden} open={open}>
     <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden" data-kit-part="summary">
       <span>{words.included(formatNumber(count, language), count === 1)}</span>
@@ -71,6 +75,12 @@ const deliveryWords = (kind: string) =>
         );
       })}
     </ul>
+    {kit.unavailableItems > 0 && (
+      <p class="border-t border-border px-3 py-2 text-sm text-muted-foreground" data-kit-part="unavailable">{words.unavailable(formatNumber(kit.unavailableItems, language), kit.unavailableItems === 1)}</p>
+    )}
+    {unlisted > 0 && moreUrl && (
+      <p class="border-t border-border px-3 py-2 text-sm"><a href={moreUrl} class="font-medium text-primary underline underline-offset-2" data-kit-part="more">{words.seeAll(formatNumber(count, language))}</a></p>
+    )}
     {kit.saving.amountMinor > 0 && (
       <p class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-3 py-2 text-sm" data-kit-part="saving">
         <span class="text-muted-foreground">{words.worth(kit.compareAt.formatted)}</span>

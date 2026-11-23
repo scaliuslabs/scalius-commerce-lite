@@ -2,7 +2,7 @@
 // payment (with online payment recovery) and order help.
 
 import { checkoutText, pageOrderNumber, pagePhone } from "@/lib/checkout-text";
-import { frozenAddOnTotals } from "@scalius/shared/add-on-folding";
+import { addOnRowsOver, readAddOnRows } from "@scalius/shared/add-on-totals";
 import {
   createCustomerOrderPaymentSession,
   createCustomerOrderSupportRequest,
@@ -641,8 +641,8 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
     // Nothing to deliver and nothing charged: no delivery row.
     const showsDeliveryRow = !(deliveryMode === "none" && !order.shippingMethodName && delivery.charged === 0 && delivery.fee === 0);
     const deliveryRow = orderDeliveryRow({ mode: deliveryMode, methodName: order.shippingMethodName, ...delivery }, copy, money);
-    // The apps' add-ons as their own rows, from what the order's lines froze: Subtotal is the items alone, as on the receipt.
-    const addOns = frozenAddOnTotals(detail.items, order.subtotalAmountMinor ?? 0, document.documentElement.lang);
+    // The apps' add-ons as their own rows, as the server folded them from the order's frozen lines: Subtotal is the items alone, as on the receipt.
+    const addOns = addOnRowsOver(order.subtotalAmountMinor ?? 0, readAddOnRows(detail.addOns));
     summary.innerHTML = [
       row(words.subtotal, cell(minor(addOns.itemsSubtotalMinor)), "subtotal"),
       ...addOns.rows.map((addOn) => row(addOn.title, cell(minor(addOn.amountMinor)), "add-on")),

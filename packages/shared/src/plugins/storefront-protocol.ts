@@ -540,7 +540,8 @@ export interface StorefrontStoreInfo {
  *   order lookup.
  * - `inbox`: the buyer's messages with the store (a support link); a guest
  *   signs in first.
- * - `warrantyClaims`: start a warranty claim.
+ * - `warrantyClaims`: the buyer's warranties, where a claim starts (a
+ *   guest signs in first).
  * Older stores send only `home`, `search`, `cart` and `account`.
  */
 export interface StorefrontRoutes {
@@ -709,6 +710,9 @@ export interface StorefrontProductMedia extends StorefrontImage {
   video?: { url: string; durationMs: number | null } | null;
 }
 
+/** The items a placed offer's kit lists on its host page, at most (its own page lists them all). */
+export const STOREFRONT_PLACED_KIT_ITEMS_MAX = 6;
+
 /**
  * How a kit's item reaches the buyer (`StorefrontKitComponent.delivery`),
  * from its own fulfilment setting: shipped or picked up, performed, a
@@ -742,8 +746,17 @@ export interface StorefrontKitComponent {
  * current prices; `availability` comes from its items (the scarcest one).
  */
 export interface StorefrontKit {
-  /** At most 20, in the merchant's order. */
+  /**
+   * Its items a buyer may read, in the merchant's order: never one whose
+   * product is a draft, archived or deleted (`unavailableItems` counts them;
+   * the kit is out of stock then). A placed offer's kit lists its first
+   * `STOREFRONT_PLACED_KIT_ITEMS_MAX`; its own page lists all, at most 20.
+   */
   components: StorefrontKitComponent[];
+  /** How many items it holds, whatever `components` lists: link the kit's page for the rest. */
+  componentCount: number;
+  /** Items withheld from `components` because they are not for sale. */
+  unavailableItems: number;
   price: StorefrontMoney;
   compareAt: StorefrontMoney;
   saving: StorefrontMoney;
@@ -770,9 +783,15 @@ export interface StorefrontPlacedOffer {
   options: Array<{ name: string; value: string }>;
   image: StorefrontImage | null;
   price: StorefrontMoney;
-  /** A kit's items at their current prices; null for a SKU that is not a kit. */
+  /** A kit's items at their current prices, or a SKU's regular price while it is on sale; null otherwise. */
   compareAt: StorefrontMoney | null;
   available: boolean;
+  /**
+   * Its product asks the buyer for inputs (an engraving) before buying: link
+   * its page (`url`, "Choose options") instead of a buy button. A
+   * `buyOffer` button on it opens that page.
+   */
+  needsChoices: boolean;
   availability: StorefrontAvailability;
   /** Its contents when it is a kit; null otherwise. */
   kit: StorefrontKit | null;

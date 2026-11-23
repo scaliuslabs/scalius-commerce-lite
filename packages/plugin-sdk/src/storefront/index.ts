@@ -59,7 +59,7 @@ export { STOREFRONT_WARRANTY_DURATION_UNITS, STOREFRONT_WARRANTY_PROVIDERS } fro
 /** The kinds of a card's typed facts (`card.cardFacts`). */
 export { STOREFRONT_CARD_FACT_KINDS } from "@scalius/shared/plugins/storefront-protocol";
 /** How a kit's item reaches the buyer (`kit.components[].delivery`), and what a gallery item is (`media[].kind`): lists that grow at their end. */
-export { STOREFRONT_KIT_DELIVERY_KINDS, STOREFRONT_PRODUCT_MEDIA_KINDS } from "@scalius/shared/plugins/storefront-protocol";
+export { STOREFRONT_KIT_DELIVERY_KINDS, STOREFRONT_PLACED_KIT_ITEMS_MAX, STOREFRONT_PRODUCT_MEDIA_KINDS } from "@scalius/shared/plugins/storefront-protocol";
 /** The budgets the packer, the upload and the storefront hold a render to (`islandPropsBytes`, `htmlBytes`, …). */
 export { STOREFRONT_COMPONENT_LIMITS } from "@scalius/shared/plugins/storefront-protocol";
 /** The most product suggestions one `context.searchSuggestions` call answers. */

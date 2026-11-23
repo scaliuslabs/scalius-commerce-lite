@@ -2544,7 +2544,7 @@ export { STOREFRONT_BUY_FORM_PARTS } from "@scalius/shared/plugins/storefront-pr
 export { STOREFRONT_BUY_FORM_OPTION_LAYOUTS } from "@scalius/shared/plugins/storefront-protocol";
 export { STOREFRONT_WARRANTY_DURATION_UNITS, STOREFRONT_WARRANTY_PROVIDERS } from "@scalius/shared/plugins/storefront-protocol";
 export { STOREFRONT_CARD_FACT_KINDS } from "@scalius/shared/plugins/storefront-protocol";
-export { STOREFRONT_KIT_DELIVERY_KINDS, STOREFRONT_PRODUCT_MEDIA_KINDS } from "@scalius/shared/plugins/storefront-protocol";
+export { STOREFRONT_KIT_DELIVERY_KINDS, STOREFRONT_PLACED_KIT_ITEMS_MAX, STOREFRONT_PRODUCT_MEDIA_KINDS } from "@scalius/shared/plugins/storefront-protocol";
 export { STOREFRONT_COMPONENT_LIMITS } from "@scalius/shared/plugins/storefront-protocol";
 export { STOREFRONT_SEARCH_SUGGESTIONS_MAX } from "@scalius/shared/plugins/storefront-protocol";
 export type { BuyFormPartProps, BuyFormProps, DeferredProps, ImageProps, IslandProps, OrderFormProps, PriceProps, ProductModuleProps, SlotProps } from "./components";
@@ -9690,6 +9690,7 @@ export interface StorefrontProductMedia extends StorefrontImage {
         durationMs: number | null;
     } | null;
 }
+export declare const STOREFRONT_PLACED_KIT_ITEMS_MAX = 6;
 export declare const STOREFRONT_KIT_DELIVERY_KINDS: readonly ["physical", "service", "digital_key", "digital_file"];
 export type StorefrontKitDelivery = (typeof STOREFRONT_KIT_DELIVERY_KINDS)[number];
 export interface StorefrontKitComponent {
@@ -9708,6 +9709,8 @@ export interface StorefrontKitComponent {
 }
 export interface StorefrontKit {
     components: StorefrontKitComponent[];
+    componentCount: number;
+    unavailableItems: number;
     price: StorefrontMoney;
     compareAt: StorefrontMoney;
     saving: StorefrontMoney;
@@ -9728,6 +9731,7 @@ export interface StorefrontPlacedOffer {
     price: StorefrontMoney;
     compareAt: StorefrontMoney | null;
     available: boolean;
+    needsChoices: boolean;
     availability: StorefrontAvailability;
     kit: StorefrontKit | null;
 }
