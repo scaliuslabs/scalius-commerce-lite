@@ -300,6 +300,8 @@ With `chrome: theme` the cart page draws your header and footer skins from the s
 - your slots draw nothing: no app slot, no light or dark switch, no market or language form sits inside your region. The store draws its controls beside your regions, where `controls` says: the light or dark switch (when you offer it) by your header, the market and language forms (when the store sells in several) by your footer, `before` or `after` the region (unset: after), or `none`. Their look is the `scheme` and `localization` targets' tokens;
 - no form: every form, field, select and label goes, a search form included. The store's own search (`data-host="search"`: one field named `q` and a submit, in the store's words) sits in its own slot of the header's frame, before or after your region as `search` says, never inside it. The page carries no app form token.
 
+The store rebuilds at most 16 KiB of your header's (and footer's) markup, so the rebuild stays within about 2 ms of a request's CPU; over that it draws its own chrome there and logs why once. A real header is a few KiB. Each rebuilt skin is kept for the isolate's later pages.
+
 Your public stylesheet does not load on private pages: style the chrome in this stylesheet through its classes (`[data-free="header"] .site-header`). A menu works as a `<details>`.
 
 Trust model. A bundled app's skin is code the store runs in its own Worker. It gets only the job (the projection, its settings and the root path), but as host code it could read what the process holds during that request, like any store code. An isolated app's skin runs in its own isolate and gets only the job. Neither ever gets the buyer's cart lines, which live in the browser.

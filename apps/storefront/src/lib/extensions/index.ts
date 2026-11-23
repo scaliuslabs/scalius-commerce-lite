@@ -28,7 +28,7 @@ import {
 import { splitStorefrontEmbeds, type StorefrontMarkupPart } from "@scalius/shared/plugins/storefront-embeds";
 import { getLayoutData } from "@/lib/api/storefront";
 import { getRuntime, getRuntimePresence, getRuntimePrivateImageOrigins, getRuntimeStorefrontUrl, getWorkerEnv } from "@/lib/api/runtime";
-import { inertChromeHtml } from "@scalius/shared/plugins/inert-html";
+import { INERT_MARKUP_MAX_BYTES, inertChromeHtml } from "@scalius/shared/plugins/inert-html";
 import { cspSourcesAllowImage } from "@scalius/shared/security-csp";
 import { STOREFRONT_CORE_ROUTES, STOREFRONT_SEARCH_QUERY } from "@scalius/shared/storefront-routes";
 import { storefrontCopy } from "@/lib/storefront-copy";
@@ -41,7 +41,7 @@ import { storeRegion, storeTimeZone } from "@/lib/store-time-zone";
 import { dateLocale } from "@scalius/shared/locale-format";
 import { markRenderDegraded } from "@/lib/page-dependencies";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { ExtensionHost } from "./host";
+import { ExtensionHost, warnOnce } from "./host";
 import { storefrontIncidentReporter } from "./incidents";
 import { storeLogo, storefrontImageOf } from "./data";
 import type { ExtensionRuntime } from "./loaders";
@@ -256,7 +256,18 @@ export async function privateChromeMarkup(locals: object, url: URL, target: "hea
   const settings = resolveSkinSettings(declaration.settings, values, (id) => storefrontImageOf(theme.skinMedia.get(id)));
   const html = await host.render(extension, { kind: "skin", target, component: declaration.id, settings, data: await data() } as never, { jsonLd: false });
   const markup = appMarkup(extension, target, html);
-  return markup ? { ...markup, parts: markup.parts.map((part) => (part.kind === "html" ? { ...part, html: inertHtml(part.html) } : part)) } : null;
+  if (!markup) return null;
+  const parts: StorefrontMarkupPart[] = [];
+  for (const part of markup.parts) {
+    const inert = part.kind === "html" ? inertHtml(part.html) : null;
+    if (part.kind === "html" && inert === null) {
+      // Over the rebuild's bound: the store's own chrome draws in its place.
+      warnOnce(`private-chrome-size:${extension.pluginId}:${target}`, `${extension.pluginId} ${target} skin draws over ${INERT_MARKUP_MAX_BYTES / 1024} KiB on a private page: the store draws its own ${target} there.`);
+      return null;
+    }
+    parts.push(part.kind === "html" ? { ...part, html: inert! } : part);
+  }
+  return { ...markup, parts };
 }
 
 /**
@@ -282,16 +293,26 @@ export async function privateChromeControls(locals: object): Promise<Exclude<Pri
   return served.controls ?? "after";
 }
 
+/** Rebuilt markup this isolate keeps, by its content and the page's image origins (a skin's markup repeats on every page). */
+const INERT_MEMO_MAX = 64;
+const inertMemo = new Map<string, string | null>();
+
 /**
  * Checked app markup rebuilt for a private page (`inertChromeHtml`, an allow-list): no
  * island, script, style, frame or form, class names and ids the region's own, links only
- * to store paths and images only from the page's allowed origins.
+ * to store paths and images only from the page's allowed origins. Null when it is over the
+ * rebuild's bound (`INERT_MARKUP_MAX_BYTES`). The same markup is rebuilt once per isolate.
  */
-export function inertHtml(html: string): string {
+export function inertHtml(html: string): string | null {
   const allowed = getRuntimePrivateImageOrigins() ?? [];
-  return inertChromeHtml(html, {
-    imageAllowed: (src) => cspSourcesAllowImage(src, allowed, getRuntimeStorefrontUrl()),
-  });
+  const origin = getRuntimeStorefrontUrl();
+  const key = `${origin} ${allowed.join(" ")}\u0000${html}`;
+  const known = inertMemo.get(key);
+  if (known !== undefined) return known;
+  const rebuilt = inertChromeHtml(html, { imageAllowed: (src) => cspSourcesAllowImage(src, allowed, origin) });
+  if (inertMemo.size >= INERT_MEMO_MAX) inertMemo.delete(inertMemo.keys().next().value!);
+  inertMemo.set(key, rebuilt);
+  return rebuilt;
 }
 
 /** Cuts checked markup under its unit's embed rule; null when it draws nothing or misses a required embed. */

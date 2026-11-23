@@ -219,8 +219,18 @@ export function inertMarkupProblems(root: { querySelectorAll(selector: string): 
   return problems;
 }
 
-/** Checked skin markup rebuilt with nothing left that runs, loads, frames, posts, collects or shadows the page. */
-export function inertChromeHtml(html: string, options: InertChromeOptions): string {
+/**
+ * The most markup one region rebuilds (UTF-8 bytes). Its rebuild then stays
+ * within about 2 ms of CPU on a Worker (inert-html.test.ts measures it), so a
+ * private page with a header and a footer keeps inside Workers Free's 10 ms;
+ * a real header is a few KiB. Larger markup is not rebuilt: the store draws
+ * its own chrome in its place.
+ */
+export const INERT_MARKUP_MAX_BYTES = 16 * 1024;
+
+/** Checked skin markup rebuilt with nothing left that runs, loads, frames, posts, collects or shadows the page; null when it is over `INERT_MARKUP_MAX_BYTES`. */
+export function inertChromeHtml(html: string, options: InertChromeOptions): string | null {
+  if (html.length > INERT_MARKUP_MAX_BYTES / 3 && new TextEncoder().encode(html).byteLength > INERT_MARKUP_MAX_BYTES) return null;
   const out: string[] = [];
   walk(parseDocument(untrustedHtml(html), { ...UNTRUSTED_HTML_PARSING, recognizeSelfClosing: true }).children, options, out);
   return out.join("");
