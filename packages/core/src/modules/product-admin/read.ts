@@ -47,6 +47,7 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import { bpsToPercent, fromMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { getBarcodeIdentityKey } from "@scalius/shared/barcode-identity";
+import { qualifiedColumn } from "../../utils/qualified-column";
 
 function requireProductTimestamp(
     value: Date | number | string | null | undefined,
@@ -638,7 +639,7 @@ export async function getProductDetails(
             .select({
                 ...getTableColumns(productVariants),
                 // A bundle (kit) SKU holds no stock of its own: the editor shows no quantity for it.
-                isKit: sql<number>`EXISTS (SELECT 1 FROM variant_components AS detail_kit WHERE detail_kit.kit_variant_id = ${productVariants.id})`.mapWith(Number),
+                isKit: sql<number>`EXISTS (SELECT 1 FROM variant_components AS detail_kit WHERE detail_kit.kit_variant_id = ${qualifiedColumn(productVariants.id)})`.mapWith(Number),
             })
             .from(productVariants)
             .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt))),

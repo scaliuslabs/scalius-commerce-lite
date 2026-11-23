@@ -31237,9 +31237,28 @@
                   "invalid": {
                     "type": "object",
                     "additionalProperties": {
-                      "type": "string"
+                      "type": "object",
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "store_page",
+                            "https",
+                            "invalid"
+                          ],
+                          "description": "Why: store_page (a store-page address given another site's address or anything but a path of this store), https (an https address that is not one), invalid (anything else; the message says). Word each reason in your own language."
+                        },
+                        "message": {
+                          "type": "string",
+                          "description": "The English message a save gives."
+                        }
+                      },
+                      "required": [
+                        "reason",
+                        "message"
+                      ]
                     },
-                    "description": "Stored values the setting no longer takes (an https address where a store page is wanted), by key, with the message a save gives: show the value as invalid, never drop it."
+                    "description": "Stored values the setting no longer takes (an https address where a store page is wanted), by key: show the value as invalid with its reason, never drop it."
                   },
                   "sections": {
                     "type": "array",
@@ -257218,6 +257237,29 @@
                                       ]
                                     },
                                     "x-scalius-app-owned": "items"
+                                  },
+                                  "bundle": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "perUnit": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "description": "This line's units in one bundle: the line holds `quantity / perUnit` bundles."
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "title",
+                                      "perUnit"
+                                    ],
+                                    "description": "The store bundle (kit) this line was sold in, as frozen at checkout; null for any other line. A bundle's lines change together, in whole bundles (`kit_amended_in_part`)."
                                   }
                                 },
                                 "required": [
@@ -257227,7 +257269,8 @@
                                   "quantity",
                                   "price",
                                   "fulfillmentType",
-                                  "properties"
+                                  "properties",
+                                  "bundle"
                                 ]
                               }
                             }
@@ -266291,6 +266334,270 @@
         }
       }
     },
+    "/api/v1/admin/products/sku-options": {
+      "get": {
+        "operationId": "dashboard.products.sku_options",
+        "tags": [
+          "Admin - Products"
+        ],
+        "summary": "Search SKUs of any product for a picker",
+        "description": "Live SKUs of any product (drafts and untracked SKUs too) by product name, SKU code or option value, a bounded page at a time: what a bundle's items and a product page's offers are chosen from.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 120,
+              "description": "Product name, SKU code or option value"
+            },
+            "required": false,
+            "description": "Product name, SKU code or option value",
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 1,
+              "description": "Page number, up to 50: search to narrow past it"
+            },
+            "required": false,
+            "description": "Page number, up to 50: search to narrow past it",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 10,
+              "description": "SKUs per page"
+            },
+            "required": false,
+            "description": "SKUs per page",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of SKUs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "variantId": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "productName": {
+                                "type": "string"
+                              },
+                              "productActive": {
+                                "type": "boolean",
+                                "description": "False for a draft or archived product: a bundle holding it can't be sold."
+                              },
+                              "sku": {
+                                "type": "string"
+                              },
+                              "options": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "name",
+                                    "value"
+                                  ]
+                                },
+                                "maxItems": 5,
+                                "description": "The SKU's chosen option values (platform, format), in option order."
+                              },
+                              "imageUrl": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "The SKU's picture, else its product's."
+                              },
+                              "price": {
+                                "type": "number",
+                                "description": "One unit's price in the store's currency, its discount applied."
+                              },
+                              "available": {
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "Units on hand less reserved; null when it does not track stock."
+                              },
+                              "isKit": {
+                                "type": "boolean",
+                                "description": "It is a bundle (a SKU made of other SKUs): it can't be an item of another."
+                              },
+                              "isGiftCard": {
+                                "type": "boolean",
+                                "description": "A gift card: it can't be in a bundle."
+                              }
+                            },
+                            "required": [
+                              "variantId",
+                              "productId",
+                              "productName",
+                              "productActive",
+                              "sku",
+                              "options",
+                              "imageUrl",
+                              "price",
+                              "available",
+                              "isKit",
+                              "isGiftCard"
+                            ]
+                          },
+                          "maxItems": 20
+                        },
+                        "page": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "hasMore": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "page",
+                        "hasMore"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when choosing SKUs of any product for a bundle's items or a product page's offers.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
+        }
+      }
+    },
     "/api/v1/admin/products": {
       "get": {
         "operationId": "dashboard.products.list",
@@ -273984,6 +274291,10 @@
                               },
                               "version": {
                                 "type": "number"
+                              },
+                              "isKit": {
+                                "type": "boolean",
+                                "description": "This SKU is a bundle (kit): made of other SKUs, it holds no stock of its own (`sections/kits`)."
                               }
                             },
                             "required": [
@@ -273995,7 +274306,8 @@
                               "sku",
                               "price",
                               "stock",
-                              "reservedStock"
+                              "reservedStock",
+                              "isKit"
                             ]
                           }
                         },
@@ -274171,6 +274483,11 @@
                         "warrantyPolicyId": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "pageOfferCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "How many SKUs of other products this product's page shows under its own (`sections/page_offers`)."
                         }
                       },
                       "required": [
@@ -274209,7 +274526,8 @@
                         "additionalInfo",
                         "attributes",
                         "relatedObjects",
-                        "warrantyPolicyId"
+                        "warrantyPolicyId",
+                        "pageOfferCount"
                       ]
                     }
                   },
@@ -339622,6 +339940,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.products.restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.sku_options",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.sku_options"
           ]
         },
         {
