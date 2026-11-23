@@ -794,6 +794,14 @@ export interface StorefrontProductPage {
     /** The merchant's description, sanitized by the store; "" without one. */
     descriptionHtml: string;
     /**
+     * The merchant's other details tabs (Products, Details), in order, each
+     * its title and its sanitized HTML; `[]` without any. Draw them in your
+     * own tab set (beside the description and `<Reviews />`), or place
+     * `<ProductModule name="description" />`, which draws them: not both.
+     * Absent from older stores.
+     */
+    tabs?: Array<{ title: string; html: string }>;
+    /**
      * The gallery, in its order, 20 at most: photos, and each video as its
      * poster (`kind: "video"` with the video file). Absent posters leave a
      * video out.

@@ -545,6 +545,8 @@ export function productPageData(input: {
       url: input.url,
       brand: brand && product.brand ? { title: brand, url: `/brands/${encodeURIComponent(product.brand.slug)}` } : null,
       descriptionHtml: product.description ? sanitizeHtml(product.description) : "",
+      // The details tabs the store's description module draws, as data: a skin builds one tab set of its own.
+      tabs: (product.additionalInfo ?? []).flatMap((tab) => (tab.title.trim() && tab.content ? [{ title: tab.title.trim(), html: sanitizeHtml(tab.content) }] : [])),
       media,
       price: amount(input.price.current),
       compareAt: compare(input.price.current, input.price.regular, input.price.from),

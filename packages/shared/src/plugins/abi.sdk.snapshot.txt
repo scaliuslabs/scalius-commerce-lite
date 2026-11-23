@@ -9738,6 +9738,10 @@ export interface StorefrontProductPage {
         url: string;
         brand: StorefrontLink | null;
         descriptionHtml: string;
+        tabs?: Array<{
+            title: string;
+            html: string;
+        }>;
         media: StorefrontProductMedia[];
         price: StorefrontMoney;
         compareAt: StorefrontMoney | null;

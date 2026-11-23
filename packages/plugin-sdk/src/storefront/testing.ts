@@ -186,6 +186,7 @@ export function fixtureProductPage(overrides: Partial<StorefrontProductPage["pro
       url: card.url,
       brand: { title: "Acme", url: "/brands/acme" },
       descriptionHtml: "<p>Breathable linen, cut for the heat.</p>",
+      tabs: [{ title: "Care", html: "<p>Wash cold, dry flat.</p>" }],
       media: card.image ? [{ ...card.image, kind: "image", video: null }] : [],
       price: card.price,
       compareAt: card.compareAt,
@@ -374,19 +375,19 @@ const SAMPLE_WARRANTY: StorefrontWarranty = {
   summary: "6 months store warranty · 7-day replacement",
 };
 
-const bdt = (amountMinor: number) => ({ amountMinor, currency: "BDT", formatted: `৳${(amountMinor / 100).toLocaleString("en-US")}` });
+const bdt = (amountMinor: number, formatted: string) => ({ amountMinor, currency: "BDT", formatted });
 
 /** The sample shop's summer set placed under its shirt: a kit of the shirt and a scarf. */
 const SAMPLE_PLACED_KIT: StorefrontPlacedOffer = {
   productId: "prod_set", variantId: "sku_set", title: "Summer set", url: "/products/summer-set", sku: "SET-1", options: [],
   image: { url: "https://media.example.com/set-480.webp", srcset: null, width: 960, height: 960, alt: "Summer set" },
-  price: bdt(160000), compareAt: bdt(200000), available: true, availability: "in_stock",
+  price: bdt(160000, "৳1,600"), compareAt: bdt(200000, "৳2,000"), available: true, availability: "in_stock",
   kit: {
     components: [
-      { productId: "prod_1", variantId: "sku_m", title: "Linen shirt", url: "/products/linen-shirt", image: null, options: [{ name: "Size", value: "M" }], quantity: 1, delivery: "physical", price: bdt(120000) },
-      { productId: "prod_scarf", variantId: "sku_scarf", title: "Cotton scarf", url: null, image: null, options: [], quantity: 1, delivery: "physical", price: bdt(80000) },
+      { productId: "prod_1", variantId: "sku_m", title: "Linen shirt", url: "/products/linen-shirt", image: null, options: [{ name: "Size", value: "M" }], quantity: 1, delivery: "physical", price: bdt(120000, "৳1,200") },
+      { productId: "prod_scarf", variantId: "sku_scarf", title: "Cotton scarf", url: null, image: null, options: [], quantity: 1, delivery: "physical", price: bdt(80000, "৳800") },
     ],
-    price: bdt(160000), compareAt: bdt(200000), saving: bdt(40000), savingPercent: 20, availability: "in_stock",
+    price: bdt(160000, "৳1,600"), compareAt: bdt(200000, "৳2,000"), saving: bdt(40000, "৳400"), savingPercent: 20, availability: "in_stock",
   },
 };
 
