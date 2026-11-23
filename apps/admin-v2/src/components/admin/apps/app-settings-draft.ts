@@ -3,6 +3,7 @@
 // the body Save sends. A secret is never read back: its draft starts empty,
 // and the body carries it only when it changes (a typed value sets it, null
 // clears it, leaving it out keeps the saved one).
+import { isStorePagePath } from "@scalius/shared/plugins/store-page-path";
 import { isEmailAddress } from "@scalius/shared/text-scan";
 import type { AppDetail, AppSettingField, AppSettingValue } from "~/lib/api-query-options/apps";
 import { sameFormValue } from "~/lib/form-values";
@@ -16,6 +17,9 @@ export interface SettingsDraft {
   translations: Record<string, Record<string, string>>;
 }
 
+/** A stored value the API reports as no longer accepted: why (worded here) and its English message (for a reason this form has no words for). */
+export type StoredIssue = AppDetail["settings"]["invalid"][string];
+
 export type SettingProblem =
   | { kind: "required" }
   | { kind: "tooLong"; max: number }
@@ -25,7 +29,7 @@ export type SettingProblem =
   | { kind: "atMost"; max: number }
   | { kind: "https" }
   | { kind: "storePage" }
-  | { kind: "stored"; message: string }
+  | { kind: "stored"; issue: StoredIssue }
   | { kind: "email" }
   | { kind: "color" };
 
@@ -33,10 +37,6 @@ const COLOR = /^#[0-9a-f]{6}$/;
 const SECRET_MAX = 4096;
 /** An example of what a store-page setting takes (a path on this store, never another site's address). */
 export const STORE_PAGE_EXAMPLE = "/pages/shipping-policy";
-// The API's store-page rule (settings-schema.ts urlValue): a path from the root, no host, query, hash or dot segments.
-const STORE_PAGE = /^\/(?!\/)[^\\\s?#]*$/u;
-const storePage = (value: string) =>
-  value.length <= 2048 && STORE_PAGE.test(value) && !value.split("/").some((part) => part === "." || part === "..") && !/%(?:2f|5c|2e)/iu.test(value);
 
 export function draftFromSettings(settings: AppDetail["settings"]): SettingsDraft {
   const values: SettingsDraft["values"] = {};
@@ -113,7 +113,7 @@ export function checkSetting(field: AppSettingField, draft: SettingsDraft, secre
       return null;
     }
     case "url":
-      if (field.store) return storePage(value) ? null : { kind: "storePage" };
+      if (field.store) return isStorePagePath(value) ? null : { kind: "storePage" };
       try {
         new URL(value);
       } catch {
@@ -135,20 +135,20 @@ export const translationProblemKey = (key: string, locale: string) => `${key}.${
 /**
  * Every field's problem, by key; a translation's under `<key>.<language>`.
  * `stored`: the values the API reports as no longer accepted (`settings.invalid`,
- * key → its message) against `saved`, the draft as last saved. Such a field
- * keeps its stored value and that message until the merchant changes it.
+ * key → its reason and message) against `saved`, the draft as last saved. Such
+ * a field keeps its stored value and the problem until the merchant changes it.
  */
 export function checkSettings(
   fields: readonly AppSettingField[],
   draft: SettingsDraft,
   secrets: Record<string, boolean>,
-  stored?: { invalid: Record<string, string>; saved: SettingsDraft },
+  stored?: { invalid: Record<string, StoredIssue>; saved: SettingsDraft },
 ): Record<string, SettingProblem> {
   const problems: Record<string, SettingProblem> = {};
   for (const field of fields) {
-    const message = stored?.invalid[field.key];
-    const unchanged = stored !== undefined && message !== undefined && sameFormValue(draft.values[field.key], stored.saved.values[field.key]);
-    const problem: SettingProblem | null = unchanged ? { kind: "stored", message } : checkSetting(field, draft, secrets[field.key] === true);
+    const issue = stored?.invalid[field.key];
+    const unchanged = stored !== undefined && issue !== undefined && sameFormValue(draft.values[field.key], stored.saved.values[field.key]);
+    const problem: SettingProblem | null = unchanged ? { kind: "stored", issue } : checkSetting(field, draft, secrets[field.key] === true);
     if (problem) problems[field.key] = problem;
     if (!field.translatable || field.maxLength === null) continue;
     for (const [locale, texts] of Object.entries(draft.translations)) {

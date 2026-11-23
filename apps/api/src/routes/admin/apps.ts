@@ -358,7 +358,10 @@ const appDetailSchema = appSummarySchema.extend({
     secrets: z.record(z.string(), z.boolean()).openapi({ description: "Whether each secret is set; secret values are never returned." }),
     translations: z.record(z.string(), z.record(z.string(), z.string())).optional().openapi({ description: "Translatable settings in the store's other languages: store language code → setting key → text. Buyers read them through the store's fallback chain (their language, the store's default, then the setting's own value)." }),
     missing: z.array(z.string()).openapi({ description: "Required settings still empty (activation needs them)." }),
-    invalid: z.record(z.string(), z.string()).openapi({ description: "Stored values the setting no longer takes (an https address where a store page is wanted), by key, with the message a save gives: show the value as invalid, never drop it." }),
+    invalid: z.record(z.string(), z.object({
+      reason: z.enum(["store_page", "https", "invalid"]).openapi({ description: "Why: store_page (a store-page address given another site's address or anything but a path of this store), https (an https address that is not one), invalid (anything else; the message says). Word each reason in your own language." }),
+      message: z.string().openapi({ description: "The English message a save gives." }),
+    })).openapi({ description: "Stored values the setting no longer takes (an https address where a store page is wanted), by key: show the value as invalid with its reason, never drop it." }),
     sections: z.array(z.object({
       group: z.object({ id: z.string(), title: z.string(), description: z.string().nullable() }).nullable(),
       keys: z.array(z.string()),

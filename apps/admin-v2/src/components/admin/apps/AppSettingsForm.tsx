@@ -21,7 +21,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { useLocale, useMessages } from "~/i18n";
 import { languageName } from "~/components/admin/translations/translation-form";
 import { storeLanguagesQueryOptions } from "~/lib/api-query-options/translations";
-import { installedAppsMessages } from "~/i18n/apps";
+import { installedAppsMessages, type InstalledAppsMessageKey } from "~/i18n/apps";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { type AppDetail, type AppSettingField } from "~/lib/api-query-options/apps";
 import { appSettingErrors, isAppChangedError, saveAppSettings } from "~/lib/api-mutations/apps";
@@ -36,6 +36,7 @@ import {
   translationsBody,
   translationText,
   type SettingProblem,
+  type StoredIssue,
   type SettingsDraft,
 } from "./app-settings-draft";
 
@@ -56,6 +57,37 @@ const PROVIDER_READINESS_KEYS = [
 
 /** A field's control id; a sheet uses its own prefix, so the app page under it never shares an id. */
 export const settingFieldId = (key: string, prefix = "app-setting") => `${prefix}-${key}`;
+
+type Words = (key: InstalledAppsMessageKey, vars?: Record<string, string | number>) => string;
+
+/** A stored value's problem in the dashboard's own words; the server's English only for a reason this form has none for. */
+function storedIssueText(t: Words, issue: StoredIssue): string {
+  switch (issue.reason) {
+    case "store_page":
+      return t("problem_storePage", { example: STORE_PAGE_EXAMPLE });
+    case "https":
+      return t("problem_https");
+    default:
+      return issue.message;
+  }
+}
+
+function settingProblemText(t: Words, problem: SettingProblem): string {
+  switch (problem.kind) {
+    case "tooLong":
+      return t("problem_tooLong", { max: problem.max });
+    case "atLeast":
+      return t("problem_atLeast", { min: problem.min });
+    case "atMost":
+      return t("problem_atMost", { max: problem.max });
+    case "storePage":
+      return t("problem_storePage", { example: STORE_PAGE_EXAMPLE });
+    case "stored":
+      return storedIssueText(t, problem.issue);
+    default:
+      return t(`problem_${problem.kind}`);
+  }
+}
 
 /** A multi-choice list: a fieldset with its own note, marked when the last save refused it. */
 function ChoiceList({ id, field, label, chosen, problem, showNow, help, disabled, onChange }: {
@@ -142,7 +174,7 @@ export function useAppSettingsDraft(app: AppDetail, options: { canManage: boolea
   // One of another section's: this save would send it as stored and the API would refuse it, so say so before.
   const outside = settings.fields
     .filter((field) => !keySet.has(field.key) && settings.invalid[field.key] !== undefined)
-    .map((field) => ({ message: `${field.label}: ${settings.invalid[field.key]}` }));
+    .map((field) => ({ message: `${field.label}: ${storedIssueText(t, settings.invalid[field.key]!)}` }));
 
   useSaveBar({
     label: options.label ?? t("settingsTitle"),
@@ -263,23 +295,7 @@ export function AppSettingControl({ app, field, form, canManage, idPrefix }: {
 }) {
   const t = useMessages(installedAppsMessages);
   const { draft, problems, setValue, setSecret } = form;
-  const problemText = (problem: SettingProblem | undefined): string | null => {
-    if (!problem) return null;
-    switch (problem.kind) {
-      case "tooLong":
-        return t("problem_tooLong", { max: problem.max });
-      case "atLeast":
-        return t("problem_atLeast", { min: problem.min });
-      case "atMost":
-        return t("problem_atMost", { max: problem.max });
-      case "storePage":
-        return t("problem_storePage", { example: STORE_PAGE_EXAMPLE });
-      case "stored":
-        return problem.message;
-      default:
-        return t(`problem_${problem.kind}`);
-    }
-  };
+  const problemText = (problem: SettingProblem | undefined): string | null => (problem ? settingProblemText(t, problem) : null);
   const id = settingFieldId(field.key, idPrefix);
   const disabled = !canManage;
   const error = problemText(problems[field.key]);
