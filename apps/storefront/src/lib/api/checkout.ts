@@ -135,6 +135,19 @@ export function takesOnlinePayment(config: CheckoutConfig | null | undefined): b
 }
 
 /**
+ * Whether nothing these SKUs sell can be bought here: every one is paid only
+ * online (core's `paidOnlineOnly`: a key, a download, a gift card, a kit
+ * holding one) and checkout takes no online payment. The server decides the
+ * same at checkout; the page only says so first.
+ */
+export function paidOnlineOnlyHere(
+  variants: ReadonlyArray<{ paidOnlineOnly?: boolean | null }>,
+  config: CheckoutConfig | null | undefined,
+): boolean {
+  return variants.length > 0 && variants.every((variant) => variant.paidOnlineOnly === true) && !takesOnlinePayment(config);
+}
+
+/**
  * Check if only COD is active (simple COD-only flow).
  * If advance partial payments are enabled, this flow is disabled because a gateway is required.
  */

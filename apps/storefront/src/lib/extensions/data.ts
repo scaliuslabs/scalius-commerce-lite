@@ -367,7 +367,12 @@ export function storefrontKitOf(kit: ProductKit, page: StorefrontPageMoney): Sto
 }
 
 /** A placed offer as a skin gets it (`StorefrontPlacedOffer`): what it is, its price and band, and its contents when a kit. */
-export function storefrontPlacedOfferOf(offer: ProductPlacedOffer, page: StorefrontPageMoney): StorefrontPlacedOffer {
+/**
+ * A placed offer as a theme gets it. `available` judges its buy action as its
+ * own page does: in stock, and payable here (one paid only online is off
+ * where checkout takes no online payment, core's `paidOnlineOnly`).
+ */
+export function storefrontPlacedOfferOf(offer: ProductPlacedOffer, page: StorefrontPageMoney, takesOnlinePayment = true): StorefrontPlacedOffer {
   // A host page's offer is a summary: its kit's first items (its own page lists them all).
   const kit = offer.kit ? storefrontKitOf({ ...offer.kit, components: offer.kit.components.slice(0, STOREFRONT_PLACED_KIT_ITEMS_MAX) }, page) : null;
   return {
@@ -380,7 +385,7 @@ export function storefrontPlacedOfferOf(offer: ProductPlacedOffer, page: Storefr
     image: offer.imageUrl ? storefrontImageOf({ url: offer.imageUrl, alt: offer.imageAlt || offer.productName }) : null,
     price: pageAmount(offer.price, page),
     compareAt: offer.compareAtPrice !== null && offer.compareAtPrice > offer.price ? pageAmount(offer.compareAtPrice, page) : null,
-    available: offer.availabilityBand !== "out_of_stock",
+    available: offer.availabilityBand !== "out_of_stock" && (takesOnlinePayment || offer.paidOnlineOnly !== true),
     needsChoices: offer.requiresCustomization,
     availability: offer.availabilityBand,
     kit,
@@ -503,6 +508,8 @@ export function productPageData(input: {
   /** One SKU's buyer price (the page's price engine). */
   variantPrice: (variant: ProductVariant) => number;
   page: StorefrontPageMoney;
+  /** Checkout takes an online payment (`takesOnlinePayment`); without one a placed offer paid only online is off. Default true. */
+  takesOnlinePayment?: boolean;
   /** The page's checkout-language copy: the warranty row's words (English without it). */
   warrantyCopy?: Partial<CheckoutLanguageData>;
   /** The buy form's buyer inputs (`productBuyerInputFields`: the product's, then the apps' line inputs); the product's own without it. */
@@ -587,7 +594,7 @@ export function productPageData(input: {
           kit: variant.kit ? storefrontKitOf(variant.kit, page) : null,
         };
       }),
-      placedOffers: (product.placedOffers ?? []).map((offer) => storefrontPlacedOfferOf(offer, page)),
+      placedOffers: (product.placedOffers ?? []).map((offer) => storefrontPlacedOfferOf(offer, page, input.takesOnlinePayment ?? true)),
       warranties,
       fields: storefrontFieldValues(product.customFields, page),
       breadcrumbs: input.breadcrumbs,

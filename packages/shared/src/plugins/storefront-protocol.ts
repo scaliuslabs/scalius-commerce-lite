@@ -791,6 +791,11 @@ export interface StorefrontPlacedOffer {
   price: StorefrontMoney;
   /** A kit's items at their current prices, or a SKU's regular price while it is on sale; null otherwise. */
   compareAt: StorefrontMoney | null;
+  /**
+   * Its buy action works here, judged as on its own page: in stock, and
+   * payable (one paid only online, a key or a kit holding one, is off where
+   * checkout takes no online payment). `availability` is its stock band.
+   */
   available: boolean;
   /**
    * Its product asks the buyer for inputs (an engraving) before buying: link
