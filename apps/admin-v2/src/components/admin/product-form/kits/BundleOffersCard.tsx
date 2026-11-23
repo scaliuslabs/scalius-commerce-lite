@@ -22,7 +22,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Inset } from "~/components/ui/field";
+import { Field, Inset } from "~/components/ui/field";
 import { NumberInput } from "~/components/ui/number-input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { OWN_SAVE_ATTRIBUTE } from "~/components/admin/shared/SaveBar";
@@ -69,72 +69,97 @@ const fromOption = (option: SkuOption): DraftItem => ({
 
 interface BundleOffersCardProps {
   productId: string;
+  /** The product's name: what buyers read as a bundle's title, with its options. */
+  productName: string;
   /** The product's live SKUs: each may be made a bundle. */
   skus: ProductSkuSummary[];
+  /** Which of them are bundles now (the product read, then this card's saves). */
+  kitIds: ReadonlySet<string>;
   readOnly: boolean;
+  /** The page's own save (fields, variants) is on its way: a bundle waits for it. */
+  pageSaving: boolean;
   revision: ProductRevisionHandle;
 }
 
 /**
  * A SKU of this product made of SKUs of any products ("What's included"),
  * sold at its own price. The card lists the product's SKUs; a bundle shows
- * what the server prices from its items: what buyers pay, what the items add
- * up to, the saving, how many can be sold, and why none can. Edits save on
+ * what the server prices from its items: its price, what the items add up
+ * to, the saving, how many can be sold, and why none can. Edits save on
  * their own (a section with its own button), under the product's revision.
+ * Closed, it says how many SKUs are bundles from the product read; its own
+ * read waits until it opens.
  */
-export default function BundleOffersCard({ productId, skus, readOnly, revision }: BundleOffersCardProps) {
+export default function BundleOffersCard({ productId, productName, skus, kitIds, readOnly, pageSaving, revision }: BundleOffersCardProps) {
   const t = useMessages(productKitMessages);
-  const tr = useMessages(resourceMessages);
-  const { data, isError, refetch } = useQuery(productKitsQueryOptions(productId));
-  const kits = useMemo(() => new Map((data?.items ?? []).map((kit) => [kit.variantId, kit])), [data]);
-  const [editing, setEditing] = useState<string | null>(null);
-  const kitCount = skus.filter((sku) => kits.has(sku.id)).length;
-
+  const kitCount = skus.filter((sku) => kitIds.has(sku.id)).length;
   return (
     <CollapsibleCard
       id="product-bundle-offers"
       title={t("kitsTitle")}
       description={t("kitsHelp")}
       defaultOpen={kitCount > 0}
-      summary={data === undefined ? null : <p className="text-body text-muted-foreground">{t("kitsSummary", { count: kitCount })}</p>}
+      summary={<p className="text-body text-muted-foreground">{t("kitsSummary", { count: kitCount })}</p>}
     >
-      <div {...{ [OWN_SAVE_ATTRIBUTE]: "" }} className="flex flex-col gap-4">
-        {data === undefined ? (
-          isError ? (
-            <p className="text-body text-muted-foreground">
-              {t("kitsLoadFailed")}{" "}
-              <Button type="button" variant="link" onClick={() => void refetch()}>{tr("retry")}</Button>
-            </p>
-          ) : <Skeleton className="h-24 w-full" />
-        ) : skus.length === 0 ? (
-          <p className="text-body text-muted-foreground">{t("noSkus")}</p>
-        ) : (
-          <ul className="flex flex-col divide-y">
-            {skus.map((sku) => (
-              <li key={sku.id} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0">
-                <BundleSkuRow
-                  productId={productId}
-                  sku={sku}
-                  kit={kits.get(sku.id) ?? null}
-                  readOnly={readOnly}
-                  editing={editing === sku.id}
-                  onEdit={(open) => setEditing(open ? sku.id : null)}
-                  revision={revision}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <BundleOffersBody productId={productId} productName={productName} skus={skus} readOnly={readOnly} pageSaving={pageSaving} revision={revision} />
     </CollapsibleCard>
   );
 }
 
-function BundleSkuRow({ productId, sku, kit, readOnly, editing, onEdit, revision }: {
+function BundleOffersBody({ productId, productName, skus, readOnly, pageSaving, revision }: Omit<BundleOffersCardProps, "kitIds">) {
+  const t = useMessages(productKitMessages);
+  const tr = useMessages(resourceMessages);
+  const { data, isError, refetch } = useQuery(productKitsQueryOptions(productId));
+  const kits = useMemo(() => new Map((data?.items ?? []).map((kit) => [kit.variantId, kit])), [data]);
+  // Every open editor keeps its own draft: opening another never drops one.
+  const [editing, setEditing] = useState<ReadonlySet<string>>(() => new Set());
+  return (
+    <div {...{ [OWN_SAVE_ATTRIBUTE]: "" }} className="flex flex-col gap-4">
+      {data === undefined ? (
+        isError ? (
+          <p className="text-body text-muted-foreground">
+            {t("kitsLoadFailed")}{" "}
+            <Button type="button" variant="link" onClick={() => void refetch()}>{tr("retry")}</Button>
+          </p>
+        ) : <Skeleton className="h-24 w-full" />
+      ) : skus.length === 0 ? (
+        <p className="text-body text-muted-foreground">{t("noSkus")}</p>
+      ) : (
+        <ul className="flex flex-col divide-y">
+          {skus.map((sku) => (
+            <li key={sku.id} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0">
+              <BundleSkuRow
+                productId={productId}
+                buyerTitle={sku.label ? `${productName} – ${sku.label}` : productName}
+                sku={sku}
+                kit={kits.get(sku.id) ?? null}
+                readOnly={readOnly}
+                pageSaving={pageSaving}
+                editing={editing.has(sku.id)}
+                onEdit={(open) => setEditing((current) => {
+                  const next = new Set(current);
+                  if (open) next.add(sku.id);
+                  else next.delete(sku.id);
+                  return next;
+                })}
+                revision={revision}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function BundleSkuRow({ productId, buyerTitle, sku, kit, readOnly, pageSaving, editing, onEdit, revision }: {
   productId: string;
+  /** The offer's title as buyers read it. */
+  buyerTitle: string;
   sku: ProductSkuSummary;
   kit: ProductKit | null;
   readOnly: boolean;
+  pageSaving: boolean;
   editing: boolean;
   onEdit: (open: boolean) => void;
   revision: ProductRevisionHandle;
@@ -162,9 +187,9 @@ function BundleSkuRow({ productId, sku, kit, readOnly, editing, onEdit, revision
         )}
       </div>
       {editing ? (
-        <BundleEditor productId={productId} sku={sku} kit={kit} onClose={() => onEdit(false)} revision={revision} />
+        <BundleEditor productId={productId} sku={sku} kit={kit} pageSaving={pageSaving} onClose={() => onEdit(false)} revision={revision} />
       ) : kit ? (
-        <BundleOutcome kit={kit} title={title} />
+        <BundleOutcome kit={kit} title={buyerTitle} />
       ) : null}
     </>
   );
@@ -196,7 +221,7 @@ function BundleOutcome({ kit, title }: { kit: ProductKit; title: string }) {
       <div className="flex flex-col gap-3">
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="flex flex-col gap-1">
-          <dt className="text-body text-muted-foreground">{t("buyerPays")}</dt>
+          <dt className="text-body text-muted-foreground">{t("price")}</dt>
           <dd className="text-body font-medium tabular-nums">{fmt(kit.price)}</dd>
         </div>
         <div className="flex flex-col gap-1">
@@ -282,10 +307,11 @@ interface KitWrite {
 }
 
 /** Edits one SKU's items: add through the picker, set quantities, remove; saves the whole list. */
-function BundleEditor({ productId, sku, kit, onClose, revision }: {
+function BundleEditor({ productId, sku, kit, pageSaving, onClose, revision }: {
   productId: string;
   sku: ProductSkuSummary;
   kit: ProductKit | null;
+  pageSaving: boolean;
   onClose: () => void;
   revision: ProductRevisionHandle;
 }) {
@@ -317,6 +343,9 @@ function BundleEditor({ productId, sku, kit, onClose, revision }: {
 
   const save = useCommand<KitWrite, { aggregateRevision: number }>({
     subject: (input) => input.variantId,
+    // The page's Save waits while this one is on its way (one revision, one writer at a time).
+    onMutate: () => revision.writing(true),
+    onSettled: () => revision.writing(false),
     mutationFn: ({ variantId, components }) => {
       const expectedAggregateRevision = revision.current();
       if (!expectedAggregateRevision) throw new Error(t("saveFailed"));
@@ -327,6 +356,7 @@ function BundleEditor({ productId, sku, kit, onClose, revision }: {
     },
     onSuccess: async (result, input) => {
       revision.saved(result.aggregateRevision);
+      revision.kitSaved(input.variantId, input.components.length > 0);
       toast.success(t(input.components.length > 0 ? "bundleSaved" : "bundleRemoved"));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: productKitsQueryOptions(productId).queryKey }),
@@ -338,7 +368,7 @@ function BundleEditor({ productId, sku, kit, onClose, revision }: {
   });
 
   const submit = () => {
-    if (invalid) return;
+    if (invalid || pageSaving) return;
     setRefusal(null);
     save.mutate({
       variantId: sku.id,
@@ -389,8 +419,8 @@ function BundleEditor({ productId, sku, kit, onClose, revision }: {
             const problem = itemRefusal(item);
             const quantityInvalid = item.quantity === null || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > QUANTITY_MAX;
             return (
-              <li key={item.variantId} className="flex flex-col gap-1">
-                <div className="flex items-center gap-3">
+              <li key={item.variantId} className="flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="text-body wrap-anywhere">{name}</span>
                     <span className="text-body text-muted-foreground">
@@ -399,19 +429,20 @@ function BundleEditor({ productId, sku, kit, onClose, revision }: {
                       {item.price === null ? null : <span className="tabular-nums">{fmt(item.price)}</span>}
                     </span>
                   </div>
-                  <NumberInput
-                    integer
-                    className="w-24"
-                    value={item.quantity}
-                    aria-label={t("quantityFor", { name })}
-                    aria-invalid={quantityInvalid || problem !== null}
-                    onValueChange={(quantity) => setItems((current) => current.map((entry) => (entry.variantId === item.variantId ? { ...entry, quantity } : entry)))}
-                  />
                   <Button type="button" variant="ghost" size="icon" aria-label={t("removeItem", { name })} onClick={() => remove(item)}>
                     <Trash2 className="size-4" aria-hidden="true" />
                   </Button>
                 </div>
-                {problem ? <p role="alert" className="text-body text-destructive">{problem}</p> : null}
+                {/* The server's refusal of this item, else why its quantity can't be saved, under the field and read with it. */}
+                <Field label={t("quantity")} error={problem ?? (quantityInvalid ? t("quantityRange", { max: QUANTITY_MAX }) : undefined)} announceError>
+                  <NumberInput
+                    integer
+                    className="w-32"
+                    aria-label={t("quantityFor", { name })}
+                    value={item.quantity}
+                    onValueChange={(quantity) => setItems((current) => current.map((entry) => (entry.variantId === item.variantId ? { ...entry, quantity } : entry)))}
+                  />
+                </Field>
               </li>
             );
           })}
@@ -424,9 +455,11 @@ function BundleEditor({ productId, sku, kit, onClose, revision }: {
         </Button>
       </div>
       {footerRefusal ? <p role="alert" className="text-body text-destructive">{footerRefusal}</p> : null}
+      {/* Why Save is off: the product's own save is on its way, or a quantity is out of range (said at its field). */}
+      {pageSaving ? <p className="text-body text-muted-foreground">{t("waitForPageSave")}</p> : null}
       <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
         <Button type="button" variant="outline" disabled={save.isPending} onClick={onClose}>{tr("cancel")}</Button>
-        <Button type="button" loading={save.isPending} disabled={invalid || !changed || (items.length === 0 && saved.length === 0)} onClick={onSave}>
+        <Button type="button" loading={save.isPending} disabled={invalid || pageSaving || !changed || (items.length === 0 && saved.length === 0)} onClick={onSave}>
           {t("saveBundle")}
         </Button>
       </div>

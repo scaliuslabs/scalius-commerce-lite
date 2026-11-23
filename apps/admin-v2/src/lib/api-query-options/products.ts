@@ -24,8 +24,11 @@ type ApiProductVariant = ApiProductDetail["variants"][number];
  * Contract gap: the shared variant schema (apps/api/src/schemas/entities.ts)
  * marks these optional; the product detail route always returns them.
  */
-export type ProductVariant = ApiProductVariant &
-  Required<Pick<ApiProductVariant, "selectedOptions" | "version" | "stockVersion">>;
+export type ProductVariant = Omit<ApiProductVariant, "isKit"> &
+  Required<Pick<ApiProductVariant, "selectedOptions" | "version" | "stockVersion">> & {
+    /** A bundle (kit) SKU: no stock of its own. Absent reads as an ordinary SKU (test fixtures, a variant just made). */
+    isKit?: boolean;
+  };
 export type ProductDetailDto = Omit<ApiProductDetail, "variants"> & {
   variants: ProductVariant[];
 };

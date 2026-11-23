@@ -6,6 +6,8 @@ export interface ProductSkuSummary {
   sku: string;
   /** Its option values ("Red / M"); empty for a product without options. */
   label: string;
+  /** It is a bundle (kit), as the product read says. */
+  isKit: boolean;
 }
 
 /**
@@ -18,6 +20,10 @@ export interface ProductRevisionHandle {
   current: () => number | undefined;
   saved: (revision: number) => void;
   conflict: (conflict: ProductRevisionConflict) => void;
+  /** A section's write is on its way (true) or settled (false): the page's Save waits for it. */
+  writing: (on: boolean) => void;
+  /** A SKU became a bundle, or an ordinary SKU again: the variant editor and the card's summary follow. */
+  kitSaved: (variantId: string, isKit: boolean) => void;
 }
 
 /** The product's live SKUs for the bundle card: its variants, or its one default SKU. */
@@ -25,6 +31,7 @@ export function productSkuSummaries(variants: ReadonlyArray<{
   id: string;
   sku?: string | null;
   isDefault?: boolean | null;
+  isKit?: boolean;
   deletedAt?: unknown;
   selectedOptions?: ReadonlyArray<{ value: string; position: number }>;
 }>): ProductSkuSummary[] {
@@ -34,5 +41,6 @@ export function productSkuSummaries(variants: ReadonlyArray<{
     id: variant.id,
     sku: variant.sku ?? "",
     label: [...(variant.selectedOptions ?? [])].sort((a, b) => a.position - b.position).map((option) => option.value).join(" / "),
+    isKit: variant.isKit === true,
   }));
 }

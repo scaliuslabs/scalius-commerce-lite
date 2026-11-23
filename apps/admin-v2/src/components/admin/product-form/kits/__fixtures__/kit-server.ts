@@ -30,6 +30,8 @@ export function createKitServer(skus: FakeSku[]) {
     /** The next write fails with this error (once). */
     refuse: null as Error | null,
     writes: [] as Array<Record<string, unknown>>,
+    /** While set, writes wait for it (a save still on its way). */
+    hold: null as Promise<void> | null,
   };
 
   const kitRead = (productId: string) => ({
@@ -81,6 +83,7 @@ export function createKitServer(skus: FakeSku[]) {
       path.section === "kits" ? kitRead(path.id) : offersRead(path.id),
     patchSection: async ({ path, body }: { path: { id: string; section: string }; body: Record<string, unknown> }) => {
       state.writes.push(body);
+      if (state.hold) await state.hold;
       if (state.refuse) {
         const error = state.refuse;
         state.refuse = null;

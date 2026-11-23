@@ -4,7 +4,7 @@
 // every check here has a guard trigger behind it (migration 0224), so a write
 // that races another is refused with the same reason.
 import type { BatchItem } from "drizzle-orm/batch";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "@scalius/database/client";
 import { productPageOffers, products, productVariants, variantComponents } from "@scalius/database/schema";
@@ -20,6 +20,7 @@ import {
     kitRefusal,
     parseVariantOptionValues,
     productPublishedToChannelSql,
+    productVariantBarcodeIdentityEquals,
     resolveProductMediaProjectionRows,
     resolveSkuImageRepresentation,
     selectSkuMediaProjectionRows,
@@ -30,6 +31,8 @@ import {
 } from "../products";
 import { readStoreCurrency } from "../markets";
 import { containsText } from "../../utils/text-match";
+import { sanitizeSearchTokens, searchKeyColumn, searchKeys } from "../../search";
+import { getBarcodeIdentityKey } from "@scalius/shared/barcode-identity";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -303,13 +306,60 @@ export async function readProductKitsSection(db: Database, productId: string) {
 export const SKU_OPTIONS_LIMIT_MAX = 20;
 export const SKU_OPTIONS_PAGE_MAX = 50;
 
+/** The most SKUs one way of matching a search finds: as many as the picker pages through, and one more. */
+const SKU_OPTIONS_MATCH_CAP = SKU_OPTIONS_LIMIT_MAX * SKU_OPTIONS_PAGE_MAX + 1;
+
+/**
+ * The ids of the SKUs a search finds, each way an index lookup bounded by
+ * SKU_OPTIONS_MATCH_CAP: a word of its product's name or of its code (the
+ * search index, as the product list searches), its exact barcode, or an
+ * option value holding every word of the search (option values have no text
+ * index: that way reads each option value once, never the SKUs). Undefined
+ * when nothing in the search can match (no word and no barcode).
+ */
+function skuOptionMatches(db: Database, search: string): SQL | undefined {
+    const key = sql.raw(searchKeyColumn(db));
+    const cap = sql.raw(String(SKU_OPTIONS_MATCH_CAP));
+    // A derived table per way: a compound member takes no LIMIT of its own on SQLite.
+    const capped = (select: SQL) => sql`SELECT id FROM (${select} LIMIT ${cap}) AS sku_match`;
+    const ways: SQL[] = [];
+    const nameKeys = searchKeys(db, "products", search, { column: "name" });
+    if (nameKeys) {
+        ways.push(capped(sql`SELECT named_sku.id AS id FROM products AS named_product
+            INNER JOIN product_variants AS named_sku ON named_sku.product_id = named_product.id
+            WHERE named_product.${key} IN (${nameKeys}) AND named_sku.deleted_at IS NULL`));
+    }
+    const codeKeys = searchKeys(db, "product_variants", search);
+    if (codeKeys) {
+        ways.push(capped(sql`SELECT coded_sku.id AS id FROM product_variants AS coded_sku
+            WHERE coded_sku.${key} IN (${codeKeys}) AND coded_sku.deleted_at IS NULL`));
+    }
+    const barcodeKey = getBarcodeIdentityKey(search);
+    if (barcodeKey) {
+        ways.push(sql`SELECT ${productVariants.id} AS id FROM ${productVariants}
+            WHERE ${productVariantBarcodeIdentityEquals(barcodeKey)} AND ${productVariants.deletedAt} IS NULL`);
+    }
+    const words = sanitizeSearchTokens(search);
+    if (words.length > 0) {
+        ways.push(capped(sql`SELECT valued_sku.variant_id AS id FROM product_variant_option_values AS valued_sku
+            WHERE valued_sku.option_value_id IN (SELECT matched_value.id FROM product_option_values AS matched_value
+                WHERE matched_value.deleted_at IS NULL AND ${sql.join(words.map((word) => containsText(sql`matched_value.value`, word)), sql` AND `)}
+                LIMIT ${cap})`));
+    }
+    return ways.length > 0 ? sql.join(ways, sql` UNION `) : undefined;
+}
+
 /**
  * Live SKUs of any product for the bundle and page-offer pickers, searched by
- * product name, SKU code or option value; drafts and untracked SKUs included
- * (the editor shows their state). Each with its picture, options, price in the
- * store's currency, available units (null when it tracks none) and whether it
- * is a bundle (kit) or a gift card, which a bundle can't hold. Two statements:
- * the page's rows, then their pictures.
+ * product name, SKU code, barcode or option value (`skuOptionMatches`); drafts
+ * and untracked SKUs included (the editor shows their state), never a deleted
+ * SKU or a SKU of a deleted product. Ordered by product name, product and SKU
+ * id: the empty search walks the products' name index and stops after its
+ * page; a search sorts only its matches. Each with its picture, options, price
+ * in the store's currency, available units (null when it tracks none) and
+ * whether it is a bundle (kit) or a gift card, which a bundle can't hold. Two
+ * statements: the page's rows (its ids first, then the wide rows of those
+ * ids), then their pictures.
  */
 export async function searchProductSkuOptions(
     db: Database,
@@ -318,11 +368,18 @@ export async function searchProductSkuOptions(
     const limit = Math.min(Math.max(1, Math.trunc(input.limit)), SKU_OPTIONS_LIMIT_MAX);
     const page = Math.min(Math.max(1, Math.trunc(input.page)), SKU_OPTIONS_PAGE_MAX);
     const term = input.search?.trim() ?? "";
-    const matches = term === "" ? undefined : sql`(${containsText(products.name, term)} OR ${containsText(productVariants.sku, term)} OR EXISTS (
-        SELECT 1 FROM product_variant_option_values AS pick_pvov
-        JOIN product_option_values AS pick_pov ON pick_pov.id = pick_pvov.option_value_id
-        WHERE pick_pvov.variant_id = ${productVariants.id} AND instr(lower(pick_pov.value), lower(${term})) > 0
-    ))`;
+    const matches = term === "" ? undefined : skuOptionMatches(db, term);
+    const order = [products.name, products.id, productVariants.id];
+    // A search drives from its matches: the unary `+` keeps SQLite off the
+    // name index (`deleted_at` first), which would walk every product in order.
+    const pageKeys = db.select({ id: productVariants.id }).from(productVariants)
+        .innerJoin(products, eq(products.id, productVariants.productId))
+        .where(term === ""
+            ? and(isNull(productVariants.deletedAt), isNull(products.deletedAt))
+            : and(sql`${productVariants.id} IN (${matches ?? sql`SELECT NULL WHERE 0 = 1`})`, isNull(productVariants.deletedAt), sql`+${products.deletedAt} IS NULL`))
+        .orderBy(...order)
+        .limit(limit + 1)
+        .offset((page - 1) * limit);
     const [rows, currency] = await Promise.all([
         db.select({
             variantId: productVariants.id,
@@ -346,10 +403,8 @@ export async function searchProductSkuOptions(
             isKit: sql<number>`EXISTS (SELECT 1 FROM variant_components AS pick_kit WHERE pick_kit.kit_variant_id = ${productVariants.id})`.mapWith(Number).as("pick_is_kit"),
         }).from(productVariants)
             .innerJoin(products, eq(products.id, productVariants.productId))
-            .where(and(isNull(productVariants.deletedAt), isNull(products.deletedAt), matches))
-            .orderBy(sql`lower(${products.name})`, productVariants.productId, productVariants.sku, productVariants.id)
-            .limit(limit + 1)
-            .offset((page - 1) * limit)
+            .where(inArray(productVariants.id, pageKeys))
+            .orderBy(...order)
             .all(),
         readStoreCurrency(db),
     ]);

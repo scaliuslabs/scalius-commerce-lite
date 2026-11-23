@@ -403,6 +403,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
         matrixRef={matrixRef}
         variantIds={matrixSnapshot.variants.filter((variant) => !variant.deletedAt).map((variant) => variant.id)}
         skus={skus}
+        pageOfferCount={formSnapshot.pageOfferCount}
         onSectionSaved={(revision) => void handleSectionSaved(revision).catch(() => {})}
         customizationSchemaInvalid={formSnapshot.customizationSchemaInvalid}
         brandName={formSnapshot.brandName}

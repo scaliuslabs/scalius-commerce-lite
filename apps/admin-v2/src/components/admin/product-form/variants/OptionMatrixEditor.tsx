@@ -1,5 +1,6 @@
 import React from "react";
-import { KitSkuIdsContext, useKitSkuIds } from "../kits/kit-sku-ids";
+import { KitSkuIdsContext } from "../kits/kit-sku-ids";
+import { readKitRefusal } from "~/lib/kit-refusal";
 import { seededName } from "~/lib/seeded-names";
 import { WeightInput, useWeightUnit } from "./WeightInput";
 import { formatWeight } from "./weight-format";
@@ -250,7 +251,12 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   // One constrained row per draft row and rules, so an edit re-renders only the edited row.
   // A digital SKU's stock is its licence keys: a saved one shows (and saves) its recorded stock, never a typed one.
   // A bundle (a SKU made of other SKUs) holds no stock of its own: never tracked, its quantity not shown.
-  const kitIds = useKitSkuIds(productId);
+  // The product editor says which SKUs are bundles now; on its own the editor reads its SKUs' `isKit`.
+  const providedKitIds = React.useContext(KitSkuIdsContext);
+  const kitIds = React.useMemo<ReadonlySet<string>>(
+    () => providedKitIds ?? new Set(savedVariants.filter((variant) => variant.isKit).map((variant) => variant.id)),
+    [providedKitIds, savedVariants],
+  );
   const constrained = React.useMemo(() => ({
     rules: kindRules,
     rows: new WeakMap<DraftVariant, DraftVariant>(),
@@ -774,6 +780,9 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
             onRevisionConflict?.(conflict);
             throw new SaveConflict(t("changedElsewhere"));
           }
+          // A bundle's refusal (its stock, its tracking) in the dashboard's words, never the server's.
+          const kit = await readKitRefusal(error);
+          if (kit) throw new SaveNotCompleted(kit.message).because(error);
           const issue = readSkuTaken(error) ?? readApiFieldIssues(error)?.[0];
           const line = issue ? showServerIssue(issue.path, issue.message) : null;
           throw new SaveNotCompleted(line ?? getServerFnError(error, t("saveFailed"))).because(error);

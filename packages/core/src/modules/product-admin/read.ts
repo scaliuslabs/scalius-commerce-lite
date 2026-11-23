@@ -9,7 +9,7 @@ import {
     productAttributeValues,
     inventoryMovements,
 } from "@scalius/database/schema";
-import { and, sql, eq, asc, inArray, isNull, or, type SQL, type SQLWrapper } from "drizzle-orm";
+import { and, getTableColumns, sql, eq, asc, inArray, isNull, or, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { CursorValueKind } from "@scalius/shared/pagination";
 import {
     COUNT_PROBE_COLUMN,
@@ -572,11 +572,18 @@ export async function getProductsByIds(
  * Returns full product details including variants and ordered media.
  * Returns null if the product does not exist.
  */
+/** The editor's product: each SKU says whether it is a bundle, and the page counts its other products' offers. */
+export type ProductEditorDetails = Omit<ProductWithDetails, "variants"> & {
+    relatedObjectsJson: string | null;
+    variants: Array<ProductWithDetails["variants"][number] & { isKit: boolean }>;
+    pageOfferCount: number;
+};
+
 export async function getProductDetails(
     db: Database,
     id: string,
     relatedObjectsProjection?: SQL<string | null>,
-): Promise<(ProductWithDetails & { relatedObjectsJson: string | null }) | null> {
+): Promise<ProductEditorDetails | null> {
     // Every read is keyed by the product id: one wave, not three.
     const productRead = db
         .select({
@@ -617,6 +624,8 @@ export async function getProductDetails(
             },
             /** The brand picker's label (a trashed brand keeps its name until changed). */
             brandName: brands.name,
+            /** The page's offers of other products (the editor's collapsed card counts them without its own read). */
+            pageOfferCount: sql<number>`(SELECT count(*) FROM product_page_offers AS detail_offer WHERE detail_offer.product_id = ${products.id})`.mapWith(Number),
         })
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
@@ -626,7 +635,11 @@ export async function getProductDetails(
     const [[result], variants, mediaByProduct, richContent, attributeValues, decimalPlaces, optionsByProduct, selectedOptionsByVariant] = await Promise.all([
         productRead,
         db
-            .select()
+            .select({
+                ...getTableColumns(productVariants),
+                // A bundle (kit) SKU holds no stock of its own: the editor shows no quantity for it.
+                isKit: sql<number>`EXISTS (SELECT 1 FROM variant_components AS detail_kit WHERE detail_kit.kit_variant_id = ${productVariants.id})`.mapWith(Number),
+            })
             .from(productVariants)
             .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt))),
         loadProductMediaProjections(db, [id]),
@@ -659,10 +672,12 @@ export async function getProductDetails(
         deletedAt: result.deletedAt
             ? requireProductTimestamp(result.deletedAt, "deleted timestamp")
             : null,
-        variants: variants.map((variant) => ({
+        variants: variants.map(({ isKit, ...variant }) => ({
             ...presentCatalogPrice(variant, decimalPlaces),
+            isKit: Number(isKit) === 1,
             selectedOptions: selectedOptionsByVariant.get(variant.id) ?? [],
         })),
+        pageOfferCount: Number(result.pageOfferCount ?? 0),
         options: optionsByProduct.get(id) ?? [],
         media: mediaByProduct.get(id) ?? [],
         additionalInfo: richContent.map((item) => ({
@@ -675,7 +690,7 @@ export async function getProductDetails(
             attributeId: attr.attributeId,
             value: attr.value,
         })),
-    } as ProductWithDetails & { relatedObjectsJson: string | null };
+    } as ProductEditorDetails;
 }
 
 /** Returns aggregate product and category counts for the products dashboard. */

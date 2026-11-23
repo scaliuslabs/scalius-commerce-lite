@@ -7085,10 +7085,19 @@ export type AppDetail = AppSummary & {
          */
         missing: Array<string>;
         /**
-         * Stored values the setting no longer takes (an https address where a store page is wanted), by key, with the message a save gives: show the value as invalid, never drop it.
+         * Stored values the setting no longer takes (an https address where a store page is wanted), by key: show the value as invalid with its reason, never drop it.
          */
         invalid: {
-            [key: string]: string;
+            [key: string]: {
+                /**
+                 * Why: store_page (a store-page address given another site's address or anything but a path of this store), https (an https address that is not one), invalid (anything else; the message says). Word each reason in your own language.
+                 */
+                reason: 'store_page' | 'https' | 'invalid';
+                /**
+                 * The English message a save gives.
+                 */
+                message: string;
+            };
         };
         /**
          * The app-wide settings in their sections, in order (group null: general). Provider fields show with their provider.
@@ -73426,6 +73435,17 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                             text: string;
                         };
                     }>;
+                    /**
+                     * The store bundle (kit) this line was sold in, as frozen at checkout; null for any other line. A bundle's lines change together, in whole bundles (`kit_amended_in_part`).
+                     */
+                    bundle: {
+                        id: string;
+                        title: string;
+                        /**
+                         * This line's units in one bundle: the line holds `quantity / perUnit` bundles.
+                         */
+                        perUnit: number;
+                    } | null;
                 }>;
                 [key: string]: unknown;
             };
@@ -78345,6 +78365,10 @@ export type GetApiV1AdminProductsByIdResponses = {
                 deletedAt?: NullableTimestamp;
                 stockVersion?: number;
                 version?: number;
+                /**
+                 * This SKU is a bundle (kit): made of other SKUs, it holds no stock of its own (`sections/kits`).
+                 */
+                isKit: boolean;
             }>;
             media: Array<{
                 id: string;
@@ -78385,6 +78409,10 @@ export type GetApiV1AdminProductsByIdResponses = {
                 displayName: string;
             }>;
             warrantyPolicyId: string | null;
+            /**
+             * How many SKUs of other products this product's page shows under its own (`sections/page_offers`).
+             */
+            pageOfferCount: number;
         };
     };
 };

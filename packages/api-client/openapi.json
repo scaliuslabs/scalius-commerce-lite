@@ -31068,9 +31068,28 @@
                   "invalid": {
                     "type": "object",
                     "additionalProperties": {
-                      "type": "string"
+                      "type": "object",
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "store_page",
+                            "https",
+                            "invalid"
+                          ],
+                          "description": "Why: store_page (a store-page address given another site's address or anything but a path of this store), https (an https address that is not one), invalid (anything else; the message says). Word each reason in your own language."
+                        },
+                        "message": {
+                          "type": "string",
+                          "description": "The English message a save gives."
+                        }
+                      },
+                      "required": [
+                        "reason",
+                        "message"
+                      ]
                     },
-                    "description": "Stored values the setting no longer takes (an https address where a store page is wanted), by key, with the message a save gives: show the value as invalid, never drop it."
+                    "description": "Stored values the setting no longer takes (an https address where a store page is wanted), by key: show the value as invalid with its reason, never drop it."
                   },
                   "sections": {
                     "type": "array",
@@ -257012,6 +257031,29 @@
                                       ]
                                     },
                                     "x-scalius-app-owned": "items"
+                                  },
+                                  "bundle": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "perUnit": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "description": "This line's units in one bundle: the line holds `quantity / perUnit` bundles."
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "title",
+                                      "perUnit"
+                                    ],
+                                    "description": "The store bundle (kit) this line was sold in, as frozen at checkout; null for any other line. A bundle's lines change together, in whole bundles (`kit_amended_in_part`)."
                                   }
                                 },
                                 "required": [
@@ -257021,7 +257063,8 @@
                                   "quantity",
                                   "price",
                                   "fulfillmentType",
-                                  "properties"
+                                  "properties",
+                                  "bundle"
                                 ]
                               }
                             }
@@ -274042,6 +274085,10 @@
                               },
                               "version": {
                                 "type": "number"
+                              },
+                              "isKit": {
+                                "type": "boolean",
+                                "description": "This SKU is a bundle (kit): made of other SKUs, it holds no stock of its own (`sections/kits`)."
                               }
                             },
                             "required": [
@@ -274053,7 +274100,8 @@
                               "sku",
                               "price",
                               "stock",
-                              "reservedStock"
+                              "reservedStock",
+                              "isKit"
                             ]
                           }
                         },
@@ -274229,6 +274277,11 @@
                         "warrantyPolicyId": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "pageOfferCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "How many SKUs of other products this product's page shows under its own (`sections/page_offers`)."
                         }
                       },
                       "required": [
@@ -274267,7 +274320,8 @@
                         "additionalInfo",
                         "attributes",
                         "relatedObjects",
-                        "warrantyPolicyId"
+                        "warrantyPolicyId",
+                        "pageOfferCount"
                       ]
                     }
                   },

@@ -142,7 +142,7 @@ export function SkuPickerDialog({ open, onOpenChange, mode, productId, kitVarian
           />
         </div>
         {/* A fixed box: filtering changes the rows, never the dialog's size. */}
-        <div className="h-80 overflow-y-auto overscroll-contain border-t">
+        <div className="h-64 overflow-y-auto overscroll-contain border-t">
           {loading ? (
             <p role="status" className="flex items-center justify-center gap-2 px-5 py-10 text-body text-muted-foreground">
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
@@ -167,11 +167,12 @@ export function SkuPickerDialog({ open, onOpenChange, mode, productId, kitVarian
                 const name = skuName(sku, sku.sku);
                 return (
                   <li key={sku.variantId}>
-                    <label className="flex min-h-14 cursor-pointer items-center gap-3 px-5 py-2 hover:bg-accent has-disabled:cursor-default">
+                    <label className="flex min-h-14 cursor-pointer items-center gap-3 px-5 py-2 hover:bg-accent has-aria-disabled:cursor-default">
+                      {/* A locked row stays in the tab order, so its reason is heard (aria-disabled, never disabled). */}
                       <Checkbox
                         checked={checked}
-                        disabled={locked}
-                        onCheckedChange={() => toggle(sku)}
+                        aria-disabled={locked || undefined}
+                        onCheckedChange={() => { if (!locked) toggle(sku); }}
                         aria-label={name}
                         aria-describedby={reason ? `sku-reason-${sku.variantId}` : undefined}
                       />
@@ -187,9 +188,9 @@ export function SkuPickerDialog({ open, onOpenChange, mode, productId, kitVarian
                       </span>
                       <span className="flex shrink-0 flex-col items-end gap-1 text-end">
                         <span className="text-body tabular-nums">{fmt(sku.price)}</span>
-                        <span className="text-body tabular-nums text-muted-foreground">{availableStockText(sku.available)}</span>
+                        <span className="text-body tabular-nums text-muted-foreground">{sku.isKit ? t("stockFromItems") : availableStockText(sku.available)}</span>
                       </span>
-                      <span className="hidden shrink-0 gap-1 sm:flex">
+                      <span className="flex shrink-0 flex-wrap justify-end gap-1">
                         {added ? <Badge variant="secondary">{t("added")}</Badge> : null}
                         {sku.isKit ? <Badge variant="info">{t("bundle")}</Badge> : null}
                         {sku.isGiftCard ? <Badge variant="secondary">{t("giftCard")}</Badge> : null}
@@ -216,6 +217,8 @@ export function SkuPickerDialog({ open, onOpenChange, mode, productId, kitVarian
           )}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3">
+          {/* How many a search found, read once it lands. */}
+          <p className="sr-only" aria-live="polite">{loading || query.isError ? "" : t("resultCount", { count: skus.length })}</p>
           <p className="text-body tabular-nums text-muted-foreground" aria-live="polite">
             {staged.size > 0 && full ? t("selectedLimit", { count: staged.size }) : tr("selected", { count: staged.size })}
           </p>

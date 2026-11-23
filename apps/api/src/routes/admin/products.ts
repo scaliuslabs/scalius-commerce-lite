@@ -95,6 +95,10 @@ const adminProductDetailSchema = productDetailSchema.extend({
     relatedObjects: z.array(relatedObjectRecordSchema),
     /** The product's warranty policy (wrp_…), or null. Checkout freezes its current revision onto order lines. */
     warrantyPolicyId: z.string().nullable(),
+    variants: z.array(productVariantSchema.extend({
+        isKit: z.boolean().openapi({ description: "This SKU is a bundle (kit): made of other SKUs, it holds no stock of its own (`sections/kits`)." }),
+    })),
+    pageOfferCount: z.number().int().nonnegative().openapi({ description: "How many SKUs of other products this product's page shows under its own (`sections/page_offers`)." }),
 });
 
 const productPickerSummarySchema = z.object({
