@@ -123,6 +123,10 @@ export interface AccountCopy {
     expectedDelivery: (date: string) => string;
     product: string;
     quantity: (count: string, unit: string) => string;
+    /** An item of a bundle: how many of it each set holds. */
+    perSet: (count: string) => string;
+    /** A bundle's quantity when no one set price is exact. */
+    sets: (count: string) => string;
     lineDiscount: (amount: string) => string;
     subtotal: string;
     tax: string;
@@ -351,6 +355,8 @@ const EN: AccountCopy = {
     expectedDelivery: (date) => `Expected delivery: ${date}`,
     product: "Product",
     quantity: (count, unit) => `Qty ${count} × ${unit}`,
+    perSet: (count) => `${count} per set`,
+    sets: (count) => `Qty ${count}`,
     lineDiscount: (amount) => `Discount -${amount}`,
     subtotal: "Subtotal",
     tax: "Tax",
@@ -590,6 +596,8 @@ const BN: AccountCopy = {
     expectedDelivery: (date) => `সম্ভাব্য ডেলিভারি: ${date}`,
     product: "পণ্য",
     quantity: (count, unit) => `পরিমাণ ${count} × ${unit}`,
+    perSet: (count) => `প্রতি সেটে ${count}টি`,
+    sets: (count) => `পরিমাণ ${count}`,
     lineDiscount: (amount) => `ছাড় -${amount}`,
     subtotal: "সাবটোটাল",
     tax: "ট্যাক্স",

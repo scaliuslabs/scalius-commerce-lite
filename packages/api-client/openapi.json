@@ -56376,6 +56376,62 @@
                                     "variantLabel": {
                                       "type": "string",
                                       "nullable": true
+                                    },
+                                    "bundle": {
+                                      "type": "object",
+                                      "nullable": true,
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "title": {
+                                          "type": "string"
+                                        },
+                                        "kind": {
+                                          "type": "string",
+                                          "enum": [
+                                            "expand",
+                                            "merge",
+                                            "kit"
+                                          ]
+                                        },
+                                        "kit": {
+                                          "type": "object",
+                                          "nullable": true,
+                                          "properties": {
+                                            "variantId": {
+                                              "type": "string"
+                                            },
+                                            "productId": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "variantId",
+                                            "productId"
+                                          ]
+                                        },
+                                        "anchor": {
+                                          "type": "boolean"
+                                        },
+                                        "units": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        },
+                                        "perUnit": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "title",
+                                        "kind",
+                                        "kit",
+                                        "anchor",
+                                        "units",
+                                        "perUnit"
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -56386,7 +56442,8 @@
                                     "productName",
                                     "productSlug",
                                     "productImage",
-                                    "variantLabel"
+                                    "variantLabel",
+                                    "bundle"
                                   ],
                                   "additionalProperties": {}
                                 }

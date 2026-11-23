@@ -12,6 +12,7 @@ import { isFreeOrderLine, resolveSavedOrderLineMoney } from "@scalius/shared/ord
 import { presentedLineTotalMinor } from "@/lib/order-line-discounts";
 import { orderLineGroupStatusText, orderLinePropertyRows } from "@/lib/order-line-groups";
 import { buyerLineAddOnRows } from "@scalius/shared/buyer-line-add-on-text";
+import { rowItemsOnly } from "@/lib/order-bundles";
 import LongAnswer from "@/components/LongAnswer.astro";
 import { longAnswerWords } from "@/lib/long-answer";
 import { pageLanguage } from "@/lib/store-time-zone";
@@ -242,7 +243,8 @@ const answerWords = longAnswerWords(pageLanguage());
     <div class="space-y-4">
       {
         group.items.map((item) => {
-          const savedLine = resolveSavedOrderLineMoney(item, savedMoneySummary);
+          // The row's own amounts: what the apps charged on it is a summary row (`receiptAddOnRows`), never part of its price.
+          const savedLine = rowItemsOnly(resolveSavedOrderLineMoney(item, savedMoneySummary), item, receiptAddOnRows.length > 0);
           const propertyRows = [
             ...orderLinePropertyRows(
               item.properties,
@@ -289,7 +291,9 @@ const answerWords = longAnswerWords(pageLanguage());
                 <p class="text-sm text-muted-foreground mt-1">
                   {checkoutText(copy.orderReceiptQuantityText, { quantity: quantityText(item.quantity) })} × {savedLine && savedLine.unitPriceMinor !== null
                     ? formatReceiptMinor(savedLine.unitPriceMinor)
-                    : formatReceiptAmount(item.price)}
+                    : savedLine && savedMoneySummary
+                      ? formatReceiptMinor(Math.round(savedLine.grossSubtotalMinor / Math.max(1, item.quantity)))
+                      : formatReceiptAmount(item.price)}
                 </p>
                 {savedLine && savedMoneySummary && showsLineDiscounts && savedLine.discountMinor > 0 && (
                   <p class="mt-1 text-xs text-muted-foreground">

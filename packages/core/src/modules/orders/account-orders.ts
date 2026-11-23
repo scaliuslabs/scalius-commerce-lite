@@ -735,9 +735,9 @@ export async function getCustomerOrders(
             : null,
         openSupportRequestType: openRequestTypeByOrder.get(order.id) ?? null,
         latestShipment: latestShipmentByOrder.get(order.id) ?? null,
-        // A kit's item split into two lines is one row (`foldBuyerOrderLines`).
+        // A kit's item split into two lines is one row (`foldBuyerOrderLines`); a row keeps its bundle, so a card counts one bundle once.
         items: foldBuyerOrderLines(itemsByOrder.get(order.id) || []).map(({
-            id: _id, orderId: _orderId, properties: _properties, lineIds: _lineIds, bundle: _bundle, addOns: _addOns, unitPriceMinor, unitsTotalMinor, ...item
+            id: _id, orderId: _orderId, properties: _properties, lineIds: _lineIds, addOns: _addOns, unitPriceMinor, unitsTotalMinor, ...item
         }) => ({
             ...item,
             price: buyerLineUnitPrice({ unitPriceMinor, unitsTotalMinor, quantity: item.quantity }, order.currencyDecimalPlaces),

@@ -439,6 +439,8 @@ export interface CustomerOrderItem {
   discountAmountMinor?: number | null;
   taxableAmountMinor?: number | null;
   taxAmountMinor?: number;
+  /** The bundle the row was bought in (rows of one bundle share its id); null for a plain row. */
+  bundle?: { id: string; title: string; units: number | null; perUnit: number | null } | null;
 }
 
 export interface CustomerOrderShipment {

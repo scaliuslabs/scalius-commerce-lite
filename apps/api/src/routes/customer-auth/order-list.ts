@@ -6,7 +6,7 @@ import {
 } from "@scalius/core/modules/customers";
 import { getCustomerOrders } from "@scalius/core/modules/orders";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
-import { deliveryMethodKindSchema } from "../../schemas/order-lines";
+import { deliveryMethodKindSchema, orderLineBundleSchema } from "../../schemas/order-lines";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { buyerOrderShippingAddressShape, customerAddressSchema } from "../../schemas/entities";
 import { ok } from "../../utils/api-response";
@@ -89,6 +89,8 @@ const getCustomerOrdersRoute = createRoute({
                 productSlug: z.string().nullable(),
                 productImage: z.string().nullable(),
                 variantLabel: z.string().nullable(),
+                /** The bundle the row was bought in: rows of one bundle share its id, so a card counts it once. */
+                bundle: orderLineBundleSchema.nullable(),
               }).passthrough()),
             }).passthrough()),
             pagination: z.object({

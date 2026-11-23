@@ -14847,6 +14847,18 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                     productSlug: string | null;
                     productImage: string | null;
                     variantLabel: string | null;
+                    bundle: {
+                        id: string;
+                        title: string;
+                        kind: 'expand' | 'merge' | 'kit';
+                        kit: {
+                            variantId: string;
+                            productId: string;
+                        } | null;
+                        anchor: boolean;
+                        units: number | null;
+                        perUnit: number | null;
+                    } | null;
                     [key: string]: unknown;
                 }>;
                 [key: string]: unknown;
