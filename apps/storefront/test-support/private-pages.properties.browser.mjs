@@ -343,6 +343,10 @@ const REGRESSIONS = {
   "review 5: the store's own page under the marketplace palette's dark colours": { request: { palette: "marketplace", scheme: "dark" }, privatePages: {} },
   // A filled button's hover once mixed its colour with the page (`bg-primary/90`): white on it read 4.42:1.
   "review 5: the store's own page under the marketplace palette's light colours": { request: { palette: "marketplace", scheme: "light" }, privatePages: {} },
+  // Review 6, B1: a header skin draws its own light or dark switch (and the host sign-in's account link), and its
+  // stylesheet hides that switch in dark colours and on a phone. The region keeps no host behaviour, so the store's
+  // switch never yields to it: it shows at every width, in both schemes.
+  "review 6, B1: the theme's header draws its own scheme switch and hides it": { request: { noor: true, toggle: true, skinSwitch: true, scheme: "system" }, privatePages: { chrome: "theme", css: ':root[data-color-scheme="dark"] [data-free="header"] button { display: none } @media (max-width: 500px) { [data-free="header"] button { visibility: hidden } }' } },
   // What the save must refuse (under a mutation that lets one through, the drawing must fail).
   "a stylesheet hiding a host part": { refused: "unscoped_selector", privatePages: { css: '[data-part="summary"] * { display: none } [data-part="details-submit"] * { visibility: hidden }' } },
   "summary rows that do not read on their summary": { refused: "contrast", privatePages: { tokens: { cart: { "summary-rows": { text: "#eeeeee" }, summary: { background: "#ffffff" } } } } },

@@ -287,7 +287,6 @@ const RAW_FUNCTIONS = new Set(["nth-child", "nth-last-child", "nth-of-type", "nt
 const PSEUDO_ELEMENTS = new Set(["before", "after", "marker", "first-line", "first-letter", "selection"]);
 /** The attributes a selector may name: those the region's inert markup carries (plugins/inert-html.ts), never a class or id by attribute. */
 const REGION_ATTRIBUTES = new Set([...INERT_MARKUP.attributes, ...Object.values(INERT_MARKUP.byTag).flat(), ...INERT_MARKUP.svg].filter((name) => name !== "class" && name !== "id"));
-const REGION_ARIA = new RegExp(INERT_MARKUP.aria);
 /** The page root's state a selector may read before its region: the scheme, the language and the direction. */
 const ROOT_STATE_ATTRIBUTES = new Set(["data-color-scheme", "data-private-tokens", "lang", "dir"]);
 /** The page itself: named only as the leading root state, never inside a selector. */
@@ -490,8 +489,8 @@ function ownNames(complex: Complex): Complex {
     if (item.kind === "attr" && (item.name === "class" || item.name === "id")) {
       refuse("unsupported_selector", `[${item.name}…]: select by .class or #id inside a region.`);
     }
-    if (item.kind === "attr" && !REGION_ATTRIBUTES.has(item.name) && !(REGION_ARIA.test(item.name) && !INERT_MARKUP.loudAria.includes(item.name))) {
-      refuse("unknown_attribute", `[${item.name}…] is not an attribute the region's markup carries: select by tag, .class, #id, [data-ui], [data-tone], an aria-* attribute or another attribute the inert markup keeps.`);
+    if (item.kind === "attr" && !REGION_ATTRIBUTES.has(item.name)) {
+      refuse("unknown_attribute", `[${item.name}…] is not an attribute the region's markup carries: select by tag, .class, #id, [data-ui], [data-tone], [role], [aria-label], [aria-current] or another attribute the inert markup keeps.`);
     }
     if (item.kind === "pseudo" && item.selectors) return { ...item, selectors: item.selectors.map(ownNames) };
     return item;

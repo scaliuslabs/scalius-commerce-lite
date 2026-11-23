@@ -18,6 +18,7 @@ const rewrite = (file, find, replace) => ({ file, find, replace });
 const TOKENS = "packages/shared/src/storefront-theme/private-tokens.ts";
 const PLAN = "apps/storefront/src/lib/private-pages/plan.ts";
 const MARKUP = "apps/storefront/src/components/private/PrivateMarkup.astro";
+const INERT = "packages/shared/src/plugins/inert-html.ts";
 const SEAL = "overflow:hidden;overflow:clip;contain:layout paint style;";
 const ROW = "export function privateRowDeclarations(row: PrivateTokenRow, parent: PrivateTokenRow | null, also: ReadonlySet<string> = NONE): string {\n";
 /** A row of the table that writes only its paint: its words keep whatever colour reaches them. */
@@ -236,6 +237,16 @@ export const MUTATIONS = {
     rewrites: [rewrite("packages/shared/src/storefront-theme/tokens.ts", '"primary-hover": storefrontThemeHoverSurface([colors.primary], [colors["primary-foreground"]]),', '"primary-hover": storefrontThemeMix(colors.primary, colors.background, 0.1),')],
     cases: ["review 5: the store's own page under the marketplace palette's light colours"],
     expect: /hovered: .* reads [\d.]+:1 on what is behind it/,
+  },
+  "R6-B1 a region keeps the skin's buttons and the store's chrome behaviours": {
+    why: "the inert rebuild keeps a skin's button and its colour scheme switch and account link: the store's switch yields to one the theme hides",
+    rewrites: [
+      rewrite(INERT, '  "button",\n]);', "]);"),
+      rewrite(INERT, '  "svg", "g", "path",', '  "button", "svg", "g", "path",'),
+      rewrite(INERT, '    if (VALUES[name]) {', '    if (name === "data-color-scheme-toggle" || name === "data-account-link") { out.push([name, value]); continue; }\n    if (VALUES[name]) {'),
+    ],
+    cases: ["review 6, B1: the theme's header draws its own scheme switch and hides it"],
+    expect: /^base: \[data-host="scheme"\] button: not visible/,
   },
   "P2 a page paint with no tokens draws the store's own page": {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",

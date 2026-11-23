@@ -32,7 +32,7 @@ import type { ThemeColorScheme } from "@/lib/theme-paint";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 
 /** A switch a header or footer skin (or an app in their slots) drew: the store's then yields to it. */
-const SKIN_DRAWN_SWITCH = "[data-storefront-header] [data-color-scheme-toggle]:not([data-sx-host-color-scheme-toggle]), [data-storefront-footer] [data-color-scheme-toggle]:not([data-sx-host-color-scheme-toggle])";
+export const SKIN_DRAWN_SWITCH = "[data-storefront-header] [data-color-scheme-toggle]:not([data-sx-host-color-scheme-toggle]), [data-storefront-footer] [data-color-scheme-toggle]:not([data-sx-host-color-scheme-toggle])";
 
 /** Where a buyer's choice is kept, on their device only. */
 export const COLOR_SCHEME_STORAGE_KEY = "scalius:color-scheme";

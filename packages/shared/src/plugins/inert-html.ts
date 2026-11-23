@@ -2,9 +2,10 @@
 // and footer there, `privatePages.chrome: theme`). It runs on markup the
 // plugin sanitizer already checked (`sanitizePluginHtml`) and writes a new
 // document from an allow-list, so nothing a skin draws there can run, load,
-// frame, post, collect, cover or impersonate anything:
+// frame, post, collect, cover, impersonate or steer anything:
 // - elements: text, lists, links, images, disclosure (`details`), tables and
-//   SVG drawing only; a button only as `type="button"`;
+//   SVG drawing only. No button: nothing inert is a control, so a skin's
+//   buttons go with their content;
 // - forms: none. Every form, field, select, text area and label goes with
 //   its content, so nothing here takes what a buyer types; the store's own
 //   search sits beside the region where the theme places it
@@ -12,15 +13,18 @@
 // - islands are unwrapped (no app script loads), deferred markup is drawn in
 //   place, and script, style, link, base, meta, frames, objects, embeds,
 //   media, dialogs and templates go with their content;
-// - attributes: no `style`, event handler, `popover`, form action or URL
-//   reference in SVG; class names and ids are the region's own
-//   (`tc-<name>`), as are the ids ARIA attributes name, so chrome never
-//   shares a class with the store's CSS or an id with a host element; the
-//   only data attributes are the store's chrome behaviours (signed-in
-//   versions, the colour scheme switch, the account link); no live region,
-//   alert, modal or control role (a `role="button"` or `"link"` on a div). A link keeps an href only to a clean path on this
-//   store (no `//`, no dot segment) or to one of the region's own ids; an
-//   image only a source the page allows.
+// - attributes: an allow-list, each with no meaning to the host. No `style`,
+//   event handler, `popover`, `tabindex`, form action or URL reference in SVG,
+//   and no host behaviour: none of the store's chrome attributes (the colour
+//   scheme switch, the account link, signed-in versions), so nothing in a
+//   region triggers a host action or makes a host part yield. Class names and
+//   ids are the region's own (`tc-<name>`), as are the ids ARIA attributes
+//   name; the only data attributes are the buyer UI's style words (`data-ui`,
+//   `data-tone`), each from a fixed list; roles and ARIA attributes only from
+//   their lists (no live region, alert, modal, control or role description).
+//   A link keeps an href only to a clean path on this store (no `//`, no dot
+//   segment) or to one of the region's own ids; an image only a source the
+//   page allows.
 // The host draws the result inside a sealed free region (`data-free`).
 import { isTag, isText, type ChildNode, type Element } from "domhandler";
 import { parseDocument } from "htmlparser2";
@@ -36,7 +40,7 @@ export interface InertChromeOptions {
 export const CHROME_NAME_PREFIX = "tc-";
 
 const KEEP = new Set([
-  "a", "abbr", "article", "aside", "b", "bdi", "blockquote", "br", "button", "caption", "code", "dd", "del", "details",
+  "a", "abbr", "article", "aside", "b", "bdi", "blockquote", "br", "caption", "code", "dd", "del", "details",
   "div", "dl", "dt", "em", "figcaption", "figure", "footer", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr",
   "i", "img", "ins", "li", "mark", "nav", "ol", "p", "picture", "pre", "q", "s", "section", "small", "source", "span",
   "strong", "sub", "summary", "sup", "table", "tbody", "td", "tfoot", "th", "thead", "time", "tr", "u", "ul",
@@ -48,28 +52,31 @@ const DROP = new Set([
   "noscript", "video", "audio", "canvas", "math", "foreignobject", "use", "image", "portal", "form", "input", "select",
   "textarea", "option", "optgroup", "label", "datalist", "output", "fieldset", "dialog", "slot", "lineargradient",
   "radialgradient", "clippath", "mask", "pattern", "filter", "marker", "symbol", "animate", "animatemotion", "animatetransform", "set",
+  "button",
 ]);
 /** Gone, its content kept. */
 const UNWRAP = new Set(["scalius-island", "scalius-deferred"]);
 
-const GENERAL = new Set(["role", "title", "hidden", "lang", "dir", "translate"]);
+/** Attributes any element may carry. */
+const GENERAL = new Set(["title", "hidden", "lang", "dir", "translate", "role", "aria-label", "aria-hidden", "aria-current", "aria-level"]);
+/** ARIA attributes that name ids: each id is the region's own. */
+const ID_REFERENCES = new Set(["aria-labelledby", "aria-describedby", "aria-details", "headers"]);
 /**
- * Roles the rebuild never writes: those that would speak over the page or pose as one of its dialogs,
- * and those that announce a control (a button, a link, a menu item, a box to tick, a tab, an option…),
- * which nothing inert is.
+ * Attributes whose value must be one of a list: the roles that only describe
+ * structure (none announces a control, speaks over the page or poses as a
+ * dialog), and the buyer UI's style words (the theme's content blocks carry
+ * them, so one stylesheet styles both). None is read by a host script.
  */
-const LOUD_ROLES = new Set([
-  "dialog", "alertdialog", "alert", "status", "log", "marquee", "timer",
-  "button", "link", "menuitem", "menuitemcheckbox", "menuitemradio", "checkbox", "radio", "switch", "tab", "option",
-  "slider", "spinbutton", "textbox", "searchbox", "combobox", "treeitem", "gridcell",
-]);
-const LOUD_ARIA = new Set(["aria-modal", "aria-live", "aria-atomic", "aria-relevant", "aria-busy"]);
+const VALUES: Record<string, readonly string[]> = {
+  role: ["none", "presentation", "img", "note", "group", "list", "listitem", "navigation", "figure", "separator", "heading", "term", "definition", "paragraph"],
+  "data-ui": ["banner", "badge", "text", "heading", "link", "image", "disclosure", "divider", "stack", "columns"],
+  "data-tone": ["neutral", "info", "success", "warning", "critical"],
+};
 const BY_TAG: Record<string, ReadonlySet<string>> = {
   a: new Set(["href", "rel", "hreflang"]),
   img: new Set(["src", "srcset", "sizes", "alt", "width", "height", "loading", "decoding", "fetchpriority"]),
   source: new Set(["srcset", "sizes", "media", "type", "width", "height"]),
   details: new Set(["open"]),
-  button: new Set(["disabled"]),
   ol: new Set(["start", "reversed", "type"]),
   td: new Set(["colspan", "rowspan"]),
   th: new Set(["colspan", "rowspan", "scope", "abbr"]),
@@ -82,17 +89,6 @@ const SVG = new Set([
   "width", "height", "xmlns",
 ]);
 const SVG_TAGS = new Set(["svg", "g", "path", "circle", "ellipse", "line", "polyline", "polygon", "rect", "defs"]);
-/** ARIA attributes that name ids: each id is the region's own. */
-const ID_REFERENCES = new Set(["aria-labelledby", "aria-describedby", "aria-controls", "aria-owns", "aria-activedescendant", "aria-details", "aria-errormessage", "aria-flowto", "headers"]);
-/** The store's chrome behaviours a skin may mark (plugin-sdk `whenSignedIn`, `colorSchemeToggle`, `accountLink`). */
-const BEHAVIOURS: Record<string, (tag: string, value: string) => boolean> = {
-  "data-scalius-when": (_tag, value) => value === "signed-in" || value === "signed-out",
-  "data-color-scheme-toggle": (tag) => tag === "button",
-  "data-account-link": (tag) => tag === "a",
-  // The buyer UI's kind and tone words, as the theme's content blocks carry them: one stylesheet styles both.
-  "data-ui": (_tag, value) => /^[a-z]{1,24}$/.test(value),
-  "data-tone": (_tag, value) => ["neutral", "info", "success", "warning", "critical"].includes(value),
-};
 
 const NAME = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
 const own = (name: string) => `${CHROME_NAME_PREFIX}${name}`;
@@ -128,8 +124,9 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
       if (names) out.push([name, names]);
       continue;
     }
-    if (name.startsWith("data-")) {
-      if (BEHAVIOURS[name]?.(tag, value)) out.push([name, value]);
+    if (VALUES[name]) {
+      const word = value.trim().toLowerCase();
+      if (VALUES[name].includes(word)) out.push([name, word]);
       continue;
     }
     if (name === "href") {
@@ -138,7 +135,6 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
       if (storefrontBrowsingPath(value)) out.push([name, value]);
       continue;
     }
-    if (LOUD_ARIA.has(name) || (name === "role" && LOUD_ROLES.has(value.trim().toLowerCase()))) continue;
     if (name === "src") {
       if (tag !== "img") continue;
       if (!options.imageAllowed(value)) return null;
@@ -149,18 +145,13 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
       if (allowedSrcset(value, options)) out.push([name, value]);
       continue;
     }
-    if (name === "tabindex") {
-      if (value === "0" || value === "-1") out.push([name, value]);
-      continue;
-    }
     if (SVG_TAGS.has(tag) && SVG.has(name)) {
       if (!/url\s*\(|javascript:/i.test(value)) out.push([name, value]);
       continue;
     }
-    if (GENERAL.has(name) || (name.startsWith("aria-") && /^aria-[a-z]+$/.test(name)) || BY_TAG[tag]?.has(name)) out.push([name, value]);
+    if (GENERAL.has(name) || BY_TAG[tag]?.has(name)) out.push([name, value]);
   }
   if (tag === "img" && !out.some(([name]) => name === "src")) return null;
-  if (tag === "button") out.push(["type", "button"]);
   return out;
 }
 
@@ -193,19 +184,16 @@ function walk(nodes: ChildNode[], options: InertChromeOptions, out: string[]): v
 
 /**
  * Everything the rebuild can emit, as data: its elements, the attributes any
- * of them may carry, those of one element, SVG's, and the roles and button
- * type it never writes. The host's content blocks draw from the same words.
+ * of them may carry, those of one element, SVG's, and the attributes whose
+ * value is one of a list. The host's content blocks draw from the same words.
  */
 export const INERT_MARKUP = {
   tags: [...KEEP],
-  attributes: [...GENERAL, "class", "id", "tabindex", ...ID_REFERENCES, ...Object.keys(BEHAVIOURS)],
-  byTag: Object.fromEntries(Object.entries(BY_TAG).map(([tag, names]) => [tag, [...names, ...(tag === "button" ? ["type"] : [])]])) as Record<string, string[]>,
+  attributes: [...GENERAL, "class", "id", ...ID_REFERENCES, ...Object.keys(VALUES)],
+  byTag: Object.fromEntries(Object.entries(BY_TAG).map(([tag, names]) => [tag, [...names]])) as Record<string, string[]>,
   svgTags: [...SVG_TAGS],
   svg: [...SVG],
-  aria: "^aria-[a-z]+$",
-  loudAria: [...LOUD_ARIA],
-  roles: [...LOUD_ROLES],
-  buttonType: "button",
+  values: VALUES as Record<string, string[]>,
 };
 
 /**
@@ -215,7 +203,6 @@ export const INERT_MARKUP = {
  */
 export function inertMarkupProblems(root: { querySelectorAll(selector: string): ArrayLike<{ localName: string; attributes: ArrayLike<{ name: string; value: string }> }> }, markup: typeof INERT_MARKUP): string[] {
   const problems: string[] = [];
-  const aria = new RegExp(markup.aria);
   for (const element of Array.from(root.querySelectorAll("*"))) {
     const tag = element.localName.toLowerCase();
     if (!markup.tags.includes(tag)) {
@@ -224,11 +211,9 @@ export function inertMarkupProblems(root: { querySelectorAll(selector: string): 
     }
     for (const { name: raw, value } of Array.from(element.attributes)) {
       const name = raw.toLowerCase();
-      const known = markup.attributes.includes(name) || (markup.byTag[tag] ?? []).includes(name)
-        || (markup.svgTags.includes(tag) && markup.svg.includes(name)) || (aria.test(name) && !markup.loudAria.includes(name));
+      const known = markup.attributes.includes(name) || (markup.byTag[tag] ?? []).includes(name) || (markup.svgTags.includes(tag) && markup.svg.includes(name));
       if (!known) problems.push(`<${tag} ${name}>: an attribute the inert markup never draws`);
-      else if (name === "role" && markup.roles.includes(value.trim().toLowerCase())) problems.push(`<${tag} role="${value}">: a role the inert markup never draws`);
-      else if (name === "type" && value !== markup.buttonType) problems.push(`<${tag} type="${value}">: the inert markup draws only type="${markup.buttonType}"`);
+      else if (markup.values[name] && !markup.values[name].includes(value)) problems.push(`<${tag} ${name}="${value}">: a value the inert markup never draws`);
     }
   }
   return problems;

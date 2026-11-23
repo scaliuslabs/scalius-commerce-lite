@@ -208,6 +208,25 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
   const runtimeModule = await vite.ssrLoadModule("/src/lib/api/runtime.ts");
   const { serveExtensionFile } = await vite.ssrLoadModule("/src/lib/extensions/files.ts");
   const routes = storefrontRoutes();
+  // The private pages' gate: Noor's header drawing its own light or dark switch (`colorSchemeToggle()`, as a header
+  // skin may) and the host sign-in's account link where an entry asks (`skinSwitch`), so the gate sees what a region
+  // keeps of a skin's host behaviours. The ask rides the skin's own input (a setting no cart page shows), so the
+  // host's memory of rendered skins keeps the two apart.
+  const SKIN_SWITCH = "gallery skin switch";
+  const bundled = (await vite.ssrLoadModule("/src/extensions/bundled.gen.ts")).BUNDLED_STOREFRONT_EXTENSIONS;
+  const noorModule = bundled["scalius.noor"]?.module;
+  if (noorModule) {
+    bundled["scalius.noor"].module = async () => {
+      const loaded = await noorModule();
+      const render = (batch) => {
+        const reply = loaded.default.render(batch);
+        const headers = new Set(batch.jobs.filter((job) => job.kind === "skin" && job.target === "header" && JSON.stringify(job).includes(SKIN_SWITCH)).map((job) => job.id));
+        const own = '<button type="button" data-color-scheme-toggle aria-label="Dark colours" class="noor-own-switch">◐</button><a href="/account" data-account-link class="noor-own-account">Account</a>';
+        return { ...reply, results: reply.results.map((result) => headers.has(result.id) && "html" in result ? { ...result, html: result.html.replace(/<\/header>(?![\s\S]*<\/header>)/, `${own}</header>`) } : result) };
+      };
+      return { ...loaded, default: { ...loaded.default, render } };
+    };
+  }
 
   // Every API read of a render is answered by the entry's fixture API; any
   // other request leaves nothing (the gallery is hermetic).
@@ -299,7 +318,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       // compiler (a refusal answers its issues, as a save would) and drawn on the buyer UI cart entry in
       // one of its states, under a palette, colour scheme and page paint, with Noor's chrome when asked (its
       // header skin dropped with `headerSkin: false`), a store of two markets (`localization`), a look an older
-      // checker compiled (`stale`) and the phone tab bar (`tabs`). The answer
+      // checker compiled (`stale`), the phone tab bar (`tabs`) and Noor's header drawing its own scheme switch and
+      // account link (`skinSwitch`). The answer
       // carries the page's colour table (each row's key, selector and kind) for the coverage walk.
       if (url.pathname === `${GALLERY_PREFIX}/private-theme` && request.method === "POST") {
         const body = JSON.parse(await readBody(request) || "{}");
@@ -310,6 +330,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const base = body.noor ? noorTheme(structuredClone(found)) : found;
         // A store whose theme has no header skin (`headerSkin: false`): its chrome draws no theme header.
         if (body.noor && body.headerSkin === false && base.apps?.skins) delete base.apps.skins.header;
+        if (body.noor && body.skinSwitch === true && base.apps?.skins?.header) base.apps.skins.header = { ...base.apps.skins.header, values: { ...base.apps.skins.header.values, landing_label: SKIN_SWITCH } };
         const colors = body.palette && shared.STOREFRONT_THEME_PALETTES[body.palette] ? { ...shared.STOREFRONT_THEME_PALETTES[body.palette] } : base.tokens.colors;
         const tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors: shared.storefrontDarkPalette(colors), ...(body.paint ? { pagePaint: body.paint } : {}) };
         // A page paint the palette cannot read on is dropped by a save: a case that asks for one names a readable paint.
