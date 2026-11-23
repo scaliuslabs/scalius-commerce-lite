@@ -62,10 +62,18 @@
  * its events dispatched and its messages sent before the measured write (a refund with 3 webhooks
  * on Paid drained them: 116 -> 89 calls).
  *
- * Merge of mono-repo into the account-data branch (2026-11-23): four Free subscriber cases
- * re-measured on the merged tree read 2-3 more rows and one statement fewer
- * (order-3-line-commit-subscribers-8, order-refund-subscribers-1/-3,
- * order-full-refund-cancel-subscribers-3); Paid is unchanged.
+ * Measured cases draw from a fixed point of the seeded sequence (2026-11-23,
+ * `checkpointState`), never from wherever the setup left it: a new permission's seed rows
+ * (each draws an id before the checkpoint) had shifted every later id, and on Free a bounded
+ * webhook drain takes due deliveries by id, so another event's payload was built in the measured
+ * run. Re-recorded on the fixed point, four Free cases moved by one or two statements and their
+ * rows: order-refund-subscribers-1 (64 -> 65 statements, 56 -> 54 rows read) and -3 (62),
+ * order-full-refund-cancel-subscribers-1 (81) and -3 (78, 108 rows read). Traced per run, each
+ * moved only between reading the order's payload (orders, order_items) and the refund's
+ * (order_refunds, order_refund_lines, refund_attempts) for the delivery the drain took first: no
+ * statement the cases did not run before, and the same cases read 1 to 3 rows more or less at
+ * other fixed points. order-3-line-commit-subscribers-8 reads 98 or 101 rows by the run (both
+ * within one case); its worst run is 101. Paid is unchanged.
  *
  * Recovery contacts (2026-11-23): a new buyer's email code also asks, in the round trip that
  * already asks whether the email is a closed account's, whether a sign-in reset named it
@@ -387,16 +395,16 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-3-line-commit-subscribers-3": { d1Calls: 27, d1Statements: 86, externalFetches: 2, rowsWritten: 72, rowsRead: 81, fullScans: 16 },
     "order-3-line-commit-subscribers-8": { d1Calls: 27, d1Statements: 86, externalFetches: 2, rowsWritten: 82, rowsRead: 101, fullScans: 16 },
     "order-status-change-subscribers-1": { d1Calls: 24, d1Statements: 44, externalFetches: 1, rowsWritten: 15, rowsRead: 41, fullScans: 1 },
-    "order-refund-subscribers-1": { d1Calls: 36, d1Statements: 63, externalFetches: 2, rowsWritten: 49, rowsRead: 58, fullScans: 3 },
+    "order-refund-subscribers-1": { d1Calls: 36, d1Statements: 65, externalFetches: 2, rowsWritten: 49, rowsRead: 54, fullScans: 3 },
     "order-status-change-subscribers-3": { d1Calls: 27, d1Statements: 49, externalFetches: 2, rowsWritten: 20, rowsRead: 48, fullScans: 1 },
-    "order-refund-subscribers-3": { d1Calls: 35, d1Statements: 61, externalFetches: 2, rowsWritten: 61, rowsRead: 78, fullScans: 3 },
+    "order-refund-subscribers-3": { d1Calls: 35, d1Statements: 62, externalFetches: 2, rowsWritten: 61, rowsRead: 78, fullScans: 3 },
     "order-3-line-commit-app-subscriber": { d1Calls: 24, d1Statements: 83, externalFetches: 0, rowsWritten: 61, rowsRead: 66, fullScans: 16 },
     "order-cancel-stock-subscribers-0": { d1Calls: 23, d1Statements: 56, externalFetches: 0, rowsWritten: 23, rowsRead: 55, fullScans: 7 },
     "order-full-refund-cancel-subscribers-0": { d1Calls: 25, d1Statements: 60, externalFetches: 0, rowsWritten: 30, rowsRead: 49, fullScans: 5 },
     "order-cancel-stock-subscribers-1": { d1Calls: 35, d1Statements: 75, externalFetches: 2, rowsWritten: 37, rowsRead: 75, fullScans: 7 },
-    "order-full-refund-cancel-subscribers-1": { d1Calls: 37, d1Statements: 80, externalFetches: 2, rowsWritten: 64, rowsRead: 82, fullScans: 5 },
+    "order-full-refund-cancel-subscribers-1": { d1Calls: 37, d1Statements: 81, externalFetches: 2, rowsWritten: 64, rowsRead: 82, fullScans: 5 },
     "order-cancel-stock-subscribers-3": { d1Calls: 34, d1Statements: 73, externalFetches: 2, rowsWritten: 41, rowsRead: 79, fullScans: 7 },
-    "order-full-refund-cancel-subscribers-3": { d1Calls: 36, d1Statements: 77, externalFetches: 2, rowsWritten: 78, rowsRead: 108, fullScans: 5 },
+    "order-full-refund-cancel-subscribers-3": { d1Calls: 36, d1Statements: 78, externalFetches: 2, rowsWritten: 78, rowsRead: 108, fullScans: 5 },
   },
   paid: {
     // Cart check, 20 lines, one bundled app drawing under each line (2026-11-23): one run of the app for the
