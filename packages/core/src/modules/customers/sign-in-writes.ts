@@ -12,17 +12,18 @@
 // since (so a session or a history row never commits beside a lost write),
 // and the update itself matches only that version. The caller answers 409
 // `sign_in_changed` (`signInChangedConflict`); a retry reads again.
-import { and, eq, sql, type SQL } from "drizzle-orm";
+import { and, eq, gt, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
-import type { SQLiteUpdateSetSource } from "drizzle-orm/sqlite-core";
+import type { SQLiteInsertValue, SQLiteUpdateSetSource } from "drizzle-orm/sqlite-core";
 import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/database/client";
 import { customerIdentities, customers } from "@scalius/database/schema";
 import { NO_PHONE } from "@scalius/shared/customer-auth-policy";
 import { ConflictError } from "@scalius/core/errors";
+import { normalizeContactEmail } from "./customer-identity";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 type CustomerSet = SQLiteUpdateSetSource<typeof customers>;
-type CustomerInsert = typeof customers.$inferInsert;
+type CustomerInsert = SQLiteInsertValue<typeof customers>;
 
 /** `details.reason` when a sign-in write lost to one that landed after its read. */
 export const SIGN_IN_CHANGED_REASON = "sign_in_changed";
@@ -30,6 +31,35 @@ const SIGN_IN_CHANGED = "SIGN_IN_CHANGED";
 
 /** The columns of `customers` only this module writes. */
 const SIGN_IN_KEYS = ["phone", "email", "phoneVerifiedAt", "emailVerifiedAt", "signInRecovery", "signInRecoveryAt", "signInVersion"] as const;
+type SignInKey = (typeof SIGN_IN_KEYS)[number];
+
+/**
+ * What a write may set through `writeCustomerWhere`: any column but how the
+ * customer signs in, and an email (the blank-email fill). A proof, a recovery
+ * mark or the version is refused by the type.
+ */
+export type CustomerFieldsSet = Omit<CustomerSet, SignInKey> & { email?: string };
+
+/** How long a recovery contact reaches its account, from the reset. */
+export const SIGN_IN_RECOVERY_DAYS = 7;
+/** `SIGN_IN_RECOVERY_DAYS` in seconds. */
+export const SIGN_IN_RECOVERY_SECONDS = SIGN_IN_RECOVERY_DAYS * 24 * 60 * 60;
+
+/** A recovery mark still standing: set under `SIGN_IN_RECOVERY_DAYS` ago. An expired one reaches and blocks nothing. */
+export function liveRecovery(method: "phone" | "email"): SQL {
+    // The kind is written inline, as the partial recovery indexes spell it.
+    return and(sql`${customers.signInRecovery} = ${sql.raw(method === "phone" ? "'phone'" : "'email'")}`, gt(customers.signInRecoveryAt, sql`unixepoch() - ${SIGN_IN_RECOVERY_SECONDS}`))!;
+}
+
+/**
+ * A set or insert with its email (when it carries a plain one) stored as every
+ * lookup compares it: trimmed and lower-cased here (`normalizeContactEmail`),
+ * never only by SQL (SQLite's `lower()` folds ASCII only, PostgreSQL's all of
+ * Unicode, so the providers would disagree on a stored capital).
+ */
+function withStoredEmail<T extends { email?: unknown }>(values: T): T {
+    return typeof values.email === "string" ? { ...values, email: normalizeContactEmail(values.email) } : values;
+}
 
 /** The customer a write was decided from: its id and the `sign_in_version` read with it. */
 export interface SignInRead {
@@ -54,11 +84,15 @@ export function isSignInChangedError(error: unknown): boolean {
     return isBatchGuardError(error, SIGN_IN_CHANGED);
 }
 
-/** Fails the batch unless the customer is still at the version read and `also` holds for its row. */
+/**
+ * Fails the batch unless the customer is still at the version read, is not
+ * trashed (a delete advances the version too), and `also` holds for its row.
+ */
 export function signInUnchanged(db: Database, read: SignInRead, also?: SQL): SQLiteBatchItem {
     return buildBatchGuard(db, sql`EXISTS (
         SELECT 1 FROM ${customers}
         WHERE ${customers.id} = ${read.id} AND ${customers.signInVersion} = ${read.signInVersion}
+          AND ${customers.deletedAt} IS NULL
         ${also ? sql`AND ${also}` : sql``}
     )`, SIGN_IN_CHANGED);
 }
@@ -82,7 +116,7 @@ function recoveryFollowsContact(set: CustomerSet): CustomerSet {
 }
 
 function advance(set: CustomerSet): CustomerSet {
-    return { ...recoveryFollowsContact(set), signInVersion: sql`${customers.signInVersion} + 1`, updatedAt: sql`unixepoch()` };
+    return { ...recoveryFollowsContact(withStoredEmail(set)), signInVersion: sql`${customers.signInVersion} + 1`, updatedAt: sql`unixepoch()` };
 }
 
 /**
@@ -97,19 +131,33 @@ export function writeSignIn(db: Database, read: SignInRead, set: CustomerSet, al
     ];
 }
 
-/**
- * A write whose whole precondition is `where` (checked by the write itself,
- * nothing read before it): a blank email filled, an erasure. When it writes
- * how a row signs in, that row's version advances.
- */
-export function writeCustomerWhere(db: Database, where: SQL, set: CustomerSet): SQLiteBatchItem {
+function writeWhere(db: Database, where: SQL, set: CustomerSet): SQLiteBatchItem {
     return db.update(customers).set(writesSignIn(set) ? advance(set) : set).where(where) as unknown as SQLiteBatchItem;
 }
 
+/**
+ * A write whose whole precondition is `where` (checked by the write itself,
+ * nothing read before it): a customer's other fields, or a blank email
+ * filled. Writing an email advances the row's version.
+ */
+export function writeCustomerWhere(db: Database, where: SQL, set: CustomerFieldsSet): SQLiteBatchItem {
+    return writeWhere(db, where, set as CustomerSet);
+}
+
+/**
+ * Customers moved to the trash: their version advances, so a sign-in, proof
+ * or reset decided before the delete commits nothing (it would otherwise
+ * leave a session that a restore revives).
+ */
+export function trashCustomers(db: Database, where: SQL): SQLiteBatchItem {
+    return db.update(customers).set({ deletedAt: sql`unixepoch()`, signInVersion: sql`${customers.signInVersion} + 1` })
+        .where(where) as unknown as SQLiteBatchItem;
+}
+
 /** The columns an erasure clears of how the customer signs in, and its linked identities. */
-export function eraseSignIn(db: Database, where: SQL, rest: CustomerSet, identitiesOf: SQL): SQLiteBatchItem[] {
+export function eraseSignIn(db: Database, where: SQL, rest: CustomerFieldsSet, identitiesOf: SQL): SQLiteBatchItem[] {
     return [
-        writeCustomerWhere(db, where, {
+        writeWhere(db, where, {
             ...rest,
             email: null,
             phone: NO_PHONE,
@@ -122,9 +170,12 @@ export function eraseSignIn(db: Database, where: SQL, rest: CustomerSet, identit
     ];
 }
 
-/** A new customer row; one that proves a contact (a sign-up) starts at version 0. */
-export function insertCustomer(db: Database, values: CustomerInsert): SQLiteBatchItem {
-    return db.insert(customers).values({ ...values, signInVersion: 0 }) as unknown as SQLiteBatchItem;
+/**
+ * A new customer row, the one way to insert one: its email normalised, at
+ * version 0. A row that proves a contact is a sign-up.
+ */
+export function insertCustomer(db: Database, values: CustomerInsert) {
+    return db.insert(customers).values({ ...withStoredEmail(values), signInVersion: 0 });
 }
 
 /** An app identity (`provider`, `subject`) linked to a customer the same batch creates or writes. */
@@ -175,8 +226,11 @@ export function proveSignIn(
     identifier: string,
     link?: { providerId: string; subject: string; at: number },
 ): SQLiteBatchItem[] {
-    const holds = method === "email" ? sql`lower(${customers.email}) = ${identifier}` : sql`${customers.phone} = ${identifier}`;
+    const contact = method === "email" ? sql`lower(${customers.email}) = ${identifier}` : sql`${customers.phone} = ${identifier}`;
     const proven = method === "email" ? account.emailVerifiedAt : account.phoneVerifiedAt;
+    // An unproven contact proves only through the reset that names it: at commit, that reset
+    // still stands and the account still proves nothing (whatever was read before).
+    const holds = proven ? contact : and(contact, liveRecovery(method), sql`${customers.phoneVerifiedAt} IS NULL AND ${customers.emailVerifiedAt} IS NULL`)!;
     if (proven && !account.signInRecovery && !link) {
         return [
             signInUnchanged(db, account, holds),

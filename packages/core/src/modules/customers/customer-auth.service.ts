@@ -423,7 +423,7 @@ async function resolveProofOwner(
                     isNotNull(customers.accountClaimedAt),
                 ))
                 .limit(1),
-        ] as unknown as Parameters<Database["batch"]>[0]) as unknown as [Array<{ id: string }>, Array<{ id: string }>];
+        ] as unknown as Parameters<Database["batch"]>[0]) as unknown as [RecoveryRows, Array<{ id: string }>];
         const recovered = await recoveryOwner(db, staffRows);
         if (recovered) return recovered;
         return closedRows[0] ? { kind: "deleted" } : { kind: "none" };
@@ -448,15 +448,20 @@ async function resolveProofOwner(
     return await recoveryOwner(db, await recoveryOwnerQuery(db, "phone", identifier)) ?? { kind: "none" };
 }
 
+type RecoveryRows = Awaited<ReturnType<typeof recoveryOwnerQuery>>;
+
 /**
  * The one account a sign-in reset named this contact on, while that reset
- * stands (`recoveryOwnerQuery`); read whole only then. Two such accounts
- * reach neither.
+ * stands, as the statement that matched it read it (`recoveryOwnerQuery`:
+ * the version a proof names is the one that matched). Two such accounts
+ * reach neither. Its default address is read after, for the profile.
  */
-async function recoveryOwner(db: Database, rows: ReadonlyArray<{ id: string }>): Promise<ProofOwner | null> {
+async function recoveryOwner(db: Database, rows: RecoveryRows): Promise<ProofOwner | null> {
     if (rows.length !== 1) return null;
-    const owner = await getActiveCustomerProfileRow(db, rows[0]!.id);
-    return owner ? { kind: "account", row: owner.customer, address: owner.address } : null;
+    const row = rows[0]!;
+    const address = await db.select().from(customerAddresses)
+        .where(and(eq(customerAddresses.customerId, row.id), eq(customerAddresses.isDefault, true))).get();
+    return { kind: "account", row, address: address ?? null };
 }
 
 /**
@@ -764,7 +769,7 @@ export async function signInWithIdentity(
     };
     const row = { totalOrders: 0, lastOrderAt: null, deletedAt: null, ...values } as CustomerRow;
     const session = await createSessionForCustomer(db, row, null, input.sessionHashKey, [
-        insertCustomer(db, values),
+        insertCustomer(db, values) as SQLiteBatchItem,
         signedUpHistory(db, { accountId: row.id, via: method }) as SQLiteBatchItem,
         linkIdentity(db, { ...linked, customerId: row.id }),
     ]);
@@ -1261,7 +1266,7 @@ async function prepareNewAccount(
         } as CustomerRow,
         address,
         writes: [
-            insertCustomer(db, values),
+            insertCustomer(db, values) as SQLiteBatchItem,
             ...(address ? [db.insert(customerAddresses).values(address) as SQLiteBatchItem] : []),
         ],
     };

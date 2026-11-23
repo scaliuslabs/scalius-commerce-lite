@@ -18,8 +18,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { fromMinor } from "@scalius/shared/money";
 import { customerKind, guestRecordForContact, normalizeContactEmail } from "./customer-identity";
-import { SIGN_IN_RECOVERY_DAYS } from "./sign-in-recovery";
-import { isSignInChangedError, signInChangedConflict, writeCustomerWhere, writeSignIn } from "./sign-in-writes";
+import { insertCustomer, isSignInChangedError, SIGN_IN_RECOVERY_DAYS, signInChangedConflict, trashCustomers, writeCustomerWhere, writeSignIn } from "./sign-in-writes";
 import { storedPhone } from "@scalius/shared/customer-auth-policy";
 import { currentMarketingContactSql, segmentWhereSql } from "./customer-segments";
 import {
@@ -498,7 +497,7 @@ export async function createCustomer(
 
     const customerId = "cust_" + nanoid();
     await db.batch([
-        db.insert(customers).values({
+        insertCustomer(db, {
             id: customerId,
             name: data.name,
             email: data.email,
@@ -659,14 +658,16 @@ export async function updateCustomer(
         });
     }
     // Only the fields the caller sent: a field another writer changed since the read keeps its value.
-    const changes = {
+    const fields = {
         ...(data.name != null ? { name: data.name } : {}),
-        // A contact is written only when it changes: how the buyer signs in is versioned.
-        ...(data.email !== undefined && (data.email ?? null) !== (existing.email ?? null) ? { email: data.email } : {}),
-        ...(phoneMoved ? { phone: storedPhone(data.phone!) } : {}),
         ...(data.taxExempt !== undefined || data.taxExemptionId !== undefined ? tax : {}),
         // Naming a checkout guest record in the dashboard makes it the merchant's customer.
         ...(!existing.accountClaimedAt && next.name !== existing.name ? { origin: "merchant" as const } : {}),
+    };
+    // A contact is written only when it changes (emails as stored: trimmed, lower case): how the buyer signs in is versioned.
+    const contact = {
+        ...(emailMoved ? { email: normalizeContactEmail(data.email) } : {}),
+        ...(phoneMoved ? { phone: storedPhone(data.phone!) } : {}),
     };
     const live = isNull(customers.erasedAt);
     // The exemption the caller read, checked in the write itself.
@@ -682,9 +683,9 @@ export async function updateCustomer(
             // An erasure committed since the read refuses the edit.
             customerNotErasedGuard(db, id),
             ...(expectsTax ? [buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${customers} WHERE ${customers.id} = ${id} AND ${taxAsRead})`, "CUSTOMER_TAX_MOVED")] : []),
-            ...("phone" in changes || "email" in changes
-                ? writeSignIn(db, existing, changes, live)
-                : [writeCustomerWhere(db, and(eq(customers.id, id), live)!, { ...changes, updatedAt: sql`unixepoch()` })]),
+            ...(phoneMoved || emailMoved
+                ? writeSignIn(db, existing, { ...fields, ...contact }, live)
+                : [writeCustomerWhere(db, and(eq(customers.id, id), live)!, { ...fields, updatedAt: sql`unixepoch()` })]),
             historyFromLiveRow(db, id, "updated", actorId, live),
         ]);
     } catch (error) {
@@ -764,7 +765,8 @@ export async function deleteCustomer(db: Database, id: string, actorId: string |
 
     const live = isNull(customers.erasedAt);
     await safeBatch(db, [
-        db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(and(eq(customers.id, id), live)),
+        // Through the sign-in writer: a sign-in decided before the delete commits no session a restore would revive.
+        trashCustomers(db, and(eq(customers.id, id), live)!),
         db
             .update(customerSessions)
             .set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
@@ -881,7 +883,7 @@ export async function bulkDeleteCustomers(db: Database, ids: string[], permanent
         ] as Parameters<Database["batch"]>[0]);
     } else {
         await db.batch([
-            db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(inSet(customers.id)),
+            trashCustomers(db, inSet(customers.id)),
             db
                 .update(customerSessions)
                 .set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })

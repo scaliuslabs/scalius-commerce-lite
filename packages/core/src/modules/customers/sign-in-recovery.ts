@@ -5,7 +5,7 @@
 // `customers.reset_sign_in` permission name ONE recovery contact; an agent's
 // call always waits for the merchant's approval, and an app cannot make it
 // (the route refuses).
-import { and, eq, gt, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { customerHistory, customers, customerSessions } from "@scalius/database/schema";
@@ -13,30 +13,22 @@ import { isEmailAddress } from "@scalius/shared/text-scan";
 import { parseContactPhone } from "@scalius/shared/customer-utils";
 import { AppError, ConflictError, NotFoundError, ValidationError } from "../../errors";
 import { readSignInPolicy } from "./sign-in-policy";
-import { isSignInChangedError, resetSignInWrites, signInChangedConflict } from "./sign-in-writes";
-
-/** How long a recovery contact reaches its account, from the reset. */
-export const SIGN_IN_RECOVERY_DAYS = 7;
-const RECOVERY_SECONDS = SIGN_IN_RECOVERY_DAYS * 24 * 60 * 60;
+import { isSignInChangedError, liveRecovery, resetSignInWrites, SIGN_IN_RECOVERY_SECONDS, signInChangedConflict } from "./sign-in-writes";
 
 export type SignInRecoveryContact = { phone: string; email?: never } | { email: string; phone?: never };
-
-/** A recovery mark still standing: set under `SIGN_IN_RECOVERY_DAYS` ago. An expired one reaches and blocks nothing. */
-export function liveRecovery(method: "phone" | "email") {
-    // The kind is written inline, as the partial recovery indexes spell it.
-    return and(sql`${customers.signInRecovery} = ${sql.raw(method === "phone" ? "'phone'" : "'email'")}`, gt(customers.signInRecoveryAt, sql`unixepoch() - ${RECOVERY_SECONDS}`))!;
-}
 
 /**
  * The account a sign-in code to `identifier` recovers: the one live, claimed
  * account a reset named it on, that proves nothing at all (no proven phone
  * or email) and was reset under `SIGN_IN_RECOVERY_DAYS` ago. The contact
  * holds exactly the value the reset set: a write that moves it ends the mark
- * (`sign-in-writes.ts`). Ids only; one search of
- * `customers_recovery_phone_idx` / `customers_recovery_email_idx`.
+ * (`sign-in-writes.ts`). The whole row in the one statement that matched it,
+ * so the version read is the one that matched (no join: a batch returns rows
+ * by column name, and the address book's `id` would shadow the customer's); a
+ * search of `customers_recovery_phone_idx` / `customers_recovery_email_idx`.
  */
 export function recoveryOwnerQuery(db: Database, method: "email" | "phone", identifier: string) {
-    return db.select({ id: customers.id })
+    return db.select()
         .from(customers)
         .where(and(
             method === "email" ? sql`lower(${customers.email}) = ${identifier}` : eq(customers.phone, identifier),
@@ -109,7 +101,7 @@ export async function resetCustomerSignIn(
         });
     }
 
-    const expiresAt = Math.floor(Date.now() / 1000) + RECOVERY_SECONDS;
+    const expiresAt = Math.floor(Date.now() / 1000) + SIGN_IN_RECOVERY_SECONDS;
     const byAgent = input.actorId.startsWith("agent:");
     try {
         await safeBatch(db, [

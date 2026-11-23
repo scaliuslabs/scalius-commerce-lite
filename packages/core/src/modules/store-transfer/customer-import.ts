@@ -29,6 +29,7 @@ import type { CustomerImportBatch, CustomerImportItem } from "@scalius/shared/st
 import { readAcceptedCustomerCountries } from "../settings";
 import {
   customerAddressColumns,
+  insertCustomer,
   isSignInChangedError,
   resolveAddressFromRows,
   writeCustomerWhere,
@@ -267,7 +268,7 @@ export async function importCustomers(
         // A filled email is a contact of how the customer signs in: the write names the version read.
         statements.push(...(updates.email
           ? writeSignIn(db, match, updates, sql`${customers.email} IS NULL`)
-          : [writeCustomerWhere(db, sql`${customers.id} = ${match.id}`, { ...updates, updatedAt: sql`unixepoch()` })]));
+          : [writeCustomerWhere(db, sql`${customers.id} = ${match.id}`, { ...(updates.name ? { name: updates.name } : {}), updatedAt: sql`unixepoch()` })]));
         statements.push(db.insert(customerHistory).values({
           id: `hist_${nanoid()}`,
           customerId: match.id,
@@ -302,7 +303,7 @@ export async function importCustomers(
     result.customerId = customerId;
     const name = displayName(item);
     const statements: unknown[] = [
-      db.insert(customers).values({
+      insertCustomer(db, {
         id: customerId,
         name,
         email: item.email,

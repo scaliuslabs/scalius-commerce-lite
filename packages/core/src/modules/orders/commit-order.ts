@@ -33,7 +33,7 @@ import {
     type BuyerUploadClaim,
 } from "./buyer-upload-claims";
 import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
-import { linkedOrderHistory, type VerifiedContact } from "../customers";
+import { insertCustomer, linkedOrderHistory, type VerifiedContact } from "../customers";
 import {
     isInventoryReservationConflictError,
     prepareStockReservationBatch,
@@ -378,7 +378,7 @@ function customerStatements(db: Database, od: OrderFacts, customer: OrderCustome
         )`, ORDER_CUSTOMER_ACCOUNT_INACTIVE) as SQLiteBatchItem);
     }
     if (customer.createdBy) {
-        writes.push(db.insert(customers).values({
+        writes.push(insertCustomer(db, {
             id: customer.id,
             name: od.customerName,
             email: od.customerEmail,

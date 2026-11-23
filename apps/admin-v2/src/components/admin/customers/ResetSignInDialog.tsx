@@ -35,7 +35,7 @@ import { useCommand } from "~/lib/use-command";
 
 /**
  * How long the recovery contact reaches the account: the API's
- * `SIGN_IN_RECOVERY_DAYS` (core `sign-in-recovery.ts`; the test pins them equal).
+ * `SIGN_IN_RECOVERY_DAYS` (core `sign-in-writes.ts`; the test pins them equal).
  * The dialog says it before the reset runs, so it can't come from the answer.
  */
 export const SIGN_IN_RECOVERY_DAYS = 7;

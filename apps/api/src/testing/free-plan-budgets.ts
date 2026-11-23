@@ -68,12 +68,12 @@
  * webhook drain takes due deliveries by id, so another event's payload was built in the measured
  * run. Re-recorded on the fixed point, four Free cases moved by one or two statements and their
  * rows: order-refund-subscribers-1 (64 -> 65 statements, 56 -> 54 rows read) and -3 (62),
- * order-full-refund-cancel-subscribers-1 (81) and -3 (78, 108 rows read). Traced per run, each
- * moved only between reading the order's payload (orders, order_items) and the refund's
- * (order_refunds, order_refund_lines, refund_attempts) for the delivery the drain took first: no
- * statement the cases did not run before, and the same cases read 1 to 3 rows more or less at
- * other fixed points. order-3-line-commit-subscribers-8 reads 98 or 101 rows by the run (both
- * within one case); its worst run is 101. Paid is unchanged.
+ * order-full-refund-cancel-subscribers-1 (81) and -3 (78, 108 rows read). Traced per run, the
+ * statement counts differ by 1 to 2 with which delivery's payload the drain reads first (the
+ * order's: orders, order_items; or the refund's: order_refunds, order_refund_lines,
+ * refund_attempts), and the rows read by 1 to 3 with it; at three other fixed points the same
+ * cases land within those ranges. order-3-line-commit-subscribers-8 reads 98 or 101 rows by the
+ * run (both within one case); its worst run is 101. Paid is unchanged.
  *
  * Recovery contacts (2026-11-23): a new buyer's email code also asks, in the round trip that
  * already asks whether the email is a closed account's, whether a sign-in reset named it
