@@ -17,7 +17,7 @@ import { STOREFRONT_ROUTE_SEGMENTS } from "./storefront-route-segments";
 export function storefrontBrowsingPath(path: string): boolean {
   // Judged as the browser reads it: no control character (it strips some before parsing), and a path that
   // resolves on the store's own origin.
-  if (/[\u0000-\u001f\u007f]/.test(path) || !/^(?!.*\/\/)\/[^\s"<>\\#?]*(?:[?#][^\s"<>\\]*)?$/.test(path)) return false;
+  if ([...path].some((character) => character <= "\u001f" || character === "\u007f") || !/^(?!.*\/\/)\/[^\s"<>\\#?]*(?:[?#][^\s"<>\\]*)?$/.test(path)) return false;
   if (new URL(path, "https://store.invalid").origin !== "https://store.invalid") return false;
   const segments = path.split(/[?#]/)[0]!.split("/").filter(Boolean);
   if (segments.some((segment) => segment === "." || segment === ".." || /^%2e/i.test(segment))) return false;

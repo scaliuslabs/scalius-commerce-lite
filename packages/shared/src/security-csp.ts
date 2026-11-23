@@ -129,7 +129,7 @@ export function cspSourcesAllowOrigin(origin: string, sources: readonly string[]
  * before parsing) is refused, and the rest is resolved against the page.
  */
 export function cspSourcesAllowImage(url: string, sources: readonly string[], self: string): boolean {
-  if (/[\u0000-\u001f\u007f]/.test(url) || url !== url.trim()) return false;
+  if ([...url].some((character) => character <= "\u001f" || character === "\u007f") || url !== url.trim()) return false;
   let page = "https://self.invalid";
   try {
     if (self) page = new URL(self).origin;
