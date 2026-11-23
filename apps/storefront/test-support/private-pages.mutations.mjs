@@ -6,7 +6,9 @@
 // reads the variable. A mutation whose text is no longer in its file fails the
 // run (it would test nothing), so the list stays true to the code.
 //
-// `cases` are the named cases (REGRESSIONS) that must fail under it.
+// `cases` are the named cases (REGRESSIONS) that must fail under it, and `expect`
+// the check that must fail: one of the problems the failing draws report must
+// match it (a mutation caught by some other failure is not caught).
 
 import { readFileSync } from "node:fs";
 
@@ -40,6 +42,7 @@ export const MUTATIONS = {
     why: "the default arrangement's tokens drawn on the host's page, whose summary sits in the lines panel",
     rewrites: [rewrite(PLAN, "layout: tokens ? [...arrangement?.layout ?? spec.layout] : privateLayoutIsDefault", "layout: privateLayoutIsDefault")],
     cases: [B1],
+    expect: /reads [\d.]+:1 on what is behind it/,
   },
   // Three guards each keep an app's node readable in a dark line: its own rows (which write its colours), the
   // words inheriting their row's colour, and the palette classes reading the nearest row. Before the fix it had none.
@@ -51,34 +54,39 @@ export const MUTATIONS = {
       rewrite(TOKENS, '...["text-foreground", "text-card-foreground", "text-primary-foreground"].map(', '...["text-card-foreground", "text-primary-foreground"].map('),
     ],
     cases: [B2],
+    expect: /an app's node at cart\.line\.after has no row of its own/,
   },
   "B3 the dialogs read the store's palette": {
     why: "token mode does not reach the store's dialogs: their palette classes keep the palette's colours",
     rewrites: [rewrite(TOKENS, `const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]', `, "const TOKEN_SCOPE = ['[data-private=\"cart\"]', ")],
     cases: [B3],
+    expect: /^sign-in: .*(?:is none of its row's colours \(dialog|reads [\d.]+:1 on what is behind it)/,
   },
   "B4 (M1) the details form's row writes only its background": {
     why: "the table's CSS paints the details form and drops its words' colours",
     rewrites: [paintOnly('row.key === "details-form"')],
     cases: [B4],
+    expect: /reads [\d.]+:1 on what is behind it/,
   },
   "M1 the lines' and the apps' rows write only their background": {
     why: "the table's CSS paints a dark panel and an app's nodes and drops their words' colours",
     rewrites: [paintOnly('row.key === "lines" || row.key.startsWith("ui.")')],
     cases: [B1, B2],
+    expect: /is none of its row's colours/,
   },
   // Paint containment clips too: without overflow clipping alone the seal still holds, so this takes both.
   "M2 the seal clips nothing": {
     why: "the free-region seal loses overflow:hidden, overflow:clip and paint containment",
     rewrites: [rewrite(PLAN, SEAL, "contain:layout style;")],
     cases: [COVERS, WIDE],
+    expect: /covered by a free region|lands on .* in a free region|: not visible|scrolls sideways/,
   },
   "M4 the stylesheet may select a host part": {
     why: "the compiler stops refusing [data-part=…] selectors (scoping off)",
     rewrites: [rewrite("packages/shared/src/storefront-theme/private-css.ts", "  if (attr.op !== \"=\") return null;\n", "  if (attr.op !== \"=\") return null;\n  if (attr.name === \"data-part\") return `[data-part=\"${attr.value}\"]`;\n")],
     cases: ["a stylesheet hiding a host part"],
     // The drawing must fail, not only the refusal.
-    expect: /not visible|missing|reads [\d.]+:1/,
+    expect: /: not visible/,
   },
   // The gate's own.
   "M5 the host's search inside the theme's region": {
@@ -111,31 +119,37 @@ export const MUTATIONS = {
     why: "token mode no longer makes the store's palette surfaces transparent (a tint paints inside a dark panel)",
     rewrites: [rewrite(PLAN, '${tokens ? PRIVATE_TOKEN_MODE_CSS.before : ""}', "")],
     cases: [KINDS],
+    expect: /paints .* no row of the table claims/,
   },
   "M8 the store's own header outside token mode": {
     why: "the store's header paints its row's dark surface while its words keep the palette's dark colours",
     rewrites: [rewrite(TOKENS, `, '[data-host="search"]', '[data-private="core-header"]'];`, `, '[data-host="search"]'];`)],
     cases: [HEADER],
+    expect: /is none of its row's colours \(chrome:/,
   },
   "M9 every nested row leaves out what its parent has": {
     why: "Place order inherits its form's words' colour, but it is also a filled button whose row sets its own",
     rewrites: [rewrite(TOKENS, 'const inherited = row.nested && (row.kind === "box" || row.kind === "text") && !row.key.startsWith("ui.") ? parent : null;', "const inherited = row.nested ? parent : null;")],
     cases: [S6],
+    expect: /"Place order" .*reads [\d.]+:1/,
   },
   "M10 a title's clamp on its heading": {
     why: "the line title's heading clips its link's focus ring",
     rewrites: [rewrite("apps/storefront/src/lib/cart/line-html.ts", '<h3 class="text-sm font-medium text-foreground sm:text-base" data-part="line-title"><a href="${escapeHtml(view.productHref)}" class="line-clamp-2 break-words', '<h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base" data-part="line-title"><a href="${escapeHtml(view.productHref)}" class="break-words')],
     cases: [B4],
+    expect: /\[data-part=line-title\]>a: its focus ring reads at/,
   },
   "M11 text sizes follow the screen": {
     why: "a 40px wide-tracked title takes 8% of the screen, not of its line: its first word overflows its column",
     rewrites: [rewrite(TOKENS, "font-size:min(${value}px,max(12px,7cqi))", "font-size:min(${value}px,max(12px,8vw))"), rewrite("apps/storefront/src/lib/cart/line-html.ts", "line-clamp-2 break-words", "line-clamp-2")],
     cases: [S8],
+    expect: /cut sideways|is cut off at the side/,
   },
   "M12 grid columns at their declared width": {
     why: "a layout node's columns apply whatever the box holding it measures",
     rewrites: [rewrite(TOKENS, "narrow.push(`:where(${root} :has(> ${selector.slice(root.length + 1)})){container-type:inline-size}@container (min-width:${fit}px){${rule}}`);", "narrow.push(rule);")],
     cases: [COLUMNS],
+    expect: /outside the viewport/,
   },
   // S10: `contain: inline-size` once sat in the seal; without it no case failed, so it is gone. What keeps a
   // block from widening its column is this pair.
@@ -143,26 +157,31 @@ export const MUTATIONS = {
     why: "the free-region seal loses min-inline-size:0 and max-inline-size:100%",
     rewrites: [rewrite(PLAN, "min-inline-size:0;max-inline-size:100%;", "")],
     cases: [WIDE],
+    expect: /outside the viewport|scrolls sideways/,
   },
   "P1 the page row ignores the theme's page paint": {
     why: "the table checks the page's words on its page colour while the body shows the theme's gradient",
     rewrites: [rewrite(TOKENS, "} else if (place.parent === null && palette.pagePaint) {", "} else if (false) {")],
     cases: ["page words that do not read on the theme's page paint", "a dark page paint under dark tokens"],
+    expect: /paints an image its row \(page\) does not|it must be refused \(contrast\)/,
   },
   "T1 a dark row leaves out a cell its light row writes": {
     why: "the dark lines panel leaves its ring to its parent's, so the light panel's dark ring shows on it",
     rewrites: [rewrite(TOKENS, "(row[cell] !== inherited?.[cell] || also.has(property))", "row[cell] !== inherited?.[cell]")],
     cases: ["a dark page under the dark colours"],
+    expect: /its focus ring reads at/,
   },
   "C1 the theme's chrome with no header draws the store's full header": {
     why: "a theme chrome with no header skin draws the public header, whose surfaces and words no row of the table knows",
     rewrites: [rewrite("apps/storefront/src/components/header/header.astro", '<slot name="private-fallback" />', "<CoreHeader {...props} />")],
     cases: ["the theme's chrome with no header skin, under a dark page"],
+    expect: /\[data-private="core-header"\]: missing/,
   },
   "U1 the details form's app targets have no rows": {
     why: "an app's blocks inside the details form read the form's row only: a theme's ui.* tokens for them style nothing the table checks",
     rewrites: [rewrite(TOKENS, "    if (targets.length > 0) ui(targets, key);\n", "")],
     cases: ["the apps' blocks in a dark details form, styled by target"],
+    expect: /an app's node at checkout\.(?:contact|delivery)\.after has no row of its own/,
   },
   "H1 token mode paints no hover": {
     why: "a hover surface paints nothing in token mode: a control the host gives a hover shows none under the pointer",
@@ -188,10 +207,24 @@ export const MUTATIONS = {
     cases: ["review 5, S5: twenty lines, each with two 2000px image blocks"],
     expect: /px down \(the cart's own lines/,
   },
+  "R5-S6 the phone tab bar on a private page": {
+    why: "the theme's chrome draws the phone tab bar on the cart, outside token scope: its surface and words belong to no row",
+    rewrites: [
+      rewrite("apps/storefront/src/components/header/header.astro", '{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}</Fragment>', '{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}{tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}</Fragment>'),
+      rewrite("apps/storefront/src/layouts/Layout.astro", "const showMobileTabs = !hideHeader && !privateChrome && themeLayout.mobileNavigation", "const showMobileTabs = !hideHeader && themeLayout.mobileNavigation"),
+    ],
+    cases: ["review 5, S6: the theme's chrome with the phone tab bar, under a dark page"],
+    expect: /nav#mobile-tab-bar paints .* no row of the table claims that surface/,
+  },
   "P2 a page paint with no tokens draws the store's own page": {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",
-    rewrites: [rewrite("packages/shared/src/storefront-theme/private-layout.ts", "painted && privatePageHasOwnPage(page) ? {} : null", "null")],
+    // With the layout's guard too (review 5, S4), which draws no paint on a cart not in token mode.
+    rewrites: [
+      rewrite("packages/shared/src/storefront-theme/private-layout.ts", "painted && privatePageHasOwnPage(page) ? {} : null", "null"),
+      rewrite("apps/storefront/src/layouts/Layout.astro", "themePaint(privateStyle !== undefined && !privateTokens ? { ...storefrontTheme, tokens: unpaintedTokens } : storefrontTheme, resolvedTheme)", "themePaint(storefrontTheme, resolvedTheme)"),
+    ],
     cases: ["a dark page paint, no private tokens"],
+    expect: /shows a paint of its own/,
   },
 };
 
@@ -226,10 +259,11 @@ export function galleryMutation(name) {
   return { name, plugin, applied, missed, files: [...new Set(mutation.rewrites.map((each) => each.file))], compile: mutation.compile };
 }
 
-/** Each rewrite's text is in its file exactly once (checked without a browser). */
+/** Each mutation names the check it must fail, and each rewrite's text is in its file exactly once (checked without a browser). */
 export async function mutationsHold(read) {
   const problems = [];
   for (const [name, mutation] of Object.entries(MUTATIONS)) {
+    if (!(mutation.expect instanceof RegExp)) problems.push(`${name}: names no check that must fail (expect)`);
     for (const { file, find } of mutation.rewrites) {
       const source = await read(file);
       const at = source.indexOf(find);

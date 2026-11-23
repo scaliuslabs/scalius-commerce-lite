@@ -242,7 +242,8 @@ const showNavigationSidebar =
   !hideNavigationSidebar &&
   themeLayout.navigation === "sidebar" &&
   (navigationData.length > 0 || (categoryTree?.nodes.length ?? 0) > 0);
-const showMobileTabs = !hideHeader && themeLayout.mobileNavigation === "tabs";
+// A private page draws no phone tab bar, the theme's chrome there included (as the store's checkout header).
+const showMobileTabs = !hideHeader && !privateChrome && themeLayout.mobileNavigation === "tabs";
 
 // The theme's brand images (the draft's under a preview): the tab icon, the
 // header logo that also stands in for a missing share image and schema logo.

@@ -12,7 +12,7 @@
 //   pnpm test:private-pages --seed 7              replay one seed (its document is printed on failure)
 //   pnpm test:private-pages --case "review 4, B4" only the named cases whose name holds this text
 //   pnpm test:private-pages --mutate <name>       run under one known-bad change (private-pages.mutations.mjs)
-//   pnpm test:private-pages --mutations           every known-bad change must make the gate fail
+//   pnpm test:private-pages --mutations           the unmutated cases draw clean, and every known-bad change fails the check it names
 //   --jobs <n> cases at once (4); --profile where the time goes; PT_SHOTS=<dir> keeps the screen a
 //   failing text was measured on. Exit 0: every draw holds; 1: a draw fails; 2: the gate could not run.
 //
@@ -85,16 +85,29 @@ if (args.includes("--mutations")) {
   const stale = await mutationsHold((file) => readFile(resolve(file), "utf8"));
   if (stale.length > 0) { console.error(stale.join("\n")); process.exit(2); }
   const script = fileURLToPath(import.meta.url);
+  const gate = (extra, cases) => spawnSync(process.execPath, [script, "--no-seeds", ...extra, ...cases.flatMap((each) => ["--case", each])], { encoding: "utf8", env: { ...process.env }, maxBuffer: 64 * 1024 * 1024 });
+  // The problems the failing draws reported (each `  <problem>` line under a `✗ ` draw), never the rest of the output.
+  const problemsOf = (output) => output.split("\n").filter((line) => line.startsWith("  ") && !line.startsWith("  document: ")).map((line) => line.trim());
+  // The baseline first, in the same run: every case a mutation names draws clean unmutated, so a mutation's
+  // failure is the mutation's.
+  const cases = [...new Set(Object.values(MUTATIONS).flatMap((mutation) => mutation.cases))];
+  const begun = Date.now();
+  const baseline = gate([], cases);
+  console.log(`${baseline.status === 0 ? "clean    " : "NOT CLEAN"} the unmutated baseline, ${cases.length} cases (${Math.round((Date.now() - begun) / 1000)}s, exit ${baseline.status})`);
+  if (baseline.status !== 0) {
+    console.log(`${baseline.stdout}\n${baseline.stderr}`.split("\n").filter((line) => line.trim()).slice(-25).map((line) => `    ${line}`).join("\n"));
+    process.exit(1);
+  }
   const survived = [];
   for (const [name, mutation] of Object.entries(MUTATIONS)) {
     const started = Date.now();
-    const run = spawnSync(process.execPath, [script, "--mutate", name, "--no-seeds", "--bail", ...mutation.cases.flatMap((each) => ["--case", each])], { encoding: "utf8", env: { ...process.env }, maxBuffer: 64 * 1024 * 1024 });
+    const run = gate(["--mutate", name, "--bail"], mutation.cases);
     const output = `${run.stdout}\n${run.stderr}`;
-    // Caught: the gate ran and reported a failing draw (not a crash, exit 2), with the failure it must show.
-    const caught = run.status === 1 && /\n✗ /.test(output) && (!mutation.expect || mutation.expect.test(output));
+    // Caught: the gate ran and reported a failing draw (not a crash, exit 2), and the check the mutation names failed.
+    const caught = run.status === 1 && /\n✗ /.test(output) && problemsOf(output).some((problem) => mutation.expect.test(problem));
     console.log(`${caught ? "caught  " : "SURVIVED"} ${name} (${Math.round((Date.now() - started) / 1000)}s, exit ${run.status}): ${mutation.why}`);
-    // What caught it: the first failing draw and its first problem.
-    if (caught) console.log(`    ${output.split("\n").filter((line) => line.startsWith("✗ ") || line.startsWith("  ")).slice(0, 2).map((line) => line.trim().slice(0, 220)).join(" — ")}`);
+    // What caught it: the first problem of the check it names.
+    if (caught) console.log(`    ${problemsOf(output).find((problem) => mutation.expect.test(problem)).slice(0, 220)}`);
     if (!caught) {
       survived.push(name);
       console.log(output.split("\n").filter((line) => line.trim()).slice(-25).map((line) => `    ${line}`).join("\n"));
@@ -320,6 +333,9 @@ const REGRESSIONS = {
     layout: [{ type: "part", part: "notices" }, { type: "content", hook: "lead", content: { kind: "image", image: { app: NOOR, file: "pp/banner.svg" }, alt: { en: "A banner" }, width: 2000, height: 2000 } }, ...LEGAL_COLUMNS.slice(1)],
     items: { line: [LINE_IMAGE("line-top"), ...DEFAULT_LINE, LINE_IMAGE("line-end")] },
   } } } },
+  // Review 5, S6: the theme's phone tab bar (`bottom-tabs`) under the theme's chrome, drawn outside token scope.
+  "review 5, S6: the theme's chrome with the phone tab bar, under a dark page": { request: { noor: true, tabs: true }, privatePages: { chrome: "theme", tokens: { cart: { page: DARK } } } },
+  "review 5, S6: the theme's chrome with the phone tab bar, no tokens": { request: { noor: true, tabs: true, scheme: "dark" }, privatePages: { chrome: "theme" } },
   // What the save must refuse (under a mutation that lets one through, the drawing must fail).
   "a stylesheet hiding a host part": { refused: "unscoped_selector", privatePages: { css: '[data-part="summary"] * { display: none } [data-part="details-submit"] * { visibility: hidden }' } },
   "summary rows that do not read on their summary": { refused: "contrast", privatePages: { tokens: { cart: { "summary-rows": { text: "#eeeeee" }, summary: { background: "#ffffff" } } } } },

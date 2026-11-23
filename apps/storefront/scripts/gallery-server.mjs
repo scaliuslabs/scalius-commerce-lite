@@ -298,8 +298,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       // The private pages' rendered property tests: a generated theme compiled with the store's own
       // compiler (a refusal answers its issues, as a save would) and drawn on the buyer UI cart entry in
       // one of its states, under a palette, colour scheme and page paint, with Noor's chrome when asked (its
-      // header skin dropped with `headerSkin: false`), a store of two markets (`localization`), and a look an older
-      // checker compiled (`stale`). The answer
+      // header skin dropped with `headerSkin: false`), a store of two markets (`localization`), a look an older
+      // checker compiled (`stale`) and the phone tab bar (`tabs`). The answer
       // carries the page's colour table (each row's key, selector and kind) for the coverage walk.
       if (url.pathname === `${GALLERY_PREFIX}/private-theme` && request.method === "POST") {
         const body = JSON.parse(await readBody(request) || "{}");
@@ -314,7 +314,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors: shared.storefrontDarkPalette(colors), ...(body.paint ? { pagePaint: body.paint } : {}) };
         // A page paint the palette cannot read on is dropped by a save: a case that asks for one names a readable paint.
         if (body.paint && !shared.storefrontTokensWithReadablePaint(tokens).pagePaint) return sendJson(response, 400, { error: "The page paint does not read on this palette." });
-        const theme = { ...base, tokens };
+        // The phone tab bar (`tabs`: the theme's bottom-tabs phone navigation).
+        const theme = { ...base, tokens, ...(body.tabs === true ? { blocks: { ...base.blocks, mobileNav: { variant: "bottom-tabs", settings: { tabs: ["home", "categories", "offers", "account"], drawer: "accordion" } } } } : {}) };
         const document = { ...shared.storefrontPrivatePagesDefault(), ...body.privatePages };
         const context = shared.privatePagesContextOf(theme);
         const compiled = mutation?.compile ? mutation.compile(shared, document, context) : shared.compileStorefrontPrivatePages(document, context);

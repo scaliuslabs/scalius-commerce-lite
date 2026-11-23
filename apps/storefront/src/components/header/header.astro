@@ -3,7 +3,8 @@
 // (`apps.skins.header`), else the theme's own header (CoreHeader.astro). An
 // app header that is inactive, fails or is late gives way to the core
 // header, so a page always has one. Under an app header the store adds the
-// theme's phone tab bar and its menu disclosure behaviour (nav-disclosure.ts),
+// theme's phone tab bar (never on a private page, as under the store's own
+// checkout header) and its menu disclosure behaviour (nav-disclosure.ts),
 // and the merchant's light or dark switch where the skin places `header.actions`
 // (on a public page: a private page's theme header draws none of its slots).
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
@@ -72,7 +73,7 @@ const privateSearch = privateMarkup ? await privateHeaderSearch(Astro.locals) : 
 {privatePage ? (
 <div class="contents" data-storefront-header data-private="header">
   {privateMarkup ? (
-    <Fragment>{privateSearch?.place === "before" && <PrivateSearch {...privateSearch.form} />}<div data-free="header"><PrivateMarkup markup={privateMarkup} /></div>{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}{tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}</Fragment>
+    <Fragment>{privateSearch?.place === "before" && <PrivateSearch {...privateSearch.form} />}<div data-free="header"><PrivateMarkup markup={privateMarkup} /></div>{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}</Fragment>
   ) : <slot name="private-fallback" />}
 </div>
 ) : (
