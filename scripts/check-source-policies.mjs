@@ -6,7 +6,7 @@
 // matching fails `check-source-policies.test.mjs`.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
-import { extname, relative, resolve } from "node:path";
+import { dirname, extname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { collectCoreBoundaryViolations } from "./core-boundaries.mjs";
 
@@ -1136,7 +1136,11 @@ export function signInWriteViolations(files, allow = CUSTOMER_UPDATE_ALLOW) {
 function collectSignInWriteViolations() {
   const files = SIGN_IN_WRITE_ROOTS.flatMap((path) => codeFiles(path))
     .map((file) => ({ name: relative(root, file), text: readFileSync(file, "utf8") }));
-  const stale = [...Object.keys(CUSTOMER_UPDATE_ALLOW), ...Object.keys(SIGN_IN_TEST_SEEDERS)].filter((name) => !files.some((file) => file.name === name)).map((name) => `${name}: listed for the sign-in writer check but gone`);
+  // The public repository carries no tests: a listed seeder under a stripped folder is absent there, not stale.
+  const strippedFromPublic = (name) => /(^|\/)__tests__\//.test(name) && !existsSync(resolve(root, dirname(name)));
+  const stale = [...Object.keys(CUSTOMER_UPDATE_ALLOW), ...Object.keys(SIGN_IN_TEST_SEEDERS)]
+    .filter((name) => !files.some((file) => file.name === name) && !strippedFromPublic(name))
+    .map((name) => `${name}: listed for the sign-in writer check but gone`);
   return [...signInWriteViolations(files), ...stale];
 }
 
