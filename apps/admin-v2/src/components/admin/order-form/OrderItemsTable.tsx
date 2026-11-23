@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense } from "react";
 import { Button } from "~/components/ui/button";
 import { Trash2 } from "lucide-react";
 import type { OrderItem, Product } from "./types";
@@ -20,6 +20,8 @@ type ProductVariant = Product["variants"][number];
 
 export const orderLineQuantityId = (index: number) => `order-line-${index}-quantity`;
 
+const OrderBundleRow = lazy(() => import("./OrderBundleRow"));
+
 interface OrderItemsTableProps {
   resolvedVariantsById?: Record<string, ProductVariant>;
 }
@@ -38,7 +40,6 @@ export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTablePr
   const items = form.watch("items") as OrderItem[];
   // The quote's amounts are minor units of its own currency.
   const quoted = (amountMinor: number) => fromMinor(amountMinor, manualQuote.data!.decimalPlaces);
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
 
   const setItems = (next: OrderItem[]) =>
     form.setValue("items", next, { shouldDirty: true, shouldValidate: true });
@@ -84,74 +85,28 @@ export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTablePr
           const units = Math.max(1, Math.round(items[first]!.quantity / items[first]!.bundle!.perUnit));
           const quotedRow = quotedRows(row.members);
           const total = quotedRow ? quoted(quotedRow.totalMinor) : row.members.reduce((sum, index) => sum + items[index]!.price * items[index]!.quantity, 0);
-          const issues = issuesOf(row.members);
-          const issueId = `order-line-issue-${first}`;
-          const listId = `order-bundle-items-${first}`;
-          const open = expanded.has(row.id);
+          // Only a saved order holding a bundle downloads its row; its place is held at a row's height meanwhile.
           return (
-            <li key={`bundle-${row.id}`} className="flex flex-col gap-2 py-3">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                <div className="min-w-0 flex-1 basis-40">
-                  <p className="truncate text-body font-medium" title={row.title}>{row.title}</p>
-                  <p className="truncate text-body text-muted-foreground">
-                    {[t("bundleItems", { count: row.members.length }), fmt(total / units)].join(" · ")}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="link"
-                    aria-expanded={open}
-                    aria-controls={listId}
-                    onClick={() => setExpanded((current) => {
-                      const next = new Set(current);
-                      if (next.has(row.id)) next.delete(row.id);
-                      else next.add(row.id);
-                      return next;
-                    })}
-                  >
-                    {t(open ? "hideBundleItems" : "showBundleItems")}
-                  </Button>
-                  {issues.length > 0 ? <p id={issueId} className="text-body text-destructive">{issues.join(" ")}</p> : null}
-                </div>
-                <OrderItemQuantityInput
-                  id={orderLineQuantityId(first)}
-                  quantity={units}
-                  itemName={row.title}
-                  onQuantityChange={(next) => {
-                    // A bundle changes whole: each of its lines holds its units per bundle times the bundles.
-                    const current = [...form.getValues("items")];
-                    for (const index of row.members) {
-                      const line = current[index];
-                      if (line?.bundle) current[index] = { ...line, quantity: next * line.bundle.perUnit };
-                    }
-                    setItems(current);
-                  }}
-                  describedBy={issues.length > 0 ? issueId : undefined}
-                />
-                <p className="min-w-32 text-end text-body font-medium tabular-nums">{fmt(total)}</p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeRows(row.members)}
-                  aria-label={t("remove", { name: row.title })}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-              <ul id={listId} hidden={!open} className="flex flex-col gap-1 ps-4 text-body text-muted-foreground" aria-label={t("bundleItemsOf", { name: row.title })}>
-                {row.members.map((index) => {
-                  const item = items[index]!;
-                  const product = products.find((candidate) => candidate.id === item.productId);
-                  const variant = item.variantId ? resolvedVariantsById[item.variantId] ?? product?.variants.find((candidate) => candidate.id === item.variantId) : undefined;
-                  const variantText = item.variantLabel !== undefined ? item.variantLabel : orderItemVariantLabel(variant);
-                  return (
-                    <li key={`${item.orderItemId ?? index}`} className="flex justify-between gap-3">
-                      <span className="min-w-0 truncate">{item.quantity} × {[item.name ?? product?.name ?? t("unknownProduct"), variantText].filter(Boolean).join(" · ")}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </li>
+            <Suspense key={`bundle-${row.id}`} fallback={<li className="min-h-20 py-3" aria-hidden="true" />}>
+              <OrderBundleRow
+                title={row.title}
+                members={row.members.map((index) => ({ index, item: items[index]!, product: products.find((candidate) => candidate.id === items[index]!.productId), resolvedVariantsById }))}
+                units={units}
+                total={total}
+                issues={issuesOf(row.members)}
+                quantityId={orderLineQuantityId(first)}
+                onUnitsChange={(next) => {
+                  // A bundle changes whole: each of its lines holds its units per bundle times the bundles.
+                  const current = [...form.getValues("items")];
+                  for (const index of row.members) {
+                    const line = current[index];
+                    if (line?.bundle) current[index] = { ...line, quantity: next * line.bundle.perUnit };
+                  }
+                  setItems(current);
+                }}
+                onRemove={() => removeRows(row.members)}
+              />
+            </Suspense>
           );
         }
         const index = row.index;

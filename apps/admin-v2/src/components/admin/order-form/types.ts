@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
 import { z } from "zod";
 import { adminPhoneSchema } from "~/lib/admin-phone-schema";
@@ -81,8 +82,17 @@ export type OrderFormMode = "create" | "amend";
  * is converted in it.
  */
 export type OrderFormProps = OrderFormCommonProps & (
-  | { mode: "create"; currencyCode?: never }
-  | { mode: "amend"; currencyCode: string }
+  | {
+      mode: "create";
+      currencyCode?: never;
+      /**
+       * The parts only a new order asks for (app questions, payment, sales
+       * channel: `OrderCreateSections`), handed in by the create route so an
+       * amendment never downloads them.
+       */
+      createSections: ReactNode;
+    }
+  | { mode: "amend"; currencyCode: string; createSections?: never }
 );
 
 interface OrderFormCommonProps {

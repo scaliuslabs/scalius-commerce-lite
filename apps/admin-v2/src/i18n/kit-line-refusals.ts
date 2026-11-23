@@ -1,4 +1,4 @@
-import { readAdminApiError } from "~/lib/admin-api-error";
+import { isKitLineRefusalReason, kitLineRefusalOf, type KitLineRefusalReason } from "~/lib/kit-line-refusal-reason";
 import { defineMessages, translate } from "./index";
 
 /**
@@ -19,27 +19,13 @@ export const kitLineRefusalMessages = defineMessages({
   },
 });
 
-export type KitLineRefusalReason = keyof typeof kitLineRefusalMessages.en;
-
-const isKitLineRefusalReason = (reason: unknown): reason is KitLineRefusalReason =>
-  reason === "kit_stock_movement" || reason === "kit_amended_in_part";
-
 /** The sentence for a reason (a row's `code`, a refusal's `details.reason`) when it is one of the two, else null. */
 export function kitLineRefusalMessage(reason: unknown): string | null {
   return isKitLineRefusalReason(reason) ? translate(kitLineRefusalMessages, reason) : null;
 }
 
-/**
- * A failed write the server refused with one of the two reasons (`details.reason`),
- * with the order lines it names (`details.orderItemIds`, an amendment's), or null
- * for any other failure.
- */
+/** A failed write refused with one of the two reasons, in the dashboard's words, with the lines it names; else null. */
 export function readKitLineRefusal(error: unknown): { reason: KitLineRefusalReason; message: string; orderItemIds: string[] } | null {
-  const details = readAdminApiError(error)?.details as { reason?: unknown; orderItemIds?: unknown } | null | undefined;
-  if (!details || typeof details !== "object" || !isKitLineRefusalReason(details.reason)) return null;
-  return {
-    reason: details.reason,
-    message: translate(kitLineRefusalMessages, details.reason),
-    orderItemIds: Array.isArray(details.orderItemIds) ? details.orderItemIds.filter((id): id is string => typeof id === "string") : [],
-  };
+  const refusal = kitLineRefusalOf(error);
+  return refusal ? { ...refusal, message: translate(kitLineRefusalMessages, refusal.reason) } : null;
 }
