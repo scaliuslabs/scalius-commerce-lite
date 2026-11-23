@@ -29,7 +29,7 @@ import {
     recommendationOrderProducts,
 } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { and, asc, desc, eq, gt, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, sql, type SQL } from "drizzle-orm";
 import {
     rankRecommendationLists,
     recommendationRowReason,
@@ -225,11 +225,18 @@ export async function recommendationRotationBatch(
  * Units sold per product in the last 30 days, from real orders (placed and
  * kept: not cancelled, refunded, returned or unfinished), each line net of
  * its units in accepted return cases (approved, receiving or completed, as
- * the sales reports count returns; a line returned in full counts nothing),
- * reconciling the table in one batch. The upsert stamps every product sold in the window with
- * this refresh's time (unchanged projections only refresh their timestamp),
- * so the rows it did not stamp are the products that no longer sold: the
- * delete reads the stats table alone, never each product's line history.
+ * the sales reports count returns; a line returned in full counts nothing).
+ * A store kit sells as its items' lines: the items keep their units, and the
+ * kit's own product is credited with the kits sold, read from its anchor
+ * line's frozen `_bundle` entry (net units over its share per kit; a split
+ * anchor's lines count the kit once, by the fewest whole kits they hold).
+ * Units, not orders: a buyer who takes three takes three off the shelf.
+ *
+ * One batch reconciles the table. The upsert stamps every product sold in
+ * the window with this refresh's time (unchanged projections only refresh
+ * their timestamp), so the rows it did not stamp are the products that no
+ * longer sold: the delete reads the stats table alone, never each product's
+ * line history.
  */
 export async function refreshProductSalesStats(db: Database): Promise<{ products: number }> {
     // Both reconciliation statements use the same database time, including
@@ -242,12 +249,9 @@ export async function refreshProductSalesStats(db: Database): Promise<{ products
     }).from(sql`(SELECT 1) AS refresh_clock`).all();
     const refreshAt = Math.max(Number(clock!.now), Number(clock!.last ?? 0) + 1);
     const statuses = sql.join(REAL_ORDER_STATUSES.map((status) => sql`${status}`), sql`, `);
-    const results = await safeBatch(db, [
-        db.insert(productSalesStats).select(sql`
-            SELECT kept_line.product_id, SUM(kept_line.units), ${refreshAt}
-            FROM (
-                SELECT sales_line.product_id AS product_id, sales_line.quantity - COALESCE((
-                    -- The line's accepted return units, through the returns' sales index.
+    // The window's kept lines (`units`: net of accepted returns) with `columns`.
+    const windowLines = (columns: SQL, join: SQL = sql``, where: SQL = sql``) => sql`
+                SELECT ${columns}, sales_line.quantity - COALESCE((
                     SELECT SUM(returned_line.approved_quantity)
                     FROM ${orderReturnLines} AS returned_line
                     INNER JOIN ${orderReturns} AS returned_case ON returned_case.id = returned_line.return_id
@@ -257,14 +261,38 @@ export async function refreshProductSalesStats(db: Database): Promise<{ products
                 ), 0) AS units
                 FROM ${orders} AS sales_order
                 INNER JOIN ${orderItems} AS sales_line ON sales_line.order_id = sales_order.id
+                ${join}
                 WHERE sales_order.status IN (${statuses})
                   AND sales_order.deleted_at IS NULL
                   AND sales_order.created_at >= ${refreshAt - SALES_WINDOW_SECONDS}
                   AND sales_line.quantity > 0
-                  AND EXISTS (SELECT 1 FROM ${products} WHERE ${products.id} = sales_line.product_id)
-            ) AS kept_line
-            WHERE kept_line.units > 0
-            GROUP BY kept_line.product_id
+                  ${where}`;
+    const results = await safeBatch(db, [
+        db.insert(productSalesStats).select(sql`
+            SELECT credited.product_id, SUM(credited.units), ${refreshAt}
+            FROM (
+                SELECT kept_line.product_id AS product_id, kept_line.units AS units
+                FROM (${windowLines(sql`sales_line.product_id AS product_id`)}) AS kept_line
+                UNION ALL
+                SELECT kit_sale.product_id, kit_sale.kits FROM (
+                    SELECT kit_line.product_id AS product_id, MIN(kit_line.units / kit_line.per_unit) AS kits
+                    FROM (${windowLines(sql`
+                        CAST(json_extract(kit_entry.value, '$.bundle.kit.productId') AS TEXT) AS product_id,
+                        sales_order.id AS order_id,
+                        CAST(json_extract(kit_entry.value, '$.bundle.id') AS TEXT) AS bundle_id,
+                        CAST(json_extract(kit_entry.value, '$.bundle.perUnit') AS INTEGER) AS per_unit`, sql`
+                        CROSS JOIN json_each(sales_line.properties) AS kit_entry`, sql`
+                        AND sales_line.properties LIKE '%"kind":"kit"%'
+                        AND json_extract(kit_entry.value, '$.key') = '_bundle'
+                        AND json_extract(kit_entry.value, '$.bundle.kind') = 'kit'
+                        AND json_type(kit_entry.value, '$.bundle.anchor') = 'true'
+                        AND CAST(json_extract(kit_entry.value, '$.bundle.perUnit') AS INTEGER) > 0`)}) AS kit_line
+                    GROUP BY kit_line.order_id, kit_line.bundle_id, kit_line.product_id
+                ) AS kit_sale
+            ) AS credited
+            WHERE credited.units > 0
+              AND EXISTS (SELECT 1 FROM ${products} WHERE ${products.id} = credited.product_id)
+            GROUP BY credited.product_id
         `).onConflictDoUpdate({
             target: productSalesStats.productId,
             set: { sold30d: sql`excluded.sold_30d`, computedAt: sql`${refreshAt}` },
