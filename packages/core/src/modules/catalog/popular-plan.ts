@@ -70,6 +70,12 @@ export interface PopularPageInput {
     boundary: PopularBoundary | undefined;
     limit: number;
     offset: number;
+    /**
+     * Take this form whatever the sizes say (tests prove both give the same
+     * pages): `driven` reads the set whole (the listing's conditions when it
+     * has no driven form), `walking` walks where the listing has a walk.
+     */
+    force?: "driven" | "walking";
 }
 
 /**
@@ -83,7 +89,8 @@ export function popularPageIds(input: PopularPageInput): SQL {
     const joinProducts = input.needsProducts ? sql`INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}` : sql``;
     const boundary = input.boundary;
 
-    const driven = input.driven === null || input.driven === undefined ? null : (() => {
+    const drivenConditions = input.driven?.conditions ?? (input.driven || input.force === "driven" ? input.conditions : null);
+    const driven = drivenConditions === null ? null : (() => {
         const tier = popularityTier(productSalesStats.sold30d);
         const value = popularityValue(productSalesStats.sold30d, buyerState.productCreatedAt);
         const cursor = boundary
@@ -94,7 +101,7 @@ export function popularPageIds(input: PopularPageInput): SQL {
                 SELECT ${buyerState.productId} AS page_product_id FROM ${buyerState}
                 ${joinProducts}
                 LEFT JOIN ${productSalesStats} ON ${productSalesStats.productId} = ${buyerState.productId}
-                WHERE ${allOf([...(input.driven.conditions ?? input.conditions), cursor])}
+                WHERE ${allOf([...drivenConditions, cursor])}
                 ORDER BY ${tier} DESC, ${value} DESC, ${buyerState.productId}
                 LIMIT ${rowCount}`;
     })();
@@ -131,7 +138,9 @@ export function popularPageIds(input: PopularPageInput): SQL {
                 ) AS newest_rest`;
     })();
 
-    const ids = driven && walking && input.size
+    const ids = input.force
+        ? sql`(${(input.force === "walking" ? walking : driven) ?? walking ?? driven}) AS popular_ids`
+        : driven && walking && input.size
         ? sql`(
             SELECT CAST(popular_pick.value AS TEXT) AS page_product_id
             FROM (
