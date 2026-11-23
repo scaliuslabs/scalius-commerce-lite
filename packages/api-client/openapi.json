@@ -17123,7 +17123,12 @@
             "nullable": true
           },
           "fulfillmentKind": {
-            "type": "string"
+            "type": "string",
+            "description": "What it sells; a kit's from its items."
+          },
+          "paidOnlineOnly": {
+            "type": "boolean",
+            "description": "Paid only online (a key, a download, or a kit holding one): where checkout takes no online payment, its buy action is off, as on its own page."
           },
           "price": {
             "type": "number",
@@ -17174,6 +17179,7 @@
           "imageMediaId",
           "imageAlt",
           "fulfillmentKind",
+          "paidOnlineOnly",
           "price",
           "compareAtPrice",
           "requiresCustomization",
@@ -17310,6 +17316,19 @@
               "in_stock"
             ],
             "description": "From its items: as many kits as the scarcest item allows; `out_of_stock` when an item can't be sold."
+          },
+          "fulfillmentKind": {
+            "type": "string",
+            "enum": [
+              "physical",
+              "digital",
+              "service"
+            ],
+            "description": "What it sells, from all its items (never the kit SKU's own setting): physical when any item ships, else digital when any item is, else a service."
+          },
+          "paidOnlineOnly": {
+            "type": "boolean",
+            "description": "One of its items is paid only online (a key, a download): no cash on delivery or at the service buys it."
           }
         },
         "required": [
@@ -17320,7 +17339,9 @@
           "compareAtPrice",
           "saving",
           "savingPercent",
-          "availabilityBand"
+          "availabilityBand",
+          "fulfillmentKind",
+          "paidOnlineOnly"
         ],
         "description": "A SKU made of other SKUs: checkout sells it as them."
       },
@@ -83054,6 +83075,10 @@
                                     ],
                                     "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                                   },
+                                  "paidOnlineOnly": {
+                                    "type": "boolean",
+                                    "description": "Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it."
+                                  },
                                   "createdAt": {
                                     "type": "string",
                                     "nullable": true
@@ -83078,6 +83103,7 @@
                                   "discountPercentage",
                                   "discountAmount",
                                   "fulfillmentKind",
+                                  "paidOnlineOnly",
                                   "createdAt"
                                 ]
                               },
@@ -84380,6 +84406,10 @@
                                 ],
                                 "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                               },
+                              "paidOnlineOnly": {
+                                "type": "boolean",
+                                "description": "Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it."
+                              },
                               "customFields": {
                                 "type": "array",
                                 "items": {
@@ -84431,6 +84461,7 @@
                               "discountPercentage",
                               "discountAmount",
                               "fulfillmentKind",
+                              "paidOnlineOnly",
                               "customFields",
                               "warrantyId",
                               "createdAt",
