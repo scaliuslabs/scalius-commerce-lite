@@ -27,6 +27,8 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 
 | Operation | D1 calls | Statements | Rows written | Rows read | Full scans | Steady mean written / read |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `cart-check-20-lines-line-app` | 9 | 17 | 0 | 175 | 2 | - |
+| `cart-check-20-code-app` | 11 | 25 | 0 | 168 | 2 | - |
 | `staff-sign-in` | 9 | 9 | 6 | 10 | 0 | - |
 | `staff-sign-up` | 5 | 5 | 5 | 10 | 17 | - |
 | `customer-otp-request` | 16 | 20 | 10 | 21 | 2 | - |
