@@ -52,6 +52,16 @@ function announce(root: ParentNode, message: string): void {
 }
 
 /** A line as it will be after its inputs change: the old line's key and the edited line. */
+/** `<app id> <cart key>` of each line an app's own block (`cart.line.after`) arrived for, read from the check's blocks without their schema (the renderer checks them). */
+export function appLinesOf(blocks: unknown): Set<string> {
+  const lines = new Set<string>();
+  for (const block of Array.isArray(blocks) ? blocks : []) {
+    const { appId, target, lineKey } = (block ?? {}) as { appId?: unknown; target?: unknown; lineKey?: unknown };
+    if (target === "cart.line.after" && typeof appId === "string" && typeof lineKey === "string") lines.add(`${appId} ${lineKey}`);
+  }
+  return lines;
+}
+
 /**
  * Whether the store draws its own control for an input on a line: the input
  * names the cart among its surfaces, or the line needs an answer (undecided
@@ -61,6 +71,8 @@ function announce(root: ParentNode, message: string): void {
  */
 export function hostDrawsLineInput(
   facts: CartLineInputFacts,
+  /** `appLinesOf(facts.blocks)`, read once per draw. */
+  appLines: ReadonlySet<string>,
   lineKey: string,
   key: string,
   item: Pick<VariantCartItem, "properties"> | undefined,
@@ -69,7 +81,7 @@ export function hostDrawsLineInput(
   if (!view) return false;
   if (view.input.surfaces === undefined || view.input.surfaces.includes("cart")) return true;
   const needed = (view.input.decision !== undefined && !(item && lineAnswer(item, key))) || (facts.refused.get(lineKey)?.has(key) ?? false);
-  return needed && !facts.appLines.has(`${view.appId} ${lineKey}`);
+  return needed && !appLines.has(`${view.appId} ${lineKey}`);
 }
 
 export type LineEdit = { oldLineKey: string; item: Omit<VariantCartItem, "propertiesHash"> };
@@ -281,7 +293,8 @@ export function mountCartLineInputs(root: ParentNode, facts: CartLineInputFacts)
   const { items } = cartStore.get();
   // The host draws an input's control in the cart unless its app draws it itself (`surfaces` without `cart`)
   // and its block for the line arrived: a line that needs an answer always has a way to give it.
-  const drawnOn = (lineKey: string) => (key: string) => hostDrawsLineInput(facts, lineKey, key, items[lineKey]);
+  const appLines = appLinesOf(facts.blocks);
+  const drawnOn = (lineKey: string) => (key: string) => hostDrawsLineInput(facts, appLines, lineKey, key, items[lineKey]);
   const drawn = (key: string) => {
     const view = facts.inputs.get(key);
     return view !== undefined && lineInputDrawnOn(view.input, "cart");

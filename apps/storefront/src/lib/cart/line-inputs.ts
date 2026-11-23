@@ -29,21 +29,15 @@ export interface CartLineInputFacts {
   byLine: Map<string, string[]>;
   /** By cart key, the app answers the check refused on the line (a decline of an agreement since changed). */
   refused: Map<string, Set<string>>;
-  /** `<app id> <cart key>` of each line an app's own block (`cart.line.after`) arrived for with the check. */
-  appLines: Set<string>;
+  /**
+   * The apps' buyer UI blocks the check answered (unparsed): which lines an
+   * app's own block (`cart.line.after`) arrived for is read where the store
+   * decides to draw its own control (line-input-controls.ts).
+   */
+  blocks: unknown;
 }
 
-export const NO_LINE_INPUTS: CartLineInputFacts = { inputs: new Map(), byLine: new Map(), refused: new Map(), appLines: new Set() };
-
-/** The lines an app's per-line block arrived for, read from the check's blocks without their schema (the renderer checks them). */
-function appLinesOf(blocks: unknown): Set<string> {
-  const lines = new Set<string>();
-  for (const block of Array.isArray(blocks) ? blocks : []) {
-    const { appId, target, lineKey } = (block ?? {}) as { appId?: unknown; target?: unknown; lineKey?: unknown };
-    if (target === "cart.line.after" && typeof appId === "string" && typeof lineKey === "string") lines.add(`${appId} ${lineKey}`);
-  }
-  return lines;
-}
+export const NO_LINE_INPUTS: CartLineInputFacts = { inputs: new Map(), byLine: new Map(), refused: new Map(), blocks: [] };
 
 /**
  * The facts from a cart check's answer. A line the check refused for one of
@@ -74,7 +68,7 @@ export function cartLineInputFacts(
     byLine.set(issue.cartKey, order.filter((key) => keys.has(key)));
     refused.set(issue.cartKey, new Set([...(refused.get(issue.cartKey) ?? []), issue.propertyKey]));
   }
-  return { inputs, byLine, refused, appLines: appLinesOf(validation?.buyerUi) };
+  return { inputs, byLine, refused, blocks: validation?.buyerUi ?? [] };
 }
 
 /** The line's answer to an input, or null when it has none. */
