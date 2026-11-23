@@ -553,7 +553,7 @@ export const orderRefundAttemptSchema = z.object({
   allocationCount: z.number().optional(),
   attempts: z.number().optional(),
   lastError: z.string().nullable().optional(),
-});
+}).openapi("OrderRefundAttempt");
 
 export const activeRefundOperationSchema = z.object({
   active: z.literal(true),

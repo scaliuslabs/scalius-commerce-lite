@@ -14,7 +14,8 @@ import {
   type OrderChannelSourcePreset,
 } from "@scalius/shared/order-channel";
 import { spreadsheetSafeCsvCell } from "@scalius/shared/spreadsheet-csv";
-import { formatOrderLinePropertiesText, parseOrderLineProperties } from "./line-presentation";
+import { readOrderLineProperties } from "@scalius/shared/line-properties";
+import { formatOrderLinePropertiesText } from "./line-presentation";
 
 export const ORDER_CSV_ARTIFACT_MAX_BYTES = 16 * 1024 * 1024;
 
@@ -207,7 +208,7 @@ export function formatOrderCsvLineProperties(
   decimalPlaces: number,
 ): string[] {
   return formatOrderLinePropertiesText(
-    parseOrderLineProperties(stored),
+    readOrderLineProperties(stored),
     (priceMinor) => formatMoney(fromMinor(priceMinor, decimalPlaces), { code: currencyCode }),
   );
 }

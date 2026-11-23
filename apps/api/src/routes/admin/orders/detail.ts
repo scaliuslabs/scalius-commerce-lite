@@ -517,7 +517,8 @@ app.openapi(createPaymentRecoveryLinkRoute, async (c) => {
 const orderDetailWithLineExtrasSchema = orderDetailSchema.extend({
     relatedObjects: z.array(relatedObjectRecordSchema),
     attributeApps: checkoutAttributeAppsSchema,
-    items: z.array(orderItemSchema.extend(orderLineExtrasShape)),
+    // A named shape: past the description's inline budget it is linked, so a line field never crowds the read.
+    items: z.array(orderItemSchema.extend(orderLineExtrasShape).openapi("AdminOrderLine", { description: "One order line as staff read it: its money, frozen entries, fulfilment and extras." })),
 });
 
 const getOrderRoute = createRoute({

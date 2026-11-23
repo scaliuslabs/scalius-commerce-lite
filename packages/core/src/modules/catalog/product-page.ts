@@ -366,7 +366,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         selectProductPageContentBlockRows(db, product.id),
         selectActiveProductBundleRows(db, [product.id]),
         selectStorefrontCustomFieldRows(db, "product", product.id),
-        selectStorefrontVariantCustomFieldRows(db, product.id),
+        // With placed offers, their SKUs' fields too (a chip from a flag), in the same statement.
+        selectStorefrontVariantCustomFieldRows(db, product.id, { placedOffers: withKits }),
         ...(withKits ? [selectProductPageKitRows(db, product.id, pricing, translation), selectProductPageKitMediaRows(db, product.id)] : []),
     ] as never).then((results) => {
         const [blockRows, bundleRows, productFieldRows, variantFieldRows, kitRows, kitMediaRows] = results as unknown as [
@@ -636,7 +637,11 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             /** The ready files those blocks name. */
             contentBlockMedia: blockMedia satisfies ProductPageBlockMedia[],
             /** SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU). */
-            placedOffers: pageKits.placedOffers,
+            placedOffers: pageKits.placedOffers.map((offer) => {
+                // The offered SKU's storefront-visible custom fields, as `variants[]` carries its own SKUs'.
+                const fields = content.variantCustomFields.get(offer.variantId) ?? [];
+                return { ...offer, customFields: foreign ? customFieldsInMarket(fields, pageMarket!) : fields };
+            }),
             /** Active quantity tiers, priced by checkout exactly as shown. */
             bundles: content.bundles.map((tier) => presentProductBundleTier(
                 priced && tier.discountType === "fixed_price" ? { ...tier, priceMinor: presentTierPrice(tier.priceMinor) } : tier,

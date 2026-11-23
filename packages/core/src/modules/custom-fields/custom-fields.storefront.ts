@@ -193,8 +193,12 @@ export function selectStorefrontCustomFieldRows(
         .orderBy(asc(customFieldDefinitions.position), asc(customFieldDefinitions.id));
 }
 
-/** The storefront-visible values of every SKU of a product (live or not; callers pick their SKUs). */
-export function selectStorefrontVariantCustomFieldRows(db: Database, productId: string) {
+/**
+ * The storefront-visible values of every SKU of a product (live or not;
+ * callers pick their SKUs), and with `placedOffers` of the SKUs its page
+ * places under its own offers (`product_page_offers`), in the same statement.
+ */
+export function selectStorefrontVariantCustomFieldRows(db: Database, productId: string, options: { placedOffers?: boolean } = {}) {
     deps.customFieldDefinitions("variant");
     return db.select({
         cfOwnerId: customFieldValues.ownerId,
@@ -214,7 +218,10 @@ export function selectStorefrontVariantCustomFieldRows(db: Database, productId: 
         ))
         .where(and(
             eq(customFieldValues.ownerType, "variant"),
-            sql`${customFieldValues.ownerId} IN (SELECT ${productVariants.id} FROM ${productVariants} WHERE ${productVariants.productId} = ${productId})`,
+            options.placedOffers
+                ? sql`${customFieldValues.ownerId} IN (SELECT ${productVariants.id} FROM ${productVariants} WHERE ${productVariants.productId} = ${productId}
+                    UNION SELECT placed_field_sku.variant_id FROM product_page_offers AS placed_field_sku WHERE placed_field_sku.product_id = ${productId})`
+                : sql`${customFieldValues.ownerId} IN (SELECT ${productVariants.id} FROM ${productVariants} WHERE ${productVariants.productId} = ${productId})`,
         ))
         .orderBy(asc(customFieldDefinitions.position), asc(customFieldDefinitions.id));
 }

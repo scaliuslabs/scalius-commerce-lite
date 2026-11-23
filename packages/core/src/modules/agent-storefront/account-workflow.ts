@@ -696,7 +696,7 @@ export async function getAgentStorefrontReceipt(
     // The buyer's rows: a kit's item split into two lines is one (`foldBuyerOrderLines`), its real lines in `lineIds`.
     items: foldBuyerOrderLines(items, {
       sum: ["lineSubtotalMinor", "discountAmountMinor", "taxableAmountMinor", "taxAmountMinor"],
-    }).map(({ productImageObjectKey, productImageStatus, properties: _properties, bundle: _bundle, unitsTotalMinor, ...item }) => ({
+    }).map(({ productImageObjectKey, productImageStatus, properties: _properties, bundle: _bundle, addOns: _addOns, unitsTotalMinor, ...item }) => ({
       ...item,
       price: buyerLineUnitPrice({ ...item, unitsTotalMinor }, order.currencyDecimalPlaces),
       productImage: productImageObjectKey

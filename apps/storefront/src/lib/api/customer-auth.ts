@@ -931,7 +931,7 @@ export async function verifyPhone(code: string): Promise<VerifyPhoneResult> {
 /**
  * Get one customer order detail/timeline. Requires active session (cs_tok cookie).
  */
-export async function getCustomerOrderDetail(orderId: string): Promise<{
+export async function getCustomerOrderDetail(orderId: string, options: { buyerUi?: boolean } = {}): Promise<{
   success: boolean;
   detail?: CustomerOrderDetail;
   error?: string;
@@ -943,7 +943,8 @@ export async function getCustomerOrderDetail(orderId: string): Promise<{
   }
 
   try {
-    const res = await customerAuthFetch(authUrl(`orders/${encodeURIComponent(orderId)}`), {
+    // The account order page's own read asks the apps to draw (`buyerUi=run`); Buy again does not.
+    const res = await customerAuthFetch(authUrl(`orders/${encodeURIComponent(orderId)}${options.buyerUi ? "?buyerUi=run" : ""}`), {
       credentials: "include",
       cache: "no-store",
       headers: await buyerUiLocaleHeaders(),

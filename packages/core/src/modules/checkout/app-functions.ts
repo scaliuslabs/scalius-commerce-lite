@@ -55,6 +55,7 @@ import {
   type BuyerUiInput,
   type BuyerUiLine,
   type StorefrontUiSlot,
+  type BuyerUiOrderLine,
   type PluginFunctionInput,
   type PluginFunctionOutput,
   type PluginRunPoint,
@@ -114,11 +115,16 @@ export interface CheckoutAppFunctions {
   buyerUiApps?(target: StorefrontUiSlot): string[];
   /**
    * The apps' buyer UI blocks for `targets`, one run per app and slot. The
-   * cart's slots read `lines` (every app's inputs: each app sees its own);
-   * a per-line slot (`STOREFRONT_UI_LINE_SLOTS`) answers a block per line,
-   * each naming its line.
+   * cart's slots read `lines`, an order's slots `orderLines` (every app's
+   * inputs: each app sees its own); a per-line slot
+   * (`STOREFRONT_UI_LINE_SLOTS`) answers a block per line, each naming its line.
    */
-  buyerUi?(input: Partial<Omit<BuyerUiInput, "target" | "lines">> & { targets: readonly StorefrontUiSlot[]; currency: string; lines?: readonly BuyerUiLine[] }): Promise<BuyerUiBlock[]>;
+  buyerUi?(input: Partial<Omit<BuyerUiInput, "target" | "lines" | "orderLines">> & {
+    targets: readonly StorefrontUiSlot[];
+    currency: string;
+    lines?: readonly BuyerUiLine[];
+    orderLines?: readonly BuyerUiOrderLine[];
+  }): Promise<BuyerUiBlock[]>;
   /**
    * `cart.line_prices` of the named apps alone, for an offer's price: never
    * blocking, outside the failure circuits, and never part of the quote.
