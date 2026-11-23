@@ -8,7 +8,7 @@
 // match a template" compares looks only (`storefrontThemeLook`).
 import { DEFAULT_STOREFRONT_THEME_BRAND, STOREFRONT_BRAND_IMAGE_KEYS } from "./brand";
 import { storefrontVariantSpec } from "./blocks";
-import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontThemeFieldBorder, storefrontTokensKeepingColorScheme } from "./tokens";
+import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontThemeFieldBorder, storefrontThemeFocusRing, storefrontTokensKeepingColorScheme } from "./tokens";
 import { emptyStorefrontPageTemplates } from "./pages";
 import { STOREFRONT_TEMPLATE_IDS, storefrontThemeWithReadableDarkColors, type StorefrontTemplateId, type StorefrontThemeDocument } from "./document";
 import { STOREFRONT_MAX_SECTIONS, STOREFRONT_SECTION_REGISTRY, type StorefrontSection, type StorefrontSectionType } from "./sections";
@@ -350,14 +350,15 @@ export function storefrontThemeWithContent(
 /**
  * The document's look: everything but its content (content reset to empty),
  * without the sections a theme switch kept hidden from another theme. The
- * field border reads as the palettes give it now, so a store saved from a
- * template before its border was darkened to show (3:1) still matches it.
+ * field border and focus ring read as the palettes give them now, so a store
+ * saved from a template before they were made to show (3:1) still matches it.
  */
 export function storefrontThemeLook(theme: StorefrontThemeDocument): StorefrontThemeDocument {
   const own = { ...theme, pages: { ...theme.pages, home: theme.pages.home.filter((section) => !storefrontSectionKeptHidden(section)) } };
   const look = storefrontThemeWithContent(own, null);
   const { colors } = look.tokens;
-  return { ...look, tokens: { ...look.tokens, colors: { ...colors, input: storefrontThemeFieldBorder(colors) } } };
+  const input = storefrontThemeFieldBorder(colors);
+  return { ...look, tokens: { ...look.tokens, colors: { ...colors, input, ring: storefrontThemeFocusRing({ ...colors, input }) } } };
 }
 
 /** One image a document names: where (a document path) and which media id. */
