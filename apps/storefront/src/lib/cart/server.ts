@@ -21,6 +21,7 @@ import { isLocationCountry, readForeignAddressFields, shippingCountryName, shipp
 import { readDiscountCodes } from "@/lib/checkout/tax-quote-client";
 import { BILLING_ADDRESS_FIELDS, checkoutBillingFields } from "@/lib/checkout/billing-address";
 import { marketingConsentOrderField } from "@/lib/checkout/marketing-consent";
+import { termsAcceptedOrderField } from "@/lib/checkout/terms-text";
 import { parseCheckoutAttributes, parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
 import { cartLinePurchaseOptionIds } from "./purchase-option";
 import {
@@ -424,6 +425,8 @@ export async function processOrder(
       paymentMethod: "cod",
       // Only when the buyer ticked the marketing consent box.
       ...marketingConsentOrderField(formData),
+      // The terms box, when the store asks for it (the API refuses an order without it then).
+      ...termsAcceptedOrderField(formData),
     };
 
     const result = await createOrder(payload, {

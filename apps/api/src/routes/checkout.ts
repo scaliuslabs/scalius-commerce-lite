@@ -65,6 +65,12 @@ const checkoutConfigSchema = z.object({
    * require.
    */
   requireFullBillingAddress: z.boolean(),
+  /**
+   * Settings → Checkout: the buyer must agree to the store's terms before the
+   * order is placed. The order commit refuses one without `termsAccepted:
+   * true` (`details.reason: terms_acceptance_required`).
+   */
+  requireTermsAcceptance: z.boolean(),
   allowedCountries: z.array(z.string()).max(250),
   allowedCountriesMode: z.enum(["include", "exclude"]),
   currency: z.object({

@@ -18,6 +18,7 @@ import { formatMoney } from "@/lib/currency";
 import { getCustomerSession } from "../api/customer-session-later";
 import { browserApiUrl } from "../api/browser-url";
 import { readBuyerAttributes } from "../buyer-ui/state";
+import { checkTermsAgreement } from "../checkout/terms-text";
 import { buyerUiDrawn, buyerUiPending } from "../buyer-ui/lazy";
 import { pagePath } from "../presence-url";
 import { addressAutocompleteService, pageLocale } from "../app-services";
@@ -139,6 +140,7 @@ const realImports: Record<string, unknown> = {
   pagePath,
   phoneHintCopy,
   readBuyerAttributes,
+  checkTermsAgreement,
   readCheckoutDeliveryMode,
   readCheckoutFormDraft,
   readCheckoutPhoneNeed,

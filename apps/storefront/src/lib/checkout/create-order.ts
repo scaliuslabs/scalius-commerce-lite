@@ -15,6 +15,7 @@ import { storedCheckoutBillingFields } from "./billing-address";
 import { giftCardRequestFields } from "./gift-card-storage";
 import { parseCheckoutAttributes } from "./tax-quote-contract";
 import { marketingConsentOrderField } from "./marketing-consent";
+import { termsAcceptedOrderField } from "./terms-text";
 
 /**
  * The order body the storefront sends: the generated request plus the
@@ -216,6 +217,8 @@ export async function createOrder(
     ...tender,
     // Only when the buyer ticked the marketing consent box on the cart page.
     ...marketingConsentOrderField(checkoutData),
+    // The terms box beside Pay, when the store asks for it.
+    ...termsAcceptedOrderField(checkoutData),
   };
 
   const res = await fetch("/api/checkout/create-order", {

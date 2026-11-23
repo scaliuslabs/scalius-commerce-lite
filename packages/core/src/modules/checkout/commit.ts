@@ -7,6 +7,7 @@ import {
     type OrderCommitResult,
     type OrderCustomer,
     type StorefrontOrderCommitPayload,
+    buildTermsAcceptedOrderEventInsert,
 } from "../orders";
 import { buildBatchGuard, chunkRowsForD1, isBatchGuardError, type Database } from "@scalius/database/client";
 import {
@@ -195,8 +196,9 @@ function buildReservationItemIssues(
 /**
  * The checkout's facts after the order's own rows: the order-created
  * notification claim, promotion allocations and redemptions, app record
- * writes, the gift-card hold, the Meta claim and the tracking snapshot. The
- * payload's discounts must agree with its lines and tax quote.
+ * writes, the gift-card hold, the Meta claim, the terms agreement and the
+ * tracking snapshot. The payload's discounts must agree with its lines and
+ * tax quote.
  */
 function checkoutOrderFacts(
     db: Database,
@@ -407,6 +409,9 @@ function checkoutOrderFacts(
             source: "storefront-order",
         }));
     }
+
+    // The buyer's agreement to the store's terms, when it was required: with the order.
+    if (payload.termsAccepted) writes.push(buildTermsAcceptedOrderEventInsert(db, od.id));
 
     // The order's consent snapshot and match signals (audit spec S4): with the
     // order or not at all, so a server Purchase never runs without its consent.

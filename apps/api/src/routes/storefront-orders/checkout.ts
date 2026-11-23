@@ -331,6 +331,9 @@ const createOrderSchema = z.object({
    * Never required; recorded after the order commits.
    */
   marketingConsent: z.object({ language: z.string().trim().max(16).nullable(), channels: z.array(z.enum(["email", "sms", "whatsapp"])).min(1).max(3) }).strict().nullable().optional(),
+  termsAccepted: z.boolean().optional().openapi({
+    description: "The buyer ticked \"I agree to the terms\". Required (true) when the store asks for it (checkout config `requireTermsAcceptance`): without it the order is refused with `details.reason: terms_acceptance_required`. The order records the agreement.",
+  }),
   trackingSignals: checkoutTrackingSignalsSchema.nullable().optional(),
   expectedAmountDueMinor: z.number().int().nonnegative().optional().openapi({
     description: "The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 gift_card_changed.",
@@ -639,6 +642,7 @@ app.openapi(createOrderRoute, async (c) => {
         contactFields: checkoutAuthority.contactFields,
         shippingCountries: checkoutAuthority.shippingCountries,
         requireFullBillingAddress: checkoutAuthority.checkoutSettings.requireFullBillingAddress,
+        requireTermsAcceptance: checkoutAuthority.checkoutSettings.requireTermsAcceptance,
         paymentTermsDays: deferredTerms?.days ?? null,
       }),
       checkoutAuthority.taxAuthority,

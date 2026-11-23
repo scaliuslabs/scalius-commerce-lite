@@ -31,5 +31,6 @@ export * from "./buyer-ui-lines";
 export * from "./pricing";
 export * from "./payment-terms";
 export * from "./store-copy";
+export * from "./terms-acceptance";
 
 export * from "./attributes";

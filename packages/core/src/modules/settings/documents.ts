@@ -286,6 +286,12 @@ export interface CheckoutFlowSettings {
    * country plus the region and postal code its rules require.
    */
   requireFullBillingAddress: boolean;
+  /**
+   * The buyer must tick "I agree to the terms" before any order is placed
+   * (checkout/terms-acceptance.ts); the order records that they did.
+   * Off: checkout shows the terms sentence only.
+   */
+  requireTermsAcceptance: boolean;
 }
 
 export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
@@ -297,6 +303,7 @@ export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
     partialPaymentAmount: majorMoney(z.number()),
     autoFulfilMode: z.enum(AUTO_FULFIL_MODES),
     requireFullBillingAddress: z.boolean(),
+    requireTermsAcceptance: z.boolean(),
   }),
   defaults: {
     guestCheckoutEnabled: true,
@@ -305,6 +312,7 @@ export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
     partialPaymentAmount: 0,
     autoFulfilMode: "after_payment",
     requireFullBillingAddress: false,
+    requireTermsAcceptance: false,
   },
 });
 
