@@ -140,7 +140,7 @@ export const MUTATIONS = {
     expect: /is none of its row's colours \(chrome:/,
   },
   "M9 every nested row leaves out what its parent has": {
-    why: "Place order inherits its form's words' colour, but it is also a filled button whose row sets its own",
+    why: "Place order inherits its dock's words' colour, but it is also a filled button whose row sets its own",
     rewrites: [rewrite(TOKENS, 'const inherited = row.nested && (row.kind === "box" || row.kind === "text") && !row.key.startsWith("ui.") ? parent : null;', "const inherited = row.nested ? parent : null;")],
     cases: [S6],
     expect: /"Place order" .*reads [\d.]+:1/,

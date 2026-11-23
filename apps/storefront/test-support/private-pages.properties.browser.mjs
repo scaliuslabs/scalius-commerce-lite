@@ -311,7 +311,8 @@ const REGRESSIONS = {
   "review 4, B4: tokens only, a dark details form in every state": { states: "all", privatePages: { tokens: { cart: { "details-form": DARK } } } },
   // The apps' blocks inside the details form stand on its row, and a theme styles them there by `ui.*`.
   "the apps' blocks in a dark details form, styled by target": { privatePages: { tokens: { cart: { "details-form": DARK, "ui.banner.warning/checkout.delivery.after": { background: "#3a2a0a", text: "#fde68a", border: "#f59e0b" }, "ui.button/checkout.contact.after": { background: "#7c3aed", text: "#ffffff", radius: 12 } } } } },
-  "review 4, S6: Place order's focus ring on a dark form": { privatePages: { tokens: { cart: { "details-form": DARK, submit: { background: "#7c3aed", text: "#ffffff", radius: 0 } } } } },
+  // Place order sits in the dock (review 6, B3): a dark form and a dark dock around it.
+  "review 4, S6: Place order's focus ring on a dark form": { privatePages: { tokens: { cart: { "details-form": DARK, dock: DARK, submit: { background: "#7c3aed", text: "#ffffff", radius: 0 } } } } },
   "review 4, S8: a 40px wide-tracked title clamped to two lines": { privatePages: { tokens: { cart: { "line-title": { size: 40, tracking: "wider", clamp: "2" } } } } },
   "review 4: every node kind under a dark summary and a dark line, in every state": { states: "all", privatePages: { tokens: { cart: { summary: DARK, lines: DARK, "ui.banner.warning/cart.line.after": { background: "#3a2a0a", text: "#fde68a", border: "#f59e0b" } } } } },
   // A dark page in a theme that shows dark colours: the dark rows write every cell the light rows write (else the
