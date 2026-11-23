@@ -60690,7 +60690,7 @@ export type PostApiV1AdminSettingsThemeTemplateError = PostApiV1AdminSettingsThe
 
 export type PostApiV1AdminSettingsThemeTemplateResponses = {
     /**
-     * The draft's new revision and what the switch did
+     * The draft's new revision, what the switch did and the template's handles the store lacks
      */
     200: {
         success: true;
@@ -60699,6 +60699,7 @@ export type PostApiV1AdminSettingsThemeTemplateResponses = {
             basePublishedRevision: number;
             updatedAt: string | null;
             plan: ThemeTemplateSwitchPlan;
+            unresolved: Array<ThemeUnresolvedHandle>;
         };
     };
 };

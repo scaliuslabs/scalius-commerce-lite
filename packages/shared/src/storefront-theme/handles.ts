@@ -5,7 +5,11 @@
 // applied or listed. Three forms, anywhere in the value:
 //
 //   - a product source `{ "kind": "category" | "collection", "handle": "laptops" }`
-//     becomes `{ kind, categoryId | collectionId: <id> }`;
+//     becomes the form the place it sits in takes: `{ kind, categoryId |
+//     collectionId: <id> }` in a core section's settings, the string
+//     `category:<id>` / `collection:<id>` inside an app's values (an app
+//     section's, a skin's, a product app block's: the `products` setting's
+//     source form, `PLUGIN_PRODUCT_SOURCE`);
 //   - a string `@category:<handle>` or `@collection:<handle>` (in a section's
 //     id list: `categoryIds`, `collectionIds`) becomes the id;
 //   - a link `/collections/@<handle>` or `/categories/@<handle>` (with an
@@ -41,8 +45,21 @@ function validHandle(handle: string): boolean {
   return handle.length <= HANDLE_MAX_LENGTH && HANDLE_PATTERN.test(handle);
 }
 
-/** The handle reference a value is, with how to rewrite it, or null. */
-function referenceOf(value: unknown): { ref: StorefrontHandleRef; rewrite: (id: string) => unknown } | null {
+/**
+ * An app's values: the `values` of an `{ app, values }` part (an app
+ * section's settings, a skin, a product app block). A product source inside
+ * takes the app setting form there.
+ */
+function isAppPart(value: Record<string, unknown>): boolean {
+  return typeof value.app === "string" && isRecord(value.values);
+}
+
+/**
+ * The handle reference a value is, with how to rewrite it, or null. `inApp`:
+ * the value sits in an app's values, where a product source is the string
+ * `<kind>:<id>`.
+ */
+function referenceOf(value: unknown, inApp = false): { ref: StorefrontHandleRef; rewrite: (id: string) => unknown } | null {
   if (typeof value === "string") {
     const id = ID_REFERENCE.exec(value);
     if (id && validHandle(id[2]!)) return { ref: { kind: id[1] as StorefrontHandleKind, handle: id[2]! }, rewrite: (resolved) => resolved };
@@ -62,7 +79,7 @@ function referenceOf(value: unknown): { ref: StorefrontHandleRef; rewrite: (id: 
   const kind = value.kind;
   return {
     ref: { kind, handle: value.handle },
-    rewrite: (resolved) => (kind === "category" ? { kind, categoryId: resolved } : { kind, collectionId: resolved }),
+    rewrite: (resolved) => inApp ? `${kind}:${resolved}` : kind === "category" ? { kind, categoryId: resolved } : { kind, collectionId: resolved },
   };
 }
 
@@ -88,14 +105,15 @@ export function storefrontHandleKey(ref: StorefrontHandleRef): string {
 }
 
 /**
- * The value with every handle reference replaced by what it names, and the
- * references the lookup could not resolve (left in place). The input is not
- * changed.
+ * The value with every handle reference replaced by what it names, in the
+ * form the place it sits in takes, and the references the lookup could not
+ * resolve (left in place). The one resolver for templates, page presets and
+ * section-settings writes. The input is not changed.
  */
 export function resolveStorefrontHandles(value: unknown, lookup: StorefrontHandleLookup): { value: unknown; unresolved: StorefrontHandleRef[] } {
   const unresolved = new Map<string, StorefrontHandleRef>();
-  const walk = (node: unknown): unknown => {
-    const reference = referenceOf(node);
+  const walk = (node: unknown, inApp: boolean): unknown => {
+    const reference = referenceOf(node, inApp);
     if (reference) {
       const id = lookup(reference.ref);
       if (id === null) {
@@ -104,11 +122,14 @@ export function resolveStorefrontHandles(value: unknown, lookup: StorefrontHandl
       }
       return reference.rewrite(id);
     }
-    if (Array.isArray(node)) return node.map(walk);
-    if (isRecord(node)) return Object.fromEntries(Object.entries(node).map(([key, child]) => [key, walk(child)]));
+    if (Array.isArray(node)) return node.map((child) => walk(child, inApp));
+    if (isRecord(node)) {
+      const app = isAppPart(node);
+      return Object.fromEntries(Object.entries(node).map(([key, child]) => [key, walk(child, inApp || (app && key === "values"))]));
+    }
     return node;
   };
-  const resolved = walk(value);
+  const resolved = walk(value, false);
   return { value: resolved, unresolved: [...unresolved.values()] };
 }
 

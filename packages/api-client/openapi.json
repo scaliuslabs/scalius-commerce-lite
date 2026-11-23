@@ -212433,7 +212433,7 @@
           "Admin - Settings"
         ],
         "summary": "Switch the theme draft to another template (it goes live only when the draft is published)",
-        "description": "The design the store last had on that template comes back if there is one; otherwise the template's look and homepage take the merchant's content by section type, and a section it has no place for stays on the homepage, hidden. The draft it replaces is kept as a restore point (reason `template`) and as the design of the template it leaves. `plan` says which sections moved, stayed hidden or left the homepage.",
+        "description": "The design the store last had on that template comes back if there is one; otherwise the template's look and homepage take the merchant's content by section type, and a section it has no place for stays on the homepage, hidden. The draft it replaces is kept as a restore point (reason `template`) and as the design of the template it leaves. `plan` says which sections moved, stayed hidden or left the homepage. An app template's catalogue handles resolve against the store; a homepage section naming one the store lacks is left out and listed in `unresolved`.",
         "operationId": "dashboard.theme.template_switch",
         "requestBody": {
           "required": true,
@@ -212467,7 +212467,7 @@
         },
         "responses": {
           "200": {
-            "description": "The draft's new revision and what the switch did",
+            "description": "The draft's new revision, what the switch did and the template's handles the store lacks",
             "content": {
               "application/json": {
                 "schema": {
@@ -212497,13 +212497,21 @@
                         },
                         "plan": {
                           "$ref": "#/components/schemas/ThemeTemplateSwitchPlan"
+                        },
+                        "unresolved": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ThemeUnresolvedHandle"
+                          },
+                          "maxItems": 200
                         }
                       },
                       "required": [
                         "revision",
                         "basePublishedRevision",
                         "updatedAt",
-                        "plan"
+                        "plan",
+                        "unresolved"
                       ]
                     }
                   },

@@ -45,6 +45,7 @@ import { ok } from "../../utils/api-response";
 import { AppError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { conflictResponse, errorResponses, successEnvelope } from "../../schemas/responses";
 import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
+import { themeUnresolvedHandleApiSchema } from "../../schemas/storefront-theme";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
 import { requestActorId } from "./request-actor";
 
@@ -77,12 +78,6 @@ const sectionSchema = z.object({
   hidden: z.boolean(),
   settings: z.record(z.string(), z.unknown()).openapi({ description: "The section's settings as the theme document stores them (an app section: its own values)." }),
 }).openapi("ThemeSection");
-
-const unresolvedSchema = z.object({
-  kind: z.enum(["category", "collection"]),
-  handle: z.string(),
-  sectionId: z.string().nullable(),
-}).openapi("ThemeUnresolvedHandle");
 
 function issuesError(error: z.ZodError, prefix: string): ValidationError {
   const issue = error.issues[0];
@@ -213,7 +208,7 @@ app.openapi(createRoute({
           schema: successEnvelope(z.object({
             theme: themeSchema,
             template: z.string(),
-            unresolved: z.array(unresolvedSchema).max(200),
+            unresolved: z.array(themeUnresolvedHandleApiSchema).max(200),
           })),
         },
       },
@@ -285,14 +280,7 @@ app.openapi(createRoute({
   if ((body.page === "landing") !== (body.slug !== undefined)) {
     throw new ValidationError("Name a landing page's slug exactly when page is landing.", { field: "slug" });
   }
-  const lookup = await readThemeHandleLookup(db, [body.settings]);
-  const resolved = resolveStorefrontHandles(body.settings, lookup);
-  const missing = resolved.unresolved[0];
-  if (missing) {
-    throw new AppError(422, "handle_unresolved", `No ${missing.kind} has the handle ${missing.handle}.`, { unresolved: resolved.unresolved.slice(0, 20) });
-  }
-  const patch = resolved.value as Record<string, unknown>;
-  const workspace = await getThemeWorkspace(db);
+  const [lookup, workspace] = await Promise.all([readThemeHandleLookup(db, [body.settings]), getThemeWorkspace(db)]);
   pagePreconditions(workspace, body);
   const theme = structuredClone(workspace.draft.theme);
   const sections = body.page === "home" ? theme.pages.home : theme.pages.landing[body.slug!]?.sections;
@@ -301,7 +289,15 @@ app.openapi(createRoute({
   if (index < 0) throw new AppError(404, "section_not_found", "No section with that id is on the page.");
   const current = sections[index]!;
   const stored = current.settings as Record<string, unknown>;
-  const settings = current.type === "app"
+  const isApp = current.type === "app";
+  // The patch resolves where it lands, so a handle takes its section's form (an app's values: `category:<id>`).
+  const resolved = resolveStorefrontHandles(isApp ? { app: stored.app, values: body.settings } : body.settings, lookup);
+  const missing = resolved.unresolved[0];
+  if (missing) {
+    throw new AppError(422, "handle_unresolved", `No ${missing.kind} has the handle ${missing.handle}.`, { unresolved: resolved.unresolved.slice(0, 20) });
+  }
+  const patch = (isApp ? (resolved.value as { values: unknown }).values : resolved.value) as Record<string, unknown>;
+  const settings = isApp
     ? { ...stored, values: { ...((stored.values as Record<string, unknown> | undefined) ?? {}), ...patch } }
     : { ...stored, ...patch };
   const parsed = storefrontSectionSchema.safeParse({ ...current, settings });
