@@ -2,6 +2,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   SESSION_TTL_SECONDS,
+  hashCustomerSessionToken,
   buildSetCookieHeader,
   getCookieConfig,
   sendAccountPhoneCode,
@@ -116,7 +117,7 @@ const verifyAccountPhoneCodeRoute = createRoute({
 
 app.openapi(verifyAccountPhoneCodeRoute, async (c) => {
   setPrivateNoStoreHeaders(c);
-  const { session } = await requireCustomerSession(c);
+  const { session, token } = await requireCustomerSession(c);
   if (!session.customerId) throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
   const env = c.env as unknown as Record<string, unknown>;
   const { code, phone, currentCode } = c.req.valid("json");
@@ -127,13 +128,14 @@ app.openapi(verifyAccountPhoneCodeRoute, async (c) => {
     phone,
     currentCode,
     sessionHashKey: getCustomerSessionHashKey(env),
+    callerSessionTokenHash: await hashCustomerSessionToken(token, getCustomerSessionHashKey(env)),
     encryptionKey: getCredentialEncryptionKey(env),
     credentialEncryptionKey: getCredentialEncryptionKey(env),
   });
   // Every session of the account ended, this one too: the new one replaces its cookie.
   const { sameSite, domainAttr } = getCookieConfig(c.env.STOREFRONT_URL as string | undefined, c.env.CUSTOMER_AUTH_COOKIE_DOMAIN as string | undefined);
   c.header("Set-Cookie", buildSetCookieHeader(proof.session.token, SESSION_TTL_SECONDS, domainAttr, sameSite), { append: true });
-  if (proof.notice) await sendAuthOtp(c, db, proof.notice);
+  for (const notice of proof.notices) await sendAuthOtp(c, db, notice);
   const { movedOrders } = proof;
   const added = movedOrders === 0 ? "" : movedOrders === 1 ? " 1 order was added to your account." : ` ${movedOrders} orders were added to your account.`;
   return ok(c, { movedOrders, message: `Your phone number is verified. You were signed out on other devices.${added}` });

@@ -2117,6 +2117,32 @@ export type CheckoutAttributeApps = Array<{
     };
 }>;
 
+export type OrderLineProperty = {
+    key: string;
+    /**
+     * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
+     */
+    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
+    label: string;
+    value: string;
+    displayValue: string;
+    price: number;
+    priceMinor: number;
+    appId?: string;
+    /**
+     * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
+     */
+    textRevision?: string;
+    /**
+     * The revision of the words the buyer answered (absent: none named).
+     */
+    revision?: string;
+    confirmation?: {
+        text: string;
+    };
+    details?: Array<string>;
+};
+
 export type OrderLineExtras = {
     review?: OrderLineReviewExtra;
     downloads?: Array<OrderLineDownloadExtra>;
@@ -2200,6 +2226,29 @@ export type OrderLineWarrantyExtra = {
     } | null;
 };
 
+/**
+ * What an app's `cart.line_prices` charged on this row ("Protection ৳350"), from the order's real lines.
+ */
+export type BuyerLineAddOn = {
+    appId: string | null;
+    title: string;
+    total: number;
+    /**
+     * What the row's lines were charged for it, exactly.
+     */
+    totalMinor: number;
+    amount: number | null;
+    /**
+     * Per unit (`per: unit`) or per bundle unit (`per: bundle`), when one amount is exact for every unit; null: show `totalMinor`.
+     */
+    amountMinor: number | null;
+    /**
+     * From what the line froze: `bundle` for a kit's or an expanded bundle's add-on (on its anchor item's row), else `unit`.
+     */
+    per: 'unit' | 'bundle';
+    details?: Array<string>;
+};
+
 export type BuyerPaymentRecovery = {
     eligible: boolean;
     /**
@@ -2264,7 +2313,7 @@ export type CustomerAccountSummary = {
     buyerUi: Array<{
         appId: string;
         releaseId: string;
-        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'order.line.after' | 'account.overview' | 'account.profile';
         ui: {
             type: 'page';
             title?: string;
@@ -3362,6 +3411,10 @@ export type StorefrontPlacedOffer = {
     requiresCustomization: boolean;
     availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
     kit: StorefrontKit | null;
+    /**
+     * The offered SKU's storefront-visible custom fields, as `variants[].customFields` carries the page's own SKUs' (a chip from a flag).
+     */
+    customFields: Array<StorefrontCustomField>;
 };
 
 /**
@@ -3374,14 +3427,10 @@ export type StorefrontKit = {
     components: Array<{
         variantId: string;
         productId: string;
-        productName: string;
         /**
-         * Its product page; null when that page is not public.
+         * In the reader's language.
          */
-        productSlug: string | null;
-        imageUrl: string | null;
-        imageMediaId: string | null;
-        imageAlt: string | null;
+        productName: string;
         /**
          * The SKU's chosen option values (platform, format), in option order.
          */
@@ -3389,7 +3438,17 @@ export type StorefrontKit = {
             name: string;
             value: string;
         }>;
+        /**
+         * Its units in one kit.
+         */
         quantity: number;
+        imageUrl: string | null;
+        imageMediaId: string | null;
+        imageAlt: string | null;
+        /**
+         * Its product page; null when that page is not public.
+         */
+        productSlug: string | null;
         /**
          * How the item reaches the buyer, from its own fulfilment setting: shipped or picked up, performed, a licence key, or a file. The theme words it.
          */
@@ -3464,6 +3523,32 @@ export type ProductReviews = {
     summary: PublicReviewSummary;
     items: Array<PublicReview>;
     nextCursor: string | null;
+};
+
+/**
+ * One included item of a kit: its name and option values in the reader's language, its units in one kit and its picture.
+ */
+export type KitItem = {
+    variantId: string;
+    productId: string;
+    /**
+     * In the reader's language.
+     */
+    productName: string;
+    /**
+     * The SKU's chosen option values (platform, format), in option order.
+     */
+    options: Array<{
+        name: string;
+        value: string;
+    }>;
+    /**
+     * Its units in one kit.
+     */
+    quantity: number;
+    imageUrl: string | null;
+    imageMediaId: string | null;
+    imageAlt: string | null;
 };
 
 export type BuyerWarrantyClaim = {
@@ -6382,6 +6467,75 @@ export type OrderActionState = {
     reason: 'refund_in_progress' | 'courier_check' | 'payment_in_progress' | 'on_hold' | 'status' | 'handed_over' | 'cancel_needs_refund' | 'payment_unsettled' | 'cash_not_collected' | 'money_due' | 'not_all_sent' | 'nothing_to_hand_over' | 'not_cash_on_delivery' | 'deposit_not_paid' | 'nothing_due' | 'cash_settled' | 'nothing_to_refund' | 'not_pickup' | 'already_ready' | null;
 };
 
+/**
+ * One order line as staff read it: its money, frozen entries, fulfilment and extras.
+ */
+export type AdminOrderLine = {
+    /**
+     * How the order line reaches the buyer, frozen when the order is placed.
+     */
+    fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
+    fulfilledQuantity: number;
+    properties: Array<OrderLineProperty>;
+    propertiesPrice: number;
+    propertiesPriceMinor: number;
+    baseUnitPriceMinor: number | null;
+    id: string;
+    productId: string;
+    variantId: string | null;
+    quantity: number;
+    price: number;
+    productName: string | null;
+    productImage: string | null;
+    variantLabel: string | null;
+    inventoryTracked: boolean;
+    unitPriceMinor: number | null;
+    lineSubtotalMinor: number | null;
+    discountAmountMinor: number | null;
+    taxableAmountMinor: number | null;
+    taxAmountMinor: number;
+    extras?: OrderLineExtras;
+};
+
+export type OrderRefundAttempt = {
+    id: string;
+    orderId: string;
+    amount: number;
+    currency: string;
+    gateway: string;
+    status: string;
+    providerStatus: string | null;
+    active: boolean;
+    severity: 'info' | 'success' | 'warning' | 'danger';
+    label: string;
+    message: string;
+    createdAt: NullableTimestamp;
+    updatedAt: NullableTimestamp;
+    nextProbeAt: NullableTimestamp;
+    lastProbeAt: NullableTimestamp;
+    refundedAt: NullableTimestamp;
+    failedAt: NullableTimestamp;
+    /**
+     * The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it.
+     */
+    providerProcessing?: boolean;
+    /**
+     * A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded.
+     */
+    locksOrder?: boolean;
+    reason?: string;
+    refundPaymentId?: string;
+    sourcePaymentId?: string;
+    sourceTransactionId?: string | null;
+    refundReference?: string;
+    providerRefundId?: string | null;
+    providerCorrelationId?: string | null;
+    allocationIndex?: number;
+    allocationCount?: number;
+    attempts?: number;
+    lastError?: string | null;
+};
+
 export type WarrantyClaim = {
     id: string;
     status: 'open' | 'in_progress' | 'resolved' | 'rejected';
@@ -6712,7 +6866,7 @@ export type AppSummary = {
      * Where the app shows content on the buyer's cart, checkout, receipt and account pages (storefront extensions).
      */
     extensions: Array<{
-        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'order.line.after' | 'account.overview' | 'account.profile';
         /**
          * The app's data the extension reads to draw its content.
          */
@@ -14951,7 +15105,12 @@ export type GetApiV1CustomerAuthOrdersByIdData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `run`: the apps draw their blocks for the order's slots (`buyerUi`), one run per slot. Only the account order page's own read asks; absent (Buy again, an ownership check), no app runs and `buyerUi` is empty.
+         */
+        buyerUi?: 'run';
+    };
     url: '/api/v1/customer-auth/orders/{id}';
 };
 
@@ -14994,7 +15153,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'order.line.after' | 'account.overview' | 'account.profile';
                 ui: {
                     type: 'page';
                     title?: string;
@@ -15692,6 +15851,10 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 variantLabel: string | null;
                 unitPrice: number;
                 lineTotal: number;
+                /**
+                 * The row's units at their unit prices (`lineTotal` in minor units).
+                 */
+                unitsTotalMinor: number;
                 unitPriceMinor: number | null;
                 lineSubtotalMinor: number | null;
                 discountAmountMinor: number | null;
@@ -15702,30 +15865,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                  */
                 fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
                 fulfilledQuantity: number;
-                properties: Array<{
-                    key: string;
-                    /**
-                     * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
-                     */
-                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
-                    label: string;
-                    value: string;
-                    displayValue: string;
-                    price: number;
-                    priceMinor: number;
-                    appId?: string;
-                    /**
-                     * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
-                     */
-                    textRevision?: string;
-                    /**
-                     * The revision of the words the buyer answered (absent: none named).
-                     */
-                    revision?: string;
-                    confirmation?: {
-                        text: string;
-                    };
-                }>;
+                properties: Array<OrderLineProperty>;
                 propertiesPrice: number;
                 propertiesPriceMinor: number;
                 baseUnitPriceMinor: number | null;
@@ -15742,6 +15882,10 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     units: number | null;
                     perUnit: number | null;
                 } | null;
+                /**
+                 * Every app add-on the row was charged, exactly; empty: none. The app's own line answers are in `properties` (entries with its `appId`); an add-on is never in `properties` unless it is what each unit pays.
+                 */
+                addOns: Array<BuyerLineAddOn>;
                 createdAt: NullableTimestamp;
                 [key: string]: unknown;
             }>;
@@ -15931,12 +16075,16 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
             paymentRecovery: BuyerPaymentRecovery;
             buyerView: BuyerOrderDetailView;
             giftCardTenders: Array<OrderGiftCardTender>;
+            /**
+             * The apps' add-ons as summary rows from the order's real lines: draw Subtotal as `itemsSubtotalMinor`, then each row.
+             */
             addOns: {
                 itemsSubtotalMinor: number;
                 rows: Array<{
                     appId: string | null;
                     title: string;
                     amountMinor: number;
+                    details?: Array<string>;
                 }>;
             };
         };
@@ -23999,6 +24147,10 @@ export type GetApiV1OrdersReceiptByIdData = {
          * `omit` skips deciding the payment the buyer may make (its gateway and settings reads): the status poll needs only the order's kind.
          */
         paymentRecovery?: 'include' | 'omit';
+        /**
+         * `run`: the apps draw their blocks for the receipt's slots (`buyerUi`), one run per slot. Only the page's own read asks; absent (a status poll, any other read), no app runs and `buyerUi` is empty.
+         */
+        buyerUi?: 'run';
     };
     url: '/api/v1/orders/receipt/{id}';
 };
@@ -24023,7 +24175,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 buyerUi: Array<{
                     appId: string;
                     releaseId: string;
-                    target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                    target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'order.line.after' | 'account.overview' | 'account.profile';
                     ui: {
                         type: 'page';
                         title?: string;
@@ -24779,6 +24931,18 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     overdue: boolean;
                 } | null;
                 giftCardTenders: Array<OrderGiftCardTender>;
+                /**
+                 * The apps' add-ons as summary rows from the order's real lines: draw Subtotal as `itemsSubtotalMinor`, then each row.
+                 */
+                addOns: {
+                    itemsSubtotalMinor: number;
+                    rows: Array<{
+                        appId: string | null;
+                        title: string;
+                        amountMinor: number;
+                        details?: Array<string>;
+                    }>;
+                };
                 createdAt: string | null;
                 updatedAt: string | null;
                 items: Array<{
@@ -24804,34 +24968,27 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                      */
                     fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
                     fulfilledQuantity: number;
-                    properties: Array<{
-                        key: string;
-                        /**
-                         * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
-                         */
-                        type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
-                        label: string;
-                        value: string;
-                        displayValue: string;
-                        price: number;
-                        priceMinor: number;
-                        appId?: string;
-                        /**
-                         * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
-                         */
-                        textRevision?: string;
-                        /**
-                         * The revision of the words the buyer answered (absent: none named).
-                         */
-                        revision?: string;
-                        confirmation?: {
-                            text: string;
-                        };
-                    }>;
+                    properties: Array<OrderLineProperty>;
                     propertiesPrice: number;
                     propertiesPriceMinor: number;
                     baseUnitPriceMinor: number | null;
                     extras?: OrderLineExtras;
+                    bundle: {
+                        id: string;
+                        title: string;
+                        kind: 'expand' | 'merge' | 'kit';
+                        kit: {
+                            variantId: string;
+                            productId: string;
+                        } | null;
+                        anchor: boolean;
+                        units: number | null;
+                        perUnit: number | null;
+                    } | null;
+                    /**
+                     * Every app add-on the row was charged, exactly; empty: none. The app's own line answers are in `properties` (entries with its `appId`); an add-on is never in `properties` unless it is what each unit pays.
+                     */
+                    addOns: Array<BuyerLineAddOn>;
                 }>;
                 supportRequests: Array<{
                     id: string;
@@ -25170,7 +25327,7 @@ export type PostApiV1OrdersCartValidationResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'order.line.after' | 'account.overview' | 'account.profile';
                 ui: {
                     type: 'page';
                     title?: string;
@@ -25892,54 +26049,8 @@ export type PostApiV1OrdersCartValidationResponses = {
                 baseUnitPrice: number;
                 propertiesPrice: number;
                 propertiesPriceMinor: number;
-                properties: Array<{
-                    key: string;
-                    /**
-                     * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
-                     */
-                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
-                    label: string;
-                    value: string;
-                    displayValue: string;
-                    price: number;
-                    priceMinor: number;
-                    appId?: string;
-                    /**
-                     * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
-                     */
-                    textRevision?: string;
-                    /**
-                     * The revision of the words the buyer answered (absent: none named).
-                     */
-                    revision?: string;
-                    confirmation?: {
-                        text: string;
-                    };
-                }>;
-                adjustments: Array<{
-                    key: string;
-                    /**
-                     * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
-                     */
-                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
-                    label: string;
-                    value: string;
-                    displayValue: string;
-                    price: number;
-                    priceMinor: number;
-                    appId?: string;
-                    /**
-                     * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
-                     */
-                    textRevision?: string;
-                    /**
-                     * The revision of the words the buyer answered (absent: none named).
-                     */
-                    revision?: string;
-                    confirmation?: {
-                        text: string;
-                    };
-                }>;
+                properties: Array<OrderLineProperty>;
+                adjustments: Array<OrderLineProperty>;
                 /**
                  * The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them.
                  */
@@ -25966,6 +26077,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                 availableQuantity: number | null;
                 productImageMediaId: string | null;
                 productImage: string | null;
+                /**
+                 * A kit line's items, in the kit's order: each one's name and option values in the page's language, its units in one kit and its picture. Null on any other line.
+                 */
+                kitItems: Array<KitItem> | null;
             }>;
             subtotal: number;
             /**
@@ -25979,6 +26094,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                     title: string;
                     amount: number;
                     amountMinor: number;
+                    /**
+                     * What the row opens to: its lines' detail lines, in order; absent: none.
+                     */
+                    details?: Array<string>;
                 }>;
             };
             currencyCode?: string;
@@ -26249,7 +26368,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'order.line.after' | 'account.overview' | 'account.profile';
                 ui: {
                     type: 'page';
                     title?: string;
@@ -26905,6 +27024,10 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     title: string;
                     amount: number;
                     amountMinor: number;
+                    /**
+                     * What the row opens to: its lines' detail lines, in order; absent: none.
+                     */
+                    details?: Array<string>;
                 }>;
             };
             shippingMinor: number;
@@ -27096,55 +27219,9 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                  * How the order line reaches the buyer, frozen when the order is placed.
                  */
                 fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
-                properties: Array<{
-                    key: string;
-                    /**
-                     * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
-                     */
-                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
-                    label: string;
-                    value: string;
-                    displayValue: string;
-                    price: number;
-                    priceMinor: number;
-                    appId?: string;
-                    /**
-                     * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
-                     */
-                    textRevision?: string;
-                    /**
-                     * The revision of the words the buyer answered (absent: none named).
-                     */
-                    revision?: string;
-                    confirmation?: {
-                        text: string;
-                    };
-                }>;
+                properties: Array<OrderLineProperty>;
                 propertiesPriceMinor: number;
-                adjustments: Array<{
-                    key: string;
-                    /**
-                     * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
-                     */
-                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
-                    label: string;
-                    value: string;
-                    displayValue: string;
-                    price: number;
-                    priceMinor: number;
-                    appId?: string;
-                    /**
-                     * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
-                     */
-                    textRevision?: string;
-                    /**
-                     * The revision of the words the buyer answered (absent: none named).
-                     */
-                    revision?: string;
-                    confirmation?: {
-                        text: string;
-                    };
-                }>;
+                adjustments: Array<OrderLineProperty>;
                 /**
                  * The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them.
                  */
@@ -43834,6 +43911,23 @@ export type GetApiV1AdminCustomersByIdResponses = {
             accountClaimedAt: NullableTimestamp;
             kind: 'account' | 'guest' | 'merchant';
             latestOrderName: string | null;
+            /**
+             * On the customer read (not the history page's header).
+             */
+            signIn?: {
+                phoneProven: boolean;
+                emailProven: boolean;
+                recovery: {
+                    /**
+                     * Which of the customer's contacts recovers the account (the phone or the email shown above).
+                     */
+                    method: 'phone' | 'email';
+                    /**
+                     * Unix seconds: after it the recovery contact reaches nothing.
+                     */
+                    expiresAt: number;
+                } | null;
+            };
             totalOrders: number;
             totalSpent: number;
             lastOrderAt: NullableTimestamp;
@@ -44091,6 +44185,85 @@ export type PostApiV1AdminCustomersByIdEraseResponses = {
 };
 
 export type PostApiV1AdminCustomersByIdEraseResponse = PostApiV1AdminCustomersByIdEraseResponses[keyof PostApiV1AdminCustomersByIdEraseResponses];
+
+export type PostApiV1AdminCustomersByIdResetSignInData = {
+    /**
+     * The one recovery contact: a phone or an email.
+     */
+    body: {
+        phone: string;
+    } | {
+        email: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/reset-sign-in';
+};
+
+export type PostApiV1AdminCustomersByIdResetSignInErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminCustomersByIdResetSignInError = PostApiV1AdminCustomersByIdResetSignInErrors[keyof PostApiV1AdminCustomersByIdResetSignInErrors];
+
+export type PostApiV1AdminCustomersByIdResetSignInResponses = {
+    /**
+     * Reset
+     */
+    200: {
+        success: true;
+        data: {
+            recovery: 'phone' | 'email';
+            /**
+             * Unix seconds: after it the recovery contact reaches nothing.
+             */
+            expiresAt: number;
+            recoveryDays: number;
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersByIdResetSignInResponse = PostApiV1AdminCustomersByIdResetSignInResponses[keyof PostApiV1AdminCustomersByIdResetSignInResponses];
 
 export type GetApiV1AdminCustomersByIdAddressesData = {
     body?: never;
@@ -44743,6 +44916,23 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 accountClaimedAt: NullableTimestamp;
                 kind: 'account' | 'guest' | 'merchant';
                 latestOrderName: string | null;
+                /**
+                 * On the customer read (not the history page's header).
+                 */
+                signIn?: {
+                    phoneProven: boolean;
+                    emailProven: boolean;
+                    recovery: {
+                        /**
+                         * Which of the customer's contacts recovers the account (the phone or the email shown above).
+                         */
+                        method: 'phone' | 'email';
+                        /**
+                         * Unix seconds: after it the recovery contact reaches nothing.
+                         */
+                        expiresAt: number;
+                    } | null;
+                };
                 totalOrders: number;
                 totalSpent: number;
                 lastOrderAt: NullableTimestamp;
@@ -72758,55 +72948,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
             updatedAt: string | number;
             deletedAt: NullableTimestamp;
             itemCount: number;
-            items: Array<{
-                /**
-                 * How the order line reaches the buyer, frozen when the order is placed.
-                 */
-                fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
-                fulfilledQuantity: number;
-                properties: Array<{
-                    key: string;
-                    /**
-                     * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
-                     */
-                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
-                    label: string;
-                    value: string;
-                    displayValue: string;
-                    price: number;
-                    priceMinor: number;
-                    appId?: string;
-                    /**
-                     * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
-                     */
-                    textRevision?: string;
-                    /**
-                     * The revision of the words the buyer answered (absent: none named).
-                     */
-                    revision?: string;
-                    confirmation?: {
-                        text: string;
-                    };
-                }>;
-                propertiesPrice: number;
-                propertiesPriceMinor: number;
-                baseUnitPriceMinor: number | null;
-                id: string;
-                productId: string;
-                variantId: string | null;
-                quantity: number;
-                price: number;
-                productName: string | null;
-                productImage: string | null;
-                variantLabel: string | null;
-                inventoryTracked: boolean;
-                unitPriceMinor: number | null;
-                lineSubtotalMinor: number | null;
-                discountAmountMinor: number | null;
-                taxableAmountMinor: number | null;
-                taxAmountMinor: number;
-                extras?: OrderLineExtras;
-            }>;
+            items: Array<AdminOrderLine>;
             latestShipment: {
                 id: string;
                 providerId: string | null;
@@ -72848,44 +72990,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 staleProcessing: boolean;
                 updatedAt: NullableTimestamp;
             };
-            refundAttempts: Array<{
-                id: string;
-                orderId: string;
-                amount: number;
-                currency: string;
-                gateway: string;
-                status: string;
-                providerStatus: string | null;
-                active: boolean;
-                severity: 'info' | 'success' | 'warning' | 'danger';
-                label: string;
-                message: string;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                nextProbeAt: NullableTimestamp;
-                lastProbeAt: NullableTimestamp;
-                refundedAt: NullableTimestamp;
-                failedAt: NullableTimestamp;
-                /**
-                 * The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it.
-                 */
-                providerProcessing?: boolean;
-                /**
-                 * A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded.
-                 */
-                locksOrder?: boolean;
-                reason?: string;
-                refundPaymentId?: string;
-                sourcePaymentId?: string;
-                sourceTransactionId?: string | null;
-                refundReference?: string;
-                providerRefundId?: string | null;
-                providerCorrelationId?: string | null;
-                allocationIndex?: number;
-                allocationCount?: number;
-                attempts?: number;
-                lastError?: string | null;
-            }>;
+            refundAttempts: Array<OrderRefundAttempt>;
             activeRefundOperation: {
                 active: true;
                 status: string;
@@ -73276,30 +73381,7 @@ export type GetApiV1AdminOrdersByIdItemsResponses = {
              */
             fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
             fulfilledQuantity: number;
-            properties: Array<{
-                key: string;
-                /**
-                 * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
-                 */
-                type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
-                label: string;
-                value: string;
-                displayValue: string;
-                price: number;
-                priceMinor: number;
-                appId?: string;
-                /**
-                 * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
-                 */
-                textRevision?: string;
-                /**
-                 * The revision of the words the buyer answered (absent: none named).
-                 */
-                revision?: string;
-                confirmation?: {
-                    text: string;
-                };
-            }>;
+            properties: Array<OrderLineProperty>;
             propertiesPrice: number;
             propertiesPriceMinor: number;
             baseUnitPriceMinor: number | null;
@@ -73383,44 +73465,7 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 createdAt: string | number;
                 updatedAt: string | number;
             } | null;
-            refundAttempts: Array<{
-                id: string;
-                orderId: string;
-                amount: number;
-                currency: string;
-                gateway: string;
-                status: string;
-                providerStatus: string | null;
-                active: boolean;
-                severity: 'info' | 'success' | 'warning' | 'danger';
-                label: string;
-                message: string;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                nextProbeAt: NullableTimestamp;
-                lastProbeAt: NullableTimestamp;
-                refundedAt: NullableTimestamp;
-                failedAt: NullableTimestamp;
-                /**
-                 * The provider took the refund and is completing it: the money is on its way, and only another refund of it or a dispute's settling waits for it.
-                 */
-                providerProcessing?: boolean;
-                /**
-                 * A refund holds the order's status, fulfilment, courier booking and archive: its outcome is still open, or its money is being recorded.
-                 */
-                locksOrder?: boolean;
-                reason?: string;
-                refundPaymentId?: string;
-                sourcePaymentId?: string;
-                sourceTransactionId?: string | null;
-                refundReference?: string;
-                providerRefundId?: string | null;
-                providerCorrelationId?: string | null;
-                allocationIndex?: number;
-                allocationCount?: number;
-                attempts?: number;
-                lastError?: string | null;
-            }>;
+            refundAttempts: Array<OrderRefundAttempt>;
             activeRefundOperation: {
                 active: true;
                 status: string;
@@ -73896,30 +73941,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                      * How the order line reaches the buyer, frozen when the order is placed.
                      */
                     fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
-                    properties: Array<{
-                        key: string;
-                        /**
-                         * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
-                         */
-                        type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
-                        label: string;
-                        value: string;
-                        displayValue: string;
-                        price: number;
-                        priceMinor: number;
-                        appId?: string;
-                        /**
-                         * An app input whose words the merchant writes, or with a choice that needs confirmation: the revision of the words in `label`.
-                         */
-                        textRevision?: string;
-                        /**
-                         * The revision of the words the buyer answered (absent: none named).
-                         */
-                        revision?: string;
-                        confirmation?: {
-                            text: string;
-                        };
-                    }>;
+                    properties: Array<OrderLineProperty>;
                     /**
                      * The store bundle (kit) this line was sold in, as frozen at checkout; null for any other line. A bundle's lines change together, in whole bundles (`kit_amended_in_part`).
                      */

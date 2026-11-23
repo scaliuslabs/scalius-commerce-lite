@@ -78,18 +78,18 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `event-drain-lapsed-backlog-5-apps-3-webhooks` | 30 | 49 | 39 | 52 | 0 | - |
 | `order-3-line-commit-subscribers-0` | 14 | 68 | 54 | 57 | 16 | - |
 | `order-3-line-commit-subscribers-3` | 27 | 86 | 72 | 81 | 16 | - |
-| `order-3-line-commit-subscribers-8` | 27 | 86 | 82 | 98 | 16 | - |
+| `order-3-line-commit-subscribers-8` | 27 | 86 | 82 | 101 | 16 | - |
 | `order-status-change-subscribers-1` | 24 | 44 | 15 | 41 | 1 | - |
-| `order-refund-subscribers-1` | 36 | 64 | 49 | 56 | 3 | - |
+| `order-refund-subscribers-1` | 36 | 63 | 49 | 58 | 3 | - |
 | `order-status-change-subscribers-3` | 27 | 49 | 20 | 48 | 1 | - |
-| `order-refund-subscribers-3` | 35 | 62 | 61 | 76 | 3 | - |
+| `order-refund-subscribers-3` | 35 | 61 | 61 | 78 | 3 | - |
 | `order-3-line-commit-app-subscriber` | 24 | 83 | 61 | 66 | 16 | - |
 | `order-cancel-stock-subscribers-0` | 23 | 56 | 23 | 55 | 7 | - |
 | `order-full-refund-cancel-subscribers-0` | 25 | 60 | 30 | 49 | 5 | - |
 | `order-cancel-stock-subscribers-1` | 35 | 75 | 37 | 75 | 7 | - |
 | `order-full-refund-cancel-subscribers-1` | 37 | 80 | 64 | 82 | 5 | - |
 | `order-cancel-stock-subscribers-3` | 34 | 73 | 41 | 79 | 7 | - |
-| `order-full-refund-cancel-subscribers-3` | 36 | 78 | 78 | 106 | 5 | - |
+| `order-full-refund-cancel-subscribers-3` | 36 | 77 | 78 | 108 | 5 | - |
 
 <!-- free-plan-budgets:end -->
 

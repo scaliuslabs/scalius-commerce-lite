@@ -30,12 +30,14 @@ import {
     setDefaultCustomerAddress,
     updateCustomerAddress,
 } from "@scalius/core/modules/customers";
+import { resetCustomerSignIn, SIGN_IN_RECOVERY_DAYS, type SignInRecoveryContact } from "@scalius/core/modules/customers";
+import { parseContactPhone } from "@scalius/shared/customer-utils";
 import { fromMinor } from "@scalius/shared/money";
 import { contactPhoneSql, customers, customerHistory, orders, user } from "@scalius/database/schema";
 import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
 import { eq, sql, isNull, isNotNull, and } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
-import { ForbiddenError, NotFoundError } from "../../utils/api-error";
+import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { customerListFilterQuery, customerListFiltersFromQuery, customerMatchingSchema, readCustomerSlice } from "./customer-marketing";
 import { matchingResultSchema, requireOneSelection, type MatchingResult } from "../../schemas/bulk-matching";
 import { planLimits } from "@scalius/shared/plan-limits";
@@ -54,7 +56,7 @@ import { requestPaymentProviders } from "../../plugins/providers/payment";
 import { drainCustomerErasureAfterResponse } from "../../background/customer-erasure";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { timestampSchema, nullableTimestampSchema, optionalNullableTimestampSchema } from "../../schemas/timestamps";
-import { requestActorId, requestStaffUser } from "./request-actor";
+import { requestActorId, requestAppId, requestStaffUser } from "./request-actor";
 const app = adminRouter();
 
 /** The signed-in staff member, recorded as the author of customer changes. */
@@ -490,6 +492,63 @@ app.openapi(eraseCustomerRoute, async (c) => {
     const result = await eraseCustomer(db, { customerId: id, actorId: actor.id, encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>) });
     if (!result.complete) await drainCustomerErasureAfterResponse(c, db, result.customerId);
     return ok(c, result);
+});
+
+// ── Sign-in reset: the one action that changes how a customer signs in ──
+
+const resetSignInRoute = createRoute({
+    operationId: "dashboard.customers.reset_sign_in",
+    method: "post",
+    path: "/{id}/reset-sign-in",
+    tags: ["Admin - Customers"],
+    summary: "Reset how a customer signs in, to one recovery contact",
+    description: `For a customer who lost every way to sign in. In one step: every proven phone and email of the account stops signing in, its linked sign-in apps are removed, it is signed out everywhere, and the one contact named here (a phone or an email) becomes its recovery contact. For ${SIGN_IN_RECOVERY_DAYS} days, and only while the account proves nothing else, a sign-in code to that contact signs into this account and proves it. Refused (409 \`recovery_contact_taken\`) when the contact signs in to another account, live or closed, or is another account's recovery contact. Staff with the sensitive reset permission only; never an app; an agent always waits for approval. Ordinary customer edits never change a proven contact (409 \`contact_is_sign_in\`).`,
+    request: {
+        params: z.object({ id: z.string().min(1).max(128) }),
+        body: {
+            required: true,
+            content: {
+                "application/json": {
+                    schema: z.union([
+                        z.object({ phone: z.string().trim().min(7).max(32) }).strict(),
+                        z.object({ email: z.string().trim().email().max(254) }).strict(),
+                    ]).openapi({ description: "The one recovery contact: a phone or an email." }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: "Reset",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                recovery: z.enum(["phone", "email"]),
+                expiresAt: z.number().int().openapi({ description: "Unix seconds: after it the recovery contact reaches nothing." }),
+                recoveryDays: z.number().int(),
+            })) } },
+        },
+        ...errorResponses,
+        409: conflictResponse,
+    },
+});
+
+app.openapi(resetSignInRoute, async (c) => {
+    c.header("Cache-Control", "private, no-store");
+    if (requestAppId(c)) throw new ForbiddenError("An app cannot change how a customer signs in.");
+    const staff = requestStaffUser(c);
+    if (!staff?.id) throw new ForbiddenError("Sign in again to reset a customer's sign-in.");
+    const agent = c.get("agentPrincipal") as { grantId?: string; ownerUserId?: string } | undefined;
+    const actorId = agent?.grantId ? `agent:${agent.grantId}:${agent.ownerUserId ?? staff.id}` : staff.id;
+    const body = c.req.valid("json") as { phone?: string; email?: string };
+    let contact: SignInRecoveryContact;
+    if (body.phone !== undefined) {
+        const parsed = parseContactPhone(body.phone);
+        if (!parsed.ok) throw new ValidationError(parsed.message, { field: "phone", reason: parsed.reason });
+        contact = { phone: parsed.value };
+    } else {
+        contact = { email: body.email! };
+    }
+    const result = await resetCustomerSignIn(c.get("db"), c.req.valid("param").id, { contact, actorId });
+    return ok(c, { ...result, recoveryDays: SIGN_IN_RECOVERY_DAYS });
 });
 
 // ── The address book (MARKETS-DESIGN D7, Shopify's customer addresses) ──

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a9991d78-c80f-455e-946e-0c004d78179b",
+  "id": "e0829939-e1c9-493b-a720-6f753e662896",
   "prevId": "c2e416b4-6804-49cb-ae49-edda3a2316d8",
   "tables": {
     "account": {
@@ -7761,15 +7761,15 @@
           "notNull": false,
           "autoincrement": false
         },
-        "phone_staff_set_at": {
-          "name": "phone_staff_set_at",
-          "type": "integer",
+        "sign_in_recovery": {
+          "name": "sign_in_recovery",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "email_staff_set_at": {
-          "name": "email_staff_set_at",
+        "sign_in_recovery_at": {
+          "name": "sign_in_recovery_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -7873,21 +7873,21 @@
           ],
           "isUnique": false
         },
-        "customers_staff_phone_idx": {
-          "name": "customers_staff_phone_idx",
+        "customers_recovery_phone_idx": {
+          "name": "customers_recovery_phone_idx",
           "columns": [
             "phone"
           ],
           "isUnique": false,
-          "where": "\"customers\".\"phone_staff_set_at\" IS NOT NULL AND \"customers\".\"deleted_at\" IS NULL"
+          "where": "\"customers\".\"sign_in_recovery\" = 'phone' AND \"customers\".\"deleted_at\" IS NULL"
         },
-        "customers_staff_email_idx": {
-          "name": "customers_staff_email_idx",
+        "customers_recovery_email_idx": {
+          "name": "customers_recovery_email_idx",
           "columns": [
             "lower(\"email\")"
           ],
           "isUnique": false,
-          "where": "\"customers\".\"email_staff_set_at\" IS NOT NULL AND \"customers\".\"deleted_at\" IS NULL"
+          "where": "\"customers\".\"sign_in_recovery\" = 'email' AND \"customers\".\"deleted_at\" IS NULL"
         },
         "customers_phone_idx": {
           "name": "customers_phone_idx",
@@ -36114,7 +36114,7 @@
           }
         }
       },
-      "customers_staff_email_idx": {
+      "customers_recovery_email_idx": {
         "columns": {
           "lower(\"email\")": {
             "isExpression": true

@@ -462,6 +462,15 @@ export const PERMISSION_METADATA: Record<
     category: "Customers",
     isSensitive: false,
   },
+  [PERMISSIONS.CUSTOMERS_RESET_SIGN_IN]: {
+    name: PERMISSIONS.CUSTOMERS_RESET_SIGN_IN,
+    displayName: "Reset Customer Sign-in",
+    description: "Change how a customer signs in: sign them out everywhere and name one contact they recover with",
+    resource: "customers",
+    action: "reset_sign_in",
+    category: "Customers",
+    isSensitive: true,
+  },
   [PERMISSIONS.CUSTOMERS_SYNC]: {
     name: PERMISSIONS.CUSTOMERS_SYNC,
     displayName: "Sync Customers",

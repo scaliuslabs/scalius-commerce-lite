@@ -4,6 +4,7 @@ export * from "./addresses";
 export * from "./customer-identity";
 export * from "./customer-auth.service";
 export * from "./account-totals";
+export * from "./sign-in-recovery";
 export * from "./otp-delivery-receipts";
 export * from "./customer-auth-rate-limit";
 export * from "./customer-auth-otp-challenges";

@@ -1,5 +1,7 @@
 import { presenceKey } from "~/lib/realtime/store";
 import { lazy, Suspense, useState } from "react";
+import { Lock } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatPhone } from "~/lib/phone-display";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -28,11 +30,11 @@ import type { CustomerDto } from "@/lib/api-query-options/customers";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";
-import { useMessages } from "~/i18n";
+import { formatDateTime, useMessages } from "~/i18n";
 import { customerPageMessages } from "~/i18n/customer-page";
 import { customerAddressesMessages } from "~/i18n/customer-addresses";
 import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
-import { readCustomerPhoneConflict, type CustomerPhoneConflict } from "~/lib/admin-api-conflicts";
+import { readCustomerPhoneConflict, readCustomerSignInRefusal, type CustomerPhoneConflict } from "~/lib/admin-api-conflicts";
 import { CustomerTrashNotice, type TrashedCustomer } from "./CustomerTrashNotice";
 import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
@@ -51,6 +53,7 @@ const CustomerMarketingCard = lazy(() => import("./customers/CustomerMarketingCa
 const CustomerPaymentMethodsCard = lazy(() => import("./customers/CustomerPaymentMethodsCard").then((module) => ({ default: module.CustomerPaymentMethodsCard })));
 const CustomerTaxExemptionCard = lazy(() => import("./customers/CustomerTaxExemptionCard").then((module) => ({ default: module.CustomerTaxExemptionCard })));
 const CustomerEraseCard = lazy(() => import("./customers/CustomerEraseCard").then((module) => ({ default: module.CustomerEraseCard })));
+const ResetSignInDialog = lazy(() => import("./customers/ResetSignInDialog").then((module) => ({ default: module.ResetSignInDialog })));
 
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
@@ -66,7 +69,26 @@ interface CustomerFormProps {
     taxExempt?: boolean;
     taxExemptionId?: string | null;
     addresses?: CustomerDto["addresses"];
+    /** How the account signs in: a proven contact changes only by a sign-in reset. */
+    signIn?: CustomerDto["signIn"];
   };
+}
+
+/** A contact the customer signs in with: shown, never edited here (a sign-in reset changes it). */
+function SignInContact({ label, value }: { label: string; value: string | null | undefined }) {
+  const t = useMessages(customerPageMessages);
+  return (
+    <ReadOnlyValue
+      label={label}
+      value={value ? (
+        <span className="inline-flex items-center gap-2">
+          <Lock aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+          {value}
+        </span>
+      ) : null}
+      help={t("signInLocked")}
+    />
+  );
 }
 
 /** Under the phone field after a save: links the customer that already uses the number. */
@@ -143,6 +165,15 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
   const canErase = isEdit && isSuperAdmin && !erased && !record?.mergedInto;
   const canSave = !trashed && (isEdit ? hasPermission(PERMISSIONS.CUSTOMERS_EDIT) : canCreate);
   const canViewHistory = isEdit && hasPermission(PERMISSIONS.CUSTOMERS_VIEW_HISTORY);
+  // How the account signs in: a proven phone or email is locked; only a sign-in reset changes it.
+  const signIn = isEdit && record?.kind === "account" && !erased ? record.signIn : undefined;
+  const canResetSignIn = Boolean(signIn) && !trashed && hasPermission(PERMISSIONS.CUSTOMERS_RESET_SIGN_IN);
+  // The recovery contact reaches the account only until it expires and while it proves nothing else.
+  const recovery = signIn?.recovery && !signIn.phoneProven && !signIn.emailProven && signIn.recovery.expiresAt * 1000 > Date.now()
+    ? signIn.recovery
+    : null;
+  const [resetOpen, setResetOpen] = useState(false);
+  const queryClient = useQueryClient();
   const [phoneConflict, setPhoneConflict] = useState<CustomerPhoneConflict | null>(null);
   const [addressProblems, setAddressProblems] = useState<AddressProblem[] | null>(null);
   const form = useForm<CustomerFormValues>({
@@ -189,6 +220,13 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
         setAddressProblems(refused);
         return ta("addressInvalid");
       }
+      const signInRefusal = readCustomerSignInRefusal(error);
+      if (signInRefusal?.reason === "contact_is_sign_in") {
+        // The contact was proven since this page loaded: keep the saved one, and reload so it shows locked.
+        form.resetField(signInRefusal.field);
+        if (defaultValues?.id) void queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(defaultValues.id) });
+        return t(signInRefusal.field === "phone" ? "contactIsSignInPhone" : "contactIsSignInEmail");
+      }
       const conflict = readCustomerPhoneConflict(error);
       if (!conflict) return undefined;
       setPhoneConflict(conflict);
@@ -218,9 +256,11 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <FormField
             control={form.control}
             name="phone"
-            render={({ field, fieldState }) => canSave ? (
+            render={({ field, fieldState }) => signIn?.phoneProven ? (
+              <SignInContact label={t("phone")} value={savedPhone ? formatPhone(savedPhone) : null} />
+            ) : canSave ? (
               <div className="flex flex-col gap-2">
-                <Field label={t("phone")} help={record?.kind === "account" ? t("accountContactHint") : phoneRequired ? undefined : t("phoneOptionalHint")} error={fieldState.error?.message}>
+                <Field label={t("phone")} help={phoneRequired ? undefined : t("phoneOptionalHint")} error={fieldState.error?.message}>
                   <AdminPhoneInput
                     value={field.value}
                     onChange={(value) => {
@@ -239,8 +279,10 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <FormField
             control={form.control}
             name="email"
-            render={({ field, fieldState }) => canSave ? (
-              <Field label={t("email")} help={record?.kind === "account" ? t("accountContactHint") : undefined} error={fieldState.error?.message}>
+            render={({ field, fieldState }) => signIn?.emailProven ? (
+              <SignInContact label={t("email")} value={defaultValues?.email} />
+            ) : canSave ? (
+              <Field label={t("email")} error={fieldState.error?.message}>
                 {/* Email is optional: clearing it removes it. */}
                 <Input
                   type="email"
@@ -253,8 +295,39 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
               <ReadOnlyValue label={t("email")} value={defaultValues?.email} />
             )}
           />
+          {recovery || canResetSignIn ? (
+            <div className="flex flex-col items-start gap-3 border-t pt-4">
+              {recovery ? (
+                <p className="text-body text-muted-foreground">
+                  {t(recovery.method === "phone" ? "signInRecoveryPhone" : "signInRecoveryEmail", {
+                    date: formatDateTime(new Date(recovery.expiresAt * 1000), { dateStyle: "medium", timeStyle: "short" }),
+                  })}
+                </p>
+              ) : null}
+              {canResetSignIn ? (
+                <Button type="button" variant="outline" onClick={() => setResetOpen(true)}>{t("resetSignIn")}</Button>
+              ) : null}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
+      {canResetSignIn && defaultValues?.id && record ? (
+        <Suspense fallback={null}>
+          <ResetSignInDialog
+            customerId={defaultValues.id}
+            name={customerTitle(record, t).title}
+            phone={savedPhone || null}
+            email={defaultValues.email ?? null}
+            open={resetOpen}
+            onOpenChange={setResetOpen}
+            // The reset saved this contact: the field shows it as saved, not as an unsaved edit.
+            onReset={(contact) => {
+              if ("phone" in contact) form.resetField("phone", { defaultValue: normalizeAdminPhone(contact.phone) });
+              else form.resetField("email", { defaultValue: contact.email });
+            }}
+          />
+        </Suspense>
+      ) : null}
       {isEdit && defaultValues?.id ? (
         <CustomerAddressesCard customerId={defaultValues.id} addresses={record?.addresses ?? []} canEdit={canSave} />
       ) : canSave && address ? (

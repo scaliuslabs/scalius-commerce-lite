@@ -18,6 +18,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { fromMinor } from "@scalius/shared/money";
 import { customerKind, guestRecordForContact, normalizeContactEmail } from "./customer-identity";
+import { SIGN_IN_RECOVERY_DAYS } from "./sign-in-recovery";
 import { storedPhone } from "@scalius/shared/customer-auth-policy";
 import { currentMarketingContactSql, segmentWhereSql } from "./customer-segments";
 import {
@@ -567,6 +568,17 @@ export async function getCustomerDetail(db: Database, id: string, relatedObjects
         mergedInto,
         kind: customerKind(customer),
         latestOrderName: latest?.name ?? null,
+        // How the account signs in, for the dashboard: a proven contact is locked to ordinary edits.
+        signIn: {
+            phoneProven: Boolean(customer.accountClaimedAt && customer.phoneVerifiedAt),
+            emailProven: Boolean(customer.accountClaimedAt && customer.emailVerifiedAt),
+            recovery: customer.signInRecovery && customer.signInRecoveryAt
+                ? {
+                    method: customer.signInRecovery,
+                    expiresAt: Math.floor(new Date(customer.signInRecoveryAt).getTime() / 1000) + SIGN_IN_RECOVERY_DAYS * 86_400,
+                }
+                : null,
+        },
         totalSpent: spend ? paidSpendAmount(spend) : 0,
         tags,
         /** The address book, the default first. */
@@ -624,19 +636,23 @@ export async function updateCustomer(
     // A save that changes nothing writes nothing: no bumped timestamp, no empty "Updated" entry.
     if (taxUnchanged && (Object.keys(next) as Array<keyof typeof next>).every((key) => (next[key] ?? null) === (existing[key] ?? null))) return;
 
-    // A contact staff change on an account signs nothing in until the buyer proves it with a
-    // code (its proof then reaches this account: `resolveProofOwner`), and every session of the
-    // account ends in the same batch: whoever held one, the owner signs in again by the new contact.
-    const phoneMoved = Boolean(existing.accountClaimedAt) && data.phone != null && storedPhone(data.phone) !== existing.phone;
-    const emailMoved = Boolean(existing.accountClaimedAt) && data.email !== undefined
-        && normalizeContactEmail(data.email) !== normalizeContactEmail(existing.email);
-    const contactProof = {
-        ...(phoneMoved ? { phoneVerifiedAt: null, phoneStaffSetAt: sql`unixepoch()` } : {}),
-        ...(emailMoved ? { emailVerifiedAt: null, emailStaffSetAt: normalizeContactEmail(data.email) ? sql`unixepoch()` : null } : {}),
-    };
+    // An ordinary edit never touches how a buyer signs in: a proven sign-in contact is refused
+    // (only a sign-in reset changes it, `resetCustomerSignIn`); an unproven contact is a plain edit
+    // that stays unproven, so it can never sign anyone in until the buyer proves it.
+    const phoneMoved = data.phone != null && storedPhone(data.phone) !== existing.phone;
+    const emailMoved = data.email !== undefined && normalizeContactEmail(data.email) !== normalizeContactEmail(existing.email);
+    const provenMoved = existing.accountClaimedAt
+        ? (phoneMoved && existing.phoneVerifiedAt ? "phone" : emailMoved && existing.emailVerifiedAt ? "email" : null)
+        : null;
+    if (provenMoved) {
+        throw new AppError(409, "contact_is_sign_in", `The customer signs in with this ${provenMoved}. Reset their sign-in to change it.`, {
+            field: provenMoved,
+            reason: "contact_is_sign_in",
+            allowed: ["reset_sign_in"],
+        });
+    }
     // Only the fields the caller sent: a field another writer changed since the read keeps its value.
     const changes = {
-        ...contactProof,
         ...(data.name != null ? { name: data.name } : {}),
         ...(data.email !== undefined ? { email: data.email } : {}),
         ...(data.phone != null ? { phone: storedPhone(data.phone) } : {}),
@@ -659,10 +675,6 @@ export async function updateCustomer(
             customerNotErasedGuard(db, id),
             ...(expectsTax ? [buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${customers} WHERE ${customers.id} = ${id} AND ${taxAsRead})`, "CUSTOMER_TAX_MOVED")] : []),
             db.update(customers).set({ ...changes, updatedAt: sql`unixepoch()` }).where(and(eq(customers.id, id), live)),
-            ...(phoneMoved || emailMoved
-                ? [db.update(customerSessions).set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
-                    .where(and(eq(customerSessions.customerId, id), isNull(customerSessions.revokedAt)))]
-                : []),
             historyFromLiveRow(db, id, "updated", actorId, live),
         ]);
     } catch (error) {

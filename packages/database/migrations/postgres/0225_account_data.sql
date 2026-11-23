@@ -16,13 +16,13 @@ CREATE INDEX "orders_account_owner_customer_id_idx" ON "orders" ("account_owner_
 --> statement-breakpoint
 ALTER TABLE "customers" ADD COLUMN "whatsapp" text COLLATE "C";
 --> statement-breakpoint
-ALTER TABLE "customers" ADD "phone_staff_set_at" bigint;
+ALTER TABLE "customers" ADD COLUMN "sign_in_recovery" text COLLATE "C";
 --> statement-breakpoint
-ALTER TABLE "customers" ADD "email_staff_set_at" bigint;
+ALTER TABLE "customers" ADD "sign_in_recovery_at" bigint;
 --> statement-breakpoint
-CREATE INDEX "customers_staff_phone_idx" ON "customers" ("phone") WHERE "customers"."phone_staff_set_at" IS NOT NULL AND "customers"."deleted_at" IS NULL;
+CREATE INDEX "customers_recovery_phone_idx" ON "customers" ("phone") WHERE "customers"."sign_in_recovery" = 'phone' AND "customers"."deleted_at" IS NULL;
 --> statement-breakpoint
-CREATE INDEX "customers_staff_email_idx" ON "customers" (lower("email")) WHERE "customers"."email_staff_set_at" IS NOT NULL AND "customers"."deleted_at" IS NULL;
+CREATE INDEX "customers_recovery_email_idx" ON "customers" (lower("email")) WHERE "customers"."sign_in_recovery" = 'email' AND "customers"."deleted_at" IS NULL;
 --> statement-breakpoint
 ALTER TABLE "conversations" ADD COLUMN "buyer_account_id" text COLLATE "C";
 --> statement-breakpoint
@@ -182,4 +182,4 @@ UPDATE conversations SET buyer_account_id = (SELECT owner_order.account_owner_cu
     WHERE owner_order.id = conversations.order_id AND owner_order.deleted_at IS NULL)
     WHERE subject_type <> 'store' AND order_id IS NOT NULL;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (225, '0225_account_data', 'ef1e87b9cd080048fdb6dcb3af52ed109c236c8e1784d88c3835cabec032936e');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (225, '0225_account_data', 'f76ff9050be91af445dff1559824da488b900ee695c7bcad2c9f5f4b0f8fed4c');

@@ -35,9 +35,10 @@ const HEADER = `-- What a buyer's account reads, at any order count (rules/order
 --   row per storefront store thread and one per order-scoped thread. Its
 --   index, and \`conversations.topic\`: the merchant topic a buyer chose.
 -- - \`customers.whatsapp\`: the buyer's WhatsApp number when not the phone.
--- - \`customers.phone_staff_set_at\` / \`email_staff_set_at\`: a contact staff set on
---   an account, which signs nothing in until the buyer proves it with a code
---   (the proof then reaches this account), with their partial indexes.`;
+-- - \`customers.sign_in_recovery\` / \`sign_in_recovery_at\`: the one recovery
+--   contact a sign-in reset named; for 7 days, and only while the account
+--   proves nothing, a sign-in code to it reaches the account. Partial indexes
+--   on the marked phone and email.`;
 
 /** Drizzle's statements in the file it wrote, without breakpoints, comments, triggers, backfills or the ledger row. */
 function drizzleStatements(migration: string): string[] {

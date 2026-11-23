@@ -31,12 +31,14 @@ export const customers = sqliteTable("customers", {
     phoneVerifiedAt: integer("phone_verified_at", { mode: "timestamp" }),
     emailVerifiedAt: integer("email_verified_at", { mode: "timestamp" }),
     /**
-     * Staff set this account's phone or email (0225): until the buyer proves it
-     * with a code it signs nothing in, and the first code that proves it signs
-     * into this account (`resolveProofOwner`), which then clears the mark.
+     * A sign-in reset (0225, `resetCustomerSignIn`): staff named one recovery
+     * contact (`phone` or `email`) after clearing every proof of the account.
+     * For `SIGN_IN_RECOVERY_DAYS` from `sign_in_recovery_at`, and only while
+     * the account proves nothing, a sign-in code to that contact reaches this
+     * account (`resolveProofOwner`), proves it and clears the mark.
      */
-    phoneStaffSetAt: integer("phone_staff_set_at", { mode: "timestamp" }),
-    emailStaffSetAt: integer("email_staff_set_at", { mode: "timestamp" }),
+    signInRecovery: text("sign_in_recovery", { enum: ["phone", "email"] }),
+    signInRecoveryAt: integer("sign_in_recovery_at", { mode: "timestamp" }),
     lastAuthenticatedAt: integer("last_authenticated_at", { mode: "timestamp" }),
     totalOrders: integer("total_orders").notNull().default(0),
     lastOrderAt: integer("last_order_at", { mode: "timestamp" }),
@@ -82,11 +84,11 @@ export const customers = sqliteTable("customers", {
 }, (table) => [
     index("customers_email_idx").on(table.email),
     index("customers_merged_into_idx").on(table.mergedIntoCustomerId),
-    // A staff-set contact awaiting its proof: a sign-in's fallback owner lookup (0225).
-    index("customers_staff_phone_idx").on(table.phone)
-        .where(sql`${table.phoneStaffSetAt} IS NOT NULL AND ${table.deletedAt} IS NULL`),
-    index("customers_staff_email_idx").on(sql`lower(${table.email})`)
-        .where(sql`${table.emailStaffSetAt} IS NOT NULL AND ${table.deletedAt} IS NULL`),
+    // A recovery contact a sign-in reset named: a sign-in's fallback owner lookup (0225).
+    index("customers_recovery_phone_idx").on(table.phone)
+        .where(sql`${table.signInRecovery} = 'phone' AND ${table.deletedAt} IS NULL`),
+    index("customers_recovery_email_idx").on(sql`lower(${table.email})`)
+        .where(sql`${table.signInRecovery} = 'email' AND ${table.deletedAt} IS NULL`),
     index("customers_phone_idx").on(table.phone),
     // Store import dedupe matches emails as typed: trimmed, any case.
     index("customers_email_norm_idx").on(sql`lower(trim(${table.email}))`),

@@ -185,6 +185,7 @@ export const DASHBOARD_WHEN_A: Readonly<Record<string, string>> = {
   "dashboard.customers.create": "Use when adding a new customer record (name, phone, email) by hand.",
   "dashboard.customers.delete": "Use when moving one customer to trash.",
   "dashboard.customers.delete_permanently": "Use when a trashed customer who never ordered must be deleted for good.",
+  "dashboard.customers.reset_sign_in": "Use when a customer lost every way to sign in and the store confirmed who they are: changes how they sign in to one recovery contact.",
   "dashboard.customers.erase": "Use when a customer asks to have their personal data erased (right to erasure): scrubs their contact, addresses and words while orders and money records stay.",
   "dashboard.customers.export": "Use when exporting customers (by tag, segment, subscriber channel or ids) as CSV.",
   "dashboard.customers.get": "Use when reading one customer's profile by id.",
