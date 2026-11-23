@@ -687,7 +687,7 @@ const productEmbeds: EmbedRenderers = {
     props: { product, copy: reviewCopy, formCopy: reviewFormCopy, language: reviewLanguage, storeName: sellerSchemaName },
   }),
   recommendations: () => recommendations.products.length > 0
-    ? { component: RelatedProducts as EmbedRender["component"], props: { recommendations, currencySymbol, currencyCode } }
+    ? { component: RelatedProducts as EmbedRender["component"], props: { recommendations, currencySymbol, currencyCode, placed: true } }
     : null,
   // A placed details module draws whenever it has something, even where the
   // template lists none: the skin that places it draws no description itself.
