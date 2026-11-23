@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import {
   postApiV1AdminDigitalEntitlementsByIdReset,
@@ -17,10 +16,9 @@ import { useMessages } from "~/i18n";
 import { digitalMessages } from "~/i18n/digital";
 import { resourceMessages } from "~/i18n/resource";
 import { apiData } from "~/lib/api";
-import { invalidateOrder, orderErrorMessage } from "~/lib/api-mutations/orders";
+import { orderErrorMessage, useOrderCommand } from "~/lib/api-mutations/orders";
 import { formatOrderTimestamp } from "./formatters";
 import type { DigitalDelivery, LineDownload } from "./digital-lines";
-import { useCommand } from "~/lib/use-command";
 
 /**
  * What the order delivered digitally, per line: each file with "3 of 5
@@ -32,25 +30,23 @@ import { useCommand } from "~/lib/use-command";
 export function DigitalLinesBody({ orderId, delivery }: { orderId: string; delivery: DigitalDelivery }) {
   const t = useMessages(digitalMessages);
   const r = useMessages(resourceMessages);
-  const queryClient = useQueryClient();
   const { lines, accessEnded } = delivery;
   const permissions = useOrderActionPermissions();
   // Resending is an order edit; allowing more downloads and revoking change the buyer's access.
   const canResend = permissions.canEditOrders && !accessEnded;
   const canManage = permissions.canManageDigitalAccess && !accessEnded;
   const [revoking, setRevoking] = useState<LineDownload | null>(null);
-  const done = (message: string) => {
-    toast.success(message);
-    void invalidateOrder(queryClient, orderId);
-  };
+  const done = (message: string) => void toast.success(message);
   const failed = (error: Error) => toast.error(orderErrorMessage(error));
 
-  const reset = useCommand({
+  const reset = useOrderCommand({
+    order: () => orderId,
     mutationFn: (entitlementId: string) => apiData(postApiV1AdminDigitalEntitlementsByIdReset({ path: { id: entitlementId } })),
     onSuccess: () => done(t("downloadsReset")),
     onError: failed,
   });
-  const revoke = useCommand({
+  const revoke = useOrderCommand({
+    order: () => orderId,
     mutationFn: (entitlementId: string) => apiData(postApiV1AdminDigitalEntitlementsByIdRevoke({ path: { id: entitlementId } })),
     onSuccess: () => {
       setRevoking(null);
@@ -59,7 +55,7 @@ export function DigitalLinesBody({ orderId, delivery }: { orderId: string; deliv
     onError: failed,
   });
   // The command's key: a retry after a lost answer replays it; a success ends it.
-  const resend = useCommand({
+  const resend = useOrderCommand({
     mutationFn: (_input: { orderId: string }, requestKey: string) =>
       apiData(postApiV1AdminOrdersByIdDigitalResend({ path: { id: orderId }, body: { requestKey } })),
     onSuccess: () => done(t("resent")),

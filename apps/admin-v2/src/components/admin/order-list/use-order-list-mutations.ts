@@ -23,12 +23,13 @@ import {
   type OrderBulkOutcome,
 } from "./order-bulk-actions";
 
-/** Orders, their details, the home dashboard and stock all change with these actions. */
-function invalidateAfterOrderChange(queryClient: QueryClient) {
-  void queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
-  void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
-  void queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
-  void queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+/**
+ * Orders, their details, the home dashboard and stock all change with these
+ * actions. A command returns this, so it settles once the screen shows them.
+ */
+function invalidateAfterOrderChange(queryClient: QueryClient): Promise<unknown> {
+  return Promise.all([queryKeys.orders.all, queryKeys.dashboard.all, queryKeys.inventory.all, queryKeys.products.all]
+    .map((queryKey) => queryClient.invalidateQueries({ queryKey })));
 }
 
 /**
@@ -130,7 +131,7 @@ export function useArchiveOrdersWithUndo({ canUndo }: { canUndo: boolean }) {
         failed += 1;
       }
     }
-    invalidateAfterOrderChange(queryClient);
+    void invalidateAfterOrderChange(queryClient);
     if (failed > 0) toast.error(t("undoFailed"));
     else toast.success(orders.length === 1 ? t("restoredOne") : t("restoredOther"));
   };
