@@ -1,4 +1,4 @@
-import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
+import { NO_PHONE, phoneOrNull } from "@scalius/shared/customer-auth-policy";
 import type { Database } from "@scalius/database/client";
 import { customers, orders } from "@scalius/database/schema";
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
@@ -69,7 +69,7 @@ function claimRefused(reason: "contact_not_proven" | "contact_mismatch"): AppErr
 function provenContactCondition(customerId: string): SQL {
   return sql`EXISTS (SELECT 1 FROM ${customers} AS claimant WHERE claimant.id = ${customerId}
     AND claimant.erased_at IS NULL AND claimant.deleted_at IS NULL
-    AND ((claimant.phone_verified_at IS NOT NULL AND claimant.phone <> '' AND claimant.phone = ${sql.raw('"orders"."customer_phone"')})
+    AND ((claimant.phone_verified_at IS NOT NULL AND claimant.phone <> ${NO_PHONE} AND claimant.phone = ${sql.raw('"orders"."customer_phone"')})
       OR (claimant.email_verified_at IS NOT NULL AND trim(coalesce(claimant.email, '')) <> ''
         AND lower(trim(claimant.email)) = lower(trim(${sql.raw('"orders"."customer_email"')})))))`;
 }

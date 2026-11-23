@@ -1333,6 +1333,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   digital_asset_uploads: PRIVATE,
   digital_entitlements: PRIVATE,
   digital_licence_keys: PRIVATE,
+  order_line_messages: PRIVATE,
   gift_cards: PRIVATE,
   gift_card_transactions: PRIVATE,
   payouts: PRIVATE,

@@ -51,6 +51,7 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `checkout-20-commit` | 14 | 123 | 173 | 193 | 36 | - |
 | `checkout-99-quote` | 11 | 18 | 0 | 206 | 3 | - |
 | `checkout-99-commit` | 14 | 382 | 726 | 827 | 133 | - |
+| `checkout-kit-commit` | 14 | 74 | 71 | 78 | 18 | - |
 | `admin-order-list` | 3 | 7 | 0 | 54 | 0 | - |
 | `admin-order-list-deep` | 3 | 7 | 0 | 53 | 0 | - |
 | `admin-order-list-gift-cards` | 3 | 7 | 0 | 53 | 0 | - |

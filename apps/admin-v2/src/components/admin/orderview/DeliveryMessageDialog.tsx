@@ -129,6 +129,7 @@ function MessageForm({ line, revealed, revealFailed, save, onClose, onSaved, onC
         <DialogDescription>{t("dialogHelp", { name: line.item.productName || t("unnamedProduct") })}</DialogDescription>
       </DialogHeader>
       <form
+        method="post"
         className="space-y-4"
         noValidate
         onSubmit={(event) => {
