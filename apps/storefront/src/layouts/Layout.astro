@@ -379,7 +379,11 @@ const currencyPriceIncrement = resolvePriceIncrementMinor(currencyCode, layoutDa
 // The colour scheme is the theme's, on <html>, for every buyer and every page
 // (private ones too); the head script settles `system` and the buyer's own
 // choice before the first paint, so the HTML and its caches never vary.
-const paint = themePaint(storefrontTheme, resolvedTheme);
+// A private page drawn from parts shows the theme's page paint only in token mode, where its colour table
+// checks what stands on it: the default look (a compile this build has not made yet, or refused) stands on
+// the page colour, as the save checked it.
+const { pagePaint: _privatePaint, ...unpaintedTokens } = storefrontTheme.tokens;
+const paint = themePaint(privateStyle !== undefined && !privateTokens ? { ...storefrontTheme, tokens: unpaintedTokens } : storefrontTheme, resolvedTheme);
 // The cart drawer's arrangement, words and icons where the theme set them (lib/cart/drawer-plan.ts):
 // the drawer mounts in the browser, so it reads them from the page. The default writes nothing.
 const drawerPlan = libraryPreview ? null : cartDrawerPlan(storefrontTheme, documentLanguage, privateAssetUrls(readStorefrontExtensions(layoutData?.appExtensions)));

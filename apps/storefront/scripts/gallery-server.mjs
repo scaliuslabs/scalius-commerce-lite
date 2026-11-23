@@ -298,7 +298,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       // The private pages' rendered property tests: a generated theme compiled with the store's own
       // compiler (a refusal answers its issues, as a save would) and drawn on the buyer UI cart entry in
       // one of its states, under a palette, colour scheme and page paint, with Noor's chrome when asked (its
-      // header skin dropped with `headerSkin: false`), and a store of two markets (`localization`). The answer
+      // header skin dropped with `headerSkin: false`), a store of two markets (`localization`), and a look an older
+      // checker compiled (`stale`). The answer
       // carries the page's colour table (each row's key, selector and kind) for the coverage walk.
       if (url.pathname === `${GALLERY_PREFIX}/private-theme` && request.method === "POST") {
         const body = JSON.parse(await readBody(request) || "{}");
@@ -318,6 +319,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const context = shared.privatePagesContextOf(theme);
         const compiled = mutation?.compile ? mutation.compile(shared, document, context) : shared.compileStorefrontPrivatePages(document, context);
         if (!compiled.ok) return sendJson(response, 422, { issues: compiled.issues.slice(0, 5) });
+        // A look an older checker compiled (`stale`: between a deploy and the maintenance compile): the page serves the default look.
+        if (body.stale === true) compiled.value.compiled = { ...compiled.value.compiled, sanitizer: 0 };
         const entry = registerPrivatePagesEntry(String(body.id), { ...theme, privatePages: compiled.value }, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true });
         const tables = shared.privatePageTokenMode(compiled.value, "cart") ? galleryTables(shared, compiled.value, context) : [];
         return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables });

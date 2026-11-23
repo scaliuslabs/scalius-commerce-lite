@@ -176,6 +176,12 @@ export const MUTATIONS = {
     cases: ["review 5, B1: the theme's chrome and a 2000px image block with no look of its own"],
     expect: /not sealed/,
   },
+  "R5-S4 the page paint behind the default look": {
+    why: "a cart whose look this build has not compiled serves the default look on the theme's page paint, which no table checked",
+    rewrites: [rewrite("apps/storefront/src/layouts/Layout.astro", "themePaint(privateStyle !== undefined && !privateTokens ? { ...storefrontTheme, tokens: unpaintedTokens } : storefrontTheme, resolvedTheme)", "themePaint(storefrontTheme, resolvedTheme)")],
+    cases: ["review 5, S4: a page paint behind a look this build has not compiled"],
+    expect: /shows a paint of its own/,
+  },
   "P2 a page paint with no tokens draws the store's own page": {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",
     rewrites: [rewrite("packages/shared/src/storefront-theme/private-layout.ts", "painted && privatePageHasOwnPage(page) ? {} : null", "null")],

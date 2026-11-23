@@ -435,7 +435,7 @@ export async function getThemeSettings(db: Database): Promise<ThemeSettingsDocum
  * longer passes keeps its source and serves no compiled look until the
  * merchant saves it again.
  */
-export async function recompilePublishedPrivatePages(db: Database): Promise<"none" | "current" | "recompiled" | "refused" | "unreadable"> {
+export async function recompilePublishedPrivatePages(db: Database): Promise<"none" | "current" | "recompiled" | "refused" | "unreadable" | "raced"> {
   const row = (await selectThemeSettingsRows(db))[0];
   if (!row) return "none";
   // A document this build cannot read is left as it is (the merchant re-saves it); nothing to compile.
@@ -454,9 +454,12 @@ export async function recompilePublishedPrivatePages(db: Database): Promise<"non
   const privatePages = result.ok
     ? result.value
     : { ...filled, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CSS_SANITIZER_VERSION, css: "", refused: true } };
-  await db.update(themeSettings)
+  const written = await db.update(themeSettings)
     .set({ colors: JSON.stringify({ ...theme, privatePages }), updatedAt: sql`unixepoch()` })
-    .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)));
+    .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)))
+    .returning({ id: themeSettings.id });
+  // A publish moved the revision in between: nothing was written, so the version is not settled (tried again next run).
+  if (written.length === 0) return "raced";
   return result.ok ? "recompiled" : "refused";
 }
 

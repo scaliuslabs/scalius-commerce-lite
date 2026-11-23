@@ -72,7 +72,8 @@ export async function requestPostDeployProjectionRebuild(env: Env): Promise<bool
     const { recompilePublishedPrivatePages } = await import("@scalius/core/modules/settings");
     const outcome = await recompilePublishedPrivatePages(db);
     if (outcome !== "none" && outcome !== "current") console.log(`[scheduled] Private pages for this version: ${outcome}`);
-    await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version);
+    // A compile a publish raced wrote nothing: the version stays pending and the next run compiles again.
+    if (outcome !== "raced") await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version);
   } catch (error) {
     console.warn("[scheduled] Private pages compile failed; retried next run", error instanceof Error ? error.name : "unknown");
   }

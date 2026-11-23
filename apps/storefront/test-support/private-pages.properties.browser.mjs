@@ -303,6 +303,9 @@ const REGRESSIONS = {
   // Review 5, B2: the store's controls (the colour scheme switch, the market and language forms) once drew inside the
   // theme's header and footer, where its stylesheet reaches; the regions now hold inert markup only.
   "review 5, B2: the theme's header and footer in a store with a scheme switch and two markets": { request: { noor: true, toggle: true, localization: true }, privatePages: { chrome: "theme", search: "after", css: '[data-free="footer"] select { opacity: 0; position: absolute; inset: 0 } [data-free="header"] button { opacity: 0 }' } },
+  // Review 5, S4: between a deploy and the maintenance compile the default look is served: it stands on the page colour,
+  // never on the theme's page paint, which no table checked it on.
+  "review 5, S4: a page paint behind a look this build has not compiled": { request: { paint: PAINT, scheme: "light", stale: true }, privatePages: { tokens: { cart: { summary: DARK } } } },
   // What the save must refuse (under a mutation that lets one through, the drawing must fail).
   "a stylesheet hiding a host part": { refused: "unscoped_selector", privatePages: { css: '[data-part="summary"] * { display: none } [data-part="details-submit"] * { visibility: hidden }' } },
   "summary rows that do not read on their summary": { refused: "contrast", privatePages: { tokens: { cart: { "summary-rows": { text: "#eeeeee" }, summary: { background: "#ffffff" } } } } },
