@@ -47984,6 +47984,10 @@
                       "maxLength": 500
                     }
                   },
+                  "termsAccepted": {
+                    "type": "boolean",
+                    "description": "The buyer read and agreed to the store's terms (the storefront's terms page), which you showed them. Required (true) when the store's checkout config says `requireTermsAcceptance`: without it submit is refused with `details.reason: terms_acceptance_required`. The order records the agreement and this agent."
+                  },
                   "shippingRateToken": {
                     "type": "string",
                     "nullable": true,
@@ -53892,6 +53896,9 @@
                         "requireFullBillingAddress": {
                           "type": "boolean"
                         },
+                        "requireTermsAcceptance": {
+                          "type": "boolean"
+                        },
                         "allowedCountries": {
                           "type": "array",
                           "items": {
@@ -54061,6 +54068,7 @@
                         "partialPaymentEnabled",
                         "partialPaymentAmount",
                         "requireFullBillingAddress",
+                        "requireTermsAcceptance",
                         "allowedCountries",
                         "allowedCountriesMode",
                         "currency",
@@ -105467,6 +105475,10 @@
                       "channels"
                     ],
                     "additionalProperties": false
+                  },
+                  "termsAccepted": {
+                    "type": "boolean",
+                    "description": "The buyer ticked \"I agree to the terms\". Required (true) when the store asks for it (checkout config `requireTermsAcceptance`): without it the order is refused with `details.reason: terms_acceptance_required`. The order records the agreement."
                   },
                   "trackingSignals": {
                     "type": "object",
@@ -216883,6 +216895,9 @@
                         "requireFullBillingAddress": {
                           "type": "boolean"
                         },
+                        "requireTermsAcceptance": {
+                          "type": "boolean"
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -216895,6 +216910,7 @@
                         "partialPaymentAmount",
                         "autoFulfilMode",
                         "requireFullBillingAddress",
+                        "requireTermsAcceptance",
                         "revision"
                       ]
                     }
@@ -217048,6 +217064,9 @@
                   "requireFullBillingAddress": {
                     "type": "boolean"
                   },
+                  "requireTermsAcceptance": {
+                    "type": "boolean"
+                  },
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 0
@@ -217114,6 +217133,9 @@
                         "requireFullBillingAddress": {
                           "type": "boolean"
                         },
+                        "requireTermsAcceptance": {
+                          "type": "boolean"
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -217126,6 +217148,7 @@
                         "partialPaymentAmount",
                         "autoFulfilMode",
                         "requireFullBillingAddress",
+                        "requireTermsAcceptance",
                         "revision"
                       ]
                     }
@@ -253066,7 +253089,8 @@
                                   "app_event",
                                   "stock_held",
                                   "late_payment",
-                                  "payment_dispute"
+                                  "payment_dispute",
+                                  "terms_accepted"
                                 ]
                               },
                               "body": {
@@ -253281,7 +253305,8 @@
                             "app_event",
                             "stock_held",
                             "late_payment",
-                            "payment_dispute"
+                            "payment_dispute",
+                            "terms_accepted"
                           ]
                         },
                         "body": {
