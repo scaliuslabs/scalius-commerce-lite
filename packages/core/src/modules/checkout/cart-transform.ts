@@ -36,6 +36,14 @@ import { validateCheckoutAttributes } from "./attributes";
 //   (`presentTransformedCart`): one line per buyer line, priced as the sum
 //   of its components, with the buyer's submitted price checked against it.
 //
+// Kits (products/kits.ts) are the store's own expansion through the same
+// rules: a kit line is expanded first, before any app runs, with the kit's
+// price on its bundle (`CartLineBundle.kit`), so an app's operation naming a
+// kit line is skipped (logged), and so is an app expanding a line into a kit:
+// a kit is sold only as its components. Cart validation expands kits itself
+// when no app implements the point (`expandCartKits`), in the reads it
+// already ran.
+//
 // With no active app at the point there is no read and no call.
 
 import type { Database } from "@scalius/database/client";
@@ -43,7 +51,7 @@ import { productVariants } from "@scalius/database/schema";
 import type { FunctionCart, PluginFunctionOutput } from "@scalius/shared/plugins";
 import { LINE_BUNDLE_PROPERTY_KEY, lineAdjustmentProperty, lineBundleProperty, type OrderLineBundle, type ResolvedLineProperty } from "@scalius/shared/line-properties";
 import { aggregateLineAddOns, lineAddOnsOf } from "@scalius/shared/add-on-totals";
-import { and, inArray, isNull } from "drizzle-orm";
+import { and, inArray, isNull, sql } from "drizzle-orm";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
 import { bundleAnchors } from "./app-line-prices";
@@ -146,21 +154,76 @@ export function createCartTransformer(
             return null;
         }
         const results = await apps.run("cart.transform", { cart });
-        if (results.every((result) => result.output.operations.length === 0)) return null;
-        // The product of each component SKU, in one read (live SKUs only).
+        const kits = cartKitExpansions(valid);
+        if (kits.size === 0 && results.every((result) => result.output.operations.length === 0)) return null;
+        // The product of each component SKU, in one read (live SKUs only); a kit is never a component.
         const componentIds = [...new Set(results.flatMap((result) => result.output.operations
             .flatMap((operation) => (operation.op === "expand" ? operation.components.map((component) => component.variantId) : []))))];
         // D1 binds at most 100 parameters: read in sequential chunks of 90.
         const products = new Map<string, string>();
+        const kitSkus = new Set<string>();
         for (let start = 0; start < componentIds.length; start += 90) {
-            const rows = await db.select({ id: productVariants.id, productId: productVariants.productId })
+            const rows = await db.select({
+                id: productVariants.id,
+                productId: productVariants.productId,
+                isKit: sql<number>`EXISTS (SELECT 1 FROM variant_components AS app_kit WHERE app_kit.kit_variant_id = ${productVariants.id})`,
+            })
                 .from(productVariants)
                 .where(and(inArray(productVariants.id, componentIds.slice(start, start + 90)), isNull(productVariants.deletedAt)))
                 .all();
-            for (const row of rows) products.set(row.id, row.productId);
+            for (const row of rows) {
+                if (Number(row.isKit) === 1) kitSkus.add(row.id);
+                else products.set(row.id, row.productId);
+            }
         }
-        return applyCartTransform(items, valid, lineIds, results, products, apps);
+        return applyCartTransform(items, valid, lineIds, results, products, apps, kits, kitSkus);
     };
+}
+
+/** A kit line as the store expands it: its title, components and price per kit. */
+export interface CartKitExpansion {
+    title: string;
+    variantId: string;
+    productId: string;
+    unitPriceMinor: number;
+    priceSource?: StorefrontCartValidatedItem["priceSource"];
+    storeUnitPriceMinor?: number;
+    components: Array<{ variantId: string; productId: string; quantity: number }>;
+}
+
+/** The valid kit lines of a first pass (`kitComponents`), by line index. */
+export function cartKitExpansions(
+    valid: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "productId" | "variantId" | "productName" | "variantLabel" | "baseUnitPriceMinor" | "kitComponents" | "bundle"> & Partial<Pick<StorefrontCartValidatedItem, "priceSource" | "storeUnitPriceMinor">>>,
+): Map<number, CartKitExpansion> {
+    const kits = new Map<number, CartKitExpansion>();
+    for (const line of valid) {
+        if (!line.kitComponents || line.bundle) continue;
+        kits.set(line.index, {
+            title: line.variantLabel ? `${line.productName} (${line.variantLabel})` : line.productName,
+            variantId: line.variantId,
+            productId: line.productId,
+            unitPriceMinor: line.baseUnitPriceMinor,
+            ...(line.priceSource ? { priceSource: line.priceSource } : {}),
+            ...(line.storeUnitPriceMinor !== undefined ? { storeUnitPriceMinor: line.storeUnitPriceMinor } : {}),
+            components: line.kitComponents,
+        });
+    }
+    return kits;
+}
+
+/**
+ * The store's own kits expanded with no app at the point: the first pass's
+ * kit lines, by `applyCartTransform`'s rules. Null when the cart has none.
+ */
+export function expandCartKits(
+    items: readonly StorefrontCartValidationItem[],
+    preliminary: Pick<StorefrontCartValidationResult, "items">,
+): TransformedCart | null {
+    const valid = preliminary.items;
+    const kits = cartKitExpansions(valid);
+    if (kits.size === 0) return null;
+    const lineIds = valid.map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId));
+    return applyCartTransform(items, valid, lineIds, [], new Map(), undefined, kits);
 }
 
 /** The transformed cart by the rules above (pure); null when no operation applies. */
@@ -171,13 +234,45 @@ export function applyCartTransform(
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.transform">, "pluginId" | "output">>,
     componentProducts: ReadonlyMap<string, string>,
     apps?: Pick<CheckoutAppFunctions, "report">,
+    /** The store's kits (`cartKitExpansions`), expanded before any app's operation. */
+    kits: ReadonlyMap<number, CartKitExpansion> = new Map(),
+    /** Component SKUs an app named that are kits: a kit is never a component. */
+    kitSkus: ReadonlySet<string> = new Set(),
 ): TransformedCart | null {
     const lineIndex = new Map(lineIds.map((lineId, position) => [lineId, valid[position]!]));
     const used = new Set<number>();
-    const expanded = new Map<number, { title: string; components: Array<{ variantId: string; productId: string; perUnit: number }>; inputs: Pick<CartLineBundle, "properties" | "canonicalProperties" | "lineInputs"> }>();
+    const expanded = new Map<number, { title: string; components: Array<{ variantId: string; productId: string; perUnit: number }>; inputs: Pick<CartLineBundle, "properties" | "canonicalProperties" | "lineInputs">; kit?: CartLineBundle["kit"] }>();
     const merged = new Map<number, CartLineBundle>();
     let lineCount = items.length;
     const skip = (pluginId: string, message: string) => apps?.report(pluginId, "cart.transform", `${message} It was skipped.`);
+    const bundleInputs = (parent: (typeof valid)[number]) => ({
+        ...(parent.properties.length > 0 ? { properties: parent.properties, canonicalProperties: parent.canonicalProperties ?? [] } : {}),
+        ...(parent.lineInputs?.length ? { lineInputs: parent.lineInputs } : {}),
+    });
+
+    // The store's kits first: a kit line is never an app's to change.
+    for (const parent of valid) {
+        const kit = kits.get(parent.index);
+        if (!kit) continue;
+        // A priced buyer input has no component to charge it; a cart past the line limit stays as it is:
+        // either way the kit line is refused by the final pass, never sold as itself.
+        if ((parent.propertiesPriceMinor ?? 0) > 0 || lineCount - 1 + kit.components.length > CART_TRANSFORM_MAX_LINES) {
+            used.add(parent.index);
+            continue;
+        }
+        lineCount += kit.components.length - 1;
+        used.add(parent.index);
+        expanded.set(parent.index, {
+            title: kit.title,
+            components: kit.components.map((component) => ({ variantId: component.variantId, productId: component.productId, perUnit: component.quantity })),
+            inputs: bundleInputs(parent),
+            kit: {
+                variantId: kit.variantId, productId: kit.productId, unitPriceMinor: kit.unitPriceMinor, components: kit.components.length,
+                ...(kit.priceSource ? { priceSource: kit.priceSource } : {}),
+                ...(kit.storeUnitPriceMinor !== undefined ? { storeUnitPriceMinor: kit.storeUnitPriceMinor } : {}),
+            },
+        });
+    }
 
     for (const result of results) {
         const operations = (result.output as PluginFunctionOutput<"cart.transform">).operations;
@@ -190,6 +285,10 @@ export function applyCartTransform(
                 continue;
             }
             const found = lines as Array<(typeof valid)[number]>;
+            if (found.some((line) => kits.has(line.index))) {
+                skip(result.pluginId, `Operation ${operation.op} names a kit, which the store sells as its components.`);
+                continue;
+            }
             if (new Set(found.map((line) => line.index)).size !== found.length || found.some((line) => used.has(line.index))) {
                 skip(result.pluginId, `Operation ${operation.op} names a line another operation already changed.`);
                 continue;
@@ -212,6 +311,11 @@ export function applyCartTransform(
             }
             const quantities = new Map<string, number>();
             for (const component of operation.components) quantities.set(component.variantId, (quantities.get(component.variantId) ?? 0) + component.quantity);
+            const kitComponent = [...quantities.keys()].find((variantId) => kitSkus.has(variantId));
+            if (kitComponent) {
+                skip(result.pluginId, `Expand names SKU ${kitComponent}, which is a kit: a kit is never a component.`);
+                continue;
+            }
             const unknown = [...quantities.keys()].find((variantId) => !componentProducts.has(variantId));
             if (unknown) {
                 skip(result.pluginId, `Expand names SKU ${unknown}, which does not exist.`);
@@ -228,10 +332,7 @@ export function applyCartTransform(
                 title: operation.title ?? (parent.variantLabel ? `${parent.productName} (${parent.variantLabel})` : parent.productName),
                 components: [...quantities].map(([variantId, perUnit]) => ({ variantId, productId: componentProducts.get(variantId)!, perUnit })),
                 // The buyer's inputs stay the bundle's as a whole, never copied onto a component's own.
-                inputs: {
-                    ...(parent.properties.length > 0 ? { properties: parent.properties, canonicalProperties: parent.canonicalProperties ?? [] } : {}),
-                    ...(parent.lineInputs?.length ? { lineInputs: parent.lineInputs } : {}),
-                },
+                inputs: bundleInputs(parent),
             });
         }
     }
@@ -252,6 +353,7 @@ export function applyCartTransform(
             kind: "expand",
             units: item.quantity,
             ...expansion.inputs,
+            ...(expansion.kit ? { kit: expansion.kit } : {}),
         };
         const components: TransformedCart["expansions"][number]["components"] = [];
         for (const component of expansion.components) {
@@ -289,7 +391,7 @@ export function orderLineBundles(items: ReadonlyArray<Pick<StorefrontCartValidat
         if (!bundle) continue;
         if (bundle.kind === "merge") {
             if (!firstMerged.has(bundle.id)) firstMerged.set(bundle.id, item.index);
-            bundles.set(item.index, { id: bundle.id, title: bundle.title, kind: "merge", anchor: firstMerged.get(bundle.id) === item.index, units: null, perUnit: null });
+            bundles.set(item.index, { id: bundle.id, title: bundle.title, kind: "merge", kit: null, anchor: firstMerged.get(bundle.id) === item.index, units: null, perUnit: null });
             continue;
         }
         // Each component holds `perUnit × units` (applyCartTransform), so the division is exact.
@@ -297,7 +399,10 @@ export function orderLineBundles(items: ReadonlyArray<Pick<StorefrontCartValidat
         const perUnit = units ? item.quantity / units : null;
         const whole = units !== null && perUnit !== null && Number.isSafeInteger(perUnit) && perUnit > 0;
         bundles.set(item.index, {
-            id: bundle.id, title: bundle.title, kind: "expand", anchor: anchors.get(bundle.id)?.index === item.index,
+            // A store kit names itself: its kind and its own SKU and product.
+            id: bundle.id, title: bundle.title, kind: bundle.kit ? "kit" : "expand",
+            kit: bundle.kit ? { variantId: bundle.kit.variantId, productId: bundle.kit.productId } : null,
+            anchor: anchors.get(bundle.id)?.index === item.index,
             units: whole ? units : null, perUnit: whole ? perUnit : null,
         });
     }
@@ -356,10 +461,13 @@ export function presentTransformedCartLines(
         if (components.some((component) => !component.item)) continue;
         const buyer = buyerItems[source]!;
         const bundleUnitMinor = components.reduce((sum, component) => sum + component.item!.unitPriceMinor * component.perUnit, 0);
+        // A SKU's units per bundle unit over all its lines (a kit's item can be two lines).
+        const perSku = new Map<string, number>();
+        for (const component of components) perSku.set(component.item!.variantId, (perSku.get(component.item!.variantId) ?? 0) + component.perUnit);
         const available = components.reduce<number | null>((least, component) => {
             const quantity = component.item!.availableQuantity;
             if (quantity === null) return least;
-            const units = Math.floor(quantity / component.perUnit);
+            const units = Math.floor(quantity / perSku.get(component.item!.variantId)!);
             return least === null ? units : Math.min(least, units);
         }, null);
         const first = components[0]!.item!;
@@ -432,9 +540,16 @@ export function issuesOnBuyerLines(
     transform: TransformedCart,
     buyerItems: readonly StorefrontCartValidationItem[],
 ): StorefrontCartItemIssue[] {
+    // Per position: the SKU's units per bundle unit over its bundle's lines (a kit's item can be two lines), and those lines.
     const perUnitAt = new Map<number, number>();
+    const siblingsAt = new Map<number, Set<number>>();
     for (const expansion of transform.expansions) {
-        for (const component of expansion.components) perUnitAt.set(component.position, component.perUnit);
+        for (const component of expansion.components) {
+            const variantId = transform.items[component.position]?.variantId;
+            const same = expansion.components.filter((other) => transform.items[other.position]?.variantId === variantId);
+            perUnitAt.set(component.position, same.reduce((sum, other) => sum + other.perUnit, 0));
+            siblingsAt.set(component.position, new Set(same.map((other) => other.position)));
+        }
     }
     return issues.map((issue) => {
         const source = transform.items[issue.index]?.sourceIndex ?? issue.index;
@@ -442,13 +557,19 @@ export function issuesOnBuyerLines(
         const buyer = buyerItems[source];
         if (perUnit === undefined || !buyer) return { ...issue, index: source };
         const { availableQuantity: componentAvailable, ...rest } = issue;
-        const available = componentAvailable === undefined ? undefined : Math.floor(componentAvailable / perUnit);
+        // The same SKU on the cart's other lines draws on the same units first.
+        const own = siblingsAt.get(issue.index);
+        const elsewhere = transform.items.reduce((sum, line, position) =>
+            !own?.has(position) && position !== issue.index && line.variantId === issue.variantId ? sum + line.quantity : sum, 0);
+        const available = componentAvailable === undefined ? undefined : Math.floor(Math.max(0, componentAvailable - elsewhere) / perUnit);
         return {
             ...rest,
             index: source,
             cartKey: buyer.cartKey ?? null,
             productId: buyer.productId,
             variantId: buyer.variantId,
+            // The part that stops the bundle, for a client or an agent to name it.
+            componentVariantId: issue.variantId,
             requestedQuantity: buyer.quantity,
             ...(available === undefined ? {} : { availableQuantity: available }),
             action: issue.action === "reduce_quantity" && available !== undefined && available < 1 ? "remove" : issue.action,

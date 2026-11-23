@@ -512,7 +512,10 @@ export interface OrderLineBundle {
   /** The bought bundle, unique within its order: the buyer line's id at checkout (`cart:<index>:<variant>`), the id functions saw. */
   id: string;
   title: string;
-  kind: "expand" | "merge";
+  /** `kit`: the store's kit (a SKU made of other SKUs), sold as its items; `expand` and `merge`: an app's `cart.transform`. */
+  kind: "expand" | "merge" | "kit";
+  /** A kit's own SKU and product, the thing the buyer chose; null for an app's bundle. */
+  kit: { variantId: string; productId: string } | null;
   /**
    * The one line of the bundle its buyer inputs and app add-ons are frozen
    * on: an expanded bundle's component holding the fewest per bundle unit
@@ -533,7 +536,7 @@ export function lineBundleProperty(bundle: OrderLineBundle): ResolvedLinePropert
   const title = bundle.title.slice(0, 200);
   return {
     key: LINE_BUNDLE_PROPERTY_KEY, type: "text", label: LINE_ENTRY_WORDS_EN.lineBundleText, value: title, displayValue: title, priceMinor: 0,
-    bundle: { id: bundle.id, kind: bundle.kind, anchor: bundle.anchor, units: bundle.units, perUnit: bundle.perUnit },
+    bundle: { id: bundle.id, kind: bundle.kind, kit: bundle.kit, anchor: bundle.anchor, units: bundle.units, perUnit: bundle.perUnit },
   };
 }
 
@@ -544,7 +547,8 @@ const positiveCount = (value: unknown): value is number => typeof value === "num
  * plain line, a line frozen before membership was recorded (its `_bundle`
  * entry has the title alone), or a malformed entry. An expanded bundle's
  * units are given only while the line still holds `units × perUnit`
- * (`quantity`): a line whose quantity staff changed since reads them null,
+ * (`quantity`): a line whose quantity staff changed since reads them null
+ * (a store kit, which changes only in whole kits, reads the kits it holds now),
  * never a guess.
  */
 export function readOrderLineBundle(
@@ -553,12 +557,21 @@ export function readOrderLineBundle(
 ): OrderLineBundle | null {
   const entry = frozenEntries(properties).find((candidate) => isRecord(candidate) && candidate.key === LINE_BUNDLE_PROPERTY_KEY);
   if (!isRecord(entry) || typeof entry.value !== "string" || !isRecord(entry.bundle)) return null;
-  const { id, kind, anchor, units, perUnit } = entry.bundle;
+  const { id, kind, anchor, units, perUnit, kit } = entry.bundle;
   if (typeof id !== "string" || id.length === 0 || id.length > 128 || typeof anchor !== "boolean") return null;
-  if (kind === "merge") return { id, title: entry.value, kind, anchor, units: null, perUnit: null };
-  if (kind !== "expand" || !positiveCount(units) || !positiveCount(perUnit)) return null;
+  if (kind === "merge") return { id, title: entry.value, kind, kit: null, anchor, units: null, perUnit: null };
+  if ((kind !== "expand" && kind !== "kit") || !positiveCount(units) || !positiveCount(perUnit)) return null;
+  const kitSku = kind === "kit" && isRecord(kit) && typeof kit.variantId === "string" && kit.variantId.length > 0 && typeof kit.productId === "string" && kit.productId.length > 0
+    ? { variantId: kit.variantId, productId: kit.productId }
+    : null;
+  if (kind === "kit" && !kitSku) return null;
+  // A store kit changes only in whole kits (staff amendments are refused otherwise), and order lines
+  // are frozen: its lines read the kits they hold now. An app's bundle reads them only while unchanged.
+  if (kind === "kit") return quantity % perUnit === 0
+    ? { id, title: entry.value, kind, kit: kitSku, anchor, units: quantity / perUnit, perUnit }
+    : { id, title: entry.value, kind, kit: kitSku, anchor, units: null, perUnit: null };
   const whole = units * perUnit === quantity;
-  return { id, title: entry.value, kind, anchor, units: whole ? units : null, perUnit: whole ? perUnit : null };
+  return { id, title: entry.value, kind, kit: kitSku, anchor, units: whole ? units : null, perUnit: whole ? perUnit : null };
 }
 
 /**

@@ -13,6 +13,7 @@ import {
   assertNoCheckoutRuleErrors,
   createAppLinePricer,
   createCartTransformer,
+  promotionCartLines,
   DELIVERY_ADDRESS_REQUIRED_REASON,
   DELIVERY_RATE_UNAVAILABLE_REASON,
   NO_CHECKOUT_APP_FUNCTIONS,
@@ -759,7 +760,7 @@ async function getLiveContextCustomerPhone(db: Database, row: ContextRow): Promi
  * The one storefront discount path; throws the buyer-facing reason when the
  * code fails. A code only an app answers to (checkout functions, channel
  * "agent") is not "not found": the apps' discount preview claims it, as the
- * storefront's discount preview does. The checkout quote prices it.
+ * storefront's cart check does. The checkout quote prices it.
  */
 async function quoteAgentStorefrontDiscount(
   db: Database,
@@ -769,15 +770,8 @@ async function quoteAgentStorefrontDiscount(
   customerPhone?: string | null,
   apps: CheckoutAppFunctions = NO_CHECKOUT_APP_FUNCTIONS,
 ) {
-  const lines = projection.items.map((item) => ({
-    id: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
-    productId: item.productId,
-    variantId: item.variantId,
-    unitPriceMinor: item.unitPriceMinor,
-    quantity: item.quantity,
-    // Gift-card lines are outside every promotion (Wave B §4.2).
-    ...(item.isGiftCard ? { giftCard: true } : {}),
-  }));
+  // The lines as checkout's promotions read them (a kit's lines as the kit).
+  const lines = promotionCartLines(projection.items);
   const shippingMinor = projection.delivery?.shippingMinor ?? 0;
   // Only a context bound to a live customer session counts as signed in.
   const signedInCustomerId = await getLiveContextCustomerId(db, row);
@@ -818,13 +812,15 @@ async function quoteAgentStorefrontDiscount(
       priceIncrementMinor: projection.money.incrementMinor,
     },
     storeCurrency: functionStoreCurrency(projection.money),
-    lines: lines.map((line) => ({
+    lines: lines.map((line, position) => ({
       lineId: line.id,
       productId: line.productId,
       variantId: line.variantId,
       unitPriceMinor: line.unitPriceMinor,
       quantity: line.quantity,
       ...(line.giftCard ? { giftCard: true } : {}),
+      // A store kit's item lines are one line to apps.
+      bundle: projection.items[position]?.bundle ?? null,
     })),
     platformAllocation: interplay.allocation,
     platformClasses: platformDiscountClasses(interplay),

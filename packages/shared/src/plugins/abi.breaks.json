@@ -1696,5 +1696,47 @@
   "from": "464f3ff4f912b50b",
   "change": "manifest storefront.skins[].settings[][variant 14].fields[][variant 5].default: maxLength tightened to 2048.",
   "reason": "Issue #3 (2026-11-23), pre-release: a url setting's default is bounded at 2048 characters, the bound its saved value already had, with the new store-page url setting (`store: true`)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "403c6ae62b176634",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (issue #5, store kits, 2026-11-22): an order line's bundle names the kit it was bought as, kind \"kit\" and kit: { variantId, productId } (null for an app's bundle), so an app counts a kit like an expanded bundle and can tell which kit was sold."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "20196407e0e2685c",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiInput: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (issue #5 third review, 2026-11-23): a function cart line's bundle may be a store kit, kind \"kit\" with kit: { variantId, productId, sku }; to the functions that read what the buyer chose and pays a kit is one line (its lineId the buyer's kit line), and shipping rates see its item lines naming it. Apps can now price, discount and limit per kit; an answer for an item's SKU never reaches inside a kit."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "20196407e0e2685c",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCart: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (issue #5 third review, 2026-11-23): a function cart line's bundle may be a store kit, kind \"kit\" with kit: { variantId, productId, sku }; to the functions that read what the buyer chose and pays a kit is one line (its lineId the buyer's kit line), and shipping rates see its item lines naming it. Apps can now price, discount and limit per kit; an answer for an item's SKU never reaches inside a kit."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "20196407e0e2685c",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCartLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (issue #5 third review, 2026-11-23): a function cart line's bundle may be a store kit, kind \"kit\" with kit: { variantId, productId, sku }; to the functions that read what the buyer chose and pays a kit is one line (its lineId the buyer's kit line), and shipping rates see its item lines naming it. Apps can now price, discount and limit per kit; an answer for an item's SKU never reaches inside a kit."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "20196407e0e2685c",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_EXTENSION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (issue #5 third review, 2026-11-23): a function cart line's bundle may be a store kit, kind \"kit\" with kit: { variantId, productId, sku }; to the functions that read what the buyer chose and pays a kit is one line (its lineId the buyer's kit line), and shipping rates see its item lines naming it. Apps can now price, discount and limit per kit; an answer for an item's SKU never reaches inside a kit."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "20196407e0e2685c",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (issue #5 third review, 2026-11-23): a function cart line's bundle may be a store kit, kind \"kit\" with kit: { variantId, productId, sku }; to the functions that read what the buyer chose and pays a kit is one line (its lineId the buyer's kit line), and shipping rates see its item lines naming it. Apps can now price, discount and limit per kit; an answer for an item's SKU never reaches inside a kit."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "20196407e0e2685c",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (issue #5 third review, 2026-11-23): a function cart line's bundle may be a store kit, kind \"kit\" with kit: { variantId, productId, sku }; to the functions that read what the buyer chose and pays a kit is one line (its lineId the buyer's kit line), and shipping rates see its item lines naming it. Apps can now price, discount and limit per kit; an answer for an item's SKU never reaches inside a kit."
  }
 ]

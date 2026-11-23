@@ -16730,6 +16730,228 @@
           "isActive"
         ]
       },
+      "StorefrontPlacedOffer": {
+        "type": "object",
+        "properties": {
+          "variantId": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "productSlug": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "value"
+              ]
+            },
+            "maxItems": 5,
+            "description": "The SKU's chosen option values (platform, format), in option order."
+          },
+          "imageUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageMediaId": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageAlt": {
+            "type": "string",
+            "nullable": true
+          },
+          "fulfillmentKind": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "description": "One unit's price in the page's currency (a kit's: its own price)."
+          },
+          "compareAtPrice": {
+            "type": "number",
+            "nullable": true,
+            "description": "A kit's items summed; null for a SKU that is not a kit."
+          },
+          "availabilityBand": {
+            "type": "string",
+            "enum": [
+              "untracked",
+              "out_of_stock",
+              "low_stock",
+              "in_stock"
+            ]
+          },
+          "kit": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StorefrontKit"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "variantId",
+          "productId",
+          "productName",
+          "productSlug",
+          "sku",
+          "options",
+          "imageUrl",
+          "imageMediaId",
+          "imageAlt",
+          "fulfillmentKind",
+          "price",
+          "compareAtPrice",
+          "availabilityBand",
+          "kit"
+        ],
+        "description": "A SKU of another product shown under this page's own offers."
+      },
+      "StorefrontKit": {
+        "type": "object",
+        "properties": {
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "variantId": {
+                  "type": "string"
+                },
+                "productId": {
+                  "type": "string"
+                },
+                "productName": {
+                  "type": "string"
+                },
+                "productSlug": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "Its product page; null when that page is not public."
+                },
+                "imageUrl": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "imageMediaId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "imageAlt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "value"
+                    ]
+                  },
+                  "maxItems": 5,
+                  "description": "The SKU's chosen option values (platform, format), in option order."
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "delivery": {
+                  "type": "string",
+                  "enum": [
+                    "physical",
+                    "service",
+                    "digital_key",
+                    "digital_file"
+                  ],
+                  "description": "How the item reaches the buyer, from its own fulfilment setting: shipped or picked up, performed, a licence key, or a file. The theme words it."
+                },
+                "price": {
+                  "type": "number",
+                  "description": "One unit's price in the page's currency."
+                }
+              },
+              "required": [
+                "variantId",
+                "productId",
+                "productName",
+                "productSlug",
+                "imageUrl",
+                "imageMediaId",
+                "imageAlt",
+                "options",
+                "quantity",
+                "delivery",
+                "price"
+              ]
+            },
+            "maxItems": 20
+          },
+          "price": {
+            "type": "number",
+            "description": "What one kit costs: its own price, never more than `compareAtPrice`. Send it as the cart line's price."
+          },
+          "compareAtPrice": {
+            "type": "number",
+            "description": "Its items at their current prices, summed (computed on read)."
+          },
+          "saving": {
+            "type": "number"
+          },
+          "savingPercent": {
+            "type": "integer"
+          },
+          "availabilityBand": {
+            "type": "string",
+            "enum": [
+              "untracked",
+              "out_of_stock",
+              "low_stock",
+              "in_stock"
+            ],
+            "description": "From its items: as many kits as the scarcest item allows; `out_of_stock` when an item can't be sold."
+          }
+        },
+        "required": [
+          "components",
+          "price",
+          "compareAtPrice",
+          "saving",
+          "savingPercent",
+          "availabilityBand"
+        ],
+        "description": "A SKU made of other SKUs: checkout sells it as them."
+      },
       "PublicReviewSummary": {
         "type": "object",
         "properties": {
@@ -17541,7 +17763,28 @@
                       "type": "string",
                       "enum": [
                         "expand",
-                        "merge"
+                        "merge",
+                        "kit"
+                      ]
+                    },
+                    "kit": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "variantId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "productId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        }
+                      },
+                      "required": [
+                        "variantId",
+                        "productId"
                       ]
                     },
                     "anchor": {
@@ -17564,6 +17807,7 @@
                     "id",
                     "title",
                     "kind",
+                    "kit",
                     "anchor",
                     "units",
                     "perUnit"
@@ -40689,536 +40933,6 @@
         "security": []
       }
     },
-    "/api/v1/discounts/validate": {
-      "post": {
-        "tags": [
-          "Discounts"
-        ],
-        "summary": "Preview the cart's discounts before delivery is chosen",
-        "description": "Evaluates the applied codes together with active automatic discounts, then installed apps' discounts on top (as checkout stacks them). Codes that do not apply are listed with the reason and add nothing.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "codes": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 50
-                    },
-                    "maxItems": 5,
-                    "default": [],
-                    "description": "Discount codes the buyer applied. Codes of different discount classes combine when either allows it."
-                  },
-                  "items": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 100,
-                          "description": "Product id"
-                        },
-                        "price": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 9000000000000
-                        },
-                        "quantity": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "exclusiveMinimum": true,
-                          "maximum": 10000
-                        },
-                        "variantId": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 100
-                        },
-                        "basePrice": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 9000000000000,
-                          "description": "Unit price before buyer-input surcharges, which quantity bundles price from; defaults to `price`."
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "price",
-                        "quantity"
-                      ]
-                    },
-                    "maxItems": 99,
-                    "description": "Cart items"
-                  },
-                  "shippingCost": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 9000000000000,
-                    "description": "Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing."
-                  },
-                  "customerPhone": {
-                    "type": "string",
-                    "minLength": 7,
-                    "maxLength": 16,
-                    "description": "Customer phone for per-customer limits"
-                  },
-                  "presence": {
-                    "type": "string",
-                    "maxLength": 5,
-                    "description": "The page's subfolder presence (`en-gb`): a market in its own currency previews in it, its shop amounts converted at its rate (MARKETS-DESIGN step 6). Omit at the root."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Cart discount preview",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "totalDiscount": {
-                          "type": "number"
-                        },
-                        "bundleDiscountAmount": {
-                          "type": "number",
-                          "description": "Quantity-bundle saving included in totalDiscount (0 when the promotions save more)."
-                        },
-                        "bundles": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "productId": {
-                                "type": "string"
-                              },
-                              "quantity": {
-                                "type": "integer"
-                              },
-                              "discountType": {
-                                "type": "string",
-                                "enum": [
-                                  "percentage",
-                                  "fixed_price"
-                                ]
-                              },
-                              "label": {
-                                "type": "string",
-                                "nullable": true
-                              }
-                            },
-                            "required": [
-                              "productId",
-                              "quantity",
-                              "discountType",
-                              "label"
-                            ]
-                          }
-                        },
-                        "discounts": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "promotionId": {
-                                "type": "string",
-                                "nullable": true,
-                                "description": "Null for a discount an installed app gave (then `appId` is set)."
-                              },
-                              "appId": {
-                                "type": "string",
-                                "nullable": true,
-                                "description": "The app that gave the discount; null for the store's own. App discounts apply after the store's."
-                              },
-                              "title": {
-                                "type": "string"
-                              },
-                              "code": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "amount": {
-                                "type": "number",
-                                "description": "Off the items: shown as a discount line."
-                              },
-                              "shippingAmount": {
-                                "type": "number",
-                                "description": "Off delivery: shown on the delivery line (\"Free\" with the fee struck through), never as a discount line."
-                              },
-                              "replaces": {
-                                "type": "string",
-                                "description": "A code only: the automatic discount it replaced, because the code saves more and the two can't be combined."
-                              }
-                            },
-                            "required": [
-                              "promotionId",
-                              "appId",
-                              "title",
-                              "code",
-                              "amount",
-                              "shippingAmount"
-                            ]
-                          }
-                        },
-                        "offers": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "promotionId": {
-                                "type": "string"
-                              },
-                              "title": {
-                                "type": "string"
-                              },
-                              "code": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "kind": {
-                                "type": "string",
-                                "enum": [
-                                  "get",
-                                  "buy"
-                                ]
-                              },
-                              "percentOff": {
-                                "type": "number",
-                                "description": "100 means the items are free."
-                              },
-                              "quantity": {
-                                "type": "integer"
-                              },
-                              "shortfallAmount": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "products": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "id": {
-                                      "type": "string"
-                                    },
-                                    "slug": {
-                                      "type": "string"
-                                    },
-                                    "name": {
-                                      "type": "string"
-                                    },
-                                    "variantId": {
-                                      "type": "string",
-                                      "nullable": true,
-                                      "description": "Set for simple products, which can be added in one tap."
-                                    },
-                                    "price": {
-                                      "type": "number",
-                                      "nullable": true
-                                    }
-                                  },
-                                  "required": [
-                                    "id",
-                                    "slug",
-                                    "name",
-                                    "variantId",
-                                    "price"
-                                  ]
-                                }
-                              }
-                            },
-                            "required": [
-                              "promotionId",
-                              "title",
-                              "code",
-                              "kind",
-                              "percentOff",
-                              "quantity",
-                              "shortfallAmount",
-                              "products"
-                            ]
-                          }
-                        },
-                        "rejectedCodes": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "code": {
-                                "type": "string"
-                              },
-                              "reason": {
-                                "type": "string",
-                                "enum": [
-                                  "not_found",
-                                  "needs_phone",
-                                  "minimum_subtotal",
-                                  "minimum_quantity",
-                                  "get_items",
-                                  "buy_items",
-                                  "not_combinable",
-                                  "lower_savings",
-                                  "needs_delivery",
-                                  "delivery_discount_applied",
-                                  "unavailable"
-                                ]
-                              },
-                              "message": {
-                                "type": "string"
-                              },
-                              "shortfallAmount": {
-                                "type": "number"
-                              },
-                              "shortfallQuantity": {
-                                "type": "integer"
-                              },
-                              "conflictsWith": {
-                                "type": "string"
-                              },
-                              "offer": {
-                                "type": "object",
-                                "properties": {
-                                  "promotionId": {
-                                    "type": "string"
-                                  },
-                                  "title": {
-                                    "type": "string"
-                                  },
-                                  "code": {
-                                    "type": "string",
-                                    "nullable": true
-                                  },
-                                  "kind": {
-                                    "type": "string",
-                                    "enum": [
-                                      "get",
-                                      "buy"
-                                    ]
-                                  },
-                                  "percentOff": {
-                                    "type": "number",
-                                    "description": "100 means the items are free."
-                                  },
-                                  "quantity": {
-                                    "type": "integer"
-                                  },
-                                  "shortfallAmount": {
-                                    "type": "number",
-                                    "nullable": true
-                                  },
-                                  "products": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "object",
-                                      "properties": {
-                                        "id": {
-                                          "type": "string"
-                                        },
-                                        "slug": {
-                                          "type": "string"
-                                        },
-                                        "name": {
-                                          "type": "string"
-                                        },
-                                        "variantId": {
-                                          "type": "string",
-                                          "nullable": true,
-                                          "description": "Set for simple products, which can be added in one tap."
-                                        },
-                                        "price": {
-                                          "type": "number",
-                                          "nullable": true
-                                        }
-                                      },
-                                      "required": [
-                                        "id",
-                                        "slug",
-                                        "name",
-                                        "variantId",
-                                        "price"
-                                      ]
-                                    }
-                                  }
-                                },
-                                "required": [
-                                  "promotionId",
-                                  "title",
-                                  "code",
-                                  "kind",
-                                  "percentOff",
-                                  "quantity",
-                                  "shortfallAmount",
-                                  "products"
-                                ]
-                              },
-                              "requiresCustomerPhone": {
-                                "type": "boolean"
-                              },
-                              "bundleSavesMore": {
-                                "type": "boolean",
-                                "enum": [
-                                  true
-                                ],
-                                "description": "The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`)."
-                              }
-                            },
-                            "required": [
-                              "code",
-                              "reason",
-                              "message"
-                            ]
-                          }
-                        },
-                        "lineDiscounts": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "index": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "description": "The line's position in `items`."
-                              },
-                              "discountMinor": {
-                                "type": "integer",
-                                "minimum": 0
-                              }
-                            },
-                            "required": [
-                              "index",
-                              "discountMinor"
-                            ]
-                          },
-                          "description": "Each cart line's share of the store's own discounts (promotions or quantity bundles), as checkout allocates it: a line it pays in full (a free gift) reads free. Store apps' discounts are not split by line here."
-                        }
-                      },
-                      "required": [
-                        "totalDiscount",
-                        "bundleDiscountAmount",
-                        "bundles",
-                        "discounts",
-                        "offers",
-                        "rejectedCodes",
-                        "lineDiscounts"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "success",
-                    "error"
-                  ],
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "required": [
-                        "code",
-                        "message"
-                      ],
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "operationId": "storefront.discounts_validate.validate",
-        "x-scalius-agent": {
-          "surface": "storefront",
-          "exposure": "excluded",
-          "stability": "internal",
-          "principals": [
-            "visitor",
-            "customer"
-          ],
-          "risk": "read",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false,
-          "exclusionReason": "Legacy browser helper accepts client-asserted cart values and buyer phone; use storefront.discount.apply against the server-owned context cart.",
-          "dryRun": "none",
-          "confirmation": "none",
-          "impact": "none"
-        },
-        "x-scalius-rbac": {
-          "type": "public"
-        },
-        "security": []
-      }
-    },
     "/api/v1/analytics/configurations": {
       "get": {
         "tags": [
@@ -61052,6 +60766,62 @@
                               },
                               "extras": {
                                 "$ref": "#/components/schemas/OrderLineExtras"
+                              },
+                              "bundle": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "expand",
+                                      "merge",
+                                      "kit"
+                                    ]
+                                  },
+                                  "kit": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "variantId": {
+                                        "type": "string"
+                                      },
+                                      "productId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "variantId",
+                                      "productId"
+                                    ]
+                                  },
+                                  "anchor": {
+                                    "type": "boolean"
+                                  },
+                                  "units": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "perUnit": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "title",
+                                  "kind",
+                                  "kit",
+                                  "anchor",
+                                  "units",
+                                  "perUnit"
+                                ]
                               },
                               "createdAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
@@ -82591,6 +82361,14 @@
                               ],
                               "description": "\"EMI on card payment, from X/month\": the lowest monthly amount of the store's EMI plans. Informational only (no checkout EMI); null unless the store has EMI plans on and the product is EMI-eligible."
                             },
+                            "placedOffers": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/components/schemas/StorefrontPlacedOffer"
+                              },
+                              "maxItems": 20,
+                              "description": "SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be sold is left out."
+                            },
                             "reviews": {
                               "type": "object",
                               "nullable": true,
@@ -82808,6 +82586,7 @@
                             "contentBlockMedia",
                             "bundles",
                             "emi",
+                            "placedOffers",
                             "reviews",
                             "warranties",
                             "customFields",
@@ -83108,6 +82887,14 @@
                               "deletedAt": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "kit": {
+                                "allOf": [
+                                  {
+                                    "$ref": "#/components/schemas/StorefrontKit"
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -83136,7 +82923,8 @@
                               "customFields",
                               "warrantyId",
                               "createdAt",
-                              "deletedAt"
+                              "deletedAt",
+                              "kit"
                             ]
                           }
                         },
@@ -92688,6 +92476,14 @@
                                   "id": {
                                     "type": "string"
                                   },
+                                  "lineIds": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "minItems": 1,
+                                    "description": "The order lines this row shows: one, or two for a kit's item charged at its exact share (its quantities and amounts summed, `unitPriceMinor` null when the total does not divide). The row's `id` is the first. Returns, fulfilments and refunds name these lines."
+                                  },
                                   "productId": {
                                     "type": "string"
                                   },
@@ -92833,6 +92629,7 @@
                                 },
                                 "required": [
                                   "id",
+                                  "lineIds",
                                   "productId",
                                   "variantId",
                                   "quantity",
@@ -93858,11 +93655,6 @@
                           "minimum": 1,
                           "maximum": 1000000
                         },
-                        "price": {
-                          "type": "number",
-                          "minimum": 0,
-                          "description": "The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed."
-                        },
                         "productName": {
                           "type": "string",
                           "nullable": true,
@@ -93911,6 +93703,11 @@
                           },
                           "maxItems": 5,
                           "description": "Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`)."
+                        },
+                        "price": {
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed."
                         }
                       },
                       "required": [
@@ -94003,6 +93800,23 @@
                     },
                     "maxItems": 5,
                     "description": "Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards."
+                  },
+                  "discountCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 50
+                    },
+                    "maxItems": 5,
+                    "description": "The codes the buyer applied. Sent (even empty), the answer carries `discount`: the cart's discounts as checkout prices them. Each new code is a guess against the client's code budget."
+                  },
+                  "customerPhone": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 7,
+                    "maxLength": 16,
+                    "description": "The buyer's phone, for codes limited per customer."
                   }
                 },
                 "required": [
@@ -97984,6 +97798,10 @@
                               "propertyKey": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "componentVariantId": {
+                                "type": "string",
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -98412,6 +98230,335 @@
                               "message"
                             ]
                           }
+                        },
+                        "discount": {
+                          "type": "object",
+                          "properties": {
+                            "totalDiscount": {
+                              "type": "number"
+                            },
+                            "bundleDiscountAmount": {
+                              "type": "number",
+                              "description": "Quantity-bundle saving included in totalDiscount (0 when the promotions save more)."
+                            },
+                            "bundles": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "productId": {
+                                    "type": "string"
+                                  },
+                                  "quantity": {
+                                    "type": "integer"
+                                  },
+                                  "discountType": {
+                                    "type": "string",
+                                    "enum": [
+                                      "percentage",
+                                      "fixed_price"
+                                    ]
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "productId",
+                                  "quantity",
+                                  "discountType",
+                                  "label"
+                                ]
+                              }
+                            },
+                            "discounts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "promotionId": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "description": "Null for a discount an installed app gave (then `appId` is set)."
+                                  },
+                                  "appId": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "description": "The app that gave the discount; null for the store's own. App discounts apply after the store's."
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "amount": {
+                                    "type": "number",
+                                    "description": "Off the items: shown as a discount line."
+                                  },
+                                  "shippingAmount": {
+                                    "type": "number",
+                                    "description": "Off delivery: shown on the delivery line (\"Free\" with the fee struck through), never as a discount line."
+                                  },
+                                  "replaces": {
+                                    "type": "string",
+                                    "description": "A code only: the automatic discount it replaced, because the code saves more and the two can't be combined."
+                                  }
+                                },
+                                "required": [
+                                  "promotionId",
+                                  "appId",
+                                  "title",
+                                  "code",
+                                  "amount",
+                                  "shippingAmount"
+                                ]
+                              }
+                            },
+                            "offers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "promotionId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "get",
+                                      "buy"
+                                    ]
+                                  },
+                                  "percentOff": {
+                                    "type": "number",
+                                    "description": "100 means the items are free."
+                                  },
+                                  "quantity": {
+                                    "type": "integer"
+                                  },
+                                  "shortfallAmount": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "products": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "slug": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "variantId": {
+                                          "type": "string",
+                                          "nullable": true,
+                                          "description": "Set for simple products, which can be added in one tap."
+                                        },
+                                        "price": {
+                                          "type": "number",
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "slug",
+                                        "name",
+                                        "variantId",
+                                        "price"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "promotionId",
+                                  "title",
+                                  "code",
+                                  "kind",
+                                  "percentOff",
+                                  "quantity",
+                                  "shortfallAmount",
+                                  "products"
+                                ]
+                              }
+                            },
+                            "rejectedCodes": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": [
+                                      "not_found",
+                                      "needs_phone",
+                                      "minimum_subtotal",
+                                      "minimum_quantity",
+                                      "get_items",
+                                      "buy_items",
+                                      "not_combinable",
+                                      "lower_savings",
+                                      "needs_delivery",
+                                      "delivery_discount_applied",
+                                      "unavailable"
+                                    ]
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "shortfallAmount": {
+                                    "type": "number"
+                                  },
+                                  "shortfallQuantity": {
+                                    "type": "integer"
+                                  },
+                                  "conflictsWith": {
+                                    "type": "string"
+                                  },
+                                  "offer": {
+                                    "type": "object",
+                                    "properties": {
+                                      "promotionId": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "code": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "get",
+                                          "buy"
+                                        ]
+                                      },
+                                      "percentOff": {
+                                        "type": "number",
+                                        "description": "100 means the items are free."
+                                      },
+                                      "quantity": {
+                                        "type": "integer"
+                                      },
+                                      "shortfallAmount": {
+                                        "type": "number",
+                                        "nullable": true
+                                      },
+                                      "products": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "id": {
+                                              "type": "string"
+                                            },
+                                            "slug": {
+                                              "type": "string"
+                                            },
+                                            "name": {
+                                              "type": "string"
+                                            },
+                                            "variantId": {
+                                              "type": "string",
+                                              "nullable": true,
+                                              "description": "Set for simple products, which can be added in one tap."
+                                            },
+                                            "price": {
+                                              "type": "number",
+                                              "nullable": true
+                                            }
+                                          },
+                                          "required": [
+                                            "id",
+                                            "slug",
+                                            "name",
+                                            "variantId",
+                                            "price"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "promotionId",
+                                      "title",
+                                      "code",
+                                      "kind",
+                                      "percentOff",
+                                      "quantity",
+                                      "shortfallAmount",
+                                      "products"
+                                    ]
+                                  },
+                                  "requiresCustomerPhone": {
+                                    "type": "boolean"
+                                  },
+                                  "bundleSavesMore": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      true
+                                    ],
+                                    "description": "The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`)."
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "reason",
+                                  "message"
+                                ]
+                              }
+                            },
+                            "lineDiscounts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "index": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "description": "The line's position in the request's `items`."
+                                  },
+                                  "discountMinor": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  }
+                                },
+                                "required": [
+                                  "index",
+                                  "discountMinor"
+                                ]
+                              },
+                              "description": "Each buyer line's share of the store's own discounts (promotions or quantity bundles), as checkout allocates it: a line it pays in full (a free gift) reads free. Store apps' discounts are not split by line here."
+                            }
+                          },
+                          "required": [
+                            "totalDiscount",
+                            "bundleDiscountAmount",
+                            "bundles",
+                            "discounts",
+                            "offers",
+                            "rejectedCodes",
+                            "lineDiscounts"
+                          ],
+                          "description": "The applied codes with the store's automatic discounts, then the installed apps' (as checkout stacks them), on the lines this check can sell. Codes that do not apply are listed with the reason and add nothing. The checkout quote stays authoritative."
                         },
                         "delivery": {
                           "type": "object",
@@ -270544,7 +270691,9 @@
                 "content_blocks",
                 "content_block",
                 "template",
-                "bundles"
+                "bundles",
+                "kits",
+                "page_offers"
               ]
             },
             "required": true,
@@ -271127,6 +271276,284 @@
                                 ]
                               },
                               "maxItems": 6
+                            }
+                          },
+                          "required": [
+                            "section",
+                            "aggregateRevision",
+                            "items"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "section": {
+                              "type": "string",
+                              "enum": [
+                                "kits"
+                              ]
+                            },
+                            "aggregateRevision": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "variantId": {
+                                    "type": "string"
+                                  },
+                                  "sku": {
+                                    "type": "string"
+                                  },
+                                  "ownPrice": {
+                                    "type": "number",
+                                    "description": "The kit SKU's own price."
+                                  },
+                                  "price": {
+                                    "type": "number",
+                                    "description": "What a buyer pays: its own price, never more than its items."
+                                  },
+                                  "compareAtPrice": {
+                                    "type": "number"
+                                  },
+                                  "saving": {
+                                    "type": "number"
+                                  },
+                                  "savingPercent": {
+                                    "type": "integer"
+                                  },
+                                  "availableQuantity": {
+                                    "type": "integer",
+                                    "nullable": true,
+                                    "minimum": 0,
+                                    "description": "How many kits the items' stock allows; null when no item tracks stock."
+                                  },
+                                  "unavailable": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "componentVariantId": {
+                                          "type": "string"
+                                        },
+                                        "reason": {
+                                          "type": "string",
+                                          "enum": [
+                                            "component_deleted",
+                                            "component_inactive",
+                                            "component_product_deleted",
+                                            "component_unpublished",
+                                            "component_gift_card"
+                                          ],
+                                          "description": "Why buyers can't buy it: its SKU or product was deleted, its product is a draft or archived, unpublished, or a gift card."
+                                        }
+                                      },
+                                      "required": [
+                                        "componentVariantId",
+                                        "reason"
+                                      ]
+                                    },
+                                    "maxItems": 20,
+                                    "description": "Why buyers can't buy it now; empty when they can (stock allowing)."
+                                  },
+                                  "components": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "variantId": {
+                                          "type": "string"
+                                        },
+                                        "productId": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "productName": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "sku": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "options": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "name": {
+                                                "type": "string"
+                                              },
+                                              "value": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "name",
+                                              "value"
+                                            ]
+                                          },
+                                          "maxItems": 5,
+                                          "description": "The SKU's chosen option values (platform, format), in option order."
+                                        },
+                                        "quantity": {
+                                          "type": "integer",
+                                          "minimum": 1
+                                        },
+                                        "price": {
+                                          "type": "number",
+                                          "nullable": true
+                                        },
+                                        "stock": {
+                                          "type": "integer",
+                                          "nullable": true,
+                                          "description": "Available units (on hand less reserved); null when it does not track stock."
+                                        },
+                                        "problem": {
+                                          "type": "string",
+                                          "nullable": true,
+                                          "enum": [
+                                            "component_deleted",
+                                            "component_inactive",
+                                            "component_product_deleted",
+                                            "component_unpublished",
+                                            "component_gift_card",
+                                            null
+                                          ],
+                                          "description": "Why buyers can't buy it: its SKU or product was deleted, its product is a draft or archived, unpublished, or a gift card."
+                                        }
+                                      },
+                                      "required": [
+                                        "variantId",
+                                        "productId",
+                                        "productName",
+                                        "sku",
+                                        "options",
+                                        "quantity",
+                                        "price",
+                                        "stock",
+                                        "problem"
+                                      ]
+                                    },
+                                    "maxItems": 20
+                                  }
+                                },
+                                "required": [
+                                  "variantId",
+                                  "sku",
+                                  "ownPrice",
+                                  "price",
+                                  "compareAtPrice",
+                                  "saving",
+                                  "savingPercent",
+                                  "availableQuantity",
+                                  "unavailable",
+                                  "components"
+                                ]
+                              },
+                              "maxItems": 100
+                            }
+                          },
+                          "required": [
+                            "section",
+                            "aggregateRevision",
+                            "items"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "section": {
+                              "type": "string",
+                              "enum": [
+                                "page_offers"
+                              ]
+                            },
+                            "aggregateRevision": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "variantId": {
+                                    "type": "string"
+                                  },
+                                  "productId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "productName": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "sku": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "options": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "name",
+                                        "value"
+                                      ]
+                                    },
+                                    "maxItems": 5,
+                                    "description": "The SKU's chosen option values (platform, format), in option order."
+                                  },
+                                  "position": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "isKit": {
+                                    "type": "boolean"
+                                  },
+                                  "price": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "problem": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "enum": [
+                                      "component_deleted",
+                                      "component_inactive",
+                                      "component_product_deleted",
+                                      "component_unpublished",
+                                      "component_gift_card",
+                                      null
+                                    ],
+                                    "description": "Why buyers can't buy it: its SKU or product was deleted, its product is a draft or archived, unpublished, or a gift card."
+                                  }
+                                },
+                                "required": [
+                                  "variantId",
+                                  "productId",
+                                  "productName",
+                                  "sku",
+                                  "options",
+                                  "position",
+                                  "isKit",
+                                  "price",
+                                  "problem"
+                                ]
+                              },
+                              "maxItems": 20
                             }
                           },
                           "required": [
@@ -271888,7 +272315,9 @@
                 "additional_info_text",
                 "content_blocks",
                 "template",
-                "bundles"
+                "bundles",
+                "kits",
+                "page_offers"
               ]
             },
             "required": true,
@@ -272518,6 +272947,85 @@
                       "section",
                       "expectedAggregateRevision",
                       "tiers"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "section": {
+                        "type": "string",
+                        "enum": [
+                          "kits"
+                        ]
+                      },
+                      "expectedAggregateRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "variantId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "components": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "variantId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 160
+                            },
+                            "quantity": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 100
+                            }
+                          },
+                          "required": [
+                            "variantId",
+                            "quantity"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "maxItems": 100
+                      }
+                    },
+                    "required": [
+                      "section",
+                      "expectedAggregateRevision",
+                      "variantId",
+                      "components"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "section": {
+                        "type": "string",
+                        "enum": [
+                          "page_offers"
+                        ]
+                      },
+                      "expectedAggregateRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "variantIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        "maxItems": 100
+                      }
+                    },
+                    "required": [
+                      "section",
+                      "expectedAggregateRevision",
+                      "variantIds"
                     ]
                   }
                 ]

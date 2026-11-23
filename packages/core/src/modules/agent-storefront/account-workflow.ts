@@ -28,6 +28,8 @@ import {
 } from "../customers";
 import { usesDeliveryHierarchy } from "@scalius/shared/address";
 import {
+  buyerLineUnitPrice,
+  foldBuyerOrderLines,
   getCustomerOrderDetailForOrder,
   getCustomerOrders,
   getCustomerOwnedOrderForDetail,
@@ -38,7 +40,6 @@ import {
 } from "../orders";
 import { createCustomerOrderSupportRequest, createReceiptOrderSupportRequest } from "../conversations";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
-import { fromMinor } from "@scalius/shared/money";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
   ConflictError,
@@ -680,6 +681,7 @@ export async function getAgentStorefrontReceipt(
       discountAmountMinor: orderItems.discountAmountMinor,
       taxableAmountMinor: orderItems.taxableAmountMinor,
       taxAmountMinor: orderItems.taxAmountMinor,
+      properties: orderItems.properties,
     }).from(orderItems)
       .leftJoin(media, eq(media.id, orderItems.productImageMediaId))
       .where(eq(orderItems.orderId, orderId)),
@@ -691,9 +693,12 @@ export async function getAgentStorefrontReceipt(
     ...orderMoneyAmounts(order),
     createdAt: order.createdAt ? new Date(order.createdAt * 1_000).toISOString() : null,
     updatedAt: order.updatedAt ? new Date(order.updatedAt * 1_000).toISOString() : null,
-    items: items.map(({ productImageObjectKey, productImageStatus, ...item }) => ({
+    // The buyer's rows: a kit's item split into two lines is one (`foldBuyerOrderLines`), its real lines in `lineIds`.
+    items: foldBuyerOrderLines(items, {
+      sum: ["lineSubtotalMinor", "discountAmountMinor", "taxableAmountMinor", "taxAmountMinor"],
+    }).map(({ productImageObjectKey, productImageStatus, properties: _properties, bundle: _bundle, unitsTotalMinor, ...item }) => ({
       ...item,
-      price: fromMinor(item.unitPriceMinor, order.currencyDecimalPlaces),
+      price: buyerLineUnitPrice({ ...item, unitsTotalMinor }, order.currencyDecimalPlaces),
       productImage: productImageObjectKey
         && (productImageStatus === "ready" || productImageStatus === "trashed")
         ? storedObjectKeyUrl(productImageObjectKey, { source: "order line image" })

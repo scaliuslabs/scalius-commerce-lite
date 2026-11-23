@@ -24,7 +24,6 @@ import type {
   GetApiV1PagesSlugBySlugResponse as GetPagesSlugBySlugResponse,
   GetApiV1SeoResponse as GetSeoResponse,
   GetApiV1CheckoutLanguagesActiveResponse as GetCheckoutLanguagesActiveResponse,
-  PostApiV1DiscountsValidateResponse as PostDiscountsValidateResponse,
   GetApiV1AnalyticsConfigurationsResponse as GetAnalyticsConfigurationsResponse,
   GetApiV1LocationsCitiesResponse as GetLocationsCitiesResponse,
   GetApiV1LocationsZonesResponse as GetLocationsZonesResponse,
@@ -56,7 +55,6 @@ export type {
   GetPagesSlugBySlugResponse,
   GetSeoResponse,
   GetCheckoutLanguagesActiveResponse,
-  PostDiscountsValidateResponse,
   GetAnalyticsConfigurationsResponse,
   GetLocationsCitiesResponse,
   GetLocationsZonesResponse,
@@ -734,6 +732,20 @@ export interface OrderLineFulfilmentFacts {
   propertiesPrice?: number;
   propertiesPriceMinor?: number;
   baseUnitPriceMinor?: number | null;
+  /** The bundle the line was bought in: a store kit names its own SKU and product (`kit`); null for a plain line. */
+  bundle?: OrderLineBundleFacts | null;
+}
+
+export interface OrderLineBundleFacts {
+  id: string;
+  /** The bundle's title as the order froze it: a kit's own name. */
+  title?: string;
+  kind: "expand" | "merge" | "kit";
+  kit: { variantId: string; productId: string } | null;
+  anchor: boolean;
+  /** Bundles bought; null when the line's quantity no longer reads as whole bundles. */
+  units: number | null;
+  perUnit: number | null;
 }
 
 export interface OrderPickup {

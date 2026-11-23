@@ -63,6 +63,7 @@ import {
     productOptionValueSwatchSchema,
 } from "../../schemas/entities";
 import { productMerchandisingSectionResponseSchemas } from "../../schemas/product-merchandising";
+import { productKitsSectionSchema, productPageOffersSectionSchema } from "../../schemas/kits";
 
 import { refreshRecommendationsAfterWrite } from "../../background/catalog";
 import { assertCanWriteCosts, presentSkuCost, presentSkuCosts, productWriteSetsCosts } from "./cost-access";
@@ -182,6 +183,8 @@ const productSemanticSectionResponseSchema = z.discriminatedUnion("section", [
         }),
     }),
     ...productMerchandisingSectionResponseSchemas,
+    productKitsSectionSchema,
+    productPageOffersSectionSchema,
     z.object({
         section: z.literal("text"),
         field: z.enum(["description", "metaTitle", "metaDescription"]),
@@ -1083,6 +1086,8 @@ const writableProductSectionSchema = z.enum([
     "content_blocks",
     "template",
     "bundles",
+    "kits",
+    "page_offers",
 ]);
 
 const updateProductSectionRoute = createRoute({

@@ -62,6 +62,7 @@ import { publicMarketPresence, publicMarketPricing } from "../utils/public-marke
 import { translationScope } from "@scalius/core/modules/translations";
 import { localizedHandleFields } from "../schemas/translations";
 import { productPageMerchandisingFields } from "../schemas/product-merchandising";
+import { storefrontKitSchema, storefrontPlacedOfferSchema } from "../schemas/kits";
 import { productPageReviewFields } from "../schemas/reviews";
 import {
   normalizePublicListingSearchParam,
@@ -437,6 +438,8 @@ const productDetailVariantSchema = z.object({
   warrantyId: z.string().nullable(),
   createdAt: z.string().nullable(),
   deletedAt: z.string().nullable(),
+  /** A kit's contents, price against them and band (its own `stock` is a band sentinel); null for a SKU that is not a kit. */
+  kit: z.union([storefrontKitSchema, z.null()]),
 });
 
 const recommendedProductSchema = z.object({
@@ -517,6 +520,9 @@ const productDetailDataSchema = z.object({
       canonicalPath: z.string().nullable(),
     }).nullable(),
     ...productPageMerchandisingFields,
+    placedOffers: z.array(storefrontPlacedOfferSchema).max(20).openapi({
+      description: "SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be sold is left out.",
+    }),
     ...productPageReviewFields,
     customFields: storefrontCustomFieldsSchema,
     offers: z.array(z.object({
@@ -605,6 +611,7 @@ const productSectionTextSchema = z.object({
 });
 
 const productSectionVariantSchema = productDetailVariantSchema.omit({
+  kit: true,
   customFields: true,
   warrantyId: true,
   stock: true,

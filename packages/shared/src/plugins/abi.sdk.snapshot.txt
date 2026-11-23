@@ -4635,7 +4635,12 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
                 kind: z.ZodEnum<{
                     expand: "expand";
                     merge: "merge";
+                    kit: "kit";
                 }>;
+                kit: z.ZodNullable<z.ZodObject<{
+                    variantId: z.ZodString;
+                    productId: z.ZodString;
+                }, z.core.$strip>>;
                 anchor: z.ZodBoolean;
                 units: z.ZodNullable<z.ZodNumber>;
                 perUnit: z.ZodNullable<z.ZodNumber>;
@@ -6693,10 +6698,10 @@ export type FunctionReadRecord = { revision: number; data: Record<string, unknow
 export type FunctionReads = { [x: string]: { revision: number; data: Record<string, unknown>; } | Record<string, { revision: number; data: Record<string, unknown>; }> | { revision: number; data: Record<string, unknown>; id: string; }[] | null; };
 
 // packages/shared/src/plugins/functions.d.ts
-export type BuyerUiInput = { target: "checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "cart.page.below" | "checkout.payment.after" | "checkout.actions.before" | "checkout.summary.after" | "cart_drawer.footer" | "cart.line.after" | "order.confirmation" | "account.order" | "account.overview" | "account.profile"; language: string; locale: string; currency: string; cart: { currency: string; decimalPlaces: number; storeCurrency: { code: string; decimalPlaces: number; }; channel: "admin" | "online_store" | "pos" | "agent" | "app"; salesChannelId: string; lines: { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; addOns: { appId: string; title: string; amountMinor: number; }[]; inputRevisions?: Record<string, { answered: string | null; current: string; }> | undefined; bundle?: { id: string; title: string; kind: "expand" | "merge"; anchor: boolean; } | null | undefined; }[]; subtotalMinor: number; customer: { id: string; tags: string[]; segmentIds: string[]; orderCount: number; totalSpentMinor: number; roles: { role: string; ref: string | null; }[]; } | null; destination: { country: string; city: string | null; zone: string | null; } | null; discountCodes: string[]; market: { id: string; country: string | null; }; attributes: Record<string, string>; } | null; attributes: Record<string, string>; order: { orderId: string; status: string; paymentStatus: string; lines: { productId: string; variantId: string; quantity: number; }[]; } | null; customer: { id: string; } | null; reads: Record<string, { revision: number; data: Record<string, unknown>; } | Record<string, { revision: number; data: Record<string, unknown>; }> | { revision: number; data: Record<string, unknown>; id: string; }[] | null>; lines?: { lineKey: string; productId: string; variantId: string; title: string; quantity: number; unitPriceMinor: number; bundle: boolean; addOns: { appId: string; title: string; amountMinor: number; }[]; inputs: { key: string; eligible: boolean; value: string | null; decision: boolean; offers: { value: string; addOnMinor: number; }[]; }[]; }[] | undefined; now?: string | undefined; };
+export type BuyerUiInput = { target: "checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "cart.page.below" | "checkout.payment.after" | "checkout.actions.before" | "checkout.summary.after" | "cart_drawer.footer" | "cart.line.after" | "order.confirmation" | "account.order" | "account.overview" | "account.profile"; language: string; locale: string; currency: string; cart: { currency: string; decimalPlaces: number; storeCurrency: { code: string; decimalPlaces: number; }; channel: "admin" | "online_store" | "pos" | "agent" | "app"; salesChannelId: string; lines: { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; addOns: { appId: string; title: string; amountMinor: number; }[]; inputRevisions?: Record<string, { answered: string | null; current: string; }> | undefined; bundle?: { id: string; title: string; kind: "expand" | "merge" | "kit"; anchor: boolean; kit?: { variantId: string; productId: string; sku: string | null; } | null | undefined; } | null | undefined; }[]; subtotalMinor: number; customer: { id: string; tags: string[]; segmentIds: string[]; orderCount: number; totalSpentMinor: number; roles: { role: string; ref: string | null; }[]; } | null; destination: { country: string; city: string | null; zone: string | null; } | null; discountCodes: string[]; market: { id: string; country: string | null; }; attributes: Record<string, string>; } | null; attributes: Record<string, string>; order: { orderId: string; status: string; paymentStatus: string; lines: { productId: string; variantId: string; quantity: number; }[]; } | null; customer: { id: string; } | null; reads: Record<string, { revision: number; data: Record<string, unknown>; } | Record<string, { revision: number; data: Record<string, unknown>; }> | { revision: number; data: Record<string, unknown>; id: string; }[] | null>; lines?: { lineKey: string; productId: string; variantId: string; title: string; quantity: number; unitPriceMinor: number; bundle: boolean; addOns: { appId: string; title: string; amountMinor: number; }[]; inputs: { key: string; eligible: boolean; value: string | null; decision: boolean; offers: { value: string; addOnMinor: number; }[]; }[]; }[] | undefined; now?: string | undefined; };
 export type BuyerUiLine = { lineKey: string; productId: string; variantId: string; title: string; quantity: number; unitPriceMinor: number; bundle: boolean; addOns: { appId: string; title: string; amountMinor: number; }[]; inputs: { key: string; eligible: boolean; value: string | null; decision: boolean; offers: { value: string; addOnMinor: number; }[]; }[]; };
-export type FunctionCart = { currency: string; decimalPlaces: number; storeCurrency: { code: string; decimalPlaces: number; }; channel: "admin" | "online_store" | "pos" | "agent" | "app"; salesChannelId: string; lines: { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; addOns: { appId: string; title: string; amountMinor: number; }[]; inputRevisions?: Record<string, { answered: string | null; current: string; }> | undefined; bundle?: { id: string; title: string; kind: "expand" | "merge"; anchor: boolean; } | null | undefined; }[]; subtotalMinor: number; customer: { id: string; tags: string[]; segmentIds: string[]; orderCount: number; totalSpentMinor: number; roles: { role: string; ref: string | null; }[]; } | null; destination: { country: string; city: string | null; zone: string | null; } | null; discountCodes: string[]; market: { id: string; country: string | null; }; attributes: Record<string, string>; };
-export type FunctionCartLine = { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; addOns: { appId: string; title: string; amountMinor: number; }[]; inputRevisions?: Record<string, { answered: string | null; current: string; }> | undefined; bundle?: { id: string; title: string; kind: "expand" | "merge"; anchor: boolean; } | null | undefined; };
+export type FunctionCart = { currency: string; decimalPlaces: number; storeCurrency: { code: string; decimalPlaces: number; }; channel: "admin" | "online_store" | "pos" | "agent" | "app"; salesChannelId: string; lines: { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; addOns: { appId: string; title: string; amountMinor: number; }[]; inputRevisions?: Record<string, { answered: string | null; current: string; }> | undefined; bundle?: { id: string; title: string; kind: "expand" | "merge" | "kit"; anchor: boolean; kit?: { variantId: string; productId: string; sku: string | null; } | null | undefined; } | null | undefined; }[]; subtotalMinor: number; customer: { id: string; tags: string[]; segmentIds: string[]; orderCount: number; totalSpentMinor: number; roles: { role: string; ref: string | null; }[]; } | null; destination: { country: string; city: string | null; zone: string | null; } | null; discountCodes: string[]; market: { id: string; country: string | null; }; attributes: Record<string, string>; };
+export type FunctionCartLine = { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; addOns: { appId: string; title: string; amountMinor: number; }[]; inputRevisions?: Record<string, { answered: string | null; current: string; }> | undefined; bundle?: { id: string; title: string; kind: "expand" | "merge" | "kit"; anchor: boolean; kit?: { variantId: string; productId: string; sku: string | null; } | null | undefined; } | null | undefined; };
 export type FunctionLineOffer = { offerId: string; lineId: string; key: string; value: string; };
 export type FunctionLinePriceFacts = { lineId: string; source: "fx" | "base" | "override" | "market" | "sale" | "segment"; bundle: { id: string; title: string; units?: number | undefined; } | null; storeUnitPrice?: { amountMinor: number; currency: string; } | undefined; };
 export declare const PLUGIN_EXTENSION_RUN = "buyer.ui";
@@ -6758,8 +6763,14 @@ export declare const PLUGIN_EXTENSION_SCHEMAS: {
                     kind: z.ZodEnum<{
                         expand: "expand";
                         merge: "merge";
+                        kit: "kit";
                     }>;
                     anchor: z.ZodBoolean;
+                    kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                        variantId: z.ZodString;
+                        productId: z.ZodString;
+                        sku: z.ZodNullable<z.ZodString>;
+                    }, z.core.$strict>>>;
                 }, z.core.$strict>>>;
                 requiresShipping: z.ZodDefault<z.ZodBoolean>;
                 weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
@@ -6905,8 +6916,14 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
                         kind: z.ZodEnum<{
                             expand: "expand";
                             merge: "merge";
+                            kit: "kit";
                         }>;
                         anchor: z.ZodBoolean;
+                        kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                            variantId: z.ZodString;
+                            productId: z.ZodString;
+                            sku: z.ZodNullable<z.ZodString>;
+                        }, z.core.$strict>>>;
                     }, z.core.$strict>>>;
                     requiresShipping: z.ZodDefault<z.ZodBoolean>;
                     weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
@@ -7019,8 +7036,14 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
                         kind: z.ZodEnum<{
                             expand: "expand";
                             merge: "merge";
+                            kit: "kit";
                         }>;
                         anchor: z.ZodBoolean;
+                        kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                            variantId: z.ZodString;
+                            productId: z.ZodString;
+                            sku: z.ZodNullable<z.ZodString>;
+                        }, z.core.$strict>>>;
                     }, z.core.$strict>>>;
                     requiresShipping: z.ZodDefault<z.ZodBoolean>;
                     weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
@@ -7183,8 +7206,14 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
                         kind: z.ZodEnum<{
                             expand: "expand";
                             merge: "merge";
+                            kit: "kit";
                         }>;
                         anchor: z.ZodBoolean;
+                        kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                            variantId: z.ZodString;
+                            productId: z.ZodString;
+                            sku: z.ZodNullable<z.ZodString>;
+                        }, z.core.$strict>>>;
                     }, z.core.$strict>>>;
                     requiresShipping: z.ZodDefault<z.ZodBoolean>;
                     weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
@@ -7300,8 +7329,14 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
                         kind: z.ZodEnum<{
                             expand: "expand";
                             merge: "merge";
+                            kit: "kit";
                         }>;
                         anchor: z.ZodBoolean;
+                        kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                            variantId: z.ZodString;
+                            productId: z.ZodString;
+                            sku: z.ZodNullable<z.ZodString>;
+                        }, z.core.$strict>>>;
                     }, z.core.$strict>>>;
                     requiresShipping: z.ZodDefault<z.ZodBoolean>;
                     weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
@@ -7434,8 +7469,14 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
                         kind: z.ZodEnum<{
                             expand: "expand";
                             merge: "merge";
+                            kit: "kit";
                         }>;
                         anchor: z.ZodBoolean;
+                        kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                            variantId: z.ZodString;
+                            productId: z.ZodString;
+                            sku: z.ZodNullable<z.ZodString>;
+                        }, z.core.$strict>>>;
                     }, z.core.$strict>>>;
                     requiresShipping: z.ZodDefault<z.ZodBoolean>;
                     weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
@@ -7562,8 +7603,14 @@ export declare const PLUGIN_FUNCTION_SCHEMAS: {
                         kind: z.ZodEnum<{
                             expand: "expand";
                             merge: "merge";
+                            kit: "kit";
                         }>;
                         anchor: z.ZodBoolean;
+                        kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                            variantId: z.ZodString;
+                            productId: z.ZodString;
+                            sku: z.ZodNullable<z.ZodString>;
+                        }, z.core.$strict>>>;
                     }, z.core.$strict>>>;
                     requiresShipping: z.ZodDefault<z.ZodBoolean>;
                     weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
@@ -7704,8 +7751,14 @@ declare const PLUGIN_RUN_SCHEMAS: {
                         kind: z.ZodEnum<{
                             expand: "expand";
                             merge: "merge";
+                            kit: "kit";
                         }>;
                         anchor: z.ZodBoolean;
+                        kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                            variantId: z.ZodString;
+                            productId: z.ZodString;
+                            sku: z.ZodNullable<z.ZodString>;
+                        }, z.core.$strict>>>;
                     }, z.core.$strict>>>;
                     requiresShipping: z.ZodDefault<z.ZodBoolean>;
                     weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
@@ -7850,8 +7903,14 @@ declare const PLUGIN_RUN_SCHEMAS: {
                         kind: z.ZodEnum<{
                             expand: "expand";
                             merge: "merge";
+                            kit: "kit";
                         }>;
                         anchor: z.ZodBoolean;
+                        kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                            variantId: z.ZodString;
+                            productId: z.ZodString;
+                            sku: z.ZodNullable<z.ZodString>;
+                        }, z.core.$strict>>>;
                     }, z.core.$strict>>>;
                     requiresShipping: z.ZodDefault<z.ZodBoolean>;
                     weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
@@ -7964,8 +8023,14 @@ declare const PLUGIN_RUN_SCHEMAS: {
                         kind: z.ZodEnum<{
                             expand: "expand";
                             merge: "merge";
+                            kit: "kit";
                         }>;
                         anchor: z.ZodBoolean;
+                        kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                            variantId: z.ZodString;
+                            productId: z.ZodString;
+                            sku: z.ZodNullable<z.ZodString>;
+                        }, z.core.$strict>>>;
                     }, z.core.$strict>>>;
                     requiresShipping: z.ZodDefault<z.ZodBoolean>;
                     weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
@@ -8128,8 +8193,14 @@ declare const PLUGIN_RUN_SCHEMAS: {
                         kind: z.ZodEnum<{
                             expand: "expand";
                             merge: "merge";
+                            kit: "kit";
                         }>;
                         anchor: z.ZodBoolean;
+                        kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                            variantId: z.ZodString;
+                            productId: z.ZodString;
+                            sku: z.ZodNullable<z.ZodString>;
+                        }, z.core.$strict>>>;
                     }, z.core.$strict>>>;
                     requiresShipping: z.ZodDefault<z.ZodBoolean>;
                     weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
@@ -8245,8 +8316,14 @@ declare const PLUGIN_RUN_SCHEMAS: {
                         kind: z.ZodEnum<{
                             expand: "expand";
                             merge: "merge";
+                            kit: "kit";
                         }>;
                         anchor: z.ZodBoolean;
+                        kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                            variantId: z.ZodString;
+                            productId: z.ZodString;
+                            sku: z.ZodNullable<z.ZodString>;
+                        }, z.core.$strict>>>;
                     }, z.core.$strict>>>;
                     requiresShipping: z.ZodDefault<z.ZodBoolean>;
                     weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
@@ -8379,8 +8456,14 @@ declare const PLUGIN_RUN_SCHEMAS: {
                         kind: z.ZodEnum<{
                             expand: "expand";
                             merge: "merge";
+                            kit: "kit";
                         }>;
                         anchor: z.ZodBoolean;
+                        kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                            variantId: z.ZodString;
+                            productId: z.ZodString;
+                            sku: z.ZodNullable<z.ZodString>;
+                        }, z.core.$strict>>>;
                     }, z.core.$strict>>>;
                     requiresShipping: z.ZodDefault<z.ZodBoolean>;
                     weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;
@@ -8507,8 +8590,14 @@ declare const PLUGIN_RUN_SCHEMAS: {
                         kind: z.ZodEnum<{
                             expand: "expand";
                             merge: "merge";
+                            kit: "kit";
                         }>;
                         anchor: z.ZodBoolean;
+                        kit: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                            variantId: z.ZodString;
+                            productId: z.ZodString;
+                            sku: z.ZodNullable<z.ZodString>;
+                        }, z.core.$strict>>>;
                     }, z.core.$strict>>>;
                     requiresShipping: z.ZodDefault<z.ZodBoolean>;
                     weightGrams: z.ZodDefault<z.ZodNullable<z.ZodNumber>>;

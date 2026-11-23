@@ -30047,7 +30047,28 @@
           "type": "string",
           "enum": [
            "expand",
-           "merge"
+           "merge",
+           "kit"
+          ]
+         },
+         "kit": {
+          "type": "object",
+          "nullable": true,
+          "properties": {
+           "variantId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+           },
+           "productId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+           }
+          },
+          "required": [
+           "variantId",
+           "productId"
           ]
          },
          "anchor": {
@@ -30070,6 +30091,7 @@
          "id",
          "title",
          "kind",
+         "kit",
          "anchor",
          "units",
          "perUnit"

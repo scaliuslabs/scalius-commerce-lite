@@ -3286,6 +3286,86 @@ export type ProductBundleTier = {
     isActive: boolean;
 };
 
+/**
+ * A SKU of another product shown under this page's own offers.
+ */
+export type StorefrontPlacedOffer = {
+    variantId: string;
+    productId: string;
+    productName: string;
+    productSlug: string;
+    sku: string;
+    /**
+     * The SKU's chosen option values (platform, format), in option order.
+     */
+    options: Array<{
+        name: string;
+        value: string;
+    }>;
+    imageUrl: string | null;
+    imageMediaId: string | null;
+    imageAlt: string | null;
+    fulfillmentKind: string;
+    /**
+     * One unit's price in the page's currency (a kit's: its own price).
+     */
+    price: number;
+    /**
+     * A kit's items summed; null for a SKU that is not a kit.
+     */
+    compareAtPrice: number | null;
+    availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
+    kit: StorefrontKit | null;
+};
+
+/**
+ * A SKU made of other SKUs: checkout sells it as them.
+ */
+export type StorefrontKit = {
+    components: Array<{
+        variantId: string;
+        productId: string;
+        productName: string;
+        /**
+         * Its product page; null when that page is not public.
+         */
+        productSlug: string | null;
+        imageUrl: string | null;
+        imageMediaId: string | null;
+        imageAlt: string | null;
+        /**
+         * The SKU's chosen option values (platform, format), in option order.
+         */
+        options: Array<{
+            name: string;
+            value: string;
+        }>;
+        quantity: number;
+        /**
+         * How the item reaches the buyer, from its own fulfilment setting: shipped or picked up, performed, a licence key, or a file. The theme words it.
+         */
+        delivery: 'physical' | 'service' | 'digital_key' | 'digital_file';
+        /**
+         * One unit's price in the page's currency.
+         */
+        price: number;
+    }>;
+    /**
+     * What one kit costs: its own price, never more than `compareAtPrice`. Send it as the cart line's price.
+     */
+    price: number;
+    /**
+     * Its items at their current prices, summed (computed on read).
+     */
+    compareAtPrice: number;
+    saving: number;
+    savingPercent: number;
+    /**
+     * From its items: as many kits as the scarcest item allows; `out_of_stock` when an item can't be sold.
+     */
+    availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
+};
+
 export type PublicReviewSummary = {
     /**
      * Average of published reviews, truncated to two decimals; 0 with none.
@@ -3457,7 +3537,11 @@ export type OrderResource = {
         bundle?: {
             id: string;
             title: string;
-            kind: 'expand' | 'merge';
+            kind: 'expand' | 'merge' | 'kit';
+            kit: {
+                variantId: string;
+                productId: string;
+            } | null;
             anchor: boolean;
             units: number | null;
             perUnit: number | null;
@@ -9998,185 +10082,6 @@ export type GetApiV1ArticlesSlugBySlugResponses = {
 
 export type GetApiV1ArticlesSlugBySlugResponse = GetApiV1ArticlesSlugBySlugResponses[keyof GetApiV1ArticlesSlugBySlugResponses];
 
-export type PostApiV1DiscountsValidateData = {
-    body: {
-        /**
-         * Discount codes the buyer applied. Codes of different discount classes combine when either allows it.
-         */
-        codes?: Array<string>;
-        /**
-         * Cart items
-         */
-        items?: Array<{
-            /**
-             * Product id
-             */
-            id: string;
-            price: number;
-            quantity: number;
-            variantId?: string;
-            /**
-             * Unit price before buyer-input surcharges, which quantity bundles price from; defaults to `price`.
-             */
-            basePrice?: number;
-        }>;
-        /**
-         * Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.
-         */
-        shippingCost?: number;
-        /**
-         * Customer phone for per-customer limits
-         */
-        customerPhone?: string;
-        /**
-         * The page's subfolder presence (`en-gb`): a market in its own currency previews in it, its shop amounts converted at its rate (MARKETS-DESIGN step 6). Omit at the root.
-         */
-        presence?: string;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/discounts/validate';
-};
-
-export type PostApiV1DiscountsValidateErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
-     */
-    413: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type PostApiV1DiscountsValidateError = PostApiV1DiscountsValidateErrors[keyof PostApiV1DiscountsValidateErrors];
-
-export type PostApiV1DiscountsValidateResponses = {
-    /**
-     * Cart discount preview
-     */
-    200: {
-        success: true;
-        data: {
-            totalDiscount: number;
-            /**
-             * Quantity-bundle saving included in totalDiscount (0 when the promotions save more).
-             */
-            bundleDiscountAmount: number;
-            bundles: Array<{
-                productId: string;
-                quantity: number;
-                discountType: 'percentage' | 'fixed_price';
-                label: string | null;
-            }>;
-            discounts: Array<{
-                /**
-                 * Null for a discount an installed app gave (then `appId` is set).
-                 */
-                promotionId: string | null;
-                /**
-                 * The app that gave the discount; null for the store's own. App discounts apply after the store's.
-                 */
-                appId: string | null;
-                title: string;
-                code: string | null;
-                /**
-                 * Off the items: shown as a discount line.
-                 */
-                amount: number;
-                /**
-                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
-                 */
-                shippingAmount: number;
-                /**
-                 * A code only: the automatic discount it replaced, because the code saves more and the two can't be combined.
-                 */
-                replaces?: string;
-            }>;
-            offers: Array<{
-                promotionId: string;
-                title: string;
-                code: string | null;
-                kind: 'get' | 'buy';
-                /**
-                 * 100 means the items are free.
-                 */
-                percentOff: number;
-                quantity: number;
-                shortfallAmount: number | null;
-                products: Array<{
-                    id: string;
-                    slug: string;
-                    name: string;
-                    /**
-                     * Set for simple products, which can be added in one tap.
-                     */
-                    variantId: string | null;
-                    price: number | null;
-                }>;
-            }>;
-            rejectedCodes: Array<{
-                code: string;
-                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'needs_delivery' | 'delivery_discount_applied' | 'unavailable';
-                message: string;
-                shortfallAmount?: number;
-                shortfallQuantity?: number;
-                conflictsWith?: string;
-                offer?: {
-                    promotionId: string;
-                    title: string;
-                    code: string | null;
-                    kind: 'get' | 'buy';
-                    /**
-                     * 100 means the items are free.
-                     */
-                    percentOff: number;
-                    quantity: number;
-                    shortfallAmount: number | null;
-                    products: Array<{
-                        id: string;
-                        slug: string;
-                        name: string;
-                        /**
-                         * Set for simple products, which can be added in one tap.
-                         */
-                        variantId: string | null;
-                        price: number | null;
-                    }>;
-                };
-                requiresCustomerPhone?: boolean;
-                /**
-                 * The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`).
-                 */
-                bundleSavesMore?: true;
-            }>;
-            /**
-             * Each cart line's share of the store's own discounts (promotions or quantity bundles), as checkout allocates it: a line it pays in full (a free gift) reads free. Store apps' discounts are not split by line here.
-             */
-            lineDiscounts: Array<{
-                /**
-                 * The line's position in `items`.
-                 */
-                index: number;
-                discountMinor: number;
-            }>;
-        };
-    };
-};
-
-export type PostApiV1DiscountsValidateResponse = PostApiV1DiscountsValidateResponses[keyof PostApiV1DiscountsValidateResponses];
-
 export type GetApiV1AnalyticsConfigurationsData = {
     body?: never;
     path?: never;
@@ -15725,6 +15630,18 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 propertiesPriceMinor: number;
                 baseUnitPriceMinor: number | null;
                 extras?: OrderLineExtras;
+                bundle?: {
+                    id: string;
+                    title: string;
+                    kind: 'expand' | 'merge' | 'kit';
+                    kit: {
+                        variantId: string;
+                        productId: string;
+                    } | null;
+                    anchor: boolean;
+                    units: number | null;
+                    perUnit: number | null;
+                } | null;
                 createdAt: NullableTimestamp;
                 [key: string]: unknown;
             }>;
@@ -22063,6 +21980,10 @@ export type GetApiV1ProductsBySlugResponses = {
                     monthlyMinor: number;
                 } | null;
                 /**
+                 * SKUs of other products shown under this page's own offers, in order (a kit, a cross-sold SKU); one that can't be sold is left out.
+                 */
+                placedOffers: Array<StorefrontPlacedOffer>;
+                /**
                  * Published reviews: the summary and the five most recent (the same reviews the page shows and describes in JSON-LD). Null when the store's reviews are off; `count: 0` shows the zero state.
                  */
                 reviews: {
@@ -22184,6 +22105,7 @@ export type GetApiV1ProductsBySlugResponses = {
                 warrantyId: string | null;
                 createdAt: string | null;
                 deletedAt: string | null;
+                kit: StorefrontKit | null;
             }>;
             recommendations: {
                 /**
@@ -24564,6 +24486,10 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 updatedAt: string | null;
                 items: Array<{
                     id: string;
+                    /**
+                     * The order lines this row shows: one, or two for a kit's item charged at its exact share (its quantities and amounts summed, `unitPriceMinor` null when the total does not divide). The row's `id` is the first. Returns, fulfilments and refunds name these lines.
+                     */
+                    lineIds: Array<string>;
                     productId: string;
                     variantId: string | null;
                     quantity: number;
@@ -24842,10 +24768,6 @@ export type PostApiV1OrdersCartValidationData = {
             productId: string;
             variantId: string;
             quantity: number;
-            /**
-             * The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed.
-             */
-            price?: number;
             productName?: string | null;
             variantLabel?: string | null;
             /**
@@ -24866,6 +24788,10 @@ export type PostApiV1OrdersCartValidationData = {
              * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
              */
             purchaseOptions?: Array<string>;
+            /**
+             * The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed.
+             */
+            price?: number;
         }>;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
         shippingCountryCode?: string | null;
@@ -24887,6 +24813,14 @@ export type PostApiV1OrdersCartValidationData = {
         giftCards?: Array<{
             handle: string;
         }>;
+        /**
+         * The codes the buyer applied. Sent (even empty), the answer carries `discount`: the cart's discounts as checkout prices them. Each new code is a guess against the client's code budget.
+         */
+        discountCodes?: Array<string>;
+        /**
+         * The buyer's phone, for codes limited per customer.
+         */
+        customerPhone?: string | null;
     };
     headers?: {
         'x-storefront-language'?: string;
@@ -25634,6 +25568,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                 submittedPrice?: number;
                 currentPrice?: number;
                 propertyKey?: string | null;
+                componentVariantId?: string | null;
             }>;
             /**
              * Rules installed apps set for this cart ("at most 10 per order"), checked only when `issues` is empty. Checkout is blocked while any remain; the checkout quote and the order check them again.
@@ -25767,6 +25702,113 @@ export type PostApiV1OrdersCartValidationResponses = {
                 code: 'gift_card_unusable' | 'gift_card_duplicate' | 'gift_card_not_needed' | 'gift_card_not_eligible';
                 message: string;
             }>;
+            /**
+             * The applied codes with the store's automatic discounts, then the installed apps' (as checkout stacks them), on the lines this check can sell. Codes that do not apply are listed with the reason and add nothing. The checkout quote stays authoritative.
+             */
+            discount?: {
+                totalDiscount: number;
+                /**
+                 * Quantity-bundle saving included in totalDiscount (0 when the promotions save more).
+                 */
+                bundleDiscountAmount: number;
+                bundles: Array<{
+                    productId: string;
+                    quantity: number;
+                    discountType: 'percentage' | 'fixed_price';
+                    label: string | null;
+                }>;
+                discounts: Array<{
+                    /**
+                     * Null for a discount an installed app gave (then `appId` is set).
+                     */
+                    promotionId: string | null;
+                    /**
+                     * The app that gave the discount; null for the store's own. App discounts apply after the store's.
+                     */
+                    appId: string | null;
+                    title: string;
+                    code: string | null;
+                    /**
+                     * Off the items: shown as a discount line.
+                     */
+                    amount: number;
+                    /**
+                     * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                     */
+                    shippingAmount: number;
+                    /**
+                     * A code only: the automatic discount it replaced, because the code saves more and the two can't be combined.
+                     */
+                    replaces?: string;
+                }>;
+                offers: Array<{
+                    promotionId: string;
+                    title: string;
+                    code: string | null;
+                    kind: 'get' | 'buy';
+                    /**
+                     * 100 means the items are free.
+                     */
+                    percentOff: number;
+                    quantity: number;
+                    shortfallAmount: number | null;
+                    products: Array<{
+                        id: string;
+                        slug: string;
+                        name: string;
+                        /**
+                         * Set for simple products, which can be added in one tap.
+                         */
+                        variantId: string | null;
+                        price: number | null;
+                    }>;
+                }>;
+                rejectedCodes: Array<{
+                    code: string;
+                    reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'needs_delivery' | 'delivery_discount_applied' | 'unavailable';
+                    message: string;
+                    shortfallAmount?: number;
+                    shortfallQuantity?: number;
+                    conflictsWith?: string;
+                    offer?: {
+                        promotionId: string;
+                        title: string;
+                        code: string | null;
+                        kind: 'get' | 'buy';
+                        /**
+                         * 100 means the items are free.
+                         */
+                        percentOff: number;
+                        quantity: number;
+                        shortfallAmount: number | null;
+                        products: Array<{
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /**
+                             * Set for simple products, which can be added in one tap.
+                             */
+                            variantId: string | null;
+                            price: number | null;
+                        }>;
+                    };
+                    requiresCustomerPhone?: boolean;
+                    /**
+                     * The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`).
+                     */
+                    bundleSavesMore?: true;
+                }>;
+                /**
+                 * Each buyer line's share of the store's own discounts (promotions or quantity bundles), as checkout allocates it: a line it pays in full (a free gift) reads free. Store apps' discounts are not split by line here.
+                 */
+                lineDiscounts: Array<{
+                    /**
+                     * The line's position in the request's `items`.
+                     */
+                    index: number;
+                    discountMinor: number;
+                }>;
+            };
             delivery?: {
                 /**
                  * `delivery` ships to the buyer's address; `pickup` is collected at the store.
@@ -77435,7 +77477,7 @@ export type GetApiV1AdminProductsByIdSectionsBySectionData = {
     body?: never;
     path: {
         id: string;
-        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'options' | 'variants' | 'content_blocks' | 'content_block' | 'template' | 'bundles';
+        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'options' | 'variants' | 'content_blocks' | 'content_block' | 'template' | 'bundles' | 'kits' | 'page_offers';
     };
     query?: {
         offset?: number | null;
@@ -77594,6 +77636,84 @@ export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
             aggregateRevision: number;
             items: Array<ProductBundleTier & {
                 id: string;
+            }>;
+        } | {
+            section: 'kits';
+            aggregateRevision: number;
+            items: Array<{
+                variantId: string;
+                sku: string;
+                /**
+                 * The kit SKU's own price.
+                 */
+                ownPrice: number;
+                /**
+                 * What a buyer pays: its own price, never more than its items.
+                 */
+                price: number;
+                compareAtPrice: number;
+                saving: number;
+                savingPercent: number;
+                /**
+                 * How many kits the items' stock allows; null when no item tracks stock.
+                 */
+                availableQuantity: number | null;
+                /**
+                 * Why buyers can't buy it now; empty when they can (stock allowing).
+                 */
+                unavailable: Array<{
+                    componentVariantId: string;
+                    /**
+                     * Why buyers can't buy it: its SKU or product was deleted, its product is a draft or archived, unpublished, or a gift card.
+                     */
+                    reason: 'component_deleted' | 'component_inactive' | 'component_product_deleted' | 'component_unpublished' | 'component_gift_card';
+                }>;
+                components: Array<{
+                    variantId: string;
+                    productId: string | null;
+                    productName: string | null;
+                    sku: string | null;
+                    /**
+                     * The SKU's chosen option values (platform, format), in option order.
+                     */
+                    options: Array<{
+                        name: string;
+                        value: string;
+                    }>;
+                    quantity: number;
+                    price: number | null;
+                    /**
+                     * Available units (on hand less reserved); null when it does not track stock.
+                     */
+                    stock: number | null;
+                    /**
+                     * Why buyers can't buy it: its SKU or product was deleted, its product is a draft or archived, unpublished, or a gift card.
+                     */
+                    problem: 'component_deleted' | 'component_inactive' | 'component_product_deleted' | 'component_unpublished' | 'component_gift_card' | null;
+                }>;
+            }>;
+        } | {
+            section: 'page_offers';
+            aggregateRevision: number;
+            items: Array<{
+                variantId: string;
+                productId: string | null;
+                productName: string | null;
+                sku: string | null;
+                /**
+                 * The SKU's chosen option values (platform, format), in option order.
+                 */
+                options: Array<{
+                    name: string;
+                    value: string;
+                }>;
+                position: number;
+                isKit: boolean;
+                price: number | null;
+                /**
+                 * Why buyers can't buy it: its SKU or product was deleted, its product is a draft or archived, unpublished, or a gift card.
+                 */
+                problem: 'component_deleted' | 'component_inactive' | 'component_product_deleted' | 'component_unpublished' | 'component_gift_card' | null;
             }>;
         } | {
             section: 'text';
@@ -77825,10 +77945,22 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
             label: string | null;
             isActive: boolean;
         }>;
+    } | {
+        section: 'kits';
+        expectedAggregateRevision: number;
+        variantId: string;
+        components: Array<{
+            variantId: string;
+            quantity: number;
+        }>;
+    } | {
+        section: 'page_offers';
+        expectedAggregateRevision: number;
+        variantIds: Array<string>;
     };
     path: {
         id: string;
-        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'content_blocks' | 'template' | 'bundles';
+        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'content_blocks' | 'template' | 'bundles' | 'kits' | 'page_offers';
     };
     query?: never;
     url: '/api/v1/admin/products/{id}/sections/{section}';

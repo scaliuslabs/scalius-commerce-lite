@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "33e6459d-558d-4b01-9da6-a6b6943a974d",
-  "prevId": "95bc0832-611c-455d-b2db-a2cf60321fc0",
+  "id": "c2e416b4-6804-49cb-ae49-edda3a2316d8",
+  "prevId": "33e6459d-558d-4b01-9da6-a6b6943a974d",
   "tables": {
     "account": {
       "name": "account",
@@ -5387,6 +5387,81 @@
         }
       }
     },
+    "product_page_offers": {
+      "name": "product_page_offers",
+      "columns": {
+        "product_id": {
+          "name": "product_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "variant_id": {
+          "name": "variant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        }
+      },
+      "indexes": {
+        "product_page_offers_variant_idx": {
+          "name": "product_page_offers_variant_idx",
+          "columns": [
+            "variant_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "product_page_offers_product_id_products_id_fk": {
+          "name": "product_page_offers_product_id_products_id_fk",
+          "tableFrom": "product_page_offers",
+          "tableTo": "products",
+          "columnsFrom": [
+            "product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "product_page_offers_product_id_variant_id_pk": {
+          "columns": [
+            "product_id",
+            "variant_id"
+          ],
+          "name": "product_page_offers_product_id_variant_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "product_page_offers_position_range": {
+          "name": "product_page_offers_position_range",
+          "value": "\"product_page_offers\".\"position\" BETWEEN 0 AND 19"
+        }
+      }
+    },
     "product_recommendations": {
       "name": "product_recommendations",
       "columns": {
@@ -5555,6 +5630,96 @@
         "product_sales_stats_sold_nonnegative": {
           "name": "product_sales_stats_sold_nonnegative",
           "value": "\"product_sales_stats\".\"sold_30d\" >= 0"
+        }
+      }
+    },
+    "variant_components": {
+      "name": "variant_components",
+      "columns": {
+        "kit_variant_id": {
+          "name": "kit_variant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "component_variant_id": {
+          "name": "component_variant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        }
+      },
+      "indexes": {
+        "variant_components_component_idx": {
+          "name": "variant_components_component_idx",
+          "columns": [
+            "component_variant_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "variant_components_kit_variant_id_product_variants_id_fk": {
+          "name": "variant_components_kit_variant_id_product_variants_id_fk",
+          "tableFrom": "variant_components",
+          "tableTo": "product_variants",
+          "columnsFrom": [
+            "kit_variant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "variant_components_kit_variant_id_component_variant_id_pk": {
+          "columns": [
+            "kit_variant_id",
+            "component_variant_id"
+          ],
+          "name": "variant_components_kit_variant_id_component_variant_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "variant_components_quantity_range": {
+          "name": "variant_components_quantity_range",
+          "value": "\"variant_components\".\"quantity\" BETWEEN 1 AND 100"
+        },
+        "variant_components_not_self": {
+          "name": "variant_components_not_self",
+          "value": "\"variant_components\".\"kit_variant_id\" <> \"variant_components\".\"component_variant_id\""
+        },
+        "variant_components_position_range": {
+          "name": "variant_components_position_range",
+          "value": "\"variant_components\".\"position\" BETWEEN 0 AND 19"
         }
       }
     },

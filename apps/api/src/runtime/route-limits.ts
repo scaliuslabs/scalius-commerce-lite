@@ -112,11 +112,11 @@ export const ROUTE_LIMIT_RULES: ReadonlyArray<readonly [pattern: string, limit: 
   ["POST /storefront/agent-continuations/*", standard()],
 
   // Codes: each new value is a strict guess, wherever a code is tested.
-  ["POST /discounts/validate", guessing(standard(), "codes", "discount-code", discountCode)],
   ["POST /checkout/gift-cards/*", guessing(standard(), "code", "gift-card-code", giftCardCode)],
   ["POST /orders/tax-quote", guessing(exempt(CHECKOUT_PREPARATION), "discountCodes", "discount-code", discountCode)],
   ["POST /orders", guessing(exempt(CHECKOUT_PREPARATION), "discountCodes", "discount-code", discountCode)],
-  ["POST /orders/cart-validation", exempt(CHECKOUT_PREPARATION)],
+  // The cart check prices the applied codes for the cart page and the drawer.
+  ["POST /orders/cart-validation", guessing(exempt(CHECKOUT_PREPARATION), "discountCodes", "discount-code", discountCode)],
   // Track your order: an order number and a contact, per address (the route adds a per-order budget).
   ["POST /orders/lookup/status", strict("order-lookup")],
   // A buyer's file goes to storage: the strict budget per address.
@@ -267,7 +267,6 @@ export const ROUTE_BODY_RULES: ReadonlyArray<readonly [pattern: string, body: Bo
   ["POST /orders", "cart"],
   ["POST /orders/tax-quote", "cart"],
   ["POST /orders/cart-validation", "cart"],
-  ["POST /discounts/validate", "cart"],
   ["POST /abandoned-checkouts", "cart"],
   ["POST /meta/events", "cart"],
   ["POST /storefront/agent-contexts", "cart"],

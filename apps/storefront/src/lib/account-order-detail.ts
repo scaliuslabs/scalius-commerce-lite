@@ -573,7 +573,8 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   const words = accountCopy().order;
   if (items) {
     const lineMarkup = (item: AccountOrderDetail["items"][number]) => {
-      const hasMinor = item.lineSubtotalMinor != null && item.unitPriceMinor != null;
+      // A kit's item charged as two lines is one row here, its unit price null when its total does not divide.
+      const hasMinor = item.lineSubtotalMinor != null;
       const amounts = hasMinor
         ? { grossSubtotalMinor: item.lineSubtotalMinor!, discountMinor: item.discountAmountMinor ?? 0 }
         : null;
@@ -584,7 +585,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       const struck = amounts && isFreeOrderLine(amounts)
         ? `<s class="me-1.5 text-muted-foreground">${escapeHtml(minor(amounts.grossSubtotalMinor))}</s>`
         : "";
-      const unit = hasMinor ? minor(item.unitPriceMinor!) : accountMoney(item.unitPrice, order.currencyCode);
+      const unit = item.unitPriceMinor != null ? minor(item.unitPriceMinor) : accountMoney(item.unitPrice, order.currencyCode);
       const name = escapeHtml(item.productName || words.product);
       // Buyer inputs: display only, escaped, never in links or data attributes.
       const properties = orderLinePropertyRows(item.properties, (property) => minor(property.priceMinor), copy);

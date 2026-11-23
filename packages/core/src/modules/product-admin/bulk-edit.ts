@@ -24,7 +24,7 @@
 // on Free a screen of 50 products with up to about 1,000 counted SKUs; the
 // rest come back as `remaining`. Low-stock alerts refresh once for the
 // whole request, in one batched pass.
-import { SELLABLE_PRICE_MESSAGE, unsellablePriceIndex } from "./sellable-price";
+import { rethrowProductRuleViolation, SELLABLE_PRICE_MESSAGE, unsellablePriceIndex } from "./sellable-price";
 import { and, asc, eq, getTableColumns, inArray, is, isNull, SQL, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
@@ -48,7 +48,6 @@ import {
     isDigitalKind,
     readStoreDecimalPlaces,
     rethrowDigitalStockRuleViolation,
-    rethrowGiftCardProductRuleViolation,
     variantOptionLabelSql,
 } from "../products";
 import {
@@ -470,7 +469,11 @@ function failure(id: string, error: unknown): ProductBulkEditOutcome {
         const located = inventoryLocationErrorFrom(error, "The default location");
         if (located instanceof AppError) return { id, status: "failed", code: located.code, message: located.message };
     }
-    if (error instanceof AppError) return { id, status: "failed", code: error.code, message: error.message };
+    if (error instanceof AppError) {
+        // A refusal with a reason (`details.reason`, as a kit's) answers it as the row's code, so an agent can recover.
+        const reason = (error.details as { reason?: unknown } | undefined)?.reason;
+        return { id, status: "failed", code: typeof reason === "string" ? reason : error.code, message: error.message };
+    }
     console.error(`[product-admin] bulk edit failed: ${error instanceof Error ? error.name : "error"}`);
     return { id, status: "failed", code: "save_failed", message: "This product could not be saved. Try again." };
 }
@@ -736,7 +739,8 @@ async function commitPlans(
         const saved = results[bump] as Array<{ id: string; aggregateRevision: number }>;
         return new Map(saved.map((row) => [row.id, Number(row.aggregateRevision)]));
     } catch (error) {
-        rethrowGiftCardProductRuleViolation(error);
+        // A product rule a guard trigger raised (a gift card, an unsellable price, a kit's stock): its refusal, with its reason.
+        rethrowProductRuleViolation(error);
         rethrowDigitalStockRuleViolation(error);
         throw error;
     }

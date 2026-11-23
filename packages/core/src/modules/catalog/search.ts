@@ -8,6 +8,7 @@ import {
   publicProductBaseConditions,
   type SelectedProductOption,
   channelOnHandSql,
+  buyerStockColumns,
 } from "../products";
 import { products, productVariants } from "@scalius/database/schema";
 import { and, sql, desc, isNull, inArray, type SQL } from "drizzle-orm";
@@ -78,11 +79,10 @@ async function readStorefrontSearchVariantMap(
                 sku: productVariants.sku,
                 priceMinor: productVariants.priceMinor,
                 // The units the online store sells (its linked locations' on-hand).
-                stock: channelOnHandSql({ id: sql`${productVariants.id}`, stock: sql`${productVariants.stock}` }).mapWith(Number),
-                reservedStock: productVariants.reservedStock,
+                // A kit's stock is its items' (`buyerStockColumns`), any other SKU's its own.
+                ...buyerStockColumns(),
                 lowStockThreshold: effectiveLowStockThresholdSql(),
                 isDefault: productVariants.isDefault,
-                trackInventory: productVariants.trackInventory,
                 discountType: productVariants.discountType,
                 discountBps: productVariants.discountBps,
                 discountAmountMinor: productVariants.discountAmountMinor,

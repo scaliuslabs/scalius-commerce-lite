@@ -85,7 +85,6 @@ export const ROUTE_TABLE = [
   { mount: "/navigation", router: "navigationRoutes", group: "public-config" },
   { mount: "/pages", router: "pagesRoutes", group: "public-content" },
   { mount: "/articles", router: "articleRoutes", group: "public-content" },
-  { mount: "/discounts", router: "discountRoutes", group: "public-buyer" },
   { mount: "/analytics", router: "analyticsRoutes", group: "public-buyer" },
   { mount: "/meta", router: "metaConversionsRoutes", group: "public-buyer" },
   { mount: "/storefront", router: "storefrontRoutes", group: "public-config" },

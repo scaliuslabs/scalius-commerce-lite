@@ -260,7 +260,7 @@ export function bundleDiscountLine(bundles: unknown, amount: number): CheckoutDi
 }
 
 /**
- * The cart preview's (`/discounts/validate`) quantity-bundle saving as the
+ * The cart check's discount (`discount` on `/orders/cart-validation`) quantity-bundle saving as the
  * same "Discount · Pair" line the tax quote shows, or null when none applies
  * (or the API predates bundle previews).
  */
@@ -276,7 +276,7 @@ const REJECTED_CODE_REASONS = new Set<CheckoutRejectedCodeReason>([
   "delivery_discount_applied", "unavailable",
 ]);
 
-/** The discount lines, offers and code statuses shared by the tax quote and the cart preview. */
+/** The discount lines, offers and code statuses shared by the tax quote and the cart check's discount. */
 export function parseDiscountFacts(data: Record<string, unknown>): CheckoutDiscountFacts {
   const { discounts = [], offers = [], rejectedCodes = [] } = data;
   if (!Array.isArray(discounts) || discounts.length > 10) fail();

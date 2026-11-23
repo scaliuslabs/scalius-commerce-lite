@@ -44,6 +44,7 @@ import { OPTION_FACET_KEY_PREFIX } from "@scalius/shared/catalog-attributes";
 import { buildBuyerCatalogPricingProjection } from "./buyer-projection";
 import { publicProductHasBuyerResolvableSku } from "./public-eligibility";
 import { channelAvailableStockSql, productPublishedToChannelSql } from "./channel-publications";
+import { sellableUnitsSql } from "./kits";
 import { storeDefaultLowStockThresholdSql } from "./low-stock-policy";
 import { canonicalAttributeNumberSql } from "../../utils/attribute-number-sql";
 
@@ -77,7 +78,13 @@ interface ProductScope {
     pricing: SQL | undefined;
 }
 
-/** The products named by ids (or by their SKUs' ids), as one bound JSON parameter. */
+/**
+ * The products named by ids (or by their SKUs' ids), as one bound JSON
+ * parameter. The kits holding those SKUs are not in it: a write never pays for
+ * them. 0224's queue triggers note an item SKU whose stock, tracking or status
+ * moved, and `refreshQueuedKitItems` refreshes its kits after the write, in
+ * bounded chunks (checkout always checks a kit's items itself).
+ */
 function idScope(kind: "product" | "sku", ids: readonly string[]): ProductScope {
     const idSet = sql`(SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`;
     const on = (column: SQL) => kind === "product"
@@ -115,18 +122,17 @@ const EVERY_PRODUCT: ProductScope = { on: () => sql`1 = 1`, pricing: undefined }
  * row; a missing row is out of stock): its own low-stock level, else the
  * store default, over the units the online store sells.
  */
-function cardAvailabilityBandSql(cardSku: ReturnType<typeof alias<typeof productVariants, string>>): SQL<string> {
-    const available = channelAvailableStockSql({
-        id: sql`${cardSku.id}`,
-        stock: sql`${cardSku.stock}`,
-        reservedStock: sql`${cardSku.reservedStock}`,
-    });
+function cardAvailabilityBandSql(
+    cardSku: ReturnType<typeof alias<typeof productVariants, string>>,
+    cardUnits: SQL,
+): SQL<string> {
+    // The card SKU's sellable units from the pricing projection (-1 untracked; a kit's from its items).
     const threshold = sql`COALESCE(${cardSku.lowStockThreshold}, ${storeDefaultLowStockThresholdSql()})`;
     return sql<string>`CASE
                 WHEN ${cardSku.id} IS NULL THEN 'out_of_stock'
-                WHEN ${cardSku.trackInventory} = 0 THEN 'untracked'
-                WHEN ${available} <= 0 THEN 'out_of_stock'
-                WHEN ${threshold} > 0 AND ${available} <= ${threshold} THEN 'low_stock'
+                WHEN ${cardUnits} = -1 THEN 'untracked'
+                WHEN ${cardUnits} <= 0 THEN 'out_of_stock'
+                WHEN ${threshold} > 0 AND ${cardUnits} <= ${threshold} THEN 'low_stock'
                 ELSE 'in_stock'
             END`;
 }
@@ -167,7 +173,7 @@ export function selectLiveCatalogBuyerState(db: Database, scope: SQL, pricingSco
             hasDiscount: sql<number>`COALESCE(${pricing.hasDiscount}, 0)`.as("buyer_state_has_discount"),
             availableForSale: sql<number>`COALESCE(${pricing.availableForSale}, 0)`.as("buyer_state_available_for_sale"),
             hasCustomerOptions: sql<number>`COALESCE(${pricing.hasCustomerOptions}, 0)`.as("buyer_state_has_customer_options"),
-            availabilityBand: cardAvailabilityBandSql(cardSku).as("buyer_state_availability_band"),
+            availabilityBand: cardAvailabilityBandSql(cardSku, sql`${pricing.cardUnits}`).as("buyer_state_availability_band"),
             refreshedAt: sql<number>`unixepoch()`.as("buyer_state_refreshed_at"),
         })
         .from(products)
@@ -540,7 +546,10 @@ export async function refreshCatalogAvailabilityBands(
     const last = rows[rows.length - 1]!.id;
     const cardSku = alias(productVariants, "band_card_sku");
     // Qualified: an update renders its own columns bare, and the card SKU has a `product_id` too.
-    const band = sql`(SELECT ${cardAvailabilityBandSql(cardSku)}
+    // The card SKU's sellable units, as the projection reads them (`sellableUnitsSql`).
+    const cardUnits = sellableUnitsSql(sql`${cardSku.id}`, sql`(CASE WHEN ${cardSku.trackInventory} = 0 THEN -1
+        ELSE MAX(${channelAvailableStockSql({ id: sql`${cardSku.id}`, stock: sql`${cardSku.stock}`, reservedStock: sql`${cardSku.reservedStock}` })}, 0) END)`);
+    const band = sql`(SELECT ${cardAvailabilityBandSql(cardSku, cardUnits)}
         FROM (SELECT 1) AS band_probe
         LEFT JOIN "product_variants" AS "band_card_sku" ON ${cardSku.id} = "product_buyer_state"."sku_id"
             AND ${cardSku.productId} = "product_buyer_state"."product_id")`;

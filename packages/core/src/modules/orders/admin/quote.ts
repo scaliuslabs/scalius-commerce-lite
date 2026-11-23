@@ -22,7 +22,11 @@ import {
     withAppLineInputs,
     appLineInputApplies,
     parseAppLineInputFlags,
+    LINE_BUNDLE_PROPERTY_KEY,
+    lineBundleProperty,
+    readOrderLineProperties,
     type AppLineInputs,
+    type OrderLineBundle,
 } from "@scalius/shared/line-properties";
 import { discountedPriceMinor, isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
 import { isLineAmountInRange } from "@scalius/shared/order-limits";
@@ -51,9 +55,13 @@ import { buildStorefrontTaxAllocationLineId, calculateStorefrontTaxQuote, taxAdd
 import { billingTaxLocation } from "../billing-address";
 import { type TaxQuote, type TaxQuoteCustomer } from "../../tax/browser";
 import {
+  kitComponentsSql,
+  kitPrice,
   loadProductMediaProjections,
+  parseKitComponents,
   resolveSkuImageRepresentation,
   variantOptionLabelSql,
+  type KitComponentRef,
 } from "../../products";
 import { resolveActiveDeliveryLocationNames } from "../../delivery";
 import type {
@@ -66,7 +74,9 @@ import type {
 import { manualOrderAppLines } from "./app-lines";
 import { appFlagsSql } from "../../../utils/app-flags";
 
-type AdminOrderSkuItem = { productId: string; variantId: string | null; quantity?: number };
+/** `kitLine`: a kit's item, whose issues speak for the kit's line (its index, SKU and product) and name the item. */
+type AdminOrderSkuItem = { productId: string; variantId: string | null; quantity?: number; kitLine?: AdminOrderKitLine };
+interface AdminOrderKitLine { index: number; productId: string; variantId: string }
 type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     variantId: string;
     inventoryTracked: boolean;
@@ -81,6 +91,10 @@ type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     customizationSchema: string | null;
     /** The product's and the SKU's app flags (`appFlagsSql`): which app line inputs the line takes. */
     appFlags: { product: string | null; variant: string | null };
+    /** A kit SKU's components (`kitComponentsSql`): a staff order sells it as them (`expandAdminOrderKits`). */
+    kitComponents: KitComponentRef[] | null;
+    /** A kit's component line: its kit's membership, frozen on the order line. */
+    bundle?: OrderLineBundle;
 };
 type AdminOrderSkuIssueCode =
     | "sku_required"
@@ -109,6 +123,8 @@ export interface ManualOrderDeliveryMethod {
 /** A line the amendment keeps: its agreed price and frozen buyer inputs. */
 export interface RetainedManualOrderLine {
     variantId: string | null;
+    /** The kept line's quantity: a kit's lines are amended together (`assertKitsAmendedWhole`). */
+    quantity?: number;
     unitPriceMinor: number;
     fulfillmentType?: string | null;
     properties?: string | null;
@@ -235,6 +251,8 @@ export interface PreparedManualOrderQuote {
     /** Bangladesh's City/Thana/Area destination, stored and taxed; null when nothing ships or outside Bangladesh. */
     address: { city: string; zone: string; area: string | null } | null;
     trackedItems: PreparedManualOrderLine[];
+    /** The order's lines as asked for, aligned with `trackedItems`: a kit's line is its items (`expandAdminOrderKits`). */
+    inputItems: QuoteManualOrderInput["items"];
     allocationLineIds: string[];
     taxQuote: TaxQuote;
     quote: ManualOrderQuote;
@@ -484,7 +502,12 @@ export async function prepareManualOrderQuote(
         // A pickup ships nothing: the backup market, as the order is placed in.
         pickup: chosenKind === "pickup",
     };
-    const resolvedItems = await resolveAdminOrderItemInventory(db, data.items, marketSignals);
+    // A kit already on the order changes as a whole (an amendment), never one item of it.
+    if (retainedLines) assertKitsAmendedWhole(data.items, retainedLines);
+    // A kit is sold as its items, here as at checkout.
+    const { items: inputItems, resolved: resolvedItems } = await expandAdminOrderKits(
+        db, data.items, await resolveAdminOrderItemInventory(db, data.items, marketSignals), marketSignals, currency.priceIncrementMinor, retainedLines,
+    );
     // The country of that market, for the apps' hooks: priced, hooked and placed in one market.
     const marketCountry = normalizeMarketCountry(checkoutMarketCountry(
         resolvedItems.map((item) => ({ productId: item.productId, variantId: item.variantId })),
@@ -531,7 +554,7 @@ export async function prepareManualOrderQuote(
 
     const lineProperties = resolveManualOrderLineProperties(
         resolvedItems.map((item, index) => {
-            const submitted = data.items[index] as { orderItemId?: string | null; unitPriceMinor?: number; purchaseOptions?: readonly string[] | null } | undefined;
+            const submitted = inputItems[index] as { orderItemId?: string | null; unitPriceMinor?: number; purchaseOptions?: readonly string[] | null } | undefined;
             const override = submitted?.unitPriceMinor;
             if (override !== undefined && !isIncrementMultipleMinor(override, currency.priceIncrementMinor)) {
                 throw new ValidationError(priceIncrementMessage(currency.code, currency.priceIncrementMinor), {
@@ -555,12 +578,14 @@ export async function prepareManualOrderQuote(
     const trackedItems: PreparedManualOrderLine[] = resolvedItems.map((item, index) => ({
         ...item,
         ...lineProperties[index]!,
+        // A kit's item names its kit on the order line, as checkout freezes it.
+        ...(item.bundle ? { properties: serializeOrderLineProperties([...readOrderLineProperties(lineProperties[index]!.properties), lineBundleProperty(item.bundle)]) } : {}),
         fulfillmentType: plan.lineTypes[index]!,
     }));
     const outOfRange = trackedItems.findIndex((item) => !isLineAmountInRange(item.unitPriceMinor, item.quantity));
     if (outOfRange >= 0) {
         throw new ValidationError("That line comes to more than one order can hold. Lower its quantity.", {
-            issues: [{ index: outOfRange, code: "quantity_unavailable" }],
+            issues: [{ index: (trackedItems[outOfRange] as { kitLine?: AdminOrderKitLine }).kitLine?.index ?? outOfRange, code: "quantity_unavailable" }],
         });
     }
     const money = calculateManualOrderMoney(
@@ -647,6 +672,7 @@ export async function prepareManualOrderQuote(
         shippingCountryCode,
         address,
         trackedItems,
+        inputItems,
         allocationLineIds,
         taxQuote,
         quote: projectManualOrderQuote(taxQuote, trackedItems, appPricing.appDiscounts),
@@ -675,6 +701,8 @@ interface AdminOrderSkuIssue {
     variantId: string | null;
     code: AdminOrderSkuIssueCode;
     message: string;
+    /** On a kit's line: the item SKU the issue is about. */
+    componentVariantId?: string;
 }
 
 function throwAdminOrderSkuIssues(issues: AdminOrderSkuIssue[]): never {
@@ -688,13 +716,11 @@ function addAdminOrderSkuIssue(
     code: AdminOrderSkuIssueCode,
     message: string,
 ) {
-    issues.push({
-        index,
-        productId: item.productId,
-        variantId: item.variantId ?? null,
-        code,
-        message,
-    });
+    // A kit's item speaks for the line staff added: the kit's, naming the item.
+    const kit = item.kitLine;
+    issues.push(kit
+        ? { index: kit.index, productId: kit.productId, variantId: kit.variantId, code, message, componentVariantId: item.variantId ?? undefined }
+        : { index, productId: item.productId, variantId: item.variantId ?? null, code, message });
 }
 
 function assertAdminOrderItemsUseSkus(items: AdminOrderSkuItem[]) {
@@ -713,6 +739,174 @@ function assertAdminOrderItemsUseSkus(items: AdminOrderSkuItem[]) {
 
     if (issues.length > 0) {
         throwAdminOrderSkuIssues(issues);
+    }
+}
+
+/**
+ * A staff order's kits sold as their items, the way checkout sells them: each
+ * kit line becomes its components (quantity × kits), each charged its exact
+ * share of the kit's price (`kitPrice`; a price staff set by hand on the kit
+ * line is the kit's price; an item whose share does not divide is two lines,
+ * its heavier units one step dearer) and naming its kit under an id no other
+ * bundle of the order holds. One more read, only when the order holds a kit.
+ * A kit with an item that can't be sold or with buyer inputs is refused, with
+ * its reason, on the kit's line.
+ */
+async function expandAdminOrderKits<T extends QuoteManualOrderInput["items"][number]>(
+    db: Database,
+    items: readonly T[],
+    resolved: Array<AdminOrderItemWithInventory<T>>,
+    market: CheckoutMarketSignals,
+    priceIncrementMinor: number,
+    /** The order's kept lines (an amendment): their bundle ids are taken. */
+    retainedLines?: ReadonlyMap<string, RetainedManualOrderLine>,
+): Promise<{ items: T[]; resolved: Array<AdminOrderItemWithInventory<T>> }> {
+    if (!resolved.some((item) => item.kitComponents)) return { items: [...items], resolved };
+    const issues: AdminOrderSkuIssue[] = [];
+    const componentInputs: Array<{ kitIndex: number; perKit: number; input: T }> = [];
+    resolved.forEach((item, index) => {
+        if (!item.kitComponents) return;
+        const asked = items[index] as T & { properties?: unknown; orderItemId?: string | null };
+        if (asked.orderItemId) {
+            addAdminOrderSkuIssue(issues, item, index, "product_unavailable", "This line is a kit, which is sold as its items. Remove it and add the kit again.");
+            return;
+        }
+        if (Array.isArray(asked.properties) && asked.properties.length > 0) {
+            addAdminOrderSkuIssue(issues, item, index, "properties_invalid", "A kit takes no buyer inputs on a staff order. Send it without them.");
+            return;
+        }
+        const gone = item.kitComponents.find((component) => component.productId === null);
+        if (gone) {
+            issues.push({ index, productId: item.productId, variantId: item.variantId, code: "product_unavailable", componentVariantId: gone.variantId,
+                message: "One of this kit's items is no longer sold. Fix the kit on its product first." });
+            return;
+        }
+        const kitLine: AdminOrderKitLine = { index, productId: item.productId, variantId: item.variantId };
+        for (const component of item.kitComponents) {
+            componentInputs.push({
+                kitIndex: index,
+                perKit: component.quantity,
+                input: { productId: component.productId!, variantId: component.variantId, quantity: (item.quantity ?? 1) * component.quantity, kitLine } as unknown as T,
+            });
+        }
+    });
+    if (issues.length > 0) throwAdminOrderSkuIssues(issues);
+    const parts = await resolveAdminOrderItemInventory(db, componentInputs.map((part) => part.input), market);
+    // Bundle ids the order already holds (an amendment keeps its kits' lines): a new kit never shares one.
+    const taken = new Set([...(retainedLines?.values() ?? [])].flatMap((line) => frozenBundleIds(line.properties)));
+    const outItems: T[] = [];
+    const outResolved: Array<AdminOrderItemWithInventory<T>> = [];
+    resolved.forEach((item, index) => {
+        if (!item.kitComponents) {
+            outItems.push(items[index]!);
+            outResolved.push(item);
+            return;
+        }
+        const members = componentInputs.flatMap((part, position) => (part.kitIndex === index ? [{ ...part, resolved: parts[position]! }] : []));
+        const problem = members.find((member) => member.resolved.isGiftCard || member.resolved.kitComponents);
+        if (problem) {
+            addAdminOrderSkuIssue(issues, problem.resolved, index, "product_unavailable", "One of this kit's items can't be part of a kit (a gift card or another kit). Fix the kit on its product first.");
+            return;
+        }
+        const handPrice = (items[index] as { unitPriceMinor?: number }).unitPriceMinor;
+        const price = kitPrice(handPrice ?? item.catalogUnitPriceMinor,
+            members.map((member) => ({ unitPriceMinor: member.resolved.catalogUnitPriceMinor, quantity: member.perKit })), priceIncrementMinor);
+        const units = item.quantity ?? 1;
+        let ordinal = index;
+        while (taken.has(`kit:${ordinal}:${item.variantId}`)) ordinal += 1;
+        const id = `kit:${ordinal}:${item.variantId}`;
+        taken.add(id);
+        const title = item.variantLabel ? `${item.productName} (${item.variantLabel})` : item.productName;
+        // Each item's lines: its units at its share, and its heavier units (one step more) when the share does not divide.
+        const lines = members.flatMap((member, position) => {
+            const heavy = price.componentHeavyUnits[position]!;
+            const light = price.componentUnitPricesMinor[position]!;
+            return [
+                { member, perUnit: member.perKit - heavy, unitPriceMinor: light },
+                ...(heavy > 0 ? [{ member, perUnit: heavy, unitPriceMinor: light + price.stepMinor }] : []),
+            ].filter((line) => line.perUnit > 0);
+        });
+        const fewest = Math.min(...lines.map((line) => line.perUnit));
+        const anchor = lines.findIndex((line) => line.perUnit === fewest);
+        lines.forEach((line, position) => {
+            outItems.push({ ...line.member.input, quantity: units * line.perUnit } as T);
+            outResolved.push({
+                ...line.member.resolved,
+                quantity: units * line.perUnit,
+                catalogUnitPriceMinor: line.unitPriceMinor,
+                bundle: {
+                    id, title, kind: "kit", kit: { variantId: item.variantId, productId: item.productId },
+                    anchor: position === anchor, units, perUnit: line.perUnit,
+                },
+            });
+        });
+    });
+    if (issues.length > 0) throwAdminOrderSkuIssues(issues);
+    return { items: outItems, resolved: outResolved };
+}
+
+/** A kit's lines can't be amended one item at a time: the line would keep a share of a kit it no longer matches. */
+export const KIT_AMENDED_IN_PART_REASON = "kit_amended_in_part";
+
+/**
+ * An amendment changes a kit already on the order as a whole: every one of its
+ * lines kept at the same number of kits (its quantity per kit times them), or
+ * every one removed. Anything else is refused, naming the kit's lines.
+ */
+function assertKitsAmendedWhole(
+    items: ReadonlyArray<{ orderItemId?: string | null; quantity?: number }>,
+    retainedLines: ReadonlyMap<string, RetainedManualOrderLine>,
+): void {
+    const asked = new Map(items.flatMap((item) => (item.orderItemId ? [[item.orderItemId, item.quantity ?? 1] as const] : [])));
+    const kits = new Map<string, Array<{ orderItemId: string; perUnit: number; title: string }>>();
+    // Every line that names a kit is guarded, by the units per kit it was frozen with (never skipped).
+    for (const [orderItemId, line] of retainedLines) {
+        const kit = frozenKitBundle(line.properties);
+        if (!kit) continue;
+        kits.set(kit.id, [...(kits.get(kit.id) ?? []), { orderItemId, perUnit: kit.perUnit, title: kit.title }]);
+    }
+    for (const lines of kits.values()) {
+        const kept = lines.map((line) => asked.get(line.orderItemId));
+        if (kept.every((quantity) => quantity === undefined)) continue;
+        const units = kept.map((quantity, position) => (quantity === undefined ? Number.NaN : quantity / lines[position]!.perUnit));
+        if (units.every((count) => Number.isInteger(count) && count === units[0] && count > 0)) continue;
+        throw new ValidationError(`${lines[0]!.title} is a kit: change the quantity of all its items together, in whole kits, or remove all of them.`, {
+            reason: KIT_AMENDED_IN_PART_REASON,
+            orderItemIds: lines.map((line) => line.orderItemId),
+        });
+    }
+}
+
+/** A kit's frozen membership on an order line (`_bundle`, kind kit): its id, title and units per kit; null otherwise. */
+function frozenKitBundle(properties: string | null | undefined): { id: string; title: string; perUnit: number } | null {
+    if (!properties) return null;
+    try {
+        const entries = JSON.parse(properties) as unknown;
+        if (!Array.isArray(entries)) return null;
+        for (const entry of entries as Array<{ key?: unknown; value?: unknown; bundle?: { id?: unknown; kind?: unknown; perUnit?: unknown } }>) {
+            const bundle = entry?.key === LINE_BUNDLE_PROPERTY_KEY ? entry.bundle : undefined;
+            if (bundle?.kind === "kit" && typeof bundle.id === "string" && typeof bundle.perUnit === "number" && Number.isSafeInteger(bundle.perUnit) && bundle.perUnit > 0) {
+                return { id: bundle.id, title: typeof entry.value === "string" ? entry.value : "This kit", perUnit: bundle.perUnit };
+            }
+        }
+    } catch {
+        return null;
+    }
+    return null;
+}
+
+/** The bundle id frozen on an order line (`_bundle`), if any. */
+function frozenBundleIds(properties: string | null | undefined): string[] {
+    if (!properties) return [];
+    try {
+        const entries = JSON.parse(properties) as unknown;
+        if (!Array.isArray(entries)) return [];
+        return entries.flatMap((entry) => {
+            const bundle = (entry as { key?: unknown; bundle?: { id?: unknown } })?.key === LINE_BUNDLE_PROPERTY_KEY ? (entry as { bundle?: { id?: unknown } }).bundle : undefined;
+            return typeof bundle?.id === "string" ? [bundle.id] : [];
+        });
+    } catch {
+        return [];
     }
 }
 
@@ -746,6 +940,8 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             taxClassId: sql<string | null>`coalesce(${productVariants.taxClassId}, ${products.taxClassId})`,
             variantLabel: variantOptionLabelSql(productVariants.id),
             variantDeletedAt: productVariants.deletedAt,
+            // A kit's components (null for any other SKU): the order sells it as them.
+            kitComponents: kitComponentsSql(sql`${productVariants.id}`),
             productActive: products.isActive,
             productDeletedAt: products.deletedAt,
             fulfillmentKind: productVariants.fulfillmentKind,
@@ -875,6 +1071,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             isGiftCard: sku.isGiftCard === true,
             customizationSchema: sku.customizationSchema,
             appFlags: { product: sku.productAppFlags ?? null, variant: sku.variantAppFlags ?? null },
+            kitComponents: parseKitComponents(sku.kitComponents),
         });
     });
 

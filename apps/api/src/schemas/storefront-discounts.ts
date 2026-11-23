@@ -8,10 +8,13 @@ import {
 import { fromMinor } from "@scalius/shared/money";
 import type { AppliedAppDiscount } from "@scalius/core/modules/checkout";
 
-/** Codes the buyer applied, in the order they typed them. */
-export const discountCodesSchema = z
+/** Codes the buyer applied, in the order they typed them (no default: absent stays absent). */
+export const discountCodeListSchema = z
   .array(z.string().trim().min(1).max(50))
-  .max(MAX_SUBMITTED_DISCOUNT_CODES)
+  .max(MAX_SUBMITTED_DISCOUNT_CODES);
+
+/** Codes the buyer applied, in the order they typed them; absent is none. */
+export const discountCodesSchema = discountCodeListSchema
   .default([])
   .openapi({ description: "Discount codes the buyer applied. Codes of different discount classes combine when either allows it." });
 

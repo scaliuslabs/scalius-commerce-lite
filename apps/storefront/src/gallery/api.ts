@@ -162,13 +162,12 @@ const RESOLVED_ADDRESSES: Record<string, Record<string, string>> = {
 };
 
 /**
- * The POSTs the checkout page makes from the browser: the discount preview and
- * abandoned-checkout capture (nothing to apply or save in the gallery), and the
+ * The POSTs the checkout page makes from the browser: abandoned-checkout
+ * capture (nothing to save in the gallery), and the
  * address app's suggest and resolve. null for any other request.
  */
 async function browserPostAnswer(entry: GalleryEntry, path: string, request: Request): Promise<unknown | null> {
   if (request.method !== "POST") return null;
-  if (path === "/api/v1/discounts/validate") return { totalDiscount: 0, discounts: [], offers: [], rejectedCodes: [] };
   if (path === "/api/v1/abandoned-checkouts") return { saved: true };
   if (!entry.scenario.addressApp) return null;
   const body = (await request.json().catch(() => ({}))) as { id?: string };
@@ -378,7 +377,7 @@ function record(entry: GalleryEntry, path: string) {
 
 /** The cart check for a seeded cart: every line is priced as sent and in stock, except the fixture's sold-out products. */
 async function cartValidation(request: Request) {
-  const body = (await request.clone().json().catch(() => null)) as { items?: Array<{ cartKey?: string | null; productId: string; variantId: string; quantity: number; price: number; productName?: string | null; variantLabel?: string | null }> } | null;
+  const body = (await request.clone().json().catch(() => null)) as { discountCodes?: string[]; items?: Array<{ cartKey?: string | null; productId: string; variantId: string; quantity: number; price: number; productName?: string | null; variantLabel?: string | null }> } | null;
   const items = body?.items ?? [];
   const issues = items.flatMap((item, index) => fixtureProductSoldOut(item.productId)
     ? [{ index, cartKey: item.cartKey ?? null, productId: item.productId, variantId: item.variantId, code: "OUT_OF_STOCK", message: `${item.productName ?? "This item"} is sold out.`, requestedQuantity: item.quantity, availableQuantity: 0 }]
@@ -396,6 +395,8 @@ async function cartValidation(request: Request) {
     requiresDeliveryMethod: true,
     requiresShipping: true,
     allowedPaymentMethods: ["cod"],
+    // The cart page's discounts ride the check: nothing to apply in the gallery.
+    ...(body?.discountCodes ? { discount: { totalDiscount: 0, bundleDiscountAmount: 0, bundles: [], discounts: [], offers: [], rejectedCodes: [], lineDiscounts: [] } } : {}),
   };
 }
 
