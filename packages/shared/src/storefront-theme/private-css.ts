@@ -26,7 +26,8 @@
 // id `#x` are the region's own, written `.tc-x` and `#tc-x`, as its markup
 // is, so they never meet a host or utility class); values of words,
 // numbers, colours, strings and the allowed functions; `url(<asset>)` for
-// one of the theme's listed assets; its own custom properties `--t-*`.
+// one of the theme's listed assets, only as the direct value of an image
+// property; its own custom properties `--t-*`.
 // What it may not, each with its `reason`: reach any file or host
 // (`import`, `foreign_url`, `forbidden_function`); read state (`state_selector`)
 // or an attribute the region's inert markup never carries (`unknown_attribute`);
@@ -132,7 +133,18 @@ interface ValueContext {
   keyframes: ReadonlySet<string>;
   /** `animation` and `animation-name` name keyframes: those idents take the `t-` prefix. */
   namesKeyframes: boolean;
+  /** An asset may stand here: the top level of an image property's value (`IMAGE_PROPERTIES`). */
+  image: boolean;
 }
+
+/**
+ * The properties that paint an image inside their box: an asset (`url(<key>)`)
+ * is the direct value of one of these, never inside a function, a custom
+ * property or any other property (a cursor paints outside every box).
+ */
+const IMAGE_PROPERTIES = new Set(["background", "background-image", "border-image", "border-image-source", "list-style", "list-style-image", "mask", "mask-image", "content"]);
+/** The store's own custom properties no value may read: the page's asset URLs (an asset is `url(<key>)`). */
+const HOST_ASSET_PREFIX = "--private-asset-";
 
 /** A value checked, its assets written as their custom properties and its keyframe names prefixed. */
 function checkValue(nodes: readonly CssNode[], context: ValueContext): CssNode[] {
@@ -162,25 +174,27 @@ function checkValue(nodes: readonly CssNode[], context: ValueContext): CssNode[]
           if (!node.values.every((item) => item.type === "ident" || item.type === "whitespace")) refuse("syntax", "[ … ] holds grid line names only.");
           return node;
         }
-        return { ...node, values: checkValue(node.values, context) };
+        return { ...node, values: checkValue(node.values, { ...context, image: false }) };
       case "fn": {
         const name = node.name.toLowerCase();
         if (name === "url") {
           const args = trim(node.values);
           return assetReference(args.length === 1 && args[0]!.type === "string" ? args[0].value : "\u0000", context);
         }
+        const inner = { ...context, image: false };
         if (!FUNCTIONS.has(name)) {
           return refuse("forbidden_function", `${name}() is not allowed. A value may use colour, maths, gradient, var(), env() and the other listed functions; a file is url(<asset>).`);
         }
         if (name === "var") {
           const [first, ...rest] = trim(node.values);
           if (first?.type !== "ident" || !first.value.startsWith("--")) refuse("syntax", "var() names a custom property.");
-          return { ...node, values: [first!, ...checkValue(rest, context)] };
+          if ((first as { value: string }).value.toLowerCase().startsWith(HOST_ASSET_PREFIX)) refuse("forbidden_function", "var() never reads the page's asset properties: name an asset as url(<its key>) in an image property.");
+          return { ...node, values: [first!, ...checkValue(rest, inner)] };
         }
         if (name === "env" && !trim(node.values).every((item) => item.type === "ident" || item.type === "comma" || item.type === "whitespace" || item.type === "dimension" || item.type === "number")) {
           refuse("syntax", "env() names an environment value.");
         }
-        return { ...node, name, values: checkValue(node.values, context) };
+        return { ...node, name, values: checkValue(node.values, inner) };
       }
       default:
         return refuse("syntax", `A ${node.type} has no place in a value.`);
@@ -191,6 +205,9 @@ function checkValue(nodes: readonly CssNode[], context: ValueContext): CssNode[]
 function assetReference(key: string, context: ValueContext): CssNode {
   if (!PRIVATE_ASSET_KEY.test(key) || !context.assets.has(key)) {
     refuse("foreign_url", `url(${key.slice(0, 40)}) is not one of the theme's listed assets. List the file under privatePages.assets and write url(<its key>).`);
+  }
+  if (!context.image) {
+    refuse("forbidden_function", `url(${key}) stands only as the direct value of an image property (${[...IMAGE_PROPERTIES].join(", ")}): never inside a function, a custom property or another property.`);
   }
   return { type: "fn", name: "var", values: [{ type: "ident", value: privateAssetProperty(key) }] };
 }
@@ -608,11 +625,12 @@ class Compiler {
           assets: this.context.assets,
           keyframes: this.keyframes,
           namesKeyframes: name === "animation" || name === "animation-name",
+          image: IMAGE_PROPERTIES.has(name),
         });
         if (value.length === 0) refuse("syntax", `${name} has no value.`);
         if (name === "position") checkPosition(value);
-        // A cursor image is painted by the system, outside any box.
-        if (name === "cursor" && JSON.stringify(value).includes(privateAssetProperty(""))) refuse("forbidden_function", "cursor takes a keyword: a cursor image paints outside its region.");
+        // A cursor image is painted by the system, outside any box: a cursor is keywords, never read from a variable.
+        if (name === "cursor" && JSON.stringify(value).includes('"name":"var"')) refuse("forbidden_function", "cursor takes keywords only (pointer, default…), never var(): a cursor image paints outside its region.");
         if (name === "animation" || name === "animation-name") checkAnimation(name, value, this.prefixed);
         declarations.push([declaration.name.startsWith("--") ? declaration.name : name, serializeCss(value), declaration.important]);
       } catch (error) {

@@ -179,7 +179,7 @@ Inside a region you may use what CSS offers for a design: layout, colour, gradie
 @keyframes glow { from { opacity: .4 } to { opacity: 1 } }
 ```
 
-`url(<asset>)` names one of your listed `assets` (never a cursor); the page loads it from the store's own origin. Your animations name only your own `@keyframes` (written `t-<name>`). Custom properties are named `--t-<name>`.
+`url(<asset>)` names one of your listed `assets`, only as the direct value of a property that paints an image in its box (`background`, `background-image`, `border-image`, `border-image-source`, `list-style`, `list-style-image`, `mask`, `mask-image`, `content`): never in a custom property, inside a function or as a cursor, which takes no `var()`. The page loads it from the store's own origin. Your animations name only your own `@keyframes` (written `t-<name>`). Custom properties are named `--t-<name>`.
 
 A page holds at most **8 content blocks**, at most **3 before its last part a buyer must reach** (the details form on the cart page), and at most 2 in a cart line (`content_limit`).
 
@@ -190,7 +190,7 @@ The stylesheet is parsed by a CSS Syntax 3 parser and written back from what was
 | `unscoped_selector` | A selector does not start at a region's wrapper, selects the wrapper itself, leaves it by `~` or `+`, or climbs out of it: `:is()`, `:where()` and `:not()` take compound selectors only (no combinator), `:has()` looks only down (` ` or `>`, never `~` or `+`), and `html`, `body` and `:root` appear only first, as the page's scheme, language or direction (`:root[data-color-scheme="dark"] [data-free="header"] p`). |
 | `positioning` | `position: fixed` or `sticky`, a position read from a variable, anchor positioning or a view transition name. |
 | `animation_name` | An animation that names a keyframe that is not yours. |
-| `import`, `foreign_url`, `forbidden_function` | `@import`, a `url()` that is not one of your assets or is a cursor, `image()`, `image-set()`, `cross-fade()`, `element()`, `attr()` and other functions not on the list. |
+| `import`, `foreign_url`, `forbidden_function` | `@import`, a `url()` that is not one of your assets or stands anywhere but an image property's value, a cursor read from `var()`, `image()`, `image-set()`, `cross-fade()`, `element()`, `attr()` and other functions not on the list. |
 | `unknown_attribute`, `state_selector` | An attribute your region's markup never carries (`[value^=…]`, `[data-part…]`, `[data-host…]`; it may name `[data-ui]`, `[data-tone]`, `aria-*` and the other attributes the inert rebuild keeps), or a state that reads what a buyer does (`:placeholder-shown`, `:has(:checked)`). |
 | `unsupported_selector`, `unsupported_at_rule`, `custom_property` | A selector, at-rule or custom property not on the lists, or `[class…]`, `[id…]` (use `.name`, `#name`). |
 | `syntax`, `escape`, `bad_string`, `bad_url`, `comment`, `unbalanced`, `null_byte`, `nested_rule` | What a browser would repair: refused instead. |
