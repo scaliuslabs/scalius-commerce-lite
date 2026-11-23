@@ -156,7 +156,7 @@ export const MUTATIONS = {
   },
   "P2 a page paint with no tokens draws the store's own page": {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",
-    rewrites: [rewrite("packages/shared/src/storefront-theme/private-layout.ts", "painted && ownPage ? {} : null", "null")],
+    rewrites: [rewrite("packages/shared/src/storefront-theme/private-layout.ts", "painted && privatePageHasOwnPage(page) ? {} : null", "null")],
     cases: ["a dark page paint, no private tokens"],
   },
 };
