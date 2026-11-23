@@ -18,7 +18,7 @@
 //   shares a class with the store's CSS or an id with a host element; the
 //   only data attributes are the store's chrome behaviours (signed-in
 //   versions, the colour scheme switch, the account link); no live region,
-//   alert or modal role. A link keeps an href only to a clean path on this
+//   alert, modal or control role (a `role="button"` or `"link"` on a div). A link keeps an href only to a clean path on this
 //   store (no `//`, no dot segment) or to one of the region's own ids; an
 //   image only a source the page allows.
 // The host draws the result inside a sealed free region (`data-free`).
@@ -53,8 +53,16 @@ const DROP = new Set([
 const UNWRAP = new Set(["scalius-island", "scalius-deferred"]);
 
 const GENERAL = new Set(["role", "title", "hidden", "lang", "dir", "translate"]);
-/** Roles that would speak over the page or pose as one of its dialogs. */
-const LOUD_ROLES = new Set(["dialog", "alertdialog", "alert", "status", "log", "marquee", "timer"]);
+/**
+ * Roles the rebuild never writes: those that would speak over the page or pose as one of its dialogs,
+ * and those that announce a control (a button, a link, a menu item, a box to tick, a tab, an option…),
+ * which nothing inert is.
+ */
+const LOUD_ROLES = new Set([
+  "dialog", "alertdialog", "alert", "status", "log", "marquee", "timer",
+  "button", "link", "menuitem", "menuitemcheckbox", "menuitemradio", "checkbox", "radio", "switch", "tab", "option",
+  "slider", "spinbutton", "textbox", "searchbox", "combobox", "treeitem", "gridcell",
+]);
 const LOUD_ARIA = new Set(["aria-modal", "aria-live", "aria-atomic", "aria-relevant", "aria-busy"]);
 const BY_TAG: Record<string, ReadonlySet<string>> = {
   a: new Set(["href", "rel", "hreflang"]),
