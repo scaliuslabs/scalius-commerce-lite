@@ -98,7 +98,7 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
   input.maxLength = 10;
   input.setAttribute("aria-describedby", statusId);
   const actions = element("div", "flex flex-wrap items-center gap-x-4 gap-y-1");
-  const submit = element("button", "inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50", SUBMIT_LABEL);
+  const submit = element("button", "inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50", SUBMIT_LABEL);
   submit.type = "submit";
   const resend = element("button", linkButton, RESEND_LABEL);
   resend.type = "button";

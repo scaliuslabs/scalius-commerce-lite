@@ -673,7 +673,7 @@ export default function AuthModal() {
                     href={pagePath("/account")}
                     data-astro-prefetch="false"
                     data-part="dialog-confirm"
-                    className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {copy.viewAccount}
                   </a>
@@ -696,7 +696,7 @@ export default function AuthModal() {
                     || (step === "code" && (code.length !== 6 || locked))
                   }
                   data-part="dialog-confirm"
-                  className="min-h-11 flex-1 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  className="min-h-11 flex-1 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 >
                   {loading
                     ? step === "contact" ? copy.submit.sending : step === "code" ? copy.submit.verifying : copy.submit.creating

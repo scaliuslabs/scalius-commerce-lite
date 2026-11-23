@@ -231,6 +231,12 @@ export const MUTATIONS = {
     cases: ["review 5: the store's own page under the marketplace palette's dark colours"],
     expect: /input#\w+: its focus ring reads at 3:1 on/,
   },
+  "R5-A4 a filled button's hover is its colour over the page": {
+    why: "the default look's filled-button hover mixes the action colour with the page, as bg-primary/90 did: white words read 4.42:1 on it",
+    rewrites: [rewrite("packages/shared/src/storefront-theme/tokens.ts", '"primary-hover": storefrontThemeHoverSurface([colors.primary], [colors["primary-foreground"]]),', '"primary-hover": storefrontThemeMix(colors.primary, colors.background, 0.1),')],
+    cases: ["review 5: the store's own page under the marketplace palette's light colours"],
+    expect: /hovered: .* reads [\d.]+:1 on what is behind it/,
+  },
   "P2 a page paint with no tokens draws the store's own page": {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",
     // With the layout's guard too (review 5, S4), which draws no paint on a cart not in token mode.

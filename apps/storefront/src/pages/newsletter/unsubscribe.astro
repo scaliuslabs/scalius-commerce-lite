@@ -97,7 +97,7 @@ const channel = shown ? copy.channelName[shown.channel] : "";
               <p class="mt-2 text-base text-foreground [overflow-wrap:anywhere]">{copy.unsubscribeQuestion({ channel, contact: shown.contactMasked })}</p>
               <form method="post" action={NEWSLETTER_UNSUBSCRIBE_PATH} class="mt-6">
                 <input type="hidden" name="token" value={token} />
-                <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 sm:w-auto">
+                <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary-hover sm:w-auto">
                   {copy.unsubscribeButton}
                 </button>
               </form>

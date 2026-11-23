@@ -473,7 +473,7 @@ export interface DeliveryMarkupContext {
 }
 
 const BUTTON = "inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-medium transition-colors";
-const PRIMARY_BUTTON = `${BUTTON} bg-primary text-primary-foreground hover:bg-primary/90`;
+const PRIMARY_BUTTON = `${BUTTON} bg-primary text-primary-foreground hover:bg-primary-hover`;
 const SECONDARY_BUTTON = `${BUTTON} border border-border bg-background text-foreground hover:bg-muted`;
 
 function hiddenFields(context: DeliveryMarkupContext, fields: Record<string, string>): string {

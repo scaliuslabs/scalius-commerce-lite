@@ -341,6 +341,8 @@ const REGRESSIONS = {
   // Review 5: the default look under a palette whose action colour is a mid tone. A field's focus turns its border
   // the ring colour, which must read at 3:1 on the field's own border, in the derived dark colours too.
   "review 5: the store's own page under the marketplace palette's dark colours": { request: { palette: "marketplace", scheme: "dark" }, privatePages: {} },
+  // A filled button's hover once mixed its colour with the page (`bg-primary/90`): white on it read 4.42:1.
+  "review 5: the store's own page under the marketplace palette's light colours": { request: { palette: "marketplace", scheme: "light" }, privatePages: {} },
   // What the save must refuse (under a mutation that lets one through, the drawing must fail).
   "a stylesheet hiding a host part": { refused: "unscoped_selector", privatePages: { css: '[data-part="summary"] * { display: none } [data-part="details-submit"] * { visibility: hidden }' } },
   "summary rows that do not read on their summary": { refused: "contrast", privatePages: { tokens: { cart: { "summary-rows": { text: "#eeeeee" }, summary: { background: "#ffffff" } } } } },

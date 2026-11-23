@@ -47,7 +47,7 @@ export function renderEmptyCartState(
   const continueLink = document.createElement("a");
   continueLink.href = pagePath("/");
   continueLink.className =
-    "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90";
+    "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary-hover";
 
   const backIcon = createStaticSvg(`
     <svg class="-ms-1 me-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -63,7 +63,7 @@ export function renderEmptyCartState(
     recoveryLink.href = recoveryAction.href;
     recoveryLink.dataset.astroPrefetch = "false";
     recoveryLink.className =
-      "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90";
+      "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary-hover";
     recoveryLink.textContent = lang.languageData.viewPaymentStatusText;
     if (recoveryAction.onClick) {
       recoveryLink.addEventListener("click", recoveryAction.onClick);

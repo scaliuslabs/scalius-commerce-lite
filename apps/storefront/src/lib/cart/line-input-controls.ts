@@ -359,7 +359,7 @@ export function mountCartLineInputs(root: ParentNode, facts: CartLineInputFacts)
       for (const [action, shown, label] of [["apply", apply, view.input.bulk?.apply?.label], ["clear", clear, view.input.bulk?.clear?.label]] as const) {
         if (!shown || !label) continue;
         const button = element("button", action === "apply"
-          ? "min-h-11 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 sm:min-h-9"
+          ? "min-h-11 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary-hover sm:min-h-9"
           : "min-h-11 rounded-md border border-border px-3 text-sm font-medium text-foreground hover:bg-muted sm:min-h-9", label);
         button.type = "button";
         button.dataset.cartLineInputBulk = `${action}:${view.key}`;

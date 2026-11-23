@@ -24,7 +24,7 @@
 // nearest row (`PRIVATE_TOKEN_MODE_CSS`): a translucent tint or a palette
 // colour never decides a colour there.
 import { z } from "zod";
-import { STOREFRONT_THEME_COLOR_KEYS, storefrontThemeContrast, storefrontThemeMix, type StorefrontThemeColors } from "./contrast";
+import { STOREFRONT_THEME_COLOR_KEYS, storefrontThemeContrast, storefrontThemeHoverSurface, storefrontThemeMix, type StorefrontThemeColors } from "./contrast";
 import { storefrontPagePaintColors, storefrontPagePaintCss, type StorefrontPagePaint } from "./tokens";
 import {
   PRIVATE_BUYER_UI_STYLES,
@@ -370,25 +370,6 @@ function readable(candidates: ReadonlyArray<string | null | undefined>, backs: r
   return best;
 }
 
-/**
- * A hover surface, solid under the pointer: a step past every point of the
- * surface towards its words (from the point nearest them; else away, from the
- * point farthest), so it shows on a gradient's every point too, as far as its
- * words still read on it; the surface itself when no step keeps them readable.
- */
-function hoverOf(surface: readonly string[], words: readonly string[]): string {
-  const reads = (colour: string) => words.every((word) => storefrontThemeContrast(word, colour) >= PRIVATE_CONTRAST_FLOOR);
-  const byNearness = [...surface].sort((a, b) => storefrontThemeContrast(words[0]!, a) - storefrontThemeContrast(words[0]!, b));
-  const away = storefrontThemeContrast(words[0]!, "#000000") > storefrontThemeContrast(words[0]!, "#ffffff") ? "#000000" : "#ffffff";
-  for (const [from, towards] of [[byNearness[0]!, words[0]!], [byNearness.at(-1)!, away]] as const) {
-    for (const step of [0.1, 0.08, 0.06]) {
-      const colour = storefrontThemeMix(from, towards, step);
-      if (!surface.includes(colour) && reads(colour)) return colour;
-    }
-  }
-  return surface[0]!;
-}
-
 /** One row as the walk places it, before its colours are resolved. */
 interface Place {
   key: string;
@@ -597,7 +578,7 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     const cells = { text, muted, link, error };
     const row: PrivateTokenRow = {
       key: place.key, sources: place.sources, selector: place.selector, kind: place.kind, parents: parents.map((each) => each.key), nested: place.nested, base: place.base,
-      paint, gradient, surface, ink: cells[cell], text, muted, link, error, border, ring, hover: hoverOf(paint !== null && !gradient ? [paint] : surface, [text, cells[cell]]), placeholder, invalid, from,
+      paint, gradient, surface, ink: cells[cell], text, muted, link, error, border, ring, hover: storefrontThemeHoverSurface(paint !== null && !gradient ? [paint] : surface, [text, cells[cell]]), placeholder, invalid, from,
     };
     return row;
   };
@@ -837,7 +818,7 @@ export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [decla
     "bg-success/10", "bg-warning/10", "dark:bg-card",
   ].map((name) => [name, ["background-color:transparent"]] as const),
   // A hover surface is the nearest row's: visibly not its surface, its words readable on it.
-  ...["hover:bg-background/70", "hover:bg-muted", "hover:bg-muted/40", "hover:bg-muted/50", "hover:bg-primary/90", "sm:hover:bg-muted/60"].map((name) => [name, ["background-color:var(--pt-h)", ":hover"]] as const),
+  ...["hover:bg-background/70", "hover:bg-muted", "hover:bg-muted/40", "hover:bg-muted/50", "hover:bg-primary-hover", "sm:hover:bg-muted/60"].map((name) => [name, ["background-color:var(--pt-h)", ":hover"]] as const),
   ...["text-foreground", "text-card-foreground", "text-primary-foreground"].map((name) => [name, ["color:var(--pt-t)"]] as const),
   ...["text-muted-foreground", "text-muted-foreground/60"].map((name) => [name, ["color:var(--pt-m)"]] as const),
   ...["text-primary", "text-primary-ink"].map((name) => [name, ["color:var(--pt-l)"]] as const),

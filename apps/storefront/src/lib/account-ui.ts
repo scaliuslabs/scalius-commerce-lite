@@ -12,7 +12,7 @@ export const accountUi = {
   cardTitle: "text-base font-semibold text-foreground",
   muted: "text-sm text-muted-foreground",
   primaryButton:
-    "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60",
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60",
   secondaryButton:
     "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60",
   textButton: "inline-flex min-h-11 items-center gap-1 text-sm font-medium text-primary hover:underline",

@@ -647,13 +647,13 @@ markPaymentPage(Astro.locals);
 
         {quote && codAvailable && codServesDestination && codFitsOrder ? (
           <div class="space-y-2">
-            <button type="submit" name="intent" value="place" class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+            <button type="submit" name="intent" value="place" class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
               {copy.placeOrderText} · {quoteMoney(quote.totalAmount)}
             </button>
             <p class="text-center text-sm text-muted-foreground">{dueText}</p>
           </div>
         ) : (
-          <button type="submit" name="intent" value="review" class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+          <button type="submit" name="intent" value="review" class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
             {copy.continueText}
           </button>
         )}

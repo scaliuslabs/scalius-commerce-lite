@@ -14,6 +14,7 @@ import {
   storefrontThemeColorDistance,
   storefrontThemeContrast,
   storefrontThemeLuminance,
+  storefrontThemeHoverSurface,
   storefrontThemeMix,
   type StorefrontThemeColorKey,
   type StorefrontThemeColors,
@@ -688,6 +689,10 @@ export function buildStorefrontColorCss(colors: StorefrontThemeColors, headerTon
     // dark header tone takes it, with the other on it (an AA pair either way).
     "theme-ink": dark ? colors.background : colors.foreground,
     "theme-ink-foreground": dark ? colors.foreground : colors.background,
+    // The default look's hovers, made so their words keep 4.5:1: a filled button's under its own words, an
+    // outlined one's tint under the action colour, on the page and the card.
+    "primary-hover": storefrontThemeHoverSurface([colors.primary], [colors["primary-foreground"]]),
+    "primary-soft-hover": storefrontThemeHoverSurface([colors.background, colors.card], [colors.primary]),
   };
 }
 
@@ -739,6 +744,8 @@ export function buildStorefrontTokenCss(tokens: StorefrontThemeTokens): Record<s
     // Colour roles beyond the palette: sale is the error colour (discounted
     // prices and the sale badge only), rating and success are constants.
     "theme-sale": colors["theme-sale"],
+    "primary-hover": colors["primary-hover"],
+    "primary-soft-hover": colors["primary-soft-hover"],
     "theme-rating": STOREFRONT_RATING_COLOR,
     "theme-success": STOREFRONT_SUCCESS_COLOR,
     "theme-surface-border": STOREFRONT_ELEVATION[tokens.surface].border,

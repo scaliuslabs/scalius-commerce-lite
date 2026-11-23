@@ -532,7 +532,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         <a
           id="checkoutRecoveryLink"
           data-astro-prefetch="false"
-          class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+          class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
         >
           {copy.reviewExistingCheckoutText}
         </a>
@@ -617,7 +617,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               <div class="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
                 <a
                   href="/"
-                  class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90"
+                  class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary-hover"
                 >
                   <svg class="-ms-1 me-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fill-rule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clip-rule="evenodd" />
@@ -1081,7 +1081,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               </p>
               <button
                 type="submit"
-                class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
+                class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
                 id="submitButton"
                 data-part="details-submit"
                 aria-describedby={checkoutUnavailable ? "submitButtonReason" : undefined}

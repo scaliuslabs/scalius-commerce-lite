@@ -234,3 +234,24 @@ export function listStorefrontThemeSemanticColorProblems(colors: StorefrontTheme
   }
   return problems;
 }
+
+/**
+ * A hover surface, solid under the pointer: a step past every point of the
+ * surface towards its words (from the point nearest them; else away, from the
+ * point farthest), so it shows on a gradient's every point too, as far as its
+ * words still read on it (4.5:1); the surface itself when no step keeps them
+ * readable. The default look's hovers (`--primary-hover`) and token mode's
+ * rows both take it.
+ */
+export function storefrontThemeHoverSurface(surface: readonly string[], words: readonly string[]): string {
+  const reads = (colour: string) => words.every((word) => storefrontThemeContrast(word, colour) >= STOREFRONT_THEME_MIN_CONTRAST);
+  const byNearness = [...surface].sort((a, b) => storefrontThemeContrast(words[0]!, a) - storefrontThemeContrast(words[0]!, b));
+  const away = storefrontThemeContrast(words[0]!, "#000000") > storefrontThemeContrast(words[0]!, "#ffffff") ? "#000000" : "#ffffff";
+  for (const [from, towards] of [[byNearness[0]!, words[0]!], [byNearness.at(-1)!, away]] as const) {
+    for (const step of [0.1, 0.08, 0.06]) {
+      const colour = storefrontThemeMix(from, towards, step);
+      if (!surface.includes(colour) && reads(colour)) return colour;
+    }
+  }
+  return surface[0]!;
+}

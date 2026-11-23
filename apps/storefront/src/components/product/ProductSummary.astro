@@ -566,7 +566,7 @@ function optionAriaLabel(
       {allSoldOut && (
         <div class="space-y-2" data-product-sold-out>
           <p class="text-sm text-muted-foreground">{soldOutCopy.note}</p>
-          <a href={similarHref} class="flex min-h-12 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{soldOutCopy.similar}</a>
+          <a href={similarHref} class="flex min-h-12 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{soldOutCopy.similar}</a>
         </div>
       )}
       {factsColumn && (

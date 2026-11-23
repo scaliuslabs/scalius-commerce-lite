@@ -628,7 +628,7 @@ export default function CartFlyout({ onReady }: Props) {
         data-theme-component="button"
         data-theme-variant="default"
         data-theme-size="sm"
-        className={`${DRAWER_BUTTON} inline-flex items-center justify-center gap-2 mt-1 h-11 rounded-full px-5 text-xs hover:bg-primary/90 sm:h-9 cursor-pointer`}
+        className={`${DRAWER_BUTTON} inline-flex items-center justify-center gap-2 mt-1 h-11 rounded-full px-5 text-xs hover:bg-primary-hover sm:h-9 cursor-pointer`}
       >
         {label("drawer.startShopping", copy.startShopping)}
       </button>
@@ -1008,7 +1008,7 @@ export default function CartFlyout({ onReady }: Props) {
           data-theme-component="button"
           data-theme-variant="default"
           data-theme-size="default"
-          className={`${DRAWER_BUTTON} ${DRAWER_CHECKOUT} hover:bg-primary/90 cursor-pointer`}
+          className={`${DRAWER_BUTTON} ${DRAWER_CHECKOUT} hover:bg-primary-hover cursor-pointer`}
           data-part="drawer-checkout"
         >
           <span>{label("drawer.checkout", copy.checkout)}</span>
