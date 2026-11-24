@@ -316,7 +316,7 @@ export function snapshotInvoiceOrder(
       ? { appAnswers: { ...order.appAnswers }, attributeApps: order.attributeApps ?? [] }
       : {}),
     ...(order.addOnRows?.length
-      ? { addOnRows: order.addOnRows.map(({ appId, title, amountMinor, details }) => ({ appId, title, amountMinor, ...(details?.length ? { details: [...details] } : {}) })) }
+      ? { addOnRows: order.addOnRows.map(({ appId, title, amountMinor, details, folded }) => ({ appId, title, amountMinor, ...(details?.length ? { details: [...details] } : {}), ...(folded ? { folded } : {}) })) }
       : {}),
     createdAt: timestamp(order.createdAt),
     updatedAt: timestamp(order.updatedAt),

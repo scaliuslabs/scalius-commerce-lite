@@ -10,7 +10,8 @@ import { cashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { dateLocale, formatDateTime, formatNumber, localeDigits, numberLocale } from "@scalius/shared/locale-format";
 import { presentLineEntry, type LineEntryWords } from "@scalius/shared/line-entry-words";
 import { buyerLineAddOnRows, rowItemsOnly } from "@scalius/shared/buyer-line-add-on-text";
-import { addOnDocumentRows, buyerOrderAddOnTotals } from "@scalius/shared/add-on-document";
+import { addOnDocumentRows } from "@scalius/shared/add-on-document";
+import { buyerOrderAddOnTotals } from "@scalius/shared/add-on-folding";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
 import { formatOrderNumberIn } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
@@ -433,7 +434,9 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
     } else payment = { state: order.paymentStatus === "partial" ? "partially_paid" : "not_completed" };
 
     // The apps' add-ons as their own summary rows, the receipt's rows and words: Subtotal is then the items alone, and so is each row.
-    const addOns = money ? addOnDocumentRows(order.subtotalAmountMinor, buyerOrderAddOnTotals(lines, order.subtotalAmountMinor, lang).rows, money) : null;
+    const addOns = money ? addOnDocumentRows(order.subtotalAmountMinor, buyerOrderAddOnTotals(lines, order.subtotalAmountMinor, lang).rows, {
+      money, language: lang, lines: items.map((item) => ({ grossSubtotalMinor: item.lineSubtotalMinor, addOns: item.addOns })),
+    }) : null;
     const addOnsInSummary = (addOns?.rows.length ?? 0) > 0;
     const { request, status } = requestCopy(MESSAGE_COPY[lang], input.data?.supportRequestType, input.data?.supportRequestStatus);
     const codDue = payment.state === "cod" ? payment.due : null;

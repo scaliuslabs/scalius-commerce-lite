@@ -52,7 +52,7 @@ import {
   presentOrderPickup,
   presentShippingMethodKind,
 } from "@scalius/core/modules/orders/browser";
-import { buyerOrderAddOnTotals } from "@scalius/shared/add-on-document";
+import { buyerOrderAddOnTotals } from "@scalius/shared/add-on-folding";
 import {
   buyerLineAddOnsSchema,
   buyerLineIdsSchema,

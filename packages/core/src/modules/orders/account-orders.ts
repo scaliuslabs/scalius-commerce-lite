@@ -51,7 +51,7 @@ import {
     presentOrderPickup,
     presentShippingMethodKind,
 } from "./line-presentation";
-import { buyerOrderAddOnTotals } from "@scalius/shared/add-on-document";
+import { buyerOrderAddOnTotals } from "@scalius/shared/add-on-folding";
 import { findOrderConversationId, listBuyerOrderFulfilments } from "./fulfilment-reads";
 import {
     applyCustomerRequestPolicyToSupportActions,

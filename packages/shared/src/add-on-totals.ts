@@ -32,6 +32,14 @@ export interface AddOnTotalRow {
   amountMinor: number;
   /** The app's detail lines of this add-on over the lines, in order (text, at most `ADD_ON_ROWS_MAX`); absent: none. */
   details?: string[];
+  /** Rows folded under the neutral label (no app name known): its `title` is `addOnFoldLabel` in the language folded in; a document words it in its own (`ADD_ON_FOLD_WORDS`). */
+  folded?: true;
+}
+
+/** The neutral title of folded rows when no app name is known (a receipt names no app): the host's words. */
+export const ADD_ON_FOLD_WORDS = { en: "Add-ons", bn: "অ্যাড-অন" } as const;
+export function addOnFoldLabel(language: string | null | undefined): string {
+  return /^bn\b/iu.test(language ?? "") ? ADD_ON_FOLD_WORDS.bn : ADD_ON_FOLD_WORDS.en;
 }
 
 /** Well-formed detail lines (text within `ADD_ON_TITLE_MAX`), at most `max`; null when the value is not a list of them. */

@@ -2,7 +2,8 @@
 // payment (with online payment recovery) and order help.
 
 import { checkoutText, pageOrderNumber, pagePhone } from "@/lib/checkout-text";
-import { addOnRowsOver, readAddOnRows } from "@scalius/shared/add-on-totals";
+import { readAddOnRows } from "@scalius/shared/add-on-totals";
+import { orderAddOnRowsOver } from "@scalius/shared/add-on-document";
 import {
   createCustomerOrderPaymentSession,
   createCustomerOrderSupportRequest,
@@ -574,7 +575,9 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   const showsLineDiscounts = orderShowsLineDiscounts(detail.discounts);
   const words = accountCopy().order;
   // The apps' add-ons as their own summary rows (the server's, from the order's frozen lines): the rows then show the items alone.
-  const addOns = addOnRowsOver(order.subtotalAmountMinor ?? 0, readAddOnRows(detail.addOns));
+  // One decision for the order (`orderAddOnRowsOver`): rows only when every row's add-ons fit its amount, as every document decides.
+  const addOns = orderAddOnRowsOver(order.subtotalAmountMinor ?? 0, readAddOnRows(detail.addOns),
+    detail.items.map((item) => ({ grossSubtotalMinor: item.lineSubtotalMinor ?? null, addOns: (item as { addOns?: unknown }).addOns })));
   const addOnsInSummary = addOns.rows.length > 0;
   if (items) {
     type Row = AccountOrderDetail["items"][number];

@@ -143,7 +143,11 @@ export function renderPrintableInvoice(
   const subtotalMinor = order.subtotalAmountMinor ?? Math.round((order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)) * (10 ** decimals));
   // The apps' add-ons as their own rows after Subtotal: the receipt's rows and words (`addOnDocumentRows`).
   // Subtotal is then the items alone, and so is each line's amount (`rowItemsOnly`).
-  const addOns = addOnDocumentRows(subtotalMinor, order.addOnRows, (minor) => money(minor));
+  const addOns = addOnDocumentRows(subtotalMinor, order.addOnRows, {
+    money: (minor) => money(minor),
+    language,
+    lines: order.items.map((item) => ({ grossSubtotalMinor: itemTotal(item, decimals), addOns: item.addOns })),
+  });
   const addOnsInSummary = addOns.rows.length > 0;
   const addOnRows = addOns.rows.map((row) => `<div><span>${html(row.title)}${row.details.map((line) => `<small>${html(line)}</small>`).join("")}</span><span>${row.amount}</span></div>`).join("");
   const rows = order.items.map((item) => {
@@ -151,11 +155,12 @@ export function renderPrintableInvoice(
       unitPriceMinor: item.unitPriceMinor ?? Math.round(item.price * (10 ** decimals)),
       grossSubtotalMinor: itemTotal(item, decimals),
     }, item, addOnsInSummary)!;
-    const unit = own.unitPriceMinor === null ? "" : money(own.unitPriceMinor);
+    // No whole unit price (a row whose items alone do not divide by its units): its quantity and line total, as the email shows it.
+    const unit = own.unitPriceMinor === null ? null : money(own.unitPriceMinor);
     const total = money(own.grossSubtotalMinor);
     return `
     <tr><td>${html(item.productName || item.productId)}${item.variantLabel ? `<small>${html(item.variantLabel)}</small>` : ""}${itemProperties(item, order.currencyCode, decimals, language)}</td>
-    <td>${number(item.quantity)}${item.returnedQuantity ? `<small>${copy.returned(number(item.returnedQuantity))}</small>` : ""}</td><td>${isFreeLine(item) ? free(unit) : unit}</td>
+    <td>${number(item.quantity)}${item.returnedQuantity ? `<small>${copy.returned(number(item.returnedQuantity))}</small>` : ""}</td><td>${unit === null ? "—" : isFreeLine(item) ? free(unit) : unit}</td>
     <td>${isFreeLine(item) ? free(total) : total}</td></tr>`;
   }).join("");
   const shippingMinor = order.shippingAmountMinor ?? Math.round(order.shippingCharge * (10 ** decimals));

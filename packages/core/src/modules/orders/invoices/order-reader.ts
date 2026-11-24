@@ -17,7 +17,8 @@ import type { InvoiceOrderSnapshot } from "./snapshot";
 import { listOrderDiscountLines } from "../../promotions";
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
 import { readOrderLineProperties } from "@scalius/shared/line-properties";
-import { buyerOrderAddOnTotals } from "@scalius/shared/add-on-document";
+import { buyerOrderAddOnTotals } from "@scalius/shared/add-on-folding";
+import { capAddOnDetails } from "@scalius/shared/add-on-document";
 import { buyerLineUnitPrice, foldBuyerOrderLines, readCheckoutAttributeApps } from "../../order-kernel";
 import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
 
@@ -168,8 +169,9 @@ export async function readInvoiceOrderSource(
       shippingAmount: fromMinor(row.shippingAmountMinor, order.currencyDecimalPlaces),
     })),
     // The apps' add-ons as summary rows, from the real lines before any fold: the receipt's rows.
-    // (Rows folded past `ADD_ON_ROWS_MAX` read the neutral label in English: the snapshot holds one language.)
-    addOnRows: buyerOrderAddOnTotals(items, order.subtotalAmountMinor ?? 0, null).rows,
+    // (A row folded past `ADD_ON_ROWS_MAX` under the neutral label keeps `folded`: each print words it in its language.)
+    // Only the detail lines a document prints (`capAddOnDetails`), so the snapshot stays within its column.
+    addOnRows: capAddOnDetails(buyerOrderAddOnTotals(items, order.subtotalAmountMinor ?? 0, null).rows),
     // The buyer's rows: a kit's item split into two lines is one (`foldBuyerOrderLines`).
     items: foldBuyerOrderLines(
       items.map((item) => ({ ...item, returnedQuantity: returnedByItem.get(item.id) ?? 0 })),
