@@ -16,36 +16,47 @@
 //   --jobs <n> cases at once (4); --profile where the time goes; PT_SHOTS=<dir> keeps the screen a
 //   failing text was measured on. Exit 0: every draw holds; 1: a draw fails; 2: the gate could not run.
 //
-// Each document is a LEGAL theme (or a named break the save must refuse). A
-// document the save refuses is not drawn. Each accepted one is drawn in its
-// states (a store that delivers; a line asking for a decision, a store kit
-// with an add-on once per kit and an app's offer row, and a sold-out line; an empty cart; long Bangla titles; an Arabic right-to-left
-// presence) at 320, 390 and 1280 px, light and dark, and with validation
+// A theme here arranges the store's parts and gives them typed tokens: it
+// writes no markup and no CSS. Each document is a LEGAL theme (or a named
+// break the save must refuse, or a stored document forged past the save).
+// A named document the save refuses fails the gate unless it names the
+// reason it must be refused for; a refused seed is counted, not drawn. Each
+// accepted one is drawn in its states (a store that delivers; a line asking
+// for a decision, a store kit with an add-on once per kit and an app's offer
+// row, and a sold-out line; an empty cart; long Bangla titles; an Arabic
+// right-to-left presence; the customer's game cart offered its protection or
+// protected) at 320, 390 and 1280 px, light and dark, and with validation
 // errors showing, the sign-in dialog open and the confirmation dialog open.
 // Every draw must hold:
-// - every mandatory part inside the viewport, not tiny, not covered by a free
-//   region; the page never scrolls sideways;
+// - every mandatory part inside the viewport, not tiny; the page never
+//   scrolls sideways; the store's controls (its light or dark switch, its
+//   market and language forms) where the theme places them and nowhere else;
+//   no free region, and none of a forged document's words or CSS;
 // - Place order with its total on screen and taking a click at scroll 0 and at
 //   three scroll positions down the cart (docked at the bottom edge while its
 //   place is not in view); one of the page's lead parts starting inside the
 //   first screen at scroll 0; and what the theme adds above Place order (its
 //   place under the theme less its place under the default look, same cart)
 //   at most THEME_DEPTH_PX and LINE_DEPTH_PX a line;
-// - the coverage walk: every text and every focusable control the host draws
-//   belongs to a row of the page's colour table (in token mode its words are
-//   one of the row's colours and no surface the table does not know lies
-//   between them and the row); with no tokens, to a surface the anatomy names,
-//   and the page shows no paint of its own (a theme's page paint puts the page
-//   in token mode, so the table checks what stands on it);
-//   every free region sealed and holding inert markup only (no form, field, submit, host control or embed);
+// - the coverage walk, with every add-on row opened: every text and every
+//   focusable control the host draws belongs to a row of the page's colour
+//   table (in token mode its words are one of the row's colours, no surface
+//   the table does not know lies between them and the row, and every element
+//   a style target names is drawn by a row of that target); with no tokens,
+//   to a surface the anatomy names, and the page shows no paint of its own;
 // - every text, with no budget, at its contrast floor against the pixels
 //   behind it (the text hidden, the page photographed);
 // - every text whole: nothing cut sideways, no glyph cut by a clip, no word
 //   broken inside itself;
+// - the summary's total drawn no smaller than any other summary row;
 // - every control takes a click at its centre, is reached by Tab in document
 //   order, shows a focus ring at 3:1 against what is around it, and under the
 //   pointer still reads (and shows its hover where the host draws one);
 // - on a phone, the page scrolls by touch from the top to Place order;
+// - under the customer's look: the offer row's mark, sentence, price and Add
+//   Now on one line at 1280 and on at most two at 390, the status box on its
+//   tone's own surface, the add-on row opening to its three detail lines in
+//   order with its amount shown once;
 // - no request answers 5xx.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -75,12 +86,15 @@ const JOBS = number("jobs", 4);
 const WIDTHS = [320, 390, 1280];
 const SCHEMES = ["light", "dark"];
 /** The states a seed or `states: "all"` draws; a named case may ask for others (`states: ["many"]`: twenty lines). */
-const STATES = ["base", "lines", "decide", "empty", "bn", "ar"];
+const STATES = ["base", "lines", "decide", "empty", "bn", "ar", "customer", "customer-protected"];
 /**
  * What a theme may add above Place order, against the default look holding the same cart (both with the
- * phone's fold open): its header (24rem at most), three blocks of 30rem before the page's last part, and its
- * layouts' padding and gaps and its tokens' larger type (1000px); and per line, the line's two blocks (4rem
- * each) and its tokens (a 320px image for the default's 96px, 48px padding each side): 448px.
+ * phone's fold open). A theme writes no markup here, so only its arrangement, tokens and variants add depth:
+ * one column on a wide screen, which brings what the default look draws beside the form above it (in the
+ * gallery's cart the summary and the below-cart target each hold an app block of every node kind: 2000px);
+ * its layouts' padding and gaps and its tokens' larger type (1000px); the heading above the lines with a
+ * two-line intro, the summary's heading and Items row (200px): 3200px. And per line, its tokens (a 320px
+ * image for the default's 96px, 48px padding each side, a 40px title on three lines for two of 20px): 448px.
  */
 const THEME_DEPTH_PX = 3200;
 const LINE_DEPTH_PX = 448;
@@ -143,19 +157,21 @@ function random(seed) {
 }
 
 const ROLES = ["background", "foreground", "card", "card-foreground", "primary", "primary-foreground", "muted", "muted-foreground", "border", "input", "secondary"];
-const HOSTILE_CSS = [
-  "min-inline-size:5000px", "white-space:nowrap", "inline-size:5000px", "width:200vw", "margin:-500px", "margin-block:5000px",
-  "position:absolute;inset:-100vmax;z-index:2147483647;background:#ffffff", "outline:100vmax solid #ffffff", "outline-offset:-60px",
-  "box-shadow:0 0 0 100vmax #ffffff", "text-shadow:0 900px 0 #ff0000", "transform:scale(30)", "transform:translateY(-2000px)",
-  "font-size:200px", "letter-spacing:100px", "padding:5000px", "block-size:10000px", "display:grid;grid-template-columns:5000px",
-  "vertical-align:-9999px", "float:left;inline-size:4000px", "text-decoration:line-through 3em #ffffff", "word-spacing:3000px",
-];
 const LONG = "Supercalifragilisticexpialidocious".repeat(8);
 const PALETTES = ["retail", "marketplace", "boutique", "fresh", "beauty", "heritage", "midnight"];
 const TONES = ["neutral", "info", "success", "warning", "critical"];
 const UI_TARGETS = ["cart.page.summary", "cart.page.below", "cart.line.after", "checkout.contact.after", "checkout.delivery.after"];
-/** Text and its surface chosen together (the save refuses an unreadable pair; most still pass). */
-const PAIRS = [["card", "card-foreground"], ["background", "foreground"], ["#1e1831", "#f4f1ff"], ["#ffffff", "#111111"], ["#111111", "#ffffff"], ["#0f2a1d", "#ecfdf5"]];
+const APPS = ["acme.kinds", "acme.protection", "acme.loyalty", "gameghor.protection"];
+/** A colour per scheme (`{ light, dark }`): what each palette's row resolves on its own. */
+const SCHEMED = (light, dark) => ({ light, dark });
+/**
+ * Text and its surface chosen together (the save refuses an unreadable pair; most still pass), one colour or
+ * one per scheme (a light box in the light colours, a dark one in the dark).
+ */
+const PAIRS = [
+  ["card", "card-foreground"], ["background", "foreground"], ["#1e1831", "#f4f1ff"], ["#ffffff", "#111111"], ["#111111", "#ffffff"], ["#0f2a1d", "#ecfdf5"],
+  [SCHEMED("#ffffff", "#111111"), SCHEMED("#111111", "#f4f4f5")], [SCHEMED("card", "#1e1831"), SCHEMED("card-foreground", "#f4f1ff")], [SCHEMED("#f2ebd9", "#35282c"), SCHEMED("#000000", "#fef3c6")],
+];
 /** The theme's own files the generator names: the gallery draws any `pp/<name>.svg` of the theme's app. */
 const NOOR = "scalius.noor";
 
@@ -165,43 +181,27 @@ function generate(seed) {
   const chance = (p) => next() < p;
   const int = (min, max) => min + Math.floor(next() * (max - min + 1));
   const colour = () => chance(0.6) ? pick(ROLES) : `#${Math.floor(next() * 0xffffff).toString(16).padStart(6, "0")}`;
-  const chrome = chance(0.4) ? "theme" : "core";
-  // A theme's own files exist only with a theme app: Noor's chrome brings one.
-  const noor = chrome === "theme" || chance(0.2);
-  const hooks = [];
-  const words = () => chance(0.3) ? LONG : "Free delivery on every order this week";
-  const block = () => {
-    const hook = `block-${hooks.length}`;
-    hooks.push(hook);
-    const kinds = ["text", "heading", "banner", "link", "disclosure", "divider", ...(noor ? ["image"] : [])];
-    const kind = pick(kinds);
-    const content = kind === "banner" ? { kind, tone: pick(TONES), title: { en: words(), bn: "এই সপ্তাহে ফ্রি ডেলিভারি" } }
-      : kind === "link" ? { kind, text: { en: "Read our delivery terms" }, href: "/pages/terms" }
-        : kind === "disclosure" ? { kind, summary: { en: "How delivery works" }, text: { en: words() } }
-          : kind === "divider" ? { kind }
-            : kind === "image" ? { kind, image: { app: NOOR, file: "pp/banner.svg" }, alt: { en: "A banner" }, width: 640, height: 160 }
-              : { kind, text: { en: words(), bn: "এই সপ্তাহে প্রতিটি অর্ডারে ফ্রি ডেলিভারি" } };
-    return { type: "content", hook, content };
-  };
+  // A theme's own files exist only with a theme app: Noor installed brings one.
+  const noor = chance(0.2);
   const layoutHooks = [];
   const wrap = (children) => {
     const hook = `wrap-${layoutHooks.length}`;
     layoutHooks.push(hook);
     return { type: "layout", layout: pick(["stack", "columns", "grid", "group"]), hook, children };
   };
-  // The default arrangement (tokens only) a third of the time; else the cart's parts in a legal arrangement.
+  const variant = (list) => chance(0.5) ? { variant: pick(list) } : {};
+  // The default arrangement (tokens only) a third of the time; else the cart's parts in a legal arrangement, with their variants.
   const arranged = chance(0.67);
   let pages = {};
   if (arranged) {
-    const cart = [{ type: "part", part: "lines" }, { type: "part", part: "summary" }, ...(chance(0.5) ? [{ type: "part", part: "discount" }] : []), { type: "target", target: "cart.page.summary" }];
+    const cart = [{ type: "part", part: "lines", ...variant(["heading-inside", "heading-above"]) }, { type: "part", part: "summary", ...variant(["totals", "with-items"]) }, ...(chance(0.5) ? [{ type: "part", part: "discount" }] : []), { type: "target", target: "cart.page.summary" }];
     const side = [{ type: "layout", layout: "fold", children: cart }, { type: "target", target: "cart.page.below" }];
-    const before = Array.from({ length: int(0, 3) }, block);
-    const between = Array.from({ length: int(0, 2) }, block);
-    const after = Array.from({ length: int(0, 3) }, block);
-    const main = chance(0.5) ? [wrap([wrap(side), ...between, { type: "part", part: "details" }])] : [...side, ...between, { type: "part", part: "details" }];
-    const layout = [{ type: "part", part: "notices" }, ...before, ...main, ...after];
-    const line = chance(0.5) ? undefined : [
-      wrap([{ type: "part", part: "image" }, wrap([{ type: "part", part: "title" }, { type: "part", part: "details" }, { type: "part", part: "inputs" }, { type: "part", part: "limit" }, { type: "part", part: "issue" }, { type: "part", part: "rule" }]), wrap([{ type: "part", part: "price" }, { type: "part", part: "quantity" }, { type: "part", part: "remove" }])]),
+    const main = chance(0.5) ? [wrap([wrap(side), { type: "part", part: "details" }])] : [...side, { type: "part", part: "details" }];
+    const layout = [...(chance(0.3) ? [{ type: "part", part: "progress" }] : []), { type: "part", part: "notices" }, ...main];
+    const details = { type: "part", part: "details", ...variant(["lines", "values", "chips"]) };
+    const remove = { type: "part", part: "remove", ...variant(["icon", "words"]) };
+    const line = chance(0.4) ? undefined : [
+      wrap([{ type: "part", part: "image" }, wrap([{ type: "part", part: "title" }, details, { type: "part", part: "inputs" }, { type: "part", part: "limit" }, { type: "part", part: "issue" }, { type: "part", part: "rule" }]), wrap([{ type: "part", part: "price" }, { type: "part", part: "quantity" }, remove])]),
       { type: "target", target: "cart.line.after" },
     ];
     pages = { cart: { ...(chance(0.25) ? { frame: "narrow" } : {}), layout, ...(line ? { items: { line } } : {}) } };
@@ -212,35 +212,45 @@ function generate(seed) {
   const set = (target, values) => { tokens[target] = { ...tokens[target], ...values }; };
   const tracks = () => Array.from({ length: int(1, 4) }, () => pick([int(24, 480), 480, "1fr", "2fr", "auto", "min-content"]));
   for (const hook of [...layoutHooks]) {
-    if (chance(0.5)) set(`@${hook}`, { columns: tracks(), gap: pick([0, 48, int(0, 48)]), ...(chance(0.3) ? { "columns-wide": tracks() } : {}), ...(chance(0.2) ? { background: pick(["card", "muted", "#f8f5ff"]), radius: int(0, 32), padding: pick([0, 24, 48]) } : {}) });
+    if (chance(0.5)) set(`@${hook}`, { columns: tracks(), gap: pick([0, 48, int(0, 48)]), ...(chance(0.3) ? { "columns-wide": tracks() } : {}), ...(chance(0.2) ? { background: pick(["card", "muted", "#f8f5ff", SCHEMED("#f8f5ff", "#1e1831")]), radius: int(0, 32), padding: pick([0, 24, 48]) } : {}) });
   }
-  const darkBox = (background) => background.startsWith("#1") || background.startsWith("#0") || background === "#111111";
-  for (const target of ["lines", "summary", "details-form", "line", "page", "notice", "dialog"]) {
+  const dark = (value) => [value?.light ?? value, value?.dark ?? value].some((one) => typeof one === "string" && /^#[01]/.test(one));
+  for (const target of ["lines", "summary", "details-form", "line", "page", "notice", "dialog", "dialog-text", "dialog-agree", "summary-add-on-detail", "line-chip"]) {
     if (!chance(0.35)) continue;
     const [background, text] = pick(PAIRS);
     const gradient = chance(0.2) && ["lines", "summary", "details-form", "page"].includes(target);
-    // The page and a line keep the host's own text: their paint stays light (a dark page needs a dark palette).
-    if (target === "line") set(target, { background: pick(["background", "card", "#ffffff", "#f8f5ff"]), radius: int(0, 32), padding: pick([0, 12, 48]), "border-width": int(0, 4), "border-style": pick(["solid", "dashed", "dotted", "none"]) });
-    else if (target === "page") set(target, gradient ? { gradient: { shape: pick(["linear", "radial"]), angle: int(0, 360), from: "#ffffff", to: "#f3eefe" } } : { background: pick(["background", "card", "#ffffff", "#f8f5ff"]) });
+    // A line keeps the host's own text: its paint stays light in the light colours and dark in the dark.
+    if (target === "line") set(target, { background: pick(["background", "card", "#ffffff", "#f8f5ff", SCHEMED("#ffffff", "#111111")]), radius: int(0, 32), padding: pick([0, 12, 48]), "border-width": int(0, 4), "border-style": pick(["solid", "dashed", "dotted", "none"]) });
+    else if (target === "page") set(target, gradient ? { gradient: { shape: pick(["linear", "radial"]), angle: int(0, 360), from: pick(["#ffffff", SCHEMED("#ffffff", "#2b2d6e")]), to: pick(["#f3eefe", SCHEMED("#f3eefe", "background")]) } } : { background: pick(["background", "card", "#ffffff", "#f8f5ff", SCHEMED("#ffffff", "#111111")]) });
     else if (target === "notice") set(target, { background, text, muted: text, link: text, error: text, radius: int(0, 32), border: colour(), "border-width": int(0, 4) });
+    else if (target === "line-chip") set(target, { background, text, radius: int(0, 32), "border-width": int(0, 2) });
+    else if (target === "dialog-agree") set(target, { background, text, radius: int(0, 32), padding: pick([0, 16]), "border-width": int(0, 2) });
+    else if (target === "dialog-text" || target === "summary-add-on-detail") set(target, { background, text, muted: text, radius: int(0, 32), padding: pick([0, 16]), "border-width": int(0, 2), ...(target === "summary-add-on-detail" && chance(0.5) ? { size: int(12, 14), font: pick(["body", "mono"]) } : {}) });
     else set(target, { ...(gradient ? { gradient: { shape: "linear", angle: int(0, 360), from: background, to: background } } : { background }), text, muted: text, link: text, error: text, radius: pick([0, 32, int(0, 32)]), ...(target === "dialog" ? {} : { padding: pick([0, 48]) }), shadow: pick(["none", "sm", "md", "lg"]) });
     // Fields beside a dark box keep a ring and an error border that read on light and dark.
-    if (darkBox(background)) set("input", { ring: "#8b5cf6", invalid: "#e11d48" });
+    if (dark(background)) set("input", { ring: "#8b5cf6", invalid: "#e11d48" });
   }
   // Every other style target, now and then, with values of its types.
-  const text = () => ({ ...(chance(0.5) ? { size: pick([12, 40, int(12, 40)]) } : {}), ...(chance(0.4) ? { weight: pick(["400", "500", "600", "700", "800"]) } : {}), ...(chance(0.3) ? { case: pick(["none", "uppercase"]) } : {}), ...(chance(0.3) ? { tracking: pick(["normal", "wide", "wider"]) } : {}), ...(chance(0.3) ? { font: pick(["body", "heading"]) } : {}) });
+  const text = () => ({ ...(chance(0.5) ? { size: pick([12, 40, int(12, 40)]) } : {}), ...(chance(0.4) ? { weight: pick(["400", "500", "600", "700", "800"]) } : {}), ...(chance(0.3) ? { case: pick(["none", "uppercase"]) } : {}), ...(chance(0.3) ? { tracking: pick(["normal", "wide", "wider"]) } : {}), ...(chance(0.3) ? { font: pick(["body", "heading", "mono"]) } : {}), ...(chance(0.3) ? { leading: pick(["tight", "snug", "normal", "relaxed"]) } : {}) });
   const maybe = (target, values) => { if (chance(0.3)) set(target, values); };
   maybe("lines-heading", text());
+  maybe("lines-intro", { size: int(12, 18), weight: pick(["400", "500"]), leading: pick(["snug", "relaxed"]) });
   maybe("line-title", { ...text(), ...(chance(0.6) ? { clamp: pick(["none", "2", "3"]) } : {}) });
   maybe("line-details", { size: int(12, 20) });
   maybe("line-price", { size: int(12, 28), weight: pick(["400", "700"]), align: pick(["start", "center", "end"]) });
   maybe("line-quantity", { radius: int(0, 32), "border-width": int(0, 4), "border-style": pick(["solid", "dashed"]), ring: "#7c3aed" });
-  maybe("line-remove", { radius: int(0, 32), ring: "#7c3aed" });
+  maybe("line-remove", { radius: int(0, 32), ring: "#7c3aed", size: int(12, 18), weight: pick(["400", "600"]) });
   maybe("line-image", { width: pick([40, 240]), height: pick([40, 320]), "width-wide": pick([40, 240]), radius: int(0, 32), fit: pick(["contain", "cover"]) });
   maybe("fold-toggle", { radius: int(0, 32), shadow: pick(["none", "md"]), "border-width": int(0, 4) });
-  maybe("summary-rows", { size: int(12, 24) });
-  maybe("summary-total", { ...text(), weight: "800" });
+  // The total outranks every other summary row (the save refuses a smaller one): rows to 18px, the total from 20.
+  maybe("summary-heading", { ...text(), size: int(14, 24) });
+  maybe("summary-rows", { size: int(12, 18) });
+  maybe("summary-total", { ...text(), size: int(20, 40), weight: "800" });
+  maybe("summary-total-label", { ...text(), size: int(18, 20) });
+  maybe("summary-add-on", { radius: int(0, 12), ring: "#7c3aed" });
   maybe("section-heading", text());
+  maybe("field-label", { size: int(12, 16), weight: pick(["500", "600"]), case: pick(["none", "uppercase"]), tracking: pick(["normal", "wide"]) });
+  maybe("dialog-title", { ...text(), size: int(18, 28) });
   maybe("legal", { size: int(12, 18), align: pick(["start", "center", "end"]) });
   maybe("submit", { background: "#7c3aed", text: "#ffffff", radius: pick([0, 32]), case: "uppercase", size: pick([12, 40]), tracking: pick(["normal", "wider"]) });
   maybe("action", { radius: int(0, 32), weight: "700" });
@@ -249,17 +259,19 @@ function generate(seed) {
   maybe("dialog-back", { radius: int(0, 32), weight: "600" });
   maybe("dialog-confirm", { background: "#7c3aed", text: "#ffffff", radius: int(0, 32) });
   maybe("cart-empty", { text: "foreground" });
-  if (chrome === "theme") maybe("search", { radius: int(0, 32), "border-width": int(1, 4) });
   // The apps' nodes by kind, narrowed by tone, app and target.
-  for (let count = int(0, 4); count > 0; count -= 1) {
-    const kind = pick(["banner", "badge", "button", "text", "heading", "disclosure", "row"]);
-    const tone = ["banner", "badge"].includes(kind) && chance(0.6) ? `.${pick(TONES)}` : "";
-    const key = `ui.${kind}${tone}${chance(0.4) ? `@${pick(["acme.kinds", "acme.protection", "acme.loyalty"])}` : ""}${chance(0.4) ? `/${pick(UI_TARGETS)}` : ""}`;
+  for (let count = int(0, 5); count > 0; count -= 1) {
+    const kind = pick(["banner", "badge", "button", "text", "heading", "disclosure", "row", "stack", "mark", "link", "keyvalue"]);
+    const tone = ["banner", "badge", "stack", "mark", "text"].includes(kind) && chance(0.6) ? `.${pick(TONES)}` : "";
+    const key = `ui.${kind}${tone}${chance(0.4) ? `@${pick(APPS)}` : ""}${chance(0.4) ? `/${pick(UI_TARGETS)}` : ""}`;
     const values = kind === "row" ? { gap: int(0, 48) }
       : kind === "text" || kind === "heading" ? { size: int(12, 24), weight: pick(["400", "700"]) }
-        : kind === "button" ? { background: "#10b981", text: "#04130d", radius: int(0, 32), weight: "700" }
-          : kind === "badge" ? { background: "#fffbeb", text: "#111111", radius: int(0, 32) }
-            : { background: "#fffbeb", text: "#111111", border: colour(), radius: int(0, 32) };
+        : kind === "link" || kind === "keyvalue" ? { size: int(12, 18), weight: pick(["500", "700"]) }
+          : kind === "mark" ? { size: int(12, 18) }
+            : kind === "button" ? { background: "#10b981", text: "#04130d", radius: int(0, 32), weight: "700", inset: int(8, 24) }
+              : kind === "badge" ? { background: "#fffbeb", text: "#111111", radius: int(0, 32) }
+                : kind === "stack" ? { background: pick(["#fffbeb", SCHEMED("#f2ebd9", "#35282c")]), text: pick(["#111111", SCHEMED("#000000", "#fef3c6")]), radius: int(0, 12), padding: int(0, 16), gap: int(0, 16) }
+                  : { background: "#fffbeb", text: "#111111", border: colour(), radius: int(0, 32) };
     set(key, values);
   }
   const labels = {
@@ -268,15 +280,14 @@ function generate(seed) {
     ...(chance(0.3) ? { "cart.showSummary": pick(["show-summary", "show-cart"]), "cart.hideSummary": pick(["hide-summary", "hide-cart"]) } : {}),
     ...(chance(0.3) ? { "dialog.goBack": pick(["go-back", "cancel"]), "dialog.confirm": pick(["confirm", "continue-checkout", "agree-and-continue"]) } : {}),
     ...(chance(0.3) ? { "cart.heading": { en: chance(0.5) ? "Your bag, ready when you are" : "Cart", bn: "আপনার কার্ট" } } : {}),
+    ...(chance(0.3) ? { "cart.intro": { en: chance(0.3) ? LONG : "Review your items before checkout.", bn: "চেকআউটের আগে পণ্যগুলো দেখে নিন।" } } : {}),
+    ...(chance(0.3) ? { "cart.summaryHeading": { en: "Order Summary", bn: "অর্ডারের সারাংশ" } } : {}),
     ...(chance(0.3) ? { "cart.empty": { en: "Nothing here yet" }, "cart.emptyText": { en: "Your bag is waiting for something lovely." } } : {}),
   };
   const icons = noor && chance(0.5) ? { "cart.empty": { app: NOOR, file: "pp/bag.svg" } } : {};
-  const css = [...hooks, ...(chrome === "theme" ? ["header", "footer"] : [])].flatMap((anchor) => chance(0.8)
-    ? [`${anchor === "header" || anchor === "footer" ? `[data-free="${anchor}"]` : `[data-hook="${anchor}"]`} ${pick(["*", "p", "h2", "div", "a", "*::before"])} { ${Array.from({ length: int(1, 3) }, () => pick(HOSTILE_CSS)).join(";")}${chance(0.3) ? ';content:"Delivery phone number (required)"' : ""} }`]
-    : []).join("\n");
   return {
-    request: { noor, palette: chance(0.5) ? pick(PALETTES) : undefined, scheme: pick(["system", "system", "light", "dark"]), toggle: chance(0.3) },
-    privatePages: { chrome, ...(chrome === "theme" && chance(0.7) ? { search: pick(["before", "after"]) } : {}), pages, tokens: Object.keys(tokens).length ? { cart: tokens } : {}, css, labels, icons },
+    request: { noor, palette: chance(0.5) ? pick(PALETTES) : undefined, scheme: pick(["system", "system", "light", "dark"]), toggle: chance(0.3), localization: chance(0.2) },
+    privatePages: { ...(chance(0.4) ? { controls: pick(["header", "footer", "none"]) } : {}), pages, tokens: Object.keys(tokens).length ? { cart: tokens } : {}, labels, icons },
   };
 }
 
@@ -284,29 +295,41 @@ function generate(seed) {
 
 const LEGAL_COLUMNS = [{ type: "part", part: "notices" }, { type: "layout", layout: "columns", children: [{ type: "layout", layout: "stack", children: [{ type: "layout", layout: "fold", children: [{ type: "part", part: "lines" }, { type: "part", part: "summary" }, { type: "target", target: "cart.page.summary" }] }, { type: "target", target: "cart.page.below" }] }, { type: "part", part: "details" }] }];
 const DARK = { background: "#111111", text: "#ffffff", muted: "#d4d4d4", link: "#c4b5fd", error: "#fca5a5" };
-/** The cart line's default arrangement (private-anatomy.ts), and the largest image block a line may hold. */
+/** Light in the light colours, dark in the dark: every colour of a box, per scheme. */
+const BY_SCHEME = { background: SCHEMED("#ffffff", "#111111"), text: SCHEMED("#111111", "#ffffff"), muted: SCHEMED("#4b5563", "#d4d4d4"), link: SCHEMED("#5b21b6", "#c4b5fd"), error: SCHEMED("#b91c1c", "#fca5a5") };
+/** The cart line's default arrangement (private-anatomy.ts). */
 const DEFAULT_LINE = [{ type: "part", part: "image" }, { type: "layout", layout: "stack", children: [{ type: "layout", layout: "columns", children: [{ type: "layout", layout: "stack", children: [{ type: "part", part: "title" }, { type: "part", part: "details" }, { type: "part", part: "inputs" }, { type: "target", target: "cart.line.after" }] }, { type: "part", part: "remove" }] }, { type: "layout", layout: "columns", children: [{ type: "part", part: "quantity" }, { type: "part", part: "price" }] }, { type: "part", part: "limit" }, { type: "part", part: "issue" }, { type: "part", part: "rule" }] }];
-const LINE_IMAGE = (hook) => ({ type: "content", hook, content: { kind: "image", image: { app: NOOR, file: "pp/banner.svg" }, alt: { en: "A banner" }, width: 2000, height: 2000 } });
+/** The largest a line's tokens make it: a 320px image, 48px padding, a 40px title on three lines. */
+const LARGEST_LINE = { line: { padding: 48, "border-width": 4 }, "line-image": { width: 240, height: 320, "width-wide": 240, "height-wide": 320 }, "line-title": { size: 40, tracking: "wider", clamp: "3" }, "line-price": { size: 28 } };
 const PAINT = { kind: "linear", angle: 160, stops: ["background", "muted", "secondary"] };
 const DARK_PAINT = { kind: "radial", at: "top", stops: ["muted", "background", "secondary"] };
+/** What a stored document forged past the save carries (none of it may draw): its words and its stylesheet's mark. */
+const FORGED_WORDS = "Forged words 7Q, call 01700000000";
+const FORGED_MARK = "forged-7q";
+const FORGED_BLOCK = (hook) => ({ type: "content", hook, content: { kind: "text", text: { en: FORGED_WORDS } } });
+/** The customer's protected cart's add-on lines (apps/storefront/src/gallery/api.ts `customerAddOns`), in order. */
+const CUSTOMER_DETAILS = [
+  "Protection ID will be given after order completion.",
+  "Grand Theft Auto V: Premium Edition #1 · ৳350 · Protection ID XXX-XXX-XXX",
+  "Grand Theft Auto V: Premium Edition #2 · ৳350 · Protection ID XXX-XXX-XXX",
+];
+/** The customer's look (packages/shared/src/storefront-theme/private-reference.fixture.ts): its palettes and privatePages. */
+const REFERENCE = { reference: true, toggle: true, scheme: "system" };
 
 /**
- * The reviews' concrete breaks: each must hold when drawn (in the states it
- * names, all of them with `states: "all"`), or be refused at save with the
- * reason it names (`refused`).
+ * The named cases: the reviews' concrete breaks and this release's surfaces.
+ * Each must hold when drawn (in the states it names, all of them with
+ * `states: "all"`), or be refused at save with the reason it names
+ * (`refused`). `privatePages` absent with `request.reference`: the customer's.
  */
 const REGRESSIONS = {
-  "review 3: a block widens the page": { privatePages: { pages: { cart: { layout: [{ type: "part", part: "notices" }, { type: "content", hook: "intro", content: { kind: "text", text: { en: LONG } } }, ...LEGAL_COLUMNS.slice(1)] } }, css: '[data-hook="intro"] p { min-inline-size: 5000px; white-space: nowrap }' } },
   "review 3: a dark form's text reaches its fields": { privatePages: { tokens: { cart: { "details-form": { background: "#111111", text: "#ffffff", muted: "#cccccc", link: "#a78bfa", error: "#f87171" }, input: { ring: "#8b5cf6", invalid: "#e11d48" } } } } },
   "review 3: two 480px columns on a phone": { privatePages: { pages: { cart: { layout: [{ type: "part", part: "notices" }, { type: "layout", layout: "grid", hook: "two", children: [{ type: "layout", layout: "fold", children: [{ type: "part", part: "lines" }, { type: "part", part: "summary" }, { type: "target", target: "cart.page.summary" }] }, { type: "target", target: "cart.page.below" }, { type: "part", part: "details" }] }] } }, tokens: { cart: { "@two": { columns: [480, 480], gap: 48 } } } } },
-  "review 2: shadows, outlines and covers from a block": { privatePages: { pages: { cart: { layout: [{ type: "part", part: "notices" }, { type: "content", hook: "promo", content: { kind: "text", text: { en: "Free delivery" } } }, ...LEGAL_COLUMNS.slice(1)] } }, css: '[data-hook="promo"] p { outline: 100vmax solid #fff; box-shadow: 0 0 0 100vmax #fff; text-shadow: 0 900px 0 #fff } [data-hook="promo"] p::after { content: "990"; position: absolute; inset: -100vmax; z-index: 2147483647; background: #fff }' } },
-  "review 3: the header's search disguised as a checkout field": { request: { noor: true }, privatePages: { chrome: "theme", search: "after", css: '[data-free="header"] form::before { content: "Delivery phone number (required)" } [data-free="header"] button::after { content: "Confirm order" } [data-free="header"] * { white-space: nowrap; min-inline-size: 3000px }' } },
   // Review 4: what the contrast check modelled and the CSS did not draw.
   // A palette whose cards differ from its page: a summary drawn inside the dark panel would paint its own card there.
   "review 4, B1: tokens only, a dark lines panel over the default arrangement's summary": { request: { palette: "heritage" }, privatePages: { tokens: { cart: { lines: { background: "#111111", text: "#ffffff", muted: "#d4d4d4", link: "#ffffff", error: "#ffffff" }, input: { ring: "#8b5cf6", invalid: "#e11d48" } } } } },
   "review 4, B2: an app's warning and success badges under a dark line": { privatePages: { tokens: { cart: { lines: { background: "#111111", text: "#ffffff", muted: "#d4d4d4", link: "#ffffff", error: "#ffffff" } } } } },
   "review 4, B3: the sign-in dialog under dark dialog tokens": { privatePages: { tokens: { cart: { dialog: { background: "#111111", text: "#ffffff", muted: "#d4d4d4", link: "#ffffff", error: "#ffffff" } } } } },
-  "review 4, S3: the theme's header styling the store's search from its region": { request: { noor: true }, privatePages: { chrome: "theme", search: "after", css: '[data-free="header"] div { visibility: hidden; pointer-events: none; font-size: 60px; direction: rtl }' } },
   // Review 4, B4: the gate could not see the details form; a dark one, tokens only, in every state.
   "review 4, B4: tokens only, a dark details form in every state": { states: "all", privatePages: { tokens: { cart: { "details-form": DARK } } } },
   // The apps' blocks inside the details form stand on its row, and a theme styles them there by `ui.*`.
@@ -320,9 +343,6 @@ const REGRESSIONS = {
   "a dark page under the dark colours": { request: { scheme: "system" }, privatePages: { tokens: { cart: { page: DARK } } } },
   "the store's own header under dark tokens": { privatePages: { tokens: { cart: { chrome: { background: "#111111", text: "#ffffff", muted: "#d4d4d4", link: "#c4b5fd" } } } } },
   "the store's own page, no theme, in every state": { states: "all", privatePages: {} },
-  // The theme's chrome with no header skin: the store's own checkout header draws, in token mode like the rest.
-  "the theme's chrome with no header skin, under a dark page": { request: { noor: true, headerSkin: false }, privatePages: { chrome: "theme", tokens: { cart: { page: DARK } } } },
-  "the theme's chrome with no header skin, no tokens": { request: { noor: true, headerSkin: false, scheme: "dark" }, privatePages: { chrome: "theme" } },
   // The theme's page paint (tokens.pagePaint) shows on private pages: behind the store's own page, and under tokens
   // that paint no page surface, where the table checks every word along the gradient.
   "the theme's page paint behind the store's own page": { request: { paint: PAINT }, privatePages: {} },
@@ -331,25 +351,14 @@ const REGRESSIONS = {
   // computed from the paint; with tokens, those that paint no page surface stand on it too.
   "a dark page paint, no private tokens": { states: "all", request: { palette: "retail", scheme: "dark", paint: DARK_PAINT }, privatePages: {} },
   "a dark page paint under dark tokens": { request: { palette: "retail", scheme: "dark", paint: DARK_PAINT }, privatePages: { tokens: { cart: { summary: DARK, lines: DARK } } } },
-  // Review 5, B1: the theme's chrome and a large image block, with no stylesheet, tokens or paint: the seal is the host's.
-  "review 5, B1: the theme's chrome and a 2000px image block with no look of its own": { request: { noor: true }, privatePages: { chrome: "theme", pages: { cart: { layout: [{ type: "part", part: "notices" }, { type: "content", hook: "big", content: { kind: "image", image: { app: NOOR, file: "pp/banner.svg" }, alt: { en: "A banner" }, width: 2000, height: 2000 } }, ...LEGAL_COLUMNS.slice(1)] } } } },
-  // Review 5, B2: the store's controls (the colour scheme switch, the market and language forms) once drew inside the
-  // theme's header and footer, where its stylesheet reaches; the regions now hold inert markup only.
-  // The store draws them beside the regions (`privatePages.controls`), where the colour table covers them.
-  "review 5, B2: the theme's header and footer in a store with a scheme switch and two markets": { request: { noor: true, toggle: true, localization: true }, privatePages: { chrome: "theme", search: "after", css: '[data-free="footer"] select { opacity: 0; position: absolute; inset: 0 } [data-free="header"] button { opacity: 0 }' } },
-  "review 5, B2: the store's controls before the regions, under dark tokens": { request: { noor: true, toggle: true, localization: true, scheme: "system" }, privatePages: { chrome: "theme", controls: "before", tokens: { cart: { page: DARK, scheme: { text: "#ffffff", ring: "#c4b5fd" }, localization: { text: "#ffffff" } } } } },
   // Review 5, S4: between a deploy and the maintenance compile the default look is served: it stands on the page colour,
   // never on the theme's page paint, which no table checked it on.
   "review 5, S4: a page paint behind a look this build has not compiled": { request: { paint: PAINT, scheme: "light", stale: true }, privatePages: { tokens: { cart: { summary: DARK } } } },
-  // Review 5, S5: a line's blocks repeat with every line. Twenty lines, each with the two largest legal blocks, and the
-  // page's one block before the form: Place order is still within reach.
-  "review 5, S5: twenty lines, each with two 2000px image blocks": { states: ["many", "max"], request: { noor: true }, privatePages: { pages: { cart: {
-    layout: [{ type: "part", part: "notices" }, { type: "content", hook: "lead", content: { kind: "image", image: { app: NOOR, file: "pp/banner.svg" }, alt: { en: "A banner" }, width: 2000, height: 2000 } }, ...LEGAL_COLUMNS.slice(1)],
-    items: { line: [LINE_IMAGE("line-top"), ...DEFAULT_LINE, LINE_IMAGE("line-end")] },
-  } } } },
-  // Review 5, S6: the theme's phone tab bar (`bottom-tabs`) under the theme's chrome, drawn outside token scope.
-  "review 5, S6: the theme's chrome with the phone tab bar, under a dark page": { request: { noor: true, tabs: true }, privatePages: { chrome: "theme", tokens: { cart: { page: DARK } } } },
-  "review 5, S6: the theme's chrome with the phone tab bar, no tokens": { request: { noor: true, tabs: true, scheme: "dark" }, privatePages: { chrome: "theme" } },
+  // Review 5, S5: what a line's tokens add repeats with every line. Twenty and ninety-nine lines at their largest:
+  // Place order is still within reach.
+  "review 5, S5: twenty and ninety-nine lines at their largest": { states: ["many", "max"], privatePages: { tokens: { cart: LARGEST_LINE } } },
+  // Review 5, S6: a theme whose phone navigation is the tab bar draws none on a private page (it is the public header's).
+  "review 5, S6: the phone tab bar setting, under a dark page": { request: { tabs: true }, privatePages: { tokens: { cart: { page: DARK } } } },
   // Review 5: the default look under a palette whose action colour is a mid tone. A field's focus turns its border
   // the ring colour, which must read at 3:1 on the field's own border, in the derived dark colours too.
   "review 5: the store's own page under the marketplace palette's dark colours": { request: { palette: "marketplace", scheme: "dark" }, privatePages: {} },
@@ -358,36 +367,73 @@ const REGRESSIONS = {
   "review 6, S1: a colour set saved with the action colour as its ring, dark": { request: { palette: "marketplace", scheme: "dark", saved: true }, privatePages: {} },
   // A filled button's hover once mixed its colour with the page (`bg-primary/90`): white on it read 4.42:1.
   "review 5: the store's own page under the marketplace palette's light colours": { request: { palette: "marketplace", scheme: "light" }, privatePages: {} },
-  // Review 6, B1: a header skin draws its own light or dark switch (and the host sign-in's account link), and its
-  // stylesheet hides that switch in dark colours and on a phone. The region keeps no host behaviour, so the store's
-  // switch never yields to it: it shows at every width, in both schemes.
-  "review 6, B1: the theme's header draws its own scheme switch and hides it": { request: { noor: true, toggle: true, skinSwitch: true, scheme: "system" }, privatePages: { chrome: "theme", css: ':root[data-color-scheme="dark"] [data-free="header"] button { display: none } @media (max-width: 500px) { [data-free="header"] button { visibility: hidden } }' } },
-  // Review 6, B3: a header at its cap, a 2000px block first, the lines unfolded on a phone with two blocks in every
-  // line, at one, twenty and ninety-nine lines on a 390×700 phone, a tablet and a laptop. Place order with its total is
-  // on screen at every scroll, the cart starts inside the first screen, and the theme adds a bounded depth.
-  "review 6, B3: a tall header, a 2000px block first and unfolded lines with two blocks each": { states: LENGTHS, request: { noor: true }, privatePages: { chrome: "theme", css: '[data-free="header"] > * { min-height: 24rem }', pages: { cart: {
-    layout: [LINE_IMAGE("lead"), { type: "part", part: "progress" }, { type: "part", part: "notices" }, { type: "layout", layout: "columns", children: [{ type: "layout", layout: "stack", children: [{ type: "part", part: "lines" }, { type: "part", part: "summary" }, { type: "part", part: "discount" }, { type: "target", target: "cart.page.summary" }, { type: "target", target: "cart.page.below" }, { type: "part", part: "empty" }] }, { type: "part", part: "details" }] }],
-    items: { line: [LINE_IMAGE("line-top"), ...DEFAULT_LINE, LINE_IMAGE("line-end")] },
-  } } } },
+  // Review 6, B3: the cart's parts unfolded on a phone, progress first, at one, twenty and ninety-nine lines on a 390×700
+  // phone, a tablet and a laptop. Place order with its total is on screen at every scroll, the cart starts inside the
+  // first screen, and the theme adds a bounded depth.
+  "review 6, B3: the cart unfolded, progress first, at its largest lines": { states: LENGTHS, privatePages: { pages: { cart: {
+    layout: [{ type: "part", part: "progress" }, { type: "part", part: "notices" }, { type: "layout", layout: "columns", children: [{ type: "layout", layout: "stack", children: [{ type: "part", part: "lines", variant: "heading-above" }, { type: "part", part: "summary", variant: "with-items" }, { type: "part", part: "discount" }, { type: "target", target: "cart.page.summary" }, { type: "target", target: "cart.page.below" }, { type: "part", part: "empty" }] }, { type: "part", part: "details" }] }],
+  } }, tokens: { cart: LARGEST_LINE }, labels: { "cart.intro": { en: "Review your items before checkout." }, "cart.summaryHeading": { en: "Order Summary" } } } },
   "the store's own page with one, twenty and ninety-nine lines": { states: LENGTHS, privatePages: {} },
-  // Review 6, S3: the theme's blocks in the cart drawer, over a public page: the layout seals them there too.
-  "review 6, S3: the theme's blocks in the drawer, on a public page": { request: { page: "home" }, privatePages: {
-    css: '[data-hook="drawer-note"] p { min-block-size: 3000px; outline: 100vmax solid #fff }',
-    pages: { cartDrawer: { layout: [
-      { type: "part", part: "header" },
-      { type: "content", hook: "drawer-note", content: { kind: "banner", tone: "info", text: { en: "Delivered in 24 hours" } } },
-      { type: "layout", layout: "scroll", children: [{ type: "part", part: "lines" }] },
-      { type: "part", part: "undo" },
-      { type: "layout", layout: "group", children: [{ type: "part", part: "summary" }, { type: "target", target: "cart_drawer.footer" }, { type: "part", part: "actions" }] },
-    ] } },
-  } },
+  "the customer's look with one, twenty and ninety-nine lines": { states: LENGTHS, request: REFERENCE },
+  // The cart drawer over a public page, in the theme's arrangement: its parts on screen, its words whole and readable.
+  "the theme's arrangement of the drawer, on a public page": { request: { page: "home" }, privatePages: { pages: { cartDrawer: { layout: [
+    { type: "part", part: "header" },
+    { type: "layout", layout: "scroll", children: [{ type: "part", part: "lines" }] },
+    { type: "part", part: "undo" },
+    { type: "layout", layout: "group", children: [{ type: "part", part: "summary" }, { type: "target", target: "cart_drawer.footer" }, { type: "part", part: "actions" }] },
+  ] } } } },
+  "the customer's protected cart in the drawer, its add-on row opened": { states: ["customer-protected"], request: { ...REFERENCE, page: "home" } },
+  // Per-scheme colours (one value for the light colours, one for the dark): each palette's row resolves its own, each
+  // scheme draws its own, and each is checked on its own.
+  "per-scheme colours: light boxes in the light colours, dark in the dark": { request: { scheme: "system", toggle: true }, privatePages: { tokens: { cart: {
+    page: { background: SCHEMED("#f8f5ff", "#0b0a12") }, lines: BY_SCHEME, summary: BY_SCHEME, "details-form": BY_SCHEME, dock: BY_SCHEME, dialog: BY_SCHEME,
+    input: { ring: SCHEMED("#6d28d9", "#a78bfa"), invalid: SCHEMED("#b91c1c", "#f87171") },
+    "ui.stack.warning/cart.line.after": { background: SCHEMED("#f2ebd9", "#35282c"), text: SCHEMED("#000000", "#fef3c6") },
+  } } } },
+  // This release's parts: the heading above the lines with its intro, the summary's heading and Items row, the details
+  // as values and as chips, the word Remove, the dialogs' own targets and the field labels.
+  "the cart's variants, labels and new style targets": { states: ["base", "lines"], privatePages: { pages: { cart: {
+    layout: [{ type: "part", part: "notices" }, { type: "layout", layout: "columns", children: [{ type: "layout", layout: "stack", children: [{ type: "layout", layout: "fold", children: [{ type: "part", part: "lines", variant: "heading-above" }, { type: "part", part: "summary", variant: "with-items" }, { type: "target", target: "cart.page.summary" }] }, { type: "target", target: "cart.page.below" }] }, { type: "part", part: "details" }] }],
+    items: { line: [{ type: "part", part: "image" }, { type: "layout", layout: "stack", children: [{ type: "part", part: "details", variant: "chips" }, { type: "part", part: "title" }, { type: "part", part: "inputs" }, { type: "target", target: "cart.line.after" }, { type: "part", part: "limit" }, { type: "part", part: "issue" }, { type: "part", part: "rule" }] }, { type: "layout", layout: "stack", children: [{ type: "part", part: "price" }, { type: "part", part: "quantity" }, { type: "part", part: "remove", variant: "words" }] }] },
+  } }, tokens: { cart: {
+    "lines-heading": { size: 32, weight: "700", leading: "tight" }, "lines-intro": { size: 14, leading: "relaxed" }, "summary-heading": { size: 20, weight: "600", font: "heading" },
+    "summary-total-label": { size: 16, weight: "600", case: "uppercase", tracking: "wide" }, "summary-total": { size: 24, weight: "800" },
+    "line-chip": { background: SCHEMED("#ede9fe", "#2e1065"), text: SCHEMED("#2e1065", "#ede9fe"), radius: 12, "border-width": 1 }, "line-remove": { size: 14, weight: "600" },
+    "field-label": { size: 12, weight: "600", case: "uppercase", tracking: "wide" }, "summary-add-on-detail": { font: "mono", size: 12, background: SCHEMED("#f5f3ff", "#1e1831"), text: SCHEMED("#111111", "#f4f1ff"), muted: SCHEMED("#3f3f46", "#d4d4d8"), padding: 8 },
+    "dialog-title": { size: 24, weight: "800", leading: "tight" }, "dialog-text": { background: SCHEMED("#f5f3ff", "#110d1e"), text: SCHEMED("#111111", "#d4d4d8"), muted: SCHEMED("#3f3f46", "#d4d4d8"), padding: 16 }, "dialog-agree": { background: SCHEMED("#ede9fe", "#241b39"), text: SCHEMED("#111111", "#e4e4e7"), padding: 16 },
+  } }, labels: { "cart.heading": { en: "Your Cart", bn: "আপনার কার্ট" }, "cart.intro": { en: "Review your items before checkout.", bn: "চেকআউটের আগে পণ্যগুলো দেখে নিন।" }, "cart.summaryHeading": { en: "Order Summary", bn: "অর্ডারের সারাংশ" } } } },
+  "a line's details as its values on one line": { privatePages: { pages: { cart: { items: { line: [{ type: "part", part: "image" }, { type: "layout", layout: "stack", children: [{ type: "part", part: "details", variant: "values" }, { type: "part", part: "title" }, { type: "part", part: "inputs" }, { type: "target", target: "cart.line.after" }, { type: "part", part: "price" }, { type: "part", part: "quantity" }, { type: "part", part: "remove" }, { type: "part", part: "limit" }, { type: "part", part: "issue" }, { type: "part", part: "rule" }] }] } } } } },
+  // Where the theme places the store's controls (`privatePages.controls`), in a store with the light or dark switch
+  // and two markets: in its checkout header, in a strip at the page's end, or not at all.
+  "the store's controls in its checkout header, no tokens": { request: { toggle: true, localization: true, scheme: "system" }, privatePages: { controls: "header" } },
+  "the store's controls at the page's end, under per-scheme tokens": { request: { toggle: true, localization: true, scheme: "system" }, privatePages: { controls: "footer", tokens: { cart: {
+    page: { background: SCHEMED("#ffffff", "#111111") }, chrome: { background: SCHEMED("#f5f3ff", "#1e1831"), text: SCHEMED("#111111", "#ffffff"), muted: SCHEMED("#3f3f46", "#d4d4d8"), link: SCHEMED("#5b21b6", "#c4b5fd") },
+    scheme: { ring: SCHEMED("#5b21b6", "#c4b5fd") }, localization: { text: SCHEMED("#111111", "#ffffff") },
+  } } } },
+  "no store controls on the page, under dark tokens": { request: { toggle: true, localization: true, scheme: "system" }, privatePages: { controls: "none", tokens: { cart: { page: DARK } } } },
+  // The customer's cart (private-look.md 2.1, 2.2, 3) in its own look, light and dark, at 390 and 1280: offered its
+  // protection, and protected on two accounts with the add-on row opened.
+  "the customer's cart, its protection offered": { states: ["customer"], request: REFERENCE },
+  "the customer's cart, protected": { states: ["customer-protected"], request: REFERENCE },
+  // A stored document forged past the save (a row edited by hand): content blocks in the page and the line, a
+  // stylesheet, the theme's chrome and its search. The storefront cannot read it and draws the store's default theme
+  // whole: no free region, none of its words, none of its CSS, and every check holds.
+  "a stored document forged past the save": { request: { forged: {
+    pages: { cart: { layout: [FORGED_BLOCK("forged-page"), ...LEGAL_COLUMNS], items: { line: [...DEFAULT_LINE, FORGED_BLOCK("forged-line")] } } },
+    css: `/*${FORGED_MARK}*/[data-part="summary"]{display:none}body::after{content:"${FORGED_WORDS}"}`, chrome: "theme", search: "after", assets: { "pp/a.svg": "x" },
+  } }, privatePages: { tokens: { cart: { summary: DARK } } } },
   // What the save must refuse (under a mutation that lets one through, the drawing must fail).
-  "a stylesheet hiding a host part": { refused: "unscoped_selector", privatePages: { css: '[data-part="summary"] * { display: none } [data-part="details-submit"] * { visibility: hidden }' } },
-  // Review 6, B2: a block shown or hidden by how far down it sits, which is the cart's length (a view timeline).
-  "a block whose look follows the page": { refused: "unknown_property", privatePages: { pages: { cart: { layout: [{ type: "part", part: "notices" }, { type: "content", hook: "ready", content: { kind: "text", text: { en: "x" } } }, ...LEGAL_COLUMNS.slice(1)] } }, css: '[data-hook="ready"] p { view-timeline: --t-v block; animation: t-few linear both; animation-timeline: --t-v; animation-range: cover 0% cover 1% } [data-hook="ready"] p::after { content: "Your order qualifies for free delivery" } @keyframes few { from { visibility: hidden } to { visibility: visible } }' } },
-  "summary rows that do not read on their summary": { refused: "contrast", privatePages: { tokens: { cart: { "summary-rows": { text: "#eeeeee" }, summary: { background: "#ffffff" } } } } },
+  "a theme's stylesheet, chrome, search and blocks": { refused: "not_available", privatePages: { css: '[data-part="summary"] { display: none }', chrome: "theme", search: "after", pages: { cart: { layout: [FORGED_BLOCK("intro"), ...LEGAL_COLUMNS] } } } },
+  "summary rows that do not read on their summary": { refused: "contrast", refusedFor: /summary-rows/, privatePages: { tokens: { cart: { "summary-rows": { text: "#eeeeee" }, summary: { background: "#ffffff" } } } } },
   // #757575 reads on retail's white page (4.6:1) but not where the paint reaches its muted colour (3.9:1).
   "page words that do not read on the theme's page paint": { refused: "contrast", request: { palette: "retail", scheme: "light", paint: PAINT }, privatePages: { tokens: { cart: { page: { text: "#757575" } } } } },
+  // Per scheme: readable in the light colours, #333333 on #111111 (1.66:1) in the dark.
+  "per-scheme words that do not read in the dark": { refused: "contrast", refusedFor: /summary-rows.*#333333 on #111111.*dark colours/, request: { scheme: "system", toggle: true }, privatePages: { tokens: { cart: { summary: { background: SCHEMED("#ffffff", "#111111") }, "summary-rows": { text: SCHEMED("#111111", "#333333") } } } } },
+  // A button with no surface of its own in an app's amber box under a dark line: white words read on the line
+  // (18.9:1), not on the amber (1.3:1). Its row stands on the box.
+  "an app's button with white words in a light amber box on a dark line": { refused: "contrast", refusedFor: /ui\.button\/cart\.line\.after.*#ffffff on #fde68a/, privatePages: { tokens: { cart: { lines: DARK, "ui.stack.warning/cart.line.after": { background: "#fde68a", text: "#111111" }, "ui.button/cart.line.after": { text: "#ffffff" } } } } },
+  // The total outranks every other summary row: a 12px total under 18px rows is refused (`prominence`).
+  "a total drawn smaller than its rows": { refused: "prominence", refusedFor: /summary-total/, privatePages: { tokens: { cart: { "summary-total": { size: 12 }, "summary-rows": { size: 18 } } } } },
 };
 
 // ─── PNG pixels (Chromium's 8-bit RGB or RGBA screenshots) ────────────────
@@ -458,31 +504,24 @@ const KIT_LINE = '[data-part="line"][data-line-key="line:v3:prod_7:variant:var_k
 const LINES_MANDATORY = [...MANDATORY, KIT_LINE, `${KIT_LINE} [data-buyer-ui-app="acme.offers"] [data-ui="button"]`];
 
 /**
- * Not the store's buyer-facing page: the gallery's own scaffolding, the theme's
- * free regions (its own words, which its stylesheet owns), and text no buyer
- * sees (scripts, styles, templates). Listed here and nowhere else.
+ * Not the store's buyer-facing page: the gallery's own scaffolding and text no
+ * buyer sees (scripts, styles, templates). Listed here and nowhere else.
  */
-const EXEMPT = "script,style,template,noscript,[data-free],#gallery-page-end,vite-error-overlay";
+const EXEMPT = "script,style,template,noscript,#gallery-page-end,vite-error-overlay";
 
 /**
  * The walk over the page (or one open dialog): marks every text and control
  * the host draws, checks each against the colour table (or, with no tokens,
  * the anatomy's style targets) and returns them for the pixel checks.
  */
-function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt }) {
+function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt, styleTargets }) {
   const problems = [];
   const width = innerWidth;
   const root = scope ? document.querySelector(scope) : document.body;
   if (!root) return { problems: [`${scope}: not open`], texts: [], controls: [] };
   if (document.documentElement.scrollWidth > width + 1) problems.push(`the page scrolls sideways: ${document.documentElement.scrollWidth}px at ${width}px`);
-  // Every free region is sealed by the host, whatever the theme's look holds: its own containing block, paint
-  // contained and clipped, a bounded height.
-  for (const region of document.querySelectorAll("[data-free]")) {
-    const style = getComputedStyle(region);
-    if (!/paint|content|strict/.test(style.contain) || style.overflowY === "visible" || style.maxBlockSize === "none" || style.position === "static") {
-      problems.push(`[data-free="${region.dataset.free}"]: not sealed (contain: ${style.contain}, overflow: ${style.overflowY}, max-block-size: ${style.maxBlockSize})`);
-    }
-  }
+  // A theme writes no markup here: nothing on the page is a theme's free region.
+  for (const region of document.querySelectorAll("[data-free]")) problems.push(`[data-free="${region.dataset.free}"]: a theme's free region is drawn`);
   const name = (element) => {
     const bits = [];
     for (let at = element; at && at !== document.body && bits.length < 3; at = at.parentElement) {
@@ -491,7 +530,7 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt }) {
     return bits.join(">");
   };
   for (const old of document.querySelectorAll("[data-pt-text],[data-pt-control]")) { old.removeAttribute("data-pt-text"); old.removeAttribute("data-pt-control"); }
-  // Mandatory parts: on screen, within reach, of a size, uncovered.
+  // Mandatory parts: on screen, within reach, of a size, uncovered at their centre.
   for (const selector of mandatory) {
     const element = root.querySelector(selector);
     if (!element) { problems.push(`${selector}: missing`); continue; }
@@ -499,12 +538,9 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt }) {
     const box = element.getBoundingClientRect();
     if (!element.checkVisibility({ opacityProperty: true, visibilityProperty: true }) || box.width < 8 || box.height < 8) { problems.push(`${selector}: not visible (${Math.round(box.width)}×${Math.round(box.height)})`); continue; }
     if (box.left < -1 || box.right > width + 1) problems.push(`${selector}: outside the viewport (${Math.round(box.left)}..${Math.round(box.right)} of ${width})`);
-    for (const [fx, fy] of [[0.5, 0.5], [0.2, 0.3], [0.8, 0.3], [0.2, 0.7], [0.8, 0.7]]) {
-      const x = Math.min(width - 1, Math.max(0, box.left + box.width * fx));
-      const y = Math.min(innerHeight - 1, Math.max(0, box.top + box.height * fy));
-      const hit = document.elementFromPoint(x, y);
-      if (hit && hit.closest("[data-free]") && !element.contains(hit)) { problems.push(`${selector}: covered by a free region at ${Math.round(x)},${Math.round(y)}`); break; }
-    }
+    const [x, y] = [Math.min(width - 1, Math.max(0, box.left + box.width / 2)), Math.min(innerHeight - 1, Math.max(0, box.top + box.height / 2))];
+    const hit = document.elementFromPoint(x, y);
+    if (hit && !element.contains(hit) && !hit.contains(element)) problems.push(`${selector}: covered at its centre by ${hit.tagName.toLowerCase()}${hit.id ? `#${hit.id}` : ""}${hit.dataset.part ? `[data-part=${hit.dataset.part}]` : ""}`);
   }
   // The rows: each element its last matching row (the table's CSS is in row order at one specificity).
   const rowOf = new Map();
@@ -512,6 +548,19 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt }) {
   const claimOf = new Map();
   for (const target of anatomy) for (const element of document.querySelectorAll(target.selector)) if (!claimOf.has(element)) claimOf.set(element, target.name);
   const tokenMode = rows.length > 0;
+  // Every element a style target names is drawn by a row of that target (its own, or one the table places it at:
+  // `input/details-form`, `ui.button/… in …`), never only by the row of the box around it.
+  if (tokenMode) {
+    for (const target of styleTargets) {
+      for (const element of document.querySelectorAll(target.selector)) {
+        if (element.closest(exempt) || !element.checkVisibility()) continue;
+        const own = rowOf.get(element);
+        const names = styleTargets.filter((each) => element.matches(each.selector)).map((each) => each.name);
+        const ownTarget = own?.key.split(/\/| in /)[0];
+        if (!own || !names.includes(ownTarget)) problems.push(`${name(element)}: the style target ${target.name} names it and no row of the table is its (${own ? `it reads ${own.key}` : "it has no row"})`);
+      }
+    }
+  }
   const nearestRow = (element) => { for (let at = element; at; at = at.parentElement) if (rowOf.has(at)) return at; return null; };
   const nearestClaim = (element) => { for (let at = element; at; at = at.parentElement) if (claimOf.has(at)) return at; return null; };
   const paints = (element) => { const style = getComputedStyle(element); return !/^rgba\(\d+, \d+, \d+, 0\)$|^transparent$/.test(style.backgroundColor) || style.backgroundImage !== "none"; };
@@ -519,7 +568,16 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt }) {
     const hex = /^#([0-9a-f]{6})$/i.exec(value.trim());
     return hex ? `rgb(${parseInt(hex[1].slice(0, 2), 16)}, ${parseInt(hex[1].slice(2, 4), 16)}, ${parseInt(hex[1].slice(4), 16)})` : value.trim();
   };
-  const cellsOf = (row) => { const style = getComputedStyle(row); return ["--pt-t", "--pt-m", "--pt-l", "--pt-e"].map((cell) => parse(style.getPropertyValue(cell))); };
+  // A row's words' colours as the table resolved them, never as the CSS wrote them (a rule that leaves a cell out
+  // must not make the words it leaves look right). A row that writes only some cells (an app's node, a label) takes
+  // the others from the row its element stands in, as the CSS inherits them.
+  const cellsOf = (row) => ["text", "muted", "link", "error"].map((cell) => {
+    for (let at = row; at; at = at.parentElement) {
+      const cells = rowOf.get(at);
+      if (cells && (!cells.writes || cells.writes.includes(cell))) return parse(cells[cell] ?? "");
+    }
+    return "";
+  });
   const claimed = new Set();
   // A row's own element paints its row's paint or nothing (a nested row shows its parent's): a palette class
   // that paints over the table's surface is a surface the table does not know.
@@ -666,6 +724,9 @@ function wholeTexts() {
         offset += segment.length;
         const rect = range.getBoundingClientRect();
         if (rect.width === 0 && rect.height === 0) continue;
+        // A line a clamp hides lies wholly outside its clip: not drawn, nothing a buyer reads (its words, as Chrome lays
+        // out a clamped box's hidden lines, may break anywhere).
+        if (clip && !clip.scrolls && (rect.top >= clip.box.bottom - 1 || rect.bottom <= clip.box.top + 1)) { previous = null; continue; }
         if (clip && !clip.scrolls) {
           const sideways = rect.left < clip.box.left - 1 || rect.right > clip.box.right + 1;
           const cut = (rect.top < clip.box.top - 1 && rect.bottom > clip.box.top + 1) || (rect.top < clip.box.bottom - 1 && rect.bottom > clip.box.bottom + 1);
@@ -695,7 +756,7 @@ function clicks() {
     if (x < 0 || x >= innerWidth || y < 0 || y >= innerHeight) { problems.push(`control ${control.tagName.toLowerCase()}#${control.id}: its centre is off screen`); continue; }
     const hit = document.elementFromPoint(x, y);
     if (!hit || !(target.contains(hit) || hit.contains(target) && hit.closest("label") === target)) {
-      problems.push(`control ${control.tagName.toLowerCase()}${control.id ? `#${control.id}` : ""}[${control.dataset.part ?? control.textContent.trim().slice(0, 20)}]: a click at its centre lands on ${hit ? `${hit.tagName.toLowerCase()}${hit.id ? `#${hit.id}` : ""}${hit.closest("[data-free]") ? " in a free region" : ""}` : "nothing"}`);
+      problems.push(`control ${control.tagName.toLowerCase()}${control.id ? `#${control.id}` : ""}[${control.dataset.part ?? control.textContent.trim().slice(0, 20)}]: a click at its centre lands on ${hit ? `${hit.tagName.toLowerCase()}${hit.id ? `#${hit.id}` : ""}` : "nothing"}`);
     }
   }
   return problems;
@@ -714,7 +775,7 @@ function firstScreen(lead) {
 
 /**
  * Place order with its total, at this scroll: on screen whole, the topmost thing at its centre and its
- * total's words, and taking no cover (the docked bar is the host's; nothing of a region paints over it).
+ * total's words, and taking no cover (the docked bar is the host's: nothing paints over it).
  */
 function actionOnScreen(where) {
   const action = document.querySelector('[data-part="details-submit"]');
@@ -727,7 +788,7 @@ function actionOnScreen(where) {
     for (const element of [action, total?.querySelector("[data-amount]")].filter(Boolean)) {
       const at = element.getBoundingClientRect();
       const hit = document.elementFromPoint(at.left + at.width / 2, at.top + at.height / 2);
-      if (!hit || !action.contains(hit)) problems.push(`${where}: a click on Place order${element === action ? "" : "'s total"} lands on ${hit ? `${hit.tagName.toLowerCase()}${hit.closest("[data-free]") ? " in a free region" : ""}` : "nothing"}`);
+      if (!hit || !action.contains(hit)) problems.push(`${where}: a click on Place order${element === action ? "" : "'s total"} lands on ${hit ? hit.tagName.toLowerCase() : "nothing"}`);
     }
   }
   if (!total || total.hidden || !/\p{Nd}/u.test(total.textContent ?? "")) problems.push(`${where}: Place order shows no total`);
@@ -744,6 +805,134 @@ function actionInFlow() {
   const top = action.getBoundingClientRect().top + scrollY;
   dock.style.position = previous;
   return { top, lines: document.querySelectorAll('[data-private="cart"] [data-part="line"]').length };
+}
+
+/**
+ * The total outranks every other summary row: no word of the total's row is drawn smaller than any word of
+ * another row (an add-on row's lines included), so no look makes a subtotal read as the total.
+ */
+function prominence(scope) {
+  const problems = [];
+  for (const summary of document.querySelectorAll(scope)) {
+    const sizes = (elements) => elements.flatMap((element) => {
+      const out = [];
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const parent = node.parentElement;
+        if (!node.textContent.trim() || !parent?.checkVisibility() || parent.closest(".sr-only")) continue;
+        out.push({ text: node.textContent.trim().slice(0, 24), size: Number.parseFloat(getComputedStyle(parent).fontSize) });
+      }
+      return out;
+    });
+    const total = sizes([...summary.querySelectorAll('[data-summary-row="total"]')]);
+    const others = sizes([...summary.querySelectorAll('[data-summary-row]:not([data-summary-row="total"])')]);
+    if (total.length === 0 || others.length === 0) continue;
+    const least = total.reduce((a, b) => (b.size < a.size ? b : a));
+    const most = others.reduce((a, b) => (b.size > a.size ? b : a));
+    if (least.size < most.size - 0.25) problems.push(`the total's "${least.text}" is drawn at ${least.size.toFixed(1)}px, under the row "${most.text}" at ${most.size.toFixed(1)}px`);
+  }
+  return problems;
+}
+
+/**
+ * The store's controls where the theme places them (`privatePages.controls`): the light or dark switch where the
+ * store offers it, the market and language forms where it sells in several, inside its checkout header
+ * (`header`), its strip at the page's end (`footer`), or nowhere (`none`), and never anywhere else.
+ */
+function controlsPlaced({ place, scheme, localization }) {
+  const problems = [];
+  const roots = { header: '[data-private="core-header"]', footer: '[data-private="core-footer"]' };
+  for (const [control, wanted] of [['[data-host="scheme"] button', scheme], ['[data-host="localization"] select', localization]]) {
+    const all = [...document.querySelectorAll(control)];
+    const inPlace = place === "none" ? [] : all.filter((element) => element.closest(roots[place]));
+    if (wanted && place !== "none" && inPlace.length === 0) problems.push(`${control}: not in the store's ${place === "header" ? "checkout header" : "strip at the page's end"} (${all.length} elsewhere)`);
+    for (const element of all) if (!inPlace.includes(element)) problems.push(`${control}: drawn ${element.closest(roots.header) ? "in the checkout header" : element.closest(roots.footer) ? "at the page's end" : "outside the store's chrome"} where the theme places the controls ${place === "none" ? "nowhere" : `in the ${place}`}`);
+  }
+  return problems;
+}
+
+/** Nothing of a document forged past the save draws: none of its words, none of its stylesheet. */
+function forgedAbsent({ words, mark }) {
+  const problems = [];
+  if (document.body.innerText.includes(words)) problems.push(`the forged document's words are drawn ("${words}")`);
+  for (const sheet of document.styleSheets) {
+    let text = "";
+    try { text = [...sheet.cssRules].map((rule) => rule.cssText).join(""); } catch { continue; }
+    if (text.includes(mark) || text.includes(words)) problems.push(`the forged document's stylesheet is on the page (${sheet.ownerNode?.outerHTML.slice(0, 60)})`);
+  }
+  if ([...document.querySelectorAll("style")].some((style) => style.textContent.includes(mark))) problems.push("the forged document's stylesheet is in a <style> of the page");
+  return problems;
+}
+
+/**
+ * The customer's cart under its own look (private-look.md 2.1, 2.2, 3), measured: the offer row's pieces (their
+ * boxes) in one band at 1280 and in at most two at 390 (the sentence's own words may wrap inside its box: beside
+ * the details form the lines column is 572px at 1280, not the prototype's 1440 page); the status box painting its tone's
+ * surface (its row's paint, not the summary's); the add-on row opened to its three lines in order, its amount once.
+ */
+function customerChecks({ state, rows, details }) {
+  const problems = [];
+  const root = document.querySelector('[data-private="cart"]');
+  if (state === "customer") {
+    const row = root?.querySelector('[data-buyer-ui-target="cart.line.after"] [data-ui="stack"][data-tone="warning"]');
+    if (!row) problems.push("the offer row is not drawn under the account line");
+    else {
+      const texts = [...row.querySelectorAll('[data-ui="text"]')];
+      const pieces = {
+        mark: row.querySelector('[data-ui="mark"]'),
+        sentence: texts.find((element) => element.textContent.includes("Add GAMEGHOR Protection")),
+        price: texts.find((element) => element.textContent.trim() === "৳350"),
+        "Add Now": [...row.querySelectorAll("a,button")].find((element) => element.textContent.trim() === "Add Now"),
+      };
+      const missing = Object.entries(pieces).filter(([, element]) => !element?.checkVisibility()).map(([piece]) => piece);
+      if (missing.length > 0) problems.push(`the offer row draws no ${missing.join(", ")}`);
+      else {
+        // The pieces' boxes in bands of vertical overlap: each band one line of the row.
+        const boxes = Object.entries(pieces).map(([piece, element]) => ({ piece, box: element.getBoundingClientRect() })).sort((a, b) => a.box.top - b.box.top);
+        const bands = [];
+        for (const each of boxes) {
+          const band = bands.find((one) => each.box.top < one.bottom - 2 && each.box.bottom > one.top + 2);
+          if (band) { band.pieces.push(each.piece); band.top = Math.min(band.top, each.box.top); band.bottom = Math.max(band.bottom, each.box.bottom); }
+          else bands.push({ top: each.box.top, bottom: each.box.bottom, pieces: [each.piece] });
+        }
+        const range = document.createRange();
+        range.selectNodeContents(pieces.sentence);
+        const sentenceLines = new Set([...range.getClientRects()].filter((rect) => rect.width > 2).map((rect) => Math.round(rect.top))).size;
+        const shown = bands.map((band) => band.pieces.join(" + ")).join(" / ");
+        if (innerWidth >= 1280 && bands.length !== 1) problems.push(`the offer row's pieces lie on ${bands.length} lines (${shown}; the sentence's words on ${sentenceLines}): one line at ${innerWidth}px`);
+        if (innerWidth < 1280 && bands.length > 2) problems.push(`the offer row's pieces lie on ${bands.length} lines (${shown}): at most two at ${innerWidth}px`);
+      }
+    }
+  }
+  const tone = state === "customer" ? "warning" : "success";
+  const box = root?.querySelector(`[data-buyer-ui-target="cart.page.summary"] [data-ui="stack"][data-tone="${tone}"]`);
+  const own = rows.find((row) => row.key === `ui.stack.${tone}@gameghor.protection/cart.page.summary`);
+  const summary = rows.find((row) => row.key === "summary");
+  if (!box) problems.push(`the ${tone} status box is not drawn in the summary`);
+  else if (!own?.paint || own.paint === summary?.paint) problems.push(`the ${tone} status box has no surface of its own in the table (${own?.paint ?? "no row"})`);
+  else {
+    const hex = /^#([0-9a-f]{6})$/i.exec(own.paint);
+    const expected = hex ? `rgb(${[0, 2, 4].map((at) => parseInt(hex[1].slice(at, at + 2), 16)).join(", ")})` : own.paint;
+    const drawn = getComputedStyle(box).backgroundColor;
+    if (drawn !== expected) problems.push(`the ${tone} status box paints ${drawn}, not its tone's ${own.paint}`);
+  }
+  if (state === "customer-protected") {
+    const addOn = root?.querySelector('[data-part="summary"] [data-part="add-on-details"]');
+    if (!addOn) problems.push("the add-on row is not drawn in the summary");
+    else {
+      if (!addOn.open) problems.push("the add-on row did not open");
+      const lines = [...addOn.querySelectorAll('[data-part="add-on-detail"]')];
+      const drawn = lines.filter((line) => line.checkVisibility()).map((line) => line.textContent.replace(/\s+/g, " ").trim());
+      if (JSON.stringify(drawn) !== JSON.stringify(details)) problems.push(`the add-on row opens to ${JSON.stringify(drawn)}, not ${JSON.stringify(details)}`);
+      const tops = lines.map((line) => line.getBoundingClientRect().top);
+      if (tops.some((top, index) => index > 0 && top <= tops[index - 1])) problems.push("the add-on row's lines are not drawn top to bottom in order");
+      const amounts = addOn.textContent.split("৳700").length - 1;
+      if (amounts !== 1) problems.push(`the add-on row shows its amount ৳700 ${amounts} times`);
+    }
+    const totals = root?.querySelectorAll('[data-part="summary"] [data-summary-row="total"]').length ?? 0;
+    if (totals !== 1) problems.push(`the summary shows ${totals} totals`);
+  }
+  return problems;
 }
 
 // ─── The checks, from outside ─────────────────────────────────────────────
@@ -859,7 +1048,7 @@ async function focusOrder(page, controls) {
     document.activeElement?.blur();
     scrollTo({ top: 0, left: 0, behavior: "instant" });
   });
-  // Enough presses for every focusable on the page, the theme's regions' own links included.
+  // Enough presses for every focusable on the page.
   const presses = await page.evaluate(() => document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,summary,[tabindex]:not([tabindex="-1"])').length);
   for (let press = 0; press < presses + 4; press += 1) await page.keyboard.press("Tab");
   const all = await page.evaluate(() => { document.activeElement?.blur(); return window.__ptFocus; });
@@ -1073,24 +1262,17 @@ async function startGallery() {
   return { url, close };
 }
 const gallery = await startGallery();
-const { styles, ui: UI_KINDS, inert: INERT } = await fetch(`${gallery.url}/__gallery/private-anatomy`).then((answer) => answer.json());
-/**
- * Nothing but inert markup inside a free region, by construction: every element there is one the inert
- * rebuild writes, with only the attributes it writes (plugins/inert-html.ts `inertMarkupProblems`, the
- * very function, run in the page). No form, field, submit button, host control or embed can hide there.
- */
-const INERT_CHECK = `[...document.querySelectorAll("[data-free]")].flatMap((region) => (${INERT.check})(region, ${JSON.stringify(INERT.markup)}).map((problem) => \`[data-free="\${region.dataset.free}"] \${problem}\`))`;
+const { styles, ui: UI_KINDS } = await fetch(`${gallery.url}/__gallery/private-anatomy`).then((answer) => answer.json());
+/** Each style target of the cart page with its whole selector (the page's own, `page`, is the body). */
+const STYLE_TARGETS = Object.entries(styles).map(([name, style]) => ({ name, selector: style.absolute ? style.selector : `[data-private="cart"] ${style.selector}`.trim() }));
 /**
  * With no tokens (the store's own colours, no table) the walk claims by the
  * anatomy: everything the host draws must sit inside a surface it names (the
- * page's root, a style target, a dialog, the store's header, the theme's
- * chrome frame, the host's search). The body (`page`) holds everything, so it
- * claims only the skip link.
+ * page's root, a style target, a dialog, the store's checkout header and its
+ * strip at the page's end). The body (`page`) holds everything, so it claims
+ * only the skip link.
  */
-const ANATOMY = Object.entries(styles)
-  .filter(([name]) => name !== "page")
-  .map(([name, style]) => ({ name, selector: style.absolute ? style.selector : `[data-private="cart"] ${style.selector}`.trim() }))
-  .concat([{ name: "the theme's chrome frame", selector: '[data-private="header"],[data-private="footer"]' }, { name: "the skip link", selector: 'a[href="#main-content"]' }]);
+const ANATOMY = STYLE_TARGETS.filter(({ name }) => name !== "page").concat([{ name: "the skip link", selector: 'a[href="#main-content"]' }]);
 const browser = await chromium.launch();
 const failures = [];
 let drawn = 0;
@@ -1098,6 +1280,8 @@ let draws = 0;
 let refused = 0;
 const reasons = {};
 const started = Date.now();
+/** The most a draw's theme added above Place order, against its bound (printed with the run's result). */
+let deepest = null;
 /** Where a run's time goes (`--profile`). */
 const PROFILE = {};
 const timed = async (label, work) => {
@@ -1122,11 +1306,34 @@ function drawsOf(state) {
   if (state === "lines") return [[390, "dark"], [1280, "light"]].map(([width, scheme]) => ({ width, scheme, focus: false, interact: true }));
   if (state === "decide") return [[390, "light"], [1280, "dark"]].map(([width, scheme]) => ({ width, scheme, focus: false, interact: true }));
   if (LENGTHS.includes(state)) return LENGTH_VIEWPORTS.map(([width, height, scheme]) => ({ width, height, scheme, focus: false, interact: false }));
+  // The customer's cart on a phone and the wide page, light and dark; its controls' rings on the phone light and the
+  // wide page dark, under the pointer on the wide page dark.
+  if (state === "customer" || state === "customer-protected") {
+    return [390, 1280].flatMap((width) => SCHEMES.map((scheme) => ({ width, scheme, focus: (width === 390) === (scheme === "light"), hover: width === 1280 && scheme === "dark", interact: false })));
+  }
   return [[320, "light"], [1280, "dark"]].map(([width, scheme]) => ({ width, scheme, focus: false, interact: false }));
 }
 
-/** Every running animation and transition finished (a dialog fading in is not yet what a buyer reads). */
+/**
+ * Every running animation and transition finished (a dialog fading in is not yet what a buyer reads). The dev
+ * server may reload a page once as it first serves a dependency (Vite's optimizer): a reload of the same URL is
+ * waited out and settled again; a page that went anywhere else is a failure of the draw.
+ */
 async function settle(page) {
+  const at = page.url();
+  try {
+    await settleOnce(page);
+  } catch (error) {
+    if (!/Execution context was destroyed|navigation/i.test(String(error?.message))) throw error;
+    await page.waitForLoadState("load");
+    if (page.url() !== at) throw new Error(`the page navigated from ${at} to ${page.url()} while it settled`);
+    console.error(`(the dev server reloaded ${new URL(at).pathname}; settled again)`);
+    await page.waitForSelector('[data-private="cart"][data-cart-state="items"],[data-private="cart"][data-cart-state="empty"],[data-cart-open],#cart-button', { timeout: 20_000 }).catch(() => {});
+    await settleOnce(page);
+  }
+}
+
+async function settleOnce(page) {
   // No pointer rests on a control (a hover colour is not what the page draws).
   await page.mouse.move(0, 0);
   // The page has stopped redrawing: 250ms with no element added, removed or reworded (the cart's check,
@@ -1186,41 +1393,47 @@ async function open(context, id, width, server5xx, height = 900) {
 }
 
 /** One draw: the page in one state at one width and scheme, with its interactions. */
-async function draw({ context, id, state, width, height, focus, hover, interact, rows, chrome, search, controls, request }) {
+async function draw({ context, id, state, width, height, focus, hover, interact, rows, controls, request, drawn }) {
   const problems = [];
   const server5xx = [];
-  if (request?.page === "home") return drawDrawer({ context, id, width, problems, server5xx });
+  if (request?.page === "home") return drawDrawer({ context, id, width, problems, server5xx, rows, state });
   const page = await timed("load", () => open(context, id, width, server5xx, height));
-  // With the theme's chrome its header region is drawn (else the seed tests nothing of the chrome), and the host's search where it says.
-  // The store's controls beside the theme's regions where it draws them: the switch, and the market and language forms.
-  const chromeParts = [...(chrome ? ['[data-free="header"]'] : ['[data-private="core-header"]']), ...(search ? ['[data-host="search"]'] : []), ...(controls ?? [])];
-  const mandatory = [...(state === "empty" ? EMPTY_MANDATORY : state === "lines" ? LINES_MANDATORY : MANDATORY), ...chromeParts];
+  // The store's own checkout header, and its controls where the theme places them.
+  const mandatory = [...(state === "empty" ? EMPTY_MANDATORY : state === "lines" ? LINES_MANDATORY : MANDATORY), '[data-private="core-header"]'];
   const at = (label, list) => problems.push(...list.map((problem) => `${label}: ${problem}`));
   const check = async (label, scope, list, { controls: wantControls = true } = {}) => {
     await timed("settle", () => settle(page));
-    const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: list, scope, exempt: EXEMPT }));
+    const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: list, scope, exempt: EXEMPT, styleTargets: STYLE_TARGETS }));
     at(label, walked.problems);
-    at(label, await page.evaluate(INERT_CHECK));
+    if (request?.forged) at(label, await page.evaluate(forgedAbsent, { words: FORGED_WORDS, mark: FORGED_MARK }));
     at(label, await timed("whole", () => page.evaluate(wholeTexts)));
     at(label, await timed("contrast", () => textContrast(page, walked.texts)));
     if (wantControls) at(label, await timed("clicks", () => page.evaluate(clicks)));
     return walked;
   };
   await timed("settle", () => settle(page));
+  if (drawn) {
+    const shown = await page.evaluate(() => document.documentElement.dataset.colorScheme ?? "light");
+    if (shown !== drawn) problems.push(`scheme: the page draws its ${shown} colours where the store shows its ${drawn} ones`);
+  }
   // The first screen and Place order, as a buyer arrives: at scroll 0, then down the cart.
   at("first screen", await page.evaluate(firstScreen, LEAD));
   if (state !== "empty") at("dock", await timed("dock", () => dockChecks(page)));
   // Phones: Tab order and the touch scroll run before anything is clicked.
   if (width < 1280 && state !== "empty") at("touch", await timed("touch", () => touchScroll(page, '[data-part="details-submit"]')));
   if (focus) {
-    const { controls } = await page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: [], scope: null, exempt: EXEMPT });
+    const { controls } = await page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: [], scope: null, exempt: EXEMPT, styleTargets: [] });
     at("focus order", await timed("tab", () => focusOrder(page, controls)));
   }
-  // On a phone the cart folds behind its bar: open it, as a buyer does.
+  // On a phone the cart folds behind its bar: open it, as a buyer does; and open every add-on row to its lines.
   const toggle = page.locator('[data-part="fold-toggle"][aria-expanded="false"]');
   if (await toggle.isVisible().catch(() => false)) await toggle.click().catch(() => {});
+  await openAddOns(page, '[data-private="cart"]');
   await page.waitForTimeout(150);
   const page0 = await check(state, null, mandatory);
+  at(state, await page.evaluate(controlsPlaced, controls));
+  at(`${state} prominence`, await page.evaluate(prominence, '[data-private="cart"] [data-part="summary"]'));
+  if (request?.reference && (state === "customer" || state === "customer-protected")) at(`${state} customer`, await page.evaluate(customerChecks, { state, rows, details: CUSTOMER_DETAILS }));
   // What the theme adds above Place order, against the default look with the same cart (the fold open in both).
   if (state !== "empty") {
     const here = await page.evaluate(actionInFlow);
@@ -1228,6 +1441,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
     if (here && before) {
       const added = here.top - before.top;
       const allowed = THEME_DEPTH_PX + LINE_DEPTH_PX * here.lines;
+      if (!deepest || added / allowed > deepest.added / deepest.allowed) deepest = { added: Math.round(added), allowed, lines: here.lines };
       if (added > allowed) problems.push(`depth: the theme adds ${Math.round(added)}px above Place order (${here.lines} lines: at most ${allowed}px)`);
     }
   }
@@ -1290,11 +1504,11 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
 const DRAWER_MANDATORY = ['[data-part="drawer-header"]', '[data-part="drawer-lines"]', '[data-part="drawer-total"]', '[data-part="drawer-checkout"]'];
 
 /**
- * The cart drawer over a public page, its arrangement holding the theme's blocks: opened as a buyer opens it,
- * its regions sealed and inert, its parts on screen and uncovered, its words whole and at their floor. Its
+ * The cart drawer over a public page, in the theme's arrangement: opened as a buyer opens it, every add-on row
+ * opened, its parts on screen and uncovered, its words whole and at their floor, its controls taking a click. Its
  * look is the public page's (no colour table): the drawer claims what it draws.
  */
-async function drawDrawer({ context, id, width, problems, server5xx }) {
+async function drawDrawer({ context, id, width, problems, server5xx, state }) {
   const at = (label, list) => problems.push(...list.map((problem) => `${label}: ${problem}`));
   const page = await timed("load", () => open(context, id, width, server5xx));
   await page.waitForSelector("[data-cart-open], #cart-button", { timeout: 20_000 }).catch(() => {});
@@ -1307,10 +1521,15 @@ async function drawDrawer({ context, id, width, problems, server5xx }) {
     await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
     await settle(page);
     const scope = '[data-private="cart-drawer"]';
-    const walked = await page.evaluate(walk, { rows: [], anatomy: [{ name: "the drawer", selector: scope }], uiKinds: UI_KINDS, mandatory: DRAWER_MANDATORY, scope, exempt: EXEMPT });
+    if (state === "customer-protected") {
+      await page.waitForSelector(`${scope} [data-part="add-on-details"]`, { timeout: 10_000 }).catch(() => at("drawer", ["the add-on row is not drawn"]));
+      await openAddOns(page, scope);
+      const lines = await page.evaluate((scope) => [...document.querySelectorAll(`${scope} [data-part="add-on-detail"]`)].filter((line) => line.checkVisibility()).map((line) => line.textContent.replace(/\s+/g, " ").trim()), scope);
+      if (JSON.stringify(lines) !== JSON.stringify(CUSTOMER_DETAILS)) at("drawer", [`the add-on row opens to ${JSON.stringify(lines)}, not its three lines in order`]);
+      await settle(page);
+    }
+    const walked = await page.evaluate(walk, { rows: [], anatomy: [{ name: "the drawer", selector: scope }], uiKinds: UI_KINDS, mandatory: DRAWER_MANDATORY, scope, exempt: EXEMPT, styleTargets: [] });
     at("drawer", walked.problems);
-    at("drawer", await page.evaluate(INERT_CHECK));
-    if (await page.evaluate(() => document.querySelectorAll('[data-private="cart-drawer"] [data-free]').length) === 0) at("drawer", ["the theme's blocks are not drawn"]);
     at("drawer", await page.evaluate(wholeTexts));
     at("drawer", await textContrast(page, walked.texts));
     at("drawer", await page.evaluate(clicks));
@@ -1318,6 +1537,15 @@ async function drawDrawer({ context, id, width, problems, server5xx }) {
   at("5xx", server5xx);
   await page.close();
   return problems;
+}
+
+/** Every add-on row in `scope` opened as a buyer opens it: a click on its bar (`<summary>`). */
+async function openAddOns(page, scope) {
+  const bars = page.locator(`${scope} [data-part="add-on-details"]:not([open]) > summary`);
+  for (let index = (await bars.count()) - 1; index >= 0; index -= 1) {
+    const bar = bars.nth(index);
+    if (await bar.isVisible().catch(() => false)) await bar.click().catch(() => {});
+  }
 }
 
 /** Place order on screen at scroll 0 and at three places down the cart (while the cart still meets the screen's bottom). */
@@ -1336,8 +1564,8 @@ async function dockChecks(page) {
 /** Place order's place under the default look, for the same store and cart at this size (measured once each). */
 const defaults = new Map();
 function defaultInFlow(request = {}, state, width, height = 900) {
-  const { noor, headerSkin, localization, tabs, toggle, skinSwitch } = request;
-  const shape = { noor, headerSkin, localization, tabs, toggle, skinSwitch };
+  const { noor, localization, tabs, toggle, reference } = request;
+  const shape = { noor, localization, tabs, toggle, reference };
   const key = `${JSON.stringify(shape)}|${state}|${width}|${height}`;
   if (!defaults.has(key)) {
     defaults.set(key, (async () => {
@@ -1395,20 +1623,35 @@ try {
     const states = entry.states === "all" || ALL_STATES ? STATES : Array.isArray(entry.states) ? entry.states : entry.seed !== undefined ? ["base", STATES[1 + (entry.seed % (STATES.length - 1))]] : ["base"];
     for (const state of states) {
       const id = `pp-${index}-${state}`;
-      const answer = await fetch(`${gallery.url}/__gallery/private-theme`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, state, ...entry.request, privatePages: entry.privatePages }) });
+      const answer = await fetch(`${gallery.url}/__gallery/private-theme`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, state, ...entry.request, ...(entry.privatePages ? { privatePages: entry.privatePages } : {}) }) });
       if (answer.status === 422) {
         const issue = (await answer.json()).issues[0];
         if (state === states[0]) { refused += 1; reasons[issue?.reason ?? "?"] = (reasons[issue?.reason ?? "?"] ?? 0) + 1; }
         if (entry.refused && issue?.reason !== entry.refused) failures.push({ index, name: entry.name, where: "save", problems: [`refused for ${issue?.reason}, not ${entry.refused}: ${issue?.message}`], document: entry });
-        else if (!entry.refused && entry.seed === undefined) console.log(`${entry.name}: refused at save (${issue?.reason}: ${issue?.message})`);
+        // Refused for the break it names (`refusedFor`: the pair or key in the refusal's words), not for another.
+        else if (entry.refusedFor && !entry.refusedFor.test(issue?.message ?? "")) failures.push({ index, name: entry.name, where: "save", problems: [`refused for another break: ${issue?.message}`], document: entry });
+        // A named document meant to draw is legal: the save refusing it is a failure (it would test nothing).
+        else if (!entry.refused && entry.seed === undefined && state === states[0]) failures.push({ index, name: entry.name, where: "save", problems: [`refused at save (${issue?.reason}: ${issue?.message}); a legal document must be taken`], document: entry });
         return;
       }
       assert.equal(answer.status, 200, `${entry.name}: the gallery did not take the document`);
       if (entry.refused && state === states[0]) failures.push({ index, name: entry.name, where: "save", problems: [`the save took it; it must be refused (${entry.refused})`], document: entry });
-      const { storage, tables } = await answer.json();
+      const { storage, tables, degraded } = await answer.json();
       if (state === states[0]) drawn += 1;
+      // Only a forged document falls back to the default theme; a legal one the storefront cannot read tests nothing.
+      if (degraded !== Boolean(entry.request?.forged) && state === states[0]) failures.push({ index, name: entry.name, where: "read", problems: [degraded ? "the storefront cannot read the saved document: it draws the default theme" : "the storefront reads the forged document"], document: entry });
+      // Where the store's controls are drawn: the theme's place (the customer's: the header), the switch where the store
+      // offers it, the market forms where it sells in two markets. A forged document draws the default theme's.
+      const controls = {
+        place: degraded ? "header" : entry.request?.reference && !entry.privatePages ? "header" : entry.privatePages?.controls ?? "header",
+        scheme: !degraded && entry.request?.toggle === true,
+        localization: entry.request?.localization === true,
+      };
       for (const scheme of SCHEMES) {
-        const rows = tables.find((table) => table.scheme === scheme)?.rows ?? tables[0]?.rows ?? [];
+        // The colours the page draws in a browser that prefers `scheme`: the store's own where it shows one (a switch
+        // starts there too), the browser's where it follows the system. Its rows are that palette's.
+        const drawn = degraded ? null : entry.request?.scheme === "light" || entry.request?.scheme === "dark" ? entry.request.scheme : scheme;
+        const rows = tables.find((table) => table.scheme === drawn)?.rows ?? tables[0]?.rows ?? [];
         for (const touch of [true, false]) {
           const plan = (entry.request?.page === "home" ? [{ width: 390, scheme: "light" }, { width: 1280, scheme: "dark" }] : drawsOf(state)).filter((each) => each.scheme === scheme && (each.width < 1280) === touch);
           if (plan.length === 0) continue;
@@ -1417,12 +1660,7 @@ try {
           for (const each of plan) {
             if (bailed) { await context.close(); return; }
             draws += 1;
-            const themeChrome = entry.privatePages.chrome === "theme" && entry.privatePages.controls !== "none";
-            const controls = [
-              ...(themeChrome && entry.request?.headerSkin !== false && entry.request?.toggle ? ['[data-host="scheme"] button'] : []),
-              ...(themeChrome && entry.request?.localization ? ['[data-host="localization"] select'] : []),
-            ];
-            const problems = await draw({ context, id, state, ...each, rows, request: entry.request, chrome: entry.privatePages.chrome === "theme" && entry.request?.headerSkin !== false, search: entry.privatePages.chrome === "theme" && entry.privatePages.search, controls });
+            const problems = await draw({ context, id, state, ...each, rows, request: entry.request, controls, drawn });
             if (problems.length > 0) {
               failures.push({ index, name: entry.name, where: `${state} at ${each.width}px, ${scheme}`, problems, document: entry });
               // `--bail` (the mutations' runs): one failing draw is the answer.
@@ -1454,8 +1692,10 @@ try {
   await gallery.close();
 }
 for (const failure of failures) {
-  console.error(`\n✗ ${failure.name}, ${failure.where}:\n  ${failure.problems.slice(0, 12).join("\n  ")}${failure.problems.length > 12 ? `\n  … and ${failure.problems.length - 12} more` : ""}\n  document: ${JSON.stringify({ request: failure.document.request, privatePages: failure.document.privatePages })}`);
+  // Under a mutation every problem is printed: the run looks for the one its check names.
+  const shown = MUTATE ? failure.problems.length : 12;
+  console.error(`\n✗ ${failure.name}, ${failure.where}:\n  ${failure.problems.slice(0, shown).join("\n  ")}${failure.problems.length > shown ? `\n  … and ${failure.problems.length - shown} more` : ""}\n  document: ${JSON.stringify({ request: failure.document.request, privatePages: failure.document.privatePages })}`);
 }
 if (args.includes("--profile")) console.log(`time (s): ${Object.entries(PROFILE).map(([label, ms]) => `${label} ${(ms / 1000).toFixed(1)}`).join(", ")}`);
-console.log(`private pages, rendered: ${drawn} documents drawn in ${draws} draws (${refused} refused at save: ${JSON.stringify(reasons)}) at ${WIDTHS.join(", ")} px, light and dark, in ${Math.round((Date.now() - started) / 1000)}s: ${failures.length} failures${MUTATE ? ` (under mutation ${MUTATE})` : ""}`);
+console.log(`private pages, rendered: ${drawn} documents drawn in ${draws} draws (${refused} refused at save: ${JSON.stringify(reasons)}) at ${WIDTHS.join(", ")} px, light and dark, in ${Math.round((Date.now() - started) / 1000)}s: ${failures.length} failures${MUTATE ? ` (under mutation ${MUTATE})` : ""}${deepest ? `; the most a theme added above Place order: ${deepest.added}px with ${deepest.lines} lines (bound ${deepest.allowed}px)` : ""}`);
 if (process.exitCode !== 2) process.exitCode = failures.length > 0 ? 1 : 0;

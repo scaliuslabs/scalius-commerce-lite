@@ -130,7 +130,7 @@ function sendJson(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
-/** The cart page's colour table per palette, as the save resolved it: each row's key, selector, kind and paint, and the scheme. */
+/** The cart page's colour table per palette, as the save resolved it: each row's key, selector, kind, paint and words' colours, and the scheme. */
 function galleryTables(shared, privatePages, context) {
   const arrangement = shared.privatePageArrangement(privatePages, "cart");
   const spec = shared.PRIVATE_PAGES.cart;
@@ -140,7 +140,7 @@ function galleryTables(shared, privatePages, context) {
     items: Object.fromEntries(Object.keys(spec.items).map((item) => [item, arrangement?.items?.[item] ?? spec.items[item].layout])),
     palettes: context.palettes,
   });
-  return compiled.tables.map((table) => ({ scheme: table.palette.scheme, rows: table.rows.map((row) => ({ key: row.key, selector: row.selector, kind: row.kind, paint: row.paint, gradient: row.gradient })) }));
+  return compiled.tables.map((table) => ({ scheme: table.palette.scheme, rows: table.rows.map((row) => ({ key: row.key, selector: row.selector, kind: row.kind, paint: row.paint, gradient: row.gradient, text: row.text, muted: row.muted, link: row.link, error: row.error, writes: row.writes })) }));
 }
 
 /**
@@ -208,26 +208,6 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
   const runtimeModule = await vite.ssrLoadModule("/src/lib/api/runtime.ts");
   const { serveExtensionFile } = await vite.ssrLoadModule("/src/lib/extensions/files.ts");
   const routes = storefrontRoutes();
-  // The private pages' gate: Noor's header drawing its own light or dark switch (`colorSchemeToggle()`, as a header
-  // skin may) and the host sign-in's account link where an entry asks (`skinSwitch`), so the gate sees what a region
-  // keeps of a skin's host behaviours. The ask rides the skin's own input (a setting no cart page shows), so the
-  // host's memory of rendered skins keeps the two apart.
-  const SKIN_SWITCH = "gallery skin switch";
-  const bundled = (await vite.ssrLoadModule("/src/extensions/bundled.gen.ts")).BUNDLED_STOREFRONT_EXTENSIONS;
-  const noorModule = bundled["scalius.noor"]?.module;
-  if (noorModule) {
-    bundled["scalius.noor"].module = async () => {
-      const loaded = await noorModule();
-      const render = (batch) => {
-        const reply = loaded.default.render(batch);
-        const headers = new Set(batch.jobs.filter((job) => job.kind === "skin" && job.target === "header" && JSON.stringify(job).includes(SKIN_SWITCH)).map((job) => job.id));
-        const own = '<button type="button" data-color-scheme-toggle aria-label="Dark colours" class="noor-own-switch">◐</button><a href="/account" data-account-link class="noor-own-account">Account</a>';
-        return { ...reply, results: reply.results.map((result) => headers.has(result.id) && "html" in result ? { ...result, html: result.html.replace(/<\/header>(?![\s\S]*<\/header>)/, `${own}</header>`) } : result) };
-      };
-      return { ...loaded, default: { ...loaded.default, render } };
-    };
-  }
-
   // Every API read of a render is answered by the entry's fixture API; any
   // other request leaves nothing (the gallery is hermetic).
   const currentEntry = new AsyncLocalStorage();
@@ -285,7 +265,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       // Production's gateway owns this route before Astro. Use its real
       // bundled-file handler so packed CSS and islands run in the gallery.
       if (url.pathname.startsWith("/_x/")) {
-        // The private pages' rendered tests name theme files (an icon, an image block): the gallery draws them.
+        // The private pages' rendered tests name theme files (an icon): the gallery draws them.
         const fixture = /^\/_x\/[a-z0-9.-]+\/[A-Za-z0-9_-]+\/public\/pp\/([a-z0-9-]+)\.svg$/.exec(url.pathname);
         if (fixture) {
           response.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "no-store" });
@@ -316,24 +296,26 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       }
       // The private pages' rendered property tests: a generated theme compiled with the store's own
       // compiler (a refusal answers its issues, as a save would) and drawn on the buyer UI cart entry in
-      // one of its states, under a palette, colour scheme and page paint, with Noor's chrome when asked (its
-      // header skin dropped with `headerSkin: false`), a store of two markets (`localization`), a look an older
-      // checker compiled (`stale`), the phone tab bar (`tabs`) and Noor's header drawing its own scheme switch and
-      // account link (`skinSwitch`), the homepage, where the cart drawer opens (`page: "home"`), and a colour set
-      // saved at version 14 (`saved`). The answer
-      // carries the page's colour table (each row's key, selector and kind) for the coverage walk.
+      // one of its states, under a palette, colour scheme and page paint, with Noor installed (`noor`: the
+      // theme's own app, whose files an icon may name), a store of two markets (`localization`), a look an
+      // older checker compiled (`stale`), the phone tab bar setting (`tabs`), the homepage, where the cart
+      // drawer opens (`page: "home"`), a colour set saved at version 14 (`saved`), and the customer's
+      // reference look (`reference`: its two palettes, and its privatePages unless the body names others).
+      // `forged` is written onto the stored document past the compiler, as a row edited by hand would be.
+      // The answer carries the colour table of the page as the storefront reads the document (each row's
+      // key, selector, kind and paint) for the coverage walk, and whether that read fell back to the
+      // store's default theme (`degraded`).
       if (url.pathname === `${GALLERY_PREFIX}/private-theme` && request.method === "POST") {
         const body = JSON.parse(await readBody(request) || "{}");
         const shared = await vite.ssrLoadModule("@scalius/shared/storefront-theme");
+        const reference = body.reference === true ? await vite.ssrLoadModule(`${REPO_ROOT}/packages/shared/src/storefront-theme/private-reference.fixture.ts`) : null;
         const { entryId: makeId, registerPrivatePagesEntry, galleryEntry: findEntry } = await vite.ssrLoadModule("/src/gallery/entries.ts");
         const { noorTheme } = await vite.ssrLoadModule("/src/gallery/noor.ts");
         const found = findEntry(makeId("app", "buyer-ui")).theme;
         const base = body.noor ? noorTheme(structuredClone(found)) : found;
-        // A store whose theme has no header skin (`headerSkin: false`): its chrome draws no theme header.
-        if (body.noor && body.headerSkin === false && base.apps?.skins) delete base.apps.skins.header;
-        if (body.noor && body.skinSwitch === true && base.apps?.skins?.header) base.apps.skins.header = { ...base.apps.skins.header, values: { ...base.apps.skins.header.values, landing_label: SKIN_SWITCH } };
-        const colors = body.palette && shared.STOREFRONT_THEME_PALETTES[body.palette] ? { ...shared.STOREFRONT_THEME_PALETTES[body.palette] } : base.tokens.colors;
-        let tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors: shared.storefrontDarkPalette(colors), ...(body.paint ? { pagePaint: body.paint } : {}) };
+        const colors = reference ? { ...reference.REFERENCE_LIGHT_PALETTE } : body.palette && shared.STOREFRONT_THEME_PALETTES[body.palette] ? { ...shared.STOREFRONT_THEME_PALETTES[body.palette] } : base.tokens.colors;
+        const darkColors = reference ? { ...reference.REFERENCE_PALETTE } : shared.storefrontDarkPalette(colors);
+        let tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors, ...(body.paint ? { pagePaint: body.paint } : {}) };
         // A colour set a store saved at version 14 (`saved`): its colours and made dark colours kept the action
         // colour as their focus ring. Read as the store reads a stored document.
         if (body.saved === true) {
@@ -349,26 +331,37 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         if (body.paint && !shared.storefrontTokensWithReadablePaint(tokens).pagePaint) return sendJson(response, 400, { error: "The page paint does not read on this palette." });
         // The phone tab bar (`tabs`: the theme's bottom-tabs phone navigation).
         const theme = { ...base, tokens, ...(body.tabs === true ? { blocks: { ...base.blocks, mobileNav: { variant: "bottom-tabs", settings: { tabs: ["home", "categories", "offers", "account"], drawer: "accordion" } } } } : {}) };
-        const document = { ...shared.storefrontPrivatePagesDefault(), ...body.privatePages };
-        const context = shared.privatePagesContextOf(theme);
+        // Saved as the store saves it (site-settings.service.ts): read by the document's schema (a refusal naming its
+        // reason, as `not_available`, answers it), then compiled.
+        const parsed = shared.storefrontPrivatePagesSchema.safeParse({ ...shared.storefrontPrivatePagesDefault(), ...structuredClone(body.privatePages ?? reference?.REFERENCE_PRIVATE_PAGES ?? {}) });
+        if (!parsed.success) {
+          const named = parsed.error.issues.find((issue) => typeof issue.params?.reason === "string") ?? parsed.error.issues[0];
+          return sendJson(response, 422, { issues: [{ path: named.path, reason: named.params?.reason ?? "schema", message: named.message }] });
+        }
+        const document = parsed.data;
+        // Compiled against the palettes the store reads from the saved theme (the save compiles the parsed document).
+        const read = shared.storefrontThemeDocumentSchema.safeParse(theme);
+        if (!read.success) return sendJson(response, 400, { error: `The store's theme does not read: ${read.error.issues[0]?.path.join(".")}` });
+        const context = shared.privatePagesContextOf(read.data);
         const compiled = mutation?.compile ? mutation.compile(shared, document, context) : shared.compileStorefrontPrivatePages(document, context);
         if (!compiled.ok) return sendJson(response, 422, { issues: compiled.issues.slice(0, 5) });
         // A look an older checker compiled (`stale`: between a deploy and the maintenance compile): the page serves the default look.
         if (body.stale === true) compiled.value.compiled = { ...compiled.value.compiled, sanitizer: 0 };
-        const entry = registerPrivatePagesEntry(String(body.id), { ...theme, privatePages: compiled.value }, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, ...(body.page === "home" ? { page: "home" } : {}) });
-        const tables = shared.privatePageTokenMode(compiled.value, "cart") ? galleryTables(shared, compiled.value, context) : [];
-        return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables });
+        const stored = { ...theme, privatePages: body.forged ? { ...compiled.value, ...structuredClone(body.forged) } : compiled.value };
+        const entry = registerPrivatePagesEntry(String(body.id), stored, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, ...(body.page === "home" ? { page: "home" } : {}) });
+        // The document as the storefront reads it (storefront-theme-context.ts): one it cannot read draws the default theme whole.
+        const reread = shared.storefrontThemeDocumentSchema.safeParse(stored);
+        const served = reread.success ? reread.data : shared.DEFAULT_STOREFRONT_THEME;
+        const tables = shared.privatePageTokenMode(served.privatePages, "cart") ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served)) : [];
+        return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.success });
       }
-      // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens).
+      // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens), and the
+      // app node kinds that have rows (their selectors inside a block).
       if (url.pathname === `${GALLERY_PREFIX}/private-anatomy`) {
         const shared = await vite.ssrLoadModule("@scalius/shared/storefront-theme");
-        // And the app node kinds that have rows (their selectors inside a block).
-        // And what the inert rebuild may emit, with the very function that checks markup against it (run in the page on every free region).
-        const inert = await vite.ssrLoadModule("@scalius/shared/plugins/inert-html");
         return sendJson(response, 200, {
           styles: shared.PRIVATE_PAGES.cart.styles,
           ui: Object.values(shared.PRIVATE_BUYER_UI_STYLES).filter((style) => style.style).map((style) => style.kind),
-          inert: { markup: inert.INERT_MARKUP, check: inert.inertMarkupProblems.toString() },
         });
       }
       // Whether the mutation this gallery runs under was applied to a module it served.

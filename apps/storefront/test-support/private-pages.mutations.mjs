@@ -17,10 +17,6 @@ const rewrite = (file, find, replace) => ({ file, find, replace });
 
 const TOKENS = "packages/shared/src/storefront-theme/private-tokens.ts";
 const PLAN = "apps/storefront/src/lib/private-pages/plan.ts";
-const MARKUP = "apps/storefront/src/components/private/PrivateMarkup.astro";
-const INERT = "packages/shared/src/plugins/inert-html.ts";
-const CSS = "packages/shared/src/storefront-theme/private-css.ts";
-const SEAL = "overflow:hidden;overflow:clip;contain:layout paint style;";
 const ROW = "export function privateRowDeclarations(row: PrivateTokenRow, parent: PrivateTokenRow | null, also: ReadonlySet<string> = NONE): string {\n";
 /** A row of the table that writes only its paint: its words keep whatever colour reaches them. */
 const paintOnly = (test) => rewrite(TOKENS, ROW, `${ROW}  if (${test}) return row.paint ? \`background-color:\${row.paint}\` : "";\n`);
@@ -29,21 +25,19 @@ const B1 = "review 4, B1: tokens only, a dark lines panel over the default arran
 const B2 = "review 4, B2: an app's warning and success badges under a dark line";
 const B3 = "review 4, B3: the sign-in dialog under dark dialog tokens";
 const B4 = "review 4, B4: tokens only, a dark details form in every state";
-const S3 = "review 4, S3: the theme's header styling the store's search from its region";
 const S6 = "review 4, S6: Place order's focus ring on a dark form";
 const S8 = "review 4, S8: a 40px wide-tracked title clamped to two lines";
 const KINDS = "review 4: every node kind under a dark summary and a dark line, in every state";
-const WIDE = "review 3: a block widens the page";
-const COVERS = "review 2: shadows, outlines and covers from a block";
 const COLUMNS = "review 3: two 480px columns on a phone";
 const HEADER = "the store's own header under dark tokens";
-const DEPTH = "review 6, B3: a tall header, a 2000px block first and unfolded lines with two blocks each";
+const DEPTH = "review 6, B3: the cart unfolded, progress first, at its largest lines";
+const PROTECTED = "the customer's cart, protected";
 
 export const MUTATIONS = {
   // The reviews' fixes, each reverted: its named case must fail again.
   "B1 token mode draws the host's own page": {
     why: "the default arrangement's tokens drawn on the host's page, whose summary sits in the lines panel",
-    rewrites: [rewrite(PLAN, "layout: tokens ? [...arrangement?.layout ?? spec.layout] : privateLayoutIsDefault", "layout: privateLayoutIsDefault")],
+    rewrites: [rewrite(PLAN, "const layout = tokens ? [...arrangement?.layout ?? spec.layout] : privateLayoutIsDefault(page, arrangement) ? null : arrangement!.layout!;", "const layout = privateLayoutIsDefault(page, arrangement) ? null : arrangement!.layout!;")],
     cases: [B1],
     expect: /reads [\d.]+:1 on what is behind it/,
   },
@@ -77,50 +71,6 @@ export const MUTATIONS = {
     cases: [B1, B2],
     expect: /is none of its row's colours/,
   },
-  // Paint containment clips too: without overflow clipping alone the seal still holds, so this takes both.
-  "M2 the seal clips nothing": {
-    why: "the free-region seal loses overflow:hidden, overflow:clip and paint containment",
-    rewrites: [rewrite(PLAN, SEAL, "contain:layout style;")],
-    cases: [COVERS, WIDE],
-    expect: /covered by a free region|lands on .* in a free region|: not visible|scrolls sideways/,
-  },
-  "M4 the stylesheet may select a host part": {
-    why: "the compiler stops refusing [data-part=…] selectors (scoping off)",
-    rewrites: [rewrite("packages/shared/src/storefront-theme/private-css.ts", "  if (attr.op !== \"=\") return null;\n", "  if (attr.op !== \"=\") return null;\n  if (attr.name === \"data-part\") return `[data-part=\"${attr.value}\"]`;\n")],
-    cases: ["a stylesheet hiding a host part"],
-    // The drawing must fail, not only the refusal.
-    expect: /: not visible/,
-  },
-  // The gate's own.
-  "M5 the host's search inside the theme's region": {
-    why: "the header draws the store's search inside the theme's sealed region, where its stylesheet reaches",
-    rewrites: [rewrite("apps/storefront/src/components/header/header.astro", "<PrivateMarkup markup={privateMarkup} /></div>{privateSearch?.place === \"after\" && <PrivateSearch {...privateSearch.form} />}", "<PrivateMarkup markup={privateMarkup} />{privateSearch?.place === \"after\" && <PrivateSearch {...privateSearch.form} />}</div>")],
-    cases: [S3],
-    expect: /\[data-free="header"\] <(?:form|input|button)[ >]/,
-  },
-  "R5-B2b the store's controls inside the theme's regions": {
-    why: "the store's light or dark switch and its market and language forms draw inside the theme's regions, where its stylesheet reaches",
-    rewrites: [
-      rewrite("apps/storefront/src/components/header/header.astro", '<div data-free="header"><PrivateMarkup markup={privateMarkup} /></div>{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}{privateControls === "after" && <PrivateSchemeSwitch />}', '<div data-free="header"><PrivateMarkup markup={privateMarkup} />{privateControls === "after" && <PrivateSchemeSwitch />}</div>{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}'),
-      rewrite("apps/storefront/src/components/Footer.astro", '<div data-free="footer"><PrivateMarkup markup={privateMarkup} /></div>}\n  {privateControls === "after" && <PrivateLocalization localization={props.localization} />}', '<div data-free="footer"><PrivateMarkup markup={privateMarkup} />{privateControls === "after" && <PrivateLocalization localization={props.localization} />}</div>}'),
-    ],
-    cases: ["review 5, B2: the theme's header and footer in a store with a scheme switch and two markets"],
-    expect: /\[data-free="(?:header|footer)"\] <(?:div data-host|form|select)>/,
-  },
-  "R5-B2 the skin's slots draw the store's controls inside its region": {
-    why: "the theme's header and footer draw their slots on a private page: the scheme switch and the market and language forms sit inside the regions",
-    rewrites: [
-      rewrite(MARKUP, "const { markup } = Astro.props;\n---\n\n{markup.parts.map((part) => part.kind === \"html\" && <Fragment set:html={part.html} />)}",
-        "const { markup, embeds = {} } = Astro.props as { markup: AppMarkup; embeds?: import(\"@/lib/extensions/embeds\").EmbedRenderers };\n"
-        + "type AnyComponent = (props: Record<string, unknown>) => unknown;\n"
-        + "const parts = markup.parts.map((part) => part.kind === \"html\" ? part : { kind: \"embed\" as const, rendered: embeds[part.embed]?.({ data: part.data, index: part.index }) ?? null, embed: part.embed });\n---\n\n"
-        + "{parts.map((part) => part.kind === \"html\" ? <Fragment set:html={part.html} /> : part.rendered && (() => { const Embed = part.rendered.component as unknown as AnyComponent; return <div class=\"contents\" data-sx-embed={part.embed}><Embed {...part.rendered.props} /></div>; })())}"),
-      rewrite("apps/storefront/src/components/header/header.astro", "<div data-free=\"header\"><PrivateMarkup markup={privateMarkup} /></div>", "<div data-free=\"header\"><PrivateMarkup markup={privateMarkup} embeds={embeds} /></div>"),
-      rewrite("apps/storefront/src/components/Footer.astro", "<div data-free=\"footer\"><PrivateMarkup markup={privateMarkup} /></div>", "<div data-free=\"footer\"><PrivateMarkup markup={privateMarkup} embeds={embeds} /></div>"),
-    ],
-    cases: ["review 5, B2: the theme's header and footer in a store with a scheme switch and two markets"],
-    expect: /\[data-free="(?:header|footer)"\] <(?:div data-sx-embed|form|select|button data-sx-host-color-scheme-toggle)>/,
-  },
   "M6 the save skips one row's contrast": {
     why: "the table's check skips the summary rows, so unreadable rows are saved",
     rewrites: [rewrite(TOKENS, "if (ratio >= pair.floor) continue;", "if (ratio >= pair.floor || pair.key === \"summary-rows\") continue;")],
@@ -131,11 +81,12 @@ export const MUTATIONS = {
     why: "token mode no longer makes the store's palette surfaces transparent (a tint paints inside a dark panel)",
     rewrites: [rewrite(PLAN, '${tokens ? PRIVATE_TOKEN_MODE_CSS.before : ""}', "")],
     cases: [KINDS],
-    expect: /paints .* no row of the table claims/,
+    // The coverage walk's surface check: a palette tint where the table knows none, under words or on a row's own box.
+    expect: /paints .*(?:no row of the table claims|where its row \(.*\) paints nothing)/,
   },
-  "M8 the store's own header outside token mode": {
+  "M8 the store's own chrome outside token mode": {
     why: "the store's header paints its row's dark surface while its words keep the palette's dark colours",
-    rewrites: [rewrite(TOKENS, `, '[data-host="search"]', '[data-private="core-header"]'];`, `, '[data-host="search"]'];`)],
+    rewrites: [rewrite(TOKENS, `const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]', '[data-private="core-header"]', '[data-private="core-footer"]'];`, `const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]'];`)],
     cases: [HEADER],
     expect: /is none of its row's colours \(chrome:/,
   },
@@ -143,7 +94,8 @@ export const MUTATIONS = {
     why: "Place order inherits its dock's words' colour, but it is also a filled button whose row sets its own",
     rewrites: [rewrite(TOKENS, 'const inherited = row.nested && (row.kind === "box" || row.kind === "text") && !row.key.startsWith("ui.") ? parent : null;', "const inherited = row.nested ? parent : null;")],
     cases: [S6],
-    expect: /"Place order" .*reads [\d.]+:1/,
+    // Its words take the dock's colour, not its own row's: the walk sees it, and the pixels where that colour does not read.
+    expect: /"Place order" .*(?:reads [\d.]+:1|is none of its row's colours \(submit)/,
   },
   "M10 a title's clamp on its heading": {
     why: "the line title's heading clips its link's focus ring",
@@ -163,14 +115,6 @@ export const MUTATIONS = {
     cases: [COLUMNS],
     expect: /outside the viewport/,
   },
-  // S10: `contain: inline-size` once sat in the seal; without it no case failed, so it is gone. What keeps a
-  // block from widening its column is this pair.
-  "S10 the seal without its width bounds": {
-    why: "the free-region seal loses min-inline-size:0 and max-inline-size:100%",
-    rewrites: [rewrite(PLAN, "min-inline-size:0;max-inline-size:100%;", "")],
-    cases: [WIDE],
-    expect: /outside the viewport|scrolls sideways/,
-  },
   "P1 the page row ignores the theme's page paint": {
     why: "the table checks the page's words on its page colour while the body shows the theme's gradient",
     rewrites: [rewrite(TOKENS, "} else if (place.parent === null && palette.pagePaint) {", "} else if (false) {")],
@@ -182,12 +126,6 @@ export const MUTATIONS = {
     rewrites: [rewrite(TOKENS, "(row[cell] !== inherited?.[cell] || also.has(property))", "row[cell] !== inherited?.[cell]")],
     cases: ["a dark page under the dark colours"],
     expect: /its focus ring reads at/,
-  },
-  "C1 the theme's chrome with no header draws the store's full header": {
-    why: "a theme chrome with no header skin draws the public header, whose surfaces and words no row of the table knows",
-    rewrites: [rewrite("apps/storefront/src/components/header/header.astro", '<slot name="private-fallback" />', "<CoreHeader {...props} />")],
-    cases: ["the theme's chrome with no header skin, under a dark page"],
-    expect: /\[data-private="core-header"\]: missing/,
   },
   "U1 the details form's app targets have no rows": {
     why: "an app's blocks inside the details form read the form's row only: a theme's ui.* tokens for them style nothing the table checks",
@@ -201,33 +139,17 @@ export const MUTATIONS = {
     cases: [B1],
     expect: /shows no hover/,
   },
-  "R5-B1 the seal follows the theme's look": {
-    why: "the layout seals the free regions only when the theme compiled a look: its chrome and blocks with none draw unsealed",
-    // Only the fix reverted: the chrome and the blocks still count, the seal waits on a compiled look.
-    rewrites: [rewrite(PLAN, "  const served = servedPrivatePages(theme.privatePages);\n  const holds", "  const served = servedPrivatePages(theme.privatePages);\n  if (!privatePagesCss(theme.privatePages)) return false;\n  const holds")],
-    cases: ["review 5, B1: the theme's chrome and a 2000px image block with no look of its own"],
-    expect: /not sealed/,
-  },
   "R5-S4 the page paint behind the default look": {
     why: "a cart whose look this build has not compiled serves the default look on the theme's page paint, which no table checked",
     rewrites: [rewrite("apps/storefront/src/layouts/Layout.astro", "themePaint(privateStyle !== undefined && !privateTokens ? { ...storefrontTheme, tokens: unpaintedTokens } : storefrontTheme, resolvedTheme)", "themePaint(storefrontTheme, resolvedTheme)")],
     cases: ["review 5, S4: a page paint behind a look this build has not compiled"],
     expect: /shows a paint of its own/,
   },
-  "R5-S5 a line's blocks take a page block's height": {
-    why: "the seal gives a block in a cart line the page's 30rem: twenty lines of them bury Place order",
-    rewrites: [rewrite(PLAN, "[data-part=\"line\"] [data-free]{max-block-size:4rem}", "[data-part=\"line\"] [data-free]{max-block-size:30rem}")],
-    cases: ["review 5, S5: twenty lines, each with two 2000px image blocks"],
-    expect: /^depth: the theme adds \d+px above Place order/,
-  },
-  "R5-S6 the phone tab bar on a private page": {
-    why: "the theme's chrome draws the phone tab bar on the cart, outside token scope: its surface and words belong to no row",
-    rewrites: [
-      rewrite("apps/storefront/src/components/header/header.astro", '{privateControls === "after" && <PrivateSchemeSwitch />}</Fragment>', '{privateControls === "after" && <PrivateSchemeSwitch />}{tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}</Fragment>'),
-      rewrite("apps/storefront/src/layouts/Layout.astro", "const showMobileTabs = !hideHeader && !privateChrome && themeLayout.mobileNavigation", "const showMobileTabs = !hideHeader && themeLayout.mobileNavigation"),
-    ],
-    cases: ["review 5, S6: the theme's chrome with the phone tab bar, under a dark page"],
-    expect: /nav#mobile-tab-bar paints .* no row of the table claims that surface/,
+  "R5-S6 the public header and its phone tab bar on a private page": {
+    why: "a private page draws the public header too, and with it the theme's phone tab bar: surfaces and words no row of the table knows",
+    rewrites: [rewrite("apps/storefront/src/layouts/Layout.astro", "        !hideHeader && (\n          <Header", "        (!hideHeader || privateHeader !== undefined) && (\n          <Header")],
+    cases: ["review 5, S6: the phone tab bar setting, under a dark page"],
+    expect: /paints .* no row of the table claims that surface/,
   },
   "R5-A3 the dark colours' ring is the action colour": {
     why: "the colours' focus ring is the action colour, which shows under 3:1 on a focused field's own border",
@@ -251,46 +173,11 @@ export const MUTATIONS = {
     cases: ["review 5: the store's own page under the marketplace palette's light colours"],
     expect: /hovered: .* reads [\d.]+:1 on what is behind it/,
   },
-  "R6-B1 a region keeps the skin's buttons and the store's chrome behaviours": {
-    why: "the inert rebuild keeps a skin's button and its colour scheme switch and account link: the store's switch yields to one the theme hides",
-    rewrites: [
-      rewrite(INERT, '  "button",\n]);', "]);"),
-      rewrite(INERT, '  "svg", "g", "path",', '  "button", "svg", "g", "path",'),
-      rewrite(INERT, '    if (VALUES[name]) {', '    if (name === "data-color-scheme-toggle" || name === "data-account-link") { out.push([name, value]); continue; }\n    if (VALUES[name]) {'),
-    ],
-    cases: ["review 6, B1: the theme's header draws its own scheme switch and hides it"],
-    expect: /^base: \[data-host="scheme"\] button: not visible/,
-  },
-  "R6-B2 a region's properties are a deny-list": {
-    why: "the stylesheet takes any property and any listed function in it: a view timeline shows a block by the cart's length",
-    rewrites: [
-      rewrite(CSS, "  if (!PROPERTY_FUNCTIONS.has(name)) {\n", "  if (!/^[a-z-]+$/.test(name)) {\n"),
-      rewrite(CSS, "functions: custom ? ANY_FUNCTION : PROPERTY_FUNCTIONS.get(name)!,", "functions: ANY_FUNCTION,"),
-      rewrite(CSS, 'if (name === "animation-timeline") checkWord(', 'if (name === "-") checkWord('),
-    ],
-    cases: ["a block whose look follows the page"],
-    expect: /the save took it; it must be refused \(unknown_property\)/,
-  },
   "R6-B3a Place order is not docked": {
-    why: "Place order stays at the end of the cart: on a phone with a tall theme and many lines it is screens away",
+    why: "Place order stays at the end of the cart: on a phone with many large lines it is screens away",
     rewrites: [rewrite("apps/storefront/src/pages/cart.astro", 'class="sticky bottom-0 z-20 mt-4 hidden', 'class="relative z-20 mt-4 hidden')],
     cases: [DEPTH],
     expect: /^dock: scroll 0: Place order is not on screen/,
-  },
-  "R6-B3b the header and the blocks above the cart have no screen cap": {
-    why: "the header region keeps 24rem and a block before the cart 30rem: on a 700px phone the first screen is all theme",
-    rewrites: [
-      rewrite(PLAN, '[data-free="header"]{max-block-size:min(24rem,25svh)}', '[data-free="header"]{max-block-size:24rem}'),
-      rewrite(PLAN, "max-block-size:min(30rem,${Math.floor(2500 / (index + 1)) / 100}svh)", "max-block-size:30rem"),
-    ],
-    cases: [DEPTH],
-    expect: /^first screen: the page's first part starts at \d+px, below the 700px screen/,
-  },
-  "R6-S3 the seal only on a private page": {
-    why: "the layout writes the free regions' seal only on a private page: the theme's blocks in the drawer over a public page draw unsealed",
-    rewrites: [rewrite("apps/storefront/src/layouts/Layout.astro", "const freeRegionSeal = (privateStyle !== undefined || drawerPlan !== null) && privateFreeRegions", "const freeRegionSeal = privateStyle !== undefined && privateFreeRegions")],
-    cases: ["review 6, S3: the theme's blocks in the drawer, on a public page"],
-    expect: /^drawer: \[data-free="block"\]: not sealed/,
   },
   "P2 a page paint with no tokens draws the store's own page": {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",
@@ -301,6 +188,40 @@ export const MUTATIONS = {
     ],
     cases: ["a dark page paint, no private tokens"],
     expect: /shows a paint of its own/,
+  },
+  // This release's model.
+  "S1 per-scheme contrast checked in one palette only": {
+    why: "the save checks the light colours' table only: a per-scheme colour unreadable in the dark is saved and drawn",
+    rewrites: [rewrite(TOKENS, "  for (const table of tables) {\n    const byKey = new Map(table.rows.map((row) => [row.key, row]));\n    for (const pair of privateTablePairs(table)) {", "  for (const table of tables.slice(0, 1)) {\n    const byKey = new Map(table.rows.map((row) => [row.key, row]));\n    for (const pair of privateTablePairs(table)) {")],
+    cases: ["per-scheme words that do not read in the dark"],
+    expect: /reads [\d.]+:1 on what is behind it/,
+  },
+  "N1 container nesting off": {
+    why: "an app's box that paints holds no rows of its own: a button inside the amber box is checked on the line beneath it",
+    rewrites: [rewrite(TOKENS, "      if (!box.style.container || !paints(box.place.sources)) continue;", "      continue;")],
+    cases: ["an app's button with white words in a light amber box on a dark line"],
+    expect: /"Add now" .*reads [\d.]+:1 on what is behind it/,
+  },
+  "A1 the add-on bar's row missing from the table": {
+    why: "the summary's add-on bar (its <summary>) has no row, and the save's no_row guard is off: it reads the summary rows' row",
+    rewrites: [
+      rewrite(TOKENS, "      place(name, style, out ? beside! : key);\n", "      if (name === \"summary-add-on\") continue;\n      place(name, style, out ? beside! : key);\n"),
+      rewrite(TOKENS, "    if (keys.has(name) || (style.element", "    if (name === \"summary-add-on\" || keys.has(name) || (style.element"),
+    ],
+    cases: [PROTECTED],
+    expect: /the style target summary-add-on names it and no row of the table is its/,
+  },
+  "PR1 prominence off": {
+    why: "the save stops ranking the amounts: a 12px total under 18px rows is saved and drawn smaller than a row",
+    rewrites: [rewrite(TOKENS, "  issues.push(...prominenceIssues(page, valid));\n", "")],
+    cases: ["a total drawn smaller than its rows"],
+    expect: /prominence: the total's .* is drawn at [\d.]+px, under the row/,
+  },
+  "C1 the checkout header draws the switch wherever the controls are placed": {
+    why: "the store's checkout header draws its light or dark switch even where the theme places the controls nowhere",
+    rewrites: [rewrite("apps/storefront/src/components/CheckoutHeader.astro", "{controls && <PrivateSchemeSwitch />}", "<PrivateSchemeSwitch />")],
+    cases: ["no store controls on the page, under dark tokens"],
+    expect: /\[data-host="scheme"\] button: drawn in the checkout header where the theme places the controls nowhere/,
   },
 };
 
