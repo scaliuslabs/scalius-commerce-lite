@@ -11,7 +11,7 @@ import { recordStaffAlert } from "./staff-alerts";
 //     buyer has not read the thread, a burst of replies is one email per
 //     15-minute window and one SMS (off by default) per hour, per recipient:
 //     the delivery is keyed by thread, the buyer's read position and the
-//     window (`replyReceiptScope`), so the unique receipt key lets one send
+//     window (`replyReceiptKey`), so the unique receipt key lets one send
 //     through even when two replies are sent at once.
 //   conversation_message (buyer → staff): push ("New message about #1234", no
 //     text) and, when enabled, the staff email recipients.
@@ -29,6 +29,8 @@ import {
   conversationMessages,
   conversations,
   customers,
+  notificationDeliveryReceipts,
+  notificationOutbox,
   orders,
 } from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
@@ -60,7 +62,7 @@ import {
   type OrderNotificationChannelOutcome,
   type OrderNotificationDispatchResult,
 } from "./notifications.service";
-import { createProviderClientReference } from "./order-notification-delivery-receipts";
+import { createProviderClientReference, hashNotificationRecipient } from "./order-notification-delivery-receipts";
 import { buyerMessageScope, buyerStorefrontLink, readStoreIdentity } from "./store-messages";
 
 /** An unread burst of replies is one SMS per hour (§15 q8). */
@@ -147,14 +149,19 @@ function displayBody(thread: ThreadFacts, language: MessageLanguage): string | n
   return [thread.body?.trim(), `${MESSAGE_COPY[language].conversation.sharedProducts(cards.length)}\n${titles}`].filter(Boolean).join("\n\n");
 }
 
+/** One way to reach the buyer, and where that message links: their account inbox, or the order-proof page. */
+interface BuyerReach {
+  address: string;
+  /** A verified contact of the account that reads this thread: the link opens their account inbox. */
+  inAccount: boolean;
+}
+
 interface ThreadParty {
   /** The buyer's name, or null when none is known. */
   name: string | null;
-  email: string | null;
-  phone: string | null;
+  email: BuyerReach | null;
+  phone: BuyerReach | null;
   orderNumber: string | null;
-  /** The buyer reads this thread in their account (verified owner or store thread). */
-  inAccount: boolean;
   orderNumberRaw: number | null;
   /** The storefront presence of the thread's order (`bn`): the buyer's language and links. Null otherwise. */
   presence: string | null;
@@ -184,10 +191,12 @@ async function readAccountContacts(db: Database, customerId: string) {
 
 /**
  * The buyer side of a thread. A thread about an order (its order thread, a
- * warranty claim, a review) reaches the order's account owner by their
- * verified contacts, linking into their account; an order with no owner, or
- * whose owner account is gone, reaches the order's own contact with the
- * order-proof link. A store thread reaches its account's verified contacts.
+ * warranty claim, a review) reaches, per channel, the order's account owner
+ * by their verified contact, linking into their account; where the owner has
+ * no verified contact for that channel, or the order has no owner, or the
+ * owner account is gone, it reaches the order's own contact with the
+ * order-proof link, so a reachable buyer is never left unannounced. A store
+ * thread reaches its account's verified contacts.
  */
 async function readThreadParty(db: Database, thread: ThreadFacts): Promise<ThreadParty | null> {
   if (thread.orderId) {
@@ -207,18 +216,29 @@ async function readThreadParty(db: Database, thread: ThreadFacts): Promise<Threa
     if (!order) return null;
     const facts = { orderNumber: formatOrderNumber(order.orderNumber, order.id), orderNumberRaw: order.orderNumber, presence: order.presence ?? null };
     const owner = order.owner ? await readAccountContacts(db, order.owner) : null;
-    if (owner) return { ...owner, name: owner.name ?? (order.name?.trim() || null), ...facts, inAccount: true };
+    const reach = (verified: string | null | undefined, typed: string | null | undefined): BuyerReach | null => {
+      if (verified) return { address: verified, inAccount: true };
+      const address = typed?.trim();
+      return address ? { address, inAccount: false } : null;
+    };
     return {
-      name: order.name?.trim() || null,
-      email: order.email?.trim() || null,
-      phone: order.phone?.trim() || null,
+      name: owner?.name ?? (order.name?.trim() || null),
+      email: reach(owner?.email, order.email),
+      phone: reach(owner?.phone, order.phone),
       ...facts,
-      inAccount: false,
     };
   }
   if (thread.customerId) {
     const account = await readAccountContacts(db, thread.customerId);
-    return account ? { ...account, orderNumber: null, orderNumberRaw: null, inAccount: true, presence: null } : null;
+    if (!account) return null;
+    return {
+      name: account.name,
+      email: account.email ? { address: account.email, inAccount: true } : null,
+      phone: account.phone ? { address: account.phone, inAccount: true } : null,
+      orderNumber: null,
+      orderNumberRaw: null,
+      presence: null,
+    };
   }
   return null;
 }
@@ -235,10 +255,10 @@ function dashboardInboxLink(env: object | undefined, conversationId: string): st
 }
 
 /** Where the buyer reads the reply. Never a tokenized URL; phone and email never go in it. */
-function buyerThreadLink(storefrontUrl: unknown, thread: ThreadFacts, party: ThreadParty): string | null {
+function buyerThreadLink(storefrontUrl: unknown, thread: ThreadFacts, party: ThreadParty, reach: BuyerReach): string | null {
   const url = typeof storefrontUrl === "string" ? storefrontUrl : undefined;
   // In the presence the thread's order was placed on (`/bn/...`), as the message's language.
-  if (party.inAccount) return buyerStorefrontLink(url, party.presence, `/account/inbox/${encodeURIComponent(thread.id)}`);
+  if (reach.inAccount) return buyerStorefrontLink(url, party.presence, `/account/inbox/${encodeURIComponent(thread.id)}`);
   return buyerStorefrontLink(url, party.presence, `/track-order?order=${encodeURIComponent(String(party.orderNumberRaw ?? thread.orderId ?? ""))}`);
 }
 
@@ -275,16 +295,35 @@ ${action}${footer}
 }
 
 /**
- * The receipt scope of a reply alert: one per thread, channel, buyer read
- * position and window, so replies the buyer has not read yet share one
+ * The receipt key of a reply alert, fixed once per outbox row: one per
+ * thread, the buyer's read position, the window the row was written in,
+ * channel and recipient, so replies the buyer has not read yet share one
  * delivery (the first sends, the rest find it taken) and the next reply after
- * they read or answer, or in a later window, sends again. The recipient is in
- * the receipt key, so a corrected address is never held back by the old one.
+ * they read or answer, or written in a later window, sends again. A row that
+ * already holds a receipt for this channel and recipient (a retry, or a row
+ * the previous release keyed by its own id) keeps that receipt's key, so a
+ * retry never takes a new slot and an accepted send is never repeated.
  */
-function replyReceiptScope(thread: ThreadFacts, channel: "email" | "sms", windowSeconds: number): string | undefined {
+async function replyReceiptKey(
+  db: Database,
+  outboxId: string,
+  thread: ThreadFacts,
+  channel: "email" | "sms",
+  recipient: string,
+  windowSeconds: number,
+): Promise<string | undefined> {
   // A claim status change is always announced: its delivery keeps its own outbox row's key.
   if (isBuyerStatusEvent(thread)) return undefined;
-  return `conversation_reply:${thread.id}:r${thread.customerReadSeq}:w${Math.floor(Date.now() / 1000 / windowSeconds)}:${channel}`;
+  const recipientHash = await hashNotificationRecipient(recipient);
+  const [own, row] = await Promise.all([
+    db.select({ key: notificationDeliveryReceipts.receiptKey }).from(notificationDeliveryReceipts)
+      .where(and(eq(notificationDeliveryReceipts.outboxId, outboxId), eq(notificationDeliveryReceipts.channel, channel), eq(notificationDeliveryReceipts.recipientHash, recipientHash)))
+      .get(),
+    db.select({ createdAt: notificationOutbox.createdAt }).from(notificationOutbox).where(eq(notificationOutbox.id, outboxId)).get(),
+  ]);
+  if (own) return own.key;
+  const writtenAt = row?.createdAt ?? Math.floor(Date.now() / 1000);
+  return `conversation_reply:${thread.id}:r${thread.customerReadSeq}:w${Math.floor(writtenAt / windowSeconds)}:${channel}:${recipientHash}`;
 }
 
 export async function sendConversationNotification(
@@ -342,18 +381,18 @@ async function sendReplyToBuyer(
   // The buyer's language: the presence of the thread's order, else the store's.
   const { language, locale } = buyerMessageScope(store, party?.presence);
   const { templates } = await getNotificationTemplates(db, language, { locale });
-  // No message text: only who replied, the order and where to read it.
-  const variables: NotificationVariableValues = {
+  // No message text: only who replied, the order and where this contact reads it.
+  const variables = (reach: BuyerReach | null | undefined): NotificationVariableValues => ({
     customer_name: party?.name ?? "",
     store_name: store.name ?? "",
     // The order number in the buyer's digits, as the storefront writes it.
     order_number: party?.orderNumber ? orderNumberTextIn(party.orderNumber, numberLocale(language)) : "",
-    conversation_link: (party ? buyerThreadLink(options.env.STOREFRONT_URL, thread, party) : null) ?? "",
-  };
+    conversation_link: (party && reach ? buyerThreadLink(options.env.STOREFRONT_URL, thread, party, reach) : null) ?? "",
+  });
   const emailContext: EmailRuntimeContext = { db, env: options.env as unknown as Record<string, unknown>, encryptionKey: options.encryptionKey, appProviders: options.appProviders };
 
   if (channels.includes("email")) {
-    const email = party?.email ?? null;
+    const email = party?.email?.address ?? null;
     if (!email) {
       outcomes.push(await recordSkippedDelivery({
         ...base,
@@ -364,7 +403,7 @@ async function sendReplyToBuyer(
         reason: "missing_email_recipient",
       }));
     } else {
-      const target = { ...base, channel: "email" as const, provider: "email", recipient: email, recipientMasked: maskEmail(email), receiptScope: replyReceiptScope(thread, "email", CONVERSATION_EMAIL_COALESCE_SECONDS) };
+      const target = { ...base, channel: "email" as const, provider: "email", recipient: email, recipientMasked: maskEmail(email), receiptKey: await replyReceiptKey(db, claim.outboxId, thread, "email", email, CONVERSATION_EMAIL_COALESCE_SECONDS) };
       const blocked = await recordProviderBlockedDeliveryIfNeeded(target);
       outcomes.push(blocked ?? await dispatchWithReceipt({
         ...target,
@@ -372,7 +411,7 @@ async function sendReplyToBuyer(
           const rendered = renderMessageEmail({
             language,
             store,
-            ...renderEmailTemplate("conversation_reply", language, templates.email.conversation_reply, variables),
+            ...renderEmailTemplate("conversation_reply", language, templates.email.conversation_reply, variables(party?.email)),
           });
           return emailResultToDeliveryResult(await sendEmail({
             ...rendered,
@@ -386,7 +425,7 @@ async function sendReplyToBuyer(
   }
 
   if (channels.includes("sms")) {
-    outcomes.push(await sendReplySms(db, base, thread, party, renderSmsTemplate("conversation_reply", language, templates.sms.conversation_reply.body, variables), options));
+    outcomes.push(await sendReplySms(db, base, thread, party, renderSmsTemplate("conversation_reply", language, templates.sms.conversation_reply.body, variables(party?.phone)), options));
   }
 
   return buildDispatchResult(outcomes);
@@ -473,7 +512,7 @@ async function sendReplySms(
   text: string,
   options: ConversationNotificationOptions,
 ): Promise<OrderNotificationChannelOutcome> {
-  const phone = party?.phone ?? null;
+  const phone = party?.phone?.address ?? null;
   if (!phone) {
     return recordSkippedDelivery({
       ...base,
@@ -499,7 +538,7 @@ async function sendReplySms(
       });
     }
     const provider = await getActiveSmsProvider(db, options.encryptionKey, options.appProviders);
-    const target = { ...base, channel: "sms" as const, provider: provider?.id ?? providerName, recipient: phone, recipientMasked: maskPhone(phone), receiptScope: replyReceiptScope(thread, "sms", CONVERSATION_SMS_COALESCE_SECONDS) };
+    const target = { ...base, channel: "sms" as const, provider: provider?.id ?? providerName, recipient: phone, recipientMasked: maskPhone(phone), receiptKey: await replyReceiptKey(db, base.outboxId, thread, "sms", phone, CONVERSATION_SMS_COALESCE_SECONDS) };
     const blocked = await recordProviderBlockedDeliveryIfNeeded(target);
     if (blocked) return blocked;
     return await dispatchWithReceipt({
