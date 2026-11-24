@@ -13,6 +13,8 @@
 // which a theme may leave out.
 // A repeated unit (a cart line) has its own arrangement of its sub-parts.
 //
+// The apps' node kinds and their style rows are in private-buyer-ui.ts.
+//
 // This module is data only (no zod): the dashboard and the storefront's
 // browser code read it. The anatomy is a versioned contract: the anatomy
 // test pins every page, part and hook, and `PRIVATE_ANATOMY_VERSION` rises
@@ -37,9 +39,8 @@ export const PRIVATE_ANATOMY_VERSION = 2 as const;
 export const PRIVATE_LAYOUT_KINDS = ["stack", "columns", "grid", "group", "fold", "scroll"] as const;
 export type PrivateLayoutKind = (typeof PRIVATE_LAYOUT_KINDS)[number];
 
-/** The buyer UI's tones (an app's banner and badge), each with its rows in the colour table. */
-export const PRIVATE_UI_TONES = ["neutral", "info", "success", "warning", "critical"] as const;
-export type PrivateUiTone = (typeof PRIVATE_UI_TONES)[number];
+export { PRIVATE_UI_TONES, PRIVATE_BUYER_UI_STYLES, type PrivateUiTone, type PrivateBuyerUiStyle } from "./private-buyer-ui";
+import { PRIVATE_BUYER_UI_STYLES } from "./private-buyer-ui";
 
 /** Words in each language the theme writes them in, keyed by base language (`en`, `bn`). */
 export type PrivateWords = Record<string, string>;
@@ -425,36 +426,6 @@ export const PRIVATE_SCOPES = ["dialog", "core-header", "core-footer"] as const;
  */
 export const PRIVATE_CONTROL_PLACES = ["header", "footer", "none"] as const;
 export type PrivateControlPlace = (typeof PRIVATE_CONTROL_PLACES)[number];
-
-/** An app node kind's style target (`ui.<kind>`): what it is to the colour table, by tone. */
-export interface PrivateBuyerUiStyle {
-  /** The node's selector inside its block (`data-ui`, with `data-tone` added per tone). */
-  readonly kind: string;
-  readonly tones?: readonly PrivateUiTone[];
-  readonly tokens: readonly PrivateTokenName[];
-  /** Null for a node that draws no colour (a row of nodes): it has no row in the table. */
-  readonly style: PrivateStyleKind | null;
-  /** The palette role of its own words, per tone (`critical` words are the error colour). */
-  readonly ink?: PrivatePaletteRole;
-  readonly toneInk?: Partial<Record<PrivateUiTone, PrivatePaletteRole>>;
-}
-
-/**
- * An app's buyer UI block is host-drawn from typed nodes: a host part. A
- * theme gives each node kind a look by tokens under `ui.<kind>`, narrowed by
- * tone (`ui.banner.warning`), app (`@acme.protection`) and target
- * (`/cart.line.after`). Each kind and tone has a row in the colour table at
- * every one of the page's targets, on whatever that target sits on.
- */
-export const PRIVATE_BUYER_UI_STYLES: Readonly<Record<string, PrivateBuyerUiStyle>> = {
-  banner: { kind: '[data-ui="banner"]', tones: PRIVATE_UI_TONES, tokens: ["background", "text", "border", "border-width", "radius", "shadow", "padding"], style: "box", ink: "foreground", toneInk: { critical: "destructive" } },
-  button: { kind: ':is(a[data-ui="button"],[data-ui="button"]>button)', tokens: ["background", "text", "border", "border-width", "radius", "ring", "weight", "size", "case"], style: "control", ink: "foreground" },
-  badge: { kind: '[data-ui="badge"]', tones: PRIVATE_UI_TONES, tokens: ["background", "text", "border", "radius"], style: "text", ink: "foreground", toneInk: { critical: "destructive" } },
-  text: { kind: '[data-ui="text"]', tokens: ["text", "size", "weight"], style: "text", ink: "foreground" },
-  heading: { kind: '[data-ui="heading"]', tokens: ["text", "size", "weight", "font", "case"], style: "text", ink: "foreground" },
-  disclosure: { kind: '[data-ui="disclosure"]', tokens: ["background", "text", "border", "radius"], style: "box", ink: "foreground" },
-  row: { kind: ':is([data-ui="stack"],[data-ui="columns"])', tokens: ["gap"], style: null },
-};
 
 /**
  * The store's dialogs over a private page (`data-private="dialog"`): the
