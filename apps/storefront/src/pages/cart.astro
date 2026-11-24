@@ -18,7 +18,7 @@ import EmptyCartPopular from "@/components/checkout/EmptyCartPopular.astro";
 import CartPageLayout from "@/components/cart/CartPageLayout.astro";
 import { privateAssetUrls } from "@/lib/private-pages/html";
 import { privatePagePlan, privateStyle } from "@/lib/private-pages/plan";
-import { withCartLabels } from "@/lib/private-pages/labels";
+import { privateVariantWord, withCartLabels } from "@/lib/private-pages/labels";
 import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
 import {
   LOCATION_COUNTRY,
@@ -372,6 +372,12 @@ const foldWords = { show: cartPlan.labels["cart.showSummary"] ?? cartWords.showS
 // The theme's look for this page: host token rules compiled when it was saved.
 const cartStyle = privateStyle(cartRequestTheme.theme);
 // The theme's words for the confirmation dialog's buttons (lib/cart/confirm-dialog.ts reads them).
+// The theme's choices for the lines and the summary (private-anatomy.ts): the heading above the card, an Items row.
+const headingAbove = cartPlan.variants.lines === "heading-above";
+const headingClass = headingAbove ? "text-2xl font-semibold text-foreground" : "text-lg font-semibold text-foreground";
+const linesIntro = cartPlan.labels["cart.intro"];
+const summaryHeading = cartPlan.labels["cart.summaryHeading"];
+const itemsRow = cartPlan.variants.summary === "with-items" ? privateVariantWord("items", pageLanguageCode) : null;
 const dialogLabels = Object.fromEntries(Object.entries(cartPlan.labels).filter(([key]) => key.startsWith("dialog.")));
 const templateData = await templateSectionData("cart", cartRequestTheme);
 ---
@@ -554,11 +560,22 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             answer), drawn by the line-input controls above the folded summary, editable without unfolding it. */}
         <div class="mb-3 lg:hidden group-data-[summary=open]:hidden group-data-[cart-state=empty]:hidden" data-cart-line-decisions hidden></div>
       </Fragment>
-      <Fragment slot="lines">
-          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-            <h1 id="cartHeading" class="text-lg font-semibold text-foreground" data-part="lines-heading">
+      <Fragment slot="linesHeader">
+          {/* Inside the card by default; above it (`heading-above`), on what the lines stand on. The intro, when the theme writes one, sits under the heading. */}
+          <div
+            class={headingAbove ? "flex flex-wrap items-end justify-between gap-x-4 gap-y-2" : "flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3"}
+            data-part={headingAbove ? "lines-header" : undefined}
+          >
+            {linesIntro ? (
+              <div class="min-w-0">
+                <h1 id="cartHeading" class={headingClass} data-part="lines-heading">{copy.cartSectionTitle}</h1>
+                <p class="mt-1 text-sm text-muted-foreground" data-part="lines-intro">{linesIntro}</p>
+              </div>
+            ) : (
+            <h1 id="cartHeading" class={headingClass} data-part="lines-heading">
               {copy.cartSectionTitle}
             </h1>
+            )}
             <a
               href="/"
               class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring group-data-[cart-state=empty]:hidden sm:min-h-9"
@@ -568,7 +585,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               {copy.continueShoppingText}
             </a>
           </div>
-
+      </Fragment>
+      <Fragment slot="lines">
           {/* Loading skeleton at a cart line's size; the real lines render
               hidden underneath and appear together with the summary. */}
           <div class="hidden p-4 group-data-[cart-state=loading]:block" data-part="lines-loading" data-cart-loading>
@@ -631,6 +649,13 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
       </Fragment>
       <Fragment slot="summary">
+            {summaryHeading && <h2 class="text-base font-semibold text-foreground" data-part="summary-heading">{summaryHeading}</h2>}
+            {itemsRow && (
+              <div class="flex justify-between text-sm text-muted-foreground" data-summary-row="items">
+                <span>{itemsRow}</span>
+                <span id="summaryItems" class="font-medium tabular-nums text-foreground">—</span>
+              </div>
+            )}
             <div class="flex justify-between text-sm text-muted-foreground" data-summary-row="subtotal">
               <span>{copy.subtotalText}</span>
               <span id="subtotal" class="font-medium tabular-nums text-foreground">—</span>
@@ -654,6 +679,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               <div class="flex items-baseline justify-between" aria-live="polite" aria-atomic="true" data-summary-row="total">
                 <span
                   id="totalLabel"
+                  data-part="summary-total-label"
                   data-final-label={copy.totalText}
                   class="text-sm font-semibold text-foreground"
                   >{copy.estimatedTotalText}</span
@@ -667,7 +693,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       </Fragment>
       <Fragment slot="discount">
             <form id="discountForm" method="post" action="/cart" class="pt-3" novalidate data-part="discount">
-              <label for="discountCodeInput" class="sr-only">{copy.discountCodePlaceholder}</label>
+              <label for="discountCodeInput" class="sr-only" data-part="field-label">{copy.discountCodePlaceholder}</label>
               <div class="flex gap-2">
                 <input
                   type="text"
@@ -780,7 +806,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               <h2 id="contactHeading" class="text-base font-semibold text-foreground">{copy.contactHeadingText}</h2>
               <div class="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label for="customerName" class={labelClass}>
+                  <label for="customerName" class={labelClass} data-part="field-label">
                     {copy.customerNameLabel}
                     <span aria-hidden="true" class="ms-0.5 text-destructive">*</span>
                   </label>
@@ -828,7 +854,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 {
                   contactFields.email !== "hidden" && (
                     <div class="sm:col-span-2">
-                      <label for="customerEmail" class={labelClass}>
+                      <label for="customerEmail" class={labelClass} data-part="field-label">
                         {phoneOptionalForDigital && contactFields.email === "optional" ? (
                           <>
                             {/* Required while the phone is optional (data-phone-need on the page root). */}
@@ -861,7 +887,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 {
                   contactFields.whatsapp === "optional" && (
                     <div class="sm:col-span-2">
-                      <label for="customerWhatsapp" class={labelClass}>{copy.customerWhatsappLabel}</label>
+                      <label for="customerWhatsapp" class={labelClass} data-part="field-label">{copy.customerWhatsappLabel}</label>
                       <input
                         type="tel"
                         id="customerWhatsapp"
@@ -940,7 +966,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 fieldClass={fieldClass}
               />
               <div>
-                <label for="shippingAddress" class={labelClass}>
+                <label for="shippingAddress" class={labelClass} data-part="field-label">
                   {copy.shippingAddressLabel}
                   <span aria-hidden="true" class="ms-0.5 text-destructive">*</span>
                 </label>
@@ -1215,6 +1241,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   import { BILLING_ADDRESS_FIELDS, checkoutBillingFields } from "@/lib/checkout/billing-address";
   import { enhanceBillingAddress } from "@/lib/checkout/billing-address-rules";
   import { formatMoney } from "@/lib/currency";
+  import { formatCount } from "@/lib/store-time-zone";
   import { browserApiUrl } from "@/lib/api/browser-url";
   import {
     enhanceLocationSelects,
@@ -1543,10 +1570,13 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     { signal: cartPageSignal },
   );
 
-  const unsubscribeShippingFees = cartStore.subscribe(() =>
-    shippingMethods?.refreshFees(),
-  );
-  cartPageSignal.addEventListener("abort", unsubscribeShippingFees, {
+  // The summary's Items row (the theme's `with-items` summary) counts the cart's units as they change.
+  const summaryItems = document.getElementById("summaryItems");
+  const unsubscribeCart = cartStore.subscribe((cart) => {
+    shippingMethods?.refreshFees();
+    if (summaryItems) summaryItems.textContent = formatCount(cart.totalItems);
+  });
+  cartPageSignal.addEventListener("abort", unsubscribeCart, {
     once: true,
   });
 

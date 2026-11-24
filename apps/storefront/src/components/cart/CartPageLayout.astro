@@ -6,7 +6,9 @@
 // page's placing script) or in the theme's layout tree, where reading order
 // is the arrangement's order at every width. A part the arrangement leaves
 // out (only optional ones may go) is never rendered. The theme's line, when
-// it has one, is a `<template>` the cart script fills per line.
+// it has one, is a `<template>` the cart script fills per line: each sub-part
+// a `<!--line:name-->` mark, or `<!--line:name:variant-->` for the variant the
+// theme chose (lib/cart/line-html.ts draws it).
 import { layoutBox, renderPrivateNodes } from "@/lib/private-pages/html";
 import type { PrivatePagePlan } from "@/lib/private-pages/plan";
 import type { PrivateNode } from "@scalius/shared/storefront-theme";
@@ -25,7 +27,13 @@ if (custom) {
   const parts: Record<string, () => Promise<string>> = {
     progress: () => slot("progress"),
     notices: () => slot("notices"),
-    lines: async () => `<section aria-labelledby="cartHeading" class="overflow-hidden rounded-xl border border-border bg-card" data-part="lines">${await slot("lines")}</section>`,
+    // `heading-above`: the heading row stands on the page above the card, the two as one box wherever the part goes.
+    lines: async () => {
+      const header = await slot("linesHeader");
+      const above = plan.variants.lines === "heading-above";
+      const card = `<section aria-labelledby="cartHeading" class="overflow-hidden rounded-xl border border-border bg-card" data-part="lines">${above ? "" : header}${await slot("lines")}</section>`;
+      return above ? `<div class="flex min-w-0 flex-col gap-4">${header}${card}</div>` : card;
+    },
     summary: async () => `<div id="cartSummary" class="hidden space-y-2 rounded-xl border border-border bg-card p-4" data-part="summary">${await slot("summary")}${await slot("summaryEnd")}</div>`,
     discount: async () => `<div class="hidden group-data-[cart-state=items]:block">${await slot("discount")}</div>`,
     empty: async () => `<div class="hidden space-y-8 group-data-[cart-state=empty]:block" data-cart-empty-extras data-part="empty-extras">${await slot("empty")}</div>`,
@@ -59,7 +67,7 @@ if (custom) {
 // The theme's line: the arrangement with its sub-parts as marks the cart script fills.
 const lineTemplate = plan.items.line
   ? `<li class="@container py-3 first:pt-0" data-part="line" data-line-key="">${renderPrivateNodes(plan.items.line, {
-    part: (name) => `<!--line:${name}-->`,
+    part: (name, variant) => `<!--line:${name}${variant ? `:${variant}` : ""}-->`,
     target: () => "<!--line:target-->",
   })}</li>`
   : null;
@@ -91,6 +99,7 @@ const lineTemplate = plan.items.line
           class="overflow-hidden rounded-xl border border-border bg-card group-data-[cart-state=empty]:mx-auto group-data-[cart-state=empty]:max-w-lg"
           data-part="lines"
         >
+          <slot name="linesHeader" />
           <slot name="lines" />
           <div
             id="cartSummary"

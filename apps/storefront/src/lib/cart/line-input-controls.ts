@@ -200,6 +200,13 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: strin
   return node;
 }
 
+/** A field's label, with the private pages' `field-label` hook. */
+function fieldLabel(text: string, id: string): HTMLLabelElement {
+  const label = Object.assign(element("label", "text-sm font-medium text-foreground", text), { htmlFor: id });
+  label.dataset.part = "field-label";
+  return label;
+}
+
 const FIELD = "min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground sm:min-h-9";
 
 /** One input's control on one line. */
@@ -237,7 +244,7 @@ function inputControl(
     label.append(box, element("span", "", view.input.label));
     wrap.append(label);
   } else if (view.input.type === "select") {
-    wrap.append(Object.assign(element("label", "text-sm font-medium text-foreground", view.input.label), { htmlFor: id }));
+    wrap.append(fieldLabel(view.input.label, id));
     const select = element("select", FIELD);
     select.id = id;
     select.setAttribute("aria-label", name);
@@ -250,7 +257,7 @@ function inputControl(
     select.addEventListener("change", () => run(select, select.value || null, () => { select.value = previous; }));
     wrap.append(select);
   } else if (view.input.type === "text" || view.input.type === "textarea") {
-    wrap.append(Object.assign(element("label", "text-sm font-medium text-foreground", view.input.label), { htmlFor: id }));
+    wrap.append(fieldLabel(view.input.label, id));
     const row = element("div", "flex gap-2");
     const field = view.input.type === "text" ? element("input", FIELD) : element("textarea", `${FIELD} py-2`);
     field.id = id;

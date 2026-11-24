@@ -18,6 +18,7 @@ import {
   privatePageLabels,
   type PrivateNode,
   type PrivatePageKey,
+  type PrivateUnitSpec,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import type { PrivateAssetUrl } from "./html";
@@ -31,6 +32,11 @@ export interface PrivatePagePlan {
   layout: PrivateNode[] | null;
   /** Each repeated unit's layout; null draws the host's own. */
   items: Record<string, PrivateNode[] | null>;
+  /**
+   * The variant each part with variants draws: the one the layout names, else
+   * its default. A unit's parts carry theirs in its template's marks instead.
+   */
+  variants: Record<string, string>;
   /** The theme's labels for this page, in the page's language. */
   labels: Record<string, string>;
   /** The theme's icons for this page, by key, as URLs. */
@@ -48,6 +54,7 @@ export function privatePagePlan(theme: StorefrontThemeDocument, page: PrivatePag
   const arrangement = privatePageArrangement(privatePages, page);
   const spec = PRIVATE_PAGES[page];
   const tokens = privatePageTokenMode(theme.privatePages, page);
+  const layout = tokens ? [...arrangement?.layout ?? spec.layout] : privateLayoutIsDefault(page, arrangement) ? null : arrangement!.layout!;
   const icons = Object.fromEntries(spec.icons.flatMap((key) => {
     const ref = privatePages.icons[key];
     const url = ref ? asset(ref) : null;
@@ -56,12 +63,25 @@ export function privatePagePlan(theme: StorefrontThemeDocument, page: PrivatePag
   return {
     page,
     frame: privateFrame(page, arrangement),
-    layout: tokens ? [...arrangement?.layout ?? spec.layout] : privateLayoutIsDefault(page, arrangement) ? null : arrangement!.layout!,
+    layout,
     items: Object.fromEntries(Object.keys(spec.items).map((item) => [item, privateItemIsDefault(page, item, arrangement) ? null : arrangement!.items![item]!])),
+    variants: partVariants(spec.parts, layout ?? []),
     labels: privatePageLabels(privatePages, page, language, (variant) => privateLabelVariantWords(variant, language)),
     icons,
     tokens,
   };
+}
+
+function partVariants(parts: PrivateUnitSpec["parts"], layout: readonly PrivateNode[]): Record<string, string> {
+  const named: Record<string, string> = {};
+  const walk = (nodes: readonly PrivateNode[]) => {
+    for (const node of nodes) {
+      if (node.type === "part" && node.variant !== undefined) named[node.part] = node.variant;
+      else if (node.type === "layout") walk(node.children);
+    }
+  };
+  walk(layout);
+  return Object.fromEntries(Object.entries(parts).flatMap(([name, spec]) => spec.variants ? [[name, named[name] ?? spec.variants[0]]] : []));
 }
 
 /**

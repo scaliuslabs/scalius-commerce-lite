@@ -454,7 +454,7 @@ export default function AuthModal() {
 
             {step === "contact" && (
               <>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground" data-part="dialog-text">
                   {isEmail ? copy.intro.email : copy.intro.phone}
                 </p>
                 {ui.showMethodSwitcher && (
@@ -480,7 +480,7 @@ export default function AuthModal() {
                   </div>
                 )}
                 <div className="space-y-1.5">
-                  <label htmlFor="auth-contact" className="text-sm font-medium">{destinationLabel}</label>
+                  <label htmlFor="auth-contact" className="text-sm font-medium" data-part="field-label">{destinationLabel}</label>
                   <input
                     id="auth-contact"
                     data-autofocus
@@ -540,11 +540,11 @@ export default function AuthModal() {
 
             {step === "code" && (
               <>
-                <p className="break-words text-sm text-muted-foreground">
+                <p className="break-words text-sm text-muted-foreground" data-part="dialog-text">
                   {copy.codeSentTo(isEmail ? sentTo : pagePhone(sentTo))}
                 </p>
                 <div className="space-y-1.5">
-                  <label htmlFor="customer-otp" className="text-sm font-medium">{copy.code}</label>
+                  <label htmlFor="customer-otp" className="text-sm font-medium" data-part="field-label">{copy.code}</label>
                   <input
                     id="customer-otp"
                     data-autofocus
@@ -580,11 +580,11 @@ export default function AuthModal() {
 
             {step === "details" && (
               <>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground" data-part="dialog-text">
                   {isEmail ? copy.confirmed.email : copy.confirmed.phone}
                 </p>
                 <div className="space-y-1.5">
-                  <label htmlFor="auth-name" className="text-sm font-medium">{copy.fullName}</label>
+                  <label htmlFor="auth-name" className="text-sm font-medium" data-part="field-label">{copy.fullName}</label>
                   <input
                     id="auth-name"
                     data-autofocus
@@ -601,7 +601,7 @@ export default function AuthModal() {
                 </div>
                 {ui.newAccount.phone !== "hidden" && (
                   <div className="space-y-1.5">
-                    <label htmlFor="auth-phone" className="text-sm font-medium">
+                    <label htmlFor="auth-phone" className="text-sm font-medium" data-part="field-label">
                       {ui.newAccount.phone === "optional" ? copy.optional(copy.phone) : copy.phone}
                     </label>
                     <input
@@ -623,7 +623,7 @@ export default function AuthModal() {
                 )}
                 {ui.newAccount.email !== "hidden" && (
                   <div className="space-y-1.5">
-                    <label htmlFor="auth-email" className="text-sm font-medium">
+                    <label htmlFor="auth-email" className="text-sm font-medium" data-part="field-label">
                       {ui.newAccount.email === "optional" ? copy.optional(copy.email) : copy.email}
                     </label>
                     <input

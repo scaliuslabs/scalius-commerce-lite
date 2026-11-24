@@ -52,9 +52,25 @@ export const PRIVATE_LABEL_VARIANT_WORDS: Readonly<Record<string, Readonly<{ en:
   "go-to-cart": { en: "Go to cart", bn: "কার্টে যান" },
 };
 
+const inLanguage = (words: Readonly<{ en: string; bn: string }>, language: string): string =>
+  language.toLowerCase().split(/[-_]/)[0] === "bn" ? words.bn : words.en;
+
 /** A label variant's words in the page's language (its base language; English for one core does not translate). */
 export function privateLabelVariantWords(variant: string, language: string): string | null {
   const words = Object.hasOwn(PRIVATE_LABEL_VARIANT_WORDS, variant) ? PRIVATE_LABEL_VARIANT_WORDS[variant]! : null;
-  if (!words) return null;
-  return (language.toLowerCase().split(/[-_]/)[0] === "bn" ? words.bn : words.en);
+  return words ? inLanguage(words, language) : null;
+}
+
+/**
+ * The host's own words a part's variant draws (private-anatomy.ts: a line's
+ * `remove` as words, the summary's Items row), in each language core
+ * translates; a page in another language reads the English.
+ */
+export const PRIVATE_VARIANT_WORDS = {
+  remove: { en: "Remove", bn: "সরান" },
+  items: { en: "Items", bn: "পণ্য" },
+} as const;
+
+export function privateVariantWord(key: keyof typeof PRIVATE_VARIANT_WORDS, language: string): string {
+  return inLanguage(PRIVATE_VARIANT_WORDS[key], language);
 }
