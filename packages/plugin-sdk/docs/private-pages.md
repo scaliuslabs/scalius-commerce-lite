@@ -277,14 +277,14 @@ A refusal names the theme key and the pair that set it, and the scheme: `summary
 | `no_row` | The page draws a target the colour table has no row for (a store defect; it never draws unchecked). |
 | `too_large` | The compiled look is over 64 KiB. |
 | `label_variant` | A label that names an action or an amount set to something other than one of its variants, or a variant where your words go. |
-| `label_too_long`, `markup`, `label_figures` | Words over the label's bound, words with HTML, or a digit or currency sign in a heading, title or empty state (only `cart.intro` and `cart.emptyText` may hold one). |
+| `label_too_long`, `markup`, `label_figures` | Words over the label's bound, words with HTML, or a digit, a currency sign, a name of money or one of the store's amount words in a heading, title or empty state (only `cart.intro` and `cart.emptyText` may hold them). |
 | `foreign_asset` | An icon from an app other than your theme's. |
 
 A value that is not of the document's shape (a wrong type, an unknown field) is refused by the schema, naming its path.
 
 ## Words and icons
 
-A label that names an action or an amount takes one of the store's **variants**, which the store words in each language it translates (English, Bangla), so "Go back" never confirms and a subtotal never reads as the total. A heading, an intro or an empty state takes **your own words**, per language: plain text, a page shows its language, then English. Invisible characters and direction overrides are removed. A heading, a title or an empty state holds no digit or currency sign in any script, so no label reads as an amount (`label_figures`); only the sentences `cart.intro` and `cart.emptyText` may hold one. Words that read like an action ("Pay now" as a heading) are a known limit: they carry no figure and do nothing, but the store cannot tell what they say.
+A label that names an action or an amount takes one of the store's **variants**, which the store words in each language it translates (English, Bangla), so "Go back" never confirms and a subtotal never reads as the total. A heading, an intro or an empty state takes **your own words**, per language: plain text, a page shows its language, then English. Invisible characters and direction overrides are removed. A heading, a title or an empty state holds no digit or currency sign in any script, and none of the store's amount words or names of money as whole words, in English or Bangla ("Total", "Subtotal", "Amount due", "taka", "BDT", "dollar", "সর্বমোট", "মোট", "টাকা"; `PRIVATE_LABEL_AMOUNT_WORDS`), so no label reads as an amount (`label_figures`); only the sentences `cart.intro` and `cart.emptyText` may hold them. Words that read like an action ("Pay now" as a heading) are a known limit: they carry no figure and do nothing, but the store cannot tell what they say.
 
 | Label | Where | Value |
 | --- | --- | --- |

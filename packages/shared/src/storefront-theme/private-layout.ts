@@ -29,6 +29,7 @@
 // draws one.
 import { z } from "zod";
 import { PLUGIN_ID_PATTERN } from "../plugins/ids";
+import { STORE_ACTION_AND_AMOUNT_WORDS, foldStoreWords } from "../store-words";
 import { parsePluginSurfaceKey } from "../plugins/storefront";
 import { storefrontDarkPalette, type StorefrontThemeTokens } from "./tokens";
 import {
@@ -284,6 +285,30 @@ export interface PrivatePagesIssue {
 const MARKUP = /<[A-Za-z!/?]/;
 /** A figure in any script (৳, 3, ৩, $): what an amount is written with. */
 const FIGURES = /[\p{N}\p{Sc}]/u;
+
+/** The store's amount words a label could pass for (its total, subtotal, what is due), from its own copy (store-words.ts). */
+const AMOUNT_KEYS = ["totalText", "subtotalText", "estimatedTotalText", "amountDueText", "dueNowText", "orderReceiptBalanceDueText", "variant:subtotal", "variant:items-total"] as const;
+
+/**
+ * Words a heading, title or empty state never holds, per language, as whole
+ * words anywhere in it: the store's amount words and the names of money
+ * ("Total: free", "BDT ZERO", "টাকা"). Exported so every check of words drawn
+ * beside the store's amounts reads one list.
+ */
+export const PRIVATE_LABEL_AMOUNT_WORDS: Readonly<Record<"en" | "bn", readonly string[]>> = {
+  en: [...AMOUNT_KEYS.map((key) => STORE_ACTION_AND_AMOUNT_WORDS[key]!.en), "grand total", "total due", "taka", "tk", "bdt", "usd", "dollar", "dollars", "eur", "euro", "euros", "gbp", "pound", "pounds", "inr", "rupee", "rupees", "aed", "dirham", "dirhams"],
+  bn: [...AMOUNT_KEYS.map((key) => STORE_ACTION_AND_AMOUNT_WORDS[key]!.bn), "মোট", "টাকা", "টাকার", "টাকায়", "পরিশোধযোগ্য"],
+};
+
+/** A text's words as compared: folded (store-words.ts), split into runs of letters, marks and digits. */
+const wordsOf = (text: string) => foldStoreWords(text).match(/[\p{L}\p{M}\p{N}]+/gu) ?? [];
+const AMOUNT_PHRASES = [...new Set(Object.values(PRIVATE_LABEL_AMOUNT_WORDS).flat())].map(wordsOf);
+
+/** True when the text holds one of the store's amount words or a name of money, as whole words, in any of its languages. */
+export function privateWordsReadAsAmount(text: string): boolean {
+  const words = wordsOf(text);
+  return AMOUNT_PHRASES.some((phrase) => words.some((_, at) => phrase.every((word, index) => words[at + index] === word)));
+}
 /** Words without direction overrides or invisible characters. */
 export function plainPrivateWords(words: PrivateWords): PrivateWords {
   return Object.fromEntries(Object.entries(words).map(([lang, text]) => [lang, text.replace(HIDDEN_CHARACTERS, "")]));
@@ -294,8 +319,8 @@ function wordsIssues(words: PrivateWords | undefined, path: Array<string | numbe
   return Object.entries(words).flatMap(([lang, text]): PrivatePagesIssue[] => {
     if (MARKUP.test(text)) return [{ path: [...path, lang], reason: "markup" as const, message: "Plain text only: no HTML." }];
     if (text.length > max) return [{ path: [...path, lang], reason: "label_too_long" as const, message: `At most ${max} characters.` }];
-    // A label never reads as an amount: the store writes every amount.
-    if (!figures && FIGURES.test(text)) return [{ path: [...path, lang], reason: "label_figures" as const, message: "A label holds no digits or currency signs: the store writes every amount, so a label never reads as one." }];
+    // A label never reads as an amount: the store writes every amount and names it.
+    if (!figures && (FIGURES.test(text) || privateWordsReadAsAmount(text))) return [{ path: [...path, lang], reason: "label_figures" as const, message: "A label holds no digits, currency signs, names of money or the store's amount words (total, subtotal, due): the store writes and names every amount, so a label never reads as one." }];
     return [];
   });
 }
@@ -433,7 +458,9 @@ export function privatePageArrangement(privatePages: StorefrontPrivatePages, pag
  * until the store compiles it again. A buyer's request never compiles.
  */
 export function privatePagesCss(privatePages: Pick<StorefrontPrivatePages, "compiled">): string {
-  return privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused ? privatePages.compiled.css : "";
+  // The page writes it into a <style>: the compiler never emits `<`, so a stored look holding one (a row edited by
+  // hand, `</style>`) serves nothing, whatever its version says.
+  return privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused && !privatePages.compiled.css.includes("<") ? privatePages.compiled.css : "";
 }
 
 /**
