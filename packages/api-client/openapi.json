@@ -6595,6 +6595,12 @@
               },
               "checkout": {
                 "$ref": "#/components/schemas/StorefrontPrivateArrangement"
+              },
+              "receipt": {
+                "$ref": "#/components/schemas/StorefrontPrivateArrangement"
+              },
+              "account": {
+                "$ref": "#/components/schemas/StorefrontPrivateArrangement"
               }
             },
             "additionalProperties": false
@@ -6747,6 +6753,14 @@
                     "maxLength": 65536
                   },
                   "checkout": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "receipt": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "account": {
                     "type": "string",
                     "maxLength": 65536
                   }
