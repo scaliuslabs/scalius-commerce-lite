@@ -485,8 +485,9 @@ const REGRESSIONS = {
   "summary rows that do not read on their summary": { refused: "contrast", refusedFor: /summary-rows/, privatePages: { tokens: { cart: { "summary-rows": { text: "#eeeeee" }, summary: { background: "#ffffff" } } } } },
   // #757575 reads on retail's white page (4.6:1) but not where the paint reaches its muted colour (3.9:1).
   "page words that do not read on the theme's page paint": { refused: "contrast", request: { palette: "retail", scheme: "light", paint: PAINT }, privatePages: { tokens: { cart: { page: { text: "#757575" } } } } },
-  // Per scheme: readable in the light colours, #333333 on #111111 (1.66:1) in the dark.
-  "per-scheme words that do not read in the dark": { refused: "contrast", refusedFor: /summary-rows.*#333333 on #111111.*dark colours/, request: { scheme: "system", toggle: true }, privatePages: { tokens: { cart: { summary: { background: SCHEMED("#ffffff", "#111111") }, "summary-rows": { text: SCHEMED("#111111", "#333333") } } } } },
+  // Per scheme: readable in the light colours (the total's own #1d1c1a, so the rows never outread the total), #333333
+  // on #111111 (1.66:1) in the dark: refused for that pair alone.
+  "per-scheme words that do not read in the dark": { refused: "contrast", refusedFor: /summary-rows.*#333333 on #111111.*dark colours/, request: { scheme: "system", toggle: true }, privatePages: { tokens: { cart: { summary: { background: SCHEMED("#ffffff", "#111111") }, "summary-rows": { text: SCHEMED("#1d1c1a", "#333333") } } } } },
   // A button with no surface of its own in an app's amber box under a dark line: white words read on the line
   // (18.9:1), not on the amber (1.3:1). Its row stands on the box.
   "an app's button with white words in a light amber box on a dark line": { refused: "contrast", refusedFor: /ui\.button\/cart\.line\.after.*#ffffff on #fde68a/, privatePages: { tokens: { cart: { lines: DARK, "ui.stack.warning/cart.line.after": { background: "#fde68a", text: "#111111" }, "ui.button/cart.line.after": { text: "#ffffff" } } } } },
