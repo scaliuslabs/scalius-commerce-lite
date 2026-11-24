@@ -26,6 +26,8 @@ export interface PrivateBuyerUiStyle {
    * row inside each of its rows, so what it holds is checked on it.
    */
   readonly container?: true;
+  /** A container's children by kind (`button`: a banner holds only its actions); absent: every kind. */
+  readonly holds?: readonly string[];
 }
 
 const CRITICAL_INK = { critical: "destructive" } as const;
@@ -39,14 +41,14 @@ const CRITICAL_INK = { critical: "destructive" } as const;
  * Kind names are lowercase letters (the token key's grammar).
  */
 export const PRIVATE_BUYER_UI_STYLES: Readonly<Record<string, PrivateBuyerUiStyle>> = {
-  banner: { kind: '[data-ui="banner"]', tones: PRIVATE_UI_TONES, tokens: ["background", "text", "border", "border-width", "radius", "shadow", "padding"], style: "box", ink: "foreground", toneInk: CRITICAL_INK, container: true },
+  banner: { kind: '[data-ui="banner"]', tones: PRIVATE_UI_TONES, tokens: ["background", "text", "border", "border-width", "radius", "shadow", "padding"], style: "box", ink: "foreground", toneInk: CRITICAL_INK, container: true, holds: ["button"] },
   // A toned stack (an offer row, a status box): a surface whose pieces sit in a row where it is wide enough.
   stack: { kind: '[data-ui="stack"][data-tone]', tones: PRIVATE_UI_TONES, tokens: ["background", "text", "border", "border-width", "radius", "shadow", "padding", "gap"], style: "box", ink: "foreground", toneInk: CRITICAL_INK, container: true },
-  button: { kind: ':is(a[data-ui="button"],[data-ui="button"]>button)', tokens: ["background", "text", "border", "border-width", "radius", "ring", "weight", "size", "case"], style: "control", ink: "foreground" },
-  badge: { kind: '[data-ui="badge"]', tones: PRIVATE_UI_TONES, tokens: ["background", "text", "border", "radius", "padding", "weight", "size"], style: "text", ink: "foreground", toneInk: CRITICAL_INK },
+  button: { kind: ':is(a[data-ui="button"],[data-ui="button"]>button)', tokens: ["background", "text", "border", "border-width", "radius", "ring", "inset", "weight", "size", "case"], style: "control", ink: "foreground" },
+  badge: { kind: '[data-ui="badge"]', tones: PRIVATE_UI_TONES, tokens: ["background", "text", "border", "radius", "padding", "inset", "weight", "size"], style: "text", ink: "foreground", toneInk: CRITICAL_INK },
   // A tone's glyph in a circle: its words' colour, the circle's border and its size (the circle is twice it).
   mark: { kind: '[data-ui="mark"]', tones: PRIVATE_UI_TONES, tokens: ["text", "border", "size"], style: "text", ink: "foreground", toneInk: CRITICAL_INK },
-  text: { kind: '[data-ui="text"]', tones: PRIVATE_UI_TONES, tokens: ["text", "size", "weight"], style: "text", ink: "foreground", toneInk: CRITICAL_INK },
+  text: { kind: '[data-ui="text"]', tones: PRIVATE_UI_TONES, tokens: ["text", "font", "size", "weight", "leading"], style: "text", ink: "foreground", toneInk: CRITICAL_INK },
   heading: { kind: '[data-ui="heading"]', tokens: ["text", "size", "weight", "font", "case"], style: "text", ink: "foreground" },
   link: { kind: 'a[data-ui="link"]', tokens: ["text", "size", "weight"], style: "text", ink: "foreground" },
   // Labels are its muted words, values its text.
