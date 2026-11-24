@@ -149,7 +149,10 @@ export interface PrivateStyleSpec {
   /**
    * How a buyer tells the control or field from what is around it (WCAG
    * 1.4.11, 3:1 on what is around it): `fill`, a filled button (Place order,
-   * Confirm), by its own surface; `edge`, an outlined one (a stepper, the
+   * Confirm), by its own surface, or by a drawn edge where the theme sets a
+   * solid border of at least 2px that reads 3:1 on what is around it over a
+   * fill still clearly a colour of its own (CIE76 40 from every point around
+   * it: an outlined button is Go back's look); `edge`, an outlined one (a stepper, the
    * fold's bar, Go back) and every field, by its border, or by its own
    * surface where the theme draws no border (`border-width: 0`,
    * `border-style: none`).

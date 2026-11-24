@@ -20,8 +20,10 @@
 // words and of its muted, link and error words, its border and focus ring
 // (and a field's placeholder and error border). Each is the theme's token
 // where given, else a default that reads on the surface beneath. A filled
-// button's fill, and an outlined control's or a field's border (its own fill
-// where the theme draws no border), read at 3:1 on what is around it. The host
+// button's fill (or its edge, where the theme draws a solid border of at least
+// 2px over a fill clearly a colour of its own), and an outlined control's or a
+// field's border (its own fill where the theme draws no border), read at 3:1
+// on what is around it. The host
 // writes exactly those rows as CSS (`privateTableCss`), and the contrast check
 // runs over exactly those rows (`privateTablePairs`): a pair the CSS draws is
 // a pair the check reads. Inside the page, the host's palette classes read the
@@ -29,7 +31,7 @@
 // colour never decides a colour there.
 import { z } from "zod";
 import { buyerUiButtonProminenceIssues, PRIVATE_UI_BUTTON_UNDER } from "./private-buyer-ui";
-import { STOREFRONT_THEME_COLOR_KEYS, storefrontThemeContrast, storefrontThemeHoverSurface, storefrontThemeMix, type StorefrontThemeColors } from "./contrast";
+import { STOREFRONT_THEME_COLOR_KEYS, STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE, storefrontThemeColorDistance, storefrontThemeContrast, storefrontThemeHoverSurface, storefrontThemeMix, type StorefrontThemeColors } from "./contrast";
 import { storefrontPagePaintColors, storefrontPagePaintCss, storefrontThemeFocusRing, type StorefrontPagePaint } from "./tokens";
 import {
   PRIVATE_BUYER_UI_STYLES,
@@ -52,6 +54,17 @@ import {
 /** The contrast floors: text (WCAG 1.4.3 AA) and a field's marks and focus rings (WCAG 1.4.11). */
 export const PRIVATE_CONTRAST_FLOOR = 4.5;
 export const PRIVATE_MARK_CONTRAST_FLOOR = 3;
+/**
+ * A filled button found by a drawn edge rather than its fill: the least
+ * border width it draws (px; an unset width draws none)...
+ */
+export const PRIVATE_EDGE_MIN_WIDTH = 2;
+/**
+ * ...and how far its fill stays from every point around it (CIE76, the
+ * store's "clearly apart"): a fill near what is around it with an edge is an
+ * outlined button, Go back's look, never the store's action.
+ */
+export const PRIVATE_EDGE_FILL_DISTANCE = STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE;
 
 const HEX = /^#[0-9a-f]{6}$/;
 const oneColorSchema = z.union([z.enum(STOREFRONT_THEME_COLOR_KEYS), z.string().regex(HEX)]);
@@ -475,7 +488,10 @@ export interface PrivateTokenRow {
    * How a buyer tells it from what is around it (private-anatomy.ts
    * `boundary`; every field `edge`), and whether it draws its border (no
    * `border-width: 0`, no `border-style: none`): an edge that draws none is
-   * told by its fill.
+   * told by its fill. A filled button is `edge` where it is found by a drawn
+   * edge (a solid border of at least PRIVATE_EDGE_MIN_WIDTH reading 3:1 on
+   * every point around it, its fill at least PRIVATE_EDGE_FILL_DISTANCE from
+   * each): its border is then checked, never its fill.
    */
   boundary: "fill" | "edge" | null;
   bordered: boolean;
@@ -825,10 +841,15 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     // A control's or a field's own ring is drawn outside it; a box's rings are its children's, drawn on it.
     const ring = take("ring", "ring", [under?.ring, storefrontThemeFocusRing(colors), text, colors.foreground, colors.background], marked ? around : surface, PRIVATE_MARK_CONTRAST_FLOOR);
     // A field's and an outlined control's border is how a buyer finds it: it reads on what is around it.
-    const boundary = place.kind === "field" ? "edge" : place.boundary ?? null;
-    const border = boundary === "edge"
-      ? take("border", "border", [colors.input, colors.border, muted, text], around, PRIVATE_MARK_CONTRAST_FLOOR)
-      : take("border", "border", [under?.border ?? colors.border], surface, 1);
+    const edgeBorder = () => take("border", "border", [colors.input, colors.border, muted, text], around, PRIVATE_MARK_CONTRAST_FLOOR);
+    // A filled button is found by its fill, or by a drawn edge: a solid border the theme sets at least
+    // PRIVATE_EDGE_MIN_WIDTH wide, reading on every point around it, over a fill still clearly a colour of its own.
+    const width = values["border-width"];
+    const edged = place.boundary === "fill" && typeof width === "number" && width >= PRIVATE_EDGE_MIN_WIDTH && (values["border-style"] ?? "solid") === "solid"
+      && ((drawn: string) => around.every((back) => storefrontThemeContrast(drawn, back) >= PRIVATE_MARK_CONTRAST_FLOOR))(edgeBorder())
+      && surface.every((point) => around.every((back) => storefrontThemeColorDistance(point, back) >= PRIVATE_EDGE_FILL_DISTANCE));
+    const boundary = place.kind === "field" || edged ? "edge" : place.boundary ?? null;
+    const border = boundary === "edge" ? edgeBorder() : take("border", "border", [under?.border ?? colors.border], surface, 1);
     const field = place.kind === "field" || place.parent === null;
     const placeholder = field ? take("placeholder", "placeholder", [colors["muted-foreground"], muted, text], surface, PRIVATE_CONTRAST_FLOOR) : null;
     const invalid = field ? take("invalid", "invalid", [colors.destructive, error, text], around, PRIVATE_MARK_CONTRAST_FLOOR) : null;
@@ -888,8 +909,9 @@ export function privateTablePairs(table: PrivateTokenTable): PrivateTokenPair[] 
     };
     for (const what of ["text", "muted", "link", "error", "placeholder"] as const) add(what, row[what], row.surface, PRIVATE_CONTRAST_FLOOR);
     add("ring", row.ring, marked ? around : row.surface, PRIVATE_MARK_CONTRAST_FLOOR);
-    // An edge is found by its border where it draws one, else by its own fill; a filled button by its fill
-    // (WCAG 1.4.11): a pair the check reads is a pair the CSS draws.
+    // An edge is found by its border where it draws one, else by its own fill; a filled button by its fill, or
+    // where it draws a solid edge of its own over a fill clearly apart, as an edge (WCAG 1.4.11): a pair the check
+    // reads is a pair the CSS draws.
     if (row.boundary === "edge" && row.bordered) add("border", row.border, around, PRIVATE_MARK_CONTRAST_FLOOR);
     else add("border", row.border, row.surface, 1);
     if (row.boundary === "fill" || (row.boundary === "edge" && !row.bordered)) {
@@ -926,7 +948,11 @@ function tableIssues(page: PrivatePageKey, tables: readonly PrivateTokenTable[])
       seen.add(id);
       const where = pair.key === target ? target : `${target} (${pair.key})`;
       const what = pair.what === "fill" ? (row.boundary === "fill" ? "its fill" : "its fill, with no border drawn,") : pair.what;
-      issues.push({ path: ["privatePages", "tokens", page, target], reason: "contrast", message: `${where}: ${what} ${pair.fore} on ${pair.back} is ${ratio.toFixed(2)}:1 in the ${table.palette.scheme} colours, under the ${pair.floor}:1 a buyer needs${pair.what === "fill" ? " to find it" : ""}.` });
+      // A filled button refused by its fill may instead be found by a drawn edge: say so.
+      const instead = pair.what !== "fill" ? "" : row.boundary === "fill"
+        ? ` to find it: give it a fill that reads, or draw a solid border of at least ${PRIVATE_EDGE_MIN_WIDTH}px at ${PRIVATE_MARK_CONTRAST_FLOOR}:1 on it, with a fill clearly a colour of its own`
+        : " to find it";
+      issues.push({ path: ["privatePages", "tokens", page, target], reason: "contrast", message: `${where}: ${what} ${pair.fore} on ${pair.back} is ${ratio.toFixed(2)}:1 in the ${table.palette.scheme} colours, under the ${pair.floor}:1 a buyer needs${instead}.` });
     }
   }
   return issues;

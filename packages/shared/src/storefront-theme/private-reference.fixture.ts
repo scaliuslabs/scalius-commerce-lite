@@ -55,9 +55,9 @@ const WHITE = { light: "#000000", dark: "#ffffff" } as const;
 /** The action: the prototype's yellow and its words in the light scheme, the palette's action in the dark. */
 const ACTION = { light: "#fed700", dark: "primary" } as const;
 const ON_ACTION = { light: "#333e48", dark: "primary-foreground" } as const;
-/** Place order: the nearest yellow to the prototype's that reads as a fill on the light card, the palette's action in the dark. */
-const PLACE = { light: "#a38a00", dark: "primary" } as const;
+/** Place order: the prototype's yellow with black words, the palette's action in the dark; its edge black in light, its fill in dark. */
 const ON_PLACE = { light: "#000000", dark: "primary-foreground" } as const;
+const PLACE_EDGE = { light: "#000000", dark: "primary" } as const;
 
 export const REFERENCE_PRIVATE_PAGES = {
   // The store's controls (the light or dark switch, the market and language forms) in its checkout header.
@@ -130,9 +130,9 @@ export const REFERENCE_PRIVATE_PAGES = {
       // The labels' grey (#9f9fa9, light #111111) would not read in the dark dialog in the light scheme: they keep their box's words.
       "field-label": { size: 12, weight: "600" },
       dock: { background: "card", border: "#524179", "border-width": 1 },
-      // Place order is found on the dock by its fill (3:1): the prototype's yellow reads 1.24:1 on the light card, so the
-      // light one is the nearest yellow that reads (#a38a00, 3.00:1) with black words; the dark one the palette's action.
-      submit: { background: PLACE, text: ON_PLACE, radius: 0, weight: "600", size: 14, inset: 20 },
+      // Place order is found on the dock by its fill (3:1) or a drawn edge: the prototype's yellow reads 1.24:1 on the
+      // light card, so it draws a 2px black edge (21:1) over the yellow, clearly a colour of its own; the dark one the palette's action.
+      submit: { background: ACTION, text: ON_PLACE, border: PLACE_EDGE, "border-width": 2, radius: 0, weight: "600", size: 14, inset: 20 },
       "cart-empty": { text: "foreground", muted: "muted-foreground" },
       // The decision: the dark dialog in both schemes (the prototype's light words on it do not read).
       dialog: { background: "#171124", text: "#ffffff", muted: "#d4d4d8", border: { light: "#eaeaea", dark: "#49396d" }, "border-width": 1, radius: 0, shadow: "lg" },
