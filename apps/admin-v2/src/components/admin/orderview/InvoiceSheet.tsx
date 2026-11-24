@@ -13,6 +13,8 @@ import { unixToDate } from "@scalius/shared/timestamps";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { useLocaleFormat, useMessages } from "~/i18n";
 import { lineEntryWords, presentLineEntry } from "@scalius/shared/line-entry-words";
+import { addOnDocumentRows } from "@scalius/shared/add-on-document";
+import { buyerLineAddOnRows, rowItemsOnly } from "@scalius/shared/buyer-line-add-on-text";
 import { presentCheckoutAttributes } from "@scalius/shared/plugins/checkout-attribute-text";
 import { orderInvoiceMessages as orderDetailMessages } from "~/i18n/order-invoice";
 import { orderMessages, paymentMethodLabel, paymentStatusLabel } from "~/i18n/orders";
@@ -83,6 +85,16 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
   // The order's own billing address (0119); null when the delivery address bills or there is none.
   const billingLines = formatBillingAddressLines(order, countryName);
   const amount = (minorAmount: number) => (saved ? minor(minorAmount) : money(fromMinor(minorAmount, decimals)));
+  // The apps' add-ons as their own rows after Subtotal: the printed invoice's, the receipt's and the emails' rows
+  // (`addOnDocumentRows`), decided once for the order; Subtotal and each line then count the items alone (`rowItemsOnly`).
+  const addOns = saved
+    ? addOnDocumentRows(saved.subtotalMinor, order.addOnRows, {
+        money: minor,
+        language: locale,
+        lines: order.items.map((item) => ({ grossSubtotalMinor: resolveSavedOrderLineMoney(item, saved)?.grossSubtotalMinor ?? null, addOns: item.addOns })),
+      })
+    : null;
+  const addOnsInSummary = (addOns?.rows.length ?? 0) > 0;
   const discountSummary = summarizeOrderDiscounts({
     discounts: order.discounts ?? [],
     shippingMinor: saved ? saved.shippingMinor : Math.round(order.shippingCharge * 10 ** decimals),
@@ -111,8 +123,9 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
       ? [[t("summary.discount"), `−${amount(discountSummary.otherDiscountMinor)}`] as [string, string]]
       : []),
   ];
-  const totals: Array<[string, string, string?]> = [
-    [t("summary.subtotal"), saved ? minor(saved.subtotalMinor) : money(order.totalAmount - order.shippingCharge + discount)],
+  const totals: Array<[string, string, (string | string[])?]> = [
+    [t("summary.subtotal"), addOns ? minor(addOns.itemsSubtotalMinor) : money(order.totalAmount - order.shippingCharge + discount)],
+    ...(addOns?.rows ?? []).map((row): [string, string, string[]] => [row.title, row.amount, row.details]),
     [delivery.label, deliveryValue, deliveryDetails],
     ...discounts,
     ...(saved && saved.taxMinor > 0
@@ -198,7 +211,7 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
         </thead>
         <tbody>
           {order.items.map((item) => {
-            const line = resolveSavedOrderLineMoney(item, saved);
+            const line = rowItemsOnly(resolveSavedOrderLineMoney(item, saved), item, addOnsInSummary);
             // A free gift prints free, its price struck (the discount row says which offer).
             const free = isFreeOrderLine(line);
             return (
@@ -213,11 +226,15 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
                       {property.priceMinor > 0 && saved ? ` (+${minor(property.priceMinor)})` : ""}
                     </small>
                   ))}
+                  {/* What the apps charged on the line: its one place, worded as the receipt words it. */}
+                  {saved ? buyerLineAddOnRows(item.addOns, { label: lineWords.lineAddOnText, money: minor, language: locale }).map((row, index) => (
+                    <small key={`add-on-${index}`}>{row.label}: {row.value}</small>
+                  )) : null}
                   {(item.returnedQuantity ?? 0) > 0 ? <small>{t("items.returned", { count: item.returnedQuantity ?? 0 })}</small> : null}
                 </td>
                 <td>{formatNumber(item.quantity)}</td>
                 {/* A kit's item charged as two lines prints as one row; with no whole unit price, its total over its quantity. */}
-                {packingSlip ? null : <td>{line && line.unitPriceMinor !== null ? (free ? <><s>{minor(line.unitPriceMinor)}</s> {minor(0)}</> : minor(line.unitPriceMinor)) : money(item.price)}</td>}
+                {packingSlip ? null : <td>{line && line.unitPriceMinor !== null ? (free ? <><s>{minor(line.unitPriceMinor)}</s> {minor(0)}</> : minor(line.unitPriceMinor)) : line && addOnsInSummary ? "—" : money(item.price)}</td>}
                 {packingSlip ? null : <td>{line ? (free ? <><s>{minor(line.grossSubtotalMinor)}</s> {minor(0)}</> : minor(line.grossSubtotalMinor)) : money(item.price * item.quantity)}</td>}
               </tr>
             );
@@ -228,7 +245,7 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
       {packingSlip ? null : <dl className="invoice-totals">
         {totals.map(([label, value, detail], index) => (
           <div key={`${label}:${index}`}>
-            <dt>{label}{detail ? <small>{detail}</small> : null}</dt>
+            <dt>{label}{(Array.isArray(detail) ? detail : detail ? [detail] : []).map((text, line) => <small key={line}>{text}</small>)}</dt>
             <dd>{value}</dd>
           </div>
         ))}
