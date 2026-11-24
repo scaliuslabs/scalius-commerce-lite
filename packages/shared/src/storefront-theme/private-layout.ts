@@ -233,7 +233,7 @@ export type PrivatePagesReason =
   | ReturnType<typeof privateArrangementIssues>[number]["reason"]
   | PrivateTokenReason
   | typeof PRIVATE_NOT_AVAILABLE | "too_large"
-  | "label_too_long" | "label_variant" | "markup" | "foreign_asset";
+  | "label_too_long" | "label_variant" | "label_figures" | "markup" | "foreign_asset";
 
 export interface PrivatePagesIssue {
   path: Array<string | number>;
@@ -243,16 +243,20 @@ export interface PrivatePagesIssue {
 
 /** Text that reads as markup (`<b>`, `</p>`, `<!--`): words here are plain text. */
 const MARKUP = /<[A-Za-z!/?]/;
+/** A figure in any script (৳, 3, ৩, $): what an amount is written with. */
+const FIGURES = /[\p{N}\p{Sc}]/u;
 /** Words without direction overrides or invisible characters. */
 export function plainPrivateWords(words: PrivateWords): PrivateWords {
   return Object.fromEntries(Object.entries(words).map(([lang, text]) => [lang, text.replace(HIDDEN_CHARACTERS, "")]));
 }
 
-function wordsIssues(words: PrivateWords | undefined, path: Array<string | number>, max: number): PrivatePagesIssue[] {
+function wordsIssues(words: PrivateWords | undefined, path: Array<string | number>, max: number, figures = true): PrivatePagesIssue[] {
   if (!words) return [];
   return Object.entries(words).flatMap(([lang, text]): PrivatePagesIssue[] => {
     if (MARKUP.test(text)) return [{ path: [...path, lang], reason: "markup" as const, message: "Plain text only: no HTML." }];
     if (text.length > max) return [{ path: [...path, lang], reason: "label_too_long" as const, message: `At most ${max} characters.` }];
+    // Words drawn among the amounts never read as one: the store writes every amount.
+    if (!figures && FIGURES.test(text)) return [{ path: [...path, lang], reason: "label_figures" as const, message: "These words sit among the amounts: no digits or currency signs; the store writes every amount." }];
     return [];
   });
 }
@@ -328,7 +332,7 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
     } else if (typeof label === "string") {
       issues.push({ path, reason: "label_variant", message: `${key} is the theme's own words, per language: { "en": "…", "bn": "…" }.` });
     } else {
-      issues.push(...wordsIssues(label, path, spec.max));
+      issues.push(...wordsIssues(label, path, spec.max, spec.figures !== false));
     }
   }
   if (issues.length > 0) return { ok: false, issues };
