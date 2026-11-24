@@ -13,13 +13,9 @@
 /* Rich text (Typography's `.prose`) is its own sheet, linked only by pages
    that render it: rich-text.css and components/RichTextStyles.astro. */
 
-/* 7. Global utility classes. */
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
+/* Tailwind's utilities stay in its layer (line-clamp-2 is its own): an
+   unlayered copy here would outrank a private page's token rules, which are
+   unlayered at zero specificity (a theme's `clamp` on the line title). */
 
 /* A long buyer answer (lib/long-answer.ts): three lines, then "Show more"
    opens the rest, with no script. A screen reader reads the whole answer. */
