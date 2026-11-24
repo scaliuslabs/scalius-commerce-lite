@@ -35,20 +35,46 @@ import { parsePluginSurfaceKey } from "../plugins/storefront";
 import { storefrontDarkPalette, type StorefrontThemeTokens } from "./tokens";
 import {
   PRIVATE_ANATOMY_VERSION,
+  PRIVATE_CONTROL_PLACES,
   PRIVATE_HOOK_MAX,
   PRIVATE_LAYOUT_KINDS,
-  PRIVATE_PAGES,
   PRIVATE_PAGE_KEYS,
-  PRIVATE_CONTROL_PLACES,
+  PRIVATE_PAGE_WORDS,
   privateIconKeys,
   privateLabelKeys,
   type PrivateControlPlace,
-  type PrivateAssetRef,
-  type PrivateNode,
+  type PrivateLabelSpec,
   type PrivatePageKey,
-  type PrivatePageSpec,
-  type PrivateWords,
-} from "./private-anatomy";
+} from "./private-keys";
+import { PRIVATE_PAGES, type PrivateAssetRef, type PrivatePageSpec, type PrivateWords } from "./private-anatomy";
+import {
+  PRIVATE_CHECKER_VERSION,
+  PRIVATE_COMPILED_CSS_MAX_BYTES,
+  PRIVATE_LOOK_ONLY_PAGES,
+  PRIVATE_NOT_AVAILABLE,
+  PRIVATE_WORDS_LIMITS,
+  privateNotAvailable,
+  storefrontPrivatePagesDefault,
+  type StorefrontPrivatePages,
+} from "./private-schema";
+
+export {
+  PRIVATE_CHECKER_VERSION,
+  PRIVATE_COMPILED_CSS_MAX_BYTES,
+  PRIVATE_LAYOUT_MAX_DEPTH,
+  PRIVATE_LOOK_ONLY_PAGES,
+  PRIVATE_NOT_AVAILABLE,
+  PRIVATE_WORDS_LIMITS,
+  privateAssetRefSchema,
+  privateNodeSchema,
+  privatePageArrangementSchema,
+  readStoredPrivatePages,
+  storefrontPrivatePagesDefault,
+  storefrontPrivatePagesSchema,
+  storefrontPrivatePagesTemplateSchema,
+  type StorefrontPrivatePages,
+  type StorefrontPrivatePagesTemplate,
+} from "./private-schema";
 import {
   compactPrivateArrangement,
   privateCheckoutBlockArrangement,
@@ -66,223 +92,11 @@ import {
 } from "./private-tokens";
 
 /**
- * The checker's version: a page never serves a look an older checker
- * compiled (maintenance compiles the published theme again). Version 6: a
- * theme's stylesheet, chrome and content blocks are not available. Version
- * 7: the look is compiled per page, and a page is in token mode where it has
- * one; a filled button's fill and an outlined control's or a field's edge read
- * at 3:1, Place order and Confirm outrank their neighbours, the total by
- * weight and contrast too, and no descriptive label holds a figure. Version 8:
- * the look is compiled per page, and a page is in token mode where it has one.
- */
-export const PRIVATE_CHECKER_VERSION = 8;
-
-/** The most compiled token CSS a page stores (each page serves only its own). */
-export const PRIVATE_COMPILED_CSS_MAX_BYTES = 64 * 1024;
-
-/**
  * Control and invisible characters (direction overrides, zero-width spaces): never part of a theme's words.
  * A joiner (Bangla's conjuncts), a variation selector and an emoji's tag stay.
  */
 const HIDDEN_CHARACTERS = /(?![\t\n‌‍\p{Variation_Selector}\u{E0020}-\u{E007F}])[\p{Cc}\p{Default_Ignorable_Code_Point}]/gu;
 
-/** Bounds of the theme's words on private pages. */
-export const PRIVATE_WORDS_LIMITS = { languages: 8, text: 500 } as const;
-
-const language = z.string().regex(/^[a-z]{2,3}$/, "A base language code: en, bn.");
-const wordsSchema = z.record(language, z.string().trim().min(1).max(PRIVATE_WORDS_LIMITS.text))
-  .refine((words) => Object.keys(words).length >= 1 && Object.keys(words).length <= PRIVATE_WORDS_LIMITS.languages, `Words in 1 to ${PRIVATE_WORDS_LIMITS.languages} languages.`)
-  // Named, as the asset and the arrangement are: the contract states each shape once, not at every use.
-  .meta({ id: "StorefrontPrivateWords" });
-
-/** A file of the theme's own app (`public/<file>`): the app whose template the theme is. */
-export const privateAssetRefSchema = z.object({
-  app: z.string().regex(PLUGIN_ID_PATTERN),
-  file: z.string().regex(/^[A-Za-z0-9_-][A-Za-z0-9._/-]{0,200}$/).refine((file) => !file.split("/").includes(".."), "A file inside public/."),
-}).strict().meta({ id: "StorefrontPrivateAsset" });
-
-const hook = z.string().max(PRIVATE_HOOK_MAX);
-
-const name = z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/);
-
-/**
- * The pages a theme gives a look (tokens) but does not arrange yet: the
- * receipt and the account draw their parts in the store's order; an
- * arrangement other than the default is refused (`not_available`).
- */
-export const PRIVATE_LOOK_ONLY_PAGES: readonly PrivatePageKey[] = ["receipt", "account"];
-
-/** Refused with this reason and plain words: what a theme cannot set on a private page in this release. */
-export const PRIVATE_NOT_AVAILABLE = "not_available";
-const notAvailable = (what: string) => `${what} is not available yet: a theme arranges the store's parts and gives them tokens.`;
-
-/** One node of an arrangement (structure only; `privateArrangementIssues` checks the names). */
-export const privateNodeSchema: z.ZodType<PrivateNode> = z.lazy(() => z.discriminatedUnion("type", [
-  z.object({ type: z.literal("layout"), layout: z.enum(PRIVATE_LAYOUT_KINDS), hook: hook.optional(), children: z.array(privateNodeSchema).max(24) }).strict(),
-  z.object({ type: z.literal("part"), part: name, variant: name.optional() }).strict(),
-  z.object({ type: z.literal("target"), target: name }).strict(),
-  // A theme's own content block: named only to be refused with its reason, never parsed into a node.
-  z.object({ type: z.literal("content") }).passthrough().superRefine((_node, context) => {
-    context.addIssue({ code: "custom", message: notAvailable("A content block"), params: { reason: PRIVATE_NOT_AVAILABLE } });
-  }),
-])).meta({ id: "StorefrontPrivateNode" }) as z.ZodType<PrivateNode>;
-
-/** The deepest a layout tree may nest. */
-export const PRIVATE_LAYOUT_MAX_DEPTH = 12;
-
-/** How deep a stored arrangement nests, counted without recursion (so any input answers, never overflows). */
-function arrangementDepth(value: unknown): number {
-  let deepest = 0;
-  const stack: Array<[unknown, number]> = [[value, 0]];
-  while (stack.length > 0) {
-    const [node, depth] = stack.pop()!;
-    if (depth > PRIVATE_LAYOUT_MAX_DEPTH + 1) return depth;
-    deepest = Math.max(deepest, depth);
-    if (Array.isArray(node)) for (const child of node) stack.push([child, depth]);
-    else if (node && typeof node === "object") {
-      for (const [key, child] of Object.entries(node)) stack.push([child, key === "children" ? depth + 1 : depth]);
-    }
-  }
-  return deepest;
-}
-
-
-export const privatePageArrangementSchema = z.preprocess(
-  // Refused before the recursive parse reaches it, with its reason.
-  (value, context) => {
-    if (arrangementDepth(value) <= PRIVATE_LAYOUT_MAX_DEPTH) return value;
-    context.addIssue({ code: "custom", message: `Layouts nest at most ${PRIVATE_LAYOUT_MAX_DEPTH} deep in a stored arrangement.`, params: { reason: "too_deep" } });
-    return z.NEVER;
-  },
-  z.object({
-    frame: name.optional(),
-    layout: z.array(privateNodeSchema).max(24).optional(),
-    items: z.record(z.string().regex(/^[a-z]{1,24}$/), z.array(privateNodeSchema).max(24)).optional(),
-  }).strict(),
-).meta({ id: "StorefrontPrivateArrangement" });
-
-/** Each label's value: one of the host's variants for an action or an amount, the theme's words per language for the rest. */
-const labelsSchema = z.object(Object.fromEntries(privateLabelKeys().map(({ key, spec }) => [key, spec.variants ? z.enum(spec.variants) : wordsSchema]))).partial().strict();
-const iconKeys = privateIconKeys() as [string, ...string[]];
-
-const pagesShape = Object.fromEntries(PRIVATE_PAGE_KEYS.map((page) => [page, privatePageArrangementSchema.optional()])) as Record<PrivatePageKey, z.ZodOptional<typeof privatePageArrangementSchema>>;
-
-const privatePagesFields = {
-  controls: z.enum(PRIVATE_CONTROL_PLACES).optional(),
-  pages: z.object(pagesShape).strict(),
-  tokens: privateTokensSchema,
-  labels: labelsSchema,
-  icons: z.partialRecord(z.enum(iconKeys), privateAssetRefSchema),
-};
-
-/**
- * What a theme cannot set on a private page in this release, each refused
- * with `not_available` when it would draw something: a stylesheet, the
- * theme's own chrome, the store's search in it, files for a stylesheet. The
- * empty values (`chrome: "core"`, `css: ""`, `assets: {}`) say nothing and
- * are dropped, so a document written by an earlier build of this model reads.
- */
-const HELD = {
-  chrome: { label: "The theme's own header and footer", empty: (value: unknown) => value === "core" },
-  search: { label: "The store's search in the theme's header", empty: (value: unknown) => value === undefined },
-  css: { label: "A stylesheet for private pages", empty: (value: unknown) => value === "" },
-  assets: { label: "Files for a private page's stylesheet", empty: (value: unknown) => typeof value === "object" && value !== null && !Array.isArray(value) && Object.keys(value).length === 0 },
-} as const;
-const heldFields = Object.fromEntries(Object.keys(HELD).map((key) => [key, z.unknown().optional()])) as Record<keyof typeof HELD, z.ZodOptional<z.ZodUnknown>>;
-
-/**
- * A stored document's `privatePages` as this build reads it (the stored
- * document's path only: a save parses `storefrontPrivatePagesSchema` and
- * refuses each with `not_available`): what a theme cannot set here (`HELD`,
- * a content block anywhere in an arrangement) dropped, and `held` true when
- * any of it said something. The reader then marks the private pages' compile
- * refused (`refusedPrivatePages`): they draw the store's default look until
- * the next save, and the rest of the theme stays.
- */
-export function readStoredPrivatePages(value: unknown): { value: unknown; held: boolean } {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return { value, held: false };
-  let held = false;
-  const rest: Record<string, unknown> = { ...value };
-  for (const [key, entry] of Object.entries(HELD)) {
-    if (!(key in rest)) continue;
-    held ||= !entry.empty(rest[key]);
-    delete rest[key];
-  }
-  const record = (each: unknown): each is Record<string, unknown> => typeof each === "object" && each !== null && !Array.isArray(each);
-  const nodes = (list: unknown): unknown => Array.isArray(list) ? list.flatMap((node) => {
-    if (record(node) && node.type === "content") { held = true; return []; }
-    return [record(node) && node.type === "layout" ? { ...node, children: nodes(node.children) } : node];
-  }) : list;
-  if (record(rest.pages)) {
-    rest.pages = Object.fromEntries(Object.entries(rest.pages).map(([page, arrangement]) => [page, record(arrangement) ? {
-      ...arrangement,
-      ...("layout" in arrangement ? { layout: nodes(arrangement.layout) } : {}),
-      ...(record(arrangement.items) ? { items: Object.fromEntries(Object.entries(arrangement.items).map(([item, layout]) => [item, nodes(layout)])) } : {}),
-    } : arrangement]));
-  }
-  return { value: rest, held };
-}
-
-function refuseHeld(value: Partial<Record<keyof typeof HELD, unknown>>, context: z.RefinementCtx): void {
-  for (const [key, held] of Object.entries(HELD) as Array<[keyof typeof HELD, (typeof HELD)[keyof typeof HELD]]>) {
-    if (key in value && !held.empty(value[key])) context.addIssue({ code: "custom", path: [key], message: notAvailable(held.label), params: { reason: PRIVATE_NOT_AVAILABLE } });
-  }
-}
-
-function withoutHeld<T extends Partial<Record<keyof typeof HELD, unknown>>>(value: T): Omit<T, keyof typeof HELD> {
-  const { chrome: _chrome, search: _search, css: _css, assets: _assets, ...rest } = value;
-  return rest;
-}
-
-/** The document's `privatePages`. */
-export const storefrontPrivatePagesSchema = z.object({
-  ...privatePagesFields,
-  ...heldFields,
-  // A version 15 document written before tokens existed reads as having none.
-  tokens: privateTokensSchema.optional().transform((tokens): PrivateTokens => tokens ?? {}),
-  compiled: z.preprocess(compiledOfAnEarlierChecker, z.object({
-    anatomy: z.number().int().min(1),
-    /** The checker's version (0: never compiled): a page never serves what an older checker compiled. */
-    sanitizer: z.number().int().min(0),
-    /**
-     * Each page's look, by page: the host's token rules. A page with an entry is drawn in token mode (the theme
-     * set its tokens, or has a page paint); a page serves only its own entry.
-     */
-    css: z.partialRecord(z.enum(PRIVATE_PAGE_KEYS as [PrivatePageKey, ...PrivatePageKey[]]), z.string().max(PRIVATE_COMPILED_CSS_MAX_BYTES)),
-    /** The store's maintenance compile refused this source: the pages draw the default look until a save. */
-    refused: z.boolean().optional(),
-  }).strict()),
-}).strict().superRefine(refuseHeld).transform(withoutHeld);
-
-/**
- * What a checker before version 7 wrote (one stylesheet for every page and a
- * token-mode flag): read as never compiled, so no page serves it and
- * maintenance compiles the published theme again.
- */
-function compiledOfAnEarlierChecker(value: unknown): unknown {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
-  const { css, tokenMode: _tokenMode, ...rest } = value as Record<string, unknown>;
-  return typeof css === "string" ? { ...rest, sanitizer: 0, css: {} } : value;
-}
-
-/** What an app template may set: any of it but the compiled output, which the store writes on save. */
-export const storefrontPrivatePagesTemplateSchema = z.object({ ...privatePagesFields, ...heldFields }).partial().strict().superRefine(refuseHeld).transform(withoutHeld);
-
-export interface StorefrontPrivatePages {
-  /** Where the store's controls sit (unset: the store's checkout header). */
-  controls?: PrivateControlPlace;
-  pages: Partial<Record<PrivatePageKey, PrivatePageArrangement>>;
-  tokens: PrivateTokens;
-  labels: Partial<Record<string, PrivateWords | string>>;
-  icons: Partial<Record<string, PrivateAssetRef>>;
-  compiled: { anatomy: number; sanitizer: number; css: Partial<Record<PrivatePageKey, string>>; refused?: boolean };
-}
-export type StorefrontPrivatePagesTemplate = Partial<Omit<StorefrontPrivatePages, "compiled">>;
-
-/** The private pages as the host draws them with no theme of its own. */
-export function storefrontPrivatePagesDefault(): StorefrontPrivatePages {
-  return { pages: {}, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: {} } };
-}
 
 /**
  * Where the store's controls sit on a private page as served: the theme's
@@ -398,7 +212,7 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
     const base = ["privatePages", "pages", page];
     // The receipt and the account take their look from tokens; their parts are not arranged by a theme yet.
     if (PRIVATE_LOOK_ONLY_PAGES.includes(page) && compactPrivateArrangement(page, arrangement)) {
-      issues.push({ path: base, reason: PRIVATE_NOT_AVAILABLE, message: notAvailable(`Arranging the ${page} page`) });
+      issues.push({ path: base, reason: PRIVATE_NOT_AVAILABLE, message: privateNotAvailable(`Arranging the ${page} page`) });
       continue;
     }
     issues.push(...privateArrangementIssues(page, arrangement).map((issue) => ({ ...issue, path: [...base, ...issue.path] })));
@@ -536,7 +350,7 @@ export function privateWords(words: PrivateWords | undefined, languageCode: stri
  * copy in the page's language).
  */
 export function privatePageLabels(privatePages: Pick<StorefrontPrivatePages, "labels">, page: PrivatePageKey, languageCode: string | null | undefined, variantWords: (variant: string) => string | null): Record<string, string> {
-  return Object.fromEntries(Object.entries(PRIVATE_PAGES[page].labels).flatMap(([key, spec]) => {
+  return Object.fromEntries(Object.entries(PRIVATE_PAGE_WORDS[page].labels as Readonly<Record<string, PrivateLabelSpec>>).flatMap(([key, spec]) => {
     const label = privatePages.labels[key];
     const words = typeof label === "string" ? (spec.variants?.includes(label) ? variantWords(label) : null) : privateWords(label, languageCode);
     return words === null ? [] : [[key, words]];

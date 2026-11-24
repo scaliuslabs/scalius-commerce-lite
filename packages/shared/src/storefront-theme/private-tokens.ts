@@ -28,9 +28,12 @@
 // nearest row (`PRIVATE_TOKEN_MODE_CSS`): a translucent tint or a palette
 // colour never decides a colour there.
 import { z } from "zod";
+
+export { privateTokensSchema, type PrivateTokens } from "./private-schema";
 import { buyerUiButtonProminenceIssues, PRIVATE_UI_BUTTON_UNDER } from "./private-buyer-ui";
 import { STOREFRONT_THEME_COLOR_KEYS, storefrontThemeContrast, storefrontThemeHoverSurface, storefrontThemeMix, type StorefrontThemeColors } from "./contrast";
 import { storefrontPagePaintColors, storefrontPagePaintCss, storefrontThemeFocusRing, type StorefrontPagePaint } from "./tokens";
+import { privateTokensSchema, type PrivateTokens } from "./private-schema";
 import {
   PRIVATE_BUYER_UI_STYLES,
   PRIVATE_HOOK_PATTERN,
@@ -165,13 +168,6 @@ export const PRIVATE_TOKEN_SPECS: Record<PrivateTokenName, TokenSpec> = /* @__PU
 /** Where a phone ends (the store's `sm`). */
 export const PRIVATE_WIDE_MEDIA = "(min-width:40rem)";
 
-/** `privatePages.tokens`: per page, per style target (`@<layout hook>`, `ui.<kind>…`), per token, a value. */
-// Names are checked by the compile (`unknown_style`, `unknown_token`) so the schema stays small.
-export const privateTokensSchema = z.record(
-  z.string().regex(/^[a-zA-Z]{1,24}$/),
-  z.record(z.string().regex(/^(?:@[a-z][a-z0-9-]{0,40}|[a-z][a-z0-9-]{0,40}|ui\.[a-z]{1,12}(?:\.[a-z]{1,12})?(?:@[a-z0-9][a-z0-9.-]{0,63})?(?:\/[a-z_.]{1,64})?)$/), z.record(z.string().regex(/^[a-z][a-z-]{0,23}$/), z.unknown())),
-).refine((tokens) => Object.keys(tokens).every((page) => Object.hasOwn(PRIVATE_PAGES, page)), "Tokens are set per private page: cart.") as unknown as z.ZodType<PrivateTokens>;
-export type PrivateTokens = Partial<Record<PrivatePageKey, Record<string, Partial<Record<PrivateTokenName, unknown>>>>>;
 
 export type PrivateTokenReason = "unknown_style" | "unknown_token" | "token_value" | "contrast" | "no_row" | "prominence" | "too_large";
 
