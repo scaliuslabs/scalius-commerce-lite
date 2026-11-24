@@ -246,7 +246,8 @@ const showNavigationSidebar =
   !hideNavigationSidebar &&
   themeLayout.navigation === "sidebar" &&
   (navigationData.length > 0 || (categoryTree?.nodes.length ?? 0) > 0);
-// A private page draws no phone tab bar, the theme's chrome there included (as the store's checkout header).
+// A page without the store's public header draws no phone tab bar (the cart and the payment step, under the store's
+// checkout header); the receipt and the account keep the public header and, on phones, its tab bar.
 const showMobileTabs = !hideHeader && themeLayout.mobileNavigation === "tabs";
 
 // The theme's brand images (the draft's under a preview): the tab icon, the

@@ -190,7 +190,7 @@ receipt style delivery-contact <root> [data-part="delivery-contact"] tokens=text
 receipt style lines <root> [data-part="lines"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 receipt style lines-heading <root> [data-part="lines-heading"] tokens=text,font,weight,size,leading,case,tracking
 receipt style line <root> [data-part="line"] tokens=background,border,border-width,border-style,radius,padding targets=order.line.after
-receipt style line-image <root> [data-part="line-image"] tokens=width,height,width-wide,height-wide,radius,background,border,border-width,border-style,fit
+receipt style line-image <root> [data-part="line-image"] tokens=width,height,width-wide,height-wide,radius,background,border,border-width,border-style
 receipt style line-title <root> [data-part="line-title"] tokens=text,font,weight,size,leading,case,tracking
 receipt style line-details <root> [data-part="line-details"] tokens=text,size
 receipt style line-price <root> [data-part="line-price"] tokens=text,muted,font,weight,size,align

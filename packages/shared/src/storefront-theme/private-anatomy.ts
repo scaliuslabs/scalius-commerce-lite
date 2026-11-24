@@ -622,10 +622,13 @@ const ACCOUNT_PAGE_STYLES = privatePageStyles("account", { dialogs: true, chrome
 /** The page-wide targets but the notices: neither page draws the cart's notices part. */
 const withoutNotices = ({ notice: _notice, ...rest }: Record<string, PrivateStyleSpec>) => rest;
 
-/** An order's line as the cart's line is styled, inside the box `on`, with the apps' `order.line.after` under it. */
-const afterOrderLineStyles = (on: string): Record<string, PrivateStyleSpec> => ({
+/**
+ * An order's line as the cart's line is styled, inside the box `on`, with the apps' `order.line.after` under it.
+ * `fit` reaches an image inside its box: a page whose line image is the `<img>` itself (`imageBox: false`) does not take it.
+ */
+const afterOrderLineStyles = (on: string, { imageBox }: { imageBox: boolean }): Record<string, PrivateStyleSpec> => ({
   line: { ...CART_STYLES.line!, on, targets: ["order.line.after"] },
-  "line-image": { ...CART_STYLES["line-image"]!, item: undefined, part: undefined, on: "line" },
+  "line-image": { ...CART_STYLES["line-image"]!, tokens: CART_STYLES["line-image"]!.tokens.filter((token) => imageBox || token !== "fit"), item: undefined, part: undefined, on: "line" },
   "line-title": { ...CART_STYLES["line-title"]!, tokens: [...TEXT_TOKENS], item: undefined, part: undefined, on: "line" },
   "line-details": { ...CART_STYLES["line-details"]!, item: undefined, part: undefined, on: "line" },
   "line-price": { ...CART_STYLES["line-price"]!, item: undefined, part: undefined, on: "line" },
@@ -666,7 +669,7 @@ const RECEIPT_STYLES: Record<string, PrivateStyleSpec> = {
   // What was bought: the card, its heading and each line.
   lines: { selector: '[data-part="lines"]', tokens: [...BOX_TOKENS], kind: "box", surface: "background", ink: "foreground", part: "lines" },
   "lines-heading": { selector: '[data-part="lines-heading"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "lines" },
-  ...afterOrderLineStyles("lines"),
+  ...afterOrderLineStyles("lines", { imageBox: false }),
   // The order's conversation with the store (it holds the reply form).
   conversation: { selector: '[data-part="conversation"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "conversation", fields: true },
   ...RECEIPT_PAGE_STYLES.tail,
@@ -737,7 +740,7 @@ const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
   "status-badge": { selector: '[data-part="status-badge"]', tokens: [...STATUS_BADGE_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "card" },
   // An order's totals inside its card, drawn at the card's 14px; what is left to pay (`due`) ranks with the total.
   ...privateSummaryStyles({ on: "card", rows: { size: 14, weight: 400 }, total: { size: 14, weight: 400 }, label: { size: 14, weight: 400 }, due: true }),
-  ...afterOrderLineStyles("card"),
+  ...afterOrderLineStyles("card", { imageBox: true }),
   // A line's delivery message (the store's words for it) and the control that reveals it.
   "delivery-message": { selector: '[data-part="delivery-message"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", on: "line" },
   // An outlined control: with its border drawn its edge reads 3:1 on the box around it, without one its fill does.
