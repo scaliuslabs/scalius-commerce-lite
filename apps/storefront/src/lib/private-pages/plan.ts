@@ -16,6 +16,7 @@ import {
   privateLayoutIsDefault,
   privatePageArrangement,
   privatePageLabels,
+  privateCheckoutBlockArrangement,
   type PrivateNode,
   type PrivatePageKey,
   type PrivateUnitSpec,
@@ -51,9 +52,10 @@ export interface PrivatePagePlan {
 
 export function privatePagePlan(theme: StorefrontThemeDocument, page: PrivatePageKey, language: string, asset: PrivateAssetUrl): PrivatePagePlan {
   const privatePages = servedPrivatePages(theme.privatePages);
-  const arrangement = privatePageArrangement(privatePages, page);
   const spec = PRIVATE_PAGES[page];
   const tokens = privatePageTokenMode(theme.privatePages, page);
+  // In token mode a page with no arrangement draws the one its look was checked on (the payment step's from its block).
+  const arrangement = privatePageArrangement(privatePages, page) ?? (tokens && page === "checkout" ? privateCheckoutBlockArrangement(theme.blocks.checkout) : undefined);
   const layout = tokens ? [...arrangement?.layout ?? spec.layout] : privateLayoutIsDefault(page, arrangement) ? null : arrangement!.layout!;
   const icons = Object.fromEntries(spec.icons.flatMap((key) => {
     const ref = privatePages.icons[key];
@@ -92,8 +94,8 @@ function partVariants(parts: PrivateUnitSpec["parts"], layout: readonly PrivateN
  * values on save. Only what this build's checker compiled is served
  * (`privatePagesCss`).
  */
-export function privateStyle(theme: StorefrontThemeDocument, page: PrivatePageKey = "cart"): string {
-  const css = privatePagesCss(theme.privatePages);
+export function privateStyle(theme: StorefrontThemeDocument, page: PrivatePageKey): string {
+  const css = privatePagesCss(theme.privatePages, page);
   if (!css) return "";
   const tokens = privatePageTokenMode(theme.privatePages, page);
   return `${tokens ? PRIVATE_TOKEN_MODE_CSS.before : ""}${css}${tokens ? PRIVATE_TOKEN_MODE_CSS.after : ""}`;

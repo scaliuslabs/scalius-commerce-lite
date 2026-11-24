@@ -9,7 +9,9 @@ The cart, checkout, payment, receipt and account pages are a buyer's own pages: 
 
 The store writes every CSS rule from your values, checks every colour a buyer reads, and keeps what a buyer must see and do. A rendered gate ([below](#the-rendered-gate)) draws themes in a real browser and fails when anything a buyer must read or use is lost.
 
-This page covers the cart page, which is private, and the cart drawer. The drawer opens over public pages and is part of each of them: its arrangement, words and icons come from here, and its look comes from your public stylesheet through the same hooks. The checkout, the receipt and the account take the closed choices in [themes.md](themes.md#templates) until they move to this model.
+This page covers the cart page, the payment step and the cart drawer. The drawer opens over public pages and is part of each of them: its arrangement, words and icons come from here, and its look comes from your public stylesheet through the same hooks. Quick checkout (the page that places an order without scripts), the receipt and the account take the store's look and the closed choices in [themes.md](themes.md#templates) until they move to this model.
+
+Each page is compiled and served on its own: a page is in token mode only where you gave it tokens (or your theme has a page paint), and it serves only its own look.
 
 ## What you set
 
@@ -18,7 +20,7 @@ A template sets them under `privatePages`. The merchant's theme document holds t
 | Field | What it is |
 | --- | --- |
 | `controls` | Where the store's controls sit: `header` (the store's checkout header; unset means this), `footer` (a strip at the page's end) or `none`. See [the store's controls](#the-stores-controls). |
-| `pages.cart`, `pages.cartDrawer` | An arrangement per page. Leave a page out to keep the store's own. |
+| `pages.cart`, `pages.checkout`, `pages.cartDrawer` | An arrangement per page (`checkout` is the payment step). Leave a page out to keep the store's own. |
 | `tokens` | The look of the store's parts, per page and style target: `{ "cart": { "summary": { "background": "card", "radius": 0 } } }`. |
 | `labels` | The store's word you choose for an action or an amount (`{ "dialog.confirm": "continue-checkout" }`), your own words per language for a heading or an empty state (`{ "cart.heading": { "en": "Your Cart", "bn": "আপনার কার্ট" } }`). |
 | `icons` | Your image for a store icon: `{ "cart.empty": { "app": "acme.studio", "file": "icons/bag.svg" } }`, a file in your `public/`. `app` is the app your template comes from (`foreign_asset` otherwise). Applying a template that sets `privatePages` replaces the store's whole object; one that sets none drops any icon of another app. |
@@ -43,7 +45,7 @@ Each refusal says "… is not available yet: a theme arranges the store's parts 
 
 An arrangement is `{ frame?, layout?, items? }`:
 
-- `frame`: the page's closed variant. The cart page: `standard` or `narrow`. The drawer: `standard` (380px) or `wide` (440px).
+- `frame`: the page's closed variant. The cart page and the payment step: `standard` or `narrow`. The drawer: `standard` (380px) or `wide` (440px).
 - `layout`: the page as a tree of nodes. Leave it out to keep the store's layout.
 - `items.line`: the layout of one cart line, repeated for every line.
 
@@ -72,6 +74,8 @@ A hook is lowercase words joined by hyphens (`cart-columns`), at most 40 charact
 | Cart page | `summary` | `totals`: the money rows. `with-items`: an Items row first (`data-summary-row="items"`, the number of items). |
 | Cart line | `details` | `lines`: each fact on its own labelled line. `values`: the chosen values only, on one line ("Rockstar Launcher / Account"). `chips`: each fact as a chip (`line-chip`). |
 | Cart line | `remove` | `icon`: the × button. `words`: the word Remove (সরান in Bangla). Both are 44px to tap. |
+| Payment step | `summary` | `open-wide`: folded behind its bar (the total) on phones, open from 64rem. `folded`: behind its bar at every width. |
+| Payment step | `payment` | `list`: one row per method, the chosen method's details under it. `tiles`: a grid of tiles, the chosen method's details under the grid (one method is always a row). |
 
 The drawer's parts have no variants. A variant a part does not have is refused (`unknown_variant`).
 
@@ -85,6 +89,9 @@ Every arrangement holds each **mandatory** part and every target exactly once. Y
 | Cart line | `title`, `details`, `inputs`, `quantity`, `price`, `remove`, `limit`, `issue`, `rule`; target `cart.line.after` | `image` |
 | Drawer | `header`, `lines`, `undo`, `summary`, `actions`; target `cart_drawer.footer` | `added`, `recommendations`, `offers` |
 | Drawer line | as the cart line | `image` |
+| Payment step | `empty` (no checkout to pay for), `heading`, `notices`, `summary` (its target `checkout.summary.after` sits inside it), `gift-card`, `payment`; targets `checkout.payment.after`, `checkout.actions.before` | `progress` |
+
+The payment step reads `notices` before `payment`, as the cart reads them before `details`. `payment` is one part: the methods, the chosen method's details, the payment provider's own surface (its card form or frame), Pay and the terms beside it stay together in the store's order whatever you arrange. A theme with an arrangement for the payment step draws it from that; with tokens and no arrangement, from the arrangement its `blocks.checkout` chose (`top`: a `narrow` frame and the summary `folded`; `tiles`), so the look is checked on the page buyers get.
 
 The phone fold starts closed on phones, so it holds only `lines`, `summary`, `discount` and the `cart.page.summary` target (`layout_holds` otherwise).
 
@@ -215,11 +222,24 @@ A buyer must find each control and field where it stands (WCAG 1.4.11, 3:1 on wh
 | `scheme` | The light or dark switch | control | `chrome` |
 | `localization` | The market and language forms | box, holds fields | `chrome` |
 
+**The payment step** takes the same names for the same things: `page`, `frame`, `action`, `input`, `field-label`, `notice`, `chrome`, `scheme`, `localization`; the order summary's `summary`, `summary-heading`, `summary-rows`, `summary-total` (with what is left to pay after a gift card or a deposit, which ranks with the total), `summary-total-label`, `summary-add-on`, `summary-add-on-detail` and its phone bar `fold-toggle`; Pay is `submit` and the terms beside it `legal`. Its own:
+
+| Target | What it is | Kind | Stands on |
+| --- | --- | --- | --- |
+| `checkout-empty` | No checkout to pay for: the way back to the store | box (`card`) | where `empty` sits |
+| `heading` | The page's `h1` | text | where `heading` sits |
+| `gift-card` | The gift card form | box (`card`), holds fields | where `gift-card` sits |
+| `payment-method` | One payment method's card | box (`card`) | where `payment` sits |
+| `payment-chosen` | The method the buyer chose (drawn over `payment-method`) | box | `payment-method` |
+| `payment-details` | The chosen method's details: its notice, the provider's surface, the terms and Pay | box | `payment-chosen`; with `tiles`, where `payment` sits |
+
+The payment provider's own surface (`data-part="gateway"`: its card form, its frame) has no target, and token mode never reaches into it: it keeps the store's colours whatever you set, and nothing of yours covers or reorders it. The provider's mark on a method keeps its white badge. A total smaller than a money row, or a Pay or a word that does not read, is refused as on the cart.
+
 **Layout nodes.** A layout node takes `background`, `gradient`, `border`, `border-width`, `border-style`, `radius`, `shadow`, `padding`, `gap`, `columns` and `columns-wide` through its hook: `"@line-grid": { "columns": [64, "1fr", 88] }`. A hook with a colour is a row of the table. Its `columns` apply only where the box holding it fits every track at its floor (20rem for a track that holds the page's parts, 4rem inside a line) and the gaps between; `columns-wide` from 40rem. Elsewhere the store's one column draws, so a part is never squeezed. The store's own layouts split by the width of the box they sit in, never the screen's: a `columns` draws its children side by side from 48rem, and only as many in a row as keep each at least 20rem wide.
 
 ### Apps' blocks
 
-The store draws an app's block from typed nodes ([commerce hooks](commerce-hooks.md#buyer-ui-extensions)), so it is one of the store's parts. You give it a look by node kind, under `ui.<kind>`, narrowed by tone, app and target: `"ui.stack.warning@acme.protection/cart.line.after": { "background": "#3a2a0a", "text": "#fde68a" }`. A row reads every key that matches it, the most specific last. Every kind and tone has a row at each of the page's targets (`cart.page.summary`, `cart.page.below`, `cart.line.after`, and `checkout.contact.after`, `checkout.delivery.after` inside the details form), on whatever that target sits on, whether you name it or not.
+The store draws an app's block from typed nodes ([commerce hooks](commerce-hooks.md#buyer-ui-extensions)), so it is one of the store's parts. You give it a look by node kind, under `ui.<kind>`, narrowed by tone, app and target: `"ui.stack.warning@acme.protection/cart.line.after": { "background": "#3a2a0a", "text": "#fde68a" }`. A row reads every key that matches it, the most specific last. Every kind and tone has a row at each of the page's targets (`cart.page.summary`, `cart.page.below`, `cart.line.after`, and `checkout.contact.after`, `checkout.delivery.after` inside the details form; on the payment step `checkout.summary.after` inside the summary, `checkout.payment.after` and `checkout.actions.before`), on whatever that target sits on, whether you name it or not. A key names a target of its own page: `"ui.badge.success@acme.protection/checkout.summary.after"` styles a "✓ Protection added" badge in the payment step's summary, and the same key with `/cart.line.after` the badge under a cart line.
 
 | Kind | Draws | Tones | Tokens |
 | --- | --- | --- | --- |
@@ -277,7 +297,7 @@ A refusal names the theme key and the pair that set it, and the scheme: `summary
 | `contrast` | A row reads under its floor in a scheme a buyer sees. |
 | `prominence` | The total drawn smaller than a money row, an add-on line or its own label, lighter than the rows, or with fainter words than theirs; its label smaller than the rows; Place order smaller or lighter than the other filled buttons; Confirm smaller or lighter than Go back. |
 | `no_row` | The page draws a target the colour table has no row for (a store defect; it never draws unchecked). |
-| `too_large` | The compiled look is over 64 KiB. |
+| `too_large` | A page's compiled look is over 64 KiB (each page has its own bound: it serves only its own look). |
 | `label_variant` | A label that names an action or an amount set to something other than one of its variants, or a variant where your words go. |
 | `label_too_long`, `markup`, `label_figures` | Words over the label's bound, words with HTML, or a digit, a currency sign, a name of money or one of the store's amount words in a heading, title or empty state (only `cart.intro` and `cart.emptyText` may hold them). |
 | `foreign_asset` | An icon from an app other than your theme's. |
@@ -318,7 +338,7 @@ An app's `cart.line_prices` add-on shows as its own money row (`data-summary-row
 - under it, each line is `data-part="add-on-detail"`, in line order, as plain text (at most 50 a row);
 - it starts closed. The cart page and the drawer redraw the summary as the cart changes: a row the buyer opened stays open, and a row that first appears after the buyer adds the add-on opens by itself (never on the page's first answer).
 
-A row with no details is a plain row of its title and amount. On the cart page the bar takes the `summary-add-on` tokens and each line `summary-add-on-detail`, on the `summary-rows` row; elsewhere the row takes the look of the money rows around it.
+A row with no details is a plain row of its title and amount. On the cart page and the payment step the bar takes the `summary-add-on` tokens and each line `summary-add-on-detail`, on the `summary-rows` row; elsewhere the row takes the look of the money rows around it.
 
 ## The store's controls
 
@@ -588,6 +608,7 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 - the customer's cart (the reference above), offered and protected, at 390 and 1280, light and dark, and its protected cart in the drawer with the add-on row open;
 - the store's controls in its header, in the strip at the page's end and nowhere, in a store with the light or dark switch and two markets;
 - a stored document forged past the save (a stylesheet, the theme's chrome and search, content blocks in the page and a line): the store reads it with all of them dropped and its private pages' compile refused, so the theme stays (its light or dark switch is drawn) and its cart draws the default look with none of them;
+- the payment step, drawn as the editor's sample checkout draws it for buyers: a look in palette roles with its methods as a list, the same with a narrow frame and tiles, and a forged stylesheet, at 320, 390 and 1280 px, light and dark. It fails when Pay or the total is not drawn, is off screen when scrolled to or is covered; when Pay is smaller, lighter or fainter than the gift card's Apply, or its words read under 4.5:1 on its fill; when the total is smaller than another money row or reads under 4.5:1; or when the payment provider's surface is painted other than the store paints it. Four mutations prove these fail: Pay hidden, the total hidden, Pay weaker than Apply, token mode reaching into the provider's surface;
 - named breaks the save must refuse, each with its reason (a stylesheet or blocks, `not_available`; words that do not read, in either scheme; a total smaller, lighter or fainter than its rows, or under its label, `prominence`; Place order or Confirm with no fill that shows, or smaller and lighter than its neighbour; Go back filled; a borderless field or stepper the colour of its box): a refused document is not drawn.
 
 **Where each state is drawn** (by cost: each draw loads the page and photographs it screen by screen):
@@ -759,6 +780,45 @@ cartDrawer label drawer.continue variants=continue-shopping|keep-shopping
 cartDrawer label drawer.empty max=80 no-figures
 cartDrawer label drawer.startShopping variants=start-shopping|browse-products|continue-shopping
 cartDrawer icon drawer.empty
+checkout root data-private=checkout frames=standard|narrow
+checkout part progress hooks=progress
+checkout part empty mandatory hooks=checkout-empty
+checkout part summary mandatory variants=open-wide|folded hooks=summary,fold-toggle,summary-panel,summary-heading,summary-total-label,add-on-details,add-on-detail
+checkout part heading mandatory hooks=heading
+checkout part notices mandatory hooks=notice
+checkout part gift-card mandatory hooks=gift-card
+checkout part payment mandatory variants=list|tiles hooks=payment,payment-method,payment-details,gateway,pay,legal
+checkout fields in gift-card
+checkout target checkout.payment.after
+checkout target checkout.actions.before
+checkout order notices before payment
+checkout lead summary,payment
+checkout layouts stack,columns,grid,group
+checkout style page body[data-private-body] tokens=background,gradient,text,muted,link,error
+checkout style frame <root> <root> tokens=max-width
+checkout style action [data-private="checkout"] .bg-primary tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+checkout style input [data-private="checkout"] :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+checkout style field-label [data-private="checkout"] [data-part="field-label"] tokens=text,size,weight,case,tracking
+checkout style notice <root> [data-part="notice"] tokens=background,text,muted,link,error,border,border-width,radius
+checkout style checkout-empty <root> [data-part="checkout-empty"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+checkout style heading <root> [data-part="heading"] tokens=text,font,weight,size,leading,case,tracking
+checkout style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap targets=checkout.summary.after
+checkout style summary-heading <root> [data-part="summary-heading"] tokens=text,font,weight,size,leading,case,tracking
+checkout style summary-rows <root> [data-summary-row]:not(:is([data-summary-row="total"],[data-summary-row="due"])) tokens=text,size
+checkout style summary-total <root> :is([data-summary-row="total"],[data-summary-row="due"]) tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size,ui/checkout.summary.after:size
+checkout style summary-total-label <root> :is([data-summary-row="total"],[data-summary-row="due"]) [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size
+checkout style summary-add-on <root> [data-part="add-on-details"] > summary tokens=text,ring,radius
+checkout style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size
+checkout style fold-toggle <root> [data-part="fold-toggle"] tokens=background,text,border,border-width,radius,shadow,ring boundary=edge
+checkout style gift-card <root> [data-part="gift-card"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+checkout style payment-method <root> [data-part="payment-method"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+checkout style payment-chosen <root> [data-part="payment-method"][data-chosen] tokens=background,text,muted,border,border-width,shadow
+checkout style payment-details <root> [data-part="payment-details"] tokens=background,text,muted,link,error,border,border-width,radius,padding outside-when=tiles
+checkout style submit <root> [data-part="pay"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=action:size+weight
+checkout style legal <root> [data-part="legal"] tokens=text,size,align
+checkout style chrome :is([data-private="core-header"],[data-private="core-footer"]) tokens=background,gradient,text,muted,link,border,border-width
+checkout style scheme [data-host="scheme"] button tokens=text,ring,radius
+checkout style localization [data-host="localization"] tokens=text,muted,link fields
 dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-agree,dialog-actions,dialog-back,dialog-confirm,field-label
 buyer-ui attributes=data-buyer-ui-target,data-buyer-ui-app,data-ui
 chrome roots data-private=core-header|core-footer controls=header|footer|none

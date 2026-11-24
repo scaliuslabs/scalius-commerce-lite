@@ -131,11 +131,12 @@ function sendJson(response, status, body) {
 }
 
 /** The cart page's colour table per palette, as the save resolved it: each row's key, selector, kind, paint and words' colours, and the scheme. */
-function galleryTables(shared, privatePages, context) {
-  const arrangement = shared.privatePageArrangement(privatePages, "cart");
-  const spec = shared.PRIVATE_PAGES.cart;
+function galleryTables(shared, privatePages, context, page = "cart") {
+  // The payment step with tokens and no arrangement is drawn on the arrangement its block chose (context.defaults).
+  const arrangement = shared.privatePageArrangement(privatePages, page) ?? context.defaults?.[page];
+  const spec = shared.PRIVATE_PAGES[page];
   // A page in token mode with no tokens of its own (the theme's page paint put it there) has the default rows.
-  const compiled = shared.compilePrivateTokens("cart", privatePages.tokens.cart ?? {}, {
+  const compiled = shared.compilePrivateTokens(page, privatePages.tokens[page] ?? {}, {
     layout: arrangement?.layout ?? spec.layout,
     items: Object.fromEntries(Object.keys(spec.items).map((item) => [item, arrangement?.items?.[item] ?? spec.items[item].layout])),
     palettes: context.palettes,
@@ -353,8 +354,10 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         // cannot read serves the default theme whole; the storefront draws what that read served.
         const reread = shared.readStoredStorefrontThemeDocument(JSON.stringify(stored));
         const served = reread.ok ? reread.document : shared.DEFAULT_STOREFRONT_THEME;
-        const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, terms: body.terms === true, ...(body.page === "home" ? { page: "home" } : {}) });
-        const tables = shared.privatePageTokenMode(served.privatePages, "cart") ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served)) : [];
+        const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, terms: body.terms === true, ...(body.page === "home" || body.page === "sample-checkout" ? { page: body.page } : {}) });
+        // The page drawn: the cart, or the payment step (the editor's sample checkout, drawn as buyers get it).
+        const drawnPage = body.page === "sample-checkout" ? "checkout" : "cart";
+        const tables = shared.privatePageTokenMode(served.privatePages, drawnPage) ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served), drawnPage) : [];
         return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: served.privatePages.compiled.refused === true });
       }
       // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens), and the

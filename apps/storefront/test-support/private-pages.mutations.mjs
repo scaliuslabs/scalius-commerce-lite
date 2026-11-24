@@ -36,7 +36,40 @@ const PROTECTED = "the customer's cart, protected";
 const CART = "apps/storefront/src/pages/cart.astro";
 const CART_ROOT = '    data-private="cart"\n  >\n';
 
+// ─── The payment step's mutations (page `checkout`) ───
+const STEP = "apps/storefront/src/components/checkout/CheckoutPaymentStep.astro";
+const CHECKOUT_SCRIPT = "apps/storefront/src/lib/checkout/index.ts";
+const CHECKOUT_LIST = "payment step: the reference palettes' look, methods as a list";
+const CHECKOUT_MUTATIONS = {
+  "P1 Pay hidden": {
+    why: "the payment step draws its Pay button hidden",
+    rewrites: [rewrite(STEP, '              data-part="pay"\n', '              data-part="pay"\n              style="display:none"\n')],
+    cases: [CHECKOUT_LIST],
+    expect: /^payment step: Pay is not drawn/,
+  },
+  "P2 the total hidden": {
+    why: "the summary's total row (what is due) is drawn hidden",
+    rewrites: [rewrite(CHECKOUT_SCRIPT, '"flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2 mb-2",', '"hidden flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2 mb-2",')],
+    cases: [CHECKOUT_LIST],
+    expect: /^payment step: the total is not drawn/,
+  },
+  "P3 Pay weaker than a secondary action": {
+    why: "Pay drawn small and light, under the gift card's Apply",
+    rewrites: [rewrite(STEP, "min-h-12 w-full rounded-lg bg-primary px-4 py-3 text-base font-semibold", "min-h-12 w-full rounded-lg bg-primary px-4 py-3 text-xs font-normal")],
+    cases: [CHECKOUT_LIST],
+    expect: /^payment step: Pay is drawn (?:smaller|lighter) than a secondary action/,
+  },
+  "P4 token mode reaches into the gateway": {
+    why: "the payment provider's surface takes the theme's token mode: its paint goes transparent",
+    rewrites: [rewrite(TOKENS, ':not([data-part="${PRIVATE_GATEWAY_HOOK}"],[data-part="${PRIVATE_GATEWAY_HOOK}"] *)`;', "`;")],
+    cases: [CHECKOUT_LIST],
+    expect: /^payment step: gateway: the provider's surface is restyled/,
+  },
+};
+// ─── end of the payment step's mutations ───
+
 export const MUTATIONS = {
+  ...CHECKOUT_MUTATIONS,
   // The gate's own checks, each shown able to fail.
   "G1 the cart takes no touch pan": {
     why: "touch-action:none on the cart: a phone's swipe moves nothing, and Place order's place is never reached by touch",
@@ -110,7 +143,7 @@ export const MUTATIONS = {
   },
   "B3 the dialogs read the store's palette": {
     why: "token mode does not reach the store's dialogs: their palette classes keep the palette's colours",
-    rewrites: [rewrite(TOKENS, `const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]', `, "const TOKEN_SCOPE = ['[data-private=\"cart\"]', ")],
+    rewrites: [rewrite(TOKENS, "  ...PRIVATE_SCOPES.map((scope) => `[data-private=\"${scope}\"]`),\n", "  ...PRIVATE_SCOPES.filter((scope) => scope !== \"dialog\").map((scope) => `[data-private=\"${scope}\"]`),\n")],
     cases: [B3],
     expect: /^sign-in: .*(?:is none of its row's colours \(dialog|reads [\d.]+:1 on what is behind it)/,
   },
@@ -141,7 +174,7 @@ export const MUTATIONS = {
   },
   "M8 the store's own chrome outside token mode": {
     why: "the store's header paints its row's dark surface while its words keep the palette's dark colours",
-    rewrites: [rewrite(TOKENS, `const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]', '[data-private="core-header"]', '[data-private="core-footer"]'];`, `const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]'];`)],
+    rewrites: [rewrite(TOKENS, "  ...PRIVATE_SCOPES.map((scope) => `[data-private=\"${scope}\"]`),\n", "  ...PRIVATE_SCOPES.filter((scope) => !scope.startsWith(\"core-\")).map((scope) => `[data-private=\"${scope}\"]`),\n")],
     cases: [HEADER],
     expect: /is none of its row's colours \(chrome:/,
   },

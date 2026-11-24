@@ -28,7 +28,7 @@
 // mandatory part and target exactly once. Nothing else is per page.
 
 /** Rises when a page gains a mandatory part or target or a reading order (a stored arrangement then fills it in on read). */
-export const PRIVATE_ANATOMY_VERSION = 3 as const;
+export const PRIVATE_ANATOMY_VERSION = 4 as const;
 
 /**
  * The host's layout nodes. `stack`: one column. `columns`: one column on
@@ -291,17 +291,101 @@ const FIELD_TOKENS = ["background", "text", "placeholder", "border", "ring", "in
  */
 const FIELD_ELEMENTS = ':is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field])';
 
+/**
+ * The targets every page with a page of its own takes, scoped to its root
+ * (`root`), in two runs the page's own targets go between (outer before
+ * inner): `head`, the page's paint and frame, every filled button and field
+ * drawn on it and its notices; `tail`, the store's dialogs over it (`dialogs`:
+ * the pages that open them) and the store's chrome with its controls (unless
+ * `chrome: false`: a page that keeps the public header and footer). A thing
+ * that is the same on every page has one name on every page.
+ */
+export function privatePageStyles(root: string, options: { dialogs?: boolean; chrome?: boolean } = {}): { head: Record<string, PrivateStyleSpec>; tail: Record<string, PrivateStyleSpec> } {
+  const scope = options.dialogs ? `:is([data-private="${root}"],[data-private="dialog"])` : `[data-private="${root}"]`;
+  const head: Record<string, PrivateStyleSpec> = {
+    // The page's paint (F2: a gradient behind everything) and its frame's width.
+    page: { selector: "body[data-private-body]", absolute: true, tokens: ["background", "gradient", "text", "muted", "link", "error"], kind: "box", surface: "background", ink: "foreground" },
+    frame: { selector: "", tokens: ["max-width"], kind: "box", surface: "under", ink: "foreground", on: "page" },
+    // Every filled button the host draws without a target of its own (bg-primary), and every field, on the page and in its dialogs.
+    action: { selector: `${scope} .bg-primary`, absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", hostSize: 14, hostWeight: 600 },
+    input: { selector: `${scope} ${FIELD_ELEMENTS}`, absolute: true, element: FIELD_ELEMENTS, tokens: [...FIELD_TOKENS], kind: "field", surface: "background", ink: "foreground" },
+    // Every field's label (and a group of fields' legend), wherever fields are drawn: on the box that holds them.
+    "field-label": { selector: `${scope} [data-part="field-label"]`, absolute: true, element: '[data-part="field-label"]', tokens: ["text", "size", "weight", "case", "tracking"], kind: "text", surface: "under", ink: "foreground" },
+    notice: { selector: '[data-part="notice"]', tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius"], kind: "box", surface: "under", ink: "foreground", part: "notices" },
+  };
+  const tail: Record<string, PrivateStyleSpec> = options.dialogs ? {
+    // The store's dialogs over the page (confirmation, sign-in): their surface, words, fields and buttons.
+    dialog: { selector: '[data-private="dialog"]', absolute: true, tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "shadow"], kind: "box", surface: "card", ink: "foreground", on: "page", fields: true },
+    "dialog-title": { selector: '[data-private="dialog"] [data-part="dialog-title"]', absolute: true, tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "dialog" },
+    // What the buyer agrees to, and the tick box saying so: boxes side by side in the dialog, neither inside the other.
+    "dialog-text": { selector: '[data-private="dialog"] [data-part="dialog-text"]', absolute: true, tokens: ["background", "text", "muted", "border", "border-width", "radius", "padding"], kind: "box", surface: "under", ink: "foreground", on: "dialog" },
+    "dialog-agree": { selector: '[data-private="dialog"] [data-part="dialog-agree"]', absolute: true, tokens: ["background", "text", "border", "border-width", "radius", "padding"], kind: "box", surface: "under", ink: "foreground", on: "dialog" },
+    // The decision's two buttons never swap looks: Go back is outlined, never filled (no surface of its own); Confirm
+    // is filled, its fill read at 3:1 on the dialog, and never smaller or lighter than Go back.
+    "dialog-back": { selector: '[data-private="dialog"] [data-part="dialog-back"]', absolute: true, tokens: ["text", "border", "border-width", "radius", "ring", "inset", "weight"], kind: "control", surface: "under", ink: "foreground", on: "dialog", boundary: "edge", hostSize: 14, hostWeight: 500 },
+    "dialog-confirm": {
+      selector: '[data-private="dialog"] [data-part="dialog-confirm"]', absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "dialog", boundary: "fill", hostSize: 14, hostWeight: 500, typeFrom: "action",
+      outranks: { why: "Confirm is the decision's filled action: never smaller or lighter than Go back", over: { "dialog-back": ["size", "weight"] } },
+    },
+  } : {};
+  if (options.chrome === false) return { head, tail };
+  Object.assign(tail, {
+    // The store's own chrome: its checkout header, and the strip at the page's end that holds the store's controls
+    // when the theme places them there (`privatePages.controls: footer`). Their surface, words and border.
+    chrome: { selector: ':is([data-private="core-header"],[data-private="core-footer"])', absolute: true, tokens: ["background", "gradient", "text", "muted", "link", "border", "border-width"], kind: "box", surface: "background", ink: "foreground", on: "page" },
+    // The store's controls in its chrome, where the theme places them (`privatePages.controls`): the light or
+    // dark switch and the market and language forms.
+    scheme: { selector: '[data-host="scheme"] button', absolute: true, tokens: ["text", "ring", "radius"], kind: "control", surface: "under", ink: "foreground", on: "chrome" },
+    localization: { selector: '[data-host="localization"]', absolute: true, tokens: ["text", "muted", "link"], kind: "box", surface: "under", ink: "foreground", on: "chrome", fields: true },
+  } satisfies Record<string, PrivateStyleSpec>);
+  return { head, tail };
+}
+
+/**
+ * A money summary's targets, the same on every page that lists the order's
+ * money: the box (`part`, or `on` a target that holds it), its heading, every
+ * row but the total, the total and its label, and an add-on row that opens to
+ * the app's lines. The sizes and weights (px, CSS weight) are what the page
+ * draws with no token; `due` adds the rows that say what is left to pay (a gift
+ * card's, a deposit's) to the total's target, so they rank with it; `over`
+ * adds the page's other amounts the total outranks (a cart line's price) and
+ * `apps` the apps' targets drawn among the amounts, whose nodes it is never
+ * drawn smaller than.
+ */
+export function privateSummaryStyles(options: {
+  part?: string; on?: string; due?: boolean;
+  rows: { size: number; weight: number }; total: { size: number; weight: number }; label: { size: number; weight: number };
+  over?: Readonly<Record<string, readonly PrivateRankBy[]>>; apps?: readonly string[];
+}): Record<string, PrivateStyleSpec> {
+  const total = options.due ? ':is([data-summary-row="total"],[data-summary-row="due"])' : '[data-summary-row="total"]';
+  return {
+    summary: { selector: '[data-part="summary"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", ...(options.on ? { on: options.on } : { part: options.part ?? "summary" }) },
+    "summary-heading": { selector: '[data-part="summary-heading"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary" },
+    // Every money row but the total (items, subtotal, add-ons, delivery, discount, tax): never drawn larger than the total.
+    "summary-rows": { selector: `[data-summary-row]:not(${total})`, tokens: ["text", "size"], kind: "text", surface: "under", ink: "muted-foreground", on: "summary", hostSize: options.rows.size, hostWeight: options.rows.weight },
+    // The total's amount (and, unless its label sets its own, its label): it outranks every other money row, the
+    // add-on's lines and its own label, so no theme makes a subtotal read as the total.
+    "summary-total": {
+      selector: total, tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary", hostSize: options.total.size, hostWeight: options.total.weight,
+      outranks: { why: "the total reads at least as strongly as every other amount, so a buyer never takes a subtotal for it", over: { "summary-rows": ["size", "weight", "contrast"], "summary-add-on-detail": ["size"], "summary-total-label": ["size"], ...options.over }, ...(options.apps ? { apps: options.apps } : {}) },
+    },
+    // The total's label, apart from its amount; only the total row's (a label inside it), never another row's.
+    "summary-total-label": {
+      selector: `${total} [data-part="summary-total-label"]`, tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary-total", hostSize: options.label.size, hostWeight: options.label.weight, typeFrom: "summary-total",
+      outranks: { why: "the total's label is never smaller than the rows it closes", over: { "summary-rows": ["size"] } },
+    },
+    // An add-on row that opens to the app's lines (a money row: it stands in the row's element): its bar is a control
+    // (a focus ring on the summary), each line under it a box.
+    "summary-add-on": { selector: '[data-part="add-on-details"] > summary', tokens: ["text", "ring", "radius"], kind: "control", surface: "under", ink: "muted-foreground", on: "summary-rows" },
+    "summary-add-on-detail": { selector: '[data-part="add-on-details"] [data-part="add-on-detail"]', tokens: ["background", "text", "muted", "border", "border-width", "radius", "padding", "font", "size"], kind: "box", surface: "under", ink: "foreground", on: "summary-rows", hostSize: 14 },
+  };
+}
+
+const CART_PAGE_STYLES = privatePageStyles("cart", { dialogs: true });
+
 /** The cart page's style targets (and the store's dialogs over it), outer before inner. */
 const CART_STYLES: Record<string, PrivateStyleSpec> = {
-  // The page's paint (F2: a gradient behind everything) and its frame's width.
-  page: { selector: "body[data-private-body]", absolute: true, tokens: ["background", "gradient", "text", "muted", "link", "error"], kind: "box", surface: "background", ink: "foreground" },
-  frame: { selector: "", tokens: ["max-width"], kind: "box", surface: "under", ink: "foreground", on: "page" },
-  // Every filled button the host draws without a target of its own (bg-primary), and every field, on the page and in its dialogs.
-  action: { selector: ':is([data-private="cart"],[data-private="dialog"]) .bg-primary', absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", hostSize: 14, hostWeight: 600 },
-  input: { selector: `:is([data-private="cart"],[data-private="dialog"]) ${FIELD_ELEMENTS}`, absolute: true, element: FIELD_ELEMENTS, tokens: [...FIELD_TOKENS], kind: "field", surface: "background", ink: "foreground" },
-  // Every field's label (and a group of fields' legend), wherever fields are drawn: on the box that holds them.
-  "field-label": { selector: ':is([data-private="cart"],[data-private="dialog"]) [data-part="field-label"]', absolute: true, element: '[data-part="field-label"]', tokens: ["text", "size", "weight", "case", "tracking"], kind: "text", surface: "under", ink: "foreground" },
-  notice: { selector: '[data-part="notice"]', tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius"], kind: "box", surface: "under", ink: "foreground", part: "notices" },
+  ...CART_PAGE_STYLES.head,
   lines: { selector: '[data-part="lines"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "lines" },
   // The heading and the theme's intro under it: in the card, or (`heading-above`) on what the card stands on.
   "lines-heading": { selector: '[data-part="lines-heading"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "lines", outside: ["heading-above"] },
@@ -317,25 +401,7 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   "line-quantity": { selector: '[data-part="line-quantity"]', tokens: ["background", "text", "border", "border-width", "border-style", "radius", "ring"], kind: "control", surface: "under", ink: "foreground", item: "line", part: "quantity", boundary: "edge" },
   "line-remove": { selector: '[data-part="line-remove"]', tokens: ["text", "size", "weight", "radius", "ring"], kind: "control", surface: "under", ink: "muted-foreground", item: "line", part: "remove" },
   "fold-toggle": { selector: '[data-part="fold-toggle"]', tokens: ["background", "text", "border", "border-width", "radius", "shadow", "ring"], kind: "control", surface: "card", ink: "foreground", layout: "fold", boundary: "edge" },
-  summary: { selector: '[data-part="summary"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", part: "summary" },
-  "summary-heading": { selector: '[data-part="summary-heading"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary" },
-  // Every money row but the total (items, subtotal, add-ons, delivery, discount, tax): never drawn larger than the total.
-  "summary-rows": { selector: '[data-summary-row]:not([data-summary-row="total"])', tokens: ["text", "size"], kind: "text", surface: "under", ink: "muted-foreground", on: "summary", hostSize: 14, hostWeight: 500 },
-  // The total's amount (and, unless its label sets its own, its label): it outranks every other money row, the
-  // add-on's lines and its own label, so no theme makes a subtotal read as the total.
-  "summary-total": {
-    selector: '[data-summary-row="total"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary", hostSize: 20, hostWeight: 600,
-    outranks: { why: "the total reads at least as strongly as every other amount, so a buyer never takes a subtotal for it", over: { "summary-rows": ["size", "weight", "contrast"], "summary-add-on-detail": ["size"], "summary-total-label": ["size"], "line-price": ["size"] }, apps: ["cart.page.summary"] },
-  },
-  // The total's label, apart from its amount; only the total row's (a label inside it), never another row's.
-  "summary-total-label": {
-    selector: '[data-summary-row="total"] [data-part="summary-total-label"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary-total", hostSize: 14, hostWeight: 600, typeFrom: "summary-total",
-    outranks: { why: "the total's label is never smaller than the rows it closes", over: { "summary-rows": ["size"] } },
-  },
-  // An add-on row that opens to the app's lines (a money row: it stands in the row's element): its bar is a control
-  // (a focus ring on the summary), each line under it a box.
-  "summary-add-on": { selector: '[data-part="add-on-details"] > summary', tokens: ["text", "ring", "radius"], kind: "control", surface: "under", ink: "muted-foreground", on: "summary-rows" },
-  "summary-add-on-detail": { selector: '[data-part="add-on-details"] [data-part="add-on-detail"]', tokens: ["background", "text", "muted", "border", "border-width", "radius", "padding", "font", "size"], kind: "box", surface: "under", ink: "foreground", on: "summary-rows", hostSize: 14 },
+  ...privateSummaryStyles({ rows: { size: 14, weight: 500 }, total: { size: 20, weight: 600 }, label: { size: 14, weight: 600 }, over: { "line-price": ["size"] }, apps: ["cart.page.summary"] }),
   "details-form": { selector: '[data-part="details-form"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "details", targets: ["checkout.contact.after", "checkout.delivery.after"] },
   "section-heading": { selector: ':is([data-part="contact"],[data-part="delivery"]) h2', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "details-form" },
   // Place order with its total, the agreement and why it may be off: the page's last box, docked at the bottom
@@ -347,26 +413,7 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
     outranks: { why: "Place order is the page's one filled action: never smaller or lighter than the store's other filled buttons", over: { action: ["size", "weight"] } },
   },
   legal: { selector: '[data-part="legal"]', tokens: ["text", "size", "align"], kind: "text", surface: "under", ink: "muted-foreground", on: "dock" },
-  // The store's dialogs over the page (confirmation, sign-in): their surface, words, fields and buttons.
-  dialog: { selector: '[data-private="dialog"]', absolute: true, tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "shadow"], kind: "box", surface: "card", ink: "foreground", on: "page", fields: true },
-  "dialog-title": { selector: '[data-private="dialog"] [data-part="dialog-title"]', absolute: true, tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "dialog" },
-  // What the buyer agrees to, and the tick box saying so: boxes side by side in the dialog, neither inside the other.
-  "dialog-text": { selector: '[data-private="dialog"] [data-part="dialog-text"]', absolute: true, tokens: ["background", "text", "muted", "border", "border-width", "radius", "padding"], kind: "box", surface: "under", ink: "foreground", on: "dialog" },
-  "dialog-agree": { selector: '[data-private="dialog"] [data-part="dialog-agree"]', absolute: true, tokens: ["background", "text", "border", "border-width", "radius", "padding"], kind: "box", surface: "under", ink: "foreground", on: "dialog" },
-  // The decision's two buttons never swap looks: Go back is outlined, never filled (no surface of its own); Confirm
-  // is filled, its fill read at 3:1 on the dialog, and never smaller or lighter than Go back.
-  "dialog-back": { selector: '[data-private="dialog"] [data-part="dialog-back"]', absolute: true, tokens: ["text", "border", "border-width", "radius", "ring", "inset", "weight"], kind: "control", surface: "under", ink: "foreground", on: "dialog", boundary: "edge", hostSize: 14, hostWeight: 500 },
-  "dialog-confirm": {
-    selector: '[data-private="dialog"] [data-part="dialog-confirm"]', absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "dialog", boundary: "fill", hostSize: 14, hostWeight: 500, typeFrom: "action",
-    outranks: { why: "Confirm is the decision's filled action: never smaller or lighter than Go back", over: { "dialog-back": ["size", "weight"] } },
-  },
-  // The store's own chrome: its checkout header, and the strip at the page's end that holds the store's controls
-  // when the theme places them there (`privatePages.controls: footer`). Their surface, words and border.
-  chrome: { selector: ':is([data-private="core-header"],[data-private="core-footer"])', absolute: true, tokens: ["background", "gradient", "text", "muted", "link", "border", "border-width"], kind: "box", surface: "background", ink: "foreground", on: "page" },
-  // The store's controls in its chrome, where the theme places them (`privatePages.controls`): the light or
-  // dark switch and the market and language forms.
-  scheme: { selector: '[data-host="scheme"] button', absolute: true, tokens: ["text", "ring", "radius"], kind: "control", surface: "under", ink: "foreground", on: "chrome" },
-  localization: { selector: '[data-host="localization"]', absolute: true, tokens: ["text", "muted", "link"], kind: "box", surface: "under", ink: "foreground", on: "chrome", fields: true },
+  ...CART_PAGE_STYLES.tail,
 };
 
 /** The cart page: the information step (lines, totals, the details form and its submit). */
@@ -498,6 +545,77 @@ const CART_DRAWER: PrivatePageSpec = {
   icons: ["drawer.empty"],
 };
 
+// ─── The payment step (`checkout`) ─────────────────────────────────────────
+
+const CHECKOUT_PAGE_STYLES = privatePageStyles("checkout");
+
+/**
+ * The payment step's style targets, outer before inner. The order summary
+ * takes the cart's names (its rows, total, add-on row, phone bar), Pay takes
+ * `submit` and the terms beside it `legal`. The gateway's own surface (its
+ * card form, a provider's frame: `data-part="gateway"`) has no target and
+ * token mode never reaches into it: no theme restyles, hides or covers it.
+ */
+const CHECKOUT_STYLES: Record<string, PrivateStyleSpec> = {
+  ...CHECKOUT_PAGE_STYLES.head,
+  // No checkout to pay for: the way back to the shop.
+  "checkout-empty": { selector: '[data-part="checkout-empty"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "empty" },
+  heading: { selector: '[data-part="heading"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", part: "heading" },
+  ...privateSummaryStyles({ rows: { size: 14, weight: 400 }, total: { size: 14, weight: 700 }, label: { size: 14, weight: 700 }, due: true, apps: ["checkout.summary.after"] }),
+  // The summary's bar that states the total and opens it (phones; every width when `folded`): the cart's fold bar.
+  "fold-toggle": { selector: '[data-part="fold-toggle"]', tokens: ["background", "text", "border", "border-width", "radius", "shadow", "ring"], kind: "control", surface: "under", ink: "foreground", on: "summary", boundary: "edge" },
+  "gift-card": { selector: '[data-part="gift-card"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "gift-card" },
+  // One payment method, and the one the buyer chose (drawn after it, so it wins where both reach).
+  "payment-method": { selector: '[data-part="payment-method"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "payment" },
+  "payment-chosen": { selector: '[data-part="payment-method"][data-chosen]', tokens: ["background", "text", "muted", "border", "border-width", "shadow"], kind: "box", surface: "under", ink: "foreground", on: "payment-method" },
+  // The chosen method's details (its notice, Pay, the terms): in its card, or (`tiles`) under the grid on what the methods stand on.
+  "payment-details": { selector: '[data-part="payment-details"]', tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "padding"], kind: "box", surface: "under", ink: "foreground", on: "payment-chosen", outside: ["tiles"] },
+  submit: {
+    selector: '[data-part="pay"]', tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "payment-details", boundary: "fill", hostSize: 16, hostWeight: 600, typeFrom: "action",
+    outranks: { why: "Pay is the page's one filled action: never smaller or lighter than the store's other filled buttons", over: { action: ["size", "weight"] } },
+  },
+  legal: { selector: '[data-part="legal"]', tokens: ["text", "size", "align"], kind: "text", surface: "under", ink: "muted-foreground", on: "payment-details" },
+  ...CHECKOUT_PAGE_STYLES.tail,
+};
+
+/**
+ * The payment step: the order summary, the gift card, the payment methods
+ * (the gateway's own surface inside them, untouched) and Pay with the terms
+ * beside it. `payment` is one part: its methods, the chosen method's details,
+ * Pay and the terms stay together in the store's order, whatever the theme.
+ */
+const CHECKOUT_PAGE: PrivatePageSpec = {
+  root: "checkout",
+  frames: ["standard", "narrow"],
+  parts: {
+    progress: part(false, ["progress"]),
+    empty: part(true, ["checkout-empty"]),
+    // `open-wide`: folded behind its bar on phones, open from 64rem; `folded`: behind its bar at every width.
+    summary: part(true, ["summary", "fold-toggle", "summary-panel", "summary-heading", "summary-total-label", "add-on-details", "add-on-detail"], null, ["open-wide", "folded"]),
+    heading: part(true, ["heading"]),
+    notices: part(true, ["notice"]),
+    "gift-card": part(true, ["gift-card"], "fields"),
+    payment: part(true, ["payment", "payment-method", "payment-details", "gateway", "pay", "legal"], null, ["list", "tiles"]),
+  },
+  targets: ["checkout.payment.after", "checkout.actions.before"],
+  // Why Pay may be off is read before Pay, as on the cart.
+  order: [["notices", "payment"]],
+  lead: ["summary", "payment"],
+  layouts: ["stack", "columns", "grid", "group"],
+  styles: { ...CHECKOUT_STYLES, summary: { ...CHECKOUT_STYLES.summary!, targets: ["checkout.summary.after"] } },
+  layout: [
+    p("progress"),
+    p("empty"),
+    l("columns", [
+      l("stack", [p("summary")]),
+      l("stack", [p("heading"), p("notices"), p("gift-card"), p("payment"), t("checkout.payment.after"), t("checkout.actions.before")]),
+    ]),
+  ],
+  items: {},
+  labels: {},
+  icons: [],
+};
+
 /**
  * Every private page the model draws, by its key in the theme document's
  * `privatePages.pages`. The checkout, the receipt and the account register
@@ -506,6 +624,7 @@ const CART_DRAWER: PrivatePageSpec = {
 export const PRIVATE_PAGES = {
   cart: CART_PAGE,
   cartDrawer: CART_DRAWER,
+  checkout: CHECKOUT_PAGE,
 } as const satisfies Record<string, PrivatePageSpec>;
 
 export type PrivatePageKey = keyof typeof PRIVATE_PAGES;

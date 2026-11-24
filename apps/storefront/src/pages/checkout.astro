@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import { markRenderUncacheable } from "@/lib/cache-policy";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { privatePagePlan, privateStyle } from "@/lib/private-pages/plan";
 import { giftCardCheckoutCopy } from "@/lib/checkout/gift-cards";
 import { termsAgreement } from "@/lib/checkout/terms-text";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
@@ -52,8 +53,11 @@ const copy = checkoutLanguage.languageData;
 const giftCopy = giftCardCheckoutCopy(copy);
 // The store's terms beside Pay: the sentence, or the required box (public settings only, like the rest of this shell).
 const agreement = termsAgreement({ required: checkoutConfig.requireTermsAcceptance, policies: layoutData?.policies, copy });
-// The theme's checkout block (the request's one theme resolution: no read of its own).
-const checkoutBlock = (await resolveRequestTheme(Astro, layoutData)).resolved.blocks.checkout;
+// The theme's checkout block and its arrangement and look of the step (the request's one theme resolution: no read of its own).
+const requestTheme = await resolveRequestTheme(Astro, layoutData);
+const checkoutBlock = requestTheme.resolved.blocks.checkout;
+const checkoutPlan = privatePagePlan(requestTheme.theme, "checkout", checkoutLanguageBaseCode(checkoutLanguage.code), () => null);
+const checkoutStyle = privateStyle(requestTheme.theme, "checkout");
 // A payment page: only the payment provider's scripts run here, none of the store's (lib/analytics-csp.ts).
 markPaymentPage(Astro.locals);
 ---
@@ -64,6 +68,8 @@ markPaymentPage(Astro.locals);
   documentLanguage={checkoutLanguageBaseCode(checkoutLanguage.code)}
   hideHeader
   hideFooter
+  privateStyle={checkoutStyle}
+  privateTokens={checkoutPlan.tokens}
 >
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <CheckoutHeader layoutData={layoutData} copy={copy} />
@@ -73,7 +79,7 @@ markPaymentPage(Astro.locals);
       below is parsed, the script makes a checkout in progress (or an order
       just placed, whose link the page script builds) "loading", and sends a
       buyer with neither to the cart, the step they skipped. */}
-  <CheckoutPaymentStep copy={copy} giftCopy={giftCopy} block={checkoutBlock} agreement={agreement} />
+  <CheckoutPaymentStep copy={copy} giftCopy={giftCopy} block={checkoutBlock} agreement={agreement} plan={checkoutPlan} />
 </Layout>
 
 <CheckoutLoadingOverlay
