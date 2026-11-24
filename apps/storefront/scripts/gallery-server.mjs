@@ -332,7 +332,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         // A page paint the palette cannot read on is dropped by a save: a case that asks for one names a readable paint.
         if (body.paint && !shared.storefrontTokensWithReadablePaint(tokens).pagePaint) return sendJson(response, 400, { error: "The page paint does not read on this palette." });
         // The phone tab bar (`tabs`: the theme's bottom-tabs phone navigation).
-        const theme = { ...base, tokens, ...(body.tabs === true ? { blocks: { ...base.blocks, mobileNav: { variant: "bottom-tabs", settings: { tabs: ["home", "categories", "offers", "account"], drawer: "accordion" } } } } : {}) };
+        const theme = { ...base, tokens, ...(body.tabs === true ? { blocks: { ...base.blocks, mobileNav: { variant: "bottom-tabs", settings: { tabs: [{ kind: "home" }, { kind: "categories" }, { kind: "offers" }, { kind: "account" }], drawer: "accordion" } } } } : {}) };
         // Saved as the store saves it (site-settings.service.ts): read by the document's schema (a refusal naming its
         // reason, as `not_available`, answers it), then compiled.
         const parsed = shared.storefrontPrivatePagesSchema.safeParse({ ...shared.storefrontPrivatePagesDefault(), ...structuredClone(body.privatePages ?? reference?.REFERENCE_PRIVATE_PAGES ?? {}) });
