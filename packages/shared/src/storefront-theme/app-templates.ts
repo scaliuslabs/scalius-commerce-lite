@@ -241,6 +241,35 @@ function templatePath(path: string, template: StorefrontAppTemplateTheme): strin
  * icon naming any other app is refused here, as at the merchant's save.
  */
 function templateSaveIssues(template: StorefrontAppTemplateTheme, key: string): StorefrontThemeSaveIssue[] {
+  // The verdict depends only on the key and the template, so an isolate checks each once:
+  // the editor, the app page, the library and an apply read the same templates again and again.
+  const json = JSON.stringify(template);
+  const cacheKey = `${key}|${json.length}|${fingerprint(json)}`;
+  const known = TEMPLATE_VERDICTS.get(cacheKey);
+  if (known) return known;
+  const issues = uncachedTemplateSaveIssues(template, key);
+  if (TEMPLATE_VERDICTS.size >= TEMPLATE_VERDICTS_MAX) TEMPLATE_VERDICTS.delete(TEMPLATE_VERDICTS.keys().next().value!);
+  TEMPLATE_VERDICTS.set(cacheKey, issues);
+  return issues;
+}
+
+/** Templates' verdicts this isolate has reached, oldest first (bounded: five templates an app, a few apps a store). */
+const TEMPLATE_VERDICTS = new Map<string, StorefrontThemeSaveIssue[]>();
+const TEMPLATE_VERDICTS_MAX = 64;
+
+/** A 53-bit FNV-1a-style fingerprint of `text` (two 32-bit lanes): a cache key, not a security boundary. */
+function fingerprint(text: string): string {
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    a = Math.imul(a ^ code, 0x01000193);
+    b = Math.imul(b ^ code, 0x5bd1e995);
+  }
+  return `${(a >>> 0).toString(36)}${(b >>> 0).toString(36)}`;
+}
+
+function uncachedTemplateSaveIssues(template: StorefrontAppTemplateTheme, key: string): StorefrontThemeSaveIssue[] {
   const applied = applyStorefrontAppTemplate(DEFAULT_STOREFRONT_THEME, key, template);
   // Applying remakes dark colours and drops a page paint a look leaves unreadable (the merchant's own,
   // kept across templates); a template's own palette is checked as it is written, every colour set it shows.
