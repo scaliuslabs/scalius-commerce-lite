@@ -37,7 +37,7 @@ A theme arranges the store's parts and gives them tokens. It writes no markup an
 | `assets` (files for a stylesheet) | `not_available` |
 | A `{ "type": "content" }` node in an arrangement (your words or picture) | `not_available` |
 
-Each refusal says "… is not available yet: a theme arranges the store's parts and gives them tokens." The empty values an earlier build wrote (`chrome: "core"`, `css: ""`, `assets: {}`) say nothing and are dropped. A stored document holding any of these still draws the store's parts only.
+Each refusal says "… is not available yet: a theme arranges the store's parts and gives them tokens." The empty values an earlier build wrote (`chrome: "core"`, `css: ""`, `assets: {}`) say nothing and are dropped. A stored theme that already holds any of these (an earlier build's) still reads, on the storefront and in the dashboard: the store drops them and every content block, and that theme's private pages draw the store's default look until your next save compiles them again; the rest of the theme stays as it is. The save itself still refuses them.
 
 ## Arrangements
 
@@ -77,7 +77,7 @@ The drawer's parts have no variants. A variant a part does not have is refused (
 
 ### What must stay
 
-Every arrangement holds each **mandatory** part and every target exactly once. You may leave out the **optional** parts. Reading order is your order at every width, so put what a buyer needs first in a sensible place. The page keeps one `h1`: the lines' heading.
+Every arrangement holds each **mandatory** part and every target exactly once. You may leave out the **optional** parts. Reading order is your order at every width, so put what a buyer needs first in a sensible place; the cart page's `notices` (cart-wide alerts) always come before its `details` (the form), so a buyer on a phone reads them first (`part_order` otherwise). The page keeps one `h1`: the lines' heading.
 
 | Unit | Mandatory | Optional |
 | --- | --- | --- |
@@ -88,7 +88,7 @@ Every arrangement holds each **mandatory** part and every target exactly once. Y
 
 The phone fold starts closed on phones, so it holds only `lines`, `summary`, `discount` and the `cart.page.summary` target (`layout_holds` otherwise).
 
-When the store later makes another part mandatory, a saved arrangement without it shows it in its default place. A store upgrade never breaks your page.
+When the store later makes another part mandatory, a saved arrangement without it shows it in its default place; a saved arrangement with `notices` after `details` reads with `notices` moved just before them (before the side-by-side layout that holds them, never into a column of its own). A store upgrade never breaks your page.
 
 Example: the heading above the lines, an Items row in the summary, the summary beside the form, and a line with its price column.
 
@@ -134,7 +134,7 @@ Each page names its **style targets**, the elements of its parts that take a loo
 
 - the table has a row for every style target at every place your arrangement puts it, for each palette a buyer can see (light, dark or both): each app node kind and tone at each of the page's targets, and again inside each app box that paints a surface; the store's dialogs; every filled button; a field and a field label in every box that holds fields; the store's chrome and its controls;
 - a row holds a solid surface (or a gradient's points), the colour of the target's own words, its muted, link and error words, its border and focus ring, its hover surface (a step from the surface that its words still read on), and for a field its placeholder and error border;
-- each is your token where you set one, else a default that reads on the surface beneath: a dark box gives its untouched children readable words, and a field keeps its own surface;
+- each is your token where you set one, else a default that reads on the surface beneath: a dark box gives its untouched children readable words, a field keeps its own surface, and Place order or Confirm left at the palette's fill on a box where it would not show takes one that does;
 - the page stands on the theme's page paint unless your `page` tokens give it a surface, so every row on the page, the store's defaults included, is checked along the whole paint;
 - the store writes exactly those rows as CSS and checks exactly those rows ([floors](#floors)). Inside the page, the store's own palette classes read the nearest row, so no translucent tint and no palette colour decides a colour there. The page is drawn from its arrangement (the store's default one if you set none), so the table's places are the page's.
 
@@ -148,18 +148,18 @@ A page with no token, in a theme with no page paint, is drawn exactly as the sto
 | `gradient` | `{ "shape": "linear" \| "radial", "angle"?: 0–360, "from": colour, "to": colour }` (linear defaults to 180; radial is a circle from the top) | The row's surface, checked at every point |
 | `text` | A colour | The target's own words (and plain words inside it) |
 | `muted`, `link`, `error` | A colour | Its muted, link and error words |
-| `border` | A colour | Its border (a field's at 3:1) |
+| `border` | A colour | Its border (a field's, the stepper's, the fold bar's and Go back's at 3:1 on what is around it) |
 | `ring` | A colour | The focus ring of what is inside it; a field's or a button's own |
 | `placeholder`, `invalid` | A colour | A field's placeholder and error border |
-| `border-width`, `radius` | Whole pixels: 0–4, 0–32 | Those properties |
-| `border-style` | `solid`, `dashed`, `dotted`, `none` | `border-style` |
+| `border-width`, `radius` | Whole pixels: 0–4, 0–32 | Those properties; `border-width: 0` draws no border, so a field or an outlined control is then found by its own fill (3:1) |
+| `border-style` | `solid`, `dashed`, `dotted`, `none` | `border-style`; `none` as `border-width: 0` |
 | `shadow` | `none`, `sm`, `md`, `lg` | A fixed `box-shadow` |
 | `padding`, `gap` | 0–48 px | Those, at most 4% of the screen's width on a phone; a padding is never under 4px nor under 30% of the radius, so focus rings and rounded corners stay on the box's surface |
 | `inset` | 0–32 px | A button's room at its sides; the store keeps its height (44px to tap on a phone) |
 | `font` | `body`, `heading` (the theme's typography), `mono` (the system's monospace face) | `font-family` |
 | `size` | 12–40 px | `font-size`, at most 7% of the box it sits in (a line, a layout node, else the screen; never under 12px) |
 | `leading` | `tight` (1.25), `snug` (1.375), `normal` (1.5), `relaxed` (1.625) | `line-height`, on the words inside too |
-| `weight` | `400`, `500`, `600`, `700`, `800` | `font-weight` |
+| `weight` | `400`, `500`, `600`, `700`, `800` | `font-weight`, on the words inside too |
 | `case` | `none`, `uppercase` | `text-transform` |
 | `tracking` | `normal`, `wide`, `wider` | `letter-spacing` |
 | `align` | `start`, `center`, `end` | `text-align` |
@@ -174,6 +174,8 @@ No value is text CSS reads as code: no `var()`, no `calc()`, no `url()`, no font
 ### Style targets
 
 A target is a **box** (a surface that holds other things), a **field** (its own surface and words; its border, focus ring and error border read on the box around it), a **control** (a button, a stepper, a toggle: its focus ring reads on what is around it) or **text** (words on a surface). It stands on the row of the place it is drawn.
+
+A buyer must find each control and field where it stands (WCAG 1.4.11, 3:1 on what is around it), and the anatomy says how (`boundary=` in the [anatomy reference](#anatomy-reference)): a **filled** button (Place order, Confirm) by its fill; an **outlined** one (the stepper, the fold's bar, Go back) and every field by its border, or, where your tokens draw none (`border-width: 0`, `border-style: none`), by its own fill. A field drawn as a box around its input (the phone number with its country code) is that box. The check reads the edge the page draws, never one it does not.
 
 | Target | What it is | Kind | Stands on |
 | --- | --- | --- | --- |
@@ -194,20 +196,21 @@ A target is a **box** (a surface that holds other things), a **field** (its own 
 | `fold-toggle` | The phone fold's bar | control (`card`) | where the fold sits |
 | `summary` | The summary box | box (`card`) | where `summary` sits |
 | `summary-heading` | Your `cart.summaryHeading` at its top | text | `summary` |
-| `summary-rows` | Every money row but the total (items, subtotal, add-ons, delivery, discount, tax) | text (muted, 14px) | `summary` |
-| `summary-total` | The total row | text (20px) | `summary` |
-| `summary-total-label` | The total's label, apart from its amount (a `size` on the total reaches it unless you set its own) | text | `summary-total` |
+| `summary-rows` | Every money row but the total (items, subtotal, add-ons, delivery, discount, tax) | text (muted, 14px, its amounts 500) | `summary` |
+| `summary-total` | The total row: its amount (20px, 600) | text | `summary` |
+| `summary-total-label` | The total's label, apart from its amount (a `size` or `weight` on the total reaches it unless you set its own) | text | `summary-total` |
 | `summary-add-on` | An add-on row's bar, which opens to the app's lines | control (muted) | `summary-rows` |
 | `summary-add-on-detail` | Each of those lines | box | `summary-rows` |
 | `details-form` | The details form; it holds the targets `checkout.contact.after` and `checkout.delivery.after` | box (`card`) | where `details` sits |
 | `section-heading` | The form's Contact and Delivery headings | text | `details-form` |
 | `dock` | The page's last box: Place order, the total, the terms and why Place order may be off. It always paints its own surface ([below](#what-the-store-guarantees-and-what-is-yours)) | box (`background`) | `page` |
-| `submit` | Place order | control (`primary`) | `dock` |
+| `submit` | Place order (16px, 600; `action`'s `size` and `weight` reach it unless you set its own) | filled control (`primary`) | `dock` |
 | `legal` | The terms sentence or the required tick box | text (muted) | `dock` |
 | `dialog` | The store's dialogs: the confirmation an app's choice asks for, sign-in | box (`card`), holds fields | `page` |
 | `dialog-title` | A dialog's title | text | `dialog` |
 | `dialog-text`, `dialog-agree` | What the buyer agrees to, and the row with the tick box saying so: side by side, neither inside the other | box | `dialog` |
-| `dialog-back`, `dialog-confirm` | The dialog's two buttons | control (`dialog-confirm`: `primary`) | `dialog` |
+| `dialog-back` | Go back: outlined, never filled (it takes no `background`) | outlined control | `dialog` |
+| `dialog-confirm` | Confirm (14px; `action`'s `size` and `weight` reach it unless you set its own) | filled control (`primary`) | `dialog` |
 | `chrome` | The store's checkout header and the controls strip | box (`background`) | `page` |
 | `scheme` | The light or dark switch | control | `chrome` |
 | `localization` | The market and language forms | box, holds fields | `chrome` |
@@ -244,8 +247,12 @@ The check reads every row of every palette's table:
 | --- | --- | --- |
 | Every word (text, muted, link, error, placeholder) | 4.5:1 | its surface and every point of a gradient; a row's words also on its hover surface |
 | A field's border and error border | 3:1 | the box around the field |
+| A filled button's fill (Place order, Confirm); an outlined control's or a field's border, or its own fill where no border is drawn | 3:1 | what is around it |
 | Every focus ring | 3:1 | what is around the control or field; a box's rings on the box |
-| The total | never smaller than another money row or an add-on line | the summary |
+| The total's amount | its size at least every money row's, every add-on line's and its own label's; its weight at least the rows'; its words' contrast on the summary at least the strongest of the rows' words (their own, their amounts', a discount's) | the summary |
+| The total's label | its size at least every money row's | the summary |
+| Place order | its size and weight at least the store's other filled buttons' (`action`) | the page |
+| Confirm | its size and weight at least Go back's | the dialog |
 
 A refusal names the theme key and the pair that set it, and the scheme: `summary-rows: text #eeeeee on #ffffff is 1.16:1 in the light colours, under the 4.5:1 a buyer needs.` A theme key's bad pair is refused once, however many rows read it.
 
@@ -259,24 +266,25 @@ A refusal names the theme key and the pair that set it, and the scheme: `summary
 | `unknown_part`, `unknown_target`, `unknown_layout`, `unknown_variant`, `unknown_frame`, `unknown_item` | No such name on that page or unit. |
 | `layout_once` | A second `fold` or `scroll`. |
 | `layout_holds` | The fold holds what a buyer fills in or must read first. |
+| `part_order` | The cart's `notices` come after its `details` in reading order. |
 | `invalid_hook` | A hook that is not lowercase words joined by hyphens, or over 40 characters. |
 | `too_deep`, `too_many_nodes` | Layouts nested over 6 deep, a layout with over 24 nodes, or a unit with over 80. A document nested over 12 deep is refused before it is read. |
 | `unknown_style` | No such style target, node kind, tone or target on the page, no layout node with that hook, or any token on the drawer. |
 | `unknown_token` | The target does not take that token. |
 | `token_value` | Not a value of the token's type, outside its bounds, or a colour per scheme without both keys. |
 | `contrast` | A row reads under its floor in a scheme a buyer sees. |
-| `prominence` | A size that draws the total smaller than another money row or an add-on line, or its label smaller than the other rows. |
+| `prominence` | The total drawn smaller than a money row, an add-on line or its own label, lighter than the rows, or with fainter words than theirs; its label smaller than the rows; Place order smaller or lighter than the other filled buttons; Confirm smaller or lighter than Go back. |
 | `no_row` | The page draws a target the colour table has no row for (a store defect; it never draws unchecked). |
 | `too_large` | The compiled look is over 64 KiB. |
 | `label_variant` | A label that names an action or an amount set to something other than one of its variants, or a variant where your words go. |
-| `label_too_long`, `markup`, `label_figures` | Words over the label's bound, words with HTML, or a digit or currency sign in words drawn among the amounts. |
+| `label_too_long`, `markup`, `label_figures` | Words over the label's bound, words with HTML, or a digit or currency sign in a heading, title or empty state (only `cart.intro` and `cart.emptyText` may hold one). |
 | `foreign_asset` | An icon from an app other than your theme's. |
 
 A value that is not of the document's shape (a wrong type, an unknown field) is refused by the schema, naming its path.
 
 ## Words and icons
 
-A label that names an action or an amount takes one of the store's **variants**, which the store words in each language it translates (English, Bangla), so "Go back" never confirms and a subtotal never reads as the total. A heading, an intro or an empty state takes **your own words**, per language: plain text, a page shows its language, then English. Invisible characters and direction overrides are removed.
+A label that names an action or an amount takes one of the store's **variants**, which the store words in each language it translates (English, Bangla), so "Go back" never confirms and a subtotal never reads as the total. A heading, an intro or an empty state takes **your own words**, per language: plain text, a page shows its language, then English. Invisible characters and direction overrides are removed. A heading, a title or an empty state holds no digit or currency sign in any script, so no label reads as an amount (`label_figures`); only the sentences `cart.intro` and `cart.emptyText` may hold one. Words that read like an action ("Pay now" as a heading) are a known limit: they carry no figure and do nothing, but the store cannot tell what they say.
 
 | Label | Where | Value |
 | --- | --- | --- |
@@ -289,11 +297,11 @@ A label that names an action or an amount takes one of the store's **variants**,
 | `drawer.viewCart` | Drawer | `view-cart`, `go-to-cart` |
 | `drawer.continue` | Drawer | `continue-shopping`, `keep-shopping` |
 | `drawer.startShopping` | Drawer, empty | `start-shopping`, `browse-products`, `continue-shopping` |
-| `cart.heading` | Cart page, the `h1` | Your words, at most 60 |
-| `cart.intro` | Cart page, one sentence under the heading (drawn only when set) | Your words, at most 200 |
-| `cart.summaryHeading` | Cart page, the summary's `h2` (drawn only when set) | Your words, at most 40, no digit or currency sign in any script (it sits among the amounts) |
-| `cart.empty`, `cart.emptyText` | Cart page, empty | Your words, at most 80, 200 |
-| `drawer.title`, `drawer.empty` | Drawer | Your words, at most 40, 80 |
+| `cart.heading` | Cart page, the `h1` | Your words, at most 60, no figure |
+| `cart.intro` | Cart page, one sentence under the heading (drawn only when set) | Your words, at most 200, figures allowed |
+| `cart.summaryHeading` | Cart page, the summary's `h2` (drawn only when set) | Your words, at most 40, no figure |
+| `cart.empty`, `cart.emptyText` | Cart page, empty | Your words, at most 80 (no figure), 200 (figures allowed) |
+| `drawer.title`, `drawer.empty` | Drawer | Your words, at most 40, 80, no figure |
 
 The words a part's variant draws are the store's: "Remove" (সরান) for `remove: words`, "Items" (পণ্য) for `summary: with-items`. Icons: `cart.empty`, `drawer.empty`.
 
@@ -414,11 +422,11 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
       "line-details": { "text": "muted-foreground", "size": 12 },
       "line-title": { "weight": "600", "clamp": "2", "text": "foreground", "leading": "tight" },
       "line-price": { "size": 18, "weight": "600", "align": "end", "text": { "light": "#000000", "dark": "#5ee9b5" }, "muted": { "light": "#111111", "dark": "#83838d" } },
-      "line-quantity": { "background": "muted", "border-width": 0, "radius": 0, "text": { "light": "#111111", "dark": "#d4d4d8" } },
+      "line-quantity": { "background": "muted", "border": { "light": "#7b7b7b", "dark": "#8575ae" }, "radius": 0, "text": { "light": "#111111", "dark": "#d4d4d8" } },
       "line-remove": { "text": "destructive", "size": 14, "weight": "400" },
-      "summary": { "background": "card", "border": "#524179", "border-width": 0, "radius": 0, "padding": 20, "gap": 12, "shadow": "lg" },
+      "summary": { "background": "card", "text": { "light": "#000000", "dark": "#d1d1d5" }, "border": "#524179", "border-width": 0, "radius": 0, "padding": 20, "gap": 12, "shadow": "lg" },
       "summary-heading": { "size": 20, "weight": "600", "text": "foreground" },
-      "summary-rows": { "text": { "light": "#000000", "dark": "#d4d4d8" }, "size": 14 },
+      "summary-rows": { "text": { "light": "#000000", "dark": "#d1d1d5" }, "size": 14 },
       "summary-total": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 20, "weight": "600" },
       "summary-total-label": { "text": "foreground", "size": 16, "weight": "600" },
       "summary-add-on": { "text": { "light": "#000000", "dark": "#5ee9b5" } },
@@ -444,8 +452,8 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
       "field-label": { "size": 12, "weight": "600" },
       "dock": { "background": "card", "border": "#524179", "border-width": 1 },
       "submit": {
-        "background": { "light": "#fed700", "dark": "primary" },
-        "text": { "light": "#333e48", "dark": "primary-foreground" },
+        "background": { "light": "#a38a00", "dark": "primary" },
+        "text": { "light": "#000000", "dark": "primary-foreground" },
         "radius": 0,
         "weight": "600",
         "size": 14,
@@ -464,7 +472,7 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
       "dialog-title": { "size": 24, "weight": "800", "leading": "tight", "text": "#ffffff" },
       "dialog-text": { "background": "#110d1e", "border": "#443567", "border-width": 1, "radius": 0, "padding": 16, "text": "#d4d4d8", "muted": "#d4d4d8" },
       "dialog-agree": { "background": "#241b39", "border": "#49396d", "border-width": 1, "radius": 0, "padding": 16, "text": "#e4e4e7" },
-      "dialog-back": { "background": "#211936", "text": "#e4e4e7", "border": "#49396d", "border-width": 1, "radius": 0, "weight": "700", "inset": 20 },
+      "dialog-back": { "text": "#e4e4e7", "border": "#8575ae", "border-width": 1, "radius": 0, "weight": "700", "inset": 20 },
       "dialog-confirm": {
         "background": { "light": "#fed700", "dark": "primary" },
         "text": { "light": "#333e48", "dark": "primary-foreground" },
@@ -572,8 +580,8 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 - the default look and the customer's look with one, twenty and ninety-nine lines on a 390×700 phone, a 768×1024 tablet and a 1280×800 laptop;
 - the customer's cart (the reference above), offered and protected, at 390 and 1280, light and dark, and its protected cart in the drawer with the add-on row open;
 - the store's controls in its header, in the strip at the page's end and nowhere, in a store with the light or dark switch and two markets;
-- a stored document forged past the save (a stylesheet, the theme's chrome and search, content blocks in the page and a line): it draws none of them;
-- named breaks the save must refuse, each with its reason (a stylesheet or blocks, `not_available`; words that do not read, in either scheme; a total smaller than its rows, `prominence`): a refused document is not drawn.
+- a stored document forged past the save (a stylesheet, the theme's chrome and search, content blocks in the page and a line): the store reads it with all of them dropped and its private pages' compile refused, so the theme stays (its light or dark switch is drawn) and its cart draws the default look with none of them;
+- named breaks the save must refuse, each with its reason (a stylesheet or blocks, `not_available`; words that do not read, in either scheme; a total smaller, lighter or fainter than its rows, or under its label, `prominence`; Place order or Confirm with no fill that shows, or smaller and lighter than its neighbour; Go back filled; a borderless field or stepper the colour of its box): a refused document is not drawn.
 
 **What fails it.**
 
@@ -588,7 +596,8 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 | Whole text | A text is cut off at the side, a glyph is cut by its box, or a word breaks inside itself. |
 | Controls | A click at a control's centre lands elsewhere; Tab does not reach it, or reaches it out of document order; its focus ring changes under three quarters of its perimeter at 3:1. |
 | Hover | Under the pointer, a control's words read under their floor, or a control the store gives a hover surface changes under a quarter of its box. |
-| Prominence | The total is drawn smaller than another summary row. |
+| Prominence | The total is drawn smaller than another summary row, its amount smaller than its label, lighter than a row's word, or reading fainter on what is behind it than a row's word (an add-on's app lines aside). |
+| Finding actions and fields | Under a theme's tokens: Place order's or Confirm's fill reads under 3:1 on what is behind it; Place order is smaller or lighter than another filled button on the page; Go back paints a fill of its own; Confirm is smaller or lighter than Go back; a field, the stepper, the fold's bar or Go back shows its border under 3:1 on what is behind it, or, drawing none, its own fill. |
 | Place order | At scroll 0 and at three places down the cart, Place order or its total is off screen, does not take a click there, or shows no total; on a phone, with the cart's fold closed and again with it open. |
 | First screen | At scroll 0, none of the page's lead parts starts inside the screen. |
 | Depth | What the theme adds above Place order (its place under the theme less its place under the default look, same cart, the fold open) is over 3200px and 448px a line, or either place cannot be measured. |
@@ -603,7 +612,7 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 | The gate (named cases and the fast seed set) | `pnpm test:private-pages` |
 | A longer run | `pnpm test:private-pages --seeds 30 --from 100` (`--no-named` for seeds only, `--all-states` for every state of each) |
 | One seed or case | `--seed 7`, `--case "B4"` (a failing seed prints its document) |
-| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (28 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, and the switch drawn under `controls: none`) |
+| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (33 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, the total ranked by size only, a filled button's fill unchecked, an edge read by a border it does not draw, Go back filled, and the switch drawn under `controls: none`) |
 
 The gate checks the cart page with the fixture store's data, not every store's data.
 
@@ -623,13 +632,14 @@ cart part empty hooks=empty-extras
 cart fields in discount,details
 cart target cart.page.summary
 cart target cart.page.below
+cart order notices before details
 cart layouts stack,columns,grid,group,fold
 cart layout fold hooks=fold-toggle,fold-body
 cart layout fold holds=lines,summary,discount,cart.page.summary
 cart style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 cart style frame <root> <root> tokens=max-width
 cart style action :is([data-private="cart"],[data-private="dialog"]) .bg-primary tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
-cart style input :is([data-private="cart"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+cart style input :is([data-private="cart"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 cart style field-label :is([data-private="cart"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
 cart style notice <root> [data-part="notice"] tokens=background,text,muted,link,error,border,border-width,radius
 cart style lines <root> [data-part="lines"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
@@ -642,27 +652,27 @@ cart style line-title <root> [data-part="line-title"] tokens=text,font,weight,si
 cart style line-details <root> [data-part="line-details"] tokens=text,size
 cart style line-chip <root> [data-part="line-chip"] tokens=background,text,border,border-width,radius
 cart style line-price <root> [data-part="line-price"] tokens=text,muted,font,weight,size,align
-cart style line-quantity <root> [data-part="line-quantity"] tokens=background,text,border,border-width,border-style,radius,ring
+cart style line-quantity <root> [data-part="line-quantity"] tokens=background,text,border,border-width,border-style,radius,ring boundary=edge
 cart style line-remove <root> [data-part="line-remove"] tokens=text,size,weight,radius,ring
-cart style fold-toggle <root> [data-part="fold-toggle"] tokens=background,text,border,border-width,radius,shadow,ring
+cart style fold-toggle <root> [data-part="fold-toggle"] tokens=background,text,border,border-width,radius,shadow,ring boundary=edge
 cart style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap
 cart style summary-heading <root> [data-part="summary-heading"] tokens=text,font,weight,size,leading,case,tracking
 cart style summary-rows <root> [data-summary-row]:not([data-summary-row="total"]) tokens=text,size
-cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows,summary-add-on-detail
-cart style summary-total-label <root> [data-summary-row="total"] [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows
+cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size
+cart style summary-total-label <root> [data-summary-row="total"] [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size
 cart style summary-add-on <root> [data-part="add-on-details"] > summary tokens=text,ring,radius
 cart style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size
 cart style details-form <root> [data-part="details-form"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding targets=checkout.contact.after,checkout.delivery.after
 cart style section-heading <root> :is([data-part="contact"],[data-part="delivery"]) h2 tokens=text,font,weight,size,leading,case,tracking
 cart style dock [data-private="cart"] [data-part="dock"] tokens=background,text,muted,link,error,border,border-width,shadow
-cart style submit <root> [data-part="details-submit"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+cart style submit <root> [data-part="details-submit"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=action:size+weight
 cart style legal <root> [data-part="legal"] tokens=text,size,align
 cart style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow fields
 cart style dialog-title [data-private="dialog"] [data-part="dialog-title"] tokens=text,font,weight,size,leading,case,tracking
 cart style dialog-text [data-private="dialog"] [data-part="dialog-text"] tokens=background,text,muted,border,border-width,radius,padding
 cart style dialog-agree [data-private="dialog"] [data-part="dialog-agree"] tokens=background,text,border,border-width,radius,padding
-cart style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=background,text,border,border-width,radius,ring,inset,weight
-cart style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+cart style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=text,border,border-width,radius,ring,inset,weight boundary=edge
+cart style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=dialog-back:size+weight
 cart style chrome :is([data-private="core-header"],[data-private="core-footer"]) tokens=background,gradient,text,muted,link,border,border-width
 cart style scheme [data-host="scheme"] button tokens=text,ring,radius
 cart style localization [data-host="localization"] tokens=text,muted,link fields
@@ -680,11 +690,11 @@ cart.line part rule mandatory hooks=line-rule
 cart.line fields in inputs
 cart.line target cart.line.after
 cart.line layouts stack,columns,grid,group
-cart label cart.heading max=60
+cart label cart.heading max=60 no-figures
 cart label cart.intro max=200
 cart label cart.summaryHeading max=40 no-figures
 cart label cart.continue variants=continue-shopping|keep-shopping|back-to-store
-cart label cart.empty max=80
+cart label cart.empty max=80 no-figures
 cart label cart.emptyText max=200
 cart label cart.subtotal variants=subtotal|items-total
 cart label cart.showSummary variants=show-summary|show-cart
@@ -718,11 +728,11 @@ cartDrawer.line part rule mandatory hooks=line-rule
 cartDrawer.line fields in inputs
 cartDrawer.line target cart.line.after
 cartDrawer.line layouts stack,columns,grid,group
-cartDrawer label drawer.title max=40
+cartDrawer label drawer.title max=40 no-figures
 cartDrawer label drawer.checkout variants=checkout|proceed-to-checkout
 cartDrawer label drawer.viewCart variants=view-cart|go-to-cart
 cartDrawer label drawer.continue variants=continue-shopping|keep-shopping
-cartDrawer label drawer.empty max=80
+cartDrawer label drawer.empty max=80 no-figures
 cartDrawer label drawer.startShopping variants=start-shopping|browse-products|continue-shopping
 cartDrawer icon drawer.empty
 dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-agree,dialog-actions,dialog-back,dialog-confirm,field-label

@@ -44,10 +44,8 @@ import {
   compileStorefrontPrivatePages,
   privatePagesCompiledCurrent,
   privatePagesContextOf,
-  PRIVATE_ANATOMY_VERSION,
-  PRIVATE_CHECKER_VERSION,
-  PRIVATE_PAGE_KEYS,
-  privatePageArrangement,
+  filledPrivatePages,
+  refusedPrivatePages,
   parseStoredStorefrontThemeDocument,
   storefrontThemeDocumentSchema,
   storefrontThemeTranslationProblems,
@@ -445,17 +443,8 @@ export async function recompilePublishedPrivatePages(db: Database): Promise<"non
   if (!theme) return "unreadable";
   if (privatePagesCompiledCurrent(theme.privatePages)) return "current";
   // Every path stores arrangements filled for this anatomy: a newly mandatory part is never missing.
-  const filled = {
-    ...theme.privatePages,
-    pages: Object.fromEntries(PRIVATE_PAGE_KEYS.flatMap((page) => {
-      const arrangement = privatePageArrangement(theme.privatePages, page);
-      return arrangement ? [[page, arrangement]] : [];
-    })),
-  };
-  const result = compileStorefrontPrivatePages(filled, privatePagesContextOf(theme));
-  const privatePages = result.ok
-    ? result.value
-    : { ...filled, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: "", refused: true } };
+  const result = compileStorefrontPrivatePages(filledPrivatePages(theme.privatePages), privatePagesContextOf(theme));
+  const privatePages = result.ok ? result.value : refusedPrivatePages(theme.privatePages);
   const written = await db.update(themeSettings)
     .set({ colors: JSON.stringify({ ...theme, privatePages }), updatedAt: sql`unixepoch()` })
     .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)))

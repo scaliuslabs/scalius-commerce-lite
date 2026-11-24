@@ -299,6 +299,7 @@
    }
   },
   "privatePages": {
+   "chrome": "core",
    "pages": {
     "cart": {
      "frame": "narrow",
@@ -410,8 +411,10 @@
     }
    },
    "tokens": {},
+   "css": "",
    "labels": {},
    "icons": {},
+   "assets": {},
    "compiled": {
     "anatomy": 1,
     "sanitizer": 2,
@@ -725,10 +728,13 @@
    }
   },
   "privatePages": {
+   "chrome": "core",
    "pages": {},
    "tokens": {},
+   "css": "",
    "labels": {},
    "icons": {},
+   "assets": {},
    "compiled": {
     "anatomy": 1,
     "sanitizer": 2,
@@ -1031,6 +1037,7 @@
    }
   },
   "privatePages": {
+   "chrome": "core",
    "pages": {
     "cartDrawer": {
      "layout": [
@@ -1082,8 +1089,10 @@
     }
    },
    "tokens": {},
+   "css": "",
    "labels": {},
    "icons": {},
+   "assets": {},
    "compiled": {
     "anatomy": 1,
     "sanitizer": 2,
@@ -1397,12 +1406,24 @@
    }
   },
   "privatePages": {
+   "chrome": "theme",
    "pages": {
     "cart": {
      "layout": [
       {
        "type": "part",
        "part": "notices"
+      },
+      {
+       "type": "content",
+       "hook": "acme-lead",
+       "content": {
+        "kind": "text",
+        "text": {
+         "en": "Review your items before checkout.",
+         "bn": "চেকআউটের আগে দেখে নিন।"
+        }
+       }
       },
       {
        "type": "layout",
@@ -1526,6 +1547,7 @@
     }
    },
    "tokens": {},
+   "css": "body { background: url(paper) }\n[data-part=\"summary\"] { border-radius: 0 }\n[data-hook=\"acme-grid\"] { grid-template-columns: 1fr 380px }",
    "labels": {
     "cart.heading": {
      "en": "Your Cart",
@@ -1536,6 +1558,12 @@
     "cart.empty": {
      "app": "acme.studio",
      "file": "icons/bag.svg"
+    }
+   },
+   "assets": {
+    "paper": {
+     "app": "acme.studio",
+     "file": "images/paper.webp"
     }
    },
    "compiled": {

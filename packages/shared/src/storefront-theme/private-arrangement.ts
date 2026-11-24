@@ -5,11 +5,12 @@
 // Three readings, one rule set:
 // - `privateArrangementIssues`: the strict check a save and a publish run.
 //   Every mandatory part and every target exactly once, no unknown name,
-//   no duplicate, only the layouts the unit takes; each problem with a
-//   machine-readable `reason`.
+//   no duplicate, only the layouts the unit takes, its parts in the unit's
+//   reading order (`order`); each problem with a machine-readable `reason`.
 // - `fillPrivateArrangement`: what a read of an arrangement stored before
 //   this build does. Unknown and duplicate names go; a mandatory part or
-//   target it lacks (core added one since) goes in its default place. A
+//   target it lacks (core added one since) goes in its default place, and a
+//   part out of the reading order moves before the part it must precede. A
 //   core upgrade never breaks a stored theme and never loses a required part.
 // - `privateArrangementIsDefault`: an arrangement equal to the default draws
 //   the page exactly as the host does without one.
@@ -44,7 +45,7 @@ export const PRIVATE_ARRANGEMENT_REASONS = [
   "missing_part", "duplicate_part", "unknown_part",
   "missing_target", "duplicate_target", "unknown_target",
   "unknown_layout", "layout_once", "layout_holds", "unknown_variant", "unknown_frame", "unknown_item", "invalid_hook",
-  "too_deep", "too_many_nodes",
+  "too_deep", "too_many_nodes", "part_order",
 ] as const;
 export type PrivateArrangementReason = (typeof PRIVATE_ARRANGEMENT_REASONS)[number];
 
@@ -72,6 +73,8 @@ function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: 
   };
   const parts = new Map<string, number>();
   const targets = new Map<string, number>();
+  // Each part's place in reading order (depth first) and its path, for the unit's `order`.
+  const read = new Map<string, { at: number; path: Array<string | number> }>();
   const singles = new Set<PrivateLayoutKind>();
   let count = 0;
   const visit = (list: readonly PrivateNode[], path: Array<string | number>, depth: number) => {
@@ -106,6 +109,7 @@ function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: 
         if (parts.has(node.part)) issues.push({ path: [...at, "part"], reason: "duplicate_part", message: `The ${node.part} part appears once.` });
         heldWrongly(node.part, [...at, "part"]);
         parts.set(node.part, index);
+        if (!read.has(node.part)) read.set(node.part, { at: read.size, path: [...at, "part"] });
         if (node.variant !== undefined && !entry.variants?.includes(node.variant)) {
           issues.push({ path: [...at, "variant"], reason: "unknown_variant", message: entry.variants ? `The ${node.part} part's variants are ${entry.variants.join(", ")}.` : `The ${node.part} part has no variants.` });
         }
@@ -131,6 +135,10 @@ function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: 
   }
   for (const target of spec.targets) {
     if (!targets.has(target)) issues.push({ path: base, reason: "missing_target", message: `${what} must place the ${target} target, where apps draw for the buyer.` });
+  }
+  for (const [before, after] of spec.order ?? []) {
+    const [first, second] = [read.get(before), read.get(after)];
+    if (first && second && first.at > second.at) issues.push({ path: first.path, reason: "part_order", message: `${what} reads the ${before} part before the ${after} part: on a phone a buyer reads it first.` });
   }
   return issues;
 }
@@ -216,7 +224,39 @@ function fillUnit(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], holds: H
     insertNear(result, order, order.indexOf(leaf), seen, holds);
     seen.add(key);
   }
+  for (const [before, after] of spec.order ?? []) inReadingOrder(result, before, after, holds);
   return result;
+}
+
+/** Side-by-side layouts: a part put beside another there would draw as a column of its own on wide screens. */
+const BESIDE: ReadonlySet<PrivateLayoutKind> = new Set(["columns", "grid"]);
+
+/**
+ * Moves the part `before` to just ahead of the part `after` when it reads
+ * after it: into the nearest list holding `after` that stacks its children
+ * (never into a side-by-side layout, nor one that may not hold it).
+ */
+function inReadingOrder(nodes: PrivateNode[], before: string, after: string, holds: Holds): void {
+  type Step = { list: PrivateNode[]; at: number; kind: PrivateLayoutKind | null };
+  const path = (name: string, list: PrivateNode[], kind: PrivateLayoutKind | null, trail: Step[]): Step[] | null => {
+    for (let at = 0; at < list.length; at += 1) {
+      const node = list[at]!;
+      if (node.type === "part" && node.part === name) return [...trail, { list, at, kind }];
+      if (node.type === "layout") {
+        const found = path(name, node.children, node.layout, [...trail, { list, at, kind }]);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  const leaves = defaultLeaves(nodes).flatMap((leaf) => leaf.type === "part" ? [leaf.part] : []);
+  if (!leaves.includes(before) || !leaves.includes(after) || leaves.indexOf(before) < leaves.indexOf(after)) return;
+  const from = path(before, nodes, null, [])!.at(-1)!;
+  const [moved] = from.list.splice(from.at, 1);
+  const trail = path(after, nodes, null, [])!;
+  // From the part `after` outwards, the first list that stacks and may hold the moved part.
+  const step = [...trail].reverse().find((each) => !(each.kind && (BESIDE.has(each.kind) || (holds[each.kind] && !holds[each.kind]!.includes(before))))) ?? trail[0]!;
+  step.list.splice(step.at, 0, moved!);
 }
 
 /**
