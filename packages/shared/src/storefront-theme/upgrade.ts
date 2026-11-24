@@ -13,7 +13,8 @@ import { STOREFRONT_THEME_DOCUMENT_VERSION, storefrontThemeDocumentSchema, type 
 import { STOREFRONT_SECTION_REGISTRY, type StorefrontSectionSettingsUpgrade } from "./sections";
 import { storefrontPrivatePageDefaults } from "./private-pages";
 import { privateCartPresetArrangement, privateDrawerWith, type PrivatePageArrangement } from "./private-arrangement";
-import { PRIVATE_CHECKER_VERSION } from "./private-layout";
+import { PRIVATE_ANATOMY_VERSION } from "./private-anatomy";
+import { PRIVATE_CHECKER_VERSION, readStoredPrivatePages, refusedPrivatePages } from "./private-layout";
 
 /**
  * The oldest stored version that still reads. Migration 0155 reset every
@@ -158,12 +159,13 @@ function privatePageBlocks(document: Json): Json {
 }
 
 /**
- * The anatomy the 14 → 15 step checks against. It writes no tokens, and
- * nothing compiles to nothing under any checker, so its empty output is
- * this build's checker's.
+ * The anatomy the 14 → 15 step's arrangements are checked against: this
+ * build's, since they are this build's presets (drawn from this anatomy's
+ * default layouts). Its look was never compiled (`sanitizer: 0`), so the
+ * maintenance compile compiles it: a theme with a page paint is drawn in
+ * token mode on its paint, never served an empty look marked current.
  */
-const V15_ANATOMY = 2;
-const V15_CHECKER = PRIVATE_CHECKER_VERSION;
+const V15_ANATOMY = PRIVATE_ANATOMY_VERSION;
 
 /**
  * Version 14 → 15 too: the colours and the dark colours (a document's, or an
@@ -212,7 +214,7 @@ function privatePageLayouts(document: Json): Json {
     return {
       ...document,
       blocks: rest,
-      privatePages: { pages: stored, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: V15_ANATOMY, sanitizer: V15_CHECKER, css: "" } },
+      privatePages: { pages: stored, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: V15_ANATOMY, sanitizer: 0, css: "" } },
     };
   }
   if (!("cart" in blocks) && !("cartDrawer" in blocks)) return document;
@@ -353,7 +355,7 @@ export function upgradeStorefrontThemeDocument(value: unknown, chain: Storefront
   // reads through the same mapping as the 12 → 13 step; an older one already
   // took that step.
   const named = from === LAST_KEBAB_PRODUCT_MODULES_VERSION ? snakeProductModules(document) : document;
-  return upgradeSectionLists(withoutPrivatePageTemplates(named), chain);
+  return upgradeSectionLists(named, chain);
 }
 
 /**
@@ -375,7 +377,14 @@ export type StoredStorefrontThemeRead =
   | { ok: true; document: StorefrontThemeDocument; storedVersion: number }
   | { ok: false; reason: string };
 
-/** Reads a stored document (JSON text or a parsed value): upgraded, then strictly parsed. */
+/**
+ * Reads a stored document (JSON text or a parsed value): upgraded, then
+ * strictly parsed. What a theme cannot set on a private page (a stylesheet,
+ * its chrome, its search, files, a content block) is dropped first, as the
+ * stored path alone does, and the private pages' compile is then refused: the
+ * theme reads, its private pages draw the store's default look until the
+ * next save (which refuses those fields with `not_available`).
+ */
 export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefrontThemeRead {
   let parsed: unknown = value;
   if (typeof value === "string") {
@@ -391,12 +400,15 @@ export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefr
   } catch (error) {
     return { ok: false, reason: error instanceof StorefrontThemeUpgradeError ? error.message : "The stored theme did not upgrade." };
   }
-  const result = storefrontThemeDocumentSchema.safeParse(upgraded);
+  upgraded = withoutPrivatePageTemplates(upgraded);
+  const released = readStoredPrivatePages(upgraded.privatePages);
+  const result = storefrontThemeDocumentSchema.safeParse("privatePages" in upgraded ? { ...upgraded, privatePages: released.value } : upgraded);
   if (!result.success) {
     const issue = result.error.issues[0];
     return { ok: false, reason: `${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}` };
   }
-  return { ok: true, document: result.data, storedVersion: (parsed as Json).version as number };
+  const document = released.held ? { ...result.data, privatePages: refusedPrivatePages(result.data.privatePages) } : result.data;
+  return { ok: true, document, storedVersion: (parsed as Json).version as number };
 }
 
 /**

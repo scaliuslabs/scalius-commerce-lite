@@ -21,11 +21,15 @@
 //   or maintenance after a deploy).
 //
 // A theme writes no markup and no CSS on these pages in this release: a
-// document with a stylesheet, its own chrome, its own search or files for a
-// stylesheet, or a content block in an arrangement is refused
-// (`not_available`), and nothing on the render path draws one.
+// save of a document with a stylesheet, its own chrome, its own search or
+// files for a stylesheet, or a content block in an arrangement is refused
+// (`not_available`). A stored document holding any of them still reads
+// (`readStoredPrivatePages`): they are dropped and its private pages draw
+// the store's default look until the next save; nothing on the render path
+// draws one.
 import { z } from "zod";
 import { PLUGIN_ID_PATTERN } from "../plugins/ids";
+import { STORE_ACTION_AND_AMOUNT_WORDS, foldStoreWords } from "../store-words";
 import { parsePluginSurfaceKey } from "../plugins/storefront";
 import { storefrontDarkPalette, type StorefrontThemeTokens } from "./tokens";
 import {
@@ -62,9 +66,12 @@ import {
 /**
  * The checker's version: a page never serves a look an older checker
  * compiled (maintenance compiles the published theme again). Version 6: a
- * theme's stylesheet, chrome and content blocks are not available.
+ * theme's stylesheet, chrome and content blocks are not available. Version
+ * 7: a filled button's fill and an outlined control's or a field's edge read
+ * at 3:1, Place order and Confirm outrank their neighbours, the total by
+ * weight and contrast too, and no descriptive label holds a figure.
  */
-export const PRIVATE_CHECKER_VERSION = 6;
+export const PRIVATE_CHECKER_VERSION = 7;
 
 /** The most compiled token CSS a document stores. */
 export const PRIVATE_COMPILED_CSS_MAX_BYTES = 64 * 1024;
@@ -169,6 +176,39 @@ const HELD = {
 } as const;
 const heldFields = Object.fromEntries(Object.keys(HELD).map((key) => [key, z.unknown().optional()])) as Record<keyof typeof HELD, z.ZodOptional<z.ZodUnknown>>;
 
+/**
+ * A stored document's `privatePages` as this build reads it (the stored
+ * document's path only: a save parses `storefrontPrivatePagesSchema` and
+ * refuses each with `not_available`): what a theme cannot set here (`HELD`,
+ * a content block anywhere in an arrangement) dropped, and `held` true when
+ * any of it said something. The reader then marks the private pages' compile
+ * refused (`refusedPrivatePages`): they draw the store's default look until
+ * the next save, and the rest of the theme stays.
+ */
+export function readStoredPrivatePages(value: unknown): { value: unknown; held: boolean } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return { value, held: false };
+  let held = false;
+  const rest: Record<string, unknown> = { ...value };
+  for (const [key, entry] of Object.entries(HELD)) {
+    if (!(key in rest)) continue;
+    held ||= !entry.empty(rest[key]);
+    delete rest[key];
+  }
+  const record = (each: unknown): each is Record<string, unknown> => typeof each === "object" && each !== null && !Array.isArray(each);
+  const nodes = (list: unknown): unknown => Array.isArray(list) ? list.flatMap((node) => {
+    if (record(node) && node.type === "content") { held = true; return []; }
+    return [record(node) && node.type === "layout" ? { ...node, children: nodes(node.children) } : node];
+  }) : list;
+  if (record(rest.pages)) {
+    rest.pages = Object.fromEntries(Object.entries(rest.pages).map(([page, arrangement]) => [page, record(arrangement) ? {
+      ...arrangement,
+      ...("layout" in arrangement ? { layout: nodes(arrangement.layout) } : {}),
+      ...(record(arrangement.items) ? { items: Object.fromEntries(Object.entries(arrangement.items).map(([item, layout]) => [item, nodes(layout)])) } : {}),
+    } : arrangement]));
+  }
+  return { value: rest, held };
+}
+
 function refuseHeld(value: Partial<Record<keyof typeof HELD, unknown>>, context: z.RefinementCtx): void {
   for (const [key, held] of Object.entries(HELD) as Array<[keyof typeof HELD, (typeof HELD)[keyof typeof HELD]]>) {
     if (key in value && !held.empty(value[key])) context.addIssue({ code: "custom", path: [key], message: notAvailable(held.label), params: { reason: PRIVATE_NOT_AVAILABLE } });
@@ -245,18 +285,42 @@ export interface PrivatePagesIssue {
 const MARKUP = /<[A-Za-z!/?]/;
 /** A figure in any script (৳, 3, ৩, $): what an amount is written with. */
 const FIGURES = /[\p{N}\p{Sc}]/u;
+
+/** The store's amount words a label could pass for (its total, subtotal, what is due), from its own copy (store-words.ts). */
+const AMOUNT_KEYS = ["totalText", "subtotalText", "estimatedTotalText", "amountDueText", "dueNowText", "orderReceiptBalanceDueText", "variant:subtotal", "variant:items-total"] as const;
+
+/**
+ * Words a heading, title or empty state never holds, per language, as whole
+ * words anywhere in it: the store's amount words and the names of money
+ * ("Total: free", "BDT ZERO", "টাকা"). Exported so every check of words drawn
+ * beside the store's amounts reads one list.
+ */
+export const PRIVATE_LABEL_AMOUNT_WORDS: Readonly<Record<"en" | "bn", readonly string[]>> = {
+  en: [...AMOUNT_KEYS.map((key) => STORE_ACTION_AND_AMOUNT_WORDS[key]!.en), "grand total", "total due", "taka", "tk", "bdt", "usd", "dollar", "dollars", "eur", "euro", "euros", "gbp", "pound", "pounds", "inr", "rupee", "rupees", "aed", "dirham", "dirhams"],
+  bn: [...AMOUNT_KEYS.map((key) => STORE_ACTION_AND_AMOUNT_WORDS[key]!.bn), "মোট", "টাকা", "টাকার", "টাকায়", "পরিশোধযোগ্য"],
+};
+
+/** A text's words as compared: folded (store-words.ts), split into runs of letters, marks and digits. */
+const wordsOf = (text: string) => foldStoreWords(text).match(/[\p{L}\p{M}\p{N}]+/gu) ?? [];
+const AMOUNT_PHRASES = [...new Set(Object.values(PRIVATE_LABEL_AMOUNT_WORDS).flat())].map(wordsOf);
+
+/** True when the text holds one of the store's amount words or a name of money, as whole words, in any of its languages. */
+export function privateWordsReadAsAmount(text: string): boolean {
+  const words = wordsOf(text);
+  return AMOUNT_PHRASES.some((phrase) => words.some((_, at) => phrase.every((word, index) => words[at + index] === word)));
+}
 /** Words without direction overrides or invisible characters. */
 export function plainPrivateWords(words: PrivateWords): PrivateWords {
   return Object.fromEntries(Object.entries(words).map(([lang, text]) => [lang, text.replace(HIDDEN_CHARACTERS, "")]));
 }
 
-function wordsIssues(words: PrivateWords | undefined, path: Array<string | number>, max: number, figures = true): PrivatePagesIssue[] {
+function wordsIssues(words: PrivateWords | undefined, path: Array<string | number>, max: number, figures: boolean): PrivatePagesIssue[] {
   if (!words) return [];
   return Object.entries(words).flatMap(([lang, text]): PrivatePagesIssue[] => {
     if (MARKUP.test(text)) return [{ path: [...path, lang], reason: "markup" as const, message: "Plain text only: no HTML." }];
     if (text.length > max) return [{ path: [...path, lang], reason: "label_too_long" as const, message: `At most ${max} characters.` }];
-    // Words drawn among the amounts never read as one: the store writes every amount.
-    if (!figures && FIGURES.test(text)) return [{ path: [...path, lang], reason: "label_figures" as const, message: "These words sit among the amounts: no digits or currency signs; the store writes every amount." }];
+    // A label never reads as an amount: the store writes every amount and names it.
+    if (!figures && (FIGURES.test(text) || privateWordsReadAsAmount(text))) return [{ path: [...path, lang], reason: "label_figures" as const, message: "A label holds no digits, currency signs, names of money or the store's amount words (total, subtotal, due): the store writes and names every amount, so a label never reads as one." }];
     return [];
   });
 }
@@ -332,7 +396,7 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
     } else if (typeof label === "string") {
       issues.push({ path, reason: "label_variant", message: `${key} is the theme's own words, per language: { "en": "…", "bn": "…" }.` });
     } else {
-      issues.push(...wordsIssues(label, path, spec.max, spec.figures !== false));
+      issues.push(...wordsIssues(label, path, spec.max, spec.figures === true));
     }
   }
   if (issues.length > 0) return { ok: false, issues };
@@ -341,6 +405,28 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
     return { ok: false, issues: [{ path: ["privatePages", "tokens"], reason: "too_large", message: `The compiled look is over ${PRIVATE_COMPILED_CSS_MAX_BYTES / 1024} KiB; set fewer tokens.` }] };
   }
   return { ok: true, value: { ...value, pages, labels, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: compiled, ...(tokenMode ? { tokenMode } : {}) } } };
+}
+
+/** Each page's arrangement as this build draws it (`privatePageArrangement`): what every write stores, so a newly mandatory part is never missing. */
+export function filledPrivatePages(privatePages: StorefrontPrivatePages): StorefrontPrivatePages {
+  return {
+    ...privatePages,
+    pages: Object.fromEntries(PRIVATE_PAGE_KEYS.flatMap((page) => {
+      const arrangement = privatePageArrangement(privatePages, page);
+      return arrangement ? [[page, arrangement]] : [];
+    })),
+  };
+}
+
+/**
+ * The private pages with their compile refused at this build's versions:
+ * their source kept (filled for this anatomy), no look served, the store's
+ * default look drawn until the next save compiles them. What the maintenance
+ * compile writes for a theme this checker refuses, and what a read gives a
+ * stored document that held what a theme cannot set.
+ */
+export function refusedPrivatePages(privatePages: StorefrontPrivatePages): StorefrontPrivatePages {
+  return { ...filledPrivatePages(privatePages), compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: "", refused: true } };
 }
 
 /** Whether `compiled` was written by this build's checker and anatomy (else maintenance compiles it again). */
@@ -372,7 +458,9 @@ export function privatePageArrangement(privatePages: StorefrontPrivatePages, pag
  * until the store compiles it again. A buyer's request never compiles.
  */
 export function privatePagesCss(privatePages: Pick<StorefrontPrivatePages, "compiled">): string {
-  return privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused ? privatePages.compiled.css : "";
+  // The page writes it into a <style>: the compiler never emits `<`, so a stored look holding one (a row edited by
+  // hand, `</style>`) serves nothing, whatever its version says.
+  return privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused && !privatePages.compiled.css.includes("<") ? privatePages.compiled.css : "";
 }
 
 /**

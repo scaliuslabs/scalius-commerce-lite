@@ -9,13 +9,14 @@ cart part empty hooks=empty-extras
 cart fields in discount,details
 cart target cart.page.summary
 cart target cart.page.below
+cart order notices before details
 cart layouts stack,columns,grid,group,fold
 cart layout fold hooks=fold-toggle,fold-body
 cart layout fold holds=lines,summary,discount,cart.page.summary
 cart style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 cart style frame <root> <root> tokens=max-width
 cart style action :is([data-private="cart"],[data-private="dialog"]) .bg-primary tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
-cart style input :is([data-private="cart"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+cart style input :is([data-private="cart"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 cart style field-label :is([data-private="cart"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
 cart style notice <root> [data-part="notice"] tokens=background,text,muted,link,error,border,border-width,radius
 cart style lines <root> [data-part="lines"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
@@ -28,27 +29,27 @@ cart style line-title <root> [data-part="line-title"] tokens=text,font,weight,si
 cart style line-details <root> [data-part="line-details"] tokens=text,size
 cart style line-chip <root> [data-part="line-chip"] tokens=background,text,border,border-width,radius
 cart style line-price <root> [data-part="line-price"] tokens=text,muted,font,weight,size,align
-cart style line-quantity <root> [data-part="line-quantity"] tokens=background,text,border,border-width,border-style,radius,ring
+cart style line-quantity <root> [data-part="line-quantity"] tokens=background,text,border,border-width,border-style,radius,ring boundary=edge
 cart style line-remove <root> [data-part="line-remove"] tokens=text,size,weight,radius,ring
-cart style fold-toggle <root> [data-part="fold-toggle"] tokens=background,text,border,border-width,radius,shadow,ring
+cart style fold-toggle <root> [data-part="fold-toggle"] tokens=background,text,border,border-width,radius,shadow,ring boundary=edge
 cart style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap
 cart style summary-heading <root> [data-part="summary-heading"] tokens=text,font,weight,size,leading,case,tracking
 cart style summary-rows <root> [data-summary-row]:not([data-summary-row="total"]) tokens=text,size
-cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows,summary-add-on-detail
-cart style summary-total-label <root> [data-summary-row="total"] [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows
+cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size,line-price:size,ui/cart.page.summary:size
+cart style summary-total-label <root> [data-summary-row="total"] [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size
 cart style summary-add-on <root> [data-part="add-on-details"] > summary tokens=text,ring,radius
 cart style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size
 cart style details-form <root> [data-part="details-form"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding targets=checkout.contact.after,checkout.delivery.after
 cart style section-heading <root> :is([data-part="contact"],[data-part="delivery"]) h2 tokens=text,font,weight,size,leading,case,tracking
 cart style dock [data-private="cart"] [data-part="dock"] tokens=background,text,muted,link,error,border,border-width,shadow
-cart style submit <root> [data-part="details-submit"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+cart style submit <root> [data-part="details-submit"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=action:size+weight
 cart style legal <root> [data-part="legal"] tokens=text,size,align
 cart style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow fields
 cart style dialog-title [data-private="dialog"] [data-part="dialog-title"] tokens=text,font,weight,size,leading,case,tracking
 cart style dialog-text [data-private="dialog"] [data-part="dialog-text"] tokens=background,text,muted,border,border-width,radius,padding
 cart style dialog-agree [data-private="dialog"] [data-part="dialog-agree"] tokens=background,text,border,border-width,radius,padding
-cart style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=background,text,border,border-width,radius,ring,inset,weight
-cart style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+cart style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=text,border,border-width,radius,ring,inset,weight boundary=edge
+cart style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=dialog-back:size+weight
 cart style chrome :is([data-private="core-header"],[data-private="core-footer"]) tokens=background,gradient,text,muted,link,border,border-width
 cart style scheme [data-host="scheme"] button tokens=text,ring,radius
 cart style localization [data-host="localization"] tokens=text,muted,link fields
@@ -66,11 +67,11 @@ cart.line part rule mandatory hooks=line-rule
 cart.line fields in inputs
 cart.line target cart.line.after
 cart.line layouts stack,columns,grid,group
-cart label cart.heading max=60
+cart label cart.heading max=60 no-figures
 cart label cart.intro max=200
 cart label cart.summaryHeading max=40 no-figures
 cart label cart.continue variants=continue-shopping|keep-shopping|back-to-store
-cart label cart.empty max=80
+cart label cart.empty max=80 no-figures
 cart label cart.emptyText max=200
 cart label cart.subtotal variants=subtotal|items-total
 cart label cart.showSummary variants=show-summary|show-cart
@@ -104,11 +105,11 @@ cartDrawer.line part rule mandatory hooks=line-rule
 cartDrawer.line fields in inputs
 cartDrawer.line target cart.line.after
 cartDrawer.line layouts stack,columns,grid,group
-cartDrawer label drawer.title max=40
+cartDrawer label drawer.title max=40 no-figures
 cartDrawer label drawer.checkout variants=checkout|proceed-to-checkout
 cartDrawer label drawer.viewCart variants=view-cart|go-to-cart
 cartDrawer label drawer.continue variants=continue-shopping|keep-shopping
-cartDrawer label drawer.empty max=80
+cartDrawer label drawer.empty max=80 no-figures
 cartDrawer label drawer.startShopping variants=start-shopping|browse-products|continue-shopping
 cartDrawer icon drawer.empty
 dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-agree,dialog-actions,dialog-back,dialog-confirm,field-label

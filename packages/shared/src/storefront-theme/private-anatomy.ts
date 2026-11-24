@@ -18,16 +18,17 @@
 // This module is data only (no zod): the dashboard and the storefront's
 // browser code read it. The anatomy is a versioned contract: the anatomy
 // test pins every page, part and hook, and `PRIVATE_ANATOMY_VERSION` rises
-// whenever a mandatory part or target is added, so a stored arrangement
-// written before it gets the new part in its default place on read.
+// whenever a mandatory part or target or a reading order is added, so a
+// stored arrangement written before it gets the new part in its default
+// place (and its parts in that order) on read.
 //
 // Registering a page: add a `PrivatePageSpec` below (its root, frames,
 // parts, targets, layouts, default layout, items, style targets, labels and
 // icons) and add it to `PRIVATE_PAGES`. Its default layout must hold every
 // mandatory part and target exactly once. Nothing else is per page.
 
-/** Rises when a page gains a mandatory part or target (a stored arrangement then fills it in on read). */
-export const PRIVATE_ANATOMY_VERSION = 2 as const;
+/** Rises when a page gains a mandatory part or target or a reading order (a stored arrangement then fills it in on read). */
+export const PRIVATE_ANATOMY_VERSION = 3 as const;
 
 /**
  * The host's layout nodes. `stack`: one column. `columns`: one column on
@@ -146,16 +147,38 @@ export interface PrivateStyleSpec {
    */
   readonly targets?: readonly string[];
   /**
-   * An amount's rank among its neighbours: the size (px) its words are drawn
-   * at with no `size` token (or the size of the target `sizeFrom`, whose
-   * `size` reaches it), and the targets it is never drawn smaller than. The
-   * total outranks every other summary row, so no theme makes a subtotal
-   * read as the total (`prominence`).
+   * How a buyer tells the control or field from what is around it (WCAG
+   * 1.4.11, 3:1 on what is around it): `fill`, a filled button (Place order,
+   * Confirm), by its own surface; `edge`, an outlined one (a stepper, the
+   * fold's bar, Go back) and every field, by its border, or by its own
+   * surface where the theme draws no border (`border-width: 0`,
+   * `border-style: none`).
+   */
+  readonly boundary?: "fill" | "edge";
+  /**
+   * Its words' size (px) and weight with no token of their own (the least
+   * any of its elements draws as the side that must outrank, the most as the
+   * side outranked), and the target whose `size` and `weight` also reach its
+   * element when it sets none (`typeFrom`: the total's label takes the
+   * total's; Place order and Confirm are filled buttons, so `action`'s).
    */
   readonly hostSize?: number;
-  readonly sizeFrom?: string;
-  readonly outranks?: readonly string[];
+  readonly hostWeight?: number;
+  readonly typeFrom?: string;
+  /**
+   * Its rank among its neighbours (`prominence`): the targets it is never
+   * drawn less prominent than, each by size, weight and how strongly its
+   * words read (their contrast on their surface), the apps' targets whose
+   * nodes it is never drawn smaller than (`apps`: a figure an app draws in
+   * the summary could be read as the amount), and why. Its `size` is drawn
+   * at least at the largest size it outranks, so no narrow box draws it
+   * smaller than a row the host keeps at its own size.
+   */
+  readonly outranks?: { readonly why: string; readonly over: Readonly<Record<string, readonly PrivateRankBy[]>>; readonly apps?: readonly string[] };
 }
+
+/** What a rank compares: words' size, their weight, their contrast on their surface. */
+export type PrivateRankBy = "size" | "weight" | "contrast";
 
 /** The tokens a theme's layout node takes (`@<hook>` in `privatePages.tokens`). */
 export const PRIVATE_LAYOUT_TOKENS = ["background", "gradient", "border", "border-width", "border-style", "radius", "shadow", "padding", "gap", "columns", "columns-wide"] as const satisfies readonly PrivateTokenName[];
@@ -176,6 +199,12 @@ export interface PrivateUnitSpec {
    * requires one of them to start inside the first screen at every width.
    */
   readonly lead?: readonly string[];
+  /**
+   * Parts that come before others in reading order, whatever the
+   * arrangement (`[before, after]`: the cart's notices before its details,
+   * so a cart-wide alert is read before the form on a phone).
+   */
+  readonly order?: ReadonlyArray<readonly [string, string]>;
 }
 
 /**
@@ -183,13 +212,14 @@ export interface PrivateUnitSpec {
  * (go back, confirm, check out, subtotal) are chosen from the host's
  * variants (`variants`), each translated by core in the store's copy, so a
  * theme can never make "Go back" confirm or a subtotal read as the total.
- * Words that describe (a heading, an empty state) are the theme's own plain
- * text, per language, up to `max` characters; one drawn among the amounts
- * (the summary's heading) holds no figures (`figures: false`: no digit and
- * no currency sign in any script), so it never reads as an amount.
+ * Words that describe (a heading, a title, an empty state) are the theme's
+ * own plain text, per language, up to `max` characters, with no figures (no
+ * digit and no currency sign in any script), so a label never reads as an
+ * amount; only a sentence (`figures: true`: the cart's intro, its empty
+ * text) may hold one.
  */
 export type PrivateLabelSpec =
-  | { readonly max: number; readonly figures?: false; readonly variants?: undefined }
+  | { readonly max: number; readonly figures?: true; readonly variants?: undefined }
   | { readonly variants: readonly [string, ...string[]]; readonly max?: undefined; readonly figures?: undefined };
 
 export interface PrivatePageSpec extends PrivateUnitSpec {
@@ -254,8 +284,12 @@ const BOX_TOKENS = ["background", "gradient", "text", "muted", "link", "error", 
 const BUTTON_TOKENS = ["background", "gradient", "text", "border", "border-width", "border-style", "radius", "shadow", "ring", "inset", "font", "weight", "size", "case", "tracking"] as const satisfies readonly PrivateTokenName[];
 const FIELD_TOKENS = ["background", "text", "placeholder", "border", "ring", "invalid", "border-width", "radius"] as const satisfies readonly PrivateTokenName[];
 
-/** The fields the host draws (a check box or a radio is drawn by its label). */
-const FIELD_ELEMENTS = ':is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea)';
+/**
+ * The fields the host draws (a check box or a radio is drawn by its label). A field drawn as a box around its input
+ * (the phone number with its country code: `data-field`) is that box: its edge and fill are the field's, and the
+ * input inside it draws none of its own, so the edge the check reads is the edge a buyer sees.
+ */
+const FIELD_ELEMENTS = ':is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field])';
 
 /** The cart page's style targets (and the store's dialogs over it), outer before inner. */
 const CART_STYLES: Record<string, PrivateStyleSpec> = {
@@ -263,7 +297,7 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   page: { selector: "body[data-private-body]", absolute: true, tokens: ["background", "gradient", "text", "muted", "link", "error"], kind: "box", surface: "background", ink: "foreground" },
   frame: { selector: "", tokens: ["max-width"], kind: "box", surface: "under", ink: "foreground", on: "page" },
   // Every filled button the host draws without a target of its own (bg-primary), and every field, on the page and in its dialogs.
-  action: { selector: ':is([data-private="cart"],[data-private="dialog"]) .bg-primary', absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground" },
+  action: { selector: ':is([data-private="cart"],[data-private="dialog"]) .bg-primary', absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", hostSize: 14, hostWeight: 600 },
   input: { selector: `:is([data-private="cart"],[data-private="dialog"]) ${FIELD_ELEMENTS}`, absolute: true, element: FIELD_ELEMENTS, tokens: [...FIELD_TOKENS], kind: "field", surface: "background", ink: "foreground" },
   // Every field's label (and a group of fields' legend), wherever fields are drawn: on the box that holds them.
   "field-label": { selector: ':is([data-private="cart"],[data-private="dialog"]) [data-part="field-label"]', absolute: true, element: '[data-part="field-label"]', tokens: ["text", "size", "weight", "case", "tracking"], kind: "text", surface: "under", ink: "foreground" },
@@ -280,16 +314,24 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   // A fact of the line as a chip (`chips`): words on a surface of its own, like an app's badge.
   "line-chip": { selector: '[data-part="line-chip"]', tokens: ["background", "text", "border", "border-width", "radius"], kind: "text", surface: "under", ink: "foreground", on: "line-details" },
   "line-price": { selector: '[data-part="line-price"]', tokens: ["text", "muted", "font", "weight", "size", "align"], kind: "text", surface: "under", ink: "foreground", item: "line", part: "price" },
-  "line-quantity": { selector: '[data-part="line-quantity"]', tokens: ["background", "text", "border", "border-width", "border-style", "radius", "ring"], kind: "control", surface: "under", ink: "foreground", item: "line", part: "quantity" },
+  "line-quantity": { selector: '[data-part="line-quantity"]', tokens: ["background", "text", "border", "border-width", "border-style", "radius", "ring"], kind: "control", surface: "under", ink: "foreground", item: "line", part: "quantity", boundary: "edge" },
   "line-remove": { selector: '[data-part="line-remove"]', tokens: ["text", "size", "weight", "radius", "ring"], kind: "control", surface: "under", ink: "muted-foreground", item: "line", part: "remove" },
-  "fold-toggle": { selector: '[data-part="fold-toggle"]', tokens: ["background", "text", "border", "border-width", "radius", "shadow", "ring"], kind: "control", surface: "card", ink: "foreground", layout: "fold" },
+  "fold-toggle": { selector: '[data-part="fold-toggle"]', tokens: ["background", "text", "border", "border-width", "radius", "shadow", "ring"], kind: "control", surface: "card", ink: "foreground", layout: "fold", boundary: "edge" },
   summary: { selector: '[data-part="summary"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", part: "summary" },
   "summary-heading": { selector: '[data-part="summary-heading"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary" },
   // Every money row but the total (items, subtotal, add-ons, delivery, discount, tax): never drawn larger than the total.
-  "summary-rows": { selector: '[data-summary-row]:not([data-summary-row="total"])', tokens: ["text", "size"], kind: "text", surface: "under", ink: "muted-foreground", on: "summary", hostSize: 14 },
-  "summary-total": { selector: '[data-summary-row="total"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary", hostSize: 20, outranks: ["summary-rows", "summary-add-on-detail"] },
+  "summary-rows": { selector: '[data-summary-row]:not([data-summary-row="total"])', tokens: ["text", "size"], kind: "text", surface: "under", ink: "muted-foreground", on: "summary", hostSize: 14, hostWeight: 500 },
+  // The total's amount (and, unless its label sets its own, its label): it outranks every other money row, the
+  // add-on's lines and its own label, so no theme makes a subtotal read as the total.
+  "summary-total": {
+    selector: '[data-summary-row="total"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary", hostSize: 20, hostWeight: 600,
+    outranks: { why: "the total reads at least as strongly as every other amount, so a buyer never takes a subtotal for it", over: { "summary-rows": ["size", "weight", "contrast"], "summary-add-on-detail": ["size"], "summary-total-label": ["size"], "line-price": ["size"] }, apps: ["cart.page.summary"] },
+  },
   // The total's label, apart from its amount; only the total row's (a label inside it), never another row's.
-  "summary-total-label": { selector: '[data-summary-row="total"] [data-part="summary-total-label"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary-total", hostSize: 14, sizeFrom: "summary-total", outranks: ["summary-rows"] },
+  "summary-total-label": {
+    selector: '[data-summary-row="total"] [data-part="summary-total-label"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary-total", hostSize: 14, hostWeight: 600, typeFrom: "summary-total",
+    outranks: { why: "the total's label is never smaller than the rows it closes", over: { "summary-rows": ["size"] } },
+  },
   // An add-on row that opens to the app's lines (a money row: it stands in the row's element): its bar is a control
   // (a focus ring on the summary), each line under it a box.
   "summary-add-on": { selector: '[data-part="add-on-details"] > summary', tokens: ["text", "ring", "radius"], kind: "control", surface: "under", ink: "muted-foreground", on: "summary-rows" },
@@ -300,7 +342,10 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   // edge whenever its place is not in view (`position: sticky`), at every width, under every arrangement. It
   // stands over whatever scrolls beneath it, so it always paints its own surface (as a dialog does).
   dock: { selector: '[data-private="cart"] [data-part="dock"]', absolute: true, tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "shadow"], kind: "box", surface: "background", ink: "foreground", on: "page" },
-  submit: { selector: '[data-part="details-submit"]', tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "dock" },
+  submit: {
+    selector: '[data-part="details-submit"]', tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "dock", boundary: "fill", hostSize: 16, hostWeight: 600, typeFrom: "action",
+    outranks: { why: "Place order is the page's one filled action: never smaller or lighter than the store's other filled buttons", over: { action: ["size", "weight"] } },
+  },
   legal: { selector: '[data-part="legal"]', tokens: ["text", "size", "align"], kind: "text", surface: "under", ink: "muted-foreground", on: "dock" },
   // The store's dialogs over the page (confirmation, sign-in): their surface, words, fields and buttons.
   dialog: { selector: '[data-private="dialog"]', absolute: true, tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "shadow"], kind: "box", surface: "card", ink: "foreground", on: "page", fields: true },
@@ -308,8 +353,13 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   // What the buyer agrees to, and the tick box saying so: boxes side by side in the dialog, neither inside the other.
   "dialog-text": { selector: '[data-private="dialog"] [data-part="dialog-text"]', absolute: true, tokens: ["background", "text", "muted", "border", "border-width", "radius", "padding"], kind: "box", surface: "under", ink: "foreground", on: "dialog" },
   "dialog-agree": { selector: '[data-private="dialog"] [data-part="dialog-agree"]', absolute: true, tokens: ["background", "text", "border", "border-width", "radius", "padding"], kind: "box", surface: "under", ink: "foreground", on: "dialog" },
-  "dialog-back": { selector: '[data-private="dialog"] [data-part="dialog-back"]', absolute: true, tokens: ["background", "text", "border", "border-width", "radius", "ring", "inset", "weight"], kind: "control", surface: "under", ink: "foreground", on: "dialog" },
-  "dialog-confirm": { selector: '[data-private="dialog"] [data-part="dialog-confirm"]', absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "dialog" },
+  // The decision's two buttons never swap looks: Go back is outlined, never filled (no surface of its own); Confirm
+  // is filled, its fill read at 3:1 on the dialog, and never smaller or lighter than Go back.
+  "dialog-back": { selector: '[data-private="dialog"] [data-part="dialog-back"]', absolute: true, tokens: ["text", "border", "border-width", "radius", "ring", "inset", "weight"], kind: "control", surface: "under", ink: "foreground", on: "dialog", boundary: "edge", hostSize: 14, hostWeight: 500 },
+  "dialog-confirm": {
+    selector: '[data-private="dialog"] [data-part="dialog-confirm"]', absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "dialog", boundary: "fill", hostSize: 14, hostWeight: 500, typeFrom: "action",
+    outranks: { why: "Confirm is the decision's filled action: never smaller or lighter than Go back", over: { "dialog-back": ["size", "weight"] } },
+  },
   // The store's own chrome: its checkout header, and the strip at the page's end that holds the store's controls
   // when the theme places them there (`privatePages.controls: footer`). Their surface, words and border.
   chrome: { selector: ':is([data-private="core-header"],[data-private="core-footer"])', absolute: true, tokens: ["background", "gradient", "text", "muted", "link", "border", "border-width"], kind: "box", surface: "background", ink: "foreground", on: "page" },
@@ -343,6 +393,7 @@ const CART_PAGE: PrivatePageSpec = {
   },
   targets: ["cart.page.summary", "cart.page.below"],
   lead: ["lines", "summary", "details"],
+  order: [["notices", "details"]],
   layouts: ["stack", "columns", "grid", "group", "fold"],
   styles: CART_STYLES,
   layout: [
@@ -378,11 +429,11 @@ const CART_PAGE: PrivatePageSpec = {
   labels: {
     "cart.heading": { max: 60 },
     // One sentence under the heading; the summary's heading, drawn only when set, among the amounts: words only.
-    "cart.intro": { max: 200 },
-    "cart.summaryHeading": { max: 40, figures: false },
+    "cart.intro": { max: 200, figures: true },
+    "cart.summaryHeading": { max: 40 },
     "cart.continue": { variants: ["continue-shopping", "keep-shopping", "back-to-store"] },
     "cart.empty": { max: 80 },
-    "cart.emptyText": { max: 200 },
+    "cart.emptyText": { max: 200, figures: true },
     "cart.subtotal": { variants: ["subtotal", "items-total"] },
     "cart.showSummary": { variants: ["show-summary", "show-cart"] },
     "cart.hideSummary": { variants: ["hide-summary", "hide-cart"] },
@@ -526,6 +577,7 @@ export function privatePageAnatomy(): string[] {
     const fields = Object.entries(spec.parts).filter(([, entry]) => entry.fields).map(([name]) => name);
     if (fields.length > 0) lines.push(`${prefix} fields in ${fields.join(",")}`);
     for (const target of spec.targets) lines.push(`${prefix} target ${target}`);
+    for (const [before, after] of spec.order ?? []) lines.push(`${prefix} order ${before} before ${after}`);
     lines.push(`${prefix} layouts ${spec.layouts.join(",")}`);
   };
   for (const page of PRIVATE_PAGE_KEYS) {
@@ -534,12 +586,12 @@ export function privatePageAnatomy(): string[] {
     unit(page, spec);
     for (const [kind, hooks] of Object.entries(spec.layoutHooks ?? {})) lines.push(`${page} layout ${kind} hooks=${hooks.join(",")}`);
     for (const [kind, names] of Object.entries(spec.layoutContents ?? {})) lines.push(`${page} layout ${kind} holds=${names.join(",")}`);
-    for (const [name, style] of Object.entries(spec.styles)) lines.push(`${page} style ${name} ${style.absolute ? "" : "<root> "}${style.selector || "<root>"} tokens=${style.tokens.join(",")}${style.fields ? " fields" : ""}${style.targets ? ` targets=${style.targets.join(",")}` : ""}${style.outside ? ` outside-when=${style.outside.join("|")}` : ""}${style.outranks ? ` outranks=${style.outranks.join(",")}` : ""}`);
+    for (const [name, style] of Object.entries(spec.styles)) lines.push(`${page} style ${name} ${style.absolute ? "" : "<root> "}${style.selector || "<root>"} tokens=${style.tokens.join(",")}${style.fields ? " fields" : ""}${style.targets ? ` targets=${style.targets.join(",")}` : ""}${style.outside ? ` outside-when=${style.outside.join("|")}` : ""}${style.boundary ? ` boundary=${style.boundary}` : ""}${style.outranks ? ` outranks=${[...Object.entries(style.outranks.over).map(([other, by]) => `${other}:${by.join("+")}`), ...(style.outranks.apps ?? []).map((target) => `ui/${target}:size`)].join(",")}` : ""}`);
     for (const [name, item] of Object.entries(spec.items)) {
       lines.push(`${page}.${name} root ${PRIVATE_PART_ATTRIBUTE}=${PRIVATE_LINE_HOOK}`);
       unit(`${page}.${name}`, item);
     }
-    for (const [key, label] of Object.entries(spec.labels)) lines.push(`${page} label ${key} ${label.variants ? `variants=${label.variants.join("|")}` : `max=${label.max}${label.figures === false ? " no-figures" : ""}`}`);
+    for (const [key, label] of Object.entries(spec.labels)) lines.push(`${page} label ${key} ${label.variants ? `variants=${label.variants.join("|")}` : `max=${label.max}${label.figures === true ? "" : " no-figures"}`}`);
     for (const icon of spec.icons) lines.push(`${page} icon ${icon}`);
   }
   lines.push(`dialog root ${PRIVATE_SCOPE_ATTRIBUTE}=dialog hooks=${PRIVATE_DIALOG_HOOKS.join(",")}`);
