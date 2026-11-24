@@ -327,6 +327,29 @@ const CUSTOMER_DETAILS = [
 /** The customer's look (packages/shared/src/storefront-theme/private-reference.fixture.ts): its palettes and privatePages. */
 const REFERENCE = { reference: true, toggle: true, scheme: "system" };
 
+// ─── The payment step's cases (page `checkout`) ───
+const CHECKOUT_LIST = "payment step: the reference palettes' look, methods as a list";
+const CHECKOUT_TILES = "payment step: the reference palettes' look, a narrow frame and tiles";
+const CHECKOUT_FORGED = "payment step: a stored document forged with a stylesheet";
+/** The payment step's look in palette roles: the summary and the methods as cards, Pay filled, the chosen method muted, the total large. */
+const CHECKOUT_TOKENS = {
+  page: { gradient: { shape: "radial", from: { light: "background", dark: "#2b2d6e" }, to: "background" } },
+  summary: { background: "card", radius: 0, padding: 20 },
+  "summary-total": { size: 20, weight: "600", text: "foreground" },
+  "payment-method": { background: "card", radius: 0 },
+  "payment-chosen": { background: "muted", text: "foreground", muted: "muted-foreground" },
+  submit: { background: "primary", text: "primary-foreground", radius: 0, weight: "600" },
+  "gift-card": { background: "card", radius: 0 },
+};
+const CHECKOUT_TILES_LAYOUT = [
+  { type: "part", part: "progress" }, { type: "part", part: "empty" },
+  { type: "layout", layout: "columns", children: [
+    { type: "layout", layout: "stack", children: [{ type: "part", part: "summary", variant: "folded" }] },
+    { type: "layout", layout: "stack", children: [{ type: "part", part: "heading" }, { type: "part", part: "notices" }, { type: "part", part: "gift-card" }, { type: "part", part: "payment", variant: "tiles" }, { type: "target", target: "checkout.payment.after" }, { type: "target", target: "checkout.actions.before" }] },
+  ] },
+];
+// ─── end of the payment step's cases ───
+
 /**
  * The named cases: the reviews' concrete breaks and this release's surfaces.
  * Each must hold when drawn (in the states it names, all of them with
@@ -459,6 +482,11 @@ const REGRESSIONS = {
   // A field or the stepper that draws no border and fills itself with its box's colour: nothing shows where it is.
   "a borderless field the colour of its card form": { refused: "contrast", refusedFor: /input .*its fill, with no border drawn/, privatePages: { tokens: { cart: { "details-form": { background: "card" }, input: { "border-width": 0, background: "card" } } } } },
   "a borderless stepper on its line": { refused: "contrast", refusedFor: /line-quantity: its fill, with no border drawn/, privatePages: { tokens: { cart: { "line-quantity": { "border-width": 0 } } } } },
+  // ─── The payment step (page `checkout`): drawn as the editor's sample checkout draws it, as buyers get it ───
+  [CHECKOUT_LIST]: { request: { ...REFERENCE, page: "sample-checkout" }, privatePages: { tokens: { checkout: CHECKOUT_TOKENS } }, states: ["base"] },
+  [CHECKOUT_TILES]: { request: { ...REFERENCE, page: "sample-checkout" }, privatePages: { pages: { checkout: { frame: "narrow", layout: CHECKOUT_TILES_LAYOUT } }, tokens: { checkout: CHECKOUT_TOKENS } }, states: ["base"] },
+  [CHECKOUT_FORGED]: { request: { page: "sample-checkout", forged: { css: `[data-private="checkout"] *{color:transparent} /* ${FORGED_MARK} */` } }, states: ["base"] },
+  // ─── end of the payment step ───
 };
 
 // ─── PNG pixels (Chromium's 8-bit RGB or RGBA screenshots) ────────────────
@@ -1501,6 +1529,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   const problems = [];
   const server5xx = [];
   if (request?.page === "home") return drawDrawer({ context, id, width, problems, server5xx, rows, state });
+  if (request?.page === "sample-checkout") return drawCheckout({ context, id, width, height, request });
   const page = await timed("load", () => open(context, id, width, server5xx, height));
   // The store's own checkout header, and its controls where the theme places them.
   const mandatory = [...(state === "empty" ? EMPTY_MANDATORY : state === "lines" ? LINES_MANDATORY : MANDATORY), '[data-private="core-header"]'];
@@ -1614,6 +1643,96 @@ const DRAWER_MANDATORY = ['[data-part="drawer-header"]', '[data-part="drawer-lin
  * opened, its parts on screen and uncovered, its words whole and at their floor, its controls taking a click. Its
  * look is the public page's (no colour table): the drawer claims what it draws.
  */
+// ─── The payment step (page `checkout`) ───
+
+/**
+ * What a buyer must see and do on the payment step, read in the page: Pay and the total drawn, on screen when
+ * scrolled to and taking a click at their centre; Pay never smaller, lighter or fainter than the step's secondary
+ * action (the gift card's Apply) and its words readable on its fill; the total never smaller than another money
+ * row and readable on what is behind it; the payment provider's own surface (`data-part="gateway"`) painted as the
+ * store paints it, whatever the theme set.
+ */
+function checkoutChecks() {
+  const problems = [];
+  const linear = (channel) => { const value = channel / 255; return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4; };
+  const rgba = (value) => { const found = /rgba?\(([\d.]+)[ ,]+([\d.]+)[ ,]+([\d.]+)(?:[ ,/]+([\d.]+%?))?/.exec(value); return found ? { channels: [found[1], found[2], found[3]].map(Number), alpha: found[4] === undefined ? 1 : Number.parseFloat(found[4]) / (found[4].endsWith("%") ? 100 : 1) } : null; };
+  const luminance = ([r, g, b]) => 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+  const ratio = (a, b) => { const [x, y] = [luminance(a), luminance(b)]; return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const behind = (element) => { for (let at = element; at; at = at.parentElement) { const back = rgba(getComputedStyle(at).backgroundColor); if (back && back.alpha > 0.99) return back.channels; } return [255, 255, 255]; };
+  const drawn = (element) => {
+    if (!element) return false;
+    const style = getComputedStyle(element);
+    const box = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility === "visible" && Number(style.opacity) > 0.1 && box.width >= 8 && box.height >= 8;
+  };
+  const reachable = (element) => {
+    element.scrollIntoView({ block: "center", inline: "center" });
+    const box = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return box.top >= 0 && box.bottom <= innerHeight && hit !== null && (hit === element || element.contains(hit));
+  };
+  const pay = document.getElementById("payButton");
+  const totals = [...document.querySelectorAll('[data-private="checkout"] [data-summary-row="total"]')];
+  if (!drawn(pay)) problems.push("Pay is not drawn");
+  else if (!reachable(pay)) problems.push("Pay is not on screen or does not take a click at its centre");
+  if (totals.length === 0 || !totals.every(drawn)) problems.push("the total is not drawn");
+  else if (!totals.every(reachable)) problems.push("the total is not on screen or is covered");
+  for (const [name, element] of [["the summary", document.querySelector('[data-private="checkout"] [data-part="summary"]')], ["the payment methods", document.querySelector("#paymentMethods .payment-method-card")]]) {
+    if (!drawn(element)) problems.push(`${name} is not drawn`);
+  }
+  const apply = document.getElementById("giftCardApply");
+  if (pay && apply && drawn(pay)) {
+    const [mine, theirs] = [getComputedStyle(pay), getComputedStyle(apply)];
+    if (Number.parseFloat(mine.fontSize) < Number.parseFloat(theirs.fontSize)) problems.push(`Pay is drawn smaller than a secondary action (${mine.fontSize} under Apply's ${theirs.fontSize})`);
+    if (Number(mine.fontWeight) < Number(theirs.fontWeight)) problems.push(`Pay is drawn lighter than a secondary action (${mine.fontWeight} under Apply's ${theirs.fontWeight})`);
+    const fill = rgba(mine.backgroundColor);
+    if (!fill || fill.alpha < 0.99) problems.push("Pay is drawn with no fill of its own: weaker than the store's filled actions");
+    else if (ratio(rgba(mine.color).channels, fill.channels) < 4.5) problems.push(`Pay's words read ${ratio(rgba(mine.color).channels, fill.channels).toFixed(2)}:1 on its fill`);
+  }
+  const rows = [...document.querySelectorAll('[data-private="checkout"] [data-summary-row]')];
+  for (const total of totals.filter(drawn)) {
+    const size = Number.parseFloat(getComputedStyle(total).fontSize);
+    const larger = rows.filter((row) => !["total", "due"].includes(row.dataset.summaryRow) && drawn(row) && Number.parseFloat(getComputedStyle(row).fontSize) > size);
+    if (larger.length > 0) problems.push(`the total is drawn smaller than the ${larger[0].dataset.summaryRow} row`);
+    const words = rgba(getComputedStyle(total).color);
+    if (words && ratio(words.channels, behind(total)) < 4.5) problems.push(`the total reads ${ratio(words.channels, behind(total)).toFixed(2)}:1 on what is behind it`);
+  }
+  // The provider's surface against the same element outside every private page: the store's paint, untouched.
+  const gateway = document.querySelector('[data-private="checkout"] [data-part="gateway"]');
+  if (gateway) {
+    const probe = document.createElement("div");
+    probe.className = gateway.className;
+    document.body.parentElement.appendChild(probe);
+    for (const property of ["backgroundColor", "borderTopColor", "borderTopWidth", "borderTopLeftRadius", "padding"]) {
+      if (getComputedStyle(gateway)[property] !== getComputedStyle(probe)[property]) problems.push(`gateway: the provider's surface is restyled (${property} ${getComputedStyle(gateway)[property]}, the store's ${getComputedStyle(probe)[property]})`);
+    }
+    probe.remove();
+  } else problems.push("gateway: the provider's surface is not drawn in the payment part");
+  return problems;
+}
+
+/** One draw of the payment step: the sample checkout settled, a method chosen, the summary open, then its checks. */
+async function drawCheckout({ context, id, width, height = 900, request }) {
+  const problems = [];
+  const server5xx = [];
+  const page = await context.newPage();
+  page.on("response", (answer) => { if (answer.status() >= 500) server5xx.push(`${answer.status()} ${answer.request().method()} ${new URL(answer.url()).pathname}`); });
+  await page.setViewportSize({ width, height });
+  const answer = await page.goto(`${gallery.url}/__gallery/e/${id}`, { waitUntil: "load" });
+  if (answer && answer.status() >= 500) server5xx.push(`${answer.status()} the page`);
+  const methods = await page.waitForSelector("#paymentMethods .payment-method-card", { timeout: 20_000 }).catch(() => null);
+  if (!methods) problems.push("payment: no payment method was drawn");
+  await page.locator(".payment-method-control").first().click({ timeout: 5_000 }).catch(() => {});
+  if (await page.locator("#summaryPanel.hidden").count() > 0) await page.click("#orderSummaryToggle", { timeout: 5_000 }).catch(() => {});
+  await page.waitForTimeout(300);
+  problems.push(...(await page.evaluate(checkoutChecks)).map((problem) => `payment step: ${problem}`));
+  if (request?.forged) problems.push(...(await page.evaluate(forgedAbsent, { words: FORGED_WORDS, mark: FORGED_MARK })).map((problem) => `forged: ${problem}`));
+  problems.push(...server5xx.map((line) => `server: ${line}`));
+  await page.close();
+  return problems;
+}
+// ─── end of the payment step ───
+
 async function drawDrawer({ context, id, width, problems, server5xx, state }) {
   const at = (label, list) => problems.push(...list.map((problem) => `${label}: ${problem}`));
   const page = await timed("load", () => open(context, id, width, server5xx));

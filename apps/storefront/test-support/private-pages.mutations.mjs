@@ -33,7 +33,40 @@ const HEADER = "the store's own header under dark tokens";
 const DEPTH = "review 6, B3: the cart unfolded, progress first, at its largest lines";
 const PROTECTED = "the customer's cart, protected";
 
+// ─── The payment step's mutations (page `checkout`) ───
+const STEP = "apps/storefront/src/components/checkout/CheckoutPaymentStep.astro";
+const CHECKOUT_SCRIPT = "apps/storefront/src/lib/checkout/index.ts";
+const CHECKOUT_LIST = "payment step: the reference palettes' look, methods as a list";
+const CHECKOUT_MUTATIONS = {
+  "P1 Pay hidden": {
+    why: "the payment step draws its Pay button hidden",
+    rewrites: [rewrite(STEP, '              data-part="pay"\n', '              data-part="pay"\n              style="display:none"\n')],
+    cases: [CHECKOUT_LIST],
+    expect: /^payment step: Pay is not drawn/,
+  },
+  "P2 the total hidden": {
+    why: "the summary's total row (what is due) is drawn hidden",
+    rewrites: [rewrite(CHECKOUT_SCRIPT, '"flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2 mb-2",', '"hidden flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2 mb-2",')],
+    cases: [CHECKOUT_LIST],
+    expect: /^payment step: the total is not drawn/,
+  },
+  "P3 Pay weaker than a secondary action": {
+    why: "Pay drawn small and light, under the gift card's Apply",
+    rewrites: [rewrite(STEP, "min-h-12 w-full rounded-lg bg-primary px-4 py-3 text-base font-semibold", "min-h-12 w-full rounded-lg bg-primary px-4 py-3 text-xs font-normal")],
+    cases: [CHECKOUT_LIST],
+    expect: /^payment step: Pay is drawn (?:smaller|lighter) than a secondary action/,
+  },
+  "P4 token mode reaches into the gateway": {
+    why: "the payment provider's surface takes the theme's token mode: its paint goes transparent",
+    rewrites: [rewrite(TOKENS, ':not([data-part="${PRIVATE_GATEWAY_HOOK}"],[data-part="${PRIVATE_GATEWAY_HOOK}"] *)`;', "`;")],
+    cases: [CHECKOUT_LIST],
+    expect: /^payment step: gateway: the provider's surface is restyled/,
+  },
+};
+// ─── end of the payment step's mutations ───
+
 export const MUTATIONS = {
+  ...CHECKOUT_MUTATIONS,
   // The reviews' fixes, each reverted: its named case must fail again.
   "B1 token mode draws the host's own page": {
     why: "the default arrangement's tokens drawn on the host's page, whose summary sits in the lines panel",
