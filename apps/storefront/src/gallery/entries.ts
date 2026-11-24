@@ -100,6 +100,10 @@ export interface GalleryScenario {
   delivering?: boolean;
   /** With `checkoutBuyerUi`: an app draws every node kind and tone in the summary, below the cart and under a line. */
   buyerUiKinds?: boolean;
+  /** An app block on a line and in the summary, and an add-on row, whose words run 120 letters (English and Bangla). */
+  longWords?: boolean;
+  /** The store asks the buyer to tick its terms before placing the order. */
+  requireTerms?: boolean;
   /** The cart check asks for a protection decision on the first line (declining needs agreement) and prices an add-on into the second. */
   lineStates?: boolean;
   /**
@@ -927,7 +931,7 @@ export function galleryEntry(id: string): GalleryEntry | null {
 }
 
 /** The states the private pages' rendered tests draw a theme in (each a cart the buyer can hold). */
-export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many", "one", "max", "customer", "customer-protected"] as const;
+export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many", "one", "max", "customer", "customer-protected", "long-words"] as const;
 export type PrivatePagesState = (typeof PRIVATE_PAGES_STATES)[number];
 
 /** Long Bangla titles: a line's words at their longest in the store's second language. */
@@ -979,7 +983,7 @@ function manyCart(): string {
  * store has Noor installed, so a theme from it draws its header and footer;
  * with `localization`, the store sells in two markets.
  */
-export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean; page?: "home" } = {}): GalleryEntry {
+export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean; terms?: boolean; page?: "home" } = {}): GalleryEntry {
   const base = galleryEntry(entryId("app", "buyer-ui"))!;
   // `decide`: the base cart, whose first line asks for a decision and every line sells, so Place order reaches the question.
   const customer = state === "customer" ? "offer" as const : state === "customer-protected" ? "protected" as const : undefined;
@@ -990,7 +994,9 @@ export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocu
     ...(options.noor ? { noor: "active" as const, menu: "compact" as const } : {}),
     // Two markets, the first in two languages: a public footer offers a country and a language.
     ...(options.localization ? { localization: true } : {}),
+    ...(options.terms ? { requireTerms: true } : {}),
     ...(state === "lines" || state === "decide" ? { lineStates: true } : {}),
+    ...(state === "long-words" ? { longWords: true } : {}),
     // The customer's cart: its protection app's blocks alone.
     ...(customer ? { customer, buyerUiKinds: false } : {}),
     ...(state === "bn" ? { locale: "bn" as const, product: "bangla" as const } : state === "ar" ? { locale: "ar" as const } : {}),

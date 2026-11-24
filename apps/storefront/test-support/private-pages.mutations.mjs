@@ -33,7 +33,62 @@ const HEADER = "the store's own header under dark tokens";
 const DEPTH = "review 6, B3: the cart unfolded, progress first, at its largest lines";
 const PROTECTED = "the customer's cart, protected";
 
+const CART = "apps/storefront/src/pages/cart.astro";
+const CART_ROOT = '    data-private="cart"\n  >\n';
+
 export const MUTATIONS = {
+  // The gate's own checks, each shown able to fail.
+  "G1 the cart takes no touch pan": {
+    why: "touch-action:none on the cart: a phone's swipe moves nothing, and Place order's place is never reached by touch",
+    rewrites: [rewrite(CART, CART_ROOT, '    data-private="cart"\n    style="touch-action:none"\n  >\n')],
+    cases: [S8],
+    expect: /^touch: a touch swipe stops/,
+  },
+  "G2 the cart starts two screens down": {
+    why: "the cart's parts start below the first screen",
+    rewrites: [rewrite(CART, CART_ROOT, '    data-private="cart"\n    style="padding-top:2400px"\n  >\n')],
+    cases: [S8],
+    expect: /^first screen: the page's first part starts at/,
+  },
+  "G3 Place order first in the Tab order": {
+    why: "a positive tabindex on Place order: Tab reaches it before the lines above it",
+    rewrites: [rewrite(CART, '          id="submitButton"\n', '          id="submitButton"\n          tabindex="1"\n')],
+    cases: [S8],
+    expect: /^focus order: focus goes back up the page/,
+  },
+  "G4 the page draws its light colours always": {
+    why: "the page marks its light colours where the store shows its dark ones",
+    rewrites: [rewrite("apps/storefront/src/layouts/Layout.astro", "data-color-scheme={paint.colorScheme?.scheme}", 'data-color-scheme="light"')],
+    cases: ["review 5: the store's own page under the marketplace palette's dark colours"],
+    expect: /^scheme: the page draws its light colours/,
+  },
+  "G5 a box's padding a hundredfold": {
+    why: "a padding token writes a hundred times its value: the theme adds screens above Place order",
+    rewrites: [
+      rewrite(TOKENS, "write: (value: number) => `padding:min(${value}px,4vw)`", "write: (value: number) => `padding:${value * 100}px`"),
+      rewrite(TOKENS, "declare(false, selectors, `padding:max(min(${value as number}px,4vw),${room}px)`);", "declare(false, selectors, `padding:${(value as number) * 100}px`);"),
+    ],
+    cases: [DEPTH],
+    expect: /^depth: the theme adds \d+px above Place order/,
+  },
+  "G6 a line's title breaks anywhere": {
+    why: "word-break:break-all on the line title: its words break inside themselves at the line's end",
+    rewrites: [rewrite("apps/storefront/src/lib/cart/line-html.ts", "line-clamp-2 break-words", "line-clamp-2 break-all")],
+    cases: [S8],
+    expect: /a word breaks inside itself/,
+  },
+  "G7 the cart's check answers 503": {
+    why: "the fixture store's cart check answers 503: a page drawn over a failing request",
+    rewrites: [rewrite("apps/storefront/src/gallery/api.ts", '  if (url.pathname === "/api/v1/orders/cart-validation" && request.method === "POST") {\n', '  if (url.pathname === "/api/v1/orders/cart-validation" && request.method === "POST") return new Response("{}", { status: 503 });\n  if (url.pathname === "/api/v1/orders/cart-validation" && request.method === "PUT") {\n')],
+    cases: [S8],
+    expect: /^5xx: 503 POST/,
+  },
+  "G8 the required terms box is hidden": {
+    why: "the store asks for its terms and the tick box and its words are not drawn: the buyer cannot accept them",
+    rewrites: [rewrite("apps/storefront/src/components/checkout/CheckoutTermsAgreement.astro", '<label for={id} class="flex min-h-11', '<label for={id} class="hidden min-h-11')],
+    cases: ["the required terms box, light and dark"],
+    expect: /cartTermsAccepted.*(?:not visible|missing)/,
+  },
   // The reviews' fixes, each reverted: its named case must fail again.
   "B1 token mode draws the host's own page": {
     why: "the default arrangement's tokens drawn on the host's page, whose summary sits in the lines panel",

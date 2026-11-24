@@ -13,7 +13,7 @@
 //   pnpm test:private-pages --case "review 4, B4" only the named cases whose name holds this text
 //   pnpm test:private-pages --mutate <name>       run under one known-bad change (private-pages.mutations.mjs)
 //   pnpm test:private-pages --mutations           the unmutated cases draw clean, and every known-bad change fails the check it names
-//   --jobs <n> cases at once (4); --profile where the time goes; PT_SHOTS=<dir> keeps the screen a
+//   --all-problems prints every problem of a failing draw; --jobs <n> cases at once (4); --profile where the time goes; PT_SHOTS=<dir> keeps the screen a
 //   failing text was measured on. Exit 0: every draw holds; 1: a draw fails; 2: the gate could not run.
 //
 // A theme here arranges the store's parts and gives them typed tokens: it
@@ -22,7 +22,8 @@
 // which the store reads with what it held dropped and its private pages'
 // compile refused).
 // A named document the save refuses fails the gate unless it names the
-// reason it must be refused for; a refused seed is counted, not drawn. Each
+// reason it must be refused for; a seed's refused draft is counted, and its
+// next draft drawn (a seed with no draft taken fails). Each
 // accepted one is drawn in its states (a store that delivers; a line asking
 // for a decision, a store kit with an add-on once per kit and an app's offer
 // row, and a sold-out line; an empty cart; long Bangla titles; an Arabic
@@ -46,10 +47,13 @@
 //   the table does not know lies between them and the row, and every element
 //   a style target names is drawn by a row of that target); with no tokens,
 //   to a surface the anatomy names, and the page shows no paint of its own;
-// - every text, with no budget, at its contrast floor against the pixels
-//   behind it (the text hidden, the page photographed);
+// - every text at its contrast floor against its worst pixel behind it, no
+//   budget (the text hidden, the page photographed); a field's value or
+//   placeholder at its 5th-percentile pixel less 0.05 (its box holds its ring);
 // - every text whole: nothing cut sideways, no glyph cut by a clip, no word
-//   broken inside itself;
+//   broken inside itself that fits whole on a line of its box; an app's
+//   words and an add-on row's title inside their boxes, the title clear of
+//   its amount; the lines, summary and details form at their floor;
 // - the summary's total drawn no smaller than any other summary row, its
 //   amount no smaller than its label, no lighter and no fainter than a row;
 // - under a theme's tokens: Place order's and Confirm's fill at 3:1 on what
@@ -60,7 +64,8 @@
 // - every control takes a click at its centre, is reached by Tab in document
 //   order, shows a focus ring at 3:1 against what is around it, and under the
 //   pointer still reads (and shows its hover where the host draws one);
-// - on a phone, the page scrolls by touch from the top to Place order;
+// - on a phone, the page scrolls by touch from the top to the details form's
+//   end, Place order's own place (docked, Place order is on screen at once);
 // - under the customer's look: the offer row's mark, sentence, price and Add
 //   Now on one line at 1280 and on at most two at 390, the status box on its
 //   tone's own surface, the add-on row opening to its three detail lines in
@@ -385,6 +390,9 @@ const REGRESSIONS = {
     layout: [{ type: "part", part: "progress" }, { type: "part", part: "notices" }, { type: "layout", layout: "columns", children: [{ type: "layout", layout: "stack", children: [{ type: "part", part: "lines", variant: "heading-above" }, { type: "part", part: "summary", variant: "with-items" }, { type: "part", part: "discount" }, { type: "target", target: "cart.page.summary" }, { type: "target", target: "cart.page.below" }, { type: "part", part: "empty" }] }, { type: "part", part: "details" }] }],
   } }, tokens: { cart: LARGEST_LINE }, labels: { "cart.intro": { en: "Review your items before checkout." }, "cart.summaryHeading": { en: "Order Summary" } } } },
   "the store's own page with one, twenty and ninety-nine lines": { states: LENGTHS, privatePages: {} },
+  // An app's block on a line and in the summary, and an add-on row, each holding a 120-letter English word and a Bangla
+  // one: they wrap or break inside their boxes, and the add-on's title never lies over its amount.
+  "120-letter words in an app's blocks and an add-on's title, English and Bangla": { states: ["long-words"], privatePages: {} },
   "the customer's look with one, twenty and ninety-nine lines": { states: LENGTHS, request: REFERENCE },
   // The cart drawer over a public page, in the theme's arrangement: its parts on screen, its words whole and readable.
   "the theme's arrangement of the drawer, on a public page": { request: { page: "home" }, privatePages: { pages: { cartDrawer: { layout: [
@@ -421,11 +429,20 @@ const REGRESSIONS = {
     page: { background: SCHEMED("#ffffff", "#111111") }, chrome: { background: SCHEMED("#f5f3ff", "#1e1831"), text: SCHEMED("#111111", "#ffffff"), muted: SCHEMED("#3f3f46", "#d4d4d8"), link: SCHEMED("#5b21b6", "#c4b5fd") },
     scheme: { ring: SCHEMED("#5b21b6", "#c4b5fd") }, localization: { text: SCHEMED("#111111", "#ffffff") },
   } } } },
+  // A store that asks for its terms: the required tick box and its words on screen, reached by Tab, its ring and its
+  // words readable, in the light colours and the dark, on a dark details form.
+  "the required terms box, light and dark": { request: { terms: true, scheme: "system", toggle: true }, privatePages: { tokens: { cart: { "details-form": BY_SCHEME, input: { ring: SCHEMED("#6d28d9", "#a78bfa"), invalid: SCHEMED("#b91c1c", "#f87171") } } } } },
   "no store controls on the page, under dark tokens": { request: { toggle: true, localization: true, scheme: "system" }, privatePages: { controls: "none", tokens: { cart: { page: DARK } } } },
   // The customer's cart (private-look.md 2.1, 2.2, 3) in its own look, light and dark, at 390 and 1280: offered its
   // protection, and protected on two accounts with the add-on row opened.
   "the customer's cart, its protection offered": { states: ["customer"], request: REFERENCE },
   "the customer's cart, protected": { states: ["customer-protected"], request: REFERENCE },
+  // Review P1: lines, summary and details in one `columns` with twenty empty groups beside them. Refused at save, or
+  // drawn with every part at its floor (never twenty-four squeezed tracks).
+  "review P1: a wide columns layout of twenty-four tracks": { mayRefuse: /columns|track|layout/i, privatePages: { pages: { cart: { layout: [{ type: "part", part: "notices" }, { type: "layout", layout: "columns", children: [
+    { type: "layout", layout: "stack", children: [{ type: "part", part: "lines" }] }, { type: "layout", layout: "stack", children: [{ type: "part", part: "summary" }, { type: "target", target: "cart.page.summary" }] },
+    { type: "layout", layout: "stack", children: [{ type: "part", part: "details" }] }, { type: "target", target: "cart.page.below" }, ...Array.from({ length: 20 }, () => ({ type: "layout", layout: "group", children: [] })),
+  ] }] } }, tokens: { cart: { "summary-total": { size: 20 } } } } },
   // A stored document forged past the save (a row edited by hand): content blocks in the page and the line, a
   // stylesheet, the theme's chrome and its search. The store reads it with all of that dropped and its private pages'
   // compile refused: the theme stays (its light or dark switch is drawn), its cart draws the default look with no
@@ -504,6 +521,14 @@ function decode(png) {
   return { width, height, channels, data: out };
 }
 
+/**
+ * A text's contrast is its worst pixel behind it, with no budget (measured: three runs of a named case and a page
+ * paint case found no text under its floor at the minimum that passed at the 5th percentile). A field's value or
+ * placeholder alone is read at its 5th-percentile pixel less 0.05: its box is the field's padding box, which also
+ * holds the field's own drawing (its inset ring and edge), read at 1.0 to 2.2:1 at the minimum.
+ */
+const FIELD_QUANTILE = 0.05;
+const FIELD_BUDGET = 0.05;
 const pixelAt = (image, x, y) => {
   const at = (y * image.width + x) * image.channels;
   return [image.data[at], image.data[at + 1], image.data[at + 2]];
@@ -687,7 +712,7 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt, styleTargets }
     if (!shows) continue;
     const placeholder = field.tagName !== "SELECT" && !field.value;
     const color = placeholder ? getComputedStyle(field, "::placeholder").color : style.color;
-    texts.push({ id: texts.length, label: `${placeholder ? "placeholder" : "value"} of ${name(field)}`, color, large: false });
+    texts.push({ id: texts.length, label: `${placeholder ? "placeholder" : "value"} of ${name(field)}`, color, large: false, field: true });
     window.__ptTexts.push({ field, element: field });
   }
   // Every control a buyer can reach.
@@ -730,6 +755,21 @@ function wholeTexts() {
     }
     return null;
   };
+  // A word wider than the box it is set in (a 120-letter word on a phone) can only break inside itself: allowed.
+  const widerThanItsBox = (node, at, element) => {
+    const text = node.textContent;
+    let [start, end] = [at, at];
+    while (start > 0 && word.test(text[start - 1])) start -= 1;
+    while (end < text.length && word.test(text[end])) end += 1;
+    let box = element;
+    while (box.parentElement && getComputedStyle(box).display.startsWith("inline")) box = box.parentElement;
+    const room = box.clientWidth - Number.parseFloat(getComputedStyle(box).paddingLeft) - Number.parseFloat(getComputedStyle(box).paddingRight);
+    // The word's own width: the widths of the pieces it is drawn in, end to end.
+    const range = document.createRange();
+    range.setStart(node, start);
+    range.setEnd(node, end);
+    return [...range.getClientRects()].reduce((sum, rect) => sum + rect.width, 0) > room + 1;
+  };
   const seen = new Set();
   for (const element of document.querySelectorAll("[data-pt-text]")) {
     for (const node of element.childNodes) {
@@ -758,7 +798,7 @@ function wholeTexts() {
           if (sideways && rect.bottom > clip.box.top && rect.top < clip.box.bottom) { problems.push(`${label}: "${segment}" is cut off at the side`); break; }
           if (cut) { problems.push(`${label}: "${segment}" is cut through by its box`); break; }
         }
-        if (previous && word.test(previous.segment) && word.test(segment) && rect.top >= previous.rect.bottom - 2) {
+        if (previous && word.test(previous.segment) && word.test(segment) && rect.top >= previous.rect.bottom - 2 && !widerThanItsBox(node, offset - segment.length, element)) {
           problems.push(`${label}: a word breaks inside itself ("${previous.segment}|${segment}")`);
           break;
         }
@@ -783,6 +823,67 @@ function clicks() {
     if (!hit || !(target.contains(hit) || hit.contains(target) && hit.closest("label") === target)) {
       problems.push(`control ${control.tagName.toLowerCase()}${control.id ? `#${control.id}` : ""}[${control.dataset.part ?? control.textContent.trim().slice(0, 20)}]: a click at its centre lands on ${hit ? `${hit.tagName.toLowerCase()}${hit.id ? `#${hit.id}` : ""}` : "nothing"}`);
     }
+  }
+  return problems;
+}
+
+/**
+ * An app's words and an add-on row stay in their boxes: every text under an app's block lies inside the block, and
+ * an add-on row's title lies inside its bar and clear of its amount (a 120-letter word wraps or breaks, never runs out).
+ */
+function appsFit() {
+  const problems = [];
+  const rectsOf = (root) => {
+    const out = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.textContent.trim() || !node.parentElement?.checkVisibility() || node.parentElement.closest(".sr-only")) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const rect of range.getClientRects()) if (rect.width >= 1) out.push({ text: node.textContent.trim().slice(0, 24), rect });
+    }
+    return out;
+  };
+  const inside = (rect, box) => rect.left >= box.left - 1 && rect.right <= box.right + 1;
+  for (const block of document.querySelectorAll('[data-private="cart"] [data-buyer-ui-app]')) {
+    if (!block.checkVisibility()) continue;
+    const box = block.getBoundingClientRect();
+    const out = rectsOf(block).find(({ rect }) => !inside(rect, box));
+    if (out) problems.push(`"${out.text}" in ${block.dataset.buyerUiApp}'s block runs out of it (${Math.round(out.rect.left)}..${Math.round(out.rect.right)} in ${Math.round(box.left)}..${Math.round(box.right)})`);
+  }
+  for (const row of document.querySelectorAll('[data-private="cart"] [data-summary-row="add-on"]')) {
+    const bar = row.matches("details") ? row.querySelector(":scope > summary") : row;
+    if (!bar?.checkVisibility()) continue;
+    const [title, amount] = [bar.firstElementChild, bar.lastElementChild];
+    if (!title || !amount || title === amount) continue;
+    const box = bar.getBoundingClientRect();
+    const money = amount.getBoundingClientRect();
+    for (const { text, rect } of rectsOf(title)) {
+      if (!inside(rect, box)) { problems.push(`the add-on row's title "${text}" runs out of its bar`); break; }
+      if (rect.left < money.right - 1 && rect.right > money.left + 1 && rect.top < money.bottom - 1 && rect.bottom > money.top + 1) { problems.push(`the add-on row's title "${text}" lies over its amount`); break; }
+    }
+    if (!inside(money, box)) problems.push("the add-on row's amount runs out of its bar");
+  }
+  return problems;
+}
+
+/**
+ * Every part of the page at its floor: the lines, the summary and the details form each at least as wide as a page
+ * track's floor (20rem) or the cart's own width where that is less, as the columns promise.
+ */
+function partsAtFloor() {
+  const cart = document.querySelector('[data-private="cart"]');
+  if (!cart) return [];
+  const style = getComputedStyle(cart);
+  const room = cart.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight);
+  // 8px of slack: a part's own margin or border inside the cart's width.
+  const floor = Math.min(320, room) - 8;
+  const problems = [];
+  for (const part of ["lines", "summary", "details-form"]) {
+    const element = cart.querySelector(`[data-part="${part}"]`);
+    if (!element?.checkVisibility()) continue;
+    const width = element.getBoundingClientRect().width;
+    if (width < floor) problems.push(`[data-part=${part}] is drawn ${Math.round(width)}px wide, under its floor of ${Math.round(floor + 8)}px less 8`);
   }
   return problems;
 }
@@ -1121,9 +1222,9 @@ async function textContrast(page, texts) {
       }
       if (ratios.length === 0) continue;
       ratios.sort((a, b) => a - b);
-      const worst = ratios[Math.floor(ratios.length * 0.05)];
+      const worst = ratios[text.field ? Math.floor(ratios.length * FIELD_QUANTILE) : 0];
       const floor = text.large ? 3 : 4.5;
-      if (worst < floor - 0.05) {
+      if (worst < floor - (text.field ? FIELD_BUDGET : 0)) {
         problems.push(`${text.label}: ${text.color} reads ${worst.toFixed(2)}:1 on what is behind it`);
         // `PT_SHOTS=<dir>`: keep the screen a failing text was measured on (its words hidden), to look at.
         if (process.env.PT_SHOTS && !kept) {
@@ -1294,8 +1395,8 @@ async function hovers(page, controls) {
       }
       if (ratios.length === 0) continue;
       ratios.sort((a, b) => a - b);
-      const worst = ratios[Math.floor(ratios.length * 0.05)];
-      if (worst < (word.large ? 3 : 4.5) - 0.05) problems.push(`control ${control.label} hovered: "${word.text}" ${word.color} reads ${worst.toFixed(2)}:1 on what is behind it`);
+      const worst = ratios[0];
+      if (worst < (word.large ? 3 : 4.5)) problems.push(`control ${control.label} hovered: "${word.text}" ${word.color} reads ${worst.toFixed(2)}:1 on what is behind it`);
     }
     if (box.surfaced) {
       let changed = 0;
@@ -1312,8 +1413,12 @@ async function hovers(page, controls) {
   return problems;
 }
 
-/** On a phone: swiping from the top reaches Place order (nothing on the way takes the gesture). */
-async function touchScroll(page, selector) {
+/**
+ * On a phone: swiping from the top reaches the end of the details form, where Place order's own place is
+ * (nothing on the way takes the gesture). Never Place order's docked bar: it is on screen from the start.
+ */
+async function touchScroll(page) {
+  const selector = '[data-part="details-form"]';
   const session = await page.context().newCDPSession(page);
   const viewport = page.viewportSize();
   const x = Math.round(viewport.width / 2);
@@ -1323,9 +1428,12 @@ async function touchScroll(page, selector) {
     let last = -1;
     let stuck = 0;
     for (let swipe = 0; swipe < 60; swipe += 1) {
-      const { top, y } = await page.evaluate((selector) => ({ top: document.querySelector(selector)?.getBoundingClientRect().top ?? null, y: Math.round(scrollY) }), selector);
-      if (top === null) return [`${selector}: missing for the touch scroll`];
-      if (top < viewport.height - 48) return [];
+      // The form's end in the page's flow; reached once it is on screen (or the page can scroll no further).
+      const { bottom, y, end } = await page.evaluate((selector) => ({ bottom: document.querySelector(selector)?.getBoundingClientRect().bottom ?? null, y: Math.round(scrollY), end: document.documentElement.scrollHeight - innerHeight }), selector);
+      if (bottom === null) return [`${selector}: missing for the touch scroll`];
+      if (swipe === 0 && bottom <= viewport.height) return [];
+      if (bottom <= viewport.height || y >= end - 1) return swipe > 0 ? [] : [`${selector}: its end lies below the screen and the page cannot scroll`];
+      const top = bottom;
       // Three swipes in a row that move nothing: something on the way takes the gesture.
       stuck = y === last ? stuck + 1 : 0;
       if (stuck >= 3) return [`a touch swipe stops at ${y}px, ${Math.round(top - viewport.height)}px above ${selector}`];
@@ -1383,6 +1491,10 @@ let drawn = 0;
 let draws = 0;
 let refused = 0;
 const reasons = {};
+/** The drafts a seed tries before one the save takes, and the refused drafts (counted, never drawn). */
+const SEED_DRAFTS = 8;
+let draftsRefused = 0;
+const draftReasons = {};
 const started = Date.now();
 /** The most a draw's theme added above Place order, against its bound (printed with the run's result). */
 let deepest = null;
@@ -1503,7 +1615,9 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   if (request?.page === "home") return drawDrawer({ context, id, width, problems, server5xx, rows, state });
   const page = await timed("load", () => open(context, id, width, server5xx, height));
   // The store's own checkout header, and its controls where the theme places them.
-  const mandatory = [...(state === "empty" ? EMPTY_MANDATORY : state === "lines" ? LINES_MANDATORY : MANDATORY), '[data-private="core-header"]'];
+  // A store that asks for its terms: the required box and its words, wherever the cart is not empty.
+  const terms = request?.terms && state !== "empty" ? ["#cartTermsAccepted", 'label[for="cartTermsAccepted"]'] : [];
+  const mandatory = [...(state === "empty" ? EMPTY_MANDATORY : state === "lines" ? LINES_MANDATORY : MANDATORY), '[data-private="core-header"]', ...terms];
   const at = (label, list) => problems.push(...list.map((problem) => `${label}: ${problem}`));
   const check = async (label, scope, list, { controls: wantControls = true } = {}) => {
     await timed("settle", () => settle(page));
@@ -1526,7 +1640,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   at("first screen", await page.evaluate(firstScreen, LEAD));
   if (state !== "empty") at("dock", await timed("dock", () => dockChecks(page)));
   // Phones: Tab order and the touch scroll run before anything is clicked.
-  if (width < 1280 && state !== "empty") at("touch", await timed("touch", () => touchScroll(page, '[data-part="details-submit"]')));
+  if (width < 1280 && state !== "empty") at("touch", await timed("touch", () => touchScroll(page)));
   if (focus) {
     const { controls } = await page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: [], scope: null, exempt: EXEMPT, styleTargets: [] });
     at("focus order", await timed("tab", () => focusOrder(page, controls)));
@@ -1536,15 +1650,21 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   if (await toggle.isVisible().catch(() => false)) await toggle.click().catch(() => {});
   await openAddOns(page, '[data-private="cart"]');
   await page.waitForTimeout(150);
+  // Docked with the fold open too (a phone's cart unfolded is the longest page).
+  if (state !== "empty" && width < 1280) at("dock, fold open", await timed("dock", () => dockChecks(page)));
   const page0 = await check(state, null, mandatory);
   at(state, await page.evaluate(controlsPlaced, controls));
   at(`${state} prominence`, await page.evaluate(prominence, '[data-private="cart"] [data-part="summary"]'));
+  at(`${state} apps fit`, await page.evaluate(appsFit));
+  at(`${state} floors`, await page.evaluate(partsAtFloor));
   if (request?.reference && (state === "customer" || state === "customer-protected")) at(`${state} customer`, await page.evaluate(customerChecks, { state, rows, details: CUSTOMER_DETAILS }));
   // What the theme adds above Place order, against the default look with the same cart (the fold open in both).
   if (state !== "empty") {
     const here = await page.evaluate(actionInFlow);
     const before = await timed("default", () => defaultInFlow(request, state, width, height));
-    if (here && before) {
+    // A baseline that cannot be measured is a failure, never a skipped check.
+    if (!here || !before) problems.push(`depth: Place order's place cannot be measured (${!here ? "under the theme" : "under the default look"})`);
+    else {
       const added = here.top - before.top;
       const allowed = THEME_DEPTH_PX + LINE_DEPTH_PX * here.lines;
       if (!deepest || added / allowed > deepest.added / deepest.allowed) deepest = { added: Math.round(added), allowed, lines: here.lines };
@@ -1670,8 +1790,8 @@ async function dockChecks(page) {
 /** Place order's place under the default look, for the same store and cart at this size (measured once each). */
 const defaults = new Map();
 function defaultInFlow(request = {}, state, width, height = 900) {
-  const { noor, localization, tabs, toggle, reference } = request;
-  const shape = { noor, localization, tabs, toggle, reference };
+  const { noor, localization, tabs, toggle, reference, terms } = request;
+  const shape = { noor, localization, tabs, toggle, reference, terms };
   const key = `${JSON.stringify(shape)}|${state}|${width}|${height}`;
   if (!defaults.has(key)) {
     defaults.set(key, (async () => {
@@ -1723,7 +1843,22 @@ try {
     .filter(([name]) => !CASE || args.flatMap((value, index) => args[index - 1] === "--case" ? [value] : []).some((needle) => name.includes(needle)))
     .map(([name, entry]) => ({ name, ...entry }));
   const seeds = NO_SEEDS || (CASE && ONLY === null) ? [] : (ONLY !== null ? [ONLY] : Array.from({ length: SEEDS }, (_, index) => FROM + index));
-  const cases = [...(ONLY !== null || args.includes("--no-named") ? [] : named), ...seeds.map((seed) => ({ name: `seed ${seed}`, seed, ...generate(seed) }))];
+  // Each seed draws a look the save takes: its first draft the save refuses gives way to the next of the seed's
+  // drafts (the same ones in every run, so `--seed` replays it), each refusal counted. A seed none of whose
+  // SEED_DRAFTS the save takes fails the gate: the drawn count is the seed count.
+  const accepted = await Promise.all(seeds.map(async (seed) => {
+    for (let draft = 0; draft < SEED_DRAFTS; draft += 1) {
+      const generated = generate(draft === 0 ? seed : seed + draft * 100_003);
+      const answer = await fetch(`${gallery.url}/__gallery/private-theme`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: `pp-draft-${seed}-${draft}`, state: "base", ...generated.request, privatePages: generated.privatePages }) });
+      if (answer.status === 200) return { name: `seed ${seed}${draft ? ` (draft ${draft})` : ""}`, seed, ...generated };
+      const issue = answer.status === 422 ? (await answer.json()).issues[0] : null;
+      draftsRefused += 1;
+      draftReasons[issue?.reason ?? `status ${answer.status}`] = (draftReasons[issue?.reason ?? `status ${answer.status}`] ?? 0) + 1;
+    }
+    failures.push({ index: -1, name: `seed ${seed}`, where: "save", problems: [`none of its ${SEED_DRAFTS} drafts is taken by the save: the gate draws fewer looks than it says`], document: generate(seed) });
+    return null;
+  }));
+  const cases = [...(ONLY !== null || args.includes("--no-named") ? [] : named), ...accepted.filter(Boolean)];
   /** One case: its document saved, then drawn in each of its states. */
   const runCase = async (entry, index) => {
     const states = entry.states === "all" || ALL_STATES ? STATES : Array.isArray(entry.states) ? entry.states : entry.seed !== undefined ? ["base", STATES[1 + (entry.seed % (STATES.length - 1))]] : ["base"];
@@ -1737,6 +1872,8 @@ try {
         // Refused for the break it names (`refusedFor`: the pair or key in the refusal's words), not for another.
         else if (entry.refusedFor && !entry.refusedFor.test(issue?.message ?? "")) failures.push({ index, name: entry.name, where: "save", problems: [`refused for another break: ${issue?.message}`], document: entry });
         // A named document meant to draw is legal: the save refusing it is a failure (it would test nothing).
+        // Refused or drawn whole (`mayRefuse`: the refusal's reason and words it may be refused with).
+        else if (entry.mayRefuse && entry.mayRefuse.test(`${issue?.reason}: ${issue?.message}`)) return;
         else if (!entry.refused && entry.seed === undefined && state === states[0]) failures.push({ index, name: entry.name, where: "save", problems: [`refused at save (${issue?.reason}: ${issue?.message}); a legal document must be taken`], document: entry });
         return;
       }
@@ -1802,9 +1939,9 @@ try {
 }
 for (const failure of failures) {
   // Under a mutation every problem is printed: the run looks for the one its check names.
-  const shown = MUTATE ? failure.problems.length : 12;
+  const shown = MUTATE || args.includes("--all-problems") ? failure.problems.length : 12;
   console.error(`\n✗ ${failure.name}, ${failure.where}:\n  ${failure.problems.slice(0, shown).join("\n  ")}${failure.problems.length > shown ? `\n  … and ${failure.problems.length - shown} more` : ""}\n  document: ${JSON.stringify({ request: failure.document.request, privatePages: failure.document.privatePages })}`);
 }
 if (args.includes("--profile")) console.log(`time (s): ${Object.entries(PROFILE).map(([label, ms]) => `${label} ${(ms / 1000).toFixed(1)}`).join(", ")}`);
-console.log(`private pages, rendered: ${drawn} documents drawn in ${draws} draws (${refused} refused at save: ${JSON.stringify(reasons)}) at ${WIDTHS.join(", ")} px, light and dark, in ${Math.round((Date.now() - started) / 1000)}s: ${failures.length} failures${MUTATE ? ` (under mutation ${MUTATE})` : ""}${deepest ? `; the most a theme added above Place order: ${deepest.added}px with ${deepest.lines} lines (bound ${deepest.allowed}px)` : ""}`);
+console.log(`private pages, rendered: ${drawn} documents drawn in ${draws} draws (${refused} refused at save: ${JSON.stringify(reasons)}; seeds' drafts refused before one was taken: ${draftsRefused} ${JSON.stringify(draftReasons)}) at ${WIDTHS.join(", ")} px, light and dark, in ${Math.round((Date.now() - started) / 1000)}s: ${failures.length} failures${MUTATE ? ` (under mutation ${MUTATE})` : ""}${deepest ? `; the most a theme added above Place order: ${deepest.added}px with ${deepest.lines} lines (bound ${deepest.allowed}px)` : ""}`);
 if (process.exitCode !== 2) process.exitCode = failures.length > 0 ? 1 : 0;

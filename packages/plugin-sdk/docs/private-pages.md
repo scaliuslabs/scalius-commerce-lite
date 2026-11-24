@@ -577,15 +577,32 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
 
 ## The rendered gate
 
-What the save proves is checked again by drawing. `pnpm test:private-pages` (in the Scalius repository) compiles each theme with the store's compiler and draws the real cart page in headless Chromium on a fixture store that delivers (Place order is on), with an app block of every node kind and tone in the summary, below the cart, under a line and inside the details form. Each document is a legal theme, or a named break the save must refuse; a refused document is not drawn.
+What the save proves is checked again by drawing. `pnpm test:private-pages` (in the Scalius repository) compiles each theme with the store's compiler and draws the real cart page in headless Chromium on a fixture store that delivers (Place order is on), with an app block of every node kind and tone in the summary, below the cart, under a line and inside the details form. Each document is a legal theme, or a named break the save must refuse; a refused document is not drawn. A seed draws a look the save takes: a draft the save refuses gives way to the seed's next draft (up to eight, the same ones every run), the refused drafts are counted and printed, and a seed with no draft taken fails the gate, so every seed is drawn.
 
-**What it draws.** The reviews' named cases and seeded legal themes, each in its states (the base cart; a line asking for a decision, a store kit as one line with an add-on once per kit and an app's offer row under it, and a sold-out line; an empty cart; long Bangla titles; an Arabic right-to-left presence; field errors showing; the sign-in and confirmation dialogs open), at 320, 390 and 1280 px, light and dark. Seeds carry colours per scheme, `controls`, every variant, label and style target, `leading`, `mono`, and every app node kind, the toned stack, mark, link and key-value included. Besides them:
+**What it draws.** The reviews' named cases and seeded legal themes, each in its states (the base cart; a line asking for a decision, a store kit as one line with an add-on once per kit and an app's offer row under it, and a sold-out line; an empty cart; long Bangla titles; an Arabic right-to-left presence; field errors showing; the sign-in and confirmation dialogs open). Seeds carry colours per scheme, `controls`, every variant, label and style target, `leading`, `mono`, and every app node kind, the toned stack, mark, link and key-value included. Besides them:
 
+- an app's block on a line and in the summary, and an add-on row, each holding a 120-letter English word and a Bangla one;
+- a store that asks for its terms to be ticked: the required box and its words on a details form coloured per scheme;
+- lines, summary and details in one `columns` with twenty empty groups beside them: refused at save, or drawn with every part at its floor;
 - the default look and the customer's look with one, twenty and ninety-nine lines on a 390×700 phone, a 768×1024 tablet and a 1280×800 laptop;
 - the customer's cart (the reference above), offered and protected, at 390 and 1280, light and dark, and its protected cart in the drawer with the add-on row open;
 - the store's controls in its header, in the strip at the page's end and nowhere, in a store with the light or dark switch and two markets;
 - a stored document forged past the save (a stylesheet, the theme's chrome and search, content blocks in the page and a line): the store reads it with all of them dropped and its private pages' compile refused, so the theme stays (its light or dark switch is drawn) and its cart draws the default look with none of them;
 - named breaks the save must refuse, each with its reason (a stylesheet or blocks, `not_available`; words that do not read, in either scheme; a total smaller, lighter or fainter than its rows, or under its label, `prominence`; Place order or Confirm with no fill that shows, or smaller and lighter than its neighbour; Go back filled; a borderless field or stepper the colour of its box): a refused document is not drawn.
+
+**Where each state is drawn** (by cost: each draw loads the page and photographs it screen by screen):
+
+| State | Widths and schemes | Checks beyond the walk, contrast, whole text and clicks |
+| --- | --- | --- |
+| The base cart | 320, 390 and 1280, each light and dark | Tab order and focus rings at 390 light, 390 dark and 1280 dark; hover at 1280 dark; field errors and the sign-in dialog at 390 light and 1280 dark |
+| A line asking for a decision, a kit and an offer row | 390 dark, 1280 light | the confirmation dialog in both |
+| Place order asking for the decision | 390 light, 1280 dark | the confirmation dialog in both |
+| One, twenty and ninety-nine lines | 390×700 light, 768×1024 dark, 1280×800 light | none |
+| The customer's cart, offered or protected | 390 and 1280, each light and dark | its own checks in all four; focus rings at 390 light and 1280 dark; hover at 1280 dark |
+| Every other state (empty, Bangla, Arabic, 120-letter words) | 320 light, 1280 dark | none |
+| The drawer | 390 light, 1280 dark | none |
+
+In every draw: the first screen, the store's controls, prominence, apps and add-ons fit, and floors; with lines, Place order docked and depth; under 1280px with lines, touch and Place order docked again with the fold open. A seed draws the base cart and one other state, its seed's turn. Under a scheme the store fixes (`light` or `dark`), both rows of a width draw that scheme.
 
 **What fails it.**
 
@@ -596,16 +613,18 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 | Nothing of the theme's | Any `[data-free]` region, or a forged document's words or CSS, reaches the page. |
 | Scheme | The page draws a colour scheme the store does not show. |
 | Coverage walk | In token mode, a text or a focusable control belongs to no row of the colour table (its words are none of its row's resolved colours, its row's element paints something other than the row's paint, a surface the table does not know lies between it and its row, or an element a style target names is drawn by another row), with every add-on row opened; with no tokens, it stands on no surface the anatomy names, or the page shows a paint of its own. |
-| Contrast | Any text, with no budget, reads under 4.5:1 (3:1 large) against the pixels behind it (every text hidden, the page photographed). |
-| Whole text | A text is cut off at the side, a glyph is cut by its box, or a word breaks inside itself. |
+| Contrast | Any text reads under 4.5:1 (3:1 large) against its worst pixel behind it, with no budget (every text hidden, the page photographed; its line boxes each inset 1px). A field's value or placeholder is read at its 5th-percentile pixel less 0.05: its box is the field's padding box, which holds the field's own ring and edge. A control's words under the pointer are read at their worst pixel too. |
+| Whole text | A text is cut off at the side, a glyph is cut by its box, or a word breaks inside itself where it would fit whole on a line of its box (a word wider than its box may only break). |
 | Controls | A click at a control's centre lands elsewhere; Tab does not reach it, or reaches it out of document order; its focus ring changes under three quarters of its perimeter at 3:1. |
-| Hover | Under the pointer, a control's words read under their floor, or a control the store gives a hover surface changes under a quarter of its box. |
+| Hover | Under the pointer, a control's words read under their floor at their worst pixel, or a control the store gives a hover surface changes under a quarter of its box. |
+| Apps and add-ons fit | A text under an app's block runs out of the block, or an add-on row's title runs out of its bar or lies over its amount. |
+| Floors | The lines, the summary or the details form is drawn more than 8px narrower than a page track's floor (20rem) or the cart's own width where that is less. |
 | Prominence | The total is drawn smaller than another summary row, its amount smaller than its label, lighter than a row's word, or reading fainter on what is behind it than a row's word (an add-on's app lines aside). |
 | Finding actions and fields | Under a theme's tokens: Place order's or Confirm's fill reads under 3:1 on what is behind it; Place order is smaller or lighter than another filled button on the page; Go back paints a fill of its own; Confirm is smaller or lighter than Go back; a field, the stepper, the fold's bar or Go back shows its border under 3:1 on what is behind it, or, drawing none, its own fill. |
-| Place order | At scroll 0 and at three places down the cart, Place order or its total is off screen, does not take a click there, or shows no total. |
+| Place order | At scroll 0 and at three places down the cart, Place order or its total is off screen, does not take a click there, or shows no total; on a phone, with the cart's fold closed and again with it open. |
 | First screen | At scroll 0, none of the page's lead parts starts inside the screen. |
-| Depth | What the theme adds above Place order (its place under the theme less its place under the default look, same cart, the fold open) is over 3200px and 448px a line. |
-| Touch | On a phone, swiping from the top does not reach Place order. |
+| Depth | What the theme adds above Place order (its place under the theme less its place under the default look, same cart, the fold open) is over 3200px and 448px a line, or either place cannot be measured. |
+| Touch | On a phone, swiping from the top does not reach the end of the details form, Place order's own place (never its docked bar, on screen from the start). |
 | The customer's cart | The offer row's mark, sentence, price and Add Now are not in one band at 1280 or take more than two at 390; a status box does not paint its tone's surface; the add-on row does not open to its three lines in order, or its amount shows more than once. |
 | Server | Any request answers 5xx. |
 
@@ -616,7 +635,7 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 | The gate (named cases and the fast seed set) | `pnpm test:private-pages` |
 | A longer run | `pnpm test:private-pages --seeds 30 --from 100` (`--no-named` for seeds only, `--all-states` for every state of each) |
 | One seed or case | `--seed 7`, `--case "B4"` (a failing seed prints its document) |
-| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (33 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, the total ranked by size only, a filled button's fill unchecked, an edge read by a border it does not draw, Go back filled, and the switch drawn under `controls: none`) |
+| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (41 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, the total ranked by size only, a filled button's fill unchecked, an edge read by a border it does not draw, Go back filled, and the switch drawn under `controls: none`) |
 
 The gate checks the cart page with the fixture store's data, not every store's data.
 

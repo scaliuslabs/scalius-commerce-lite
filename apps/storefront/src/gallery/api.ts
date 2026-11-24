@@ -264,8 +264,20 @@ function checkoutApps(entry: GalleryEntry) {
       ] } },
     ]
     : [];
+  // 120-letter words, English and Bangla: an app's block on the first line and in the summary (`longWords`).
+  const long = entry.scenario.longWords
+    ? ["cart.line.after", "cart.page.summary"].map((target) => ({
+      appId: "acme.long", releaseId: "gallery", target, ...(target === "cart.line.after" ? { lineKey: "line:v3:prod_1:variant:var_1:p:none" } : {}), attributes: [], values: {},
+      ui: { type: "stack", children: [
+        { type: "banner", tone: "info", title: LONG_WORD_EN, text: LONG_WORD_BN },
+        { type: "text", text: `${LONG_WORD_EN} ${LONG_WORD_BN}` },
+        { type: "button", label: LONG_WORD_EN, action: { kind: "navigate", to: { kind: "store", path: "/pages/delivery" } } },
+      ] },
+    }))
+    : [];
   return [
     ...kinds,
+    ...long,
     {
       appId: "acme.notes", releaseId: "gallery", target: "checkout.contact.after",
       attributes: [{ key: "gift_note", type: "multiline", label: "Gift message", maxLength: 500 }], values: {},
@@ -352,6 +364,15 @@ function customerInputs(protectedAccount: boolean) {
       ...(protectedAccount ? {} : { decision: { proceedWith: "declined" } }),
     }],
   };
+}
+
+/** One word of 120 letters in English and one in Bangla: an app's words and an add-on's title that cannot wrap. */
+export const LONG_WORD_EN = "Supercalifragilistic".repeat(6);
+export const LONG_WORD_BN = "\u09B8\u09C1\u09B0\u0995\u09cd\u09B7\u09BE".repeat(18).slice(0, 120);
+
+/** An add-on row whose title is one 120-letter word, then a Bangla one (`longWords`). */
+function longWordAddOns() {
+  return [{ appId: "acme.long", title: `${LONG_WORD_EN} ${LONG_WORD_BN}`, amountMinor: 35_000, details: [LONG_WORD_EN, LONG_WORD_BN] }];
 }
 
 /** The customer's protected account line: each unit with the app's add-on (৳350), the summary row opening to one entry a unit. */
@@ -441,7 +462,9 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
   if (path === "/api/v1/checkout/config") {
     const gateways = entry.scenario.checkout === "no-cod" ? [] : [{ id: "cod", name: "Cash on delivery", countries: ["BD"] }];
     // A store that delivers: a Bangladesh zone serves every address and a city has its thanas, so Place order is on.
-    return entry.scenario.delivering ? { gateways, checkoutReadiness: { status: "ready", issues: [], hasActiveShippingMethod: true, hasActiveDeliveryHierarchy: true } } : { gateways };
+    // A store that asks for its terms to be accepted (`requireTerms`): the required box, not the sentence.
+    const terms = entry.scenario.requireTerms ? { requireTermsAcceptance: true } : {};
+    return entry.scenario.delivering ? { gateways, ...terms, checkoutReadiness: { status: "ready", issues: [], hasActiveShippingMethod: true, hasActiveDeliveryHierarchy: true } } : { gateways, ...terms };
   }
   if (path === "/api/v1/products/recommendations") {
     const limit = Math.min(positiveInteger(search.get("limit"), 8), 20);
@@ -553,7 +576,7 @@ async function cartValidation(entry: GalleryEntry, request: Request) {
     issues,
     ...(lineStates ? { lineInputs: [PROTECTION_INPUTS] } : customer ? { lineInputs: [customerInputs(customer === "protected")] } : {}),
     // The customer's protected accounts: one summary row for the app's add-on, opening to an entry a unit.
-    ...(protectedUnits > 0 ? { addOns: { rows: customerAddOns(protectedUnits) } } : {}),
+    ...(protectedUnits > 0 ? { addOns: { rows: customerAddOns(protectedUnits) } } : entry.scenario.longWords ? { addOns: { rows: longWordAddOns() } } : {}),
     items: items.map((item, index) => ({
       ...(lineStates && item.productId === "prod_0" ? { lineInputs: ["acme.protect.plan"] } : {}),
       ...(account(item) ? { lineInputs: [`${GALLERY_CUSTOMER.appId}.${GALLERY_CUSTOMER.inputKey}`] } : {}),
@@ -610,7 +633,7 @@ async function taxQuote(entry: GalleryEntry, request: Request) {
     allowedPaymentMethods: entry.scenario.checkout === "no-cod" ? [] : ["cod"],
     items,
     // The customer's protected accounts: the add-on's summary row, as the cart check answers it.
-    ...(entry.scenario.customer === "protected" ? { addOns: customerAddOns(items.filter((item) => item.variantId === GALLERY_CUSTOMER.account.variantId).reduce((sum, item) => sum + item.quantity, 0)) } : {}),
+    ...(entry.scenario.customer === "protected" ? { addOns: customerAddOns(items.filter((item) => item.variantId === GALLERY_CUSTOMER.account.variantId).reduce((sum, item) => sum + item.quantity, 0)) } : entry.scenario.longWords ? { addOns: longWordAddOns() } : {}),
     // The quote carries the apps' buyer UI, as the API's does.
     buyerUi: checkoutApps(entry),
   };
