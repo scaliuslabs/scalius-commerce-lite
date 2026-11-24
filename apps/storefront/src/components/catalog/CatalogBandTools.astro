@@ -1,8 +1,11 @@
 ---
-// The listing's controls on computers: the filter button and quick filters
-// of a drawer layout, the page size, the sort and the grid/list toggle, and
-// (when the template asks) the result count. They sit in the title band;
-// Dawn's bar layout puts them at the end of the filter line instead.
+// The listing's controls: the filter button and quick filters of a drawer
+// layout, the page size, the sort and the grid/list toggle, and (when the
+// template asks) the result count. They sit in the title band; Dawn's bar
+// layout puts them at the end of the filter line instead. In the store's own
+// listing they are the computer's controls (its phone bar carries the sort
+// below 64rem); placed by a skin (`everyWidth`, the toolbar embed) they are
+// the only controls, so they show and wrap at every width.
 import type { ComponentProps } from "astro/types";
 import { catalogCopy } from "@/lib/catalog-copy";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
@@ -27,15 +30,17 @@ interface Props {
   results: string;
   /** The count at the end of the line (Dawn); null leaves it in the title. */
   countLabel?: string | null;
+  /** Shown at every width: a skin placed them, and no phone bar stands in below 64rem. */
+  everyWidth?: boolean;
   class?: string;
 }
 
-const { drawerButton, refinementCount, quickFilters, showPageSize, showSort, showViewToggle, limit, sortBy, sortOptions, viewSelect, results, countLabel = null, class: className } = Astro.props;
+const { drawerButton, refinementCount, quickFilters, showPageSize, showSort, showViewToggle, limit, sortBy, sortOptions, viewSelect, results, countLabel = null, everyWidth = false, class: className } = Astro.props;
 const { language } = await currentRequestTheme(Astro.locals);
 const copy = catalogCopy(language).listing;
 ---
 
-<div class:list={["catalog-band-tools", className]}>
+<div class:list={["catalog-band-tools", className]} data-every-width={everyWidth ? "" : undefined}>
   {drawerButton && (
     <Fragment>
       <button

@@ -27,7 +27,15 @@ import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { CUSTOMER_TAGS_PER_CUSTOMER_MAX, MARKETING_CONTACT_CHANNELS } from "@scalius/shared/customer-marketing";
 import type { CustomerImportBatch, CustomerImportItem } from "@scalius/shared/store-transfer/customers";
 import { readAcceptedCustomerCountries } from "../settings";
-import { customerAddressColumns, resolveAddressFromRows, type AddressValidationError } from "../customers";
+import {
+  customerAddressColumns,
+  insertCustomer,
+  isSignInChangedError,
+  resolveAddressFromRows,
+  writeCustomerWhere,
+  writeSignIn,
+  type AddressValidationError,
+} from "../customers";
 import {
   type ConsentChange,
   type ConsentRuntime,
@@ -79,6 +87,8 @@ type Existing = {
   /** The customer has a saved address (an import fills an empty address book only). */
   hasAddress: number;
   accountClaimedAt: unknown;
+  /** The version of how it signs in, as read: an email filled in names it. */
+  signInVersion: number;
 };
 
 type PlannedWrite = {
@@ -101,6 +111,7 @@ async function readExisting(db: Database, items: readonly CustomerImportItem[]) 
     // Qualified: drizzle leaves a one-table select's columns bare, and a bare name binds inside the subquery first.
     hasAddress: sql<number>`EXISTS (SELECT 1 FROM customer_addresses AS imported_book WHERE imported_book.customer_id = "customers"."id")`,
     accountClaimedAt: customers.accountClaimedAt,
+    signInVersion: customers.signInVersion,
   };
   const [phoneRows, emailRows] = await Promise.all([
     db.select(columns).from(customers).where(and(
@@ -254,7 +265,10 @@ export async function importCustomers(
       }
       const statements: unknown[] = [];
       if (Object.keys(updates).length > 0) {
-        statements.push(db.update(customers).set({ ...updates, updatedAt: sql`unixepoch()` }).where(sql`${customers.id} = ${match.id}`));
+        // A filled email is a contact of how the customer signs in: the write names the version read.
+        statements.push(...(updates.email
+          ? writeSignIn(db, match, updates, sql`${customers.email} IS NULL`)
+          : [writeCustomerWhere(db, sql`${customers.id} = ${match.id}`, { ...(updates.name ? { name: updates.name } : {}), updatedAt: sql`unixepoch()` })]));
         statements.push(db.insert(customerHistory).values({
           id: `hist_${nanoid()}`,
           customerId: match.id,
@@ -289,7 +303,7 @@ export async function importCustomers(
     result.customerId = customerId;
     const name = displayName(item);
     const statements: unknown[] = [
-      db.insert(customers).values({
+      insertCustomer(db, {
         id: customerId,
         name,
         email: item.email,
@@ -359,7 +373,9 @@ export async function importCustomers(
             code: "write_failed",
             message: /customers_(guest_phone|verified_phone|verified_email)/i.test(message)
               ? "Another customer with this phone or email was saved at the same time. Import the file again."
-              : "The customer could not be saved.",
+              : isSignInChangedError(single)
+                ? "This customer's phone or email changed while the file was imported. Import the file again."
+                : "The customer could not be saved.",
           });
         }
       }

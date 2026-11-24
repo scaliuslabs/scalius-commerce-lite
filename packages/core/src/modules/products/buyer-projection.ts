@@ -75,7 +75,10 @@ export function resolvedBuyerDiscountSql(sku: DiscountColumns, product: Discount
  *
  * Selection policy is deliberate:
  * - prefer an in-stock/untracked SKU when at least one can be bought now;
- * - within that pool, choose the lowest effective price;
+ * - within that pool, choose the lowest effective price, then the highest
+ *   regular price (at one price, the SKU with the deepest saving), then the
+ *   SKU id: the card's struck price and percent off are this SKU's own
+ *   (`priceLineClaim`, rules/money/price-line-claim.md);
  * - when every SKU is sold out, still choose the lowest effective price so the
  *   product can remain visible with truthful sold-out pricing;
  * - a valid SKU discount overrides the product discount, matching checkout and
@@ -214,7 +217,7 @@ export function buildBuyerCatalogPricingProjection(
             units: sql<number>`${skuFacts.units}`.as("buyer_units"),
             buyerRank: sql<number>`ROW_NUMBER() OVER (
                 PARTITION BY ${facts.productId}
-                ORDER BY ${facts.available} DESC, ${facts.effectivePrice} ASC, ${facts.skuId} ASC
+                ORDER BY ${facts.available} DESC, ${facts.effectivePrice} ASC, ${facts.basePriceMinor} DESC, ${facts.skuId} ASC
             )`.as("buyer_rank"),
         })
         .from(skuFacts)

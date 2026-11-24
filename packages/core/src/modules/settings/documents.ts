@@ -29,6 +29,7 @@ import {
   marketingConsentSettingsSchema,
   type MarketingConsentSettings,
 } from "@scalius/shared/customer-marketing";
+import { normalizeConversationTopics, type ConversationTopic } from "@scalius/shared/conversation";
 import {
   normalizeCustomerRequestPolicy,
   type CustomerRequestPolicy,
@@ -287,6 +288,12 @@ export interface CheckoutFlowSettings {
    * country plus the region and postal code its rules require.
    */
   requireFullBillingAddress: boolean;
+  /**
+   * The buyer must tick "I agree to the terms" before any order is placed
+   * (checkout/terms-acceptance.ts); the order records that they did.
+   * Off: checkout shows the terms sentence only.
+   */
+  requireTermsAcceptance: boolean;
 }
 
 export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
@@ -298,6 +305,7 @@ export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
     partialPaymentAmount: majorMoney(z.number()),
     autoFulfilMode: z.enum(AUTO_FULFIL_MODES),
     requireFullBillingAddress: z.boolean(),
+    requireTermsAcceptance: z.boolean(),
   }),
   defaults: {
     guestCheckoutEnabled: true,
@@ -306,6 +314,7 @@ export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
     partialPaymentAmount: 0,
     autoFulfilMode: "after_payment",
     requireFullBillingAddress: false,
+    requireTermsAcceptance: false,
   },
 });
 
@@ -347,6 +356,30 @@ export const customerRequestsDocument = defineSettingsDocument<CustomerRequestPo
     jsonRecord,
   ) as unknown as z.ZodType<CustomerRequestPolicy>,
   defaults: normalizeCustomerRequestPolicy(undefined),
+});
+
+// ─────────────────────────────────────────
+// Conversation topics: the short list a buyer picks from when they write to
+// the store ("Payment", "Delivery"). Keys are kept on conversations; each
+// topic carries its labels in the store's languages. Empty by default: no
+// topic is offered or required.
+// ─────────────────────────────────────────
+
+export interface ConversationTopicSettings {
+  topics: ConversationTopic[];
+}
+
+export const conversationTopicsDocument = defineSettingsDocument<ConversationTopicSettings>({
+  key: "conversation_topics",
+  schema: z.object({ topics: z.unknown() }).transform((value, context) => {
+    const topics = normalizeConversationTopics(value.topics);
+    if (!topics.ok) {
+      context.addIssue({ code: "custom", path: ["topics", ...(topics.index === undefined ? [] : [topics.index])], message: topics.reason });
+      return z.NEVER;
+    }
+    return { topics: topics.value };
+  }) as unknown as z.ZodType<ConversationTopicSettings>,
+  defaults: { topics: [] },
 });
 
 // ─────────────────────────────────────────

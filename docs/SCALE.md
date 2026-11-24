@@ -33,7 +33,12 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `staff-sign-in` | 9 | 9 | 5 | 7 | 0 | - |
 | `staff-sign-up` | 5 | 5 | 3 | 8 | 17 | - |
 | `customer-otp-request` | 16 | 20 | 8 | 20 | 2 | - |
-| `customer-otp-verify` | 8 | 19 | 12 | 4 | 1 | - |
+| `customer-otp-verify` | 8 | 20 | 12 | 4 | 1 | - |
+| `account-summary` | 12 | 13 | 0 | 10 | 0 | - |
+| `account-summary-300` | 12 | 13 | 0 | 10 | 0 | - |
+| `checkout-3-commit-signed-in` | 14 | 70 | 46 | 60 | 16 | - |
+| `order-refund-signed-in` | 24 | 44 | 20 | 26 | 3 | - |
+| `order-refund-signed-in-300` | 24 | 44 | 20 | 26 | 3 | - |
 | `page-home-miss` | 11 | 25 | 0 | 41 | 11 | - |
 | `page-home-hit` | 1 | 1 | 0 | 1 | 0 | - |
 | `page-product-miss` | 19 | 36 | 0 | 49 | 10 | - |
@@ -46,6 +51,7 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `checkout-20-commit` | 14 | 123 | 173 | 193 | 36 | - |
 | `checkout-99-quote` | 11 | 18 | 0 | 206 | 3 | - |
 | `checkout-99-commit` | 14 | 382 | 726 | 827 | 133 | - |
+| `checkout-kit-commit` | 14 | 74 | 71 | 78 | 18 | - |
 | `admin-order-list` | 3 | 7 | 0 | 54 | 0 | - |
 | `admin-order-list-deep` | 3 | 7 | 0 | 53 | 0 | - |
 | `admin-order-list-gift-cards` | 3 | 7 | 0 | 53 | 0 | - |
@@ -73,18 +79,18 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `event-drain-lapsed-backlog-5-apps-3-webhooks` | 30 | 49 | 39 | 52 | 0 | - |
 | `order-3-line-commit-subscribers-0` | 14 | 68 | 54 | 57 | 16 | - |
 | `order-3-line-commit-subscribers-3` | 27 | 86 | 72 | 81 | 16 | - |
-| `order-3-line-commit-subscribers-8` | 27 | 86 | 82 | 98 | 16 | - |
+| `order-3-line-commit-subscribers-8` | 27 | 86 | 82 | 101 | 16 | - |
 | `order-status-change-subscribers-1` | 24 | 44 | 15 | 41 | 1 | - |
-| `order-refund-subscribers-1` | 36 | 64 | 49 | 56 | 3 | - |
+| `order-refund-subscribers-1` | 36 | 65 | 49 | 54 | 3 | - |
 | `order-status-change-subscribers-3` | 27 | 49 | 20 | 48 | 1 | - |
-| `order-refund-subscribers-3` | 35 | 62 | 61 | 76 | 3 | - |
+| `order-refund-subscribers-3` | 35 | 62 | 61 | 78 | 3 | - |
 | `order-3-line-commit-app-subscriber` | 24 | 83 | 61 | 66 | 16 | - |
 | `order-cancel-stock-subscribers-0` | 23 | 56 | 23 | 55 | 7 | - |
 | `order-full-refund-cancel-subscribers-0` | 25 | 60 | 30 | 49 | 5 | - |
 | `order-cancel-stock-subscribers-1` | 35 | 75 | 37 | 75 | 7 | - |
-| `order-full-refund-cancel-subscribers-1` | 37 | 80 | 64 | 82 | 5 | - |
+| `order-full-refund-cancel-subscribers-1` | 37 | 81 | 64 | 82 | 5 | - |
 | `order-cancel-stock-subscribers-3` | 34 | 73 | 41 | 79 | 7 | - |
-| `order-full-refund-cancel-subscribers-3` | 36 | 78 | 78 | 106 | 5 | - |
+| `order-full-refund-cancel-subscribers-3` | 36 | 78 | 78 | 108 | 5 | - |
 
 <!-- free-plan-budgets:end -->
 

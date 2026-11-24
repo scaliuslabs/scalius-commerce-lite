@@ -26,6 +26,7 @@ import {
     checkoutLineInputs,
     validateCheckoutAttributes,
     presentTransformedCartLines,
+    presentedLineTypes,
     ruleErrorsOnBuyerLines,
     assertStorefrontLineFulfilment,
     presentCheckoutRateOptions,
@@ -328,6 +329,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     credentialEncryptionKey: encryptionKey,
   });
   const lineTypes = assertStorefrontLineFulfilment(cartValidation, delivery);
+  const buyerLineTypes = buyerView ? presentedLineTypes(buyerView, lineTypes) : lineTypes;
   const linePropertiesHashes = await storefrontLinePropertiesHashes(cartValidation);
   // Promotions or bundles, then the apps, then tax: the rule the order commits (pricing.ts).
   const pricing = await priceStorefrontCheckout(db, {
@@ -477,7 +479,8 @@ app.openapi(taxQuoteRoute, async (c) => {
       unitPrice: toAmount(item.unitPriceMinor),
       productName: item.productName,
       variantLabel: item.variantLabel,
-      fulfillmentType: lineTypes[position]!,
+      // A kit's line: the strictest of its items' (a key makes it paid online).
+      fulfillmentType: buyerLineTypes[listed]!,
       properties: item.properties.map((property) => ({
         ...property,
         price: toAmount(property.priceMinor),

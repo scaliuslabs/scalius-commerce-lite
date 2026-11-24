@@ -7,7 +7,7 @@
 // guest order's receipt proof is read from its httpOnly cookie and sent only
 // as the X-Receipt-Token header. A ticket is bound to the proof it was minted
 // with, so the stream sends that same proof again and never the other one.
-// Nothing here logs a proof, a ticket signature or a licence key.
+// Nothing here logs a proof, a ticket signature, a licence key or a delivery message.
 
 import { resolveBackendTarget } from "@/lib/api/transport";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
@@ -27,6 +27,7 @@ import {
   type DownloadTicketParams,
 } from "@/lib/account-downloads";
 import { readBoundedForm } from "@/lib/bounded-body";
+import { normalizeOrderLineMessageLink } from "@scalius/shared/order-line-message";
 
 const READ_TIMEOUT_MS = 6_000;
 const WRITE_TIMEOUT_MS = 10_000;
@@ -167,6 +168,32 @@ export async function revealLicenceKey(request: Request, access: DigitalAccess, 
   const key = data?.key;
   if (typeof key !== "string" || !key || data?.keyId !== keyId) return { ok: false, flag: "unavailable" };
   return { ok: true, key, last4: typeof data.last4 === "string" ? data.last4 : key.slice(-4) };
+}
+
+export type DeliveryMessageResult =
+  | { ok: true; text: string; link: string | null }
+  | { ok: false; flag: DownloadStatusFlag; retryAfterSeconds?: number };
+
+/**
+ * One line's delivery message (its text and link), for a no-store page only.
+ * The signed-in account alone: a receipt proof never reveals one.
+ */
+export async function revealDeliveryMessage(request: Request, messageId: string): Promise<DeliveryMessageResult> {
+  if (!isDigitalId(messageId)) return { ok: false, flag: "missing" };
+  const access: DigitalAccess = { kind: "account" };
+  const headers = digitalProofHeaders(request, access);
+  if (!headers) return { ok: false, flag: "signin" };
+  const response = await callApi(`/api/v1/customer-auth/delivery-messages/${encode(messageId)}/reveal`, { method: "POST", headers }, WRITE_TIMEOUT_MS);
+  if (!response) return { ok: false, flag: "unavailable" };
+  if (!response.ok) return refusal(response, access);
+  const data = await envelopeData(response);
+  const text = data?.text;
+  const link = data?.link;
+  if (typeof text !== "string" || data?.messageId !== messageId || (link !== null && typeof link !== "string")) {
+    return { ok: false, flag: "unavailable" };
+  }
+  // Drawn as a link only when it is still a plain https address (the API stores no other).
+  return { ok: true, text, link: typeof link === "string" ? normalizeOrderLineMessageLink(link) : null };
 }
 
 // ---------------------------------------------------------------------------

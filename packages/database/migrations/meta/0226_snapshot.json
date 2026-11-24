@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "c2e416b4-6804-49cb-ae49-edda3a2316d8",
-  "prevId": "33e6459d-558d-4b01-9da6-a6b6943a974d",
+  "id": "7c69bb6d-dbed-4815-90d1-65c3592fdd43",
+  "prevId": "ef623c9d-8f12-4f46-ab1e-5d995fd154ab",
   "tables": {
     "account": {
       "name": "account",
@@ -7733,6 +7733,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "whatsapp": {
+          "name": "whatsapp",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "account_claimed_at": {
           "name": "account_claimed_at",
           "type": "integer",
@@ -7753,6 +7760,28 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "sign_in_recovery": {
+          "name": "sign_in_recovery",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sign_in_recovery_at": {
+          "name": "sign_in_recovery_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sign_in_version": {
+          "name": "sign_in_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         },
         "last_authenticated_at": {
           "name": "last_authenticated_at",
@@ -7851,6 +7880,22 @@
             "merged_into_customer_id"
           ],
           "isUnique": false
+        },
+        "customers_recovery_phone_idx": {
+          "name": "customers_recovery_phone_idx",
+          "columns": [
+            "phone"
+          ],
+          "isUnique": false,
+          "where": "\"customers\".\"sign_in_recovery\" = 'phone' AND \"customers\".\"deleted_at\" IS NULL"
+        },
+        "customers_recovery_email_idx": {
+          "name": "customers_recovery_email_idx",
+          "columns": [
+            "lower(\"email\")"
+          ],
+          "isUnique": false,
+          "where": "\"customers\".\"sign_in_recovery\" = 'email' AND \"customers\".\"deleted_at\" IS NULL"
         },
         "customers_phone_idx": {
           "name": "customers_phone_idx",
@@ -8061,6 +8106,81 @@
         "customer_erasure_tasks_last_error_length": {
           "name": "customer_erasure_tasks_last_error_length",
           "value": "\"customer_erasure_tasks\".\"last_error\" IS NULL OR length(\"customer_erasure_tasks\".\"last_error\") BETWEEN 1 AND 64"
+        }
+      }
+    },
+    "account_order_totals": {
+      "name": "account_order_totals",
+      "columns": {
+        "customer_id": {
+          "name": "customer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency_code": {
+          "name": "currency_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "orders_count": {
+          "name": "orders_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "spent_minor": {
+          "name": "spent_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "account_order_totals_customer_id_customers_id_fk": {
+          "name": "account_order_totals_customer_id_customers_id_fk",
+          "tableFrom": "account_order_totals",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "account_order_totals_customer_id_currency_code_pk": {
+          "columns": [
+            "customer_id",
+            "currency_code"
+          ],
+          "name": "account_order_totals_customer_id_currency_code_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "account_order_totals_nonnegative": {
+          "name": "account_order_totals_nonnegative",
+          "value": "\"account_order_totals\".\"orders_count\" >= 0 AND \"account_order_totals\".\"spent_minor\" >= 0"
         }
       }
     },
@@ -13770,7 +13890,8 @@
         "orders_account_owner_customer_id_idx": {
           "name": "orders_account_owner_customer_id_idx",
           "columns": [
-            "account_owner_customer_id"
+            "account_owner_customer_id",
+            "currency_code"
           ],
           "isUnique": false,
           "where": "\"orders\".\"account_owner_customer_id\" IS NOT NULL"
@@ -15801,6 +15922,142 @@
         }
       }
     },
+    "order_line_messages": {
+      "name": "order_line_messages",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "order_item_id": {
+          "name": "order_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "body_ciphertext": {
+          "name": "body_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "has_link": {
+          "name": "has_link",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "order_line_messages_item_unique": {
+          "name": "order_line_messages_item_unique",
+          "columns": [
+            "order_item_id"
+          ],
+          "isUnique": true
+        },
+        "order_line_messages_order_idx": {
+          "name": "order_line_messages_order_idx",
+          "columns": [
+            "order_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "order_line_messages_order_id_orders_id_fk": {
+          "name": "order_line_messages_order_id_orders_id_fk",
+          "tableFrom": "order_line_messages",
+          "tableTo": "orders",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "order_line_messages_order_item_id_order_items_id_fk": {
+          "name": "order_line_messages_order_item_id_order_items_id_fk",
+          "tableFrom": "order_line_messages",
+          "tableTo": "order_items",
+          "columnsFrom": [
+            "order_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "order_line_messages_id_shape": {
+          "name": "order_line_messages_id_shape",
+          "value": "substr(\"order_line_messages\".\"id\", 1, 4) = 'olm_' AND length(\"order_line_messages\".\"id\") BETWEEN 8 AND 64"
+        },
+        "order_line_messages_body_shape": {
+          "name": "order_line_messages_body_shape",
+          "value": "(\"order_line_messages\".\"removed_at\" IS NULL) = (\"order_line_messages\".\"body_ciphertext\" IS NOT NULL) AND (\"order_line_messages\".\"body_ciphertext\" IS NULL OR (substr(\"order_line_messages\".\"body_ciphertext\", 1, 3) = 'v1:' AND length(\"order_line_messages\".\"body_ciphertext\") <= 24576)) AND (\"order_line_messages\".\"removed_at\" IS NULL OR \"order_line_messages\".\"has_link\" = 0)"
+        },
+        "order_line_messages_has_link_bool": {
+          "name": "order_line_messages_has_link_bool",
+          "value": "\"order_line_messages\".\"has_link\" IN (0, 1)"
+        },
+        "order_line_messages_revision_positive": {
+          "name": "order_line_messages_revision_positive",
+          "value": "\"order_line_messages\".\"revision\" >= 1"
+        }
+      }
+    },
     "conversation_attachments": {
       "name": "conversation_attachments",
       "columns": {
@@ -16955,6 +17212,20 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "buyer_account_id": {
+          "name": "buyer_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "topic": {
+          "name": "topic",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -17001,6 +17272,16 @@
           ],
           "isUnique": false,
           "where": "\"conversations\".\"customer_id\" IS NOT NULL"
+        },
+        "conversations_buyer_account_idx": {
+          "name": "conversations_buyer_account_idx",
+          "columns": [
+            "buyer_account_id",
+            "\"last_message_at\" DESC",
+            "id"
+          ],
+          "isUnique": false,
+          "where": "\"conversations\".\"buyer_account_id\" IS NOT NULL"
         },
         "conversations_order_idx": {
           "name": "conversations_order_idx",
@@ -35977,6 +36258,13 @@
           }
         }
       },
+      "customers_recovery_email_idx": {
+        "columns": {
+          "lower(\"email\")": {
+            "isExpression": true
+          }
+        }
+      },
       "customers_email_norm_idx": {
         "columns": {
           "lower(trim(\"email\"))": {
@@ -36051,6 +36339,13 @@
         }
       },
       "conversations_customer_idx": {
+        "columns": {
+          "\"last_message_at\" DESC": {
+            "isExpression": true
+          }
+        }
+      },
+      "conversations_buyer_account_idx": {
         "columns": {
           "\"last_message_at\" DESC": {
             "isExpression": true

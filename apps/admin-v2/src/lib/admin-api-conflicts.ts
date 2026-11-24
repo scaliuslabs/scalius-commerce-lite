@@ -202,3 +202,29 @@ export function readCustomerPhoneConflict(error: unknown): CustomerPhoneConflict
   if (kind !== "account" && kind !== "guest" && kind !== "merchant") return null;
   return { id, name, phone, kind };
 }
+
+/**
+ * A refusal over how a customer signs in (409 `details.reason`): an ordinary
+ * save that would change a proven phone or email (`contact_is_sign_in`), or a
+ * sign-in reset to a contact that signs in to, or recovers, another account
+ * (`recovery_contact_taken`). `field` is the contact it is about.
+ */
+export interface CustomerSignInRefusal {
+  reason: "contact_is_sign_in" | "recovery_contact_taken";
+  field: "phone" | "email";
+}
+
+/** A write of a customer's sign-in contacts lost to another that landed after the page read them (409 `sign_in_changed`). */
+export function isCustomerSignInChanged(error: unknown): boolean {
+  const parsed = readAdminApiError(error);
+  return parsed?.status === 409 && (parsed.details as { reason?: unknown } | null | undefined)?.reason === "sign_in_changed";
+}
+
+export function readCustomerSignInRefusal(error: unknown): CustomerSignInRefusal | null {
+  const parsed = readAdminApiError(error);
+  if (parsed?.status !== 409 || !parsed.details || typeof parsed.details !== "object") return null;
+  const { reason, field } = parsed.details as { reason?: unknown; field?: unknown };
+  if (reason !== "contact_is_sign_in" && reason !== "recovery_contact_taken") return null;
+  if (field !== "phone" && field !== "email") return null;
+  return { reason, field };
+}

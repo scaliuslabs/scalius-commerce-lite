@@ -52,6 +52,7 @@ import {
   type NotificationSender,
 } from "../notifications";
 import { deriveOptInToken, hashOptInToken, newOptInNonce, type MarketingLinkEnv } from "./links";
+import { writeCustomerWhere } from "../customers";
 
 export const MARKETING_OPT_IN_NOTIFICATION = "marketing_opt_in" as const;
 
@@ -293,7 +294,8 @@ function blankGuestEmailStatements(db: Database, customerId: string, email: stri
             actorId: text(null).as("actor_id"),
             createdAt: sql<number>`unixepoch()`.as("created_at"),
         }).from(customers).where(blank)),
-        db.update(customers).set({ email, updatedAt: sql`unixepoch()` }).where(blank),
+        // An email is a contact of how a customer may sign in: its one writer advances the version.
+        writeCustomerWhere(db, blank!, { email, updatedAt: sql`unixepoch()` }),
     ];
 }
 

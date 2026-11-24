@@ -151,6 +151,34 @@ export function validateAndFormatPhone(
   return parsed.format("E.164");
 }
 
+export type ContactPhoneProblem = "too_short" | "bd_mobile_required" | "invalid" | "country_not_accepted";
+export type ContactPhoneResult =
+  | { ok: true; value: string }
+  | { ok: false; reason: ContactPhoneProblem; message: string };
+
+/**
+ * A buyer's contact number (the order phone, a WhatsApp number, the profile's
+ * numbers) read the one way checkout reads it: at least 7 characters, E.164
+ * in the address country (`defaultCountry`; absent: Bangladesh's rules, which
+ * take only mobile numbers), and from a country the store accepts when its
+ * policy is given. The message is the buyer's; `reason` is for agents.
+ */
+export function parseContactPhone(
+  input: string,
+  options: { allowedCountries?: PhoneCountryPolicyInput; defaultCountry?: string | null } = {},
+): ContactPhoneResult {
+  const raw = input.trim();
+  if (raw.length < 7) return { ok: false, reason: "too_short", message: "Phone number too short" };
+  try {
+    return { ok: true, value: validateAndFormatPhone(raw, options.allowedCountries, { defaultCountry: options.defaultCountry }) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === BD_MOBILE_REQUIRED_MESSAGE) return { ok: false, reason: "bd_mobile_required", message };
+    if (message.includes("not accepted")) return { ok: false, reason: "country_not_accepted", message };
+    return { ok: false, reason: "invalid", message: "Enter a valid phone number" };
+  }
+}
+
 /**
  * Format E.164 phone to local/national format for delivery providers.
  * E.g., "+8801712345678" → "01712345678" (strips country code, keeps leading 0)

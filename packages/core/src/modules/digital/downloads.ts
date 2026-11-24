@@ -36,7 +36,12 @@ const LIST_LIMIT = 100;
  */
 export { DIGITAL_ACCESS_ENDED_ORDER_STATUSES };
 const accessEndedSql = sql<number>`${sql.raw(`"orders"."status"`)} IN ('cancelled', 'refunded', 'returned')`;
-function accessCondition(access: DigitalBuyerAccess): SQL {
+/**
+ * The one ownership check of every buyer read of what an order delivered
+ * (downloads, licence keys, delivery messages): the live order the account
+ * owns, or the order the receipt proof names.
+ */
+export function digitalBuyerAccessCondition(access: DigitalBuyerAccess): SQL {
     return access.kind === "customer"
         ? and(eq(orders.accountOwnerCustomerId, access.customerId), isNull(orders.deletedAt))!
         : and(eq(orders.id, access.orderId), isNull(orders.deletedAt))!;
@@ -110,7 +115,7 @@ export async function listBuyerDownloads(
         .innerJoin(orders, eq(orders.id, digitalEntitlements.orderId))
         .innerJoin(orderItems, eq(orderItems.id, digitalEntitlements.orderItemId))
         .innerJoin(digitalAssets, eq(digitalAssets.id, digitalEntitlements.assetId))
-        .where(accessCondition(access))
+        .where(digitalBuyerAccessCondition(access))
         .orderBy(desc(digitalEntitlements.createdAt), desc(digitalEntitlements.id))
         .limit(LIST_LIMIT)
         .all();
@@ -174,7 +179,7 @@ export async function countBuyerDigitalEntitlements(db: Database, customerId: st
         .from(digitalEntitlements)
         .innerJoin(orders, eq(orders.id, digitalEntitlements.orderId))
         .where(and(
-            accessCondition({ kind: "customer", customerId }),
+            digitalBuyerAccessCondition({ kind: "customer", customerId }),
             isNull(digitalEntitlements.revokedAt),
             notInArray(orders.status, [...DIGITAL_ACCESS_ENDED_ORDER_STATUSES]),
         ))
@@ -213,7 +218,7 @@ export async function mintDownloadTicket(
     }).from(digitalEntitlements)
         .innerJoin(orders, eq(orders.id, digitalEntitlements.orderId))
         .innerJoin(digitalAssets, eq(digitalAssets.id, digitalEntitlements.assetId))
-        .where(and(eq(digitalEntitlements.id, input.entitlementId), accessCondition(input.access)))
+        .where(and(eq(digitalEntitlements.id, input.entitlementId), digitalBuyerAccessCondition(input.access)))
         .get();
     if (!owned || owned.kind !== "file" || !owned.currentR2Key) throw new NotFoundError("Download not found");
     if (owned.revokedAt !== null || Number(owned.accessEnded) === 1) {
@@ -316,7 +321,7 @@ export async function revealLicenceKey(
         .where(and(
             eq(digitalLicenceKeys.id, input.keyId),
             eq(digitalLicenceKeys.status, "assigned"),
-            accessCondition(input.access),
+            digitalBuyerAccessCondition(input.access),
             notInArray(orders.status, [...DIGITAL_ACCESS_ENDED_ORDER_STATUSES]),
         ))
         .get();

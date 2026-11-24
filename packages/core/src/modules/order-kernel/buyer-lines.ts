@@ -37,6 +37,16 @@ export type BuyerOrderLine<T extends BuyerFoldableLine, P extends keyof T = neve
     addOns: BuyerLineAddOn[];
   };
 
+/**
+ * The buyer row a line folds into, shared by every line of that row: lines of
+ * one SKU in one store kit (the same `_bundle` id, kind `kit`). Null for a
+ * line that is a row of its own.
+ */
+export function buyerRowKey(line: Pick<BuyerFoldableLine, "variantId" | "quantity" | "properties">): string | null {
+  const bundle = readOrderLineBundle(line.properties, line.quantity);
+  return bundle?.kind === "kit" && line.variantId ? `${bundle.id}\u0000${line.variantId}` : null;
+}
+
 function sumNullable(left: number | null, right: number | null): number | null {
   return left === null && right === null ? null : (left ?? 0) + (right ?? 0);
 }
@@ -68,7 +78,7 @@ export function foldBuyerOrderLines<
   const byKey = new Map<string, (typeof groups)[number]>();
   for (const line of lines) {
     const bundle = readOrderLineBundle(line.properties, line.quantity);
-    const key = bundle?.kind === "kit" && line.variantId ? `${bundle.id}\u0000${line.variantId}` : null;
+    const key = buyerRowKey(line);
     const group = key ? byKey.get(key) : undefined;
     if (group) {
       group.members.push(line);

@@ -90,6 +90,7 @@ const groups = kind === "filters"
     sortOptions={catalogSortOptions({ defaultSort, sortBy, newestLabel, hasReviews })}
     viewSelect={{ pathname, defaultSort, currentFilters }}
     results="grid"
+    everyWidth
   />
 )}
 {kind === "pagination" && products.length > 0 && <CatalogPagination page={pagination.page} totalPages={pagination.totalPages} getPageUrl={pageUrl} />}

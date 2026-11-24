@@ -8,6 +8,7 @@ The `fulfilment` domain records the actions that hand an order's units to the bu
 |-------|---------|
 | `order_fulfillments` | One row per handover action: `kind` (`ship`, `pickup`, `digital`, `gift_card`, `service`), `status` (`active`, `voided`), `request_key`, `shipment_id`, `actor_type`, `cash_collected_minor`, `location_id`. |
 | `order_fulfillment_lines` | The units one action covers: `order_item_id`, `quantity`. |
+| `order_line_messages` | A line's delivery message (a sign-in, an instruction, an https link), sealed like a licence key: `body_ciphertext` (null once removed), `has_link`, `revision`. One per buyer row; `line-messages.ts` is its only writer (rules/orders/buyer-line-delivery-message.md). |
 
 - `ledger.ts` is the only writer of both tables. `order_items.fulfilled_quantity` is a trigger projection of the active lines. Never write it.
 - `(order_id, request_key)` is unique, so a retry returns the first result. `shipment_id` is unique. A fulfilment only moves `active` to `voided`, and its lines never change. A row linked to a parcel cannot be deleted. Triggers refuse a line beyond `quantity - fulfilled_quantity`.
@@ -31,6 +32,8 @@ Routes mount under `/api/v1/admin/orders` (`apps/api/src/routes/admin/orders/ful
 | Mark delivered (paid order, own rider, all sent) | `markOrderDelivered()` | `POST /{id}/mark-delivered` |
 | COD collected, failed or returned | `processCodAction()` | `POST /{id}/cod` |
 | Delete a parcel | `assertShipmentDeletable()` guards it | `DELETE /{id}/shipments/{shipmentId}` |
+| Write, replace or remove a line's delivery message (`orders.manage_digital_access`) | `setOrderLineMessage()` | `PUT /{id}/items/{itemId}/delivery-message` |
+| Read it back to edit it (`orders.manage_digital_access`) | `revealStaffOrderLineMessage()` | `POST /{id}/items/{itemId}/delivery-message/reveal` |
 
 Courier status checks (`POST /{id}/shipments/{shipmentId}/refresh`) live in the API layer. They call `syncCourierFulfilmentFromShipment()`.
 

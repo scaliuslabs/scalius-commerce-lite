@@ -1576,6 +1576,20 @@
       "when": 1795367967598,
       "tag": "0224_kits_and_page_offers",
       "breakpoints": true
+    },
+    {
+      "idx": 225,
+      "version": "6",
+      "when": 1795430560164,
+      "tag": "0225_account_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 226,
+      "version": "6",
+      "when": 1795458253005,
+      "tag": "0226_order_line_messages",
+      "breakpoints": true
     }
   ]
 }

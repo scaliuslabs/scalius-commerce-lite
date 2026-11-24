@@ -21,6 +21,8 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   "dashboard.checkout.flow_get": {},
   "dashboard.checkout.flow_update": { impact: "money", revision: "required" },
   "dashboard.checkout.readiness_get": {},
+  "dashboard.conversation_topics.get": {},
+  "dashboard.conversation_topics.update": { revision: "required" },
   "dashboard.customer_requests.policy_get": {},
   "dashboard.customer_requests.policy_update": { revision: "required" },
   "dashboard.delivery_locations.bulk_delete": {

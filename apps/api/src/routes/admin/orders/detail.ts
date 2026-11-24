@@ -550,6 +550,7 @@ app.openapi(getOrderRoute, (async (c: AdminRouteContext<typeof getOrderRoute>) =
             orderItemIds: result.items.map((item) => item.id),
             audience: "staff",
             currencyDecimalPlaces: result.currencyDecimalPlaces ?? 2,
+            deliveryMessages: true,
         }),
         // The words of its app checkout answers (none: no read).
         readCheckoutAttributeApps(db, result.attributes ?? {}),

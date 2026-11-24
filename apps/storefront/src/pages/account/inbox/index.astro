@@ -1,8 +1,9 @@
 ---
 // Account Inbox: the buyer's conversations with the store (store threads and
-// the threads of orders the account owns), newest first, with unread dots, and
-// "Message the store" for verified accounts. Server-rendered from the session
-// cookie, so it works without JavaScript; the form is a plain POST.
+// the threads of orders the account owns), newest first, each with its topic,
+// status and unread dot, and "Message the store" for verified accounts, which
+// offers the merchant's topics when there are any. Server-rendered from the
+// session cookie, so it works without JavaScript; the form is a plain POST.
 import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import { getLayoutData } from "@/lib/api";
@@ -68,6 +69,15 @@ const shellState = inbox.ok ? "ok" : inbox.reason === "signed_out" ? "signed_out
               <form method="post" action="/api/conversations/store" class="space-y-4">
                 <p class="text-sm text-muted-foreground">{copy.startIntro}</p>
                 <input type="hidden" name="clientMessageKey" value={clientMessageKey} />
+                {inbox.data.topics.length > 0 && (
+                  <div>
+                    <label for="storeThreadTopic" class={ui.label}>{copy.topicLabel}</label>
+                    <select id="storeThreadTopic" name="topic" class={ui.field}>
+                      <option value="">{copy.topicNone}</option>
+                      {inbox.data.topics.map((topic) => <option value={topic.key}>{topic.label}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label for="storeThreadSubject" class={ui.label}>{copy.subjectLabel}</label>
                   <input id="storeThreadSubject" name="subject" type="text" required maxlength={CONVERSATION_LIMITS.subjectLength} autocomplete="off" class={ui.field} />

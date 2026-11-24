@@ -17,6 +17,7 @@ import type { getCheckoutLanguagePreset } from "@scalius/shared/checkout-languag
 import { orderStatusTone } from "@/lib/account-ui";
 import { getProductImageUrl } from "@/lib/product-media";
 import { buyerOrderStatusText } from "@/lib/buyer-order-words";
+import { boughtItemCount, orderEntries } from "@/lib/order-bundles";
 
 export function accountOrderCards(
   orders: readonly CustomerOrder[],
@@ -25,7 +26,10 @@ export function accountOrderCards(
 ) {
   const words = copy.orders;
   return orders.map((order) => {
-    const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    // As the buyer bought them: a bundle counts its sets, never each item in it.
+    const itemCount = boughtItemCount(order.items);
+    // One picture per thing bought: a bundle's first item stands for it.
+    const shown = orderEntries(order.items).map((entry) => (entry.kind === "row" ? entry.row : entry.rows[0]!));
     const payment = orderPaymentLine(order, checkoutCopy);
     const shipment = order.latestShipment;
     const courier = shipment ? shipment.providerName || shipment.courierName : null;
@@ -47,8 +51,8 @@ export function accountOrderCards(
         : shipment
           ? { text: [courier, accountShipmentStatusText(shipment.status)].filter(Boolean).join(" · "), warn: false }
           : { text: `${payment.method} · ${payment.state}`, warn: false },
-      thumbs: order.items.slice(0, 4).map((item) => ({ src: getProductImageUrl(item.productImage, 160), alt: item.productName ?? "" })),
-      more: Math.max(0, order.items.length - 4),
+      thumbs: shown.slice(0, 4).map((item) => ({ src: getProductImageUrl(item.productImage, 160), alt: item.productName ?? "" })),
+      more: Math.max(0, shown.length - 4),
       // Buy again reads the order's lines whole (inputs and their surcharges) before they go back.
       buyAgain: order.id,
     };

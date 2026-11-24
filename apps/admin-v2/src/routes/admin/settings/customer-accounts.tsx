@@ -2,11 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { CustomerSignInCard } from "~/components/admin/settings/CustomerSignInCard";
 import { AppKindCard } from "~/components/admin/settings/AppKindCard";
 import { MarketingConsentCard } from "~/components/admin/settings/MarketingConsentCard";
+import { ConversationTopicsCard } from "~/components/admin/settings/ConversationTopicsCard";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
-import { appProvidersQuery, customerRulesQuery, marketingConsentQuery, signInPolicyQuery } from "~/lib/api-query-options/settings-screens";
+import { appProvidersQuery, conversationTopicsQuery, customerRulesQuery, marketingConsentQuery, signInPolicyQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/customer-accounts")({
@@ -15,6 +16,7 @@ export const Route = createFileRoute("/admin/settings/customer-accounts")({
       queryClient.ensureQueryData(signInPolicyQuery),
       queryClient.ensureQueryData(customerRulesQuery),
       queryClient.ensureQueryData(marketingConsentQuery),
+      queryClient.ensureQueryData(conversationTopicsQuery),
       queryClient.ensureQueryData(appProvidersQuery("identity")),
     ]),
   head: () => settingsHead("customerAccounts"),
@@ -29,6 +31,7 @@ function CustomerAccountsPage() {
       <CustomerSignInCard />
       <AppKindCard kind="identity" />
       <MarketingConsentCard />
+      <ConversationTopicsCard />
     </SettingsPage>
   );
 }

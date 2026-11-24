@@ -9,7 +9,7 @@ import { storefrontCopy } from "@/lib/storefront-copy";
 
 interface Props {
   kind: "sale" | "sold-out" | "new" | "custom";
-  /** The words; `sale` defaults to "Sale", `sold-out` and `new` to theirs. `custom` needs one. */
+  /** The words; `sold-out` and `new` default to theirs. `sale` (its "-15%") and `custom` need one. */
   label?: string | null;
   class?: string;
 }
@@ -17,7 +17,7 @@ interface Props {
 const { kind, label, class: className } = Astro.props;
 const { language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).badge;
-const text = label || (kind === "sale" ? copy.sale : kind === "sold-out" ? copy.soldOut : kind === "new" ? copy.new : "");
+const text = label || (kind === "sold-out" ? copy.soldOut : kind === "new" ? copy.new : "");
 ---
 
 {text && <span class:list={["sf-badge", className]} data-kind={kind}>{text}</span>}

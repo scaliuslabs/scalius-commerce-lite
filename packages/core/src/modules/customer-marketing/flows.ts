@@ -21,6 +21,7 @@ import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
   chooseOrderCustomer,
   enforceNewsletterSignupRateLimits,
+  insertCustomer,
   normalizeContactEmail,
   selectContactCustomerCandidates,
 } from "../customers";
@@ -120,7 +121,7 @@ async function resolveSubscriberCustomer(db: Database, contact: { phone: string;
         const id = `cust_${nanoid()}`;
         // One guest record per phone (customers_guest_phone_unique): a racing
         // signup or checkout that created it first wins and is re-resolved.
-        const inserted = await db.insert(customers).values({
+        const inserted = await insertCustomer(db, {
             id,
             name: "",
             phone: contact.phone,

@@ -270,6 +270,7 @@ export const permissionMessages = defineMessages<PermissionName>({
     "customers.create": "Add customers",
     "customers.edit": "Edit customers",
     "customers.delete": "Delete customers",
+    "customers.reset_sign_in": "Reset how a customer signs in",
     "customers.view_history": "View customer history",
     "customers.sync": "Sync customers with other systems",
 
@@ -387,6 +388,7 @@ export const permissionMessages = defineMessages<PermissionName>({
     "customers.create": "কাস্টমার যোগ করা",
     "customers.edit": "কাস্টমার এডিট করা",
     "customers.delete": "কাস্টমার ডিলিট করা",
+    "customers.reset_sign_in": "কাস্টমারের সাইন ইন রিসেট করা",
     "customers.view_history": "কাস্টমারের হিস্ট্রি দেখা",
     "customers.sync": "অন্য সিস্টেমের সাথে কাস্টমার মেলানো",
 

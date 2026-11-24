@@ -29,6 +29,8 @@
 // - conversations of the customer and of those orders: the buyer's message
 //   bodies become ERASED_TEXT (their search terms are deleted) and a store
 //   thread's subject is cleared;
+// - delivery messages staff wrote on those orders' lines (migration 0226):
+//   deleted, ciphertext and all;
 // - files the buyer uploaded for those orders (buyer uploads, migration
 //   0201): their rows are deleted and their objects become delete tasks;
 // - sign-in code delivery receipts sent to the buyer's own or their orders'
@@ -57,6 +59,7 @@ import {
   authOtpDeliveryReceipts,
   buyerUploads,
   conversationAttachments,
+  accountOrderTotals,
   conversationChannelContacts,
   conversationChannelMessages,
   conversationMessages,
@@ -72,6 +75,7 @@ import {
   customerSessions,
   customFieldValues,
   customers,
+  orderLineMessages,
   orders,
   orderTrackingSignals,
   pluginCustomerRoles,
@@ -89,6 +93,7 @@ import { REVIEW_FALLBACK_DISPLAY_NAME } from "@scalius/shared/reviews";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { inJsonArray } from "../../utils/in-json-array";
 import { hashCustomerAuthOtpIdentifier } from "./customer-auth-otp-challenges";
+import { eraseSignIn } from "./sign-in-writes";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -302,7 +307,8 @@ function orderStillNamesBuyer(): SQL {
 function recordNotErased(): SQL {
   return sql`(${customers.erasedAt} IS NULL OR ${customers.deletedAt} IS NULL OR ${customers.name} <> ${ERASED_TEXT}
     OR ${customers.email} IS NOT NULL OR ${customers.phone} <> ${NO_PHONE} OR ${customers.phoneVerifiedAt} IS NOT NULL
-    OR ${customers.emailVerifiedAt} IS NOT NULL OR ${customers.lastAuthenticatedAt} IS NOT NULL OR ${customers.taxExemptionId} IS NOT NULL)`;
+    OR ${customers.emailVerifiedAt} IS NOT NULL OR ${customers.lastAuthenticatedAt} IS NOT NULL OR ${customers.taxExemptionId} IS NOT NULL
+    OR ${customers.signInRecovery} IS NOT NULL OR ${customers.signInRecoveryAt} IS NOT NULL)`;
 }
 
 /**
@@ -330,26 +336,25 @@ function scrubStatements(db: Database, subjectId: string, scope: ErasureScope): 
     db.delete(buyerUploads).where(sql`${buyerUploads.orderId} IS NOT NULL AND ${orderIdSet(buyerUploads.orderId)}`),
     // First: it matches the contacts the statements below clear.
     db.delete(abandonedCheckouts).where(abandonedCheckoutsOfBuyer(scope)),
-    // Erased first: the address-book delete below then announces no update.
-    db.update(customers).set({
+    // Erased first: the address-book delete below then announces no update. How the
+    // customer signs in (contacts, proofs, a reset's recovery mark, linked identities)
+    // is cleared by its one writer, which advances the version: an in-flight sign-in fails.
+    ...eraseSignIn(db, and(inIds(customers.id), recordNotErased())!, {
       name: erased,
-      email: null,
-      phone: NO_PHONE,
-      phoneVerifiedAt: null,
-      emailVerifiedAt: null,
+      whatsapp: null,
       lastAuthenticatedAt: null,
       // A tax registration number names its holder; the order snapshots keep theirs as issued.
       taxExempt: false,
       taxExemptionId: null,
       erasedAt: sql`coalesce(${customers.erasedAt}, unixepoch())`,
       deletedAt: sql`coalesce(${customers.deletedAt}, unixepoch())`,
-      updatedAt: now,
-    }).where(and(inIds(customers.id), recordNotErased())),
+    }, inIds(customerIdentities.customerId)),
     db.update(customerHistory).set({ name: erased, email: null, phone: NO_PHONE })
       .where(and(inIds(customerHistory.customerId), sql`(${customerHistory.name} <> ${erased} OR ${customerHistory.email} IS NOT NULL OR ${customerHistory.phone} <> ${NO_PHONE})`)),
     db.delete(customerAddresses).where(inIds(customerAddresses.customerId)),
-    db.delete(customerIdentities).where(inIds(customerIdentities.customerId)),
     db.delete(customerSessions).where(inIds(customerSessions.customerId)),
+    // The account's order totals (an erased account keeps none: the triggers skip it after).
+    db.delete(accountOrderTotals).where(inIds(accountOrderTotals.customerId)),
     ...(scope.otpReceiptHashes.length > 0
       ? [db.delete(authOtpDeliveryReceipts).where(inJsonArray(authOtpDeliveryReceipts.identifierHash, scope.otpReceiptHashes))]
       : []),
@@ -382,6 +387,8 @@ function scrubStatements(db: Database, subjectId: string, scope: ErasureScope): 
       updatedAt: now,
     }).where(and(theirOrders, orderStillNamesBuyer())),
     db.delete(orderTrackingSignals).where(orderIdSet(orderTrackingSignals.orderId)),
+    // The delivery messages staff wrote for them (sealed sign-ins, instructions): deleted.
+    db.delete(orderLineMessages).where(orderIdSet(orderLineMessages.orderId)),
     db.update(trackingDeliveries).set({ matchSignals: null }).where(and(orderIdSet(trackingDeliveries.orderId), isNotNull(trackingDeliveries.matchSignals))),
     db.update(productReviews).set({ authorDisplayName: REVIEW_FALLBACK_DISPLAY_NAME })
       .where(and(

@@ -6,6 +6,7 @@ import {
   getCheckoutConfig,
   getLayoutData,
   checkoutTakesOrders,
+  paidOnlineOnlyHere,
   takesOnlinePayment,
   getProductBySlugResult,
   getShippingMethods,
@@ -469,12 +470,12 @@ const deliveryFacts = buildDeliveryFacts({
 });
 const fulfilmentBadge =
   pageFulfilment === "service" ? productPageCopy.noDeliveryNeededBadgeText : null;
-// Digital items and gift cards are paid online, never in cash: on a store
-// whose checkout takes only cash on delivery the page says so instead of
-// starting a purchase checkout must refuse. A product with a physical or
-// service SKU stays buyable; a cart that also holds a digital item is refused cash at checkout.
-const onlinePaymentUnavailable =
-  productFulfilment(product, buyerVariants) === "digital" && !takesOnlinePayment(checkoutConfig);
+// Digital items, gift cards and kits holding one are paid online, never in
+// cash (core's `paidOnlineOnly`): on a store whose checkout takes no online
+// payment the page says so instead of starting a purchase checkout must
+// refuse. A product with a SKU cash can pay stays buyable; a cart that also
+// holds a paid-online item is refused cash at checkout.
+const onlinePaymentUnavailable = paidOnlineOnlyHere(buyerVariants, checkoutConfig);
 // A physical product no delivery or pickup option can bring to this page's
 // buyers can't be ordered: the facts above claim neither delivery nor cash on
 // delivery, and the buttons are off with a note saying why (the cart's rule).
@@ -534,6 +535,8 @@ const productPageProjection = (): StorefrontProductPage => pageProjection ??= pr
   price: { current: buyerDisplayedPrice, regular: buyerPricePresentation.pricing.originalPrice, from: buyerPricePresentation.isStartingAt },
   variantPrice: getVariantSchemaPrice,
   page: { currencyCode, currencySymbol },
+  // A placed offer paid only online is off where checkout takes no online payment, as on its own page.
+  takesOnlinePayment: takesOnlinePayment(checkoutConfig),
   warrantyCopy: productPageCopy,
   // The form's inputs: the product's, then the apps' line inputs shown on it.
   buyerInputs: productBuyerInputFields(product, layoutData.lineInputs, productPageCopy),
@@ -687,7 +690,7 @@ const productEmbeds: EmbedRenderers = {
     props: { product, copy: reviewCopy, formCopy: reviewFormCopy, language: reviewLanguage, storeName: sellerSchemaName },
   }),
   recommendations: () => recommendations.products.length > 0
-    ? { component: RelatedProducts as EmbedRender["component"], props: { recommendations, currencySymbol, currencyCode } }
+    ? { component: RelatedProducts as EmbedRender["component"], props: { recommendations, currencySymbol, currencyCode, placed: true } }
     : null,
   // A placed details module draws whenever it has something, even where the
   // template lists none: the skin that places it draws no description itself.

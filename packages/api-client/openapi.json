@@ -11333,6 +11333,9 @@
             "items": {
               "$ref": "#/components/schemas/OrderLineWarrantyExtra"
             }
+          },
+          "message": {
+            "$ref": "#/components/schemas/OrderLineMessageExtra"
           }
         }
       },
@@ -11606,6 +11609,38 @@
           "claim"
         ]
       },
+      "OrderLineMessageExtra": {
+        "type": "object",
+        "properties": {
+          "messageId": {
+            "type": "string"
+          },
+          "hasLink": {
+            "type": "boolean",
+            "description": "The message carries a link besides its text."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "Staff reads only: the revision a write names (`expectedRevision`)."
+          },
+          "orderItemId": {
+            "type": "string",
+            "description": "Staff reads only: the line the message is stored on (a split kit item's first line)."
+          }
+        },
+        "required": [
+          "messageId",
+          "hasLink",
+          "updatedAt"
+        ],
+        "description": "A delivery message the store wrote for this line. Never its text or link: the signed-in buyer reveals those with a POST; staff with the digital-access permission reveal them from the order."
+      },
       "BuyerLineAddOn": {
         "type": "object",
         "properties": {
@@ -11776,9 +11811,41 @@
           "amountMinor"
         ]
       },
+      "ConversationTopic": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ]
+      },
       "CustomerAccountSummary": {
         "type": "object",
         "properties": {
+          "orders": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Live orders the account owns that are not unfinished checkouts (any currency)."
+          },
+          "spent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomerAccountSpend"
+            },
+            "description": "Lifetime spend per currency the account bought in, by currency code. Empty before the first order."
+          },
+          "openConversations": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The account's conversations that are not closed (store threads and the threads of its orders)."
+          },
           "unreadInbox": {
             "type": "integer",
             "minimum": 0
@@ -15499,6 +15566,9 @@
           }
         },
         "required": [
+          "orders",
+          "spent",
+          "openConversations",
           "unreadInbox",
           "reviewsToWrite",
           "reviewsWritten",
@@ -15506,6 +15576,33 @@
           "giftCards",
           "activeWarranties",
           "buyerUi"
+        ]
+      },
+      "CustomerAccountSpend": {
+        "type": "object",
+        "properties": {
+          "currencyCode": {
+            "type": "string",
+            "description": "ISO 4217: the currency these orders were charged in."
+          },
+          "orders": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "amount": {
+            "type": "number",
+            "description": "What the store holds of these orders: paid (net of refunds) less what banks took back in disputes, in major units."
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "currencyCode",
+          "orders",
+          "amount",
+          "amountMinor"
         ]
       },
       "BuyerReviews": {
@@ -16024,6 +16121,28 @@
           "keyId",
           "key",
           "last4"
+        ]
+      },
+      "RevealedDeliveryMessage": {
+        "type": "object",
+        "properties": {
+          "messageId": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "description": "Plain text with line breaks; draw it as text, never HTML."
+          },
+          "link": {
+            "type": "string",
+            "nullable": true,
+            "description": "An https:// address; draw it as a plain external link."
+          }
+        },
+        "required": [
+          "messageId",
+          "text",
+          "link"
         ]
       },
       "BuyerGiftCard": {
@@ -17575,7 +17694,12 @@
             "nullable": true
           },
           "fulfillmentKind": {
-            "type": "string"
+            "type": "string",
+            "description": "What it sells; a kit's from its items."
+          },
+          "paidOnlineOnly": {
+            "type": "boolean",
+            "description": "Paid only online (a key, a download, or a kit holding one): where checkout takes no online payment, its buy action is off, as on its own page."
           },
           "price": {
             "type": "number",
@@ -17626,6 +17750,7 @@
           "imageMediaId",
           "imageAlt",
           "fulfillmentKind",
+          "paidOnlineOnly",
           "price",
           "compareAtPrice",
           "requiresCustomization",
@@ -17762,6 +17887,19 @@
               "in_stock"
             ],
             "description": "From its items: as many kits as the scarcest item allows; `out_of_stock` when an item can't be sold."
+          },
+          "fulfillmentKind": {
+            "type": "string",
+            "enum": [
+              "physical",
+              "digital",
+              "service"
+            ],
+            "description": "What it sells, from all its items (never the kit SKU's own setting): physical when any item ships, else digital when any item is, else a service."
+          },
+          "paidOnlineOnly": {
+            "type": "boolean",
+            "description": "One of its items is paid only online (a key, a download): no cash on delivery or at the service buys it."
           }
         },
         "required": [
@@ -17772,7 +17910,9 @@
           "compareAtPrice",
           "saving",
           "savingPercent",
-          "availabilityBand"
+          "availabilityBand",
+          "fulfillmentKind",
+          "paidOnlineOnly"
         ],
         "description": "A SKU made of other SKUs: checkout sells it as them."
       },
@@ -48440,6 +48580,10 @@
                       "maxLength": 500
                     }
                   },
+                  "termsAccepted": {
+                    "type": "boolean",
+                    "description": "The buyer read and agreed to the store's terms (the storefront's terms page), which you showed them. Required (true) when the store's checkout config says `requireTermsAcceptance`: without it submit is refused with `details.reason: terms_acceptance_required`. The order records the agreement and this agent."
+                  },
                   "shippingRateToken": {
                     "type": "string",
                     "nullable": true,
@@ -54348,6 +54492,9 @@
                         "requireFullBillingAddress": {
                           "type": "boolean"
                         },
+                        "requireTermsAcceptance": {
+                          "type": "boolean"
+                        },
                         "allowedCountries": {
                           "type": "array",
                           "items": {
@@ -54517,6 +54664,7 @@
                         "partialPaymentEnabled",
                         "partialPaymentAmount",
                         "requireFullBillingAddress",
+                        "requireTermsAcceptance",
                         "allowedCountries",
                         "allowedCountriesMode",
                         "currency",
@@ -55313,6 +55461,13 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "whatsapp": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "phoneVerified": {
+                              "type": "boolean"
+                            },
                             "customerId": {
                               "type": "string",
                               "nullable": true
@@ -55453,6 +55608,7 @@
                           "required": [
                             "email",
                             "name",
+                            "phoneVerified",
                             "defaultAddress",
                             "profileComplete"
                           ]
@@ -55694,6 +55850,13 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "whatsapp": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "phoneVerified": {
+                              "type": "boolean"
+                            },
                             "customerId": {
                               "type": "string",
                               "nullable": true
@@ -55834,6 +55997,7 @@
                           "required": [
                             "email",
                             "name",
+                            "phoneVerified",
                             "defaultAddress",
                             "profileComplete"
                           ]
@@ -56086,7 +56250,7 @@
           "Customer Auth"
         ],
         "summary": "Update customer profile",
-        "description": "Changes the account name. Addresses are in the address book (/customer-auth/addresses).",
+        "description": "Changes the account's name and WhatsApp number (an empty string clears it; read as checkout reads it). The WhatsApp number is kept only when the store collects one apart from the phone (else 400 `whatsapp_not_collected`; a stored one is dropped on the next save), and the phone's own number is stored as none. A session never changes the phone: a different `phone` is a 409 with `details.reason` `phone_change_needs_codes`. To change it, `POST /customer-auth/phone/send-code` with `phone` (a code to how the account signs in now, one to the new number), then `/phone/verify` with `phone`, `code` and `currentCode`; a buyer who cannot get the first code asks the store. Addresses are in the address book (/customer-auth/addresses).",
         "requestBody": {
           "content": {
             "application/json": {
@@ -56096,6 +56260,16 @@
                   "name": {
                     "type": "string",
                     "maxLength": 100
+                  },
+                  "phone": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 32
+                  },
+                  "whatsapp": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 32
                   }
                 }
               }
@@ -56131,6 +56305,13 @@
                             "phone": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "whatsapp": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "phoneVerified": {
+                              "type": "boolean"
                             },
                             "customerId": {
                               "type": "string",
@@ -56272,6 +56453,7 @@
                           "required": [
                             "email",
                             "name",
+                            "phoneVerified",
                             "defaultAddress",
                             "profileComplete"
                           ]
@@ -56322,6 +56504,16 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -56731,6 +56923,62 @@
                                     "variantLabel": {
                                       "type": "string",
                                       "nullable": true
+                                    },
+                                    "bundle": {
+                                      "type": "object",
+                                      "nullable": true,
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "title": {
+                                          "type": "string"
+                                        },
+                                        "kind": {
+                                          "type": "string",
+                                          "enum": [
+                                            "expand",
+                                            "merge",
+                                            "kit"
+                                          ]
+                                        },
+                                        "kit": {
+                                          "type": "object",
+                                          "nullable": true,
+                                          "properties": {
+                                            "variantId": {
+                                              "type": "string"
+                                            },
+                                            "productId": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "variantId",
+                                            "productId"
+                                          ]
+                                        },
+                                        "anchor": {
+                                          "type": "boolean"
+                                        },
+                                        "units": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        },
+                                        "perUnit": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "title",
+                                        "kind",
+                                        "kit",
+                                        "anchor",
+                                        "units",
+                                        "perUnit"
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -56741,7 +56989,8 @@
                                     "productName",
                                     "productSlug",
                                     "productImage",
-                                    "variantLabel"
+                                    "variantLabel",
+                                    "bundle"
                                   ],
                                   "additionalProperties": {}
                                 }
@@ -56792,29 +57041,6 @@
                             ],
                             "additionalProperties": {}
                           }
-                        },
-                        "summary": {
-                          "type": "object",
-                          "properties": {
-                            "totalOrders": {
-                              "type": "number"
-                            },
-                            "totalSpent": {
-                              "type": "number"
-                            },
-                            "completedOrders": {
-                              "type": "number"
-                            },
-                            "pendingOrders": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "totalOrders",
-                            "totalSpent",
-                            "completedOrders",
-                            "pendingOrders"
-                          ]
                         },
                         "pagination": {
                           "type": "object",
@@ -57006,7 +57232,6 @@
                       },
                       "required": [
                         "orders",
-                        "summary",
                         "pagination",
                         "phoneVerification",
                         "customer"
@@ -57120,7 +57345,25 @@
         "tags": [
           "Customer Auth"
         ],
-        "summary": "Send a code to the signed-in account's own phone",
+        "summary": "Send a code to the signed-in account's own phone, or to a new number its phone moves to",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "phone": {
+                    "type": "string",
+                    "maxLength": 32,
+                    "description": "The number to make the account's sign-in phone. Absent: the account's own unproven phone. Either way two codes go out, both for this one change: one to how the account signs in now (its proven email, else its proven phone; `confirmWith`) and one to the number."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Code sent",
@@ -57143,11 +57386,20 @@
                         },
                         "resendAfterSeconds": {
                           "type": "integer"
+                        },
+                        "confirmWith": {
+                          "type": "string",
+                          "enum": [
+                            "phone",
+                            "email"
+                          ],
+                          "description": "Where the confirming code went: the account's proven email, else its proven phone. Send that code back as `currentCode`."
                         }
                       },
                       "required": [
                         "message",
-                        "resendAfterSeconds"
+                        "resendAfterSeconds",
+                        "confirmWith"
                       ]
                     }
                   },
@@ -57205,6 +57457,44 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -57274,7 +57564,7 @@
         "tags": [
           "Customer Auth"
         ],
-        "summary": "Prove the signed-in account's own phone and add orders placed with it",
+        "summary": "Make a proven number the account's sign-in phone (two codes); signs out every session and sets a new one",
         "requestBody": {
           "content": {
             "application/json": {
@@ -57285,6 +57575,17 @@
                     "type": "string",
                     "minLength": 4,
                     "maxLength": 12
+                  },
+                  "phone": {
+                    "type": "string",
+                    "maxLength": 32,
+                    "description": "The number the codes were sent for (absent: the account's own phone); `code` is the one sent to it."
+                  },
+                  "currentCode": {
+                    "type": "string",
+                    "minLength": 4,
+                    "maxLength": 12,
+                    "description": "The code sent to how the account signs in now (required)."
                   }
                 },
                 "required": [
@@ -63742,7 +64043,7 @@
         "tags": [
           "Customer Auth"
         ],
-        "summary": "List the account's conversations, newest first",
+        "summary": "List the account's conversations, newest first, and the store's topics",
         "parameters": [
           {
             "schema": {
@@ -63752,11 +64053,22 @@
             "required": false,
             "name": "cursor",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "The page's presence (`bn-bd`): the store's topics are named in its language."
+            },
+            "required": false,
+            "description": "The page's presence (`bn-bd`): the store's topics are named in its language.",
+            "name": "presence",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Conversations (20 per page) and whether the account may start a store conversation",
+            "description": "Conversations (20 per page), whether the account may start a store conversation, and the topics a buyer may choose (in the presence's language)",
             "content": {
               "application/json": {
                 "schema": {
@@ -63793,6 +64105,23 @@
                                 "nullable": true,
                                 "x-scalius-buyer-text": true
                               },
+                              "topic": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label"
+                                ]
+                              },
                               "orderId": {
                                 "type": "string",
                                 "nullable": true
@@ -63822,6 +64151,7 @@
                               "id",
                               "subjectType",
                               "subject",
+                              "topic",
                               "orderId",
                               "orderNumber",
                               "status",
@@ -63836,12 +64166,19 @@
                         },
                         "canStartStoreConversation": {
                           "type": "boolean"
+                        },
+                        "topics": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ConversationTopic"
+                          }
                         }
                       },
                       "required": [
                         "items",
                         "nextCursor",
-                        "canStartStoreConversation"
+                        "canStartStoreConversation",
+                        "topics"
                       ]
                     }
                   },
@@ -63962,6 +64299,12 @@
                     "type": "string",
                     "maxLength": 5000
                   },
+                  "topic": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 40,
+                    "description": "One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it."
+                  },
                   "clientMessageKey": {
                     "type": "string",
                     "minLength": 1,
@@ -64014,6 +64357,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -64328,6 +64688,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -64666,6 +65027,17 @@
             "required": false,
             "name": "afterSeq",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "The page's presence (`bn-bd`): the topic is named in its language."
+            },
+            "required": false,
+            "description": "The page's presence (`bn-bd`): the topic is named in its language.",
+            "name": "presence",
+            "in": "query"
           }
         ],
         "responses": {
@@ -64704,6 +65076,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -65018,6 +65407,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -65133,12 +65523,14 @@
         "security": []
       }
     },
-    "/api/v1/customer-auth/conversations/{id}/messages": {
+    "/api/v1/customer-auth/conversations/{id}/close": {
       "post": {
+        "operationId": "storefront.customer_auth_conversation.close",
         "tags": [
           "Customer Auth"
         ],
-        "summary": "Post a message on a conversation",
+        "summary": "Close one of the account's conversations (the buyer's next message reopens it)",
+        "description": "Moves the conversation to `closed` by the machine's `close` move (from `open` or `pending`). Closing a closed conversation changes nothing. Posting a message later reopens it for the store.",
         "parameters": [
           {
             "schema": {
@@ -65148,45 +65540,22 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "The page's presence (`bn-bd`): the store's topics are named in its language."
+            },
+            "required": false,
+            "description": "The page's presence (`bn-bd`): the store's topics are named in its language.",
+            "name": "presence",
+            "in": "query"
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "body": {
-                    "type": "string",
-                    "maxLength": 5000
-                  },
-                  "clientMessageKey": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 200
-                  },
-                  "attachmentIds": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "pattern": "^att_[A-Za-z0-9_-]{8,64}$"
-                    },
-                    "maxItems": 3
-                  }
-                },
-                "required": [
-                  "body",
-                  "clientMessageKey"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
         "responses": {
-          "201": {
-            "description": "Posted; the conversation after the post",
+          "200": {
+            "description": "The conversation, closed",
             "content": {
               "application/json": {
                 "schema": {
@@ -65220,6 +65589,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -65534,6 +65920,566 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
+                            "orderId",
+                            "orderNumber",
+                            "status",
+                            "lastMessageAt",
+                            "unread",
+                            "lastSeq",
+                            "readSeq",
+                            "messages",
+                            "hasMore"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "conversation"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "customer"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Buyer-to-store messages and images are the buyer's own words, sent from the hosted account or receipt page; agents never read or write them.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/customer-auth/conversations/{id}/messages": {
+      "post": {
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Post a message on a conversation",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^cnv_[A-Za-z0-9_-]{8,64}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "maxLength": 5000
+                  },
+                  "topic": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 40,
+                    "description": "One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it."
+                  },
+                  "clientMessageKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "attachmentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^att_[A-Za-z0-9_-]{8,64}$"
+                    },
+                    "maxItems": 3
+                  }
+                },
+                "required": [
+                  "body",
+                  "clientMessageKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Posted; the conversation after the post",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "conversation": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "subjectType": {
+                              "type": "string",
+                              "enum": [
+                                "order",
+                                "store",
+                                "warranty_claim",
+                                "review"
+                              ]
+                            },
+                            "subject": {
+                              "type": "string",
+                              "nullable": true,
+                              "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
+                            },
+                            "orderId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "orderNumber": {
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)."
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "open",
+                                "pending",
+                                "closed"
+                              ]
+                            },
+                            "lastMessageAt": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "unread": {
+                              "type": "integer"
+                            },
+                            "lastSeq": {
+                              "type": "integer"
+                            },
+                            "readSeq": {
+                              "type": "integer"
+                            },
+                            "messages": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "products": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "productId": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                                        },
+                                        "skuId": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                                        },
+                                        "title": {
+                                          "type": "string"
+                                        },
+                                        "variantLabel": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "status": {
+                                          "type": "string",
+                                          "enum": [
+                                            "available",
+                                            "sold_out",
+                                            "unavailable"
+                                          ]
+                                        },
+                                        "price": {
+                                          "type": "object",
+                                          "nullable": true,
+                                          "properties": {
+                                            "amount": {
+                                              "type": "number"
+                                            },
+                                            "currency": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "amount",
+                                            "currency"
+                                          ]
+                                        },
+                                        "imageUrl": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "pdpUrl": {
+                                          "type": "string",
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "productId",
+                                        "skuId",
+                                        "title",
+                                        "variantLabel",
+                                        "status",
+                                        "price",
+                                        "imageUrl",
+                                        "pdpUrl"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "seq": {
+                                    "type": "integer"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "message",
+                                      "event"
+                                    ]
+                                  },
+                                  "from": {
+                                    "type": "string",
+                                    "enum": [
+                                      "buyer",
+                                      "store",
+                                      "system"
+                                    ]
+                                  },
+                                  "body": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "x-scalius-buyer-text": true
+                                  },
+                                  "eventKind": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "eventData": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "additionalProperties": {}
+                                  },
+                                  "createdAt": {
+                                    "type": "integer"
+                                  },
+                                  "attachments": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        },
+                                        "sizeBytes": {
+                                          "type": "integer"
+                                        },
+                                        "width": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        },
+                                        "height": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "mediaType",
+                                        "sizeBytes",
+                                        "width",
+                                        "height"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "seq",
+                                  "kind",
+                                  "from",
+                                  "body",
+                                  "eventKind",
+                                  "eventData",
+                                  "createdAt",
+                                  "attachments"
+                                ]
+                              }
+                            },
+                            "hasMore": {
+                              "type": "boolean"
+                            },
+                            "hasNewer": {
+                              "type": "boolean"
+                            },
+                            "cartShare": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "lines": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "productId": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                                      },
+                                      "skuId": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                                      },
+                                      "quantity": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 99
+                                      }
+                                    },
+                                    "required": [
+                                      "productId",
+                                      "skuId",
+                                      "quantity"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "sharedAt": {
+                                  "type": "integer"
+                                },
+                                "withdrawnAt": {
+                                  "type": "integer",
+                                  "nullable": true
+                                },
+                                "version": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "products": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "productId": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                                      },
+                                      "skuId": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                                      },
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "variantLabel": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "status": {
+                                        "type": "string",
+                                        "enum": [
+                                          "available",
+                                          "sold_out",
+                                          "unavailable"
+                                        ]
+                                      },
+                                      "price": {
+                                        "type": "object",
+                                        "nullable": true,
+                                        "properties": {
+                                          "amount": {
+                                            "type": "number"
+                                          },
+                                          "currency": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "amount",
+                                          "currency"
+                                        ]
+                                      },
+                                      "imageUrl": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "pdpUrl": {
+                                        "type": "string",
+                                        "nullable": true
+                                      }
+                                    },
+                                    "required": [
+                                      "productId",
+                                      "skuId",
+                                      "title",
+                                      "variantLabel",
+                                      "status",
+                                      "price",
+                                      "imageUrl",
+                                      "pdpUrl"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "lines",
+                                "sharedAt",
+                                "withdrawnAt",
+                                "version"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "subjectType",
+                            "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -65942,6 +66888,17 @@
             "required": false,
             "name": "afterSeq",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "The page's presence (`bn-bd`): the topic is named in its language."
+            },
+            "required": false,
+            "description": "The page's presence (`bn-bd`): the topic is named in its language.",
+            "name": "presence",
+            "in": "query"
           }
         ],
         "responses": {
@@ -65981,6 +66938,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -66295,6 +67269,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -66441,6 +67416,12 @@
                     "type": "string",
                     "maxLength": 5000
                   },
+                  "topic": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 40,
+                    "description": "One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it."
+                  },
                   "clientMessageKey": {
                     "type": "string",
                     "minLength": 1,
@@ -66500,6 +67481,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -66814,6 +67812,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -69611,7 +70610,7 @@
         "tags": [
           "Customer Auth"
         ],
-        "summary": "Counts behind the account tabs (inbox, reviews, downloads, gift cards, warranties)",
+        "summary": "The account's numbers: orders, spend per currency, open conversations, and the counts behind the account tabs",
         "parameters": [
           {
             "schema": {
@@ -70842,6 +71841,151 @@
           "sensitiveOutput": true,
           "oneTimeSecretOutput": false,
           "exclusionReason": "Returns a plaintext licence key to its owner's browser. Download tickets and licence keys are bound to the buyer's browser cookie proof and never pass through agent I/O.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/customer-auth/delivery-messages/{messageId}/reveal": {
+      "post": {
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Show a delivery message the store wrote on one of the account's order lines",
+        "description": "Only for the signed-in account that owns the order, once it is paid, while it is not cancelled, refunded, returned or on hold. Anything else is the same 404.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "messageId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RevealedDeliveryMessage"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "storefront.customer_auth_delivery_messages_reveal.reveal",
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "customer"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Returns a delivery message (a sign-in the store wrote) to its order's signed-in buyer. Download tickets and licence keys are bound to the buyer's browser cookie proof and never pass through agent I/O.",
           "dryRun": "none",
           "confirmation": "none",
           "impact": "none"
@@ -82708,6 +83852,10 @@
                                     ],
                                     "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                                   },
+                                  "paidOnlineOnly": {
+                                    "type": "boolean",
+                                    "description": "Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it."
+                                  },
                                   "createdAt": {
                                     "type": "string",
                                     "nullable": true
@@ -82732,6 +83880,7 @@
                                   "discountPercentage",
                                   "discountAmount",
                                   "fulfillmentKind",
+                                  "paidOnlineOnly",
                                   "createdAt"
                                 ]
                               },
@@ -84034,6 +85183,10 @@
                                 ],
                                 "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                               },
+                              "paidOnlineOnly": {
+                                "type": "boolean",
+                                "description": "Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it."
+                              },
                               "customFields": {
                                 "type": "array",
                                 "items": {
@@ -84085,6 +85238,7 @@
                               "discountPercentage",
                               "discountAmount",
                               "fulfillmentKind",
+                              "paidOnlineOnly",
                               "customFields",
                               "warrantyId",
                               "createdAt",
@@ -105130,6 +106284,10 @@
                     ],
                     "additionalProperties": false
                   },
+                  "termsAccepted": {
+                    "type": "boolean",
+                    "description": "The buyer ticked \"I agree to the terms\". Required (true) when the store asks for it (checkout config `requireTermsAcceptance`): without it the order is refused with `details.reason: terms_acceptance_required`. The order records the agreement."
+                  },
                   "trackingSignals": {
                     "type": "object",
                     "nullable": true,
@@ -105585,6 +106743,17 @@
           },
           {
             "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "The page's presence (`bn-bd`): the topic is named in its language."
+            },
+            "required": false,
+            "description": "The page's presence (`bn-bd`): the topic is named in its language.",
+            "name": "presence",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "string"
             },
             "required": false,
@@ -105629,6 +106798,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -105943,6 +107129,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -106093,6 +107280,12 @@
                     "type": "string",
                     "maxLength": 5000
                   },
+                  "topic": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 40,
+                    "description": "One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it."
+                  },
                   "clientMessageKey": {
                     "type": "string",
                     "minLength": 1,
@@ -106157,6 +107350,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -106471,6 +107681,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -110136,6 +111347,17 @@
           },
           {
             "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "The page's presence (`bn-bd`): the topic is named in its language."
+            },
+            "required": false,
+            "description": "The page's presence (`bn-bd`): the topic is named in its language.",
+            "name": "presence",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "string"
             },
             "required": false,
@@ -110182,6 +111404,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -110496,6 +111735,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -110658,6 +111898,12 @@
                     "type": "string",
                     "maxLength": 5000
                   },
+                  "topic": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 40,
+                    "description": "One of the store's topic keys (`topics` on the conversation list). Set once: a conversation that has a topic keeps it."
+                  },
                   "clientMessageKey": {
                     "type": "string",
                     "minLength": 1,
@@ -110720,6 +111966,23 @@
                               "type": "string",
                               "nullable": true,
                               "x-scalius-buyer-text": true
+                            },
+                            "topic": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label"
+                              ]
                             },
                             "orderId": {
                               "type": "string",
@@ -111034,6 +112297,7 @@
                             "id",
                             "subjectType",
                             "subject",
+                            "topic",
                             "orderId",
                             "orderNumber",
                             "status",
@@ -155916,6 +157180,45 @@
                           "nullable": true,
                           "x-scalius-protected": "name"
                         },
+                        "signIn": {
+                          "type": "object",
+                          "properties": {
+                            "phoneProven": {
+                              "type": "boolean"
+                            },
+                            "emailProven": {
+                              "type": "boolean"
+                            },
+                            "recovery": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "method": {
+                                  "type": "string",
+                                  "enum": [
+                                    "phone",
+                                    "email"
+                                  ],
+                                  "description": "Which of the customer's contacts recovers the account (the phone or the email shown above)."
+                                },
+                                "expiresAt": {
+                                  "type": "integer",
+                                  "description": "Unix seconds: after it the recovery contact reaches nothing."
+                                }
+                              },
+                              "required": [
+                                "method",
+                                "expiresAt"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "phoneProven",
+                            "emailProven",
+                            "recovery"
+                          ],
+                          "description": "On the customer read (not the history page's header)."
+                        },
                         "totalOrders": {
                           "type": "number"
                         },
@@ -156966,6 +158269,258 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "customers.delete"
+        }
+      }
+    },
+    "/api/v1/admin/customers/{id}/reset-sign-in": {
+      "post": {
+        "operationId": "dashboard.customers.reset_sign_in",
+        "tags": [
+          "Admin - Customers"
+        ],
+        "summary": "Reset how a customer signs in, to one recovery contact",
+        "description": "For a customer who lost every way to sign in. In one step: every proven phone and email of the account stops signing in, its linked sign-in apps are removed, it is signed out everywhere, and the one contact named here (a phone or an email) becomes its recovery contact. For 7 days, and only while the account proves nothing else, a sign-in code to that contact signs into this account and proves it. Refused (409 `recovery_contact_taken`) when the contact signs in to another account, live or closed, or is another account's recovery contact. Staff with the sensitive reset permission only; never an app; an agent always waits for approval. Ordinary customer edits never change a proven contact (409 `contact_is_sign_in`).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "phone": {
+                        "type": "string",
+                        "minLength": 7,
+                        "maxLength": 32
+                      }
+                    },
+                    "required": [
+                      "phone"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "email": {
+                        "type": "string",
+                        "maxLength": 254,
+                        "format": "email"
+                      }
+                    },
+                    "required": [
+                      "email"
+                    ],
+                    "additionalProperties": false
+                  }
+                ],
+                "description": "The one recovery contact: a phone or an email."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "recovery": {
+                          "type": "string",
+                          "enum": [
+                            "phone",
+                            "email"
+                          ]
+                        },
+                        "expiresAt": {
+                          "type": "integer",
+                          "description": "Unix seconds: after it the recovery contact reaches nothing."
+                        },
+                        "recoveryDays": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "recovery",
+                        "expiresAt",
+                        "recoveryDays"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when a customer lost every way to sign in and the store confirmed who they are: changes how they sign in to one recovery contact.",
+          "dryRun": "none",
+          "confirmation": "required",
+          "impact": "security"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "customers.reset_sign_in"
         }
       }
     },
@@ -159176,6 +160731,45 @@
                               "nullable": true,
                               "x-scalius-protected": "name"
                             },
+                            "signIn": {
+                              "type": "object",
+                              "properties": {
+                                "phoneProven": {
+                                  "type": "boolean"
+                                },
+                                "emailProven": {
+                                  "type": "boolean"
+                                },
+                                "recovery": {
+                                  "type": "object",
+                                  "nullable": true,
+                                  "properties": {
+                                    "method": {
+                                      "type": "string",
+                                      "enum": [
+                                        "phone",
+                                        "email"
+                                      ],
+                                      "description": "Which of the customer's contacts recovers the account (the phone or the email shown above)."
+                                    },
+                                    "expiresAt": {
+                                      "type": "integer",
+                                      "description": "Unix seconds: after it the recovery contact reaches nothing."
+                                    }
+                                  },
+                                  "required": [
+                                    "method",
+                                    "expiresAt"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "phoneProven",
+                                "emailProven",
+                                "recovery"
+                              ],
+                              "description": "On the customer read (not the history page's header)."
+                            },
                             "totalOrders": {
                               "type": "number"
                             },
@@ -159303,7 +160897,7 @@
                               },
                               "changeType": {
                                 "type": "string",
-                                "description": "created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, or erased (see `order`, `relatedCustomer` and `verifiedContact`)"
+                                "description": "created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, erased, or sign_in_reset (see `order`, `relatedCustomer` and `verifiedContact`)"
                               },
                               "verifiedContact": {
                                 "type": "string",
@@ -159323,6 +160917,7 @@
                                     "enum": [
                                       "staff",
                                       "app",
+                                      "agent",
                                       "buyer",
                                       "system"
                                     ]
@@ -159334,12 +160929,22 @@
                                   "appId": {
                                     "type": "string",
                                     "nullable": true
+                                  },
+                                  "connection": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "client": {
+                                    "type": "string",
+                                    "nullable": true
                                   }
                                 },
                                 "required": [
                                   "kind",
                                   "name",
-                                  "appId"
+                                  "appId",
+                                  "connection",
+                                  "client"
                                 ]
                               },
                               "order": {
@@ -205787,6 +207392,7 @@
             "customers.create",
             "customers.delete",
             "customers.edit",
+            "customers.reset_sign_in",
             "customers.sync",
             "customers.view",
             "customers.view_history",
@@ -209454,6 +211060,7 @@
             "customers.create",
             "customers.delete",
             "customers.edit",
+            "customers.reset_sign_in",
             "customers.sync",
             "customers.view",
             "customers.view_history",
@@ -210962,6 +212569,7 @@
             "customers.create",
             "customers.delete",
             "customers.edit",
+            "customers.reset_sign_in",
             "customers.sync",
             "customers.view",
             "customers.view_history",
@@ -211645,7 +213253,7 @@
           "Admin - Settings"
         ],
         "summary": "Switch the theme draft to another template (it goes live only when the draft is published)",
-        "description": "The design the store last had on that template comes back if there is one; otherwise the template's look and homepage take the merchant's content by section type, and a section it has no place for stays on the homepage, hidden. The draft it replaces is kept as a restore point (reason `template`) and as the design of the template it leaves. `plan` says which sections moved, stayed hidden or left the homepage.",
+        "description": "The design the store last had on that template comes back if there is one; otherwise the template's look and homepage take the merchant's content by section type, and a section it has no place for stays on the homepage, hidden. The draft it replaces is kept as a restore point (reason `template`) and as the design of the template it leaves. `plan` says which sections moved, stayed hidden or left the homepage. An app template's catalogue handles resolve against the store; a homepage section naming one the store lacks is left out and listed in `unresolved`.",
         "operationId": "dashboard.theme.template_switch",
         "requestBody": {
           "required": true,
@@ -211679,7 +213287,7 @@
         },
         "responses": {
           "200": {
-            "description": "The draft's new revision and what the switch did",
+            "description": "The draft's new revision, what the switch did and the template's handles the store lacks",
             "content": {
               "application/json": {
                 "schema": {
@@ -211709,13 +213317,21 @@
                         },
                         "plan": {
                           "$ref": "#/components/schemas/ThemeTemplateSwitchPlan"
+                        },
+                        "unresolved": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ThemeUnresolvedHandle"
+                          },
+                          "maxItems": 200
                         }
                       },
                       "required": [
                         "revision",
                         "basePublishedRevision",
                         "updatedAt",
-                        "plan"
+                        "plan",
+                        "unresolved"
                       ]
                     }
                   },
@@ -216087,6 +217703,9 @@
                         "requireFullBillingAddress": {
                           "type": "boolean"
                         },
+                        "requireTermsAcceptance": {
+                          "type": "boolean"
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -216099,6 +217718,7 @@
                         "partialPaymentAmount",
                         "autoFulfilMode",
                         "requireFullBillingAddress",
+                        "requireTermsAcceptance",
                         "revision"
                       ]
                     }
@@ -216252,6 +217872,9 @@
                   "requireFullBillingAddress": {
                     "type": "boolean"
                   },
+                  "requireTermsAcceptance": {
+                    "type": "boolean"
+                  },
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 0
@@ -216318,6 +217941,9 @@
                         "requireFullBillingAddress": {
                           "type": "boolean"
                         },
+                        "requireTermsAcceptance": {
+                          "type": "boolean"
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -216330,6 +217956,7 @@
                         "partialPaymentAmount",
                         "autoFulfilMode",
                         "requireFullBillingAddress",
+                        "requireTermsAcceptance",
                         "revision"
                       ]
                     }
@@ -219554,6 +221181,7 @@
             "customers.create",
             "customers.delete",
             "customers.edit",
+            "customers.reset_sign_in",
             "customers.sync",
             "customers.view",
             "customers.view_history",
@@ -235092,6 +236720,456 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "when": "Use when changing whether buyers can ask to cancel, return or refund, and within how many days.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/conversation-topics": {
+      "get": {
+        "operationId": "dashboard.conversation_topics.get",
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get the topics buyers choose from when they write to the store",
+        "responses": {
+          "200": {
+            "description": "The topics and their revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "messageTopics": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40,
+                                "description": "Stable id kept on conversations: lowercase letters, digits, - and _."
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 60,
+                                "description": "The name in the store's default language."
+                              },
+                              "labels": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string",
+                                  "maxLength": 60
+                                },
+                                "description": "The name in the store's other languages, by two-letter code. A language with none reads `label`."
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "label"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 12
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "messageTopics",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when asked which topics buyers can choose when they write to the store.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      },
+      "put": {
+        "operationId": "dashboard.conversation_topics.update",
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Replace the topics buyers choose from (at most 12)",
+        "description": "A conversation keeps its topic's key: a renamed topic reads its new name, a removed one reads no name (and its names in every language go with it). An invalid list is a 400 whose `details.reason` is `too_many`, `invalid_key`, `duplicate_key` or `invalid_label` (with `details.index`).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "messageTopics": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40,
+                          "description": "Stable id kept on conversations: lowercase letters, digits, - and _."
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 60,
+                          "description": "The name in the store's default language."
+                        },
+                        "labels": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string",
+                            "maxLength": 60
+                          },
+                          "description": "The name in the store's other languages, by two-letter code. A language with none reads `label`."
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "label"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 12
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "messageTopics",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved topics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "messageTopics": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40,
+                                "description": "Stable id kept on conversations: lowercase letters, digits, - and _."
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 60,
+                                "description": "The name in the store's default language."
+                              },
+                              "labels": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string",
+                                  "maxLength": 60
+                                },
+                                "description": "The name in the store's other languages, by two-letter code. A language with none reads `label`."
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "label"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 12
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "messageTopics",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when adding, renaming, reordering or removing the topics buyers choose when they write to the store.",
           "dryRun": "none",
           "confirmation": "none",
           "impact": "none"
@@ -251973,7 +254051,9 @@
                                   "app_event",
                                   "stock_held",
                                   "late_payment",
-                                  "payment_dispute"
+                                  "payment_dispute",
+                                  "delivery_message",
+                                  "terms_accepted"
                                 ]
                               },
                               "body": {
@@ -252188,7 +254268,9 @@
                             "app_event",
                             "stock_held",
                             "late_payment",
-                            "payment_dispute"
+                            "payment_dispute",
+                            "delivery_message",
+                            "terms_accepted"
                           ]
                         },
                         "body": {
@@ -260090,6 +262172,504 @@
         }
       }
     },
+    "/api/v1/admin/orders/{id}/items/{itemId}/delivery-message": {
+      "put": {
+        "operationId": "dashboard.orders.line_message_set",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Write, replace or remove a line's delivery message",
+        "description": "Sets what the buyer of this line reads in their account (an account's sign-in, an instruction) and an optional https link, or removes it with `message: null`. Plain text of 1 to 4000 characters, drawn as text, never HTML; the link is a full https:// address of at most 2048 characters. Both are stored encrypted. Name the message's `revision` from the order (`items[].extras.message.revision`), or 0 when the line has none: a stale one is refused with 409 `line_message_revision_conflict` (`details.revision` is the current one) and nothing changes. A split kit item's lines share one message. The buyer sees it once the order is paid; the order timeline records the change, never the text.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "itemId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "text": {
+                        "type": "string",
+                        "maxLength": 4000,
+                        "description": "Plain text; line breaks are kept."
+                      },
+                      "link": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 2048,
+                        "description": "An https:// address, or null for none."
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The message, or null to remove it."
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "The message's revision you read; 0 when the line has none."
+                  }
+                },
+                "required": [
+                  "message",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The message as staff see it (null once removed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "orderItemId": {
+                              "type": "string",
+                              "description": "The line it is stored on: a split kit item's two lines share their first line's message."
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true
+                            },
+                            "hasLink": {
+                              "type": "boolean"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "orderItemId",
+                            "revision",
+                            "hasLink",
+                            "updatedAt"
+                          ]
+                        },
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "message",
+                        "changed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "line_message_revision_conflict: the message changed since it was read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Carries a buyer's sign-in or instructions in the clear; staff write delivery messages in the dashboard so they never pass through agent I/O. Agents see that a line has one (extras.message) from the order.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.manage_digital_access"
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/items/{itemId}/delivery-message/reveal": {
+      "post": {
+        "operationId": "dashboard.orders.line_message_reveal",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Show a line's delivery message to edit it",
+        "description": "The text and link of the line's delivery message, for staff who may write it. Never cached; the order timeline records who read it, never the text.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "itemId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "orderItemId": {
+                              "type": "string",
+                              "description": "The line it is stored on: a split kit item's two lines share their first line's message."
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true
+                            },
+                            "hasLink": {
+                              "type": "boolean"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "orderItemId",
+                            "revision",
+                            "hasLink",
+                            "updatedAt"
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "link": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "message",
+                        "text",
+                        "link"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Returns a delivery message (a buyer's sign-in) in the clear to staff who may write it; never passes through agent I/O.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.manage_digital_access"
+        }
+      }
+    },
     "/api/v1/admin/conversations": {
       "get": {
         "operationId": "dashboard.conversations.list",
@@ -260192,6 +262772,10 @@
                                 "nullable": true,
                                 "x-scalius-buyer-text": true
                               },
+                              "topic": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "status": {
                                 "type": "string",
                                 "enum": [
@@ -260277,6 +262861,7 @@
                               "subjectType",
                               "subjectId",
                               "subject",
+                              "topic",
                               "status",
                               "orderId",
                               "orderNumber",
@@ -261497,6 +264082,10 @@
                                 "nullable": true,
                                 "x-scalius-buyer-text": true
                               },
+                              "topic": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "status": {
                                 "type": "string",
                                 "enum": [
@@ -261582,6 +264171,7 @@
                               "subjectType",
                               "subjectId",
                               "subject",
+                              "topic",
                               "status",
                               "orderId",
                               "orderNumber",
@@ -262995,6 +265585,10 @@
                               "nullable": true,
                               "x-scalius-buyer-text": true
                             },
+                            "topic": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "status": {
                               "type": "string",
                               "enum": [
@@ -263345,6 +265939,7 @@
                             "subjectType",
                             "subjectId",
                             "subject",
+                            "topic",
                             "status",
                             "orderId",
                             "orderNumber",
@@ -263606,6 +266201,10 @@
                               "nullable": true,
                               "x-scalius-buyer-text": true
                             },
+                            "topic": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "status": {
                               "type": "string",
                               "enum": [
@@ -263956,6 +266555,7 @@
                             "subjectType",
                             "subjectId",
                             "subject",
+                            "topic",
                             "status",
                             "orderId",
                             "orderNumber",
@@ -264220,6 +266820,10 @@
                               "nullable": true,
                               "x-scalius-buyer-text": true
                             },
+                            "topic": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "status": {
                               "type": "string",
                               "enum": [
@@ -264570,6 +267174,7 @@
                             "subjectType",
                             "subjectId",
                             "subject",
+                            "topic",
                             "status",
                             "orderId",
                             "orderNumber",
@@ -264799,6 +267404,10 @@
                               "nullable": true,
                               "x-scalius-buyer-text": true
                             },
+                            "topic": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "status": {
                               "type": "string",
                               "enum": [
@@ -265149,6 +267758,7 @@
                             "subjectType",
                             "subjectId",
                             "subject",
+                            "topic",
                             "status",
                             "orderId",
                             "orderNumber",
@@ -265457,6 +268067,10 @@
                               "nullable": true,
                               "x-scalius-buyer-text": true
                             },
+                            "topic": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "status": {
                               "type": "string",
                               "enum": [
@@ -265807,6 +268421,7 @@
                             "subjectType",
                             "subjectId",
                             "subject",
+                            "topic",
                             "status",
                             "orderId",
                             "orderNumber",
@@ -301889,6 +304504,7 @@
             "customers.create",
             "customers.delete",
             "customers.edit",
+            "customers.reset_sign_in",
             "customers.sync",
             "customers.view",
             "customers.view_history",
@@ -337636,6 +340252,22 @@
           ]
         },
         {
+          "operationId": "dashboard.conversation_topics.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.conversation_topics.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.conversation_topics.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.conversation_topics.update"
+          ]
+        },
+        {
           "operationId": "dashboard.conversations.assignees",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -338115,6 +340747,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.customers.payment_methods_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.reset_sign_in",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.reset_sign_in"
           ]
         },
         {

@@ -1259,6 +1259,8 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   customer_tag_links: PRIVATE,
   customer_segments: PRIVATE,
   customer_order_stats: PRIVATE,
+  // A buyer account's orders and spend per currency (0225): the signed-in account summary only.
+  account_order_totals: PRIVATE,
   analytics_order_facts: PRIVATE,
   analytics_sales_buckets: PRIVATE,
   analytics_sealed_days: PRIVATE,
@@ -1331,6 +1333,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   digital_asset_uploads: PRIVATE,
   digital_entitlements: PRIVATE,
   digital_licence_keys: PRIVATE,
+  order_line_messages: PRIVATE,
   gift_cards: PRIVATE,
   gift_card_transactions: PRIVATE,
   payouts: PRIVATE,

@@ -48,9 +48,9 @@ import {
 import { formatSavedMajorAmount, formatSavedMinorAmount } from "~/lib/order-money-format";
 import { useCancelRequestGuard } from "./CancelRequestGuard";
 import { LineProperties } from "./LineProperties";
-import { OrderFulfillmentLocation } from "./OrderFulfillmentLocation";
 import { returnedQuantities } from "./OrderItemsCard";
 import { BookCourier } from "./ShipmentCard";
+import { DeliveryMessagesCard } from "./DeliveryMessagesCard";
 import { DigitalLinesCard } from "./DigitalLinesCard";
 import { formatCurrencyAmount, formatOrderTimestamp } from "./formatters";
 import {
@@ -74,6 +74,8 @@ const ManualFulfillmentDialog = lazy(() => import("./ManualFulfillmentDialog").t
 // Loaded only for orders with warranty records to show.
 const WarrantyLinesCard = lazy(() => import("./WarrantyLinesCard").then((module) => ({ default: module.WarrantyLinesCard })));
 const GiftCardLinesCard = lazy(() => import("./GiftCardLinesCard").then((module) => ({ default: module.GiftCardLinesCard })));
+// "Ships from" and its Change dialog: only an unfulfilled physical card shows it, and only in a store with several locations.
+const OrderFulfillmentLocation = lazy(() => import("./OrderFulfillmentLocation").then((module) => ({ default: module.OrderFulfillmentLocation })));
 
 function hasWarranties(order: Order): boolean {
   return order.items.some((item) => Array.isArray(item.extras?.warranty) && item.extras.warranty.length > 0);
@@ -146,6 +148,7 @@ export function OrderFulfilmentCards({ order, request, onRecordPayment }: {
         />
       ))}
       <DigitalLinesCard order={order} />
+      <DeliveryMessagesCard order={order} />
       {hasIssuedGiftCards(order) && (
         <Suspense fallback={null}>
           <GiftCardLinesCard order={order} />
@@ -325,7 +328,7 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
         description={description}
       />
       <CardContent>
-        {!closed && (group.type === "ship" || group.type === "pickup") ? <OrderFulfillmentLocation order={order} /> : null}
+        {!closed && (group.type === "ship" || group.type === "pickup") ? <Suspense fallback={null}><OrderFulfillmentLocation order={order} /></Suspense> : null}
         <ul className="divide-y">
           {group.lines.map((line) => <LineRow key={line.item.id} line={line} money={money} order={order} />)}
         </ul>

@@ -1,5 +1,5 @@
-// Account → Profile: the posted name and address-book forms, read and
-// checked the same way checkout checks an address. Pure, so the page (a plain
+// Account → Profile: the posted details (name, WhatsApp) and address-book
+// forms, read and checked the same way checkout checks an address. Pure, so the page (a plain
 // POST that works without JavaScript) and its tests share it. Nothing here
 // reaches a URL except an outcome flag.
 import { MIN_SHIPPING_ADDRESS_LENGTH } from "@/lib/checkout/shipping-address";
@@ -15,8 +15,9 @@ import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
 import { accountCopy } from "@/lib/account-copy";
 import { formatCount, pageLanguage } from "@/lib/store-time-zone";
 
-export type ProfileIntent = "name" | "address" | "remove-address" | "default-address" | "default-billing-address";
-export type ProfileSavedFlag = "name" | "address" | "removed" | "default" | "billing";
+export type ProfileIntent = "details" | "address" | "remove-address" | "default-address" | "default-billing-address";
+/** `phone`: the phone change flow (the browser's) finished. */
+export type ProfileSavedFlag = "details" | "phone" | "address" | "removed" | "default" | "billing";
 
 /** One address form: the address being edited (none: a new one) and its fields. */
 export interface AddressDraft {
@@ -40,12 +41,14 @@ export type AddressDraftField = "address" | "city" | "zone" | "area" | ForeignAd
 export interface ProfileForm {
   intent: ProfileIntent | null;
   name: string;
+  /** Null when the form has no WhatsApp field (the store does not collect one apart); "" clears it. */
+  whatsapp: string | null;
   draft: AddressDraft;
 }
 
 type Location = { id: string; name: string };
 
-const INTENTS: readonly ProfileIntent[] = ["name", "address", "remove-address", "default-address", "default-billing-address"];
+const INTENTS: readonly ProfileIntent[] = ["details", "address", "remove-address", "default-address", "default-billing-address"];
 const MAX_FIELD = 500;
 const ADDRESS_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -97,6 +100,7 @@ export function readProfileForm(form: FormData): ProfileForm {
   return {
     intent: INTENTS.includes(intent as ProfileIntent) ? intent as ProfileIntent : null,
     name: field(form, "name"),
+    whatsapp: form.has("whatsapp") ? field(form, "whatsapp") : null,
     draft: {
       addressId: ADDRESS_ID.test(addressId) ? addressId : "",
       // Absent on a store that sells only to Bangladesh (no country field).
@@ -113,6 +117,21 @@ export function readProfileForm(form: FormData): ProfileForm {
 
 export function nameError(name: string): string | null {
   return name.trim() ? null : accountCopy().profile.enterName;
+}
+
+/** The ways `parseContactPhone` refuses a number (`details.reason`). */
+const NUMBER_REASONS: ReadonlySet<string> = new Set(["too_short", "invalid", "bd_mobile_required", "country_not_accepted"]);
+
+/**
+ * A refused details save in the page's words, on the field it is about: the
+ * API's `details.reason` decides; a refusal with none of its own keeps the
+ * catalogue's words (`fallback`) for the whole form.
+ */
+export function detailsRefusal(reason: string | null | undefined, fallback: string | null): { field: "name" | "whatsapp" | null; message: string } {
+  const words = accountCopy().profile;
+  if (reason === "whatsapp_not_collected") return { field: "whatsapp", message: words.whatsappNotCollected };
+  if (reason && NUMBER_REASONS.has(reason)) return { field: "whatsapp", message: words.whatsappInvalid };
+  return { field: null, message: fallback ?? words.wentWrong };
 }
 
 /**
@@ -162,7 +181,7 @@ export function addressBookInput(draft: AddressDraft) {
   };
 }
 
-const SAVED_FLAGS: readonly ProfileSavedFlag[] = ["name", "address", "removed", "default", "billing"];
+const SAVED_FLAGS: readonly ProfileSavedFlag[] = ["details", "phone", "address", "removed", "default", "billing"];
 
 export function readProfileSavedFlag(search: URLSearchParams): ProfileSavedFlag | null {
   const flag = search.get("saved");
@@ -172,7 +191,8 @@ export function readProfileSavedFlag(search: URLSearchParams): ProfileSavedFlag 
 export function profileSavedText(flag: ProfileSavedFlag): string {
   const words = accountCopy().profile;
   return {
-    name: words.savedName,
+    details: words.savedDetails,
+    phone: words.phoneChanged,
     address: words.savedAddress,
     removed: words.removed,
     default: words.defaultChanged,

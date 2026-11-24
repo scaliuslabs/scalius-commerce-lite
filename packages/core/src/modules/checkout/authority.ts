@@ -246,6 +246,8 @@ export interface StorefrontCheckoutSettingsAuthority {
     partialPaymentAmount: number;
     /** Settings → Checkout: every order asks for a full billing address. */
     requireFullBillingAddress: boolean;
+    /** Settings → Checkout: the buyer must agree to the terms before the order is placed. */
+    requireTermsAcceptance: boolean;
 }
 
 /** The shop currency document and the backup market's price increment every checkout prices at. */
@@ -633,6 +635,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                                 partialPaymentEnabled: site.partialPaymentEnabled,
                                 partialPaymentAmount: site.partialPaymentAmount,
                                 requireFullBillingAddress: site.requireFullBillingAddress,
+                                requireTermsAcceptance: site.requireTermsAcceptance,
                             },
                             allowedCountries,
                             shippingCountries,

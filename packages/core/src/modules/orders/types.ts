@@ -493,6 +493,8 @@ export interface CreateStorefrontOrderInput {
     giftCards?: Array<{ handle: string }>;
     /** The amount due the buyer reviewed (minor units); required with gift cards. */
     expectedAmountDueMinor?: number;
+    /** The buyer agreed to the store's terms; required when the store asks for it (checkout/terms-acceptance.ts). */
+    termsAccepted?: boolean;
 }
 
 /** One buyer-facing reason a gift card is not (fully) used on an order. */
@@ -697,6 +699,11 @@ export interface StorefrontOrderCommitPayload {
      * batch when a server tracking destination is on (audit spec S4).
      */
     trackingSnapshot?: OrderTrackingSnapshot | null;
+    /**
+     * The store required the buyer's agreement to its terms and they gave
+     * it: the commit batch records it on the order (`terms_accepted`).
+     */
+    termsAccepted?: boolean;
     /** Verified storefront account owner. Guest checkout deliberately keeps this null. */
     existingCustomer: { id: string } | null;
     /** The order's own facts. */

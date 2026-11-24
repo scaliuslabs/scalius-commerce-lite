@@ -1,6 +1,7 @@
 import { isEmailAddress } from "@scalius/shared/text-scan";
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { marketingConsentFormValues } from "./marketing-consent";
+import { TERMS_ACCEPTED_FIELD, termsAcceptedOrderField } from "./terms-text";
 /**
  * Checkout without JavaScript (`/checkout/quick`): the quick-buy line from
  * `/buy/<slug>` is carried in the form body, every step is a plain POST, and
@@ -68,6 +69,8 @@ export interface QuickCheckoutForm {
   reviewedChoices: string;
   /** The marketing consent box's value when ticked (the label's language), else "". */
   marketingConsent: Record<string, string>;
+  /** The "I agree to the terms" box is ticked (kept across this form's steps). */
+  termsAccepted: boolean;
   intent: "review" | "place";
 }
 
@@ -138,6 +141,7 @@ export function readQuickCheckoutForm(form: FormData): QuickCheckoutForm {
     expectedQuoteFingerprint: FINGERPRINT_PATTERN.test(fingerprint) ? fingerprint : "",
     reviewedChoices: /^[0-9a-f]{8}$/.test(text(form, "reviewedChoices", 8)) ? text(form, "reviewedChoices", 8) : "",
     marketingConsent: marketingConsentFormValues(form),
+    termsAccepted: termsAcceptedOrderField(form).termsAccepted === true,
     intent: form.get("intent") === "place" ? "place" : "review",
   };
 }
@@ -393,7 +397,9 @@ export function quickCheckoutOrderForm(
     customerEmail: form.customerEmail,
     customerWhatsapp: form.customerWhatsapp,
     notes: form.notes,
-    ...(form.attributes ? { attributes: JSON.stringify(form.attributes) } : {}),    ...form.marketingConsent,
+    ...(form.attributes ? { attributes: JSON.stringify(form.attributes) } : {}),
+    ...form.marketingConsent,
+    ...(form.termsAccepted ? { [TERMS_ACCEPTED_FIELD]: "true" } : {}),
     discountCodes: codes.length > 0 ? JSON.stringify(codes) : "",
     deliveryMode: mode === "pickup" ? "pickup" : "delivery",
     ...(mode === "none" ? {} : { shippingLocation: rateId }),

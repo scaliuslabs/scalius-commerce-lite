@@ -33,10 +33,13 @@ export type BuyerConversationSummary = InboxPage["items"][number];
 export type BuyerConversationThread = GetApiV1CustomerAuthConversationsByIdResponses[200]["data"]["conversation"];
 export type BuyerConversationMessage = BuyerConversationThread["messages"][number];
 export type BuyerConversationAttachment = BuyerConversationMessage["attachments"][number];
+export type BuyerConversationTopic = InboxPage["topics"][number];
 export interface BuyerInboxPage {
   items: BuyerConversationSummary[];
   nextCursor: string | null;
   canStartStoreConversation: boolean;
+  /** The merchant's topics a new conversation may name, in the page's language (none: no picker). */
+  topics: BuyerConversationTopic[];
 }
 
 /** How the buyer reaches an order thread: their account session, or the receipt cookie of a guest order. */
@@ -74,6 +77,9 @@ const CONVERSATION_COPY_EN = {
   startSubmit: "Send message",
   startNeedsVerification: "To message the store, verify your phone number or email on your account page first.",
   startNeedsVerificationLink: "Go to your account",
+  topicLabel: "Topic (optional)",
+  topicNone: "Choose a topic",
+  closeConversation: "Close conversation",
   orderPanelTitle: "Questions about this order?",
   orderPanelIntro: "Message us and we'll reply here.",
   orderPanelOpenInbox: "Open in your inbox",
@@ -137,6 +143,8 @@ const CONVERSATION_COPY_EN = {
   statusLimit: "You already have 5 open conversations. Reply in one of them, or wait for the store to close one.",
   statusSignin: "Your session expired. Sign in again to send messages.",
   statusMissing: "This conversation isn't available from this browser.",
+  statusClosedByYou: "Conversation closed. Send a message any time to open it again.",
+  statusTopic: "Choose one of the store's topics, or none.",
 };
 
 export type ConversationCopy = typeof CONVERSATION_COPY_EN;
@@ -169,6 +177,9 @@ const CONVERSATION_COPY_BN: ConversationCopy = {
   startSubmit: "মেসেজ পাঠান",
   startNeedsVerification: "স্টোরকে মেসেজ পাঠাতে আগে আপনার অ্যাকাউন্ট পেজে ফোন নম্বর বা ইমেইল যাচাই করুন।",
   startNeedsVerificationLink: "আপনার অ্যাকাউন্টে যান",
+  topicLabel: "বিষয়ের ধরন (ঐচ্ছিক)",
+  topicNone: "একটি ধরন বেছে নিন",
+  closeConversation: "কথোপকথন বন্ধ করুন",
   orderPanelTitle: "এই অর্ডার নিয়ে প্রশ্ন আছে?",
   orderPanelIntro: "আমাদের মেসেজ পাঠান, আমরা এখানেই উত্তর দেব।",
   orderPanelOpenInbox: "ইনবক্সে খুলুন",
@@ -232,6 +243,8 @@ const CONVERSATION_COPY_BN: ConversationCopy = {
   statusLimit: "আপনার ইতিমধ্যে ৫টি খোলা কথোপকথন আছে। সেগুলোর একটিতে উত্তর দিন, অথবা স্টোর একটি বন্ধ করা পর্যন্ত অপেক্ষা করুন।",
   statusSignin: "আপনার সেশনের মেয়াদ শেষ। মেসেজ পাঠাতে আবার সাইন ইন করুন।",
   statusMissing: "এই ব্রাউজার থেকে কথোপকথনটি পাওয়া যাচ্ছে না।",
+  statusClosedByYou: "কথোপকথনটি বন্ধ করা হয়েছে। আবার খুলতে যেকোনো সময় মেসেজ পাঠান।",
+  statusTopic: "স্টোরের দেওয়া ধরনগুলোর একটি বেছে নিন, অথবা কোনোটিই না।",
 };
 
 /** The conversations' words in the page's language (Bangla on a Bangla page). */
@@ -252,7 +265,11 @@ export const CONVERSATION_STATUS_PARAM = "conversation";
 export const STATUS_FLAGS = [
   "sent",
   "started",
+  // The buyer closed their conversation.
+  "closed",
   "invalid",
+  // A topic the store no longer lists (`unknown_topic`).
+  "topic",
   "image",
   // The API's own refusal codes (buyer-api-errors.ts `CODE_KIND`).
   "rate_limited",
@@ -287,7 +304,9 @@ export function conversationStatusMessage(flag: ConversationStatusFlag, retryAft
   const text: Record<ConversationStatusFlag, string> = {
     sent: copy.statusSent,
     started: copy.statusStarted,
+    closed: copy.statusClosedByYou,
     invalid: copy.statusInvalid,
+    topic: copy.statusTopic,
     image: copy.statusImage,
     rate_limited: retryAfterSeconds ? checkoutText(copy.statusRateWait, { time: pageWait(retryAfterSeconds) }) : copy.statusRate,
     attachments_pending: BUYER_REFUSAL_WORDS[storefrontLanguage(pageLanguage())].attachmentsPending,
@@ -297,7 +316,7 @@ export function conversationStatusMessage(flag: ConversationStatusFlag, retryAft
     missing: copy.statusMissing,
     unavailable: copy.unavailable,
   };
-  return { tone: flag === "sent" || flag === "started" ? "success" : "error", text: text[flag] };
+  return { tone: flag === "sent" || flag === "started" || flag === "closed" ? "success" : "error", text: text[flag] };
 }
 
 /** What a failed API answer means for the buyer. */
@@ -438,6 +457,11 @@ export function conversationTitle(summary: Pick<BuyerConversationSummary, "subje
     return summary.orderNumber ? fill(copy.orderTitle, { number: pageOrderNumber(summary.orderNumber, summary.orderId ?? "") }) : copy.yourOrder;
   }
   return summary.subject?.trim() || copy.messageToStore;
+}
+
+/** The merchant's name of a thread's topic while they still list it, or "". */
+export function conversationTopicLabel(summary: Pick<BuyerConversationSummary, "topic">): string {
+  return summary.topic?.label?.trim() ?? "";
 }
 
 export function conversationStatusLabel(status: BuyerConversationSummary["status"]): string {
@@ -584,7 +608,7 @@ export function renderInboxItems(items: readonly BuyerConversationSummary[]): st
     <span aria-hidden="true" class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${unread ? "bg-primary" : "bg-transparent"}"></span>
     <span class="min-w-0 flex-1">
       <span class="block break-words text-sm ${unread ? "font-semibold" : "font-medium"} text-foreground">${escapeHtml(conversationTitle(item))}</span>
-      <span class="mt-0.5 block text-sm text-muted-foreground">${escapeHtml(conversationStatusLabel(item.status))}${unread ? ` · <span class="font-medium text-primary">${escapeHtml(unreadLabel(item.unread))}</span>` : ""}</span>
+      <span class="mt-0.5 block text-sm text-muted-foreground">${conversationTopicLabel(item) ? `<span data-conversation-topic>${escapeHtml(conversationTopicLabel(item))}</span> · ` : ""}${escapeHtml(conversationStatusLabel(item.status))}${unread ? ` · <span class="font-medium text-primary">${escapeHtml(unreadLabel(item.unread))}</span>` : ""}</span>
     </span>
     ${time ? `<time datetime="${escapeHtml(isoTime(item.lastMessageAt!))}" title="${escapeHtml(time)}" class="shrink-0 text-xs text-muted-foreground">${escapeHtml(compactTime)}</time>` : ""}
   </a>

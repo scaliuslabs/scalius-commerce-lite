@@ -10,7 +10,7 @@ export type MessageLanguage = "en" | "bn";
 
 type RequestStatus = "submitted" | "under_review" | "approved" | "rejected" | "withdrawn" | "completed";
 
-interface MessageCopy {
+export interface MessageCopy {
   greeting: (name: string) => string;
   request: Record<CustomerRequestType | "other", string>;
   requestStatus: Record<RequestStatus | "other", string>;
@@ -92,6 +92,19 @@ interface MessageCopy {
     expires: string;
     ignore: string;
     sms: (code: string, store: string | null) => string;
+    /** A code that moves the account's sign-in phone to `phone` (its last digits, `•••022`): not a sign-in, and it says so. */
+    phoneChange: {
+      subject: (code: string, store: string | null) => string;
+      intro: (store: string | null, phone: string) => string;
+      warning: string;
+      sms: (code: string, store: string | null, phone: string) => string;
+    };
+    /** The notice to the identity that signed in before, once the sign-in phone moved to `phone`. */
+    phoneChanged: {
+      subject: (store: string | null) => string;
+      body: (store: string | null, phone: string) => string;
+      sms: (store: string | null, phone: string) => string;
+    };
   };
   /** Customers & marketing: the e-mail double opt-in and marketing mail footer. */
   marketing: {
@@ -208,6 +221,17 @@ const EN: MessageCopy = {
     expires: "This code expires in 5 minutes.",
     ignore: "If you didn't ask for this code, you can ignore this email.",
     sms: (code, store) => `${code} is your ${store ? `${store} ` : "verification "}code. It expires in 5 minutes. Don't share it.`,
+    phoneChange: {
+      subject: (code, store) => `${code} confirms a phone change${store ? ` at ${store}` : ""}`,
+      intro: (store, phone) => `Someone asked to change the phone you sign in with${store ? ` at ${store}` : ""} to the number ending ${phone}. Use this code only if that was you.`,
+      warning: "If this wasn't you, don't share this code with anyone. Sign in and contact the store.",
+      sms: (code, store, phone) => `${code} changes your ${store ? `${store} ` : ""}sign-in phone to the number ending ${phone}. Not you? Don't share it.`,
+    },
+    phoneChanged: {
+      subject: (store) => `Your sign-in phone${store ? ` at ${store}` : ""} changed`,
+      body: (store, phone) => `The phone you sign in with${store ? ` at ${store}` : ""} is now the number ending ${phone}, and you were signed out on other devices. If this wasn't you, contact the store right away.`,
+      sms: (store, phone) => `Your ${store ? `${store} ` : ""}sign-in phone is now the number ending ${phone}. Not you? Contact the store now.`,
+    },
   },
   marketing: {
     optInSubject: (store) => (store ? `Confirm your subscription to ${store}` : "Confirm your subscription"),
@@ -324,6 +348,17 @@ const BN: MessageCopy = {
     expires: "কোডটির মেয়াদ ৫ মিনিট।",
     ignore: "আপনি এই কোড না চাইলে ইমেইলটি উপেক্ষা করুন।",
     sms: (code, store) => `${store ? `${store}-এর` : "আপনার যাচাই"} কোড ${code}। মেয়াদ ৫ মিনিট।`,
+    phoneChange: {
+      subject: (code, store) => `${store ? `${store}-এ ` : ""}ফোন বদল নিশ্চিত করার কোড ${code}`,
+      intro: (store, phone) => `${store ? `${store}-এ ` : ""}আপনার সাইন ইনের ফোন বদলে ${phone} দিয়ে শেষ হওয়া নম্বর করার অনুরোধ এসেছে। আপনি চাইলেই কেবল এই কোড ব্যবহার করুন।`,
+      warning: "আপনি না চাইলে কোডটি কাউকে দেবেন না। সাইন ইন করে স্টোরকে জানান।",
+      sms: (code, store, phone) => `${code}: ${store ? `${store}-এ ` : ""}ফোন বদলে ${phone} শেষের নম্বর। কাউকে দেবেন না।`,
+    },
+    phoneChanged: {
+      subject: (store) => `${store ? `${store}-এ ` : ""}আপনার সাইন ইনের ফোন বদলেছে`,
+      body: (store, phone) => `${store ? `${store}-এ ` : ""}আপনার সাইন ইনের ফোন এখন ${phone} দিয়ে শেষ হওয়া নম্বর, আর অন্য ডিভাইস থেকে আপনাকে সাইন আউট করা হয়েছে। আপনি না করে থাকলে এখনই স্টোরকে জানান।`,
+      sms: (store, phone) => `${store ? `${store}-এ ` : ""}নতুন সাইন ইন ফোন ${phone} শেষের নম্বর। আপনি না করলে জানান।`,
+    },
   },
   marketing: {
     optInSubject: (store) => (store ? `${store}-এর সাবস্ক্রিপশন নিশ্চিত করুন` : "আপনার সাবস্ক্রিপশন নিশ্চিত করুন"),

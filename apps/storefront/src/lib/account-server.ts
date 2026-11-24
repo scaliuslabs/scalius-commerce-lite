@@ -33,6 +33,8 @@ interface ApiAnswer {
   status: number;
   data: unknown;
   error: string | null;
+  /** The refusal's machine reason (`details.reason`), for a page that words it per field. */
+  reason?: string | null;
 }
 
 async function callAccountApi(
@@ -61,10 +63,11 @@ async function callAccountApi(
     const payload = await response.json().catch(() => null) as {
       success?: unknown;
       data?: unknown;
-      error?: { code?: unknown; message?: unknown } | string | null;
+      error?: { code?: unknown; message?: unknown; details?: { reason?: unknown } } | string | null;
     } | null;
     const error = payload?.success === true ? null : buyerApiErrorText(payload, { status: response.status, headers: response.headers });
-    return { status: response.status, data: payload?.success === true ? payload.data : null, error };
+    const reason = payload && typeof payload.error === "object" && typeof payload.error?.details?.reason === "string" ? payload.error.details.reason : null;
+    return { status: response.status, data: payload?.success === true ? payload.data : null, error, reason };
   } catch (error) {
     console.warn("[account] API call failed:", error instanceof Error ? error.name : "unknown");
     return null;
@@ -75,9 +78,20 @@ function failed(answer: ApiAnswer | null): { ok: false; reason: "signed_out" | "
   return { ok: false, reason: answer?.status === 401 || answer?.status === 403 ? "signed_out" : "unavailable" };
 }
 
+/** One account-summary call per page request: the tabs and the order count read the same answer. */
+const summaryAnswers = new WeakMap<Request, Promise<ApiAnswer | null>>();
+function accountSummaryAnswer(request: Request): Promise<ApiAnswer | null> {
+  let answer = summaryAnswers.get(request);
+  if (!answer) {
+    answer = callAccountApi(request, "/api/v1/customer-auth/account-summary");
+    summaryAnswers.set(request, answer);
+  }
+  return answer;
+}
+
 /** The account tab counts; null when signed out or unreachable (the tabs then show only what always shows). */
 export async function readAccountSummaryForRequest(request: Request): Promise<(AccountSummary & { buyerUi?: BuyerUiBlock[] }) | null> {
-  const answer = await callAccountApi(request, "/api/v1/customer-auth/account-summary");
+  const answer = await accountSummaryAnswer(request);
   const summary = answer?.status === 200 ? readAccountSummary(answer.data) : null;
   if (!summary) return null;
   const buyerUi = (answer?.data as { buyerUi?: BuyerUiBlock[] } | null)?.buyerUi;
@@ -95,11 +109,15 @@ export interface AccountOrdersPage {
 /** One page of the account's orders, newest first (`cursor` is the API's opaque cursor). */
 export async function readAccountOrders(request: Request, cursor: string | null): Promise<AccountRead<AccountOrdersPage>> {
   const query = cursor ? `?${new URLSearchParams({ cursor })}` : "";
-  const answer = await callAccountApi(request, `/api/v1/customer-auth/orders${query}`);
+  const [answer, summary] = await Promise.all([
+    callAccountApi(request, `/api/v1/customer-auth/orders${query}`),
+    accountSummaryAnswer(request),
+  ]);
+  // The account's order count is the summary's (placed orders, any page); a page alone cannot count them.
+  const counted = summary?.status === 200 ? (summary.data as { orders?: unknown } | null)?.orders : undefined;
   const data = answer?.status === 200 ? answer.data as Partial<{
     orders: CustomerOrder[];
     customer: CustomerInfo;
-    summary: { totalOrders?: number };
     pagination: CustomerOrdersPagination;
     phoneVerification: { phone?: unknown } | null;
   }> | null : null;
@@ -110,7 +128,7 @@ export async function readAccountOrders(request: Request, cursor: string | null)
     data: {
       customer: data.customer ?? null,
       orders: data.orders,
-      totalOrders: data.summary?.totalOrders ?? data.orders.length,
+      totalOrders: typeof counted === "number" ? counted : data.orders.length,
       pagination: data.pagination ?? null,
       phoneVerification: typeof phone === "string" && phone.trim() ? { phone: phone.trim() } : null,
     },
@@ -126,14 +144,15 @@ export async function readAccountCustomer(request: Request): Promise<AccountRead
   return { ok: true, data: data.customer };
 }
 
-/** The profile is the name; addresses are in the address book. */
+/** The profile is the name and the WhatsApp number ("" clears it: the phone); addresses are in the address book. */
 export interface ProfileUpdate {
   name?: string;
+  whatsapp?: string;
 }
 
 export type ProfileSaveResult =
   | { ok: true; customer: CustomerInfo }
-  | { ok: false; reason: "signed_out" | "unavailable" | "invalid"; message: string | null };
+  | { ok: false; reason: "signed_out" | "unavailable" | "invalid"; message: string | null; refusal?: string | null };
 
 export interface AccountMarketingChannel {
   channel: MarketingChannel;
@@ -217,12 +236,14 @@ export async function changeAccountAddresses(
   return { ...failed(answer), message: null };
 }
 
-/** Saves the name; the API validates it. */
+/** Saves the name and the WhatsApp number; the API validates them and names why it refused (`refusal`). */
 export async function saveAccountProfile(request: Request, update: ProfileUpdate): Promise<ProfileSaveResult> {
   const answer = await callAccountApi(request, "/api/v1/customer-auth/profile", { method: "PUT", body: update });
   const customer = answer?.status === 200 ? (answer.data as { customer?: CustomerInfo } | null)?.customer : null;
   if (customer) return { ok: true, customer };
-  if (answer?.status === 400 || answer?.status === 422) return { ok: false, reason: "invalid", message: answer.error };
+  if (answer?.status === 400 || answer?.status === 409 || answer?.status === 422) {
+    return { ok: false, reason: "invalid", message: answer.error, ...(answer.reason ? { refusal: answer.reason } : {}) };
+  }
   return { ...failed(answer), message: null };
 }
 

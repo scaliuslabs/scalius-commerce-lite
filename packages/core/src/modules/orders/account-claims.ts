@@ -1,9 +1,9 @@
-import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
+import { NO_PHONE, phoneOrNull } from "@scalius/shared/customer-auth-policy";
 import type { Database } from "@scalius/database/client";
-import { orders } from "@scalius/database/schema";
-import { and, eq, isNull, or, sql, type SQL } from "drizzle-orm";
+import { customers, orders } from "@scalius/database/schema";
+import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 
-import { ConflictError, ForbiddenError, NotFoundError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError } from "@scalius/core/errors";
 import { createOrderReceiptToken, recordOrderReceipt } from "./receipts";
 import { customerAccountOrderVisibilityCondition } from "./account-orders";
 
@@ -35,12 +35,12 @@ export async function issueAccountOwnerReceipt(
 
 const CONTACT_MISMATCH_MESSAGE =
   "This order was placed with a different phone number and email, so it can't be added to your account.";
+const CONTACT_NOT_PROVEN_MESSAGE =
+  "Confirm this order's phone number or email in your account with a code first, then save the order.";
 
 export interface ClaimGuestOrderToAccountInput {
   orderId: string;
   customerId: string;
-  customerEmail?: string | null;
-  customerPhone?: string | null;
 }
 
 export interface ClaimGuestOrderToAccountResult {
@@ -53,23 +53,37 @@ function normalizeEmail(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
+/** A claim refused because the account has not proven the order's contact (`details.reason`). */
+function claimRefused(reason: "contact_not_proven" | "contact_mismatch"): AppError {
+  return new AppError(403, "forbidden", reason === "contact_not_proven" ? CONTACT_NOT_PROVEN_MESSAGE : CONTACT_MISMATCH_MESSAGE, { reason });
+}
 
-function immutableContactConditions(input: ClaimGuestOrderToAccountInput): SQL[] {
-  const conditions: SQL[] = [];
-  const phone = phoneOrNull(input.customerPhone);
-  const email = normalizeEmail(input.customerEmail);
-  if (phone) conditions.push(eq(orders.customerPhone, phone));
-  if (email) conditions.push(sql`lower(trim(${orders.customerEmail})) = ${email}`);
-  return conditions;
+/**
+ * The account still proves, at the moment of the write, the order's phone or
+ * email: a live, unerased account whose PROVEN phone (`phone_verified_at`) or
+ * PROVEN email (`email_verified_at`) is the order's. Read from the account row
+ * inside the write, never from a session's copy, so a contact typed at sign-up
+ * and never proven, or a proof another sign-in write took away meanwhile,
+ * claims nothing.
+ */
+function provenContactCondition(customerId: string): SQL {
+  return sql`EXISTS (SELECT 1 FROM ${customers} AS claimant WHERE claimant.id = ${customerId}
+    AND claimant.erased_at IS NULL AND claimant.deleted_at IS NULL
+    AND ((claimant.phone_verified_at IS NOT NULL AND claimant.phone <> ${NO_PHONE} AND claimant.phone = ${sql.raw('"orders"."customer_phone"')})
+      OR (claimant.email_verified_at IS NOT NULL AND trim(coalesce(claimant.email, '')) <> ''
+        AND lower(trim(claimant.email)) = lower(trim(${sql.raw('"orders"."customer_email"')})))))`;
 }
 
 /**
  * Attach a receipt-proven guest order to an authenticated account.
  *
  * Receipt authorization is verified by the API before this service is called.
- * This service additionally requires the active account to match an immutable
- * checkout contact and changes only private account ownership. The merchant CRM
- * customer link and its already-counted order metrics remain untouched.
+ * The account must also have PROVEN (by a sign-in code) the order's phone or
+ * email: a contact only typed into the account proves nothing, so a receipt
+ * on a shared device never moves the order, its keys or its messages to
+ * someone else's account (rules/orders/claim-needs-proven-contact.md). This
+ * changes only private account ownership; the merchant CRM customer link's
+ * already-counted order metrics remain untouched.
  */
 export async function claimGuestOrderToAccount(
   db: Database,
@@ -94,21 +108,26 @@ export async function claimGuestOrderToAccount(
     throw new ConflictError("This order is already saved to another customer account.");
   }
 
-  const contactConditions = immutableContactConditions(input);
-  if (contactConditions.length === 0) {
-    throw new ForbiddenError(CONTACT_MISMATCH_MESSAGE);
-  }
+  const account = await db
+    .select({
+      email: customers.email,
+      emailVerifiedAt: customers.emailVerifiedAt,
+      phone: customers.phone,
+      phoneVerifiedAt: customers.phoneVerifiedAt,
+      erasedAt: customers.erasedAt,
+      deletedAt: customers.deletedAt,
+    })
+    .from(customers)
+    .where(eq(customers.id, input.customerId))
+    .get();
+  if (!account || account.erasedAt || account.deletedAt) throw claimRefused("contact_mismatch");
   // A phone matches only a phone: an order placed without one never matches by it.
-  const phone = phoneOrNull(input.customerPhone);
-  const contactMatches = (
-    phone !== null && phone === phoneOrNull(order.customerPhone)
-  ) || (
-    normalizeEmail(input.customerEmail) !== "" &&
-    normalizeEmail(input.customerEmail) === normalizeEmail(order.customerEmail)
-  );
-  if (!contactMatches) {
-    throw new ForbiddenError(CONTACT_MISMATCH_MESSAGE);
-  }
+  const orderPhone = phoneOrNull(order.customerPhone);
+  const orderEmail = normalizeEmail(order.customerEmail);
+  const phoneMatches = orderPhone !== null && phoneOrNull(account.phone) === orderPhone;
+  const emailMatches = orderEmail !== "" && normalizeEmail(account.email) === orderEmail;
+  const provenMatch = (phoneMatches && account.phoneVerifiedAt !== null) || (emailMatches && account.emailVerifiedAt !== null);
+  if (!provenMatch) throw claimRefused(phoneMatches || emailMatches ? "contact_not_proven" : "contact_mismatch");
 
   const claimed = await db
     .update(orders)
@@ -122,7 +141,7 @@ export async function claimGuestOrderToAccount(
       eq(orders.id, input.orderId),
       isNull(orders.accountOwnerCustomerId),
       isNull(orders.deletedAt),
-      or(...contactConditions),
+      provenContactCondition(input.customerId),
     ))
     .returning({ id: orders.id });
 

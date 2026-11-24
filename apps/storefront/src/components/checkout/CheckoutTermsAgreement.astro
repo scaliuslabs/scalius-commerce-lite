@@ -1,0 +1,63 @@
+---
+// The store's terms beside the action that places the order, on every
+// checkout form: the sentence, or the
+// required "I agree" box when the merchant asks for it. A real checkbox and
+// label; its error (`<id>-error`) is an alert the page script fills
+// (checkTermsAgreement) or the server renders (`error`) after a refused post.
+import { TERMS_ACCEPTED_FIELD, type TermsAgreement } from "@/lib/checkout/terms-text";
+
+interface Props {
+  agreement: TermsAgreement | null;
+  /** The words under an unticked required box (`termsRequiredText`). */
+  errorText: string;
+  id?: string;
+  /** Shown now: the server's refusal of an unticked box. */
+  error?: boolean;
+  /** Focus the box on load (a refused post with no other field to fix first). */
+  focus?: boolean;
+  checked?: boolean;
+  /** Not this way of paying yet (the cart page's cash block): hidden and off, so it is neither posted nor checked. */
+  inactive?: boolean;
+  /** The element id the page script shows and hides with the way of paying. */
+  wrapperId?: string;
+  /** The form the box posts with when it sits outside it (the cart page's docked Place order). */
+  form?: string;
+  /** The private page part it is (`legal` on the cart page). */
+  part?: string;
+}
+
+const { agreement, errorText, id = "termsAccepted", error = false, focus = error, checked = false, inactive = false, wrapperId, form, part } = Astro.props;
+const linkClass = "underline underline-offset-2 hover:text-foreground";
+---
+{agreement && (agreement.required ? (
+  <div id={wrapperId} class="mt-3" hidden={inactive} data-part={part}>
+    <label for={id} class="flex min-h-11 cursor-pointer items-start gap-3 py-1 text-sm text-foreground">
+      <input
+        id={id}
+        form={form}
+        type="checkbox"
+        name={TERMS_ACCEPTED_FIELD}
+        value="true"
+        required
+        checked={checked}
+        disabled={inactive}
+        autofocus={focus}
+        aria-invalid={error ? "true" : undefined}
+        aria-describedby={`${id}-error`}
+        class="mt-0.5 size-5 shrink-0 accent-primary"
+      />
+      <span>
+        {agreement.segments.map((segment) =>
+          segment.href ? <a href={segment.href} target="_blank" rel="noopener" class={linkClass}>{segment.text}</a> : segment.text,
+        )}
+      </span>
+    </label>
+    <p id={`${id}-error`} data-text={errorText} class="text-sm font-medium text-destructive empty:hidden" role="alert">{error ? errorText : ""}</p>
+  </div>
+) : (
+  <p id={wrapperId} class="mt-3 text-center text-sm text-muted-foreground" hidden={inactive} data-part={part}>
+    {agreement.segments.map((segment) =>
+      segment.href ? <a href={segment.href} target="_blank" rel="noopener" class={linkClass}>{segment.text}</a> : segment.text,
+    )}
+  </p>
+))}

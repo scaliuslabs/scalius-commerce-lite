@@ -1,10 +1,8 @@
 import type { BuyerOrderDetailView, BuyerOrderView } from "@scalius/shared/buyer-order-view";
-import { buyerApiErrorText } from "../buyer-api-errors";
+import { buyerApiErrorKind, buyerApiErrorText } from "../buyer-api-errors";
 import { currentPresence } from "../presence-url";
 import { STOREFRONT_PRESENCE_HEADER } from "@scalius/shared/markets";
-import { buyerApiErrorCopy } from "../buyer-api-error-copy";
 import { refusalWaitSeconds } from "../rate-limit-wait";
-import { pageLanguage } from "../store-time-zone";
 import { clearBuyerAttributes } from "../buyer-ui/state";
 // src/lib/api/customer-auth.ts
 // API client for storefront customer sign-in (one-time codes by email, SMS or WhatsApp).
@@ -41,7 +39,7 @@ import { reconcileCheckoutAfterSignIn } from "../checkout/session-state";
 interface AuthApiEnvelope<T = unknown> {
   success: boolean;
   data?: T;
-  error?: string | { code?: string; message?: string; details?: { retryAfterSeconds?: number; attemptsLeft?: number; reason?: string } };
+  error?: string | { code?: string; message?: string; details?: { retryAfterSeconds?: number; attemptsLeft?: number; reason?: string; field?: string } };
 }
 
 interface SendOtpData {
@@ -62,7 +60,6 @@ interface ProfileData {
 interface OrdersData {
   orders: CustomerOrder[];
   customer?: CustomerInfo;
-  summary?: CustomerOrdersSummary;
   pagination?: CustomerOrdersPagination;
   phoneVerification?: unknown;
 }
@@ -218,7 +215,7 @@ async function readEnvelope<T>(res: Response): Promise<AuthApiEnvelope<T>> {
   }
 }
 
-function errorDetails(raw: AuthApiEnvelope): { retryAfterSeconds?: number; attemptsLeft?: number; reason?: string } {
+function errorDetails(raw: AuthApiEnvelope): { retryAfterSeconds?: number; attemptsLeft?: number; reason?: string; field?: string } {
   return typeof raw.error === "object" && raw.error.details ? raw.error.details : {};
 }
 
@@ -285,6 +282,10 @@ export interface CustomerInfo {
   email: string;
   name: string;
   phone?: string;
+  /** The WhatsApp number when it is not the phone (null: the phone). */
+  whatsapp?: string | null;
+  /** The account signs in with its phone (proven by code). */
+  phoneVerified?: boolean;
   customerId?: string;
   /** The address book's default address (checkout prefills it), or null. */
   defaultAddress?: CustomerAddress | null;
@@ -442,6 +443,8 @@ export interface CustomerOrderItem {
   discountAmountMinor?: number | null;
   taxableAmountMinor?: number | null;
   taxAmountMinor?: number;
+  /** The bundle the row was bought in (rows of one bundle share its id); null for a plain row. */
+  bundle?: { id: string; title: string; units: number | null; perUnit: number | null } | null;
 }
 
 export interface CustomerOrderShipment {
@@ -501,13 +504,6 @@ export interface CustomerOrder {
   createdAt: string | null;
   latestShipment: CustomerOrderShipment | null;
   items: CustomerOrderItem[];
-}
-
-export interface CustomerOrdersSummary {
-  totalOrders: number;
-  totalSpent: number;
-  completedOrders: number;
-  pendingOrders: number;
 }
 
 export interface CustomerOrdersPagination {
@@ -808,7 +804,6 @@ export async function getCustomerOrders(options: {
   success: boolean;
   orders: CustomerOrder[];
   customer?: CustomerInfo;
-  summary?: CustomerOrdersSummary;
   pagination?: CustomerOrdersPagination;
   /** Set only when the account's own phone is unverified and the store can text it a code. */
   phoneVerification?: PhoneVerificationPrompt | null;
@@ -840,7 +835,6 @@ export async function getCustomerOrders(options: {
       success: true,
       orders: data.orders || [],
       customer: data.customer,
-      ...(data.summary ? { summary: data.summary } : {}),
       ...(data.pagination ? { pagination: data.pagination } : {}),
       phoneVerification: readPhoneVerification(data.phoneVerification),
     };
@@ -867,62 +861,122 @@ function readPhoneVerification(value: unknown): PhoneVerificationPrompt | null {
   return typeof phone === "string" && phone.trim() ? { phone: phone.trim() } : null;
 }
 
+/**
+ * Where the confirming code of a phone change went: how the account signs in
+ * now (its proven email, else its proven phone). The verify call sends that
+ * code as `currentCode`.
+ */
+export type PhoneCodeConfirmWith = "email" | "phone";
+
+/**
+ * Why a phone route refused, for the prompt to word; absent, `error` (the
+ * catalogue's words) says it.
+ * - `no_sign_in_to_confirm`: no code can reach how the account signs in now: only the store can help.
+ * - `phone_on_another_account`: the number is proven on another account: sign in with it.
+ * - `current_sign_in_code_required`: the code sent to `confirmWith` is missing.
+ * - `codes_still_valid`: too soon for new codes; the codes already sent still work.
+ * - `wrong_code` / `expired_code`: one of the two codes is wrong, or can't be used anymore.
+ * - `codes_unavailable`: the store can't send text codes right now.
+ * - `invalid_phone` / `bd_mobile_required` / `country_not_accepted`: the new number can't be read, isn't a Bangladesh mobile, or is from a country the store doesn't take.
+ */
+export type PhoneCodeRefusal =
+  | "no_sign_in_to_confirm"
+  | "phone_on_another_account"
+  | "current_sign_in_code_required"
+  | "codes_still_valid"
+  | "wrong_code"
+  | "expired_code"
+  | "codes_unavailable"
+  | "invalid_phone"
+  | "bd_mobile_required"
+  | "country_not_accepted";
+
 export type SendPhoneVerificationCodeResult =
-  | { success: true; message: string; resendAfterSeconds: number }
-  | { success: false; error: string; status: number; retryAfterSeconds?: number };
+  | { success: true; resendAfterSeconds: number; confirmWith: PhoneCodeConfirmWith }
+  | { success: false; error: string; status: number; retryAfterSeconds?: number; refusal?: PhoneCodeRefusal };
 
 export type VerifyPhoneResult =
-  | { success: true; movedOrders: number; message: string }
-  | { success: false; error: string; status: number; attemptsLeft?: number };
+  | { success: true; movedOrders: number }
+  | { success: false; error: string; status: number; attemptsLeft?: number; refusal?: PhoneCodeRefusal };
 
-/** Phone verification uses the same localized refusal boundary as sign-in. */
-function phoneVerificationFailure(res: Response, raw: AuthApiEnvelope, options: { showWait?: boolean } = {}): string {
-  return failureMessage(res, raw, options);
+const NAMED_PHONE_REFUSALS: ReadonlySet<string> = new Set(["no_sign_in_to_confirm", "phone_on_another_account", "current_sign_in_code_required"]);
+/** How the API reads a typed number (`parseContactPhone`'s reasons) on the `phone` field. */
+const PHONE_NUMBER_REFUSALS: Readonly<Record<string, PhoneCodeRefusal>> = {
+  too_short: "invalid_phone", invalid: "invalid_phone", bd_mobile_required: "bd_mobile_required", country_not_accepted: "country_not_accepted",
+};
+
+/** The API's refusal of a phone route as the prompt words it, from machine fields only. */
+function phoneCodeRefusal(res: Response, raw: AuthApiEnvelope): PhoneCodeRefusal | undefined {
+  const { reason, field } = errorDetails(raw);
+  if (reason && NAMED_PHONE_REFUSALS.has(reason)) return reason as PhoneCodeRefusal;
+  if (reason && field === "phone" && Object.hasOwn(PHONE_NUMBER_REFUSALS, reason)) return PHONE_NUMBER_REFUSALS[reason];
+  if (isCodeStillValidRefusal(reason)) return "codes_still_valid";
+  const kind = buyerApiErrorKind(raw, res.status);
+  if (kind === "wrongCode") return "wrong_code";
+  if (kind === "expiredCode") return "expired_code";
+  return undefined;
 }
 
-/** Text a code to this account's own phone. No body: the server reads the phone from the session. */
-export async function sendPhoneVerificationCode(): Promise<SendPhoneVerificationCodeResult> {
+/**
+ * Start proving a sign-in phone: without `phone`, the account's own (the
+ * server reads it from the session, no body); with it, a new number the
+ * account's phone moves to (in the body, never a URL). Two codes go out: one
+ * to `confirmWith`, one to the number.
+ */
+export async function sendPhoneVerificationCode(phone?: string): Promise<SendPhoneVerificationCodeResult> {
   try {
     const res = await customerAuthFetch(authUrl("phone/send-code"), {
       method: "POST",
       credentials: "include",
+      ...(phone ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone }) } : {}),
     }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
-    const raw = await readEnvelope<{ message?: string; resendAfterSeconds?: number }>(res);
+    const raw = await readEnvelope<{ resendAfterSeconds?: number; confirmWith?: string }>(res);
     const data = raw.data;
-    if (!res.ok || isFailedEnvelope(raw) || !data) {
+    if (!res.ok || isFailedEnvelope(raw) || !data || (data.confirmWith !== "email" && data.confirmWith !== "phone")) {
+      // Only send-code answers 503 for the store's text codes.
+      const refusal = phoneCodeRefusal(res, raw) ?? (res.status === 503 ? "codes_unavailable" : undefined);
       // The account page counts this wait down beside the message.
-      return { success: false, error: phoneVerificationFailure(res, raw, { showWait: false }), status: res.status, retryAfterSeconds: refusalWaitSeconds(raw, res.headers) };
+      return {
+        success: false,
+        error: failureMessage(res, raw, { showWait: false }),
+        status: res.status,
+        retryAfterSeconds: refusalWaitSeconds(raw, res.headers),
+        ...(refusal ? { refusal } : {}),
+      };
     }
-    return {
-      success: true,
-      message: buyerApiErrorCopy(pageLanguage()).phoneCodeSent,
-      resendAfterSeconds: data.resendAfterSeconds ?? 60,
-    };
+    return { success: true, resendAfterSeconds: data.resendAfterSeconds ?? 60, confirmWith: data.confirmWith };
   } catch (error: unknown) {
     return { success: false, error: networkErrorMessage(error), status: 0 };
   }
 }
 
-/** Prove the account's phone with its code; orders placed with it move to this account. */
-export async function verifyPhone(code: string): Promise<VerifyPhoneResult> {
+/**
+ * Prove the phone with both codes: `code` sent to the number (the account's
+ * own, or `phone` when it moves to a new one), `currentCode` sent to
+ * `confirmWith`. On success the API has signed out every session of the
+ * account and set a new session cookie: the caller reloads.
+ */
+export async function verifyPhone(codes: { code: string; currentCode: string; phone?: string }): Promise<VerifyPhoneResult> {
   try {
     const res = await customerAuthFetch(authUrl("phone/verify"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code: codes.code, currentCode: codes.currentCode, ...(codes.phone ? { phone: codes.phone } : {}) }),
     }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
-    const raw = await readEnvelope<{ movedOrders?: number; message?: string }>(res);
+    const raw = await readEnvelope<{ movedOrders?: number }>(res);
     const data = raw.data;
     if (!res.ok || isFailedEnvelope(raw) || !data) {
-      return { success: false, error: phoneVerificationFailure(res, raw), status: res.status, attemptsLeft: errorDetails(raw).attemptsLeft };
+      const refusal = phoneCodeRefusal(res, raw);
+      return {
+        success: false,
+        error: failureMessage(res, raw),
+        status: res.status,
+        attemptsLeft: errorDetails(raw).attemptsLeft,
+        ...(refusal ? { refusal } : {}),
+      };
     }
-    const movedOrders = typeof data.movedOrders === "number" && data.movedOrders > 0 ? data.movedOrders : 0;
-    return {
-      success: true,
-      movedOrders,
-      message: buyerApiErrorCopy(pageLanguage()).phoneVerified,
-    };
+    return { success: true, movedOrders: typeof data.movedOrders === "number" && data.movedOrders > 0 ? data.movedOrders : 0 };
   } catch (error: unknown) {
     return { success: false, error: networkErrorMessage(error), status: 0 };
   }

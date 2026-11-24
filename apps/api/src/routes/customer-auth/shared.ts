@@ -10,6 +10,10 @@ export const customerAuthProfileSchema = z.object({
   email: z.string(),
   name: z.string(),
   phone: z.string().nullable().optional(),
+  /** The WhatsApp number when it is not the phone (absent: the phone). */
+  whatsapp: z.string().nullable().optional(),
+  /** The account signs in with this phone (proven by code); changing it takes a code. */
+  phoneVerified: z.boolean(),
   customerId: z.string().nullable().optional(),
   /** The address book's default address (checkout prefills it), or null. */
   defaultAddress: customerAddressSchema.nullable(),

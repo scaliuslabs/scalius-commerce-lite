@@ -31,6 +31,8 @@ import {
 import { getRuntimePresence } from "@/lib/api/runtime";
 import MarketingConsentField from "@/components/checkout/MarketingConsentField.astro";
 import { marketingConsentCheckbox } from "@/lib/checkout/marketing-consent";
+import { termsAgreement } from "@/lib/checkout/terms-text";
+import CheckoutTermsAgreement from "@/components/checkout/CheckoutTermsAgreement.astro";
 import {
   getActiveCheckoutLanguage,
   getCheckoutConfig,
@@ -250,6 +252,9 @@ const contactFields = checkoutContactFields(checkoutConfig.customerIdentity ?? D
 // Settings → Customers: the marketing consent box (unchecked, never required;
 // a ticked box stays ticked across this form's steps).
 const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
+// The store's terms beside Place order: the sentence, or the required box (the API refuses an order without it).
+const agreement = termsAgreement({ required: checkoutConfig.requireTermsAcceptance, policies: layoutData?.policies, copy });
+const termsMissing = form.intent === "place" && agreement?.required === true && !form.termsAccepted;
 // The billing address checkout asks for, checked by its country's rules
 // before the order is placed (billing-validation.ts; the API checks it too).
 const billingLabels: Record<BillingAddressField, string> = {
@@ -317,7 +322,7 @@ if (mode !== "none" && !storeDelivers) {
   }
   if (checkoutConfig.guestCheckoutEnabled === false && !customerSessionToken) {
     errorMessage = copy.signInToCheckoutText;
-  } else if (fieldErrors.length > 0 || Object.keys(billingErrors).length > 0) {
+  } else if (fieldErrors.length > 0 || Object.keys(billingErrors).length > 0 || termsMissing) {
     errorMessage = "";
   } else if (!quote) {
     // Options that couldn't be read are said once, at the options; never as the buyer's mistake.
@@ -644,6 +649,7 @@ markPaymentPage(Astro.locals);
         ))}
 
         <MarketingConsentField consent={marketingConsent} selected={Object.keys(form.marketingConsent).map((key) => key.replace("marketingConsent_", ""))} idPrefix="quick" />
+        <CheckoutTermsAgreement agreement={agreement} errorText={copy.termsRequiredText} id="quickTermsAccepted" checked={form.termsAccepted} error={termsMissing} focus={termsMissing && fieldErrors.length === 0 && Object.keys(billingErrors).length === 0} />
 
         {quote && codAvailable && codServesDestination && codFitsOrder ? (
           <div class="space-y-2">

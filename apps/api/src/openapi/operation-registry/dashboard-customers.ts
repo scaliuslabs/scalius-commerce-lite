@@ -15,6 +15,8 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
   },
   // Erasure (final audit I10): Super Admin only, never an app; the merchant approves an agent's call.
   "dashboard.customers.erase": { stability: "internal", risk: "destructive", openWorld: true, batch: "forbidden" },
+  // A sign-in reset changes how the customer signs in: never an app, and an agent always waits for approval.
+  "dashboard.customers.reset_sign_in": { stability: "internal", risk: "destructive", impact: "security", confirmation: "required", batch: "forbidden" },
   "dashboard.customers.get": {},
   "dashboard.customers.history": {},
   "dashboard.customers.list": {},

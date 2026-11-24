@@ -7,6 +7,7 @@ import {
     type OrderCommitResult,
     type OrderCustomer,
     type StorefrontOrderCommitPayload,
+    buildTermsAcceptedOrderEventInsert,
 } from "../orders";
 import { buildBatchGuard, chunkRowsForD1, isBatchGuardError, type Database } from "@scalius/database/client";
 import {
@@ -22,6 +23,7 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { defaultOrderSalesChannelId } from "@scalius/shared/sales-channels";
+import { readOrderLineBundle } from "@scalius/shared/line-properties";
 import { ConflictError, ValidationError } from "../../errors";
 import type { PreparedStockReservationBatch } from "../inventory";
 import {
@@ -175,13 +177,16 @@ function buildReservationItemIssues(
         .map((result) => {
             const index = payload.items.findIndex((item) => item.variantId === result.variantId);
             const item = index >= 0 ? payload.items[index] : undefined;
+            // A kit's item speaks for the kit's line (the buyer bought the kit) and names the item.
+            const kit = item ? readOrderLineBundle(item.properties, item.quantity)?.kit ?? null : null;
             const productName = item?.productName ?? "This item";
             const variantLabel = item?.variantLabel ?? null;
             return {
                 index: index >= 0 ? index : 0,
                 cartKey: item?.cartKey ?? null,
-                productId: item?.productId ?? "",
-                variantId: result.variantId,
+                productId: kit?.productId ?? item?.productId ?? "",
+                variantId: kit?.variantId ?? result.variantId,
+                ...(kit ? { componentVariantId: result.variantId } : {}),
                 code: "quantity_unavailable",
                 action: "remove",
                 message: `${productName}${variantLabel ? ` (${variantLabel})` : ""} is no longer available in the requested quantity.`,
@@ -195,8 +200,9 @@ function buildReservationItemIssues(
 /**
  * The checkout's facts after the order's own rows: the order-created
  * notification claim, promotion allocations and redemptions, app record
- * writes, the gift-card hold, the Meta claim and the tracking snapshot. The
- * payload's discounts must agree with its lines and tax quote.
+ * writes, the gift-card hold, the Meta claim, the terms agreement and the
+ * tracking snapshot. The payload's discounts must agree with its lines and
+ * tax quote.
  */
 function checkoutOrderFacts(
     db: Database,
@@ -407,6 +413,9 @@ function checkoutOrderFacts(
             source: "storefront-order",
         }));
     }
+
+    // The buyer's agreement to the store's terms, when it was required: with the order.
+    if (payload.termsAccepted) writes.push(buildTermsAcceptedOrderEventInsert(db, od.id));
 
     // The order's consent snapshot and match signals (audit spec S4): with the
     // order or not at all, so a server Purchase never runs without its consent.

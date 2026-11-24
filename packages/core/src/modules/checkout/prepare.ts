@@ -53,6 +53,7 @@ import { generateOrderId } from "@scalius/shared/order-utils";
 import { DELIVERY_HIERARCHY_COUNTRY, isMarketSubfolder } from "@scalius/shared/markets";
 import { resolveAddressWithLocation, type ResolvedAddress } from "../customers";
 import { checkoutDocument } from "../settings";
+import { assertTermsAccepted } from "./terms-acceptance";
 import { ValidationError } from "@scalius/core/errors";
 import {
   orderBillingAddressColumns,
@@ -177,6 +178,8 @@ export interface StorefrontCheckoutPolicySnapshot {
     contactFields?: CheckoutContactFieldSettings;
     /** Settings → Checkout: every order asks for a full billing address (off: Shopify's default). */
     requireFullBillingAddress?: boolean;
+    /** Settings → Checkout: no order without the buyer's agreement to the terms (terms-acceptance.ts). */
+    requireTermsAcceptance?: boolean;
     /** The authority snapshot's fence (`authority.ts`): the commit refuses when it moved. */
     authorityFence?: CheckoutFence;
     orderCreatedNotificationEnabled?: boolean;
@@ -907,6 +910,12 @@ export async function createStorefrontOrder(
         ? null
         : await checkoutDocument.read(storefrontDb);
 
+    // The store's terms: required only when the merchant says, then recorded with the order.
+    const termsAccepted = assertTermsAccepted(
+        checkoutPolicySnapshot?.requireTermsAcceptance ?? fallbackSettings?.requireTermsAcceptance ?? false,
+        data.termsAccepted,
+    );
+
     // The billing address (Shopify's rule): the shipping address bills an
     // order that ships unless the buyer sent another; an order that ships
     // nothing needs one (minimal unless the merchant requires a full one); a
@@ -1131,6 +1140,7 @@ export async function createStorefrontOrder(
             metaPurchase: checkoutPolicySnapshot?.metaPurchaseEnabled ?? true,
         },
         existingCustomer: accountOwnerCustomer,
+        ...(termsAccepted ? { termsAccepted } : {}),
         orderData: {
             id: orderId,
             customerName: data.customerName,

@@ -13,6 +13,7 @@ import {
   getApiV1AdminSettingsCustomerRequests,
   getApiV1AdminSettingsDeliveryLocations,
   getApiV1AdminSettingsEmail,
+  getApiV1AdminSettingsConversationTopics,
   getApiV1AdminSettingsMarketingConsent,
   getApiV1AdminSettingsMedia,
   getApiV1AdminSettingsMetaConversions,
@@ -289,6 +290,11 @@ export const signInPolicyQuery = {
 export const marketingConsentQuery = {
   queryKey: queryKeys.settings.marketingConsent(),
   queryFn: () => apiData(getApiV1AdminSettingsMarketingConsent()),
+};
+
+export const conversationTopicsQuery = {
+  queryKey: queryKeys.settings.conversationTopics(),
+  queryFn: () => apiData(getApiV1AdminSettingsConversationTopics()),
 };
 
 // ── Apps ─────────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import {
     type NavigationResourceType,
 } from "@scalius/shared/navigation-target";
 import { parseNavigationHref } from "@scalius/shared/navigation-href";
+import { NAVIGATION_SYSTEM_TARGETS, type NavigationSystemTarget } from "@scalius/shared/navigation-system-targets";
 
 export const NAVIGATION_MENU_ITEM_LIMIT = 10_000;
 export const NAVIGATION_MENU_MAX_DEPTH = 3;
@@ -41,17 +42,7 @@ export interface NavigationPlacementDefinition {
     maxItems: number;
 }
 
-export const NAVIGATION_SYSTEM_TARGETS = {
-    home: "/",
-    catalog: "/search",
-    search: "/search",
-    account: "/account",
-    cart: "/cart",
-    checkout: "/checkout",
-    order_lookup: "/orders",
-} as const;
-
-export type NavigationSystemTarget = keyof typeof NAVIGATION_SYSTEM_TARGETS;
+export { NAVIGATION_SYSTEM_KEYS, NAVIGATION_SYSTEM_TARGETS, type NavigationSystemTarget } from "@scalius/shared/navigation-system-targets";
 export type NavigationAuthorityTarget =
     | {
         type: "resource";

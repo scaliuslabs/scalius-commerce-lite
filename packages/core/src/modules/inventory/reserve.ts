@@ -4,7 +4,7 @@
 // Stock is permanently deducted only on payment confirmation.
 
 import { catalogBuyerStateRefreshStatementsForSkus, channelUnlinkedOnHandSql, effectiveLowStockThresholdSql } from "../products";
-import { eq, and, sql, inArray, isNull, type SQL, type SQLWrapper } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull, SQL, type SQLWrapper } from "drizzle-orm";
 import { inventoryMovements, products, productVariants } from "@scalius/database/schema";
 import {
   buildBatchGuard,
@@ -195,13 +195,7 @@ export async function prepareStockReservationBatch(
     };
   }
 
-  const variantLoad = resolveReservationVariantStates(
-    entries,
-    options.variantStates ?? await selectReservationVariantStates(
-      db,
-      entries.map((entry) => entry.variantId),
-    ).all(),
-  );
+  const variantLoad = resolveReservationVariantStates(entries, await reservationVariantStates(db, entries, options.variantStates));
   if (!variantLoad.success) {
     return {
       ...variantLoad,
@@ -965,13 +959,32 @@ function mergeReservationItemsByVariant(items: ReservationBatchItem[]): Reservat
 }
 
 /**
+ * The counter rows of the SKUs a reservation holds: the caller's prefetched
+ * rows, and a read of any it did not prefetch. A prefetch keyed by other ids
+ * (a cart's lines, where the order reserves a kit's items) costs a round trip,
+ * never a refusal of a live SKU as not found.
+ */
+async function reservationVariantStates(
+  db: Database,
+  entries: readonly ReservationBatchItem[],
+  prefetched: readonly ReservationVariantState[] | undefined,
+): Promise<readonly ReservationVariantState[]> {
+  const have = new Set(prefetched?.map((row) => row.id));
+  const missing = entries.map((entry) => entry.variantId).filter((variantId) => !have.has(variantId));
+  if (missing.length === 0) return prefetched!;
+  const read = await selectReservationVariantStates(db, missing).all();
+  return prefetched ? [...prefetched, ...read] : read;
+}
+
+/**
  * Buyer-sellable counter rows; composable into a caller's read batch. The ids
- * ride one bound `json_each` set, never one parameter each: D1 allows 100
- * bound parameters per statement and a cart can hold more lines than that.
+ * are a list or a `SELECT <id>` (a cart's SKUs with its kits' items), the
+ * list riding one bound `json_each` set, never one parameter each: D1 allows
+ * 100 bound parameters per statement and a cart can hold more lines than that.
  */
 export function selectReservationVariantStates(
   db: Database,
-  variantIds: readonly string[],
+  variantIds: readonly string[] | SQL,
 ) {
   return db
     .select({
@@ -991,9 +1004,9 @@ export function selectReservationVariantStates(
     .innerJoin(products, eq(products.id, productVariants.productId))
     .where(
       and(
-        sql`${productVariants.id} IN (
-          SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...new Set(variantIds)])})
-        )`,
+        sql`${productVariants.id} IN (${variantIds instanceof SQL
+          ? variantIds
+          : sql`SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...new Set(variantIds)])})`})`,
         isNull(productVariants.deletedAt),
         // Filters, not indexes: the id set drives (no D1 statistics; an
         // is_active/deleted_at index walk reads every live product's SKUs).

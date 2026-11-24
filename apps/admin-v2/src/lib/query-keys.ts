@@ -250,6 +250,7 @@ export const queryKeys = {
     checkoutReadiness: () => ["settings", "checkout-readiness"] as const,
     customerRequests: () => ["settings", "customer-requests"] as const,
     marketingConsent: () => ["settings", "marketing-consent"] as const,
+    conversationTopics: () => ["settings", "conversation-topics"] as const,
     email: () => ["settings", "email"] as const,
     business: () => ["settings", "business"] as const,
     taxes: () => ["settings", "taxes"] as const,

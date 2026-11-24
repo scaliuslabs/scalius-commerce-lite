@@ -2,7 +2,7 @@
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { orders, customerAddresses, customers, deliveryShipments, firstCustomerAddressId, FulfillmentStatus } from "@scalius/database/schema";
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
-import { customerAddressColumns, guestRecordForContact, resolveAddress } from "../../customers";
+import { customerAddressColumns, guestRecordForContact, insertCustomer, resolveAddress } from "../../customers";
 import { orderAddressInput, orderShippingAddressColumns } from "../shipping-address";
 import { orderBillingAddressColumns, resolveStaffBillingAddress } from "../billing-address";
 import { nanoid } from "nanoid";
@@ -127,7 +127,7 @@ export async function updateOrderDetails(
         buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${editable})`, ORDER_DETAILS_GUARD_MARKER),
     ];
     if (newCustomerId) {
-        statements.push(db.insert(customers).values({
+        statements.push(insertCustomer(db, {
             id: newCustomerId,
             name: next.customerName,
             email: next.customerEmail,

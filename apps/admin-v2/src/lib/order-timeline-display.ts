@@ -108,6 +108,17 @@ export function describeTimelineEvent(
     }
     case "refund_kept":
       return { text: t("timeline.refundKept", { amount: money(count(data.amount)) }), detail: null };
+    case "delivery_message": {
+      // Never the text: only that a line's message was added, changed or removed.
+      const change = text(data.change);
+      return {
+        text: t(change === "changed" ? "timeline.deliveryMessageChanged"
+          : change === "removed" ? "timeline.deliveryMessageRemoved"
+            : change === "read" ? "timeline.deliveryMessageRead" : "timeline.deliveryMessageAdded"),
+        detail: text(data.reason) === "line_removed" ? t("timeline.deliveryMessageLineRemoved")
+          : data.hasLink === true && change !== "removed" && change !== "read" ? t("timeline.deliveryMessageLink") : null,
+      };
+    }
     case "stock_held": {
       // A refund cancelled the order; why the location refused, worded here (its server words stay in `body`).
       const reason = ["location_short", "stock_changed", "refused"].includes(text(data.reason) ?? "") ? text(data.reason)! : "refused";
@@ -206,6 +217,9 @@ export function describeTimelineEvent(
         detail: from && from !== to ? t("timeline.locationWas", { location: from }) : null,
       };
     }
+    case "terms_accepted":
+      // The buyer ticked "I agree to the terms" when placing the order (the store requires it).
+      return { text: t("timeline.termsAccepted"), detail: null };
     case "prices_set":
       // Staff or an app priced lines by hand when placing the order.
       return { text: t("timeline.pricesSet"), detail: null };

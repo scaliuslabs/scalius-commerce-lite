@@ -83,6 +83,21 @@ function ErasedEvent({ entry }: { entry: HistoryEntry }) {
   );
 }
 
+/** Staff (or an approved agent) reset how the account signs in, to a recovery contact of this kind. */
+function SignInResetEvent({ entry }: { entry: HistoryEntry }) {
+  const t = useMessages(customerPageMessages);
+  const contact = entry.verifiedContact === "email" ? entry.email : entry.phone ? formatPhone(entry.phone) : null;
+  return (
+    <li className="text-body">
+      <p>
+        <span className="font-medium">{t(entry.verifiedContact === "email" ? "signInResetEmail" : "signInResetPhone")}</span>
+        <span className="text-muted-foreground"> · {when(entry.createdAt)}<Author author={entry.author} /></span>
+      </p>
+      {contact ? <p className="break-words text-muted-foreground">{contact}</p> : null}
+    </li>
+  );
+}
+
 /** Order events: filed to an account at checkout, or moved between a guest record and an account. */
 const isOrderEvent = (entry: HistoryEntry) =>
   entry.changeType === "order_linked" || entry.changeType === "order_moved_in" || entry.changeType === "order_moved_out";
@@ -141,7 +156,7 @@ function SamePhone({ customer }: { customer: CustomerFacts }) {
   return <p className="text-body text-muted-foreground">{withLinks(t("samePhoneAs"), { names })}</p>;
 }
 
-/** " · by Nasrin", " · by Gift Notes", " · by the buyer", " · by System"; nothing for older entries without an author. */
+/** " · by Nasrin", " · by Packing Slips", " · by the buyer", " · by System"; nothing for older entries without an author. */
 function Author({ author }: { author: HistoryEntry["author"] }) {
   const t = useMessages(customerPageMessages);
   const actor = changeActor(author);
@@ -275,6 +290,7 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
           <ol className="space-y-3">
             {changes.map((change, index) => {
               if (change.changeType === "erased") return <ErasedEvent key={change.id} entry={change} />;
+              if (change.changeType === "sign_in_reset") return <SignInResetEvent key={change.id} entry={change} />;
               if (change.changeType === "signed_up" || isOrderEvent(change)) return <LinkEvent key={change.id} entry={change} />;
               // Newest first: an update is shown as what it changed against the snapshot below it.
               const older = olderSnapshot(changes, index);

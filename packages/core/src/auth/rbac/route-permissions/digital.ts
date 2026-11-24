@@ -3,7 +3,9 @@
 // an order line received is an order edit. Resetting or revoking a buyer's
 // access has its own permission, the one an app's digital_access.grant and
 // .revoke need (`write_digital_access`), so editing orders never includes an
-// undoable revoke.
+// undoable revoke. A line's delivery message (a sealed sign-in) is written,
+// and read back, under that same permission: whoever may give or take a
+// buyer's access may see what it hands over.
 import { PERMISSIONS } from "../permissions";
 import type { RoutePermissionMap } from "./shared";
 
@@ -37,6 +39,12 @@ export const DIGITAL_ROUTE_PERMISSIONS: RoutePermissionMap = {
   },
   "/api/v1/admin/orders/*/digital/resend": {
     POST: { permission: PERMISSIONS.ORDERS_EDIT },
+  },
+  "/api/v1/admin/orders/*/items/*/delivery-message": {
+    PUT: { permission: PERMISSIONS.ORDERS_MANAGE_DIGITAL_ACCESS },
+  },
+  "/api/v1/admin/orders/*/items/*/delivery-message/reveal": {
+    POST: { permission: PERMISSIONS.ORDERS_MANAGE_DIGITAL_ACCESS },
   },
   "/api/v1/admin/digital-entitlements/*/reset": {
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_DIGITAL_ACCESS },

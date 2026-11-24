@@ -14,16 +14,20 @@ import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import type { CheckoutLanguageData } from "@/lib/api";
 import type { GiftCardCheckoutCopy } from "@/lib/checkout/gift-cards";
 import { PAYMENT_CHOICE_DETAILS_ID } from "@/lib/checkout/payment-choices";
+import type { TermsAgreement } from "@/lib/checkout/terms-text";
+import CheckoutTermsAgreement from "@/components/checkout/CheckoutTermsAgreement.astro";
 import type { StorefrontCheckoutBlock } from "@scalius/shared/storefront-theme";
 
 interface Props {
   copy: CheckoutLanguageData["languageData"];
   giftCopy: GiftCardCheckoutCopy;
   block: StorefrontCheckoutBlock;
+  /** The store's terms beside Pay (`termsAgreement`), for every way of paying. */
+  agreement?: TermsAgreement | null;
   sample?: boolean;
 }
 
-const { copy, giftCopy, block, sample = false } = Astro.props;
+const { copy, giftCopy, block, agreement = null, sample = false } = Astro.props;
 const top = block.summary === "top";
 const tiles = block.paymentChoices === "tiles";
 ---
@@ -171,6 +175,8 @@ const tiles = block.paymentChoices === "tiles";
 
           <div id="paymentActionHost" class="hidden space-y-3">
             <p id="hostedRedirectNote" class="hidden text-xs leading-5 text-muted-foreground"></p>
+            {/* Moves with Pay under the chosen method: the terms are beside the action that places the order. */}
+            <CheckoutTermsAgreement agreement={agreement} errorText={copy.termsRequiredText} id="payTermsAccepted" />
 
             <button
               id="payButton"

@@ -1,4 +1,4 @@
-import { getBuyerConversationView } from "../../utils/conversation-view";
+import { buyerConversationTopics, buyerTranslation, getBuyerConversationView, withTopicViews } from "../../utils/conversation-view";
 // Signed-in buyer conversation routes (Wave A §6.1): the account Inbox (store
 // threads of verified accounts and the threads of orders the account owns),
 // order threads, reads, posts and private image attachments. Message
@@ -8,6 +8,7 @@ import { characterText } from "../../schemas/text";
 import type { Context } from "hono";
 import {
   assertBuyerOrderAccess,
+  closeBuyerThread,
   countBuyerUnread,
   createStoreThread,
   getOrCreateOrderThread,
@@ -42,6 +43,8 @@ import {
   clientMessageKeySchema,
   conversationAttachmentIdSchema,
   conversationIdSchema,
+  conversationTopicKeySchema,
+  conversationTopicSchema,
   readBodySchema,
 } from "../../schemas/conversations";
 import {
@@ -65,6 +68,7 @@ async function customerActor(c: Context<{ Bindings: Env }>): Promise<{ customerI
 }
 
 const conversationParam = z.object({ id: conversationIdSchema });
+const presenceQuerySchema = z.string().max(16).optional().openapi({ description: "The page's presence (`bn-bd`): the store's topics are named in its language." });
 const orderParam = z.object({ id: z.string().trim().min(1).max(128) });
 const threadEnvelope = successEnvelope(z.object({ conversation: buyerConversationThreadSchema }));
 const nullableThreadEnvelope = successEnvelope(z.object({ conversation: buyerConversationThreadSchema.nullable() }));
@@ -74,17 +78,18 @@ app.openapi(createRoute({
   method: "get",
   path: "/conversations",
   tags: ["Customer Auth"],
-  summary: "List the account's conversations, newest first",
-  request: { query: z.object({ cursor: z.string().max(100).optional() }) },
+  summary: "List the account's conversations, newest first, and the store's topics",
+  request: { query: z.object({ cursor: z.string().max(100).optional(), presence: presenceQuerySchema }) },
   responses: {
     200: {
-      description: "Conversations (20 per page) and whether the account may start a store conversation",
+      description: "Conversations (20 per page), whether the account may start a store conversation, and the topics a buyer may choose (in the presence's language)",
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
             items: z.array(buyerConversationSummarySchema),
             nextCursor: z.string().nullable(),
             canStartStoreConversation: z.boolean(),
+            topics: z.array(conversationTopicSchema),
           })),
         },
       },
@@ -95,11 +100,13 @@ app.openapi(createRoute({
   setPrivateNoStoreHeaders(c);
   const { customerId } = await customerActor(c);
   const db = c.get("db");
-  const [page, verified] = await Promise.all([
+  const scope = buyerTranslation(c);
+  const [page, verified, topics] = await Promise.all([
     listBuyerThreads(db, customerId, { cursor: c.req.valid("query").cursor }),
     isVerifiedCustomerAccount(db, customerId),
+    buyerConversationTopics(db, scope),
   ]);
-  return ok(c, { ...page, canStartStoreConversation: verified });
+  return ok(c, { ...page, items: await withTopicViews(db, page.items, scope, topics), canStartStoreConversation: verified, topics });
 });
 
 app.openapi(createRoute({
@@ -130,6 +137,7 @@ app.openapi(createRoute({
           schema: z.object({
             subject: characterText(CONVERSATION_LIMITS.subjectLength),
             body: characterText(CONVERSATION_LIMITS.bodyLength),
+            topic: conversationTopicKeySchema,
             clientMessageKey: clientMessageKeySchema,
           }).strict(),
         },
@@ -166,7 +174,27 @@ app.openapi(createRoute({
   const { actor } = await customerActor(c);
   const db = c.get("db");
   const thread = await resolveBuyerThread(db, actor, c.req.valid("param").id);
-  return ok(c, { conversation: await getBuyerConversationView(db, thread, c.req.valid("query")) });
+  return ok(c, { conversation: await getBuyerConversationView(db, thread, { ...c.req.valid("query"), scope: buyerTranslation(c) }) });
+});
+
+app.openapi(createRoute({
+  method: "post",
+  path: "/conversations/{id}/close",
+  operationId: "storefront.customer_auth_conversation.close",
+  tags: ["Customer Auth"],
+  summary: "Close one of the account's conversations (the buyer's next message reopens it)",
+  description: "Moves the conversation to `closed` by the machine's `close` move (from `open` or `pending`). Closing a closed conversation changes nothing. Posting a message later reopens it for the store.",
+  request: { params: conversationParam, query: z.object({ presence: presenceQuerySchema }) },
+  responses: {
+    200: { description: "The conversation, closed", content: { "application/json": { schema: threadEnvelope } } },
+    ...writeResponses,
+  },
+}), async (c) => {
+  setPrivateNoStoreHeaders(c);
+  const { actor } = await customerActor(c);
+  const db = c.get("db");
+  const thread = await resolveBuyerThread(db, actor, c.req.valid("param").id);
+  return ok(c, { conversation: await getBuyerConversationView(db, await closeBuyerThread(db, thread), { scope: buyerTranslation(c) }) });
 });
 
 app.openapi(createRoute({
@@ -189,6 +217,7 @@ app.openapi(createRoute({
   await postConversationMessage(db, thread, {
     actor,
     body: body.body,
+    topic: body.topic,
     clientMessageKey: body.clientMessageKey,
     attachmentIds: body.attachmentIds,
   }, { send: notificationSender(c) });
@@ -232,7 +261,7 @@ app.openapi(createRoute({
   await assertBuyerOrderAccess(db, actor, orderId);
   const thread = await readOrderThread(db, orderId);
   const conversation = thread && thread.lastSeq > 0
-    ? await getBuyerConversationView(db, thread, c.req.valid("query"))
+    ? await getBuyerConversationView(db, thread, { ...c.req.valid("query"), scope: buyerTranslation(c) })
     : null;
   return ok(c, { conversation });
 });
@@ -279,6 +308,7 @@ app.openapi(createRoute({
   const posted = await postBuyerOrderMessage(db, orderId, {
     actor,
     body: body.body,
+    topic: body.topic,
     clientMessageKey: body.clientMessageKey,
     attachmentIds: body.attachmentIds,
   }, { send: notificationSender(c) });

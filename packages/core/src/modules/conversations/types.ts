@@ -54,6 +54,8 @@ export interface BuyerConversationSummary {
   id: string;
   subjectType: ConversationSubjectType;
   subject: string | null;
+  /** The merchant topic the buyer chose (its key), or null. */
+  topic: string | null;
   orderId: string | null;
   /** The order's number, unformatted: the reader writes it in its own digits (`formatOrderNumberIn`). */
   orderNumber: number | null;
@@ -78,6 +80,8 @@ export interface StaffConversationSummary {
   /** The review or warranty claim a Wave B thread is about; null for order and store threads. */
   subjectId: string | null;
   subject: string | null;
+  /** The merchant topic the buyer chose (its key), or null. */
+  topic: string | null;
   status: ConversationStatus;
   orderId: string | null;
   orderNumber: number | null;

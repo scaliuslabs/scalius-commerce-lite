@@ -70,6 +70,8 @@ export interface ClaimCustomerAuthOtpChallengeInput {
      * their details); the code then stays valid for the details step.
      */
     consume?: boolean;
+    /** With `consume: false`: false checks the code and leaves its expiry as issued. */
+    extend?: boolean;
 }
 
 export interface ClaimedCustomerAuthOtpChallenge {
@@ -193,7 +195,8 @@ export async function claimCustomerAuthOtpChallenge(
                 consumedAt: now,
                 updatedAt: now,
             }
-            : { expiresAt: extendedChallengeExpiry(now, ACCOUNT_DETAILS_WINDOW_SECONDS), updatedAt: now })
+            // A check that keeps the code for the account details step extends it; a plain check never does.
+            : input.extend === false ? { updatedAt: now } : { expiresAt: extendedChallengeExpiry(now, ACCOUNT_DETAILS_WINDOW_SECONDS), updatedAt: now })
         .where(and(
             eq(customerAuthOtpChallenges.otpKey, input.otpKey),
             eq(customerAuthOtpChallenges.method, input.method),

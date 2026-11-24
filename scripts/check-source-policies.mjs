@@ -6,7 +6,7 @@
 // matching fails `check-source-policies.test.mjs`.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
-import { extname, relative, resolve } from "node:path";
+import { dirname, extname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { collectCoreBoundaryViolations } from "./core-boundaries.mjs";
 
@@ -1020,6 +1020,134 @@ function collectWholeModuleMockViolations() {
     .map((file) => ({ name: relative(root, file), text: readFileSync(file, "utf8") })));
 }
 
+// ---------------------------------------------------------------------------
+// How a customer signs in has one writer
+// ---------------------------------------------------------------------------
+
+/** The one module that writes how a customer signs in (rules/auth/sign-in-writes-name-their-version.md). */
+export const SIGN_IN_WRITER = "packages/core/src/modules/customers/sign-in-writes.ts";
+const SIGN_IN_WRITE_ROOTS = ["apps/api/src", "packages/core/src", "packages/database/src"];
+/**
+ * The other files that may update or delete `customers` rows, each with why. They write
+ * literal objects whose keys this check reads; none may set a column of how a customer
+ * signs in. Every insert of a customer goes through the writer (`insertCustomer`).
+ */
+export const CUSTOMER_UPDATE_ALLOW = {
+  "packages/core/src/modules/customers/customer-auth.service.ts": "the buyer's own name and WhatsApp number on their profile",
+  "packages/core/src/modules/customers/customer-identity.ts": "retires the guest records a proven contact merges into an account",
+  "packages/core/src/modules/customers/customers.service.ts": "restores a trashed customer and deletes one with no orders for good",
+  "packages/core/src/modules/orders/admin/shared.ts": "a customer's order count and last order time",
+  "packages/core/src/modules/orders/commit-order.ts": "a customer's order count and last order time",
+};
+/** Test-only seeders that write customers straight into a test database, each with why. */
+export const SIGN_IN_TEST_SEEDERS = {
+  "apps/api/src/routes/__tests__/conversation-harness.ts": "seeds a test database for the conversation route tests",
+  "packages/core/src/modules/analytics/reports/reports.fixture.ts": "seeds a test database for the report metric tests",
+  "packages/core/src/modules/analytics/reports/reports.scale-store.ts": "bulk-loads a test database for the report scale run",
+};
+/** Columns of how a customer signs in, as drizzle keys and as SQL names. */
+const SIGN_IN_KEYS = new Set(["phone", "email", "phoneVerifiedAt", "emailVerifiedAt", "signInRecovery", "signInRecoveryAt", "signInVersion"]);
+const SIGN_IN_SQL_COLUMN = /\b(?:phone|email|phone_verified_at|email_verified_at|sign_in_recovery|sign_in_recovery_at|sign_in_version)\b/i;
+const TABLES = new Set(["customers", "customerIdentities"]);
+const WRITE_HEAD = String.raw`\b(?:UPDATE|INSERT\s+(?:OR\s+\w+\s+)?INTO|REPLACE\s+INTO|DELETE\s+FROM)\s+`;
+
+/**
+ * Writes of how a customer signs in outside its one writer, fail-closed:
+ * - any insert of `customers` and any write of `customer_identities` (the table object by any
+ *   name: an import alias, a namespace member such as `schema.customers`);
+ * - an update or delete of `customers` outside the listed files; in a listed file, an update
+ *   that is not `.set({ ... })` with plain keys (no spread, no computed key) that name no
+ *   sign-in column;
+ * - raw SQL that writes `customers` or `customer_identities`, by name or as a `${table}`
+ *   placeholder; in a listed file, raw SQL may write `customers` only without naming a
+ *   sign-in column.
+ */
+export function signInWriteViolations(files, allow = CUSTOMER_UPDATE_ALLOW) {
+  const violations = [];
+  for (const { name, text } of files) {
+    if (name === SIGN_IN_WRITER || Object.hasOwn(SIGN_IN_TEST_SEEDERS, name)) continue;
+    const listed = Object.hasOwn(allow, name);
+    const source = ts.createSourceFile(name, text, ts.ScriptTarget.Latest, true, name.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+    const at = (node) => `${name}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`;
+    // Local names of the two tables: `customers`, `customerIdentities`, their import aliases.
+    const aliases = new Map([["customers", "customers"], ["customerIdentities", "customerIdentities"]]);
+    for (const statement of source.statements) {
+      const bindings = ts.isImportDeclaration(statement) ? statement.importClause?.namedBindings : undefined;
+      if (bindings && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          const imported = (element.propertyName ?? element.name).text;
+          if (TABLES.has(imported)) aliases.set(element.name.text, imported);
+        }
+      }
+    }
+    /** The table an expression names: a local name or alias, or any `<x>.customers` member. */
+    const tableOf = (node) => {
+      if (!node) return null;
+      if (ts.isIdentifier(node)) return aliases.get(node.text) ?? null;
+      if (ts.isPropertyAccessExpression(node) && TABLES.has(node.name.text)) return node.name.text;
+      if (ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression) && TABLES.has(node.argumentExpression.text)) return node.argumentExpression.text;
+      return null;
+    };
+    const keyName = (property) => {
+      if (!property.name) return null;
+      if (ts.isComputedPropertyName(property.name)) return undefined;
+      return ts.isStringLiteralLike(property.name) || ts.isIdentifier(property.name) || ts.isNumericLiteral(property.name) ? property.name.text : undefined;
+    };
+    const checkSet = (node, argument) => {
+      if (!argument || !ts.isObjectLiteralExpression(argument)) {
+        violations.push(`${at(node)}: an update of customers takes a value whose columns can't be read; use ${SIGN_IN_WRITER}`);
+        return;
+      }
+      for (const property of argument.properties) {
+        const key = ts.isSpreadAssignment(property) ? undefined : keyName(property);
+        if (key === undefined) violations.push(`${at(property)}: an update of customers spreads a value or computes a key; use ${SIGN_IN_WRITER}`);
+        else if (key !== null && SIGN_IN_KEYS.has(key)) violations.push(`${at(property)}: an update of customers writes ${key}; only ${SIGN_IN_WRITER} does`);
+      }
+    };
+    const visit = (node) => {
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+        && ["insert", "update", "delete"].includes(node.expression.name.text) && node.arguments.length === 1) {
+        const table = tableOf(node.arguments[0]);
+        const method = node.expression.name.text;
+        if (table === "customerIdentities") violations.push(`${at(node)}: ${method} of customer_identities outside ${SIGN_IN_WRITER}`);
+        else if (table === "customers" && method === "insert") violations.push(`${at(node)}: inserts a customer; use insertCustomer (${SIGN_IN_WRITER})`);
+        else if (table === "customers" && !listed) violations.push(`${at(node)}: ${method}s customers outside ${SIGN_IN_WRITER}; list the file with a reason in CUSTOMER_UPDATE_ALLOW if it writes no sign-in column`);
+        else if (table === "customers" && method === "update") {
+          const parent = node.parent;
+          if (parent && ts.isPropertyAccessExpression(parent) && parent.name.text === "set" && ts.isCallExpression(parent.parent)) checkSet(parent.parent, parent.parent.arguments[0]);
+          else violations.push(`${at(node)}: an update of customers that is not followed by .set({ ... }) can't be read; use ${SIGN_IN_WRITER}`);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    // Raw SQL, by table name or as a ${table} placeholder of a sql template.
+    for (const match of text.matchAll(new RegExp(`${WRITE_HEAD}\\$\\{\\s*([\\w.]+)\\s*\\}`, "gi"))) {
+      const local = match[1].split(".").at(-1);
+      const table = aliases.get(local) ?? (match[1].includes(".") && TABLES.has(local) ? local : null);
+      if (table) violations.push(`${name}: raw SQL writes ${table} (${match[0].replace(/\s+/g, " ")}); use ${SIGN_IN_WRITER}`);
+    }
+    for (const match of text.matchAll(new RegExp(`${WRITE_HEAD}[\`"']?(customers|customer_identities)\\b[\`"']?([^;\`]*)`, "gi"))) {
+      const [, table, rest] = match;
+      if (table.toLowerCase() === "customer_identities" || !listed || /^\s*\(/.test(rest) || SIGN_IN_SQL_COLUMN.test(rest)) {
+        violations.push(`${name}: raw SQL writes ${table} (${match[0].slice(0, 60).replace(/\s+/g, " ")}); use ${SIGN_IN_WRITER}`);
+      }
+    }
+  }
+  return violations;
+}
+
+function collectSignInWriteViolations() {
+  const files = SIGN_IN_WRITE_ROOTS.flatMap((path) => codeFiles(path))
+    .map((file) => ({ name: relative(root, file), text: readFileSync(file, "utf8") }));
+  // The public repository carries no tests: a listed seeder under a stripped folder is absent there, not stale.
+  const strippedFromPublic = (name) => /(^|\/)__tests__\//.test(name) && !existsSync(resolve(root, dirname(name)));
+  const stale = [...Object.keys(CUSTOMER_UPDATE_ALLOW), ...Object.keys(SIGN_IN_TEST_SEEDERS)]
+    .filter((name) => !files.some((file) => file.name === name) && !strippedFromPublic(name))
+    .map((name) => `${name}: listed for the sign-in writer check but gone`);
+  return [...signInWriteViolations(files), ...stale];
+}
+
 /** Violations of one policy for the given file texts ({ name, text }). */
 export function policyViolations(policy, files) {
   const violations = [];
@@ -1274,6 +1402,7 @@ export function collectSourcePolicyViolations() {
     ...mutableModuleVariables().map((v) => `no mutable module state\n    ${v}`),
     ...collectWholeModuleMockViolations().map((v) => `a test mock of an internal module spreads the real module (async (importOriginal) => ({ ...(await importOriginal()), ... })) or says why it replaces it (// whole-module mock: <reason>)\n    ${v}`),
     ...collectCoreBoundaryViolations().map((v) => `core domain boundaries (scripts/core-boundaries.mjs)\n    ${v}`),
+    ...collectSignInWriteViolations().map((v) => `how a customer signs in is written only by ${SIGN_IN_WRITER}, which names the version each write read\n    ${v}`),
   ];
 }
 
@@ -1284,6 +1413,6 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     for (const violation of violations) console.error(`- ${violation}`);
     process.exitCode = 1;
   } else {
-    console.log(`Source policy check: OK (${policies.length + 5} policies)`);
+    console.log(`Source policy check: OK (${policies.length + 6} policies)`);
   }
 }
