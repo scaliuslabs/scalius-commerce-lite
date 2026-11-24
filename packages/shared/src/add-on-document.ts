@@ -48,8 +48,9 @@ export function orderAddOnRowsOver<R extends { amountMinor: number }>(
     : { itemsSubtotalMinor: subtotalMinor - addOnsMinor, rows: list };
 }
 
-/** One add-on row of a document: the app's title, the amount in the document's money, its detail lines (plain text). */
+/** One add-on row of a document: the app, its title, the amount in the document's money, its detail lines (plain text). A summary row (`AddOnTotalRow`), so lib/add-on-row.ts draws it as it is. */
 export interface AddOnDocumentRow {
+  appId: string | null;
   title: string;
   amountMinor: number;
   amount: string;
@@ -75,6 +76,7 @@ export function addOnDocumentRows(
   return {
     itemsSubtotalMinor: over.itemsSubtotalMinor,
     rows: capAddOnDetails(over.rows).map((row) => ({
+      appId: row.appId,
       title: row.folded ? addOnFoldLabel(options.language) : row.title,
       amountMinor: row.amountMinor,
       amount: options.money(row.amountMinor),

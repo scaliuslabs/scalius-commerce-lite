@@ -412,7 +412,7 @@ const CLASS = {
   label: "mb-1.5 block text-sm font-medium text-foreground",
   input: "w-full rounded-lg border border-border bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 sm:text-sm",
   help: "mt-1 text-xs leading-relaxed text-muted-foreground",
-  submit: "inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60",
+  submit: "inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary-hover disabled:cursor-wait disabled:opacity-60",
   withdraw: "inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:cursor-wait disabled:opacity-60",
   notice: "mb-3 rounded-lg border p-3 text-sm font-medium leading-relaxed",
   starsRow: "flex w-max flex-row-reverse justify-end gap-1",

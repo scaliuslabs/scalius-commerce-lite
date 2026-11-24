@@ -1,0 +1,29 @@
+---
+// The store's controls at the end of a private page drawn from parts, where
+// the theme places them (`privatePages.controls: footer`): the light or dark
+// switch (where the theme offers it) and the market and language forms (where
+// the store sells in several), in a strip of the store's own chrome
+// (`data-private="core-footer"`, the `chrome` style target). Nothing draws
+// when neither applies.
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import PrivateSchemeSwitch from "../header/PrivateSchemeSwitch.astro";
+import PrivateLocalization from "./PrivateLocalization.astro";
+import type { FooterLocalizationModel } from "./footer-localization";
+
+interface Props {
+  localization?: FooterLocalizationModel | null;
+}
+
+const { localization } = Astro.props;
+const { theme } = await currentRequestTheme(Astro.locals);
+const shows = theme.tokens.colorSchemeToggle || Boolean(localization && (localization.markets || localization.language));
+---
+
+{shows && (
+  <footer class="border-t border-border bg-background" data-private="core-footer">
+    <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-4 px-4 py-2 sm:px-6">
+      <PrivateLocalization localization={localization} />
+      <PrivateSchemeSwitch />
+    </div>
+  </footer>
+)}

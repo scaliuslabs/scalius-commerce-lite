@@ -45,6 +45,11 @@ export const ui = {
   view: (children: PluginUiNode[]) => document({ type: "stack", children }),
   section: (title: string, children: PluginUiNode[], options: Options<"section", "children" | "title"> = {}): PluginUiNode => ({ type: "section", title, ...options, children }),
   card: (title: string, children: PluginUiNode[], options: Options<"card", "children" | "title"> = {}): PluginUiNode => ({ type: "card", title, ...options, children }),
+  /**
+   * Children in a column, or a row with `direction: "horizontal"`: a vertical
+   * stack in a row takes the room left. `tone` (buyer) draws it on a toned
+   * surface: an offer row, a status box (`ui.stack([ui.mark("warning"), ui.stack([…]), ui.button(…)], { direction: "horizontal", tone: "warning" })`).
+   */
   stack: (children: PluginUiNode[], options: Options<"stack", "children"> = {}): PluginUiNode => ({ type: "stack", ...options, children }),
   columns: (children: PluginUiNode[]): PluginUiNode => ({ type: "columns", children }),
   heading: (text: string, level: 2 | 3 | 4 = 2): PluginUiNode => ({ type: "heading", text, level }),
@@ -66,6 +71,8 @@ export const ui = {
   /** An https URL (admin), or `{ media }` / `{ app: "public/…" }` (buyer). */
   image: (src: PluginUiImageSource, alt: string, options: Options<"image", "src" | "alt"> = {}): PluginUiNode => ({ type: "image", src, alt, ...options }),
   link: (text: string, to: PluginUiTarget): PluginUiNode => ({ type: "link", text, to }),
+  /** A tone's glyph in a circle beside words that say the same (buyer): "!", a tick, "i", "×" or a dot. */
+  mark: (tone: PluginUiTone): PluginUiNode => ({ type: "mark", tone }),
   divider: (): PluginUiNode => ({ type: "divider" }),
   /**
    * A summary line the buyer opens to show `children` (buyer): the browser's

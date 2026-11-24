@@ -3,7 +3,8 @@
 
 import { checkoutText, pageOrderNumber, pagePhone } from "@/lib/checkout-text";
 import { readAddOnRows } from "@scalius/shared/add-on-totals";
-import { orderAddOnRowsOver } from "@scalius/shared/add-on-document";
+import { addOnDocumentRows } from "@scalius/shared/add-on-document";
+import { addOnRowHtml } from "@/lib/add-on-row";
 import {
   createCustomerOrderPaymentSession,
   createCustomerOrderSupportRequest,
@@ -575,9 +576,13 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   const showsLineDiscounts = orderShowsLineDiscounts(detail.discounts);
   const words = accountCopy().order;
   // The apps' add-ons as their own summary rows (the server's, from the order's frozen lines): the rows then show the items alone.
-  // One decision for the order (`orderAddOnRowsOver`): rows only when every row's add-ons fit its amount, as every document decides.
-  const addOns = orderAddOnRowsOver(order.subtotalAmountMinor ?? 0, readAddOnRows(detail.addOns),
-    detail.items.map((item) => ({ grossSubtotalMinor: item.lineSubtotalMinor ?? null, addOns: (item as { addOns?: unknown }).addOns })));
+  // One decision for the order, and the receipt's, emails' and invoices' rows and words (`addOnDocumentRows`):
+  // rows only when every row's add-ons fit its amount; lib/add-on-row.ts draws each.
+  const addOns = addOnDocumentRows(order.subtotalAmountMinor ?? 0, readAddOnRows(detail.addOns), {
+    money: minor,
+    language: pageLanguage(),
+    lines: detail.items.map((item) => ({ grossSubtotalMinor: item.lineSubtotalMinor ?? null, addOns: (item as { addOns?: unknown }).addOns })),
+  });
   const addOnsInSummary = addOns.rows.length > 0;
   if (items) {
     type Row = AccountOrderDetail["items"][number];
@@ -698,8 +703,9 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   const summary = byId("orderSummary");
   if (summary) {
     const cell = (value: string, className = "") => `<span${className ? ` class="${className}"` : ""}>${escapeHtml(value)}</span>`;
+    // Rows of label and amount, as on every money summary (an add-on row may open to its app's lines).
     const row = (label: string, valueHtml: string, kind?: MoneySummaryRow) =>
-      `<div class="flex justify-between gap-4 ${kind === "total" ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}"${kind ? ` data-summary-row="${kind}"` : ""}><dt>${escapeHtml(label)}</dt><dd class="text-end tabular-nums">${valueHtml}</dd></div>`;
+      `<div class="flex justify-between gap-4 ${kind === "total" ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}"${kind ? ` data-summary-row="${kind}"` : ""}><span>${escapeHtml(label)}</span><span class="text-end tabular-nums">${valueHtml}</span></div>`;
     const major = (value: number) => fromMinor(value, places);
     const money = (value: number) => accountMoney(value, order.currencyCode);
     const tax = order.taxAmountMinor ?? 0;
@@ -719,7 +725,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
     const deliveryRow = orderDeliveryRow({ mode: deliveryMode, methodName: order.shippingMethodName, ...delivery }, copy, money);
     summary.innerHTML = [
       row(words.subtotal, cell(minor(addOns.itemsSubtotalMinor)), "subtotal"),
-      ...addOns.rows.map((addOn) => row(addOn.title, cell(minor(addOn.amountMinor)), "add-on")),
+      ...addOns.rows.map((addOn) => addOnRowHtml(addOn, addOn.amount, "account")),
       !showsDeliveryRow ? "" : row(
         deliveryRow.label,
         [

@@ -75,7 +75,8 @@ export function orderReceiptView({ order, copy, languageCode, configuredCurrency
       };
   // The apps' add-ons as their own rows: the server's, from the order's real lines (the page folds nothing).
   // (`addOns` is read untyped: the receipt's hand-written type does not name it yet.)
-  // The same rows and words as the order emails and the invoice (`addOnDocumentRows`).
+  // The same rows and words as the account order, the order emails and the invoice (`addOnDocumentRows`),
+  // each with the app's detail lines it opens to (lib/add-on-row.ts draws them).
   const receiptAddOns = savedMoneySummary ? addOnDocumentRows(savedMoneySummary.subtotalMinor, readAddOnRows((order as { addOns?: unknown }).addOns), {
     money: formatReceiptMinor,
     language: languageCode,

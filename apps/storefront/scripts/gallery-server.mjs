@@ -14,7 +14,7 @@
  * No secrets, no API, no Wrangler: it never runs in a deployed Worker and
  * nothing in the production build imports it (docs/STOREFRONT-QUALITY.md).
  *
- *   pnpm gallery:storefront [--port 4799]
+ *   pnpm gallery:storefront [--port 4799] [--quiet]
  */
 import { createServer as createHttpServer } from "node:http";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -130,6 +130,19 @@ function sendJson(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
+/** The cart page's colour table per palette, as the save resolved it: each row's key, selector, kind, paint and words' colours, and the scheme. */
+function galleryTables(shared, privatePages, context) {
+  const arrangement = shared.privatePageArrangement(privatePages, "cart");
+  const spec = shared.PRIVATE_PAGES.cart;
+  // A page in token mode with no tokens of its own (the theme's page paint put it there) has the default rows.
+  const compiled = shared.compilePrivateTokens("cart", privatePages.tokens.cart ?? {}, {
+    layout: arrangement?.layout ?? spec.layout,
+    items: Object.fromEntries(Object.keys(spec.items).map((item) => [item, arrangement?.items?.[item] ?? spec.items[item].layout])),
+    palettes: context.palettes,
+  });
+  return compiled.tables.map((table) => ({ scheme: table.palette.scheme, rows: table.rows.map((row) => ({ key: row.key, selector: row.selector, kind: row.kind, paint: row.paint, gradient: row.gradient, text: row.text, muted: row.muted, link: row.link, error: row.error, writes: row.writes })) }));
+}
+
 /**
  * Starts the gallery server. Resolves to `{ url, close }`. Refuses to run
  * with NODE_ENV=production: the gallery is never part of a deployment.
@@ -138,6 +151,11 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
   if (process.env.NODE_ENV === "production") {
     throw new Error("The storefront gallery is dev and test only; it does not run with NODE_ENV=production.");
   }
+  // The private pages' gate tests itself (test-support/private-pages.mutations.mjs): a named
+  // mutation rewrites one source file as Vite serves it, so the gate must fail. Test only.
+  const mutation = process.env.SCALIUS_GALLERY_MUTATION
+    ? await import("../test-support/private-pages.mutations.mjs").then((module) => module.galleryMutation(process.env.SCALIUS_GALLERY_MUTATION))
+    : null;
   // The HTTP server comes first: Vite's client connects its socket to it.
   let handle = (_request, response) => {
     response.writeHead(503);
@@ -170,6 +188,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       server: { middlewareMode: true, hmr: { server: http }, watch: null },
       appType: "custom",
       plugins: [
+        ...(mutation ? [mutation.plugin] : []),
         {
           name: "storefront-gallery-virtual-modules",
           resolveId: (id) => (id in VIRTUAL_MODULES ? `\0storefront-gallery:${id}` : undefined),
@@ -189,7 +208,6 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
   const runtimeModule = await vite.ssrLoadModule("/src/lib/api/runtime.ts");
   const { serveExtensionFile } = await vite.ssrLoadModule("/src/lib/extensions/files.ts");
   const routes = storefrontRoutes();
-
   // Every API read of a render is answered by the entry's fixture API; any
   // other request leaves nothing (the gallery is hermetic).
   const currentEntry = new AsyncLocalStorage();
@@ -247,6 +265,12 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       // Production's gateway owns this route before Astro. Use its real
       // bundled-file handler so packed CSS and islands run in the gallery.
       if (url.pathname.startsWith("/_x/")) {
+        // The private pages' rendered tests name theme files (an icon): the gallery draws them.
+        const fixture = /^\/_x\/[a-z0-9.-]+\/[A-Za-z0-9_-]+\/public\/pp\/([a-z0-9-]+)\.svg$/.exec(url.pathname);
+        if (fixture) {
+          response.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "no-store" });
+          return response.end(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" rx="12" fill="#7c3aed"/><circle cx="48" cy="44" r="22" fill="#f4f1ff"/></svg>`);
+        }
         const asset = await serveExtensionFile(new Request(url.href, { method: request.method }), {});
         response.writeHead(asset.status, Object.fromEntries(asset.headers));
         return response.end(Buffer.from(await asset.arrayBuffer()));
@@ -269,6 +293,82 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const answered = await gallery.answerFixtureApi(entry, new Request(target, { method: request.method, body, headers: { "content-type": String(request.headers["content-type"] ?? "") } }));
         response.writeHead(answered.status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
         return response.end(Buffer.from(await answered.arrayBuffer()));
+      }
+      // The private pages' rendered property tests: a generated theme compiled with the store's own
+      // compiler (a refusal answers its issues, as a save would) and drawn on the buyer UI cart entry in
+      // one of its states, under a palette, colour scheme and page paint, with Noor installed (`noor`: the
+      // theme's own app, whose files an icon may name), a store of two markets (`localization`), a look an
+      // older checker compiled (`stale`), the phone tab bar setting (`tabs`), the homepage, where the cart
+      // drawer opens (`page: "home"`), a colour set saved at version 14 (`saved`), and the customer's
+      // reference look (`reference`: its two palettes, and its privatePages unless the body names others).
+      // `forged` is written onto the stored document past the compiler, as a row edited by hand would be.
+      // The answer carries the colour table of the page as the storefront reads the document (each row's
+      // key, selector, kind and paint) for the coverage walk, whether that read fell back to the store's
+      // default theme (`degraded`), and whether it refused the private pages' compile (`refused`: a stored
+      // document holding what a theme cannot set reads, its private pages drawing the default look).
+      if (url.pathname === `${GALLERY_PREFIX}/private-theme` && request.method === "POST") {
+        const body = JSON.parse(await readBody(request) || "{}");
+        const shared = await vite.ssrLoadModule("@scalius/shared/storefront-theme");
+        const reference = body.reference === true ? await vite.ssrLoadModule(`${REPO_ROOT}/packages/shared/src/storefront-theme/private-reference.fixture.ts`) : null;
+        const { entryId: makeId, registerPrivatePagesEntry, galleryEntry: findEntry } = await vite.ssrLoadModule("/src/gallery/entries.ts");
+        const { noorTheme } = await vite.ssrLoadModule("/src/gallery/noor.ts");
+        const found = findEntry(makeId("app", "buyer-ui")).theme;
+        const base = body.noor ? noorTheme(structuredClone(found)) : found;
+        const colors = reference ? { ...reference.REFERENCE_LIGHT_PALETTE } : body.palette && shared.STOREFRONT_THEME_PALETTES[body.palette] ? { ...shared.STOREFRONT_THEME_PALETTES[body.palette] } : base.tokens.colors;
+        const darkColors = reference ? { ...reference.REFERENCE_PALETTE } : shared.storefrontDarkPalette(colors);
+        let tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors, ...(body.paint ? { pagePaint: body.paint } : {}) };
+        // A colour set a store saved at version 14 (`saved`): its colours and made dark colours kept the action
+        // colour as their focus ring. Read as the store reads a stored document.
+        if (body.saved === true) {
+          const { privatePages: _privatePages, ...document } = structuredClone({ ...base, tokens });
+          const read = shared.readStoredStorefrontThemeDocument({
+            ...document, version: 14, blocks: { ...document.blocks, cart: { summary: "side" }, cartDrawer: { width: "standard", recommendations: "shown" } },
+            tokens: { ...tokens, colors: { ...tokens.colors, ring: tokens.colors.primary }, darkColors: { ...tokens.darkColors, ring: tokens.darkColors.primary } },
+          });
+          if (!read.ok) return sendJson(response, 400, { error: "The saved colour set did not read." });
+          tokens = read.document.tokens;
+        }
+        // A page paint the palette cannot read on is dropped by a save: a case that asks for one names a readable paint.
+        if (body.paint && !shared.storefrontTokensWithReadablePaint(tokens).pagePaint) return sendJson(response, 400, { error: "The page paint does not read on this palette." });
+        // The phone tab bar (`tabs`: the theme's bottom-tabs phone navigation).
+        const theme = { ...base, tokens, ...(body.tabs === true ? { blocks: { ...base.blocks, mobileNav: { variant: "bottom-tabs", settings: { tabs: ["home", "categories", "offers", "account"], drawer: "accordion" } } } } : {}) };
+        // Saved as the store saves it (site-settings.service.ts): read by the document's schema (a refusal naming its
+        // reason, as `not_available`, answers it), then compiled.
+        const parsed = shared.storefrontPrivatePagesSchema.safeParse({ ...shared.storefrontPrivatePagesDefault(), ...structuredClone(body.privatePages ?? reference?.REFERENCE_PRIVATE_PAGES ?? {}) });
+        if (!parsed.success) {
+          const named = parsed.error.issues.find((issue) => typeof issue.params?.reason === "string") ?? parsed.error.issues[0];
+          return sendJson(response, 422, { issues: [{ path: named.path, reason: named.params?.reason ?? "schema", message: named.message }] });
+        }
+        const document = parsed.data;
+        // Compiled against the palettes the store reads from the saved theme (the save compiles the parsed document).
+        const read = shared.storefrontThemeDocumentSchema.safeParse(theme);
+        if (!read.success) return sendJson(response, 400, { error: `The store's theme does not read: ${read.error.issues[0]?.path.join(".")}` });
+        const context = shared.privatePagesContextOf(read.data);
+        const compiled = mutation?.compile ? mutation.compile(shared, document, context) : shared.compileStorefrontPrivatePages(document, context);
+        if (!compiled.ok) return sendJson(response, 422, { issues: compiled.issues.slice(0, 5) });
+        // A look an older checker compiled (`stale`: between a deploy and the maintenance compile): the page serves the default look.
+        if (body.stale === true) compiled.value.compiled = { ...compiled.value.compiled, sanitizer: 0 };
+        const stored = { ...theme, privatePages: body.forged ? { ...compiled.value, ...structuredClone(body.forged) } : compiled.value };
+        // The stored document as the store reads it (storefront.service.ts, `readStoredStorefrontThemeDocument`): one it
+        // cannot read serves the default theme whole; the storefront draws what that read served.
+        const reread = shared.readStoredStorefrontThemeDocument(JSON.stringify(stored));
+        const served = reread.ok ? reread.document : shared.DEFAULT_STOREFRONT_THEME;
+        const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, ...(body.page === "home" ? { page: "home" } : {}) });
+        const tables = shared.privatePageTokenMode(served.privatePages, "cart") ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served)) : [];
+        return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: served.privatePages.compiled.refused === true });
+      }
+      // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens), and the
+      // app node kinds that have rows (their selectors inside a block).
+      if (url.pathname === `${GALLERY_PREFIX}/private-anatomy`) {
+        const shared = await vite.ssrLoadModule("@scalius/shared/storefront-theme");
+        return sendJson(response, 200, {
+          styles: shared.PRIVATE_PAGES.cart.styles,
+          ui: Object.values(shared.PRIVATE_BUYER_UI_STYLES).filter((style) => style.style).map((style) => style.kind),
+        });
+      }
+      // Whether the mutation this gallery runs under was applied to a module it served.
+      if (url.pathname === `${GALLERY_PREFIX}/mutation`) {
+        return sendJson(response, 200, { name: mutation?.name ?? null, files: mutation?.files ?? [], applied: mutation ? [...mutation.applied] : [], missed: mutation ? [...mutation.missed] : [] });
       }
       if (url.pathname === `${GALLERY_PREFIX}/index.json`) {
         return sendJson(response, 200, { entries: gallery.galleryIndex(origin) });
@@ -374,7 +474,7 @@ const invokedDirectly = process.argv[1] && fileURLToPath(import.meta.url) === pr
 if (invokedDirectly) {
   const portIndex = process.argv.indexOf("--port");
   const port = portIndex > 0 ? Number(process.argv[portIndex + 1]) : DEFAULT_GALLERY_PORT;
-  const { url, close } = await startStorefrontGallery({ port });
+  const { url, close } = await startStorefrontGallery({ port, quiet: process.argv.includes("--quiet") });
   console.log(`Storefront gallery: ${url}${GALLERY_PREFIX}/`);
   const stop = async () => {
     await close();

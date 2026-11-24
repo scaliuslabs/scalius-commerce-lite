@@ -22,7 +22,7 @@ const upload = attribute.type === "file" && fieldKey
   : null;
 ---
 <div class={className}>
-  <label for={id} class={labelClass}>{attribute.label}</label>
+  <label for={id} class={labelClass} data-part="field-label">{attribute.label}</label>
   {upload ? (
     <BuyerUploadField field={upload} id={id} name={name ?? attribute.key} value={value} describedBy={attribute.help ? [`${id}-help`] : []} />
   ) : field.tag === "textarea" ? (

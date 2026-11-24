@@ -85,7 +85,9 @@ export function termsAcceptedOrderField(input: unknown): { termsAccepted?: true 
  * no box, a box that is off (`disabled`: not this way of paying), or ticked.
  */
 export function checkTermsAgreement(root: ParentNode): boolean {
-  const box = root.querySelector<HTMLInputElement>(`input[name="${TERMS_ACCEPTED_FIELD}"]`);
+  // A form's own field, wherever it sits (the cart page docks it outside the form), else the one inside the root.
+  const owned = root instanceof HTMLFormElement ? root.elements.namedItem(TERMS_ACCEPTED_FIELD) : null;
+  const box = owned instanceof HTMLInputElement ? owned : root.querySelector<HTMLInputElement>(`input[name="${TERMS_ACCEPTED_FIELD}"]`);
   const note = box ? document.getElementById(`${box.id}-error`) : null;
   const show = (invalid: boolean) => {
     box?.setAttribute("aria-invalid", invalid ? "true" : "false");

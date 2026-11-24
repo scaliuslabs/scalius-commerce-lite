@@ -351,13 +351,14 @@ export function storefrontThemeWithContent(
  * The document's look: everything but its content (content reset to empty),
  * without the sections a theme switch kept hidden from another theme. The
  * field border reads as the palettes give it now, so a store saved from a
- * template before its border was darkened to show (3:1) still matches it.
+ * template before it was made to show (3:1) still matches it.
  */
 export function storefrontThemeLook(theme: StorefrontThemeDocument): StorefrontThemeDocument {
   const own = { ...theme, pages: { ...theme.pages, home: theme.pages.home.filter((section) => !storefrontSectionKeptHidden(section)) } };
   const look = storefrontThemeWithContent(own, null);
   const { colors } = look.tokens;
-  return { ...look, tokens: { ...look.tokens, colors: { ...colors, input: storefrontThemeFieldBorder(colors) } } };
+  const input = storefrontThemeFieldBorder(colors);
+  return { ...look, tokens: { ...look.tokens, colors: { ...colors, input } } };
 }
 
 /** One image a document names: where (a document path) and which media id. */

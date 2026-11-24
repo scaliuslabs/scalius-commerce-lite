@@ -169,7 +169,7 @@ Rules:
 - A gift card takes none: the answer is skipped and logged. A sixth add-on refuses checkout (`add_on_unavailable`): checkout never freezes an extra the buyer chose without its price; never skip a paid extra, which freezes it unpaid.
 - An add-on on any component of an expanded bundle (the `bundle` of the function's `lines` input, with its `units`: the buyer's quantity of the bundle) is the bundle's: one fee per bundle unit, never per component. Checkout charges it on the component that holds the fewest per bundle unit, at the fee over that component's units per bundle unit (a `percent` is of the bundle unit's price: every component's unit price times what it holds per unit), and counts the same app's same-titled add-on on another component once, so answering every component is safe. A fee that does not divide evenly over that component's units per bundle unit refuses checkout; refunding a bundle unit returns its fee. Merged lines keep their own add-ons, as plain lines.
 - They are part of `unitPriceMinor`: quote, tax, discounts, totals and refunds include them. The buyer sees "Add-on: <title> (+price)" in the cart, checkout, receipt and emails, and the order line keeps it as `adjustments: [{ appId, title, amountMinor }]`.
-- Either form may carry `details`: at most 10 short text lines (no HTML) such as "#1 · Phone". They are frozen with the add-on on the order line, and the summary row of your add-on ("Protection ৳700") opens to every line's details, in line order, on the cart, checkout, the receipt and the account order (50 lines at most a row); the order emails and the invoice print them under the row as plain text (10 a row, 50 in all).
+- Either form may carry `details`: at most 10 short text lines (no HTML) such as "#1 · Phone". They are frozen with the add-on on the order line, and the summary row of your add-on ("Protection ৳700") opens to every line's details, in line order, on the cart page, the drawer, the payment step, quick checkout, the receipt and the account order (50 lines at most a row on the cart and checkout; on the receipt and the account order, as on the order emails and the invoice, 10 a row and 50 in all). The row starts closed, opens with no script, and keeps its amount in its bar ([private pages](private-pages.md#the-add-on-row)); the order emails and the invoice print the lines under the row as plain text.
 - `prices` take `currency: "store"` too, and convert exactly as a product price does, rounding step and ending included (৳1,200 is $10.99 in that market, from your app as from the catalogue). When two apps price one one-time line, the first in the checkout order wins and both apps' logs say which price was used.
 
 ### Failure policy and limits
@@ -190,6 +190,26 @@ Buyer UI is a storefront extension, not a function. Declare `storefront.extensio
 
 - The input carries the target, `language`, `locale`, `currency`, the `cart` (where the slot has one), the `order` (id, status, payment status, lines), the `customer` id, your declared `reads`, and your own checkout attributes: `attributes` by bare key and `cart.attributes` by `<app id>.<key>`. It never carries another app's answers.
 - Fields are editable only in checkout slots. Buttons run cart operations in checkout slots and the cart drawer. Order and account slots are read-only.
+- The buyer surface draws `stack`, `columns`, `heading`, `text`, `badge`, `banner`, `keyValue`, `image`, `link`, `divider`, `button`, `field`, `disclosure` and `mark`. The store draws each with its own markup, so the same tree looks right in every theme:
+  - **A row.** `ui.stack(children, { direction: "horizontal" })` lays its pieces side by side where its box is wide enough and wraps them where it is not. A vertical stack inside the row is a column of words: it takes the room left, and it moves to a line of its own before it gets narrower than 16rem.
+  - **A toned row.** Add `tone` to draw the stack on that tone's surface, such as an offer row or a status box. Its height comes from its padding, gap and pieces. If its last piece (the action) wraps to a line of its own, it keeps to the row's end.
+  - **A mark.** `ui.mark(tone)` is the tone's glyph in a circle: "!" warning, a tick for success, "i" info, "×" critical, a dot for neutral. It is decoration and hidden from screen readers, so the words beside it must say the same thing.
+  - **Text.** `ui.text(text, { tone })` colours the words (critical words take the error colour), and `emphasis: "mono"` sets an ID or a code in the monospace face.
+  - **Buttons** are at least 44px tall on a phone.
+  - A toned stack and a mark show only on buyer pages: a dashboard tree that uses one is refused.
+
+  The offer row under a cart line:
+
+  ```ts
+  ui.stack([
+    ui.mark("warning"),
+    ui.stack([ui.text("Add protection for lifetime support."), ui.link("Learn more", ui.to.store("/pages/protection"))]),
+    ui.text("৳350", { tone: "success", emphasis: "strong" }),
+    ui.button("Add now", ui.cart.setLineInput("plan", "lifetime", [line.lineKey])),
+  ], { direction: "horizontal", tone: "warning" })
+  ```
+
+  A theme styles these pieces with tokens under `ui.<kind>[.<tone>]`: `ui.stack.warning`, `ui.mark.warning`, `ui.text.success`, `ui.link`, `ui.keyvalue`, `ui.button` (see [private pages](private-pages.md)).
 - Test with `harness.extension(fixtures.storefrontExtensionInput(target, overrides?))`. The fixture builds a complete, valid input for the slot's page.
 
 The slot list is in [Storefront](storefront.md#slots).

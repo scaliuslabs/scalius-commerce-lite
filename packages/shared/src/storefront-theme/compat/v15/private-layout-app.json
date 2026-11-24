@@ -1,0 +1,20 @@
+{
+ "templates": [
+  {
+   "privatePages": {
+    "pages": {
+     "cartDrawer": {
+      "frame": "wide"
+     }
+    },
+    "labels": {
+     "drawer.title": {
+      "en": "Bag",
+      "bn": "ব্যাগ"
+     }
+    }
+   }
+  }
+ ],
+ "pagePresets": []
+}

@@ -15,6 +15,7 @@ import { buyerLineAddOnRows, rowItemsOnly } from "@scalius/shared/buyer-line-add
 import LongAnswer from "@/components/LongAnswer.astro";
 import { longAnswerWords } from "@/lib/long-answer";
 import { pageLanguage } from "@/lib/store-time-zone";
+import AddOnRow from "@/components/AddOnRow.astro";
 import { accountCopy } from "@/lib/account-copy";
 import type { StorefrontReceiptSection } from "@scalius/shared/storefront-theme";
 
@@ -96,10 +97,7 @@ const answerWords = longAnswerWords(pageLanguage());
             <span class="font-medium">{formatReceiptAmount(receiptItemsSubtotal)}</span>
           </div>
           {receiptAddOnRows.map((row) => (
-            <div class="flex justify-between gap-4" data-summary-row="add-on">
-              <span class="text-muted-foreground">{row.title}</span>
-              <span class="shrink-0 whitespace-nowrap font-medium">{row.amount}</span>
-            </div>
+            <AddOnRow row={row} amount={row.amount} look="receipt" />
           ))}
           {showsReceiptDeliveryRow && receiptDeliveryRow && <div class="flex justify-between gap-4" data-summary-row="delivery">
             <span class="text-muted-foreground">{receiptDeliveryRow.label}</span>
