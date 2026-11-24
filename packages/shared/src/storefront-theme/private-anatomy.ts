@@ -662,8 +662,8 @@ const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
   card: { selector: '[data-part="card"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", on: "content", fields: true },
   "card-title": { selector: '[data-part="card-title"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "card" },
   "status-badge": { selector: '[data-part="status-badge"]', tokens: [...STATUS_BADGE_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "card" },
-  // An order's totals inside its card, drawn at the card's 14px.
-  ...privateSummaryStyles({ on: "card", total: 14, label: 14 }),
+  // An order's totals inside its card, drawn at the card's 14px; what is left to pay (`due`) ranks with the total.
+  ...privateSummaryStyles({ on: "card", total: 14, label: 14, due: true }),
   ...afterOrderLineStyles("card"),
   // A line's delivery message (the store's words for it) and the control that reveals it.
   "delivery-message": { selector: '[data-part="delivery-message"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", on: "line" },

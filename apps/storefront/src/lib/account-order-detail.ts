@@ -745,9 +745,9 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       row(words.total, cell(minor(order.totalAmountMinor ?? 0)), "total"),
       // Gift cards are payment: one row per card after the total, then what is left.
       ...giftCardTenders.map((tender) =>
-        row(receiptGiftCardTenderLabel(tender, copy), cell(`−${money(tender.amount)}`, "text-foreground"), "payment")),
+        row(receiptGiftCardTenderLabel(tender, copy), cell(`−${money(tender.amount)}`, "text-foreground"), "paid")),
       giftCardTenders.length > 0 && paymentLine.balanceDue > 0
-        ? row(paymentLine.balanceLabel, cell(money(paymentLine.balanceDue), "font-medium text-foreground"), "payment")
+        ? row(paymentLine.balanceLabel, cell(money(paymentLine.balanceDue), "font-medium text-foreground"), "due")
         : "",
     ].join("");
   }

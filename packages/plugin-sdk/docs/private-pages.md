@@ -835,9 +835,9 @@ account style card-title <root> [data-part="card-title"] tokens=text,font,weight
 account style status-badge <root> [data-part="status-badge"] tokens=background,text,border,border-width,radius
 account style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap
 account style summary-heading <root> [data-part="summary-heading"] tokens=text,font,weight,size,leading,case,tracking
-account style summary-rows <root> [data-summary-row]:not([data-summary-row="total"]) tokens=text,size
-account style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size
-account style summary-total-label <root> [data-summary-row="total"] [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size
+account style summary-rows <root> [data-summary-row]:not(:is([data-summary-row="total"],[data-summary-row="due"])) tokens=text,size
+account style summary-total <root> :is([data-summary-row="total"],[data-summary-row="due"]) tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size
+account style summary-total-label <root> :is([data-summary-row="total"],[data-summary-row="due"]) [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size
 account style summary-add-on <root> [data-part="add-on-details"] > summary tokens=text,ring,radius
 account style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size
 account style line <root> [data-part="line"] tokens=background,border,border-width,border-style,radius,padding targets=order.line.after
