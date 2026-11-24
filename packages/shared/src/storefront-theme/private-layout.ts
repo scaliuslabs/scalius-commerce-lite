@@ -14,8 +14,9 @@
 //   action or an amount, its own words per language for the rest), host
 //   icons it replaces with its own files.
 // - `compiled`: written by the store on every save and publish, never by
-//   hand: the token CSS, the checker's version and the anatomy version the
-//   arrangements were checked against. A page reads it as it is, so a custom
+//   hand: each page's token CSS (a page with an entry is in token mode), the
+//   checker's version and the anatomy version the arrangements were checked
+//   against. A page reads it as it is, so a custom
 //   look costs no query and no parse beyond the document's; one an older
 //   checker wrote serves nothing until the store compiles it again (a save,
 //   or maintenance after a deploy).
@@ -62,11 +63,12 @@ import {
 /**
  * The checker's version: a page never serves a look an older checker
  * compiled (maintenance compiles the published theme again). Version 6: a
- * theme's stylesheet, chrome and content blocks are not available.
+ * theme's stylesheet, chrome and content blocks are not available. Version 7:
+ * the look is compiled per page, and a page is in token mode where it has one.
  */
-export const PRIVATE_CHECKER_VERSION = 6;
+export const PRIVATE_CHECKER_VERSION = 7;
 
-/** The most compiled token CSS a document stores. */
+/** The most compiled token CSS a document stores, every page's together. */
 export const PRIVATE_COMPILED_CSS_MAX_BYTES = 64 * 1024;
 
 /**
@@ -186,17 +188,30 @@ export const storefrontPrivatePagesSchema = z.object({
   ...heldFields,
   // A version 15 document written before tokens existed reads as having none.
   tokens: privateTokensSchema.optional().transform((tokens): PrivateTokens => tokens ?? {}),
-  compiled: z.object({
+  compiled: z.preprocess(compiledOfAnEarlierChecker, z.object({
     anatomy: z.number().int().min(1),
     /** The checker's version (0: never compiled): a page never serves what an older checker compiled. */
     sanitizer: z.number().int().min(0),
-    css: z.string().max(PRIVATE_COMPILED_CSS_MAX_BYTES),
+    /**
+     * Each page's look, by page: the host's token rules. A page with an entry is drawn in token mode (the theme
+     * set its tokens, or has a page paint); a page serves only its own entry.
+     */
+    css: z.partialRecord(z.enum(PRIVATE_PAGE_KEYS as [PrivatePageKey, ...PrivatePageKey[]]), z.string().max(PRIVATE_COMPILED_CSS_MAX_BYTES)),
     /** The store's maintenance compile refused this source: the pages draw the default look until a save. */
     refused: z.boolean().optional(),
-    /** The page with a page of its own (the cart) is drawn in token mode: the theme set its tokens, or has a page paint. */
-    tokenMode: z.boolean().optional(),
-  }).strict(),
+  }).strict()),
 }).strict().superRefine(refuseHeld).transform(withoutHeld);
+
+/**
+ * What a checker before version 7 wrote (one stylesheet for every page and a
+ * token-mode flag): read as never compiled, so no page serves it and
+ * maintenance compiles the published theme again.
+ */
+function compiledOfAnEarlierChecker(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const { css, tokenMode: _tokenMode, ...rest } = value as Record<string, unknown>;
+  return typeof css === "string" ? { ...rest, sanitizer: 0, css: {} } : value;
+}
 
 /** What an app template may set: any of it but the compiled output, which the store writes on save. */
 export const storefrontPrivatePagesTemplateSchema = z.object({ ...privatePagesFields, ...heldFields }).partial().strict().superRefine(refuseHeld).transform(withoutHeld);
@@ -208,13 +223,13 @@ export interface StorefrontPrivatePages {
   tokens: PrivateTokens;
   labels: Partial<Record<string, PrivateWords | string>>;
   icons: Partial<Record<string, PrivateAssetRef>>;
-  compiled: { anatomy: number; sanitizer: number; css: string; refused?: boolean; tokenMode?: boolean };
+  compiled: { anatomy: number; sanitizer: number; css: Partial<Record<PrivatePageKey, string>>; refused?: boolean };
 }
 export type StorefrontPrivatePagesTemplate = Partial<Omit<StorefrontPrivatePages, "compiled">>;
 
 /** The private pages as the host draws them with no theme of its own. */
 export function storefrontPrivatePagesDefault(): StorefrontPrivatePages {
-  return { pages: {}, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: "" } };
+  return { pages: {}, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: {} } };
 }
 
 /**
@@ -302,8 +317,7 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
   for (const [path, ref] of files) {
     if (ref.app !== context.themeApp) issues.push({ path, reason: "foreign_asset", message: `${ref.app}/${ref.file}: a private page names only the theme's own files${context.themeApp ? ` (${context.themeApp})` : ""}.` });
   }
-  const tokenCss: string[] = [];
-  let tokenMode = false;
+  const tokenCss: Partial<Record<PrivatePageKey, string>> = {};
   // A theme's page paint shows behind every private page: a page with no tokens is drawn in token mode
   // anyway, its rows the defaults computed from the paint, so what stands on the paint is checked on it
   // (the drawer has no page of its own: it opens over public pages and takes their look).
@@ -311,7 +325,6 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
   for (const page of PRIVATE_PAGE_KEYS) {
     const tokens = Object.keys(value.tokens[page] ?? {}).length > 0 ? value.tokens[page]! : painted && privatePageHasOwnPage(page) ? {} : null;
     if (!tokens) continue;
-    tokenMode ||= privatePageHasOwnPage(page);
     const arrangement = privatePageArrangement({ ...value, pages, compiled: { ...value.compiled, anatomy: PRIVATE_ANATOMY_VERSION } }, page);
     const spec: PrivatePageSpec = PRIVATE_PAGES[page];
     const compiled = compilePrivateTokens(page, tokens, {
@@ -320,7 +333,8 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
       palettes: context.palettes,
     });
     issues.push(...compiled.issues);
-    tokenCss.push(compiled.css);
+    // A page of its own is drawn in token mode wherever its table was written (an empty look included).
+    if (privatePageHasOwnPage(page) && compiled.issues.length === 0) tokenCss[page] = compiled.css;
   }
   const specs = new Map(privateLabelKeys().map((entry) => [entry.key, entry.spec]));
   const labels = Object.fromEntries(Object.entries(value.labels).flatMap(([key, words]) => words ? [[key, typeof words === "string" ? words : plainPrivateWords(words)]] : []));
@@ -336,11 +350,10 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
     }
   }
   if (issues.length > 0) return { ok: false, issues };
-  const compiled = tokenCss.join("");
-  if (new TextEncoder().encode(compiled).byteLength > PRIVATE_COMPILED_CSS_MAX_BYTES) {
+  if (new TextEncoder().encode(Object.values(tokenCss).join("")).byteLength > PRIVATE_COMPILED_CSS_MAX_BYTES) {
     return { ok: false, issues: [{ path: ["privatePages", "tokens"], reason: "too_large", message: `The compiled look is over ${PRIVATE_COMPILED_CSS_MAX_BYTES / 1024} KiB; set fewer tokens.` }] };
   }
-  return { ok: true, value: { ...value, pages, labels, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: compiled, ...(tokenMode ? { tokenMode } : {}) } } };
+  return { ok: true, value: { ...value, pages, labels, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: tokenCss } } };
 }
 
 /** Whether `compiled` was written by this build's checker and anatomy (else maintenance compiles it again). */
@@ -367,21 +380,21 @@ export function privatePageArrangement(privatePages: StorefrontPrivatePages, pag
 }
 
 /**
- * The look a page may serve (the host's token rules): the stored
- * one when this build's checker compiled it, else none (the default look)
- * until the store compiles it again. A buyer's request never compiles.
+ * The look a page may serve (the host's token rules, that page's only): the
+ * stored one when this build's checker compiled it, else none (the default
+ * look) until the store compiles it again. A buyer's request never compiles.
  */
-export function privatePagesCss(privatePages: Pick<StorefrontPrivatePages, "compiled">): string {
-  return privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused ? privatePages.compiled.css : "";
+export function privatePagesCss(privatePages: Pick<StorefrontPrivatePages, "compiled">, page: PrivatePageKey): string {
+  return privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused ? privatePages.compiled.css[page] ?? "" : "";
 }
 
 /**
  * The page is in token mode (the compile wrote its table: the theme set its
- * tokens, or has a page paint): its colours come from the compiled table, the
- * host's palette classes read it.
+ * tokens, or has a page paint): its colours come from its compiled table, the
+ * host's palette classes read it. Another page's tokens never put it there.
  */
-export function privatePageTokenMode(privatePages: StorefrontPrivatePages, page: PrivatePageKey): boolean {
-  return privatePageHasOwnPage(page) && servedPrivatePages(privatePages).compiled.tokenMode === true;
+export function privatePageTokenMode(privatePages: Pick<StorefrontPrivatePages, "compiled">, page: PrivatePageKey): boolean {
+  return privatePageHasOwnPage(page) && privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused && privatePages.compiled.css[page] !== undefined;
 }
 
 /** A page of its own (a `page` style target: the cart), not one drawn over public pages (the drawer, which takes their look). */

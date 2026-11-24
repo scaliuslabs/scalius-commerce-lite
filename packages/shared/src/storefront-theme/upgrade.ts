@@ -212,7 +212,7 @@ function privatePageLayouts(document: Json): Json {
     return {
       ...document,
       blocks: rest,
-      privatePages: { pages: stored, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: V15_ANATOMY, sanitizer: V15_CHECKER, css: "" } },
+      privatePages: { pages: stored, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: V15_ANATOMY, sanitizer: V15_CHECKER, css: {} } },
     };
   }
   if (!("cart" in blocks) && !("cartDrawer" in blocks)) return document;

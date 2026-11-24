@@ -92,8 +92,8 @@ function partVariants(parts: PrivateUnitSpec["parts"], layout: readonly PrivateN
  * values on save. Only what this build's checker compiled is served
  * (`privatePagesCss`).
  */
-export function privateStyle(theme: StorefrontThemeDocument, page: PrivatePageKey = "cart"): string {
-  const css = privatePagesCss(theme.privatePages);
+export function privateStyle(theme: StorefrontThemeDocument, page: PrivatePageKey): string {
+  const css = privatePagesCss(theme.privatePages, page);
   if (!css) return "";
   const tokens = privatePageTokenMode(theme.privatePages, page);
   return `${tokens ? PRIVATE_TOKEN_MODE_CSS.before : ""}${css}${tokens ? PRIVATE_TOKEN_MODE_CSS.after : ""}`;
