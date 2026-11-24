@@ -33,6 +33,7 @@ import {
   PRIVATE_HOOK_PATTERN,
   PRIVATE_LAYOUT_TOKENS,
   PRIVATE_PAGES,
+  PRIVATE_SCOPES,
   type PrivateBuyerUiStyle,
   type PrivateUiTone,
   type PrivateNode,
@@ -1039,8 +1040,16 @@ function shapeCss(page: PrivatePageKey, tokens: Record<string, Values>, unitHook
  */
 export const PRIVATE_TOKEN_MODE = ":root[data-private-tokens]";
 
-/** Where token mode reaches: the private pages, the store's dialogs over them and the store's own chrome (its controls inside). */
-const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]', '[data-private="core-header"]', '[data-private="core-footer"]'];
+/**
+ * Where token mode reaches: every private page with a page of its own (a page
+ * is in token mode only where its own look was compiled: `data-private-tokens`
+ * on its `<html>`), the store's dialogs over them and the store's own chrome
+ * (its controls inside).
+ */
+const TOKEN_SCOPE = [
+  ...Object.values(PRIVATE_PAGES as Readonly<Record<string, PrivatePageSpec>>).filter((spec) => Object.hasOwn(spec.styles, "page")).map((spec) => `[data-private="${spec.root}"]`),
+  ...PRIVATE_SCOPES.map((scope) => `[data-private="${scope}"]`),
+];
 const IN_SCOPE = `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope} *`)].join(",")})`;
 
 /**

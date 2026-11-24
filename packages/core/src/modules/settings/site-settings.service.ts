@@ -455,7 +455,7 @@ export async function recompilePublishedPrivatePages(db: Database): Promise<"non
   const result = compileStorefrontPrivatePages(filled, privatePagesContextOf(theme));
   const privatePages = result.ok
     ? result.value
-    : { ...filled, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: "", refused: true } };
+    : { ...filled, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: {}, refused: true } };
   const written = await db.update(themeSettings)
     .set({ colors: JSON.stringify({ ...theme, privatePages }), updatedAt: sql`unixepoch()` })
     .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)))

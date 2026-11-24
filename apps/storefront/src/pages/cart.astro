@@ -370,7 +370,7 @@ const cartTemplate = cartRequestTheme.resolved.pages.templates.cart;
 // The phone summary bar's words (the theme may reword them).
 const foldWords = { show: cartPlan.labels["cart.showSummary"] ?? cartWords.showSummary, hide: cartPlan.labels["cart.hideSummary"] ?? cartWords.hideSummary };
 // The theme's look for this page: host token rules compiled when it was saved.
-const cartStyle = privateStyle(cartRequestTheme.theme);
+const cartStyle = privateStyle(cartRequestTheme.theme, "cart");
 // The theme's words for the confirmation dialog's buttons (lib/cart/confirm-dialog.ts reads them).
 // The theme's choices for the lines and the summary (private-anatomy.ts): the heading above the card, an Items row.
 const headingAbove = cartPlan.variants.lines === "heading-above";
