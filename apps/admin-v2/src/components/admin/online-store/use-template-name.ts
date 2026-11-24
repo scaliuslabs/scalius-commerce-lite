@@ -1,10 +1,8 @@
-import { useMemo } from "react";
 import { STOREFRONT_TEMPLATE_IDS } from "@scalius/shared/storefront-theme";
 import { useMessages } from "~/i18n";
 import { onlineStoreCommonMessages } from "~/i18n/online-store-common";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import type { ThemeApp } from "~/lib/api-query-options/online-store";
-import { appTemplates } from "./theme-settings";
 
 type MessageKey = keyof (typeof onlineStoreCommonMessages)["en"];
 
@@ -12,10 +10,13 @@ type MessageKey = keyof (typeof onlineStoreCommonMessages)["en"];
 export function useTemplateName(apps: readonly ThemeApp[]): (key: string) => string {
   const t = useMessages(onlineStoreCommonMessages);
   const editor = useMessages(themeEditorMessages);
-  const offered = useMemo(() => appTemplates(apps), [apps]);
   return (key) => {
     if ((STOREFRONT_TEMPLATE_IDS as readonly string[]).includes(key)) return t(`template_${key}` as MessageKey);
-    // An app's template no longer offered has no name here: it reads as an app's template, never as its key.
-    return offered.find((template) => template.key === key)?.name ?? editor("templateUnknown");
+    // An app's template the API no longer lists has no name here: it reads as an app's template, never as its key.
+    for (const app of apps) {
+      const template = app.templates.find((each) => each.key === key);
+      if (template) return template.name;
+    }
+    return editor("templateUnknown");
   };
 }
