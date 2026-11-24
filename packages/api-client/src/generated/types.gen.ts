@@ -1356,6 +1356,8 @@ export type StorefrontPrivatePages = {
     };
     labels: {
         'cart.heading'?: StorefrontPrivateWords;
+        'cart.intro'?: StorefrontPrivateWords;
+        'cart.summaryHeading'?: StorefrontPrivateWords;
         'cart.continue'?: 'continue-shopping' | 'keep-shopping' | 'back-to-store';
         'cart.empty'?: StorefrontPrivateWords;
         'cart.emptyText'?: StorefrontPrivateWords;
@@ -1708,6 +1710,7 @@ export type PluginUiNode = {
     type: 'stack';
     direction?: 'vertical' | 'horizontal';
     gap?: 'sm' | 'md' | 'lg';
+    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
     children: Array<PluginUiNode>;
 } | {
     type: 'columns';
@@ -2150,6 +2153,9 @@ export type PluginUiNode = {
     summary: string;
     open?: boolean;
     children: Array<PluginUiNode>;
+} | {
+    type: 'mark';
+    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
 };
 
 /**
@@ -2550,6 +2556,7 @@ export type CustomerAccountSummary = {
             type: 'stack';
             direction?: 'vertical' | 'horizontal';
             gap?: 'sm' | 'md' | 'lg';
+            tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
             children: Array<PluginUiNode>;
         } | {
             type: 'columns';
@@ -2992,6 +2999,9 @@ export type CustomerAccountSummary = {
             summary: string;
             open?: boolean;
             children: Array<PluginUiNode>;
+        } | {
+            type: 'mark';
+            tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
         };
         attributes: Array<{
             key: string;
@@ -15438,6 +15448,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     type: 'stack';
                     direction?: 'vertical' | 'horizontal';
                     gap?: 'sm' | 'md' | 'lg';
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     children: Array<PluginUiNode>;
                 } | {
                     type: 'columns';
@@ -15880,6 +15891,9 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     summary: string;
                     open?: boolean;
                     children: Array<PluginUiNode>;
+                } | {
+                    type: 'mark';
+                    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                 };
                 attributes: Array<{
                     key: string;
@@ -24522,6 +24536,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         type: 'stack';
                         direction?: 'vertical' | 'horizontal';
                         gap?: 'sm' | 'md' | 'lg';
+                        tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                         children: Array<PluginUiNode>;
                     } | {
                         type: 'columns';
@@ -24964,6 +24979,9 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         summary: string;
                         open?: boolean;
                         children: Array<PluginUiNode>;
+                    } | {
+                        type: 'mark';
+                        tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     };
                     attributes: Array<{
                         key: string;
@@ -25674,6 +25692,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                     type: 'stack';
                     direction?: 'vertical' | 'horizontal';
                     gap?: 'sm' | 'md' | 'lg';
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     children: Array<PluginUiNode>;
                 } | {
                     type: 'columns';
@@ -26116,6 +26135,9 @@ export type PostApiV1OrdersCartValidationResponses = {
                     summary: string;
                     open?: boolean;
                     children: Array<PluginUiNode>;
+                } | {
+                    type: 'mark';
+                    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                 };
                 attributes: Array<{
                     key: string;
@@ -26715,6 +26737,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     type: 'stack';
                     direction?: 'vertical' | 'horizontal';
                     gap?: 'sm' | 'md' | 'lg';
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     children: Array<PluginUiNode>;
                 } | {
                     type: 'columns';
@@ -27157,6 +27180,9 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     summary: string;
                     open?: boolean;
                     children: Array<PluginUiNode>;
+                } | {
+                    type: 'mark';
+                    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                 };
                 attributes: Array<{
                     key: string;

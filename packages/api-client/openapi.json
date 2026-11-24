@@ -6424,6 +6424,12 @@
               "cart.heading": {
                 "$ref": "#/components/schemas/StorefrontPrivateWords"
               },
+              "cart.intro": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "cart.summaryHeading": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
               "cart.continue": {
                 "type": "string",
                 "enum": [
@@ -8211,6 +8217,16 @@
                   "sm",
                   "md",
                   "lg"
+                ]
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "neutral",
+                  "info",
+                  "success",
+                  "warning",
+                  "critical"
                 ]
               },
               "children": {
@@ -10877,6 +10893,32 @@
               "children"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "mark"
+                ]
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "neutral",
+                  "info",
+                  "success",
+                  "warning",
+                  "critical"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "tone"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -12538,6 +12580,16 @@
                             "sm",
                             "md",
                             "lg"
+                          ]
+                        },
+                        "tone": {
+                          "type": "string",
+                          "enum": [
+                            "neutral",
+                            "info",
+                            "success",
+                            "warning",
+                            "critical"
                           ]
                         },
                         "children": {
@@ -15202,6 +15254,32 @@
                         "type",
                         "summary",
                         "children"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "mark"
+                          ]
+                        },
+                        "tone": {
+                          "type": "string",
+                          "enum": [
+                            "neutral",
+                            "info",
+                            "success",
+                            "warning",
+                            "critical"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "tone"
                       ],
                       "additionalProperties": false
                     }
@@ -58725,6 +58803,16 @@
                                           "lg"
                                         ]
                                       },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      },
                                       "children": {
                                         "type": "array",
                                         "items": {
@@ -61387,6 +61475,32 @@
                                       "type",
                                       "summary",
                                       "children"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "mark"
+                                        ]
+                                      },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "tone"
                                     ],
                                     "additionalProperties": false
                                   }
@@ -91232,6 +91346,16 @@
                                               "lg"
                                             ]
                                           },
+                                          "tone": {
+                                            "type": "string",
+                                            "enum": [
+                                              "neutral",
+                                              "info",
+                                              "success",
+                                              "warning",
+                                              "critical"
+                                            ]
+                                          },
                                           "children": {
                                             "type": "array",
                                             "items": {
@@ -93894,6 +94018,32 @@
                                           "type",
                                           "summary",
                                           "children"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "mark"
+                                            ]
+                                          },
+                                          "tone": {
+                                            "type": "string",
+                                            "enum": [
+                                              "neutral",
+                                              "info",
+                                              "success",
+                                              "warning",
+                                              "critical"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "tone"
                                         ],
                                         "additionalProperties": false
                                       }
@@ -96897,6 +97047,16 @@
                                           "lg"
                                         ]
                                       },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      },
                                       "children": {
                                         "type": "array",
                                         "items": {
@@ -99559,6 +99719,32 @@
                                       "type",
                                       "summary",
                                       "children"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "mark"
+                                        ]
+                                      },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "tone"
                                     ],
                                     "additionalProperties": false
                                   }
@@ -101997,6 +102183,16 @@
                                           "lg"
                                         ]
                                       },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      },
                                       "children": {
                                         "type": "array",
                                         "items": {
@@ -104659,6 +104855,32 @@
                                       "type",
                                       "summary",
                                       "children"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "mark"
+                                        ]
+                                      },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "tone"
                                     ],
                                     "additionalProperties": false
                                   }
