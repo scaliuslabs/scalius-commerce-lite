@@ -102,6 +102,16 @@
          }
         ]
        },
+       "product": {
+        "anyOf": [
+         {
+          "$ref": "#/$defs/__schema1"
+         },
+         {
+          "type": "null"
+         }
+        ]
+       },
        "hidden": {
         "type": "boolean"
        },
@@ -6003,6 +6013,16 @@
       "anyOf": [
        {
         "$ref": "#/$defs/__schema15"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "product": {
+      "anyOf": [
+       {
+        "$ref": "#/$defs/__schema53"
        },
        {
         "type": "null"

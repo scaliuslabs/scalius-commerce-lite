@@ -9981,6 +9981,7 @@ export interface StorefrontHeroSkinSettings {
         text?: string;
         buttonLabel?: string;
         link: string | null;
+        product?: StorefrontProductCard | null;
     }>;
     phonePlacement?: "after-categories";
     sideBanners?: Array<{

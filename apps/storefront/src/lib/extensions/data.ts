@@ -84,6 +84,7 @@ import {
   homepageBrandHref,
   homepageCollectionsFallback,
   homepageMedia,
+  homepagePickedProduct,
   homepageSourceProducts,
   type HomepageContent,
   type HomepageHeaderLead,
@@ -715,6 +716,10 @@ export function coreSectionSkinData<Type extends StorefrontSkinnableSection>(
       return endsAt && Date.parse(endsAt) > Date.now() ? { endsAt } : null;
     },
     deliveryFacts: () => content.deliveryFacts.map((fact) => ({ title: fact.title, detail: fact.detail })),
+    product: (productId) => {
+      const product = homepagePickedProduct(content, productId);
+      return product ? cards([product])[0] ?? null : null;
+    },
     objectField: (qualifiedKey) => {
       const object = content.resourceFields?.find((field) => field.type === "object_reference"
         && `${field.namespace}.${field.key}` === qualifiedKey)?.object;

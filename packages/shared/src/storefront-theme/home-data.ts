@@ -35,11 +35,18 @@ export const HOME_BRAND_LIMIT = 24;
 export const HOME_MAX_PROMOTIONS = 4;
 /** Object content types the Objects sections of one page read. */
 export const HOME_MAX_OBJECT_TYPES = 4;
+/** Products the sections of one page name by id (hero slides), all sections together. */
+export const HOME_MAX_PICKED_PRODUCTS = 8;
+/** The key of the one list that holds the products sections name by id. */
+export const HOME_PICKED_PRODUCTS_KEY = "picked";
+
+/** Where a home list's products come from: a section's source, or the products sections name by id. */
+export type HomeProductSource = StorefrontProductSource | { kind: "products"; productIds: string[] };
 
 export interface HomeProductListRequest {
-  /** `storefrontProductSourceKey(source)`. */
+  /** `storefrontProductSourceKey(source)`, or `HOME_PICKED_PRODUCTS_KEY`. */
   key: string;
-  source: StorefrontProductSource;
+  source: HomeProductSource;
   limit: number;
 }
 
@@ -134,6 +141,11 @@ export function homeSectionProductLists(section: StorefrontSection): Array<{ sou
   }
 }
 
+/** The products a section names by id (a hero slide's product), in order. */
+export function homeSectionProductIds(section: StorefrontSection): string[] {
+  return section.type === "hero" ? section.settings.slides.flatMap((slide) => slide.product ? [slide.product] : []) : [];
+}
+
 /** The images a section shows, by media id. */
 export function homeSectionMediaIds(section: StorefrontSection): string[] {
   switch (section.type) {
@@ -187,6 +199,7 @@ export function homeSectionRequests(
   const promotionIds = new Set<string>();
   const apps: HomeAppSectionRequest[] = [];
   const objects = new Map<string, HomeObjectRequest>();
+  const pickedIds = new Set<string>();
   let brandLimit = 0;
   for (const shown of sections) {
     if (shown.hidden) continue;
@@ -209,6 +222,9 @@ export function homeSectionRequests(
     for (const id of homeSectionMediaIds(section)) {
       if (mediaIds.size < HOME_MAX_MEDIA) mediaIds.add(id);
     }
+    for (const id of homeSectionProductIds(section)) {
+      if (pickedIds.size < HOME_MAX_PICKED_PRODUCTS) pickedIds.add(id);
+    }
     if (section.type === "category_tiles") {
       for (const id of section.settings.categoryIds) if (categoryIds.size < HOME_MAX_CATEGORIES) categoryIds.add(id);
     }
@@ -227,8 +243,12 @@ export function homeSectionRequests(
       promotionIds.add(section.settings.promotionId);
     }
   }
+  // The products sections name by id: one list beside the sources, read with them.
+  const picked: HomeProductListRequest[] = pickedIds.size > 0
+    ? [{ key: HOME_PICKED_PRODUCTS_KEY, source: { kind: "products", productIds: [...pickedIds] }, limit: pickedIds.size }]
+    : [];
   return {
-    lists: [...lists.values()],
+    lists: [...lists.values(), ...picked],
     mediaIds: [...mediaIds],
     categoryIds: [...categoryIds],
     collectionIds: [...collectionIds],

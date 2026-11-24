@@ -10,6 +10,7 @@
 import {
   HOME_COLLECTIONS_FALLBACK_LIMIT,
   HOME_DEAL_LIMIT,
+  HOME_PICKED_PRODUCTS_KEY,
   HOME_LOOKBOOK_LIMIT,
   homeSectionProductLists,
   storefrontCategoryTilesMinimum,
@@ -232,6 +233,11 @@ export function homepageSourceProducts(
   const named = sourceTitleAndHref(source, list, content.language ?? "en");
   const products = (list?.products ?? []).slice(0, limit) as Product[];
   return named && products.length > 0 ? { products, ...named } : null;
+}
+
+/** A product a section names by id (a hero slide's), from the page's one list of named products; null when it is not public. */
+export function homepagePickedProduct(content: Pick<HomepageContent, "lists">, productId: string): Product | null {
+  return (content.lists.get(HOME_PICKED_PRODUCTS_KEY)?.products.find((product) => product.id === productId) as Product | undefined) ?? null;
 }
 
 /** Products a single-list section shows from its source (its first N), or null when it has none. */

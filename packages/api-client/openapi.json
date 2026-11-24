@@ -4189,6 +4189,12 @@
                             "nullable": true,
                             "maxLength": 2048
                           },
+                          "product": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1,
+                            "maxLength": 64
+                          },
                           "hidden": {
                             "type": "boolean"
                           },

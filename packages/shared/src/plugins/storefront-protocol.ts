@@ -1089,6 +1089,8 @@ export interface StorefrontHeroSkinSettings {
     text?: string;
     buttonLabel?: string;
     link: string | null;
+    /** The product the slide shows (title, photo, price and old price, availability); null when it is not public. */
+    product?: StorefrontProductCard | null;
   }>;
   phonePlacement?: "after-categories";
   sideBanners?: Array<{ image: StorefrontImage | null; alt: string; href: string | null }>;

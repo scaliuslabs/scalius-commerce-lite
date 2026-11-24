@@ -946,6 +946,7 @@ export type StorefrontSectionList = Array<{
             text?: string;
             buttonLabel?: string;
             link: string | null;
+            product?: string | null;
             hidden?: boolean;
             bindings?: {
                 [key: string]: {

@@ -79,7 +79,10 @@ export const STOREFRONT_DEFAULT_FOCAL_POINT: Readonly<StorefrontFocalPoint> = Ob
  * `phoneImage` names one), each with its own focal point, the alt text
  * (what the image shows; never drawn over it), optional words over the
  * image and a link (a navigation-safe href; null: the slide is not a link).
- * The button shows only with a link.
+ * The button shows only with a link. `product` names a product the slide
+ * shows: its card (title, photo, price and old price, availability) is read
+ * with the page's product lists, and a product that is not public draws the
+ * slide without it.
  */
 export const storefrontHeroSlideSchema = z.object({
   image: recordId,
@@ -91,6 +94,7 @@ export const storefrontHeroSlideSchema = z.object({
   text: z.string().trim().max(STOREFRONT_HERO_SLIDE_TEXT_LIMITS.text).optional(),
   buttonLabel: z.string().trim().max(STOREFRONT_HERO_SLIDE_TEXT_LIMITS.buttonLabel).optional(),
   link: storefrontLinkSchema.nullable(),
+  product: recordId.nullable().optional(),
   ...blockHidden,
 }).strict();
 export type StorefrontHeroSlide = z.infer<typeof storefrontHeroSlideSchema>;
