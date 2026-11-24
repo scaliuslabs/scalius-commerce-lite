@@ -996,7 +996,8 @@ function Node({ node }: { node: PluginUiNode }) {
       return <FormNode node={node} />;
     case "field":
     case "disclosure":
-      // Buyer surface only; an admin document never passes it.
+    case "mark":
+      // Buyer surface only; an admin document never passes it (nor a toned stack).
       return null;
     case "progress":
       return <ProgressNode node={node} />;

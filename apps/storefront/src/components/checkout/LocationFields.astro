@@ -63,7 +63,7 @@ const retryClass = "mt-1 text-sm font-medium text-destructive underline underlin
   data-close-text={copy.closeText}
 >
   <div>
-    <label for={`${idPrefix}-city`} class={labelClass}>
+    <label for={`${idPrefix}-city`} class={labelClass} data-part="field-label">
       {copy.cityLabel}
       <span aria-hidden="true" class="ms-0.5 text-destructive">*</span>
     </label>
@@ -84,7 +84,7 @@ const retryClass = "mt-1 text-sm font-medium text-destructive underline underlin
   </div>
 
   <div>
-    <label for={`${idPrefix}-zone`} class={labelClass}>
+    <label for={`${idPrefix}-zone`} class={labelClass} data-part="field-label">
       {copy.zoneLabel}
       <span aria-hidden="true" class="ms-0.5 text-destructive">*</span>
     </label>
@@ -111,7 +111,7 @@ const retryClass = "mt-1 text-sm font-medium text-destructive underline underlin
   {
     showAreaField && (
       <div data-location-area class="sm:col-span-2" hidden={areas.length === 0}>
-        <label for={`${idPrefix}-area`} class={labelClass}>
+        <label for={`${idPrefix}-area`} class={labelClass} data-part="field-label">
           {copy.areaLabel}
         </label>
         <select id={`${idPrefix}-area`} name="area" disabled={areas.length === 0} autofocus={autofocus === "area"} class={selectClass}>

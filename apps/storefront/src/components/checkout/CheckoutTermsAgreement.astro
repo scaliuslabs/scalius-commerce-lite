@@ -20,16 +20,21 @@ interface Props {
   inactive?: boolean;
   /** The element id the page script shows and hides with the way of paying. */
   wrapperId?: string;
+  /** The form the box posts with when it sits outside it (the cart page's docked Place order). */
+  form?: string;
+  /** The private page part it is (`legal` on the cart page). */
+  part?: string;
 }
 
-const { agreement, errorText, id = "termsAccepted", error = false, focus = error, checked = false, inactive = false, wrapperId } = Astro.props;
+const { agreement, errorText, id = "termsAccepted", error = false, focus = error, checked = false, inactive = false, wrapperId, form, part } = Astro.props;
 const linkClass = "underline underline-offset-2 hover:text-foreground";
 ---
 {agreement && (agreement.required ? (
-  <div id={wrapperId} class="mt-3" hidden={inactive}>
+  <div id={wrapperId} class="mt-3" hidden={inactive} data-part={part}>
     <label for={id} class="flex min-h-11 cursor-pointer items-start gap-3 py-1 text-sm text-foreground">
       <input
         id={id}
+        form={form}
         type="checkbox"
         name={TERMS_ACCEPTED_FIELD}
         value="true"
@@ -50,7 +55,7 @@ const linkClass = "underline underline-offset-2 hover:text-foreground";
     <p id={`${id}-error`} data-text={errorText} class="text-sm font-medium text-destructive empty:hidden" role="alert">{error ? errorText : ""}</p>
   </div>
 ) : (
-  <p id={wrapperId} class="mt-3 text-center text-sm text-muted-foreground" hidden={inactive}>
+  <p id={wrapperId} class="mt-3 text-center text-sm text-muted-foreground" hidden={inactive} data-part={part}>
     {agreement.segments.map((segment) =>
       segment.href ? <a href={segment.href} target="_blank" rel="noopener" class={linkClass}>{segment.text}</a> : segment.text,
     )}

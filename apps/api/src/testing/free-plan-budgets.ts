@@ -233,6 +233,15 @@
  * Meta log and order-history purges add 5 calls to the Paid sweep tick
  * (cron-idle 48 -> 53); the Free worst minute stays 10.
  *
+ * Private pages (2026-11-23): the first run of a new version reads the
+ * published theme once to compile its private pages with that version's
+ * checker (a write only when an older checker compiled them), independent of
+ * the projection rebuild: it reads the version, claims it pending, and marks it
+ * settled after the compile, once per version. A settled version costs no call
+ * but one row: the sweep reads the version's key where it used to claim it
+ * (cron-idle rows read 7,037 -> 7,038 Paid; mean rows read 1.57 -> 1.6 Free,
+ * 2.14 -> 2.2 Paid; calls and statements unchanged).
+ *
  * Webhook subscribers (2026-11-03): a 3-line order's commit and after-response
  * work with 0, 3 and 8 store webhooks subscribed to every topic. Free sends at
  * most 2 deliveries after the response (the cron sends the rest), each six
@@ -382,7 +391,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-refund": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 19, rowsRead: 26, fullScans: 3 },
     "order-refund-gift-card": { d1Calls: 23, d1Statements: 57, externalFetches: 0, rowsWritten: 20, rowsRead: 39, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 6, rowsRead: 14, fullScans: 2 },
-    "cron-idle": { d1Calls: 10, d1Statements: 14, externalFetches: 0, rowsWritten: 92, rowsRead: 7020, fullScans: 7, meanRowsWritten: 0, meanRowsRead: 1.57 },
+    "cron-idle": { d1Calls: 10, d1Statements: 14, externalFetches: 0, rowsWritten: 92, rowsRead: 7020, fullScans: 7, meanRowsWritten: 0, meanRowsRead: 1.6 },
     "cron-nightly": { d1Calls: 26, d1Statements: 61, externalFetches: 0, rowsWritten: 194, rowsRead: 20323, fullScans: 61 },
     "drain-busy": { d1Calls: 8, d1Statements: 18, externalFetches: 0, rowsWritten: 13, rowsRead: 629, fullScans: 14 },
     "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 54, rowsRead: 57, fullScans: 16 },
@@ -459,7 +468,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-refund": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 19, rowsRead: 26, fullScans: 3 },
     "order-refund-gift-card": { d1Calls: 23, d1Statements: 57, externalFetches: 0, rowsWritten: 20, rowsRead: 39, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 6, rowsRead: 14, fullScans: 2 },
-    "cron-idle": { d1Calls: 60, d1Statements: 70, externalFetches: 0, rowsWritten: 96, rowsRead: 7037, fullScans: 16, meanRowsWritten: 0, meanRowsRead: 2.14 },
+    "cron-idle": { d1Calls: 60, d1Statements: 70, externalFetches: 0, rowsWritten: 96, rowsRead: 7038, fullScans: 16, meanRowsWritten: 0, meanRowsRead: 2.2 },
     "cron-nightly": { d1Calls: 120, d1Statements: 766, externalFetches: 0, rowsWritten: 194, rowsRead: 23190, fullScans: 437 },
     "drain-busy": { d1Calls: 9, d1Statements: 24, externalFetches: 0, rowsWritten: 15, rowsRead: 632, fullScans: 15 },
     "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 54, rowsRead: 57, fullScans: 16 },

@@ -61,12 +61,15 @@ export interface StorefrontRuntime {
   DASHBOARD_URL?: string;
   IMAGE_CDN_BASE_URL?: string;
   IMAGE_CDN_CANONICAL_HOST_ALIASES?: string[];
+  /** On a buyer's private page: the origins its images may come from (`privateImageOrigins`); absent elsewhere. */
+  PRIVATE_IMAGE_ORIGINS?: string[];
   /** Absolute storefront origin; platform setting or the request origin. */
   STOREFRONT_URL?: string;
   /** Derived service token used to obtain the storefront API JWT. */
   API_TOKEN?: string;
   /** Merchant CSP sources from the layout payload (Settings -> Security). */
   CSP_ALLOWED_DOMAINS?: string;
+  CSP_IMAGE_SOURCES?: string;
   /** The store's IANA time zone from the layout payload (Settings -> Store details). */
   STORE_TIME_ZONE?: string;
   /**
@@ -224,6 +227,16 @@ export function setRuntimeImageCdnPolicy(
     : [];
 }
 
+/** Marks the request a private page: its images load only from these origins (others draw the placeholder). */
+export function setRuntimePrivateImageOrigins(origins: string[]): void {
+  const store = getRuntime();
+  if (store) store.PRIVATE_IMAGE_ORIGINS = origins;
+}
+
+export function getRuntimePrivateImageOrigins(): string[] | undefined {
+  return getRuntime()?.PRIVATE_IMAGE_ORIGINS;
+}
+
 export function getRuntimeImageCdnBaseUrl(): string | undefined {
   return getRuntime()?.IMAGE_CDN_BASE_URL;
 }
@@ -269,7 +282,7 @@ function optional(value: string | null | undefined): string | undefined {
  * empty storefront setting keeps the request origin.
  */
 export function applyPlatformOrigins(
-  layout: Pick<LayoutData, "platform" | "cspAllowedDomains" | "timeZone" | "markets" | "storefrontCopy"> | null | undefined,
+  layout: Pick<LayoutData, "platform" | "cspAllowedDomains" | "cspImageSources" | "timeZone" | "markets" | "storefrontCopy"> | null | undefined,
 ): void {
   const store = getRuntime();
   if (!store) return;
@@ -290,6 +303,7 @@ export function applyPlatformOrigins(
   const cspAllowedDomains = layout?.cspAllowedDomains;
   store.CSP_ALLOWED_DOMAINS =
     typeof cspAllowedDomains === "string" ? cspAllowedDomains : "";
+  store.CSP_IMAGE_SOURCES = typeof layout?.cspImageSources === "string" ? layout.cspImageSources : "";
   const timeZone = layout?.timeZone;
   store.STORE_TIME_ZONE = isValidTimeZone(timeZone) ? timeZone : undefined;
   const presence = store.MARKET_PRESENCE;
@@ -327,6 +341,11 @@ export function getRuntimeStoreRegion(): string | undefined {
 /** The store's time zone seeded from this request's layout payload, if any. */
 export function getRuntimeStoreTimeZone(): string | undefined {
   return getRuntime()?.STORE_TIME_ZONE;
+}
+
+/** Merchant image hosts (images only) seeded from this request's layout payload. */
+export function getRuntimeCspImageSources(): string {
+  return getRuntime()?.CSP_IMAGE_SOURCES ?? "";
 }
 
 /** Merchant CSP sources seeded from this request's layout payload. */

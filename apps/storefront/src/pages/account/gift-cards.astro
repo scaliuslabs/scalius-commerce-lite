@@ -189,7 +189,7 @@ const secondaryButton = `${ui.secondaryButton} shrink-0`;
               aria-invalid={saveMessage?.tone === "error" ? "true" : undefined}
               aria-describedby={saveMessage ? "giftCardSaveMessage" : undefined}
             />
-            <button type="submit" class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">{copy.save}</button>
+            <button type="submit" class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover">{copy.save}</button>
           </form>
           {saveMessage && (
             <p id="giftCardSaveMessage" role={saveMessage.tone === "error" ? "alert" : "status"} class:list={["mt-2 text-sm", saveMessage.tone === "error" ? "text-destructive" : "text-primary"]}>{saveMessage.text}</p>

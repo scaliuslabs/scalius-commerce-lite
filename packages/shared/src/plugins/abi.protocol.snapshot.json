@@ -6984,6 +6984,16 @@
           "lg"
          ]
         },
+        "tone": {
+         "type": "string",
+         "enum": [
+          "neutral",
+          "info",
+          "success",
+          "warning",
+          "critical"
+         ]
+        },
         "children": {
          "maxItems": 100,
          "type": "array",
@@ -9581,6 +9591,30 @@
         "type",
         "summary",
         "children"
+       ],
+       "additionalProperties": false
+      },
+      {
+       "type": "object",
+       "properties": {
+        "type": {
+         "type": "string",
+         "const": "mark"
+        },
+        "tone": {
+         "type": "string",
+         "enum": [
+          "neutral",
+          "info",
+          "success",
+          "warning",
+          "critical"
+         ]
+        }
+       },
+       "required": [
+        "type",
+        "tone"
        ],
        "additionalProperties": false
       }
@@ -15407,6 +15441,16 @@
           "lg"
          ]
         },
+        "tone": {
+         "type": "string",
+         "enum": [
+          "neutral",
+          "info",
+          "success",
+          "warning",
+          "critical"
+         ]
+        },
         "children": {
          "maxItems": 100,
          "type": "array",
@@ -18002,6 +18046,30 @@
         "children"
        ],
        "additionalProperties": false
+      },
+      {
+       "type": "object",
+       "properties": {
+        "type": {
+         "type": "string",
+         "const": "mark"
+        },
+        "tone": {
+         "type": "string",
+         "enum": [
+          "neutral",
+          "info",
+          "success",
+          "warning",
+          "critical"
+         ]
+        }
+       },
+       "required": [
+        "type",
+        "tone"
+       ],
+       "additionalProperties": false
       }
      ]
     },
@@ -18102,7 +18170,8 @@
      "divider",
      "button",
      "field",
-     "disclosure"
+     "disclosure",
+     "mark"
     ],
     "actions": [
      "route",
