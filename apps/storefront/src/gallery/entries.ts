@@ -44,7 +44,7 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { ARABIC_TEXT, BANGLA_LONG, cardProduct, type ProductScenario } from "./fixtures";
-import { fixtureProductSoldOut, GALLERY_KIT, galleryCartSeed, type GalleryCartSeed } from "./cart-seed";
+import { fixtureProductSoldOut, GALLERY_KIT, galleryCartSeed, galleryCustomerCart, type GalleryCartSeed } from "./cart-seed";
 import { SECTION_CONTENT } from "./section-content";
 import { settingVariants, settingChoices, settingWith, type SettingsSchema } from "./variants";
 import { noorLandingSections, noorTheme } from "./noor";
@@ -101,6 +101,11 @@ export interface GalleryScenario {
   buyerUiKinds?: boolean;
   /** The cart check asks for a protection decision on the first line (declining needs agreement) and prices an add-on into the second. */
   lineStates?: boolean;
+  /**
+   * The customer's cart and its protection app (`gameghor.protection`, cart-seed.ts `GALLERY_CUSTOMER`):
+   * the account line offered protection (`offer`), or two accounts protected (`protected`). Its blocks replace the other apps'.
+   */
+  customer?: "offer" | "protected";
 }
 
 /** Required state setup: a closed drawer is not evidence of an open drawer. */
@@ -921,7 +926,7 @@ export function galleryEntry(id: string): GalleryEntry | null {
 }
 
 /** The states the private pages' rendered tests draw a theme in (each a cart the buyer can hold). */
-export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many", "one", "max"] as const;
+export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many", "one", "max", "customer", "customer-protected"] as const;
 export type PrivatePagesState = (typeof PRIVATE_PAGES_STATES)[number];
 
 /** Long Bangla titles: a line's words at their longest in the store's second language. */
@@ -968,14 +973,16 @@ function manyCart(): string {
  * with an add-on once per kit and an app's offer row, and a sold-out line (`lines`); the base cart with a
  * line asking for a decision and nothing sold out (`decide`); no cart (`empty`); long Bangla
  * titles (`bn`); an Arabic, right-to-left presence (`ar`); twenty lines (`many`); one line (`one`) and
- * 99 (`max`). `page: "home"` draws the homepage instead, where the cart drawer opens. With `noor`, the
+ * 99 (`max`); the customer's game cart with its protection offered (`customer`) or taken on two
+ * accounts (`customer-protected`). `page: "home"` draws the homepage instead, where the cart drawer opens. With `noor`, the
  * store has Noor installed, so a theme from it draws its header and footer;
  * with `localization`, the store sells in two markets.
  */
 export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean; page?: "home" } = {}): GalleryEntry {
   const base = galleryEntry(entryId("app", "buyer-ui"))!;
   // `decide`: the base cart, whose first line asks for a decision and every line sells, so Place order reaches the question.
-  const cart: Record<string, string> = state === "empty" ? {} : { "cart:v3": state === "bn" ? BANGLA_LONG_CART : state === "lines" ? linesCart() : state === "many" ? manyCart() : state === "one" ? repeatedCart(1) : state === "max" ? repeatedCart(99) : GALLERY_CART };
+  const customer = state === "customer" ? "offer" as const : state === "customer-protected" ? "protected" as const : undefined;
+  const cart: Record<string, string> = state === "empty" ? {} : { "cart:v3": customer ? galleryCustomerCart(customer === "protected") : state === "bn" ? BANGLA_LONG_CART : state === "lines" ? linesCart() : state === "many" ? manyCart() : state === "one" ? repeatedCart(1) : state === "max" ? repeatedCart(99) : GALLERY_CART };
   const scenario: GalleryScenario = {
     ...base.scenario, delivering: true, buyerUiKinds: true, storage: cart,
     // Noor installed and active: its header and footer skins draw the theme's chrome.
@@ -983,6 +990,8 @@ export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocu
     // Two markets, the first in two languages: a public footer offers a country and a language.
     ...(options.localization ? { localization: true } : {}),
     ...(state === "lines" || state === "decide" ? { lineStates: true } : {}),
+    // The customer's cart: its protection app's blocks alone.
+    ...(customer ? { customer, buyerUiKinds: false } : {}),
     ...(state === "bn" ? { locale: "bn" as const, product: "bangla" as const } : state === "ar" ? { locale: "ar" as const } : {}),
   };
   const entry: GalleryEntry = { ...base, id, family: "private-pages:property", title: `Private pages property ${id} (${state})`, theme, scenario, ...(options.page ? { page: options.page } : {}) };

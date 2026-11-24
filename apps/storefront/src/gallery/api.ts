@@ -12,7 +12,7 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import type { GalleryEntry } from "./entries";
-import { fixtureProductSoldOut, GALLERY_KIT } from "./cart-seed";
+import { fixtureProductSoldOut, GALLERY_CUSTOMER, GALLERY_KIT } from "./cart-seed";
 import {
   BANGLA_STORE_NAME,
   FIXTURE_POLICIES,
@@ -252,6 +252,7 @@ function listing(entry: GalleryEntry, search: URLSearchParams) {
 /** Buyer UI travels with the private cart answer, just as it does in production. */
 function checkoutApps(entry: GalleryEntry) {
   if (!entry.scenario.checkoutBuyerUi) return [];
+  if (entry.scenario.customer) return customerBlocks(entry.scenario.customer === "protected");
   const kinds = entry.scenario.buyerUiKinds
     ? [
       everyKindBlock("acme.kinds", "cart.page.summary"), everyKindBlock("acme.kinds", "cart.page.below"), everyKindBlock("acme.kinds", "cart.line.after", "line:v3:prod_1:variant:var_1:p:none"),
@@ -290,6 +291,86 @@ function checkoutApps(entry: GalleryEntry) {
   ];
 }
 
+const CUSTOMER_LEARN_MORE = { type: "link", text: "Learn more", to: { kind: "store", path: "/pages/game-protection" } } as const;
+const customerBlock = (target: string, ui: unknown, lineKey?: string) => ({
+  appId: GALLERY_CUSTOMER.appId, releaseId: "gallery", target, attributes: [], values: {}, ...(lineKey ? { lineKey } : {}), ui,
+});
+
+/**
+ * The customer's protection app (private-look.md S1 and S4), drawn with the
+ * general pieces any app has: under the eligible line not yet protected, an
+ * amber row (its mark, the offer with Learn more, the price, Add Now); in the
+ * summary, an amber "recommended" box, or once protected a green one with
+ * Remove, and a success badge under the protected line. The redeem key
+ * takes nothing.
+ */
+export function customerBlocks(protectedAccount: boolean) {
+  const { account, inputKey } = GALLERY_CUSTOMER;
+  if (protectedAccount) {
+    return [
+      customerBlock("cart.line.after", { type: "badge", tone: "success", text: `\u2713 ${GALLERY_CUSTOMER.title} added` }, account.key),
+      customerBlock("cart.page.summary", { type: "stack", direction: "horizontal", tone: "success", children: [
+        { type: "mark", tone: "success" },
+        { type: "text", text: "Your account is protected", emphasis: "strong" },
+        { type: "button", label: "Remove", tone: "secondary", action: { kind: "cart", op: "set_line_input", key: inputKey, value: null } },
+      ] }),
+    ];
+  }
+  return [
+    customerBlock("cart.line.after", { type: "stack", direction: "horizontal", tone: "warning", children: [
+      { type: "mark", tone: "warning" },
+      { type: "stack", gap: "sm", children: [{ type: "text", text: "Add GAMEGHOR Protection to get lifetime warranty and support." }, CUSTOMER_LEARN_MORE] },
+      { type: "text", text: "\u09F3350", tone: "success", emphasis: "strong" },
+      { type: "button", label: "Add Now", tone: "primary", action: { kind: "cart", op: "set_line_input", key: inputKey, value: "lifetime", lineKeys: [account.key] } },
+    ] }, account.key),
+    customerBlock("cart.page.summary", { type: "stack", direction: "horizontal", tone: "warning", children: [
+      { type: "mark", tone: "warning" },
+      { type: "stack", gap: "sm", children: [{ type: "text", text: `${GALLERY_CUSTOMER.title} recommended`, emphasis: "strong" }, CUSTOMER_LEARN_MORE] },
+    ] }),
+  ];
+}
+
+/**
+ * The customer app's line input on the account line: its own blocks draw it
+ * (`surfaces: []`); before it is answered checkout needs a decision, and
+ * declining asks for the buyer's agreement (the prototype's words).
+ */
+function customerInputs(protectedAccount: boolean) {
+  return {
+    appId: GALLERY_CUSTOMER.appId,
+    inputs: [{
+      key: GALLERY_CUSTOMER.inputKey, label: GALLERY_CUSTOMER.title, type: "select", surfaces: [],
+      options: [
+        { value: "lifetime", label: GALLERY_CUSTOMER.title },
+        { value: "declined", label: "No protection", confirm: {
+          title: "Continue without GAMEGHOR Protection?",
+          text: "I agree that I do not need GAMEGHOR Protection. If this account is hacked or hijacked from my computer, device, account security issue, or personal security issue, I will be responsible.",
+          agree: "I agree and want to continue checkout.",
+        } },
+      ],
+      textRevision: "fedcba9876543210",
+      ...(protectedAccount ? {} : { decision: { proceedWith: "declined" } }),
+    }],
+  };
+}
+
+/** The customer's protected account line: each unit with the app's add-on (৳350), the summary row opening to one entry a unit. */
+export function customerAddOns(units: number) {
+  const name = GALLERY_CUSTOMER.account.line.name;
+  return [{
+    appId: GALLERY_CUSTOMER.appId, title: GALLERY_CUSTOMER.title, amountMinor: GALLERY_CUSTOMER.protectionMinor * units,
+    details: ["Protection ID will be given after order completion.", ...Array.from({ length: units }, (_, index) => `${name} #${index + 1} \u00B7 \u09F3350 \u00B7 Protection ID XXX-XXX-XXX`)],
+  }];
+}
+
+/** A customer line's unit price as the store checks it (with its add-on once protected), or null for another line. */
+function customerUnitPrice(entry: GalleryEntry, variantId: string): number | null {
+  const { account, redeem, protectionMinor } = GALLERY_CUSTOMER;
+  if (!entry.scenario.customer) return null;
+  if (variantId === account.variantId) return account.price + (entry.scenario.customer === "protected" ? protectionMinor / 100 : 0);
+  return variantId === redeem.variantId ? redeem.price : null;
+}
+
 /** A store that delivers in Bangladesh: two delivery rates whose zone serves every address there. */
 function deliveringMethods() {
   return fixtureShippingMethods().map((method) => ({ ...method, kind: "delivery" as const, countries: [{ code: "BD", entire: true }] }));
@@ -310,6 +391,12 @@ function everyKindBlock(appId: string, target: string, lineKey?: string) {
         { type: "text", text: "Covers accidental damage for a year." },
         { type: "stack", direction: "horizontal", children: TONES.map((tone) => ({ type: "badge", tone, text: `${tone} badge` })) },
         ...TONES.map((tone) => ({ type: "banner", tone, title: `A ${tone} banner`, text: "Read this before you place the order." })),
+        // A toned row of each tone: its mark, toned words and (the warning one) an action on its surface.
+        ...TONES.map((tone) => ({ type: "stack", direction: "horizontal", tone, children: [
+          { type: "mark", tone }, { type: "text", tone, text: `A ${tone} row` },
+          ...(tone === "warning" ? [{ type: "button", label: "Add now", action: { kind: "navigate", to: { kind: "store", path: "/pages/protection" } } }] : []),
+        ] })),
+        { type: "text", emphasis: "mono", text: "XXX-XXX-XXX" },
         { type: "key-value", items: [{ label: "Plan", value: "One year" }, { label: "Price", value: 350 }] },
         { type: "link", text: "Read the terms", to: { kind: "store", path: "/pages/terms" } },
         { type: "button", label: "Add protection", action: { kind: "navigate", to: { kind: "store", path: "/pages/protection" } } },
@@ -458,16 +545,23 @@ async function cartValidation(entry: GalleryEntry, request: Request) {
     ? [{ index, cartKey: item.cartKey ?? null, productId: item.productId, variantId: item.variantId, code: "OUT_OF_STOCK", message: `${item.productName ?? "This item"} is sold out.`, requestedQuantity: item.quantity, availableQuantity: 0 }]
     : []);
   const lineStates = entry.scenario.lineStates === true;
+  const customer = entry.scenario.customer;
+  const account = (item: { variantId: string }) => customer !== undefined && item.variantId === GALLERY_CUSTOMER.account.variantId;
+  const protectedUnits = customer === "protected" ? items.filter(account).reduce((sum, item) => sum + item.quantity, 0) : 0;
   return {
     valid: issues.length === 0,
     issues,
-    ...(lineStates ? { lineInputs: [PROTECTION_INPUTS] } : {}),
+    ...(lineStates ? { lineInputs: [PROTECTION_INPUTS] } : customer ? { lineInputs: [customerInputs(customer === "protected")] } : {}),
+    // The customer's protected accounts: one summary row for the app's add-on, opening to an entry a unit.
+    ...(protectedUnits > 0 ? { addOns: { rows: customerAddOns(protectedUnits) } } : {}),
     items: items.map((item, index) => ({
       ...(lineStates && item.productId === "prod_0" ? { lineInputs: ["acme.protect.plan"] } : {}),
+      ...(account(item) ? { lineInputs: [`${GALLERY_CUSTOMER.appId}.${GALLERY_CUSTOMER.inputKey}`] } : {}),
       // A store kit, one line: an app's add-on priced once per kit (never per item), in its unit price.
       ...(item.variantId === GALLERY_KIT.variantId ? { adjustments: [GALLERY_KIT.addOn] } : {}),
+      ...(account(item) && customer === "protected" ? { adjustments: [{ key: "_adjustment", label: GALLERY_CUSTOMER.title, displayValue: "Lifetime warranty and support", price: GALLERY_CUSTOMER.protectionMinor / 100, priceMinor: GALLERY_CUSTOMER.protectionMinor, appId: GALLERY_CUSTOMER.appId }] } : {}),
       index, cartKey: item.cartKey ?? null, productId: item.productId, variantId: item.variantId, quantity: item.quantity,
-      unitPrice: item.variantId === GALLERY_KIT.variantId ? GALLERY_KIT.price + GALLERY_KIT.addOn.price : item.price, productName: item.productName ?? "", variantLabel: item.variantLabel ?? null, freeDelivery: false,
+      unitPrice: customerUnitPrice(entry, item.variantId) ?? (item.variantId === GALLERY_KIT.variantId ? GALLERY_KIT.price + GALLERY_KIT.addOn.price : item.price), productName: item.productName ?? "", variantLabel: item.variantLabel ?? null, freeDelivery: false,
       availableQuantity: fixtureProductSoldOut(item.productId) ? 0 : 12, productImageMediaId: null, productImage: null, fulfillmentKind: "physical", fulfillmentType: null,
     })),
     subtotal: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
@@ -497,7 +591,7 @@ async function taxQuote(entry: GalleryEntry, request: Request) {
     const product = Number.isSafeInteger(productIndex) ? cardProduct(productIndex, { bangla }) : null;
     return {
       cartKey: item.cartKey ?? `line-${index}`, productId: item.productId, variantId: item.variantId, quantity: item.quantity,
-      unitPrice: item.variantId === GALLERY_KIT.variantId ? GALLERY_KIT.price + GALLERY_KIT.addOn.price : product?.discountedPrice ?? 0, productName: item.productName ?? product?.name ?? item.productId, variantLabel: item.variantLabel ?? null,
+      unitPrice: customerUnitPrice(entry, item.variantId) ?? (item.variantId === GALLERY_KIT.variantId ? GALLERY_KIT.price + GALLERY_KIT.addOn.price : product?.discountedPrice ?? 0), productName: item.productName ?? product?.name ?? item.productId, variantLabel: item.variantLabel ?? null,
       fulfillmentType: null, properties: [], propertiesPriceMinor: 0, propertiesHash: "none",
     };
   });
@@ -515,6 +609,8 @@ async function taxQuote(entry: GalleryEntry, request: Request) {
     deliveryMethodKind: method ? "delivery" : null, requiresShipping: method !== null, pickup: null,
     allowedPaymentMethods: entry.scenario.checkout === "no-cod" ? [] : ["cod"],
     items,
+    // The customer's protected accounts: the add-on's summary row, as the cart check answers it.
+    ...(entry.scenario.customer === "protected" ? { addOns: customerAddOns(items.filter((item) => item.variantId === GALLERY_CUSTOMER.account.variantId).reduce((sum, item) => sum + item.quantity, 0)) } : {}),
     // The quote carries the apps' buyer UI, as the API's does.
     buyerUi: checkoutApps(entry),
   };

@@ -58,3 +58,36 @@ export const GALLERY_KIT = {
   line: { id: "prod_7", slug: "eid-gift-set", name: "Eid gift set", price: 4900, quantity: 2, variantId: "var_kit_7", propertiesHash: "none", options: [{ name: "Set", value: "Saree, panjabi and gift box" }] },
   addOn: { key: "_adjustment", label: "Gift wrap", displayValue: "Gold paper and a card", price: 100, priceMinor: 10_000, appId: "acme.wrap" },
 } as const;
+
+/**
+ * The customer's cart (GameGhor, private-look.md): two lines of one game,
+ * an account that takes the store's app's lifetime protection and a redeem
+ * key that does not. The app (`gameghor.protection`) lives here only: its
+ * line input, its add-on of ৳350 a unit and its blocks (api.ts). `customer`:
+ * the account is not protected yet; `customer-protected`: two accounts, each
+ * protected, the summary's add-on row opening to the app's lines.
+ */
+export const GALLERY_CUSTOMER = {
+  appId: "gameghor.protection",
+  inputKey: "plan",
+  protectionMinor: 35_000,
+  title: "GAMEGHOR Protection",
+  account: {
+    key: "line:v3:prod_gta5:variant:var_gta5_account:p:none", variantId: "var_gta5_account", price: 2222,
+    line: { id: "prod_gta5", slug: "gta-v-premium-edition", name: "Grand Theft Auto V: Premium Edition", price: 2222, quantity: 1, variantId: "var_gta5_account", propertiesHash: "none", options: [{ name: "Platform", value: "Rockstar Launcher" }, { name: "Type", value: "Account" }] },
+  },
+  redeem: {
+    key: "line:v3:prod_gta5:variant:var_gta5_key:p:none", variantId: "var_gta5_key", price: 1754,
+    line: { id: "prod_gta5", slug: "gta-v-premium-edition", name: "Grand Theft Auto V: Premium Edition", price: 1754, quantity: 1, variantId: "var_gta5_key", propertiesHash: "none", options: [{ name: "Type", value: "Redeem Key" }] },
+  },
+} as const;
+
+/** The customer's cart as the browser keeps it: protected, the account line holds two units at its price with the add-on. */
+export function galleryCustomerCart(protectedAccount: boolean): string {
+  const { account, redeem } = GALLERY_CUSTOMER;
+  const unit = account.price + (protectedAccount ? GALLERY_CUSTOMER.protectionMinor / 100 : 0);
+  return JSON.stringify({ items: {
+    [account.key]: { ...account.line, price: unit, quantity: protectedAccount ? 2 : 1 },
+    [redeem.key]: redeem.line,
+  } });
+}

@@ -190,6 +190,26 @@ Buyer UI is a storefront extension, not a function. Declare `storefront.extensio
 
 - The input carries the target, `language`, `locale`, `currency`, the `cart` (where the slot has one), the `order` (id, status, payment status, lines), the `customer` id, your declared `reads`, and your own checkout attributes: `attributes` by bare key and `cart.attributes` by `<app id>.<key>`. It never carries another app's answers.
 - Fields are editable only in checkout slots. Buttons run cart operations in checkout slots and the cart drawer. Order and account slots are read-only.
+- The buyer surface draws `stack`, `columns`, `heading`, `text`, `badge`, `banner`, `keyValue`, `image`, `link`, `divider`, `button`, `field`, `disclosure` and `mark`. The store draws each with its own markup, so the same tree looks right in every theme:
+  - **A row.** `ui.stack(children, { direction: "horizontal" })` lays its pieces side by side where its box is wide enough and wraps them where it is not. A vertical stack inside the row is a column of words: it takes the room left, and it moves to a line of its own before it gets narrower than 16rem.
+  - **A toned row.** Add `tone` to draw the stack on that tone's surface, such as an offer row or a status box. Its height comes from its padding, gap and pieces. If its last piece (the action) wraps to a line of its own, it keeps to the row's end.
+  - **A mark.** `ui.mark(tone)` is the tone's glyph in a circle: "!" warning, a tick for success, "i" info, "×" critical, a dot for neutral. It is decoration and hidden from screen readers, so the words beside it must say the same thing.
+  - **Text.** `ui.text(text, { tone })` colours the words (critical words take the error colour), and `emphasis: "mono"` sets an ID or a code in the monospace face.
+  - **Buttons** are at least 44px tall on a phone.
+  - A toned stack and a mark show only on buyer pages: a dashboard tree that uses one is refused.
+
+  The offer row under a cart line:
+
+  ```ts
+  ui.stack([
+    ui.mark("warning"),
+    ui.stack([ui.text("Add protection for lifetime support."), ui.link("Learn more", ui.to.store("/pages/protection"))]),
+    ui.text("৳350", { tone: "success", emphasis: "strong" }),
+    ui.button("Add now", ui.cart.setLineInput("plan", "lifetime", [line.lineKey])),
+  ], { direction: "horizontal", tone: "warning" })
+  ```
+
+  A theme styles these pieces with tokens under `ui.<kind>[.<tone>]`: `ui.stack.warning`, `ui.mark.warning`, `ui.text.success`, `ui.link`, `ui.keyvalue`, `ui.button` (see [private pages](private-pages.md)).
 - Test with `harness.extension(fixtures.storefrontExtensionInput(target, overrides?))`. The fixture builds a complete, valid input for the slot's page.
 
 The slot list is in [Storefront](storefront.md#slots).
