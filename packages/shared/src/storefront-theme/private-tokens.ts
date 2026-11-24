@@ -19,7 +19,9 @@
 // holding its solid surface (or a gradient's points), the colour of its own
 // words and of its muted, link and error words, its border and focus ring
 // (and a field's placeholder and error border). Each is the theme's token
-// where given, else a default that reads on the surface beneath. The host
+// where given, else a default that reads on the surface beneath. A filled
+// button's fill, and an outlined control's or a field's border (its own fill
+// where the theme draws no border), read at 3:1 on what is around it. The host
 // writes exactly those rows as CSS (`privateTableCss`), and the contrast check
 // runs over exactly those rows (`privateTablePairs`): a pair the CSS draws is
 // a pair the check reads. Inside the page, the host's palette classes read the
@@ -129,7 +131,8 @@ export const PRIVATE_TOKEN_SPECS: Record<PrivateTokenName, TokenSpec> = {
   // A button's room at its sides only: the host keeps its height (44px to tap on a phone).
   inset: { schema: px(0, 32), write: (value: number) => `padding-inline:min(${value}px,4vw)` },
   font: choice({ body: "font-family:var(--theme-font-body)", heading: "font-family:var(--theme-font-heading)", mono: "font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,Liberation Mono,monospace" }),
-  weight: choice({ 400: "font-weight:400", 500: "font-weight:500", 600: "font-weight:600", 700: "font-weight:700", 800: "font-weight:800" }),
+  // On the words inside too, as a size is (the store's type classes set their own): a weight the check ranks is a weight drawn.
+  weight: { ...choice({ 400: "font-weight:400", 500: "font-weight:500", 600: "font-weight:600", 700: "font-weight:700", 800: "font-weight:800" }), on: ["", " :where(.text-foreground,.text-card-foreground)"] },
   // Bounded by the box it sits in (each line and layout node is a size container; else the screen), so a word fits its column.
   size: { schema: px(12, 40), write: (value: number) => `font-size:min(${value}px,max(12px,7cqi))`, on: ["", " :where(.text-foreground,.text-card-foreground)"] },
   // Never under 1.25: lines never overlap. On the words inside too (the store's type classes set their own).
@@ -309,7 +312,7 @@ export function compilePrivateTokens(page: PrivatePageKey, tokens: PrivateTokens
   if (issues.length > 0) return { issues, css: "", tables: [] };
   const built = privateTokenTables(page, valid, context);
   if (built.issues.length > 0) return { issues: built.issues, css: "", tables: built.tables };
-  const contrast = tableIssues(page, built.tables);
+  const contrast = [...tableIssues(page, built.tables), ...prominenceContrastIssues(page, built.tables)];
   if (contrast.length > 0) return { issues: contrast, css: "", tables: built.tables };
   const unitHooks = new Set<string>();
   for (const nodes of Object.values(context.items)) layoutHooks(nodes, unitHooks);
@@ -318,22 +321,59 @@ export function compilePrivateTokens(page: PrivatePageKey, tokens: PrivateTokens
 }
 
 /**
- * An amount's rank (private-anatomy.ts `outranks`): the total is never drawn
- * smaller than another summary row, so no size makes a subtotal read as the
- * total. Checked where a theme sets a size on either side.
+ * Each target's rank (private-anatomy.ts `outranks`) by size and weight: the
+ * total over every other money row, the add-on's lines and its own label;
+ * Place order over the store's other filled buttons; Confirm over Go back.
+ * Each side is drawn at its own token, else at the token of the target whose
+ * rules reach its element (`typeFrom`), else at the host's; checked where a
+ * theme sets either side.
  */
 function prominenceIssues(page: PrivatePageKey, tokens: Record<string, Values>): PrivateTokenIssue[] {
   const spec: PrivatePageSpec = PRIVATE_PAGES[page];
-  const own = (name: string) => typeof tokens[name]?.size === "number" ? tokens[name]!.size as number : undefined;
-  const size = (name: string) => own(name) ?? (spec.styles[name]?.sizeFrom ? own(spec.styles[name]!.sizeFrom!) : undefined) ?? spec.styles[name]?.hostSize;
+  const own = (name: string, by: "size" | "weight") => tokens[name]?.[by] === undefined ? undefined : Number(tokens[name]![by]);
+  const drawn = (name: string, by: "size" | "weight") => {
+    const style = spec.styles[name];
+    const set = own(name, by) !== undefined ? name : style?.typeFrom && own(style.typeFrom, by) !== undefined ? style.typeFrom : undefined;
+    return { value: set ? own(set, by)! : by === "size" ? style?.hostSize : style?.hostWeight, set };
+  };
   const issues: PrivateTokenIssue[] = [];
   for (const [name, style] of Object.entries(spec.styles)) {
-    for (const other of style.outranks ?? []) {
-      const [mine, theirs] = [size(name), size(other)];
-      const set = own(name) !== undefined || (style.sizeFrom && own(style.sizeFrom) !== undefined) || own(other) !== undefined;
-      if (!set || mine === undefined || theirs === undefined || mine >= theirs) continue;
-      const at = own(other) !== undefined ? other : own(name) !== undefined ? name : style.sizeFrom!;
-      issues.push({ path: ["privatePages", "tokens", page, at], reason: "prominence", message: `${name} is drawn at ${mine}px, under ${other} at ${theirs}px: the total is never smaller than another row, so a buyer reads it as the total.` });
+    for (const [other, ranks] of Object.entries(style.outranks?.over ?? {})) {
+      for (const by of ranks) {
+        if (by === "contrast") continue;
+        const [mine, theirs] = [drawn(name, by), drawn(other, by)];
+        if ((!mine.set && !theirs.set) || mine.value === undefined || theirs.value === undefined || mine.value >= theirs.value) continue;
+        const [at, unit] = [theirs.set ?? mine.set!, by === "size" ? "px" : ""];
+        issues.push({ path: ["privatePages", "tokens", page, at], reason: "prominence", message: `${name} is drawn at ${by === "weight" ? "weight " : ""}${mine.value}${unit}, under ${other} at ${theirs.value}${unit}: ${style.outranks!.why}.` });
+      }
+    }
+  }
+  return issues;
+}
+
+/**
+ * Each target's rank by how strongly its words read, per palette: the
+ * weakest colour of its words (its own, its amounts') on its surface is never
+ * under the strongest of the target it outranks (its own words, its amounts',
+ * a discount's link colour). The total's words never read fainter than a row's.
+ */
+function prominenceContrastIssues(page: PrivatePageKey, tables: readonly PrivateTokenTable[]): PrivateTokenIssue[] {
+  const spec: PrivatePageSpec = PRIVATE_PAGES[page];
+  const issues: PrivateTokenIssue[] = [];
+  const strength = (row: PrivateTokenRow, colour: string) => Math.min(...row.surface.map((back) => storefrontThemeContrast(colour, back)));
+  for (const [name, style] of Object.entries(spec.styles)) {
+    for (const [other, ranks] of Object.entries(style.outranks?.over ?? {})) {
+      if (!ranks.includes("contrast")) continue;
+      for (const table of tables) {
+        const mine = table.rows.filter((row) => row.key === name).flatMap((row) => [row.ink, row.text].map((colour) => ({ row, colour, ratio: strength(row, colour) })));
+        const theirs = table.rows.filter((row) => row.key === other).flatMap((row) => [row.ink, row.text, row.link].map((colour) => ({ row, colour, ratio: strength(row, colour) })));
+        if (mine.length === 0 || theirs.length === 0) continue;
+        const weakest = mine.reduce((a, b) => (b.ratio < a.ratio ? b : a));
+        const strongest = theirs.reduce((a, b) => (b.ratio > a.ratio ? b : a));
+        if (weakest.ratio >= strongest.ratio) continue;
+        const at = weakest.row.from[weakest.row.inkCell] ?? weakest.row.from.text ?? strongest.row.from[strongest.row.inkCell] ?? strongest.row.from.text ?? weakest.row.from.surface ?? name;
+        issues.push({ path: ["privatePages", "tokens", page, at], reason: "prominence", message: `${name} reads ${weakest.colour} at ${weakest.ratio.toFixed(2)}:1, under ${other} (${strongest.colour}) at ${strongest.ratio.toFixed(2)}:1 in the ${table.palette.scheme} colours: ${style.outranks!.why}.` });
+      }
     }
   }
   return issues;
@@ -378,6 +418,14 @@ export interface PrivateTokenRow {
   /** A field's (and the page's, where every field reads it first) placeholder and error border. */
   placeholder: string | null;
   invalid: string | null;
+  /**
+   * How a buyer tells it from what is around it (private-anatomy.ts
+   * `boundary`; every field `edge`), and whether it draws its border (no
+   * `border-width: 0`, no `border-style: none`): an edge that draws none is
+   * told by its fill.
+   */
+  boundary: "fill" | "edge" | null;
+  bordered: boolean;
   /** The theme key that set each cell, for a refusal's path. */
   from: Partial<Record<PrivateRowColour | "surface", string>>;
   /**
@@ -402,10 +450,11 @@ export interface PrivateTokenTable {
 /** A pair the check reads: a colour of a row over a surface it is drawn on, and the floor it must reach. */
 export interface PrivateTokenPair {
   key: string;
-  what: PrivateRowColour;
+  /** A cell, or `fill`: a filled button's or a borderless edge's own surface on what is around it. */
+  what: PrivateRowColour | "fill";
   fore: string;
   back: string;
-  /** 4.5 for words, 3 for a field's marks and a focus ring, 1 for a box's border (it carries no meaning). */
+  /** 4.5 for words, 3 for a field's marks, a focus ring and a control's or field's boundary, 1 for a box's border (it carries no meaning). */
   floor: number;
 }
 
@@ -453,6 +502,8 @@ interface Place {
   writes?: "box" | "leaf";
   /** An app's node row at its targets: its selector is the page root, these targets' mount, then `rest`. */
   share?: PrivateTokenRow["share"];
+  /** private-anatomy.ts `boundary` (a field's row: `edge`). */
+  boundary?: "fill" | "edge";
 }
 
 /** Every row of the page as the arrangement places it, in the order the CSS writes them (an inner row after the rows it can share an element with). */
@@ -462,7 +513,7 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
   const styles = Object.entries(spec.styles);
   const selectorOf = (style: PrivateStyleSpec) => style.absolute ? style.selector : style.selector ? `${root} ${style.selector}` : root;
   const place = (key: string, style: PrivateStyleSpec, parent: Place["parent"]) => {
-    places.push({ key, selector: selectorOf(style), kind: style.kind, surface: style.surface, ink: style.ink, parent, nested: parent !== "boxes" && parent !== null && !style.absolute, base: null, sources: [key] });
+    places.push({ key, selector: selectorOf(style), kind: style.kind, surface: style.surface, ink: style.ink, parent, nested: parent !== "boxes" && parent !== null && !style.absolute, base: null, sources: [key], ...(style.boundary ? { boundary: style.boundary } : {}) });
   };
   // The rows that hold fields: a part that draws them (on its box, else on what it sits on), a dialog, an app's target.
   const holders = new Set<string>();
@@ -683,6 +734,11 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
       surface = storefrontPagePaintColors(palette.pagePaint, colors);
       paint = surface[0]!;
       gradient = palette.pagePaint.kind === "color" ? null : storefrontPagePaintCss(palette.pagePaint, (key) => colors[key]);
+    } else if (place.boundary === "fill") {
+      // A filled button the theme leaves at its palette's fill: that fill where it reads on what is around it, else
+      // the palette's inverse (its words' colour), else black or white, so a dark dialog's Confirm is still a button.
+      paint = readable([colors[place.surface], colors[place.ink]], parents.flatMap((row) => row.surface), PRIVATE_MARK_CONTRAST_FLOOR);
+      surface = [paint];
     } else {
       paint = colors[place.surface];
       surface = [paint];
@@ -708,7 +764,9 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     const marked = place.kind === "field" || place.kind === "control";
     // A control's or a field's own ring is drawn outside it; a box's rings are its children's, drawn on it.
     const ring = take("ring", "ring", [under?.ring, storefrontThemeFocusRing(colors), text, colors.foreground, colors.background], marked ? around : surface, PRIVATE_MARK_CONTRAST_FLOOR);
-    const border = place.kind === "field"
+    // A field's and an outlined control's border is how a buyer finds it: it reads on what is around it.
+    const boundary = place.kind === "field" ? "edge" : place.boundary ?? null;
+    const border = boundary === "edge"
       ? take("border", "border", [colors.input, colors.border, muted, text], around, PRIVATE_MARK_CONTRAST_FLOOR)
       : take("border", "border", [under?.border ?? colors.border], surface, 1);
     const field = place.kind === "field" || place.parent === null;
@@ -717,7 +775,8 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     const cells = { text, muted, link, error };
     const row: PrivateTokenRow = {
       key: place.key, sources: place.sources, selector: place.selector, kind: place.kind, parents: parents.map((each) => each.key), nested: place.nested, base: place.base,
-      paint, gradient, surface, ink: cells[cell], inkCell: cell, text, muted, link, error, border, ring, hover: storefrontThemeHoverSurface(paint !== null && !gradient ? [paint] : surface, [text, cells[cell]]), placeholder, invalid, from,
+      paint, gradient, surface, ink: cells[cell], inkCell: cell, text, muted, link, error, border, ring, hover: storefrontThemeHoverSurface(paint !== null && !gradient ? [paint] : surface, [text, cells[cell]]), placeholder, invalid,
+      boundary, bordered: values["border-width"] !== 0 && values["border-style"] !== "none", from,
       writes: null, ...(place.share ? { share: place.share } : {}),
     };
     return place.writes ? readsBeneath(row, place.writes, cell, parent, Boolean(fill || values.background)) : row;
@@ -765,7 +824,13 @@ export function privateTablePairs(table: PrivateTokenTable): PrivateTokenPair[] 
     };
     for (const what of ["text", "muted", "link", "error", "placeholder"] as const) add(what, row[what], row.surface, PRIVATE_CONTRAST_FLOOR);
     add("ring", row.ring, marked ? around : row.surface, PRIVATE_MARK_CONTRAST_FLOOR);
-    add("border", row.border, row.kind === "field" ? around : row.surface, row.kind === "field" ? PRIVATE_MARK_CONTRAST_FLOOR : 1);
+    // An edge is found by its border where it draws one, else by its own fill; a filled button by its fill
+    // (WCAG 1.4.11): a pair the check reads is a pair the CSS draws.
+    if (row.boundary === "edge" && row.bordered) add("border", row.border, around, PRIVATE_MARK_CONTRAST_FLOOR);
+    else add("border", row.border, row.surface, 1);
+    if (row.boundary === "fill" || (row.boundary === "edge" && !row.bordered)) {
+      for (const fore of new Set(row.surface)) for (const back of new Set(around)) pairs.push({ key: row.key, what: "fill", fore, back, floor: PRIVATE_MARK_CONTRAST_FLOOR });
+    }
     add("invalid", row.invalid, around, PRIVATE_MARK_CONTRAST_FLOOR);
     // A hovered control paints the hover surface under its words.
     // (A hover that is a point of the surface adds no pair: its words are checked on the surface.)
@@ -787,13 +852,17 @@ function tableIssues(page: PrivatePageKey, tables: readonly PrivateTokenTable[])
       const ratio = storefrontThemeContrast(pair.fore, pair.back);
       if (ratio >= pair.floor) continue;
       const row = byKey.get(pair.key)!;
-      const target = row.from[pair.what] ?? row.from.surface ?? row.parents.map((key) => byKey.get(key)?.from.surface).find(Boolean) ?? row.sources.at(-1) ?? row.key;
+      // A fill is the row's own (its surface token, else its own key: it set no border, or left its fill the host's).
+      const target = pair.what === "fill"
+        ? (row.from.surface && row.sources.includes(row.from.surface) ? row.from.surface : row.sources.at(-1) ?? row.key)
+        : row.from[pair.what] ?? row.from.surface ?? row.parents.map((key) => byKey.get(key)?.from.surface).find(Boolean) ?? row.sources.at(-1) ?? row.key;
       // Once per theme key and pair: a field style's rows in several boxes refuse its one bad pair once.
       const id = `${target}|${pair.what}|${pair.fore}|${pair.back}`;
       if (seen.has(id)) continue;
       seen.add(id);
       const where = pair.key === target ? target : `${target} (${pair.key})`;
-      issues.push({ path: ["privatePages", "tokens", page, target], reason: "contrast", message: `${where}: ${pair.what} ${pair.fore} on ${pair.back} is ${ratio.toFixed(2)}:1 in the ${table.palette.scheme} colours, under the ${pair.floor}:1 a buyer needs.` });
+      const what = pair.what === "fill" ? (row.boundary === "fill" ? "its fill" : "its fill, with no border drawn,") : pair.what;
+      issues.push({ path: ["privatePages", "tokens", page, target], reason: "contrast", message: `${where}: ${what} ${pair.fore} on ${pair.back} is ${ratio.toFixed(2)}:1 in the ${table.palette.scheme} colours, under the ${pair.floor}:1 a buyer needs${pair.what === "fill" ? " to find it" : ""}.` });
     }
   }
   return issues;
@@ -1159,5 +1228,6 @@ export const PRIVATE_TOKEN_MODE_CSS = {
   before: `${classRules(SURFACE_CLASSES)}${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}){color:inherit;--focus-ring-color:var(--pt-r)}${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}:focus-visible){outline-color:var(--pt-r)}${UI_WORDS_CSS}`,
   after: `${classRules(Object.keys(PRIVATE_TOKEN_MODE_CLASSES).filter((name) => !SURFACE_CLASSES.includes(name)))}`
     + `${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}:is(input,textarea))::placeholder{color:var(--pt-p)}`
-    + `${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}:is(input,select,textarea)[aria-invalid="true"]){border-color:var(--pt-i)}`,
+    // A field's error border, a field box's too (`data-field`: its input inside says it is invalid).
+    + `${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}:is(input,select,textarea)[aria-invalid="true"],${IN_SCOPE}[data-field]:has([aria-invalid="true"])){border-color:var(--pt-i)}`,
 } as const;
