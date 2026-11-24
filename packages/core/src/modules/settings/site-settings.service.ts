@@ -41,14 +41,14 @@ import {
   DEFAULT_STOREFRONT_THEME,
   THEME_VERSION_CHANGES_MAX,
   compareThemeDocuments,
+  checkStorefrontThemeSave,
   compileStorefrontPrivatePages,
   privatePagesCompiledCurrent,
   privatePagesContextOf,
   filledPrivatePages,
   refusedPrivatePages,
   parseStoredStorefrontThemeDocument,
-  storefrontThemeDocumentSchema,
-  storefrontThemeTranslationProblems,
+  STOREFRONT_THEME_DOCUMENT_MAX_BYTES,
   storefrontThemeAppIssues,
   storefrontThemeAppProblems,
   storefrontThemeAppReferences,
@@ -183,7 +183,7 @@ export const THEME_VERSION_HISTORY_LIMIT = 20;
 /** Most versions one history page lists: metadata only, and five worst-case entries stay under the 64 KiB agent result ceiling. */
 export const THEME_VERSION_PAGE_LIMIT = 5;
 /** Largest stored theme document: bounds each D1 row and the retained history on Workers Free. */
-export const THEME_DOCUMENT_MAX_BYTES = 512 * 1024;
+export const THEME_DOCUMENT_MAX_BYTES = STOREFRONT_THEME_DOCUMENT_MAX_BYTES;
 /** A publication note's length. */
 export const THEME_PUBLISH_NOTE_MAX = 500;
 
@@ -306,41 +306,22 @@ function assertNonnegativeRevision(value: number, label: string): void {
   }
 }
 
+/**
+ * The document as it is stored, through the one shared save checker
+ * (`checkStorefrontThemeSave`: schema and contrast, translations, private
+ * pages, size), the same one `scalius-plugin validate` runs on an app's templates.
+ */
 function serializeThemeSettings(theme: StorefrontThemeDocument): {
   theme: StorefrontThemeDocument;
   serialized: string;
 } {
-  const result = storefrontThemeDocumentSchema.safeParse(theme);
-  if (!result.success) {
-    const issues = result.error.issues.map((issue) => ({
-      path: issue.path.map(String).join("."),
-      message: issue.message,
-    }));
-    // A refusal that names its reason (a private page's `not_available`) says it once, machine-readable.
-    const reasonOf = (issue: (typeof result.error.issues)[number]) => issue.code === "custom" && typeof issue.params?.reason === "string" ? issue.params.reason : null;
-    const named = result.error.issues.find((issue) => reasonOf(issue) !== null);
-    if (named) throw new ValidationError(named.message, { reason: reasonOf(named), issues: issues.slice(0, 20) });
-    throw new ValidationError(issues[0]?.message ?? "The storefront style is not a valid theme document.", issues);
+  const checked = checkStorefrontThemeSave(theme);
+  if (!checked.ok) {
+    const { message, reason, issues } = checked.refusal;
+    // A refusal that names its reason says it once, machine-readable.
+    throw new ValidationError(message, reason ? { reason, issues: issues.slice(0, 20) } : issues);
   }
-  // A translation must fit every place its words appear, so a read never falls back to the source words.
-  const translationProblems = storefrontThemeTranslationProblems(result.data);
-  if (translationProblems.length > 0) {
-    throw new ValidationError(translationProblems[0]!.message, translationProblems);
-  }
-  // The private pages compile here, on every save and publish: each arrangement against its page's
-  // parts, the tokens against the theme's palettes and the theme's words. What the request said was
-  // compiled is never kept: the page reads only what this wrote.
-  const privatePages = compileStorefrontPrivatePages(result.data.privatePages, privatePagesContextOf(result.data));
-  if (!privatePages.ok) {
-    const first = privatePages.issues[0]!;
-    throw new ValidationError(first.message, { reason: first.reason, issues: privatePages.issues.slice(0, 20) });
-  }
-  const compiled = { ...result.data, privatePages: privatePages.value };
-  const serialized = JSON.stringify(compiled);
-  if (new TextEncoder().encode(serialized).byteLength > THEME_DOCUMENT_MAX_BYTES) {
-    throw new ValidationError("Storefront style is too large. Shorten page content or remove unused landing pages.");
-  }
-  return { theme: compiled, serialized };
+  return { theme: checked.theme, serialized: checked.serialized };
 }
 
 const THEME_REVISION_CONFLICT_SENTINEL = "theme_revision_conflict";

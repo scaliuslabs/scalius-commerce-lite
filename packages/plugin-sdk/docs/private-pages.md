@@ -21,7 +21,7 @@ A template sets them under `privatePages`. The merchant's theme document holds t
 | `pages.cart`, `pages.cartDrawer` | An arrangement per page. Leave a page out to keep the store's own. |
 | `tokens` | The look of the store's parts, per page and style target: `{ "cart": { "summary": { "background": "card", "radius": 0 } } }`. |
 | `labels` | The store's word you choose for an action or an amount (`{ "dialog.confirm": "continue-checkout" }`), your own words per language for a heading or an empty state (`{ "cart.heading": { "en": "Your Cart", "bn": "আপনার কার্ট" } }`). |
-| `icons` | Your image for a store icon: `{ "cart.empty": { "app": "acme.studio", "file": "icons/bag.svg" } }`, a file in your `public/`. `app` is the app your template comes from (`foreign_asset` otherwise). |
+| `icons` | Your image for a store icon: `{ "cart.empty": { "app": "acme.studio", "file": "icons/bag.svg" } }`, a file in your `public/`. `app` is the app your template comes from (`foreign_asset` otherwise). Applying a template that sets `privatePages` replaces the store's whole object; one that sets none drops any icon of another app. |
 
 The store checks all of it when the theme is saved or published, and stores the result in `compiled` (never set it yourself). A refusal names its `reason` ([below](#refusals)). A buyer's request never compiles anything. After a store update with a newer checker, a page shows the store's default look (its arrangement, words, icons, controls and colours) until the next save, or until the first maintenance run after the update compiles it again.
 
@@ -283,6 +283,8 @@ A refusal names the theme key and the pair that set it, and the scheme: `summary
 | `foreign_asset` | An icon from an app other than your theme's. |
 
 A value that is not of the document's shape (a wrong type, an unknown field) is refused by the schema, naming its path.
+
+`validate` runs these same checks on every template you ship, through the store's own code, and prints each with its place and reason (`✗ Theme templates: storefront.templates[0] (studio).theme.privatePages.tokens.cart.summary-total: … [contrast]`), so a template that validates is one the store applies and saves. An icon names a file your release carries in `public/`; the install refuses a release without it, and `validate` names the missing file.
 
 ## Words and icons
 

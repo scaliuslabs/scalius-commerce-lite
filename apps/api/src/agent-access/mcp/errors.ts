@@ -129,13 +129,16 @@ interface ValidationIssue {
 }
 
 function validationIssue(error: Record<string, unknown>): { field: string; message: string } | null {
-  const sources = [error, isRecord(error.details) ? error.details : null, isRecord(error.error) ? error.error : null];
+  // `details` is an object (`{ reason, issues }`) or the issue list itself (a theme save names no reason).
+  const details = isRecord(error.details) ? error.details : Array.isArray(error.details) ? { issues: error.details } : null;
+  const sources = [error, details, isRecord(error.error) ? error.error : null];
   for (const source of sources) {
     if (!source) continue;
     const issues = Array.isArray(source.issues) ? source.issues as ValidationIssue[] : null;
     const issue = issues?.find((candidate) => isRecord(candidate));
     if (issue) {
-      const path = Array.isArray(issue.path) ? issue.path.map(String).join(".") : "";
+      // A zod path is a list; a save checker's (theme documents) is already dotted.
+      const path = Array.isArray(issue.path) ? issue.path.map(String).join(".") : typeof issue.path === "string" ? issue.path : "";
       const expected = typeof issue.expected === "string" ? issue.expected : null;
       const received = typeof issue.received === "string" ? issue.received : null;
       const message = typeof issue.message === "string" ? issue.message : "Invalid value";

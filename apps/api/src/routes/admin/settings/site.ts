@@ -348,7 +348,7 @@ function themeAppSurfaces(installations: PluginInstallations, lookup: Storefront
         })) : [],
         templates: code ? storefront.templates.flatMap((template) => {
           // Catalogue handles resolve against this store; a section naming one it lacks is left out.
-          const read = resolveStorefrontAppTemplateTheme(template.theme, template.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION, lookup);
+          const read = resolveStorefrontAppTemplateTheme(template.theme, template.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION, lookup, installation.pluginId, template.id);
           if (!read.ok) return [];
           // A card field naming a product field this store lacks is left out; the library says which.
           const { theme, omitted } = withStorefrontCardFields(read.value, (field) => cardFields.has(field));

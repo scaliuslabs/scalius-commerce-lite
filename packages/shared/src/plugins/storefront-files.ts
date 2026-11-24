@@ -28,6 +28,26 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
  * digests sealed into its bundle and against its manifest. Throws the first
  * problem as an Error whose message names the file.
  */
+/**
+ * Icons the app's templates name from its own files (`privatePages.icons`,
+ * `{ app, file }` with the app's id) that the release does not carry as
+ * `public/<file>`: one sentence each, with the place in the manifest. An icon
+ * of another app is the template check's `foreign_asset`.
+ */
+export function storefrontTemplateIconFileProblems(manifest: Pick<PluginManifest, "id" | "storefront">, publicFiles: ReadonlySet<string>): string[] {
+  const problems: string[] = [];
+  manifest.storefront.templates.forEach((template, index) => {
+    const theme = template.theme as { privatePages?: { icons?: Record<string, unknown> } } | null;
+    for (const [key, ref] of Object.entries(theme?.privatePages?.icons ?? {})) {
+      if (!ref || typeof ref !== "object") continue;
+      const { app, file } = ref as { app?: unknown; file?: unknown };
+      if (app !== manifest.id || typeof file !== "string" || publicFiles.has(file)) continue;
+      problems.push(`storefront.templates[${index}] (${template.id}).theme.privatePages.icons.${key}: ${file} is not in the app's public/ folder. Add public/${file}, or name a file that is there.`);
+    }
+  });
+  return problems;
+}
+
 export async function verifyStorefrontFiles(
   manifest: PluginManifest,
   code: string,
@@ -76,6 +96,9 @@ export async function verifyStorefrontFiles(
     files.set(path, bytes);
   }
   if (islandBytes > limits.islandsBytes) throw new Error(`The islands are over ${limits.islandsBytes} bytes together.`);
+  // A template's icon draws a file the release carries.
+  const [missingIcon] = storefrontTemplateIconFileProblems(manifest, new Set(paths.filter((path) => path.startsWith("public/")).map((path) => path.slice("public/".length))));
+  if (missingIcon) throw new Error(missingIcon);
   if (publicBytes > limits.publicBytes || publicFiles > limits.publicFiles) {
     throw new Error(`The public files are over ${limits.publicFiles} files or ${limits.publicBytes} bytes.`);
   }
