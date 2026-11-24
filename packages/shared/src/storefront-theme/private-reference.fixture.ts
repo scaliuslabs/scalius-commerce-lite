@@ -55,6 +55,9 @@ const WHITE = { light: "#000000", dark: "#ffffff" } as const;
 /** The action: the prototype's yellow and its words in the light scheme, the palette's action in the dark. */
 const ACTION = { light: "#fed700", dark: "primary" } as const;
 const ON_ACTION = { light: "#333e48", dark: "primary-foreground" } as const;
+/** Place order: the nearest yellow to the prototype's that reads as a fill on the light card, the palette's action in the dark. */
+const PLACE = { light: "#a38a00", dark: "primary" } as const;
+const ON_PLACE = { light: "#000000", dark: "primary-foreground" } as const;
 
 export const REFERENCE_PRIVATE_PAGES = {
   // The store's controls (the light or dark switch, the market and language forms) in its checkout header.
@@ -106,11 +109,14 @@ export const REFERENCE_PRIVATE_PAGES = {
       "line-title": { weight: "600", clamp: "2", text: "foreground", leading: "tight" },
       // #71717b reads 3.54:1 on the card: #83838d is the nearest that passes. The light Remove red #dc3545 reads 4.01:1: #cd3140.
       "line-price": { size: 18, weight: "600", align: "end", text: EMERALD, muted: { light: "#111111", dark: "#83838d" } },
-      "line-quantity": { background: "muted", "border-width": 0, radius: 0, text: { light: "#111111", dark: "#d4d4d8" } },
+      // The stepper is found by its edge: the prototype's borderless muted box (1.0:1 on the card) takes the fields' edge.
+      "line-quantity": { background: "muted", border: { light: "#7b7b7b", dark: "#8575ae" }, radius: 0, text: { light: "#111111", dark: "#d4d4d8" } },
       "line-remove": { text: "destructive", size: 14, weight: "400" },
-      summary: { background: "card", border: "#524179", "border-width": 0, radius: 0, padding: 20, gap: 12, shadow: "lg" },
+      // The rows' words (their amounts the summary's) read no stronger than the emerald total: zinc #d1d1d5 (11.21:1 on
+      // the card) under the total's 11.22:1, where the prototype's zinc-300 labels (11.55:1) and white amounts would outread it.
+      summary: { background: "card", text: { light: "#000000", dark: "#d1d1d5" }, border: "#524179", "border-width": 0, radius: 0, padding: 20, gap: 12, shadow: "lg" },
       "summary-heading": { size: 20, weight: "600", text: "foreground" },
-      "summary-rows": { text: { light: "#000000", dark: "#d4d4d8" }, size: 14 },
+      "summary-rows": { text: { light: "#000000", dark: "#d1d1d5" }, size: 14 },
       "summary-total": { text: EMERALD, size: 20, weight: "600" },
       "summary-total-label": { text: "foreground", size: 16, weight: "600" },
       // The app's lines under its add-on row: #10161e (light #dff7e8 with a #b7e6c9 line); #71717b reads 3.76:1 there, #7e7e88 passes.
@@ -124,14 +130,18 @@ export const REFERENCE_PRIVATE_PAGES = {
       // The labels' grey (#9f9fa9, light #111111) would not read in the dark dialog in the light scheme: they keep their box's words.
       "field-label": { size: 12, weight: "600" },
       dock: { background: "card", border: "#524179", "border-width": 1 },
-      submit: { background: ACTION, text: ON_ACTION, radius: 0, weight: "600", size: 14, inset: 20 },
+      // Place order is found on the dock by its fill (3:1): the prototype's yellow reads 1.24:1 on the light card, so the
+      // light one is the nearest yellow that reads (#a38a00, 3.00:1) with black words; the dark one the palette's action.
+      submit: { background: PLACE, text: ON_PLACE, radius: 0, weight: "600", size: 14, inset: 20 },
       "cart-empty": { text: "foreground", muted: "muted-foreground" },
       // The decision: the dark dialog in both schemes (the prototype's light words on it do not read).
       dialog: { background: "#171124", text: "#ffffff", muted: "#d4d4d8", border: { light: "#eaeaea", dark: "#49396d" }, "border-width": 1, radius: 0, shadow: "lg" },
       "dialog-title": { size: 24, weight: "800", leading: "tight", text: "#ffffff" },
       "dialog-text": { background: "#110d1e", border: "#443567", "border-width": 1, radius: 0, padding: 16, text: "#d4d4d8", muted: "#d4d4d8" },
       "dialog-agree": { background: "#241b39", border: "#49396d", "border-width": 1, radius: 0, padding: 16, text: "#e4e4e7" },
-      "dialog-back": { background: "#211936", text: "#e4e4e7", border: "#49396d", "border-width": 1, radius: 0, weight: "700", inset: 20 },
+      // Go back is outlined, never filled: the prototype's #211936 fill is not a token of it, and its #49396d edge (1.83:1 on
+      // the dialog) takes the fields' #8575ae (4.51:1).
+      "dialog-back": { text: "#e4e4e7", border: "#8575ae", "border-width": 1, radius: 0, weight: "700", inset: 20 },
       "dialog-confirm": { background: ACTION, text: ON_ACTION, radius: 0, weight: "800", inset: 20 },
       // The offer row under an eligible line: amber, square, no border; its mark, its sentence, Learn more, the price and Add Now.
       [`ui.stack.warning@${APP}/cart.line.after`]: { background: AMBER, text: { light: "#000000", dark: "#fef3c6" }, "border-width": 0, radius: 0, padding: 8, gap: 8 },
