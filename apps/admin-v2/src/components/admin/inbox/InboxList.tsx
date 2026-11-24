@@ -22,13 +22,13 @@ import { useMediaQuery } from "~/hooks/use-media-query";
 import { Skeleton } from "~/components/ui/skeleton";
 import { IndexTabs } from "~/components/admin/resource/IndexTabs";
 import { EmptyState } from "~/components/admin/resource/EmptyState";
-import { useMessages } from "~/i18n";
+import { useLocale, useMessages } from "~/i18n";
 import { inboxMessages } from "~/i18n/inbox";
 import { apiData } from "~/lib/api";
 import { postApiV1AdminConversationsQuery } from "@scalius/api-client/sdk";
 import { ListDate } from "../data-table/ListDate";
-import { threadPreview, threadTitle } from "./conversation-format";
-import { inboxKeys, threadQueryOptions, type InboxItem, type InboxQuery } from "~/lib/api-query-options/inbox";
+import { threadPreview, threadTitleWithTopic, topicName } from "./conversation-format";
+import { inboxKeys, threadQueryOptions, type InboxItem, type InboxQuery, type InboxTopic } from "~/lib/api-query-options/inbox";
 import { INBOX_SUBJECTS, type InboxSearch } from "./inbox-search";
 
 const STATUSES = ["open", "pending", "closed"] as const;
@@ -102,6 +102,7 @@ export function InboxList({
     status,
     assignee: assignee === "all" ? undefined : assignee,
     subjectType: subject === "all" ? undefined : subject,
+    topic: search.topic,
     q: debouncedQuery || undefined,
     unread: search.unread, sort: search.sort,
   };
@@ -131,13 +132,15 @@ export function InboxList({
   const items = rowsWithOpenConversation(listed, selectedId, openRow).map((item) => (item.id === selectedId ? asThread(item) : item));
   const lastPage = list.data?.pages.at(-1);
   const continuingSearch = lastPage?.scanExhausted === false;
-  const filtered = Boolean(searchQuery) || assignee !== "all" || subject !== "all" || search.unread || search.sort;
+  const filtered = Boolean(searchQuery) || assignee !== "all" || subject !== "all" || search.topic || search.unread || search.sort;
+  // The merchant's topics, every name each has: the topic filter's choices.
+  const topics = list.data?.pages[0]?.topics ?? [];
   const emptyKind: InboxEmptyKind = filtered ? "filtered" : status;
   const view: InboxView = !list.isSuccess ? "loading" : items.length > 0 || continuingSearch ? "rows" : emptyKind;
   useEffect(() => onViewChange?.(view), [view, onViewChange]);
   const clearFilters = () => {
     onQueryChange("");
-    onSearchChange({ assignee: undefined, subject: undefined, unread: undefined, sort: undefined });
+    onSearchChange({ assignee: undefined, subject: undefined, topic: undefined, unread: undefined, sort: undefined });
   };
   useEffect(() => {
     if (focusSearchOnMount && !selectedId) {
@@ -189,8 +192,8 @@ export function InboxList({
           <Dialog open={filtersOpen && phone} onOpenChange={setFiltersOpen}>
             {phone ? <DialogTrigger asChild><Button variant="outline" size="icon" aria-label={t("filters")}><ListFilter aria-hidden /></Button></DialogTrigger>
               : <PopoverTrigger asChild><Button variant="outline" size="icon" aria-label={t("filters")}><ListFilter aria-hidden /></Button></PopoverTrigger>}
-            <PopoverContent align="end">{!phone ? <InboxFilters search={search} onSearchChange={onSearchChange} /> : null}</PopoverContent>
-            <DialogContent><DialogHeader><DialogTitle>{t("filters")}</DialogTitle></DialogHeader>{phone ? <InboxFilters search={search} onSearchChange={onSearchChange} /> : null}</DialogContent>
+            <PopoverContent align="end">{!phone ? <InboxFilters search={search} topics={topics} onSearchChange={onSearchChange} /> : null}</PopoverContent>
+            <DialogContent><DialogHeader><DialogTitle>{t("filters")}</DialogTitle></DialogHeader>{phone ? <InboxFilters search={search} topics={topics} onSearchChange={onSearchChange} /> : null}</DialogContent>
           </Dialog>
         </Popover>
       </div>
@@ -258,6 +261,7 @@ function InboxRow({ item, search, selected, outOfView }: {
   outOfView: boolean;
 }) {
   const t = useMessages(inboxMessages);
+  const locale = useLocale();
   const title = item.customerName?.trim() || t("unknownCustomer");
   return (
     <li>
@@ -276,7 +280,7 @@ function InboxRow({ item, search, selected, outOfView }: {
         </div>
         <p className="truncate text-body text-muted-foreground">{threadPreview(t, item) || t("attachmentOnly")}</p>
         <div className="flex items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-body text-muted-foreground">{threadTitle(t, item)}</span>
+          <span className="min-w-0 flex-1 truncate text-body text-muted-foreground">{threadTitleWithTopic(t, item, locale)}</span>
           {item.unread > 0 ? <Badge variant="info">{t("unread", { count: item.unread })}</Badge> : null}
           {outOfView ? <Badge variant="secondary">{t(`status.${item.status}`)}</Badge> : null}
         </div>
@@ -286,8 +290,9 @@ function InboxRow({ item, search, selected, outOfView }: {
   );
 }
 
-function InboxFilters({ search, onSearchChange }: { search: InboxSearch; onSearchChange: (next: Partial<InboxSearch>) => void }) {
+function InboxFilters({ search, topics, onSearchChange }: { search: InboxSearch; topics: InboxTopic[]; onSearchChange: (next: Partial<InboxSearch>) => void }) {
   const t = useMessages(inboxMessages);
+  const locale = useLocale();
   const canAssign = useHasPermission(PERMISSIONS.CONVERSATIONS_REPLY);
   const [teamOpen, setTeamOpen] = useState(false);
   const unreadId = useId();
@@ -299,8 +304,13 @@ function InboxFilters({ search, onSearchChange }: { search: InboxSearch; onSearc
     <SearchableSelect ariaLabel={t("subjectFilter")} value={search.subject ?? "all"}
       onValueChange={(value) => onSearchChange({ subject: value === "all" ? undefined : value as InboxSearch["subject"] })}
       triggerClassName="w-full" options={[{ value: "all", label: t("subject.all") }, ...INBOX_SUBJECTS.map((value) => ({ value, label: t(`subject.${value}`) }))]} />
+    {topics.length > 0 || search.topic ? <SearchableSelect ariaLabel={t("topicFilter")} value={search.topic ?? "all"}
+      onValueChange={(value) => onSearchChange({ topic: value === "all" ? undefined : value })}
+      triggerClassName="w-full" options={[{ value: "all", label: t("topic.all") },
+        ...topics.map((topic) => ({ value: topic.key, label: topicName(topic, locale) ?? topic.key })),
+        ...(search.topic && !topics.some((topic) => topic.key === search.topic) ? [{ value: search.topic, label: search.topic }] : [])]} /> : null}
     <ChoiceField id={unreadId} label={t("unreadOnly")} control={<Checkbox id={unreadId} checked={search.unread ?? false} onCheckedChange={(checked) => onSearchChange({ unread: checked === true ? true : undefined })} />} />
     <Field label={t("sort")}><SearchableSelect value={search.sort ?? "latest"} onValueChange={(value) => onSearchChange({ sort: value === "waiting_longest" ? value : undefined })} options={[{ value: "latest", label: t("sortLatest") }, { value: "waiting_longest", label: t("sortWaiting") }]} /></Field>
-    <Button variant="ghost" onClick={() => onSearchChange({ assignee: undefined, subject: undefined, unread: undefined, sort: undefined })}>{t("clearFilters")}</Button>
+    <Button variant="ghost" onClick={() => onSearchChange({ assignee: undefined, subject: undefined, topic: undefined, unread: undefined, sort: undefined })}>{t("clearFilters")}</Button>
   </div>;
 }

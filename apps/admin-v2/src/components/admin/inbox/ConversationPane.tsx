@@ -15,7 +15,7 @@ import { EmptyState } from "~/components/admin/states/EmptyState";
 import { ErrorState } from "~/components/admin/states/ErrorState";
 import { RecordNotFound } from "~/components/admin/states/NotFound";
 import { useHasPermission } from "~/contexts/PermissionContext";
-import { useMessages } from "~/i18n";
+import { useLocale, useMessages } from "~/i18n";
 import { inboxMessages } from "~/i18n/inbox";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
@@ -27,7 +27,7 @@ import { ConversationFind } from "./ConversationFind";
 import { ConversationAssigneeDialog } from "./ConversationAssigneeDialog";
 import { ConversationComposer } from "./ConversationComposer";
 import { ConversationMessages, type ConversationFollowRequest } from "./ConversationMessages";
-import { threadTitle } from "./conversation-format";
+import { threadTitleWithTopic } from "./conversation-format";
 import { threadQueryOptions, type StaffThread } from "~/lib/api-query-options/inbox";
 import { useMarkRead, useUpdateThread } from "./inbox-api";
 import type { InboxSearch } from "./inbox-search";
@@ -58,6 +58,7 @@ export function ConversationPane({
   detailsOpen?: boolean; onToggleDetails?: () => void; detailsTrigger?: RefObject<HTMLButtonElement | null>;
 }) {
   const t = useMessages(inboxMessages);
+  const locale = useLocale();
   const canReply = useHasPermission(PERMISSIONS.CONVERSATIONS_REPLY);
   const canViewCustomer = useHasPermission(PERMISSIONS.CUSTOMERS_VIEW);
   const thread = useQuery(threadQueryOptions(conversationId));
@@ -138,8 +139,8 @@ export function ConversationPane({
           <h2 id="conversation-title" className="truncate text-heading-md" title={data.customerName?.trim() || t("unknownCustomer")}>
             {data.customerName?.trim() || t("unknownCustomer")}
           </h2>
-          <p className="truncate text-body text-muted-foreground" title={threadTitle(t, data)}>
-            {threadTitle(t, data)}{!split && data.assigneeName ? ` · ${data.assigneeName}` : ""}
+          <p className="truncate text-body text-muted-foreground" title={threadTitleWithTopic(t, data, locale)}>
+            {threadTitleWithTopic(t, data, locale)}{!split && data.assigneeName ? ` · ${data.assigneeName}` : ""}
           </p>
         </div>
         <div className="hidden @3xl/thread:block"><PresenceSlot presenceKey={presenceKey("conversation", data.id)} dirty={false} readOnly notices={false} /></div>

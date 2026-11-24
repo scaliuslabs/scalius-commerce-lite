@@ -2,10 +2,17 @@ import { recordStaffAlert } from "./staff-alerts";
 // Thread notifications at send time (Wave A §10). The outbox row carries only
 // the thread id and the message seq; this reads the line and resolves the
 // recipients now:
-//   conversation_reply (staff → buyer): the order's own contact for order
-//     threads, verified account contacts for store threads. Email carries the
-//     message text (HTML-escaped); SMS is off by default and, when on, carries
-//     no text and is coalesced to one per thread per hour.
+//   conversation_reply (staff → buyer): the order's own contact for every
+//     thread about an order (order, warranty claim and review threads),
+//     verified account contacts for store threads. The merchant's
+//     `conversation_reply` template, never the message text (a staff line
+//     can hold a sign-in, which stays behind the buyer's own read, as a
+//     delivery message does): a link to where the buyer reads it. While the
+//     buyer has not read the thread, a burst of replies is one email per
+//     15-minute window and one SMS (off by default) per hour, per recipient:
+//     the delivery is keyed by thread, the buyer's read position and the
+//     window (`replyReceiptScope`), so the unique receipt key lets one send
+//     through even when two replies are sent at once.
 //   conversation_message (buyer → staff): push ("New message about #1234", no
 //     text) and, when enabled, the staff email recipients.
 //   A chat-channel thread (0202) replies on its channel only: the line's
@@ -22,7 +29,6 @@ import {
   conversationMessages,
   conversations,
   customers,
-  notificationDeliveryReceipts,
   orders,
 } from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
@@ -30,14 +36,15 @@ import { conversationProductSnapshots } from "@scalius/shared/conversation";
 import { formatOrderNumber, orderNumberTextIn } from "@scalius/shared/order-utils";
 import { numberLocale } from "@scalius/shared/locale-format";
 import { isReady } from "@scalius/shared/readiness";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { sendEmail, type EmailRuntimeContext } from "../../integrations/email";
 import { resolveAppProvider, type AppProviders } from "../../integrations/provider-port";
 import { messagingSendSchema, providerErrorOf, type MessagingChannel } from "@scalius/shared/plugins/providers";
 import { notificationsDocument } from "./documents";
 import { getAdminNotificationChannels, getNotificationChannels } from "./channel-settings";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
-import { storeHeaderHtml, type EmailStore } from "./notification-templates";
+import { renderEmailTemplate, renderMessageEmail, renderSmsTemplate, storeHeaderHtml, type EmailStore, type NotificationVariableValues } from "./notification-templates";
+import { getNotificationTemplates } from "./notification-templates.service";
 import {
   NOTIFICATION_TURNED_OFF,
   buildDispatchResult,
@@ -56,9 +63,10 @@ import {
 import { createProviderClientReference } from "./order-notification-delivery-receipts";
 import { buyerMessageScope, buyerStorefrontLink, readStoreIdentity } from "./store-messages";
 
-/** An SMS reply alert goes out at most once per thread per hour (§15 q8). */
+/** An unread burst of replies is one SMS per hour (§15 q8). */
 export const CONVERSATION_SMS_COALESCE_SECONDS = 60 * 60;
-export const CONVERSATION_SMS_COALESCED = "conversation_sms_coalesced";
+/** A burst of staff replies the buyer has not read is one email per 15-minute window. */
+export const CONVERSATION_EMAIL_COALESCE_SECONDS = 15 * 60;
 
 export interface ConversationNotificationClaim {
   outboxId: string;
@@ -85,6 +93,8 @@ interface ThreadFacts {
   subjectType: string;
   orderId: string | null;
   customerId: string | null;
+  /** The last line the buyer read (`conversations.customer_read_seq`): reading or answering moves it. */
+  customerReadSeq: number;
   seq: number;
   kind: string;
   visibility: string;
@@ -103,6 +113,7 @@ async function readThreadLine(db: Database, conversationId: string, seq: number)
       subjectType: conversations.subjectType,
       orderId: conversations.orderId,
       customerId: conversations.customerId,
+      customerReadSeq: conversations.customerReadSeq,
       seq: conversationMessages.seq,
       kind: conversationMessages.kind,
       visibility: conversationMessages.visibility,
@@ -115,6 +126,11 @@ async function readThreadLine(db: Database, conversationId: string, seq: number)
     .innerJoin(conversations, eq(conversations.id, conversationMessages.conversationId))
     .where(and(eq(conversationMessages.conversationId, conversationId), eq(conversationMessages.seq, seq)))
     .get();
+}
+
+/** A claim status change the buyer sees (`warranty_claim_status`): announced like a reply, never held by the reply limit. */
+function isBuyerStatusEvent(thread: ThreadFacts): boolean {
+  return thread.kind === "event" && thread.eventKind === "warranty_claim_status" && thread.visibility === "public" && thread.authorType === "system";
 }
 
 function replyProducts(thread: ThreadFacts) {
@@ -132,7 +148,8 @@ function displayBody(thread: ThreadFacts, language: MessageLanguage): string | n
 }
 
 interface ThreadParty {
-  name: string;
+  /** The buyer's name, or null when none is known. */
+  name: string | null;
   email: string | null;
   phone: string | null;
   orderNumber: string | null;
@@ -143,9 +160,37 @@ interface ThreadParty {
   presence: string | null;
 }
 
-/** The buyer side of a thread: the order's own contact, or the account's verified contacts. */
+/** An account's verified contacts, or null when the account is gone. Unverified contacts never receive account-thread messages (§4.3). */
+async function readAccountContacts(db: Database, customerId: string) {
+  const customer = await db
+    .select({
+      name: customers.name,
+      email: customers.email,
+      emailVerifiedAt: customers.emailVerifiedAt,
+      phone: customers.phone,
+      phoneVerifiedAt: customers.phoneVerifiedAt,
+      deletedAt: customers.deletedAt,
+    })
+    .from(customers)
+    .where(eq(customers.id, customerId))
+    .get();
+  if (!customer || customer.deletedAt) return null;
+  return {
+    name: customer.name?.trim() || null,
+    email: customer.emailVerifiedAt ? customer.email?.trim() || null : null,
+    phone: customer.phoneVerifiedAt ? customer.phone?.trim() || null : null,
+  };
+}
+
+/**
+ * The buyer side of a thread. A thread about an order (its order thread, a
+ * warranty claim, a review) reaches the order's account owner by their
+ * verified contacts, linking into their account; an order with no owner, or
+ * whose owner account is gone, reaches the order's own contact with the
+ * order-proof link. A store thread reaches its account's verified contacts.
+ */
 async function readThreadParty(db: Database, thread: ThreadFacts): Promise<ThreadParty | null> {
-  if (thread.subjectType === "order" && thread.orderId) {
+  if (thread.orderId) {
     const order = await db
       .select({
         id: orders.id,
@@ -160,40 +205,20 @@ async function readThreadParty(db: Database, thread: ThreadFacts): Promise<Threa
       .where(eq(orders.id, thread.orderId))
       .get();
     if (!order) return null;
+    const facts = { orderNumber: formatOrderNumber(order.orderNumber, order.id), orderNumberRaw: order.orderNumber, presence: order.presence ?? null };
+    const owner = order.owner ? await readAccountContacts(db, order.owner) : null;
+    if (owner) return { ...owner, name: owner.name ?? (order.name?.trim() || null), ...facts, inAccount: true };
     return {
-      name: order.name?.trim() || "Customer",
+      name: order.name?.trim() || null,
       email: order.email?.trim() || null,
       phone: order.phone?.trim() || null,
-      orderNumber: formatOrderNumber(order.orderNumber, order.id),
-      orderNumberRaw: order.orderNumber,
-      inAccount: Boolean(order.owner),
-      presence: order.presence ?? null,
+      ...facts,
+      inAccount: false,
     };
   }
   if (thread.customerId) {
-    const customer = await db
-      .select({
-        name: customers.name,
-        email: customers.email,
-        emailVerifiedAt: customers.emailVerifiedAt,
-        phone: customers.phone,
-        phoneVerifiedAt: customers.phoneVerifiedAt,
-        deletedAt: customers.deletedAt,
-      })
-      .from(customers)
-      .where(eq(customers.id, thread.customerId))
-      .get();
-    if (!customer || customer.deletedAt) return null;
-    // Unverified contacts never receive account-thread messages (§4.3).
-    return {
-      name: customer.name?.trim() || "Customer",
-      email: customer.emailVerifiedAt ? customer.email?.trim() || null : null,
-      phone: customer.phoneVerifiedAt ? customer.phone?.trim() || null : null,
-      orderNumber: null,
-      orderNumberRaw: null,
-      inAccount: true,
-      presence: null,
-    };
+    const account = await readAccountContacts(db, thread.customerId);
+    return account ? { ...account, orderNumber: null, orderNumberRaw: null, inAccount: true, presence: null } : null;
   }
   return null;
 }
@@ -219,20 +244,16 @@ function buyerThreadLink(storefrontUrl: unknown, thread: ThreadFacts, party: Thr
 
 const BUTTON = "display:inline-block;padding:12px 20px;background:#202124;color:#ffffff;text-decoration:none;border-radius:4px;";
 
-/** A short branded email around one message. Every value is escaped. */
+/** The short branded staff email about a buyer's message (never its text). Every value is escaped. */
 export function renderConversationEmail(input: {
   language: MessageLanguage;
   store: EmailStore;
   subject: string;
   intro: string;
-  message: string | null;
   action: { label: string; href: string } | null;
   footer: string | null;
 }): { subject: string; html: string; text: string } {
   const subject = input.subject.replace(/[\r\n]+/g, " ").trim();
-  const quoted = input.message
-    ? `<div style="margin:0 0 24px;padding:16px;background:#f1f3f4;border-radius:8px;white-space:pre-wrap;">${escapeHtml(input.message).replace(/\n/g, "<br>")}</div>`
-    : "";
   const action = input.action
     ? `<p style="margin:0 0 24px;"><a href="${escapeHtml(input.action.href)}" style="${BUTTON}">${escapeHtml(input.action.label)}</a></p>`
     : "";
@@ -242,32 +263,28 @@ export function renderConversationEmail(input: {
 <div role="main" style="max-width:560px;margin:0 auto;padding:24px 20px;overflow-wrap:anywhere;background:#ffffff;color:#202124;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5;">
 ${storeHeaderHtml(input.store)}
 <p style="margin:0 0 16px;">${escapeHtml(input.intro)}</p>
-${quoted}${action}${footer}
+${action}${footer}
 </div></body></html>`;
   const text = [
     input.store.name,
     input.intro,
-    input.message,
     input.action ? `${input.action.label}: ${input.action.href}` : null,
     input.footer,
   ].filter(Boolean).join("\n\n");
   return { subject, html, text };
 }
 
-/** An SMS alert for this thread was accepted within the last hour. */
-async function smsRecentlyAccepted(db: Database, conversationId: string, now: number): Promise<boolean> {
-  const row = await db
-    .select({ id: notificationDeliveryReceipts.id })
-    .from(notificationDeliveryReceipts)
-    .where(and(
-      eq(notificationDeliveryReceipts.subjectType, "conversation"),
-      eq(notificationDeliveryReceipts.subjectId, conversationId),
-      eq(notificationDeliveryReceipts.channel, "sms"),
-      gt(notificationDeliveryReceipts.acceptedAt, now - CONVERSATION_SMS_COALESCE_SECONDS),
-    ))
-    .limit(1)
-    .get();
-  return Boolean(row);
+/**
+ * The receipt scope of a reply alert: one per thread, channel, buyer read
+ * position and window, so replies the buyer has not read yet share one
+ * delivery (the first sends, the rest find it taken) and the next reply after
+ * they read or answer, or in a later window, sends again. The recipient is in
+ * the receipt key, so a corrected address is never held back by the old one.
+ */
+function replyReceiptScope(thread: ThreadFacts, channel: "email" | "sms", windowSeconds: number): string | undefined {
+  // A claim status change is always announced: its delivery keeps its own outbox row's key.
+  if (isBuyerStatusEvent(thread)) return undefined;
+  return `conversation_reply:${thread.id}:r${thread.customerReadSeq}:w${Math.floor(Date.now() / 1000 / windowSeconds)}:${channel}`;
 }
 
 export async function sendConversationNotification(
@@ -278,12 +295,12 @@ export async function sendConversationNotification(
   if (!Number.isInteger(claim.seq) || claim.seq < 1) return { kind: "nothing_to_send", reason: "missing_seq" };
   const thread = await readThreadLine(db, claim.conversationId, claim.seq);
   if (!thread) return { kind: "nothing_to_send", reason: "message_missing" };
-  if (thread.visibility !== "public" || (thread.kind !== "message" && !replyProducts(thread).length)) {
+  if (thread.visibility !== "public" || (thread.kind !== "message" && !replyProducts(thread).length && !isBuyerStatusEvent(thread))) {
     return { kind: "nothing_to_send", reason: "not_a_public_message" };
   }
   const buyerLine = thread.authorType === "customer" || thread.authorType === "guest_receipt";
   if (claim.notificationType === "conversation_reply") {
-    if (thread.authorType !== "staff") return { kind: "nothing_to_send", reason: "not_a_staff_reply" };
+    if (thread.authorType !== "staff" && !isBuyerStatusEvent(thread)) return { kind: "nothing_to_send", reason: "not_a_staff_reply" };
     if (thread.channel) return { kind: "dispatched", result: await sendReplyOnChannel(db, thread, options) };
     return { kind: "dispatched", result: await sendReplyToBuyer(db, claim, thread, options) };
   }
@@ -323,10 +340,16 @@ async function sendReplyToBuyer(
 
   const store = await readStoreIdentity(db);
   // The buyer's language: the presence of the thread's order, else the store's.
-  const { language } = buyerMessageScope(store, party?.presence);
-  const copy = MESSAGE_COPY[language].conversation;
-  // The order number in the buyer's digits, as the storefront writes it.
-  const order = party?.orderNumber ? orderNumberTextIn(party.orderNumber, numberLocale(language)) : null;
+  const { language, locale } = buyerMessageScope(store, party?.presence);
+  const { templates } = await getNotificationTemplates(db, language, { locale });
+  // No message text: only who replied, the order and where to read it.
+  const variables: NotificationVariableValues = {
+    customer_name: party?.name ?? "",
+    store_name: store.name ?? "",
+    // The order number in the buyer's digits, as the storefront writes it.
+    order_number: party?.orderNumber ? orderNumberTextIn(party.orderNumber, numberLocale(language)) : "",
+    conversation_link: (party ? buyerThreadLink(options.env.STOREFRONT_URL, thread, party) : null) ?? "",
+  };
   const emailContext: EmailRuntimeContext = { db, env: options.env as unknown as Record<string, unknown>, encryptionKey: options.encryptionKey, appProviders: options.appProviders };
 
   if (channels.includes("email")) {
@@ -341,20 +364,15 @@ async function sendReplyToBuyer(
         reason: "missing_email_recipient",
       }));
     } else {
-      const target = { ...base, channel: "email" as const, provider: "email", recipient: email, recipientMasked: maskEmail(email) };
+      const target = { ...base, channel: "email" as const, provider: "email", recipient: email, recipientMasked: maskEmail(email), receiptScope: replyReceiptScope(thread, "email", CONVERSATION_EMAIL_COALESCE_SECONDS) };
       const blocked = await recordProviderBlockedDeliveryIfNeeded(target);
       outcomes.push(blocked ?? await dispatchWithReceipt({
         ...target,
         send: async (delivery) => {
-          const link = party ? buyerThreadLink(options.env.STOREFRONT_URL, thread, party) : null;
-          const rendered = renderConversationEmail({
+          const rendered = renderMessageEmail({
             language,
             store,
-            subject: copy.replySubject(store.name, order),
-            intro: copy.replyIntro(store.name, order),
-            message: displayBody(thread, language),
-            action: link ? { label: copy.replyAction, href: link } : null,
-            footer: copy.replyNoReply,
+            ...renderEmailTemplate("conversation_reply", language, templates.email.conversation_reply, variables),
           });
           return emailResultToDeliveryResult(await sendEmail({
             ...rendered,
@@ -368,7 +386,7 @@ async function sendReplyToBuyer(
   }
 
   if (channels.includes("sms")) {
-    outcomes.push(await sendReplySms(db, base, thread, party, store.name, order, options));
+    outcomes.push(await sendReplySms(db, base, thread, party, renderSmsTemplate("conversation_reply", language, templates.sms.conversation_reply.body, variables), options));
   }
 
   return buildDispatchResult(outcomes);
@@ -451,8 +469,8 @@ async function sendReplySms(
   base: DeliveryReceiptSubject & { db: Database; outboxId: string; notificationType: ConversationNotificationClaim["notificationType"] },
   thread: ThreadFacts,
   party: ThreadParty | null,
-  storeName: string | null,
-  order: string | null,
+  /** The rendered `conversation_reply` SMS template (no message text). */
+  text: string,
   options: ConversationNotificationOptions,
 ): Promise<OrderNotificationChannelOutcome> {
   const phone = party?.phone ?? null;
@@ -464,16 +482,6 @@ async function sendReplySms(
       recipient: `missing-phone:${thread.id}`,
       recipientMasked: "missing-phone",
       reason: "missing_sms_recipient",
-    });
-  }
-  if (await smsRecentlyAccepted(db, thread.id, Math.floor(Date.now() / 1000))) {
-    return recordSkippedDelivery({
-      ...base,
-      channel: "sms",
-      provider: "sms",
-      recipient: phone,
-      recipientMasked: maskPhone(phone),
-      reason: CONVERSATION_SMS_COALESCED,
     });
   }
   try {
@@ -491,10 +499,9 @@ async function sendReplySms(
       });
     }
     const provider = await getActiveSmsProvider(db, options.encryptionKey, options.appProviders);
-    const target = { ...base, channel: "sms" as const, provider: provider?.id ?? providerName, recipient: phone, recipientMasked: maskPhone(phone) };
+    const target = { ...base, channel: "sms" as const, provider: provider?.id ?? providerName, recipient: phone, recipientMasked: maskPhone(phone), receiptScope: replyReceiptScope(thread, "sms", CONVERSATION_SMS_COALESCE_SECONDS) };
     const blocked = await recordProviderBlockedDeliveryIfNeeded(target);
     if (blocked) return blocked;
-    const copy = MESSAGE_COPY[buyerMessageScope(await readStoreIdentity(db), party?.presence).language].conversation;
     return await dispatchWithReceipt({
       ...target,
       send: async (delivery) => {
@@ -504,7 +511,7 @@ async function sendReplySms(
         // The receipt's reference keys the provider's idempotency, as for every other SMS.
         const result = await provider.send({
           to: phone,
-          text: copy.replySms(storeName, order),
+          text,
           idempotencyKey: createProviderClientReference(delivery),
         }, {});
         return {
@@ -592,7 +599,6 @@ async function sendMessageToStaff(
             store,
             subject: copy.staffEmailSubject(store.name, order, customer),
             intro: copy.staffEmailBody(customer, order),
-            message: null,
             action: link ? { label: copy.staffAction, href: link } : null,
             footer: null,
           }),
