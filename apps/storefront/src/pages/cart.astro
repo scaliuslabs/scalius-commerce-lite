@@ -1128,7 +1128,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         <button
           type="submit"
           form="checkoutForm"
-          class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
+          class="flex min-h-12 w-full flex-wrap items-center justify-center rounded-lg bg-primary px-4 py-2 text-center text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
           id="submitButton"
           data-part="details-submit"
           aria-describedby={checkoutUnavailable ? "submitButtonReason" : undefined}
