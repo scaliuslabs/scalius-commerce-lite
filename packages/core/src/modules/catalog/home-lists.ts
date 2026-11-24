@@ -73,6 +73,8 @@ export interface HomeProductList {
  * - On sale reads a candidate window: which rows are in it (`lo:sale:all`,
  *   advanced by every write to a discount-marked product or live SKU, the
  *   only way a row enters, leaves or moves in it) and each candidate's facts.
+ * - Products named by id (a hero slide's) depend on each named product, shown
+ *   or not: one that turns public, or changes its price, redraws the page.
  */
 function declareHomeProductList(
     source: HomeProductListRequest["source"],
@@ -82,6 +84,10 @@ function declareHomeProductList(
 ): void {
     if (!deps.active()) return;
     declareProductCards(productIds, mediaByProduct);
+    if (source.kind === "products") {
+        deps.products(source.productIds);
+        return;
+    }
     if (source.kind === "popular") deps.popular();
     deps.products(memberIds);
     if (source.kind === "category") {
@@ -149,19 +155,20 @@ export function planHomeProductLists(
 } {
     const statements: BatchStatement[] = [];
     const productIdQueries: SQLWrapper[] = [];
-    const slots: Array<{ key: string; rows: number; media: number; facts: number; members: number }> = [];
+    const slots: Array<{ key: string; rows: number; media: number; facts: number; members: number | null }> = [];
     const categoryIds: string[] = [];
 
     /**
      * One list: its cards, their media, and the ids its selection read (the
      * members, or the on-sale candidate window), which it depends on.
      */
-    const add = (key: string, rows: BatchStatement, ids: SQLWrapper, members: BatchStatement) => {
+    const add = (key: string, rows: BatchStatement, ids: SQLWrapper, members: BatchStatement | null) => {
         productIdQueries.push(ids);
         const rowsSlot = statements.push(rows) - 1;
         const mediaSlot = statements.push(selectProductMediaProjectionRows(db, ids)) - 1;
         const factsSlot = statements.push(selectProductCardFactRows(db, ids)) - 1;
-        const membersSlot = statements.push(members) - 1;
+        // Products named by id depend on the names themselves: no member statement.
+        const membersSlot = members ? statements.push(members) - 1 : null;
         slots.push({ key, rows: rowsSlot, media: mediaSlot, facts: factsSlot, members: membersSlot });
     };
 
@@ -202,6 +209,17 @@ export function planHomeProductLists(
                 .where(onSale).orderBy(...newestFirst()).limit(limit), ids,
             // The candidate window itself, shown or not: what the list depends on.
             db.select({ id: products.id }).from(products).where(candidates));
+        } else if (source.kind === "products") {
+            // The products sections name by id (hero slides), each read only while it is
+            // public, by the buyer-state projection's primary key: no catalogue walk.
+            // At most HOME_MAX_PICKED_PRODUCTS bound ids: primary-key lookups, no table walk.
+            const named = inArray(productBuyerState.productId, source.productIds);
+            const ids = db.select({ id: productBuyerState.productId }).from(productBuyerState)
+                .where(and(named, sql`${productBuyerState.isPublic} = 1`)).limit(limit);
+            const pricing = buildBuyerCatalogPricingProjection(db, { productScope: inArray(products.id, ids) });
+            add(list.key, db.select(buildCollectionProductSelect(pricing, translation)).from(products)
+                .innerJoin(pricing, eq(products.id, pricing.productId))
+                .where(inArray(products.id, ids)), ids, null);
         } else if (source.kind === "popular") {
             // Units sold in the last 30 days from real order lines
             // (product_sales_stats, refreshed nightly): the popularity index
@@ -267,7 +285,7 @@ export function planHomeProductLists(
                     fields,
                 );
                 const source = lists.find((list) => list.key === key)!.source;
-                const memberIds = (results[offset + members] as Array<{ id: string }>).map((row) => row.id);
+                const memberIds = members === null ? [] : (results[offset + members] as Array<{ id: string }>).map((row) => row.id);
                 declareHomeProductList(source, productRows.map((row) => row.id), mediaByProduct, memberIds);
                 const category = source.kind === "category" ? categoryById.get(source.categoryId) ?? null : null;
                 return {

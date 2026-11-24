@@ -18,7 +18,8 @@ import { apiData } from "~/lib/api";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { collectionsByIdsQueryOptions } from "~/lib/api-query-options/collections";
 import { discountsQueryOptions } from "~/lib/api-query-options/discounts";
-import { fetchProducts } from "~/lib/api-query-options/products";
+import { fetchProducts, productsByIdsQueryOptions } from "~/lib/api-query-options/products";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import { formatDateTime, useMessages } from "~/i18n";
 import { fieldMessages } from "~/i18n/field";
 import { onlineStoreMessages } from "~/i18n/online-store";
@@ -415,6 +416,46 @@ export function ProductSelect({ id, value, name, onChange, clearable = false, in
       aria-invalid={invalid || undefined}
       triggerClassName="w-full"
     />
+  );
+}
+
+/**
+ * One chosen product as every theme setting shows it: its photo, its name
+ * (looked up by id, so a saved choice shows before the search opens) or
+ * "unavailable" when it was deleted, and the catalogue search to change it.
+ */
+export function ProductPick({ id, value, clearable, invalid = false, onChange }: {
+  id: string;
+  value: string;
+  clearable: boolean;
+  invalid?: boolean;
+  onChange: (value: string | null) => void;
+}) {
+  const t = useMessages(themeEditorFull);
+  const lookup = useQuery({ ...productsByIdsQueryOptions(value ? [value] : []), enabled: Boolean(value) });
+  const product = lookup.data?.products.find((each) => each.id === value);
+  const gone = Boolean(value) && lookup.isSuccess && !lookup.isPlaceholderData && !product;
+  return (
+    <div className="flex items-center gap-2">
+      {/* The photo's box is there before a product is, so choosing one never moves the select. */}
+      <span className="grid size-11 shrink-0 place-items-center overflow-clip rounded-lg border bg-muted sm:pointer-fine:size-9">
+        {product?.primaryImage ? (
+          <img src={mediaImageUrl(product.primaryImage, 96)} alt="" className="size-full object-cover" />
+        ) : (
+          <ImageIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <ProductSelect
+          id={id}
+          value={value}
+          name={product?.name ?? (gone ? t("appProductUnavailable") : undefined)}
+          clearable={clearable}
+          invalid={invalid}
+          onChange={(next) => onChange(next === "" ? null : next)}
+        />
+      </div>
+    </div>
   );
 }
 

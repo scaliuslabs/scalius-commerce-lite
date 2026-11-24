@@ -7,9 +7,11 @@
  * An app section (`type: "app"`) shows what its app drew into the same
  * read, and nothing when the app drew nothing.
  */
+import { productCardModel, type ProductCardProduct } from "@/components/cards/card-model";
 import {
   HOME_COLLECTIONS_FALLBACK_LIMIT,
   HOME_DEAL_LIMIT,
+  HOME_PICKED_PRODUCTS_KEY,
   HOME_LOOKBOOK_LIMIT,
   homeSectionProductLists,
   storefrontCategoryTilesMinimum,
@@ -115,9 +117,27 @@ export function homepageObject(
   return type && entries.length > 0 ? { ...type, entries } : null;
 }
 
-/** A hero section's slides per viewport (slides whose image did not resolve are left out). */
-export function homepageHero(section: StorefrontSectionOf<"hero">, content: HomepageContent): ResolvedHomepageHero {
-  return resolveHomepageHero(section.settings.slides, (id) => homepageMedia(content, id));
+/**
+ * A hero section's slides per viewport (slides whose image did not resolve
+ * are left out), each named product's price in the page's money through the
+ * card model (one rule with product cards).
+ */
+export function homepageHero(
+  section: StorefrontSectionOf<"hero">,
+  content: HomepageContent,
+  money?: { currencySymbol: string; currencyCode: string },
+): ResolvedHomepageHero {
+  const language = content.language ?? "en";
+  return resolveHomepageHero(section.settings.slides, (id) => homepageMedia(content, id), (id) => {
+    const product = money ? homepagePickedProduct(content, id) : null;
+    if (!product || !money) return null;
+    const card = productCardModel(product as ProductCardProduct, { ...money, hoverImage: false, ratings: false, language });
+    return {
+      name: card.name,
+      href: card.href,
+      price: { current: card.price.current, regular: card.price.regular, soldOut: card.soldOut ? storefrontCopy(language).badge.soldOut : null },
+    };
+  });
 }
 
 /** The title category tiles show: the section's own, else "Shop by category". */
@@ -232,6 +252,11 @@ export function homepageSourceProducts(
   const named = sourceTitleAndHref(source, list, content.language ?? "en");
   const products = (list?.products ?? []).slice(0, limit) as Product[];
   return named && products.length > 0 ? { products, ...named } : null;
+}
+
+/** A product a section names by id (a hero slide's), from the page's one list of named products; null when it is not public. */
+export function homepagePickedProduct(content: Pick<HomepageContent, "lists">, productId: string): Product | null {
+  return (content.lists.get(HOME_PICKED_PRODUCTS_KEY)?.products.find((product) => product.id === productId) as Product | undefined) ?? null;
 }
 
 /** Products a single-list section shows from its source (its first N), or null when it has none. */

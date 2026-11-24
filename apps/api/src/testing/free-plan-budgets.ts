@@ -362,13 +362,22 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "checkout-3-commit-signed-in": { d1Calls: 14, d1Statements: 70, externalFetches: 0, rowsWritten: 46, rowsRead: 60, fullScans: 16 },
     "order-refund-signed-in": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 20, rowsRead: 26, fullScans: 3 },
     "order-refund-signed-in-300": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 20, rowsRead: 26, fullScans: 3 },
-    "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 0, rowsRead: 41, fullScans: 11 },
+    // The seeded store publishes its theme (a store's own saved theme): the theme row is read by the
+    // layout and the homepage, rowsRead 41 -> 43 here and 1 more on the product, category and search pages.
+    "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 0, rowsRead: 43, fullScans: 11 },
     "page-home-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
-    "page-product-miss": { d1Calls: 19, d1Statements: 36, externalFetches: 0, rowsWritten: 0, rowsRead: 49, fullScans: 10 },
+    // The same homepage, its hero naming two products and one that does not exist: the hero's image
+    // and the named products' cards, photos and facts (4 statements, no round trip). The ids are a
+    // primary-key SEARCH (product_buyer_state_scope_idx, is_public AND product_id), no scan; the 2 new
+    // scans come from the card projection every list runs (EXPLAIN: store_currency, one row, and
+    // inventory_locations, the channel gap by covering index, in the cards statement; attribute_values,
+    // the swatches, in the facts statement).
+    "page-home-miss-hero-products": { d1Calls: 11, d1Statements: 29, externalFetches: 0, rowsWritten: 0, rowsRead: 52, fullScans: 13 },
+    "page-product-miss": { d1Calls: 19, d1Statements: 36, externalFetches: 0, rowsWritten: 0, rowsRead: 50, fullScans: 10 },
     "page-product-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
-    "page-category-miss": { d1Calls: 6, d1Statements: 19, externalFetches: 0, rowsWritten: 0, rowsRead: 51, fullScans: 5 },
+    "page-category-miss": { d1Calls: 6, d1Statements: 19, externalFetches: 0, rowsWritten: 0, rowsRead: 52, fullScans: 5 },
     "page-category-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
-    "page-search-miss": { d1Calls: 6, d1Statements: 16, externalFetches: 0, rowsWritten: 0, rowsRead: 632, fullScans: 16 },
+    "page-search-miss": { d1Calls: 6, d1Statements: 16, externalFetches: 0, rowsWritten: 0, rowsRead: 633, fullScans: 16 },
     "page-search-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
     "checkout-20-quote": { d1Calls: 10, d1Statements: 17, externalFetches: 0, rowsWritten: 0, rowsRead: 48, fullScans: 3 },
     "checkout-20-commit": { d1Calls: 14, d1Statements: 123, externalFetches: 0, rowsWritten: 173, rowsRead: 193, fullScans: 36 },
@@ -439,13 +448,22 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "checkout-3-commit-signed-in": { d1Calls: 14, d1Statements: 70, externalFetches: 0, rowsWritten: 46, rowsRead: 60, fullScans: 16 },
     "order-refund-signed-in": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 20, rowsRead: 26, fullScans: 3 },
     "order-refund-signed-in-300": { d1Calls: 24, d1Statements: 44, externalFetches: 0, rowsWritten: 20, rowsRead: 26, fullScans: 3 },
-    "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 0, rowsRead: 41, fullScans: 11 },
+    // The seeded store publishes its theme (a store's own saved theme): the theme row is read by the
+    // layout and the homepage, rowsRead 41 -> 43 here and 1 more on the product, category and search pages.
+    "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 0, rowsRead: 43, fullScans: 11 },
     "page-home-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
-    "page-product-miss": { d1Calls: 19, d1Statements: 36, externalFetches: 0, rowsWritten: 0, rowsRead: 49, fullScans: 10 },
+    // The same homepage, its hero naming two products and one that does not exist: the hero's image
+    // and the named products' cards, photos and facts (4 statements, no round trip). The ids are a
+    // primary-key SEARCH (product_buyer_state_scope_idx, is_public AND product_id), no scan; the 2 new
+    // scans come from the card projection every list runs (EXPLAIN: store_currency, one row, and
+    // inventory_locations, the channel gap by covering index, in the cards statement; attribute_values,
+    // the swatches, in the facts statement).
+    "page-home-miss-hero-products": { d1Calls: 11, d1Statements: 29, externalFetches: 0, rowsWritten: 0, rowsRead: 52, fullScans: 13 },
+    "page-product-miss": { d1Calls: 19, d1Statements: 36, externalFetches: 0, rowsWritten: 0, rowsRead: 50, fullScans: 10 },
     "page-product-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
-    "page-category-miss": { d1Calls: 6, d1Statements: 19, externalFetches: 0, rowsWritten: 0, rowsRead: 51, fullScans: 5 },
+    "page-category-miss": { d1Calls: 6, d1Statements: 19, externalFetches: 0, rowsWritten: 0, rowsRead: 52, fullScans: 5 },
     "page-category-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
-    "page-search-miss": { d1Calls: 6, d1Statements: 16, externalFetches: 0, rowsWritten: 0, rowsRead: 632, fullScans: 16 },
+    "page-search-miss": { d1Calls: 6, d1Statements: 16, externalFetches: 0, rowsWritten: 0, rowsRead: 633, fullScans: 16 },
     "page-search-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 0, rowsRead: 1, fullScans: 0 },
     "checkout-20-quote": { d1Calls: 10, d1Statements: 17, externalFetches: 0, rowsWritten: 0, rowsRead: 48, fullScans: 3 },
     "checkout-20-commit": { d1Calls: 14, d1Statements: 123, externalFetches: 0, rowsWritten: 173, rowsRead: 193, fullScans: 36 },
