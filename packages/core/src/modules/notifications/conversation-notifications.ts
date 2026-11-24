@@ -128,6 +128,11 @@ async function readThreadLine(db: Database, conversationId: string, seq: number)
     .get();
 }
 
+/** A claim status change the buyer sees (`warranty_claim_status`): announced like a reply, never held by the reply limit. */
+function isBuyerStatusEvent(thread: ThreadFacts): boolean {
+  return thread.kind === "event" && thread.eventKind === "warranty_claim_status" && thread.visibility === "public" && thread.authorType === "system";
+}
+
 function replyProducts(thread: ThreadFacts) {
   if (thread.kind !== "event" || thread.eventKind !== "product_reply" || thread.visibility !== "public" || thread.authorType !== "staff") return [];
   try { return conversationProductSnapshots(JSON.parse(thread.eventData ?? "null")); }
@@ -276,7 +281,9 @@ ${action}${footer}
  * they read or answer, or in a later window, sends again. The recipient is in
  * the receipt key, so a corrected address is never held back by the old one.
  */
-function replyReceiptScope(thread: ThreadFacts, channel: "email" | "sms", windowSeconds: number): string {
+function replyReceiptScope(thread: ThreadFacts, channel: "email" | "sms", windowSeconds: number): string | undefined {
+  // A claim status change is always announced: its delivery keeps its own outbox row's key.
+  if (isBuyerStatusEvent(thread)) return undefined;
   return `conversation_reply:${thread.id}:r${thread.customerReadSeq}:w${Math.floor(Date.now() / 1000 / windowSeconds)}:${channel}`;
 }
 
@@ -288,12 +295,12 @@ export async function sendConversationNotification(
   if (!Number.isInteger(claim.seq) || claim.seq < 1) return { kind: "nothing_to_send", reason: "missing_seq" };
   const thread = await readThreadLine(db, claim.conversationId, claim.seq);
   if (!thread) return { kind: "nothing_to_send", reason: "message_missing" };
-  if (thread.visibility !== "public" || (thread.kind !== "message" && !replyProducts(thread).length)) {
+  if (thread.visibility !== "public" || (thread.kind !== "message" && !replyProducts(thread).length && !isBuyerStatusEvent(thread))) {
     return { kind: "nothing_to_send", reason: "not_a_public_message" };
   }
   const buyerLine = thread.authorType === "customer" || thread.authorType === "guest_receipt";
   if (claim.notificationType === "conversation_reply") {
-    if (thread.authorType !== "staff") return { kind: "nothing_to_send", reason: "not_a_staff_reply" };
+    if (thread.authorType !== "staff" && !isBuyerStatusEvent(thread)) return { kind: "nothing_to_send", reason: "not_a_staff_reply" };
     if (thread.channel) return { kind: "dispatched", result: await sendReplyOnChannel(db, thread, options) };
     return { kind: "dispatched", result: await sendReplyToBuyer(db, claim, thread, options) };
   }
