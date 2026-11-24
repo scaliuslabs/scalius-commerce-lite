@@ -106,7 +106,7 @@ const placedPart = { [BUY_FORM_PLACED_PART]: only };
         <a
           href={link.href}
           data-product-contact-link={link.kind}
-          class="inline-flex min-h-11 items-center justify-center rounded-md border border-primary px-4 text-sm font-semibold text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          class="inline-flex min-h-11 items-center justify-center rounded-md border border-primary px-4 text-sm font-semibold text-primary hover:bg-primary-soft-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           aria-label={link.kind === "phone" ? contactCopy.callNumber(link.label) : contactCopy.whatsappLabel}
           {...(link.kind === "whatsapp" ? { target: "_blank", rel: "noopener noreferrer" } : {})}
         >{link.kind === "phone" ? contactCopy.call : contactCopy.whatsapp}</a>

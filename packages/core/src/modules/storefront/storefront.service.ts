@@ -883,6 +883,7 @@ export async function getLayoutData(
       socialImage: seo.value.socialImage,
     },
     cspAllowedDomains: security.value.cspAllowedDomains,
+    cspImageSources: security.value.imageSources,
     storefrontCopy: resolveStorefrontCopy(checkoutLanguageResults as CheckoutCopyRow[], translation?.locale ?? null),
     policies: publicPolicies,
     // Active apps' approved scripts: the storefront loads them on their pages and adds their hosts to the CSP.

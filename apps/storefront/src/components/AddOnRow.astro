@@ -1,0 +1,17 @@
+---
+// One add-on row of a server-drawn money summary (the receipt, the quick
+// checkout): lib/add-on-row.ts's markup, the one every surface draws, which
+// escapes every value it interpolates. Opens to the app's lines without a script.
+import type { AddOnTotalRow } from "@scalius/shared/add-on-totals";
+import { addOnRowHtml, type AddOnRowLook } from "@/lib/add-on-row";
+
+interface Props {
+  row: AddOnTotalRow;
+  /** The amount as the surface writes money. */
+  amount: string;
+  look: AddOnRowLook;
+}
+
+const { row, amount, look } = Astro.props;
+---
+<Fragment set:html={addOnRowHtml(row, amount, look)} />

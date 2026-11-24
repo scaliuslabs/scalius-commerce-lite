@@ -12,15 +12,20 @@ function createStaticSvg(markup: string): SVGElement {
   return template.content.firstElementChild as SVGElement;
 }
 
+/** The empty cart's icon as the page drew it (the theme's, when it set one), kept for every later empty state. */
+let pageIcon: Element | null | undefined;
+
 export function renderEmptyCartState(
   container: HTMLElement,
   lang: CheckoutLanguageData,
   recoveryAction?: EmptyCartRecoveryAction | null,
 ): void {
+  pageIcon ??= document.querySelector('[data-part="cart-empty-icon"]')?.cloneNode(true) as Element | null;
   const wrapper = document.createElement("div");
   wrapper.className = "text-center py-8 px-4";
+  wrapper.dataset.part = "cart-empty";
 
-  const cartIcon = createStaticSvg(`
+  const cartIcon = pageIcon?.cloneNode(true) as Element | undefined ?? createStaticSvg(`
     <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
     </svg>
@@ -42,7 +47,7 @@ export function renderEmptyCartState(
   const continueLink = document.createElement("a");
   continueLink.href = pagePath("/");
   continueLink.className =
-    "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90";
+    "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary-hover";
 
   const backIcon = createStaticSvg(`
     <svg class="-ms-1 me-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -58,7 +63,7 @@ export function renderEmptyCartState(
     recoveryLink.href = recoveryAction.href;
     recoveryLink.dataset.astroPrefetch = "false";
     recoveryLink.className =
-      "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90";
+      "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary-hover";
     recoveryLink.textContent = lang.languageData.viewPaymentStatusText;
     if (recoveryAction.onClick) {
       recoveryLink.addEventListener("click", recoveryAction.onClick);

@@ -41,6 +41,13 @@ import {
   DEFAULT_STOREFRONT_THEME,
   THEME_VERSION_CHANGES_MAX,
   compareThemeDocuments,
+  compileStorefrontPrivatePages,
+  privatePagesCompiledCurrent,
+  privatePagesContextOf,
+  PRIVATE_ANATOMY_VERSION,
+  PRIVATE_CHECKER_VERSION,
+  PRIVATE_PAGE_KEYS,
+  privatePageArrangement,
   parseStoredStorefrontThemeDocument,
   storefrontThemeDocumentSchema,
   storefrontThemeTranslationProblems,
@@ -307,24 +314,35 @@ function serializeThemeSettings(theme: StorefrontThemeDocument): {
 } {
   const result = storefrontThemeDocumentSchema.safeParse(theme);
   if (!result.success) {
-    throw new ValidationError(
-      result.error.issues[0]?.message ?? "The storefront style is not a valid theme document.",
-      result.error.issues.map((issue) => ({
-        path: issue.path.map(String).join("."),
-        message: issue.message,
-      })),
-    );
+    const issues = result.error.issues.map((issue) => ({
+      path: issue.path.map(String).join("."),
+      message: issue.message,
+    }));
+    // A refusal that names its reason (a private page's `not_available`) says it once, machine-readable.
+    const reasonOf = (issue: (typeof result.error.issues)[number]) => issue.code === "custom" && typeof issue.params?.reason === "string" ? issue.params.reason : null;
+    const named = result.error.issues.find((issue) => reasonOf(issue) !== null);
+    if (named) throw new ValidationError(named.message, { reason: reasonOf(named), issues: issues.slice(0, 20) });
+    throw new ValidationError(issues[0]?.message ?? "The storefront style is not a valid theme document.", issues);
   }
   // A translation must fit every place its words appear, so a read never falls back to the source words.
   const translationProblems = storefrontThemeTranslationProblems(result.data);
   if (translationProblems.length > 0) {
     throw new ValidationError(translationProblems[0]!.message, translationProblems);
   }
-  const serialized = JSON.stringify(result.data);
+  // The private pages compile here, on every save and publish: each arrangement against its page's
+  // parts, the tokens against the theme's palettes and the theme's words. What the request said was
+  // compiled is never kept: the page reads only what this wrote.
+  const privatePages = compileStorefrontPrivatePages(result.data.privatePages, privatePagesContextOf(result.data));
+  if (!privatePages.ok) {
+    const first = privatePages.issues[0]!;
+    throw new ValidationError(first.message, { reason: first.reason, issues: privatePages.issues.slice(0, 20) });
+  }
+  const compiled = { ...result.data, privatePages: privatePages.value };
+  const serialized = JSON.stringify(compiled);
   if (new TextEncoder().encode(serialized).byteLength > THEME_DOCUMENT_MAX_BYTES) {
     throw new ValidationError("Storefront style is too large. Shorten page content or remove unused landing pages.");
   }
-  return { theme: result.data, serialized };
+  return { theme: compiled, serialized };
 }
 
 const THEME_REVISION_CONFLICT_SENTINEL = "theme_revision_conflict";
@@ -408,6 +426,43 @@ export async function getThemeSettings(db: Database): Promise<ThemeSettingsDocum
   return current
     ? { theme: parseAuthoritativeThemeSettings(current.colors), revision: current.revision }
     : unpublishedThemeSettings();
+}
+
+/**
+ * The published theme's private pages compiled by this build when an older
+ * checker wrote them (the first maintenance run after a deploy; a buyer's
+ * request never compiles, and serves the default look meanwhile). One read,
+ * and one write only then, at the same revision (it is the same document):
+ * the row's cache dependency moves with the write. A theme this checker no
+ * longer passes keeps its source and serves no compiled look until the
+ * merchant saves it again.
+ */
+export async function recompilePublishedPrivatePages(db: Database): Promise<"none" | "current" | "recompiled" | "refused" | "unreadable" | "raced"> {
+  const row = (await selectThemeSettingsRows(db))[0];
+  if (!row) return "none";
+  // A document this build cannot read is left as it is (the merchant re-saves it); nothing to compile.
+  const theme = parseStoredStorefrontThemeDocument(row.colors);
+  if (!theme) return "unreadable";
+  if (privatePagesCompiledCurrent(theme.privatePages)) return "current";
+  // Every path stores arrangements filled for this anatomy: a newly mandatory part is never missing.
+  const filled = {
+    ...theme.privatePages,
+    pages: Object.fromEntries(PRIVATE_PAGE_KEYS.flatMap((page) => {
+      const arrangement = privatePageArrangement(theme.privatePages, page);
+      return arrangement ? [[page, arrangement]] : [];
+    })),
+  };
+  const result = compileStorefrontPrivatePages(filled, privatePagesContextOf(theme));
+  const privatePages = result.ok
+    ? result.value
+    : { ...filled, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: "", refused: true } };
+  const written = await db.update(themeSettings)
+    .set({ colors: JSON.stringify({ ...theme, privatePages }), updatedAt: sql`unixepoch()` })
+    .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)))
+    .returning({ id: themeSettings.id });
+  // A publish moved the revision in between: nothing was written, so the version is not settled (tried again next run).
+  if (written.length === 0) return "raced";
+  return result.ok ? "recompiled" : "refused";
 }
 
 /** The live document, the shared draft (the live one until a draft is saved) and who published last. */

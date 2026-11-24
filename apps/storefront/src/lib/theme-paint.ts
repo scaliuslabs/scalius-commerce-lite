@@ -17,7 +17,6 @@ import {
 } from "@scalius/shared/storefront-theme";
 import { productGridFluidCss, productGridSpec } from "@/lib/product-card-layout";
 import { themeFontAssets, type ThemeFontAssets } from "@/lib/theme-fonts";
-import { cartDrawerAttributes } from "@/lib/cart/drawer-look";
 
 /** A theme that shows its dark colours: its scheme and whether buyers may switch. */
 export interface ThemeColorScheme {
@@ -80,8 +79,6 @@ export function themePaint(theme: StorefrontThemeDocument, resolved: ResolvedSto
       "data-theme-heading-case": tokens.headingCase,
       "data-theme-image-fit": tokens.imageFit,
       "data-theme-radius": tokens.radius,
-      // The cart drawer's look, only where it is not the default (lib/cart/drawer-look.ts).
-      ...cartDrawerAttributes(resolved.blocks.cartDrawer),
     },
     fonts: themeFontAssets(tokens.typography),
     colorScheme: darkColors ? { scheme: tokens.colorScheme, toggle: tokens.colorSchemeToggle } : null,

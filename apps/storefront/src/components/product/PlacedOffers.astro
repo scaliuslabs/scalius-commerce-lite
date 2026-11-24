@@ -73,7 +73,7 @@ const headingId = "placed-offers-title";
             </div>
             {offer.kit && <KitContents kit={offer.kit} words={words} language={language} moreUrl={offer.url} />}
             {offer.needsChoices ? (
-              <a href={offer.url} class="flex min-h-11 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-background px-2 text-sm font-medium text-primary hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" data-offer-part="choose" aria-describedby={titleId}>{words.chooseOptions}</a>
+              <a href={offer.url} class="flex min-h-11 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-background px-2 text-sm font-medium text-primary hover:bg-primary-soft-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" data-offer-part="choose" aria-describedby={titleId}>{words.chooseOptions}</a>
             ) : (
             <div class="flex gap-2" data-offer-part="actions">
               <button
@@ -87,7 +87,7 @@ const headingId = "placed-offers-title";
                 data-sx-bound
                 aria-describedby={titleId}
                 disabled={off}
-                class="flex min-h-11 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-background px-2 text-sm font-medium text-primary hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground"
+                class="flex min-h-11 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-background px-2 text-sm font-medium text-primary hover:bg-primary-soft-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground"
               >{addLabel}</button>
               <button
                 type="submit"
@@ -101,7 +101,7 @@ const headingId = "placed-offers-title";
                 aria-describedby={titleId}
                 disabled={off}
                 hidden={off}
-                class="flex min-h-11 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-primary px-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                class="flex min-h-11 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-primary px-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >{buyLabel}</button>
             </div>
             )}

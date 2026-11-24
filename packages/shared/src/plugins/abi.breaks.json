@@ -1948,5 +1948,11 @@
   "from": "15e9df39b9da06b6",
   "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
   "reason": "A loosening against the previous seal (second review of wave 3 k1, Nov 23, 2026): app text the store draws is cleaned at the boundary (control characters to one space, bidi embed/override/isolate marks removed, trimmed; refused only when nothing is left) instead of refusing the whole answer, so the schemas' declared type now includes the cleaning step; the store's own rate and method names handed to apps keep the plain text schema."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "43d11be555c837a3",
+  "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (private pages, beta 8): buyer UI gains a `mark` node (a tone's glyph) and an optional `tone` on `stack` (a toned row: an offer row, a status box), drawn on buyer pages only; the SDK gains `ui.mark`. An added union arm and an optional field; nothing an app used before changes meaning."
  }
 ]

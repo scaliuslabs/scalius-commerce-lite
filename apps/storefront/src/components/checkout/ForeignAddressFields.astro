@@ -36,7 +36,7 @@ const AUTOCOMPLETE: Record<ForeignAddressField, string> = {
       const error = errors[field];
       return (
         <div class={field === "shippingAddressLine2" ? "sm:col-span-2" : undefined} data-address-rule={FOREIGN_FIELD_RULE[field]}>
-          <label for={id} class={labelClass}>
+          <label for={id} class={labelClass} data-part="field-label">
             {labels[field]}<span aria-hidden="true" class="ms-0.5 hidden text-destructive" data-required-mark>*</span>
           </label>
           <input
