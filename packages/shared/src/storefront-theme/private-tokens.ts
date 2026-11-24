@@ -479,7 +479,9 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
       // Under this variant of its part, its element sits outside the part's box, on what the part stands on.
       const out = beside !== undefined && variant !== undefined && style.outside?.includes(variant) === true;
       place(name, style, out ? beside! : key);
-      inside(name);
+      // What it holds keeps its part's variant: a box inside it may stand beside the part's box too (the chosen
+      // payment method's details under tiles).
+      inside(name, variant, beside);
       if (spec.items[name]) walk(context.items[name] ?? spec.items[name]!.layout, name, name);
     }
   };
@@ -1050,7 +1052,12 @@ const TOKEN_SCOPE = [
   ...Object.values(PRIVATE_PAGES as Readonly<Record<string, PrivatePageSpec>>).filter((spec) => Object.hasOwn(spec.styles, "page")).map((spec) => `[data-private="${spec.root}"]`),
   ...PRIVATE_SCOPES.map((scope) => `[data-private="${scope}"]`),
 ];
-const IN_SCOPE = `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope} *`)].join(",")})`;
+/**
+ * A payment provider's own surface (its card form, its frame: `data-part="gateway"`): token mode never reaches
+ * into it, so it keeps the store's own colours whatever a theme sets (no row of the table names it either).
+ */
+export const PRIVATE_GATEWAY_HOOK = "gateway";
+const IN_SCOPE = `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope} *`)].join(",")}):not([data-part="${PRIVATE_GATEWAY_HOOK}"],[data-part="${PRIVATE_GATEWAY_HOOK}"] *)`;
 
 /**
  * Every palette class the host draws on a private page, and what it reads in

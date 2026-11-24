@@ -128,6 +128,7 @@ export function buildPaymentChoice(input: {
     ? "payment-method-card relative overflow-hidden rounded-xl border border-border bg-card transition-colors"
     : "payment-method-card overflow-hidden rounded-xl border border-border bg-card transition-colors";
   card.dataset.method = id;
+  card.dataset.part = "payment-method";
 
   const control = single ? document.createElement("div") : document.createElement("button");
   control.className = single
@@ -149,6 +150,7 @@ export function buildPaymentChoice(input: {
 
   const details = document.createElement("div");
   details.id = `payment-details-${id}`;
+  details.dataset.part = "payment-details";
   details.className = tiles
     ? "payment-method-details hidden space-y-3 rounded-xl border border-border bg-card px-4 py-4"
     : "payment-method-details hidden space-y-3 border-t border-border px-4 py-4";
@@ -189,6 +191,8 @@ export function applySelectedPaymentChoice(methodId: string | null): void {
     el.classList.toggle("border-primary", isSelected);
     el.classList.toggle("border-border", !isSelected);
     el.classList.toggle("shadow-sm", isSelected);
+    // The chosen method's own look on a private page (`payment-chosen`).
+    el.toggleAttribute("data-chosen", isSelected);
     el.querySelector(".check-dot")?.classList.toggle("hidden", !isSelected);
     details?.classList.toggle("hidden", !isSelected);
   });

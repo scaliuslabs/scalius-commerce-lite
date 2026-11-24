@@ -27,7 +27,7 @@
 // mandatory part and target exactly once. Nothing else is per page.
 
 /** Rises when a page gains a mandatory part or target (a stored arrangement then fills it in on read). */
-export const PRIVATE_ANATOMY_VERSION = 2 as const;
+export const PRIVATE_ANATOMY_VERSION = 3 as const;
 
 /**
  * The host's layout nodes. `stack`: one column. `columns`: one column on
@@ -489,6 +489,72 @@ const CART_DRAWER: PrivatePageSpec = {
   icons: ["drawer.empty"],
 };
 
+// ─── The payment step (`checkout`) ─────────────────────────────────────────
+
+const CHECKOUT_PAGE_STYLES = privatePageStyles("checkout");
+
+/**
+ * The payment step's style targets, outer before inner. The order summary
+ * takes the cart's names (its rows, total, add-on row, phone bar), Pay takes
+ * `submit` and the terms beside it `legal`. The gateway's own surface (its
+ * card form, a provider's frame: `data-part="gateway"`) has no target and
+ * token mode never reaches into it: no theme restyles, hides or covers it.
+ */
+const CHECKOUT_STYLES: Record<string, PrivateStyleSpec> = {
+  ...CHECKOUT_PAGE_STYLES.head,
+  // No checkout to pay for: the way back to the shop.
+  "checkout-empty": { selector: '[data-part="checkout-empty"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "empty" },
+  heading: { selector: '[data-part="heading"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", part: "heading" },
+  ...privateSummaryStyles({ total: 14, label: 14, due: true }),
+  // The summary's bar that states the total and opens it (phones; every width when `folded`): the cart's fold bar.
+  "fold-toggle": { selector: '[data-part="fold-toggle"]', tokens: ["background", "text", "border", "border-width", "radius", "shadow", "ring"], kind: "control", surface: "under", ink: "foreground", on: "summary" },
+  "gift-card": { selector: '[data-part="gift-card"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "gift-card" },
+  // One payment method, and the one the buyer chose (drawn after it, so it wins where both reach).
+  "payment-method": { selector: '[data-part="payment-method"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "payment" },
+  "payment-chosen": { selector: '[data-part="payment-method"][data-chosen]', tokens: ["background", "text", "muted", "border", "border-width", "shadow"], kind: "box", surface: "under", ink: "foreground", on: "payment-method" },
+  // The chosen method's details (its notice, Pay, the terms): in its card, or (`tiles`) under the grid on what the methods stand on.
+  "payment-details": { selector: '[data-part="payment-details"]', tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "padding"], kind: "box", surface: "under", ink: "foreground", on: "payment-chosen", outside: ["tiles"] },
+  submit: { selector: '[data-part="pay"]', tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "payment-details" },
+  legal: { selector: '[data-part="legal"]', tokens: ["text", "size", "align"], kind: "text", surface: "under", ink: "muted-foreground", on: "payment-details" },
+  ...CHECKOUT_PAGE_STYLES.tail,
+};
+
+/**
+ * The payment step: the order summary, the gift card, the payment methods
+ * (the gateway's own surface inside them, untouched) and Pay with the terms
+ * beside it. `payment` is one part: its methods, the chosen method's details,
+ * Pay and the terms stay together in the store's order, whatever the theme.
+ */
+const CHECKOUT_PAGE: PrivatePageSpec = {
+  root: "checkout",
+  frames: ["standard", "narrow"],
+  parts: {
+    progress: part(false, ["progress"]),
+    empty: part(true, ["checkout-empty"]),
+    // `open-wide`: folded behind its bar on phones, open from 64rem; `folded`: behind its bar at every width.
+    summary: part(true, ["summary", "fold-toggle", "summary-panel", "summary-heading", "summary-total-label", "add-on-details", "add-on-detail"], null, ["open-wide", "folded"]),
+    heading: part(true, ["heading"]),
+    notices: part(true, ["notice"]),
+    "gift-card": part(true, ["gift-card"], "fields"),
+    payment: part(true, ["payment", "payment-method", "payment-details", "gateway", "pay", "legal"], null, ["list", "tiles"]),
+  },
+  targets: ["checkout.payment.after", "checkout.actions.before"],
+  lead: ["summary", "payment"],
+  layouts: ["stack", "columns", "grid", "group"],
+  styles: { ...CHECKOUT_STYLES, summary: { ...CHECKOUT_STYLES.summary!, targets: ["checkout.summary.after"] } },
+  layout: [
+    p("progress"),
+    p("empty"),
+    l("columns", [
+      l("stack", [p("summary")]),
+      l("stack", [p("heading"), p("notices"), p("gift-card"), p("payment"), t("checkout.payment.after"), t("checkout.actions.before")]),
+    ]),
+  ],
+  items: {},
+  labels: {},
+  icons: [],
+};
+
 /**
  * Every private page the model draws, by its key in the theme document's
  * `privatePages.pages`. The checkout, the receipt and the account register
@@ -497,6 +563,7 @@ const CART_DRAWER: PrivatePageSpec = {
 export const PRIVATE_PAGES = {
   cart: CART_PAGE,
   cartDrawer: CART_DRAWER,
+  checkout: CHECKOUT_PAGE,
 } as const satisfies Record<string, PrivatePageSpec>;
 
 export type PrivatePageKey = keyof typeof PRIVATE_PAGES;
