@@ -38,7 +38,7 @@ const { cards, words } = Astro.props;
             <a href={card.href} data-astro-prefetch="false" class="after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring">{words.order(card.number)}</a>
           </h2>
           <p class="text-xs text-muted-foreground sm:text-sm">{card.date} · {card.items}</p>
-          <p class:list={["mt-1 truncate text-xs sm:text-sm", card.detail.warn ? "font-medium text-destructive" : "text-muted-foreground"]}>{card.detail.text}</p>
+          <p class:list={["mt-1 text-xs [overflow-wrap:anywhere] sm:text-sm", card.detail.warn ? "font-medium text-destructive" : "text-muted-foreground"]}>{card.detail.text}</p>
         </div>
 
         <div class="flex shrink-0 flex-col items-end justify-between gap-2 sm:order-3 sm:mt-auto sm:flex-row sm:items-center sm:border-t sm:border-border sm:pt-3">

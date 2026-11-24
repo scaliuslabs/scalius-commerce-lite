@@ -1176,8 +1176,14 @@ export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [decla
   ["aria-[invalid=true]:border-destructive", ["border-color:var(--pt-i)", '[aria-invalid="true"]']],
   // The receipt and the account: their pills' and overlays' tints paint nothing (a thumbnail's count reads on the
   // row's hover surface), their borders are the row's, the account menu's current marker is its link colour.
-  ...["bg-warning/15", "bg-muted/10", "bg-muted/20"].map((name) => [name, ["background-color:transparent"]] as const),
-  ["bg-background/90", ["background-color:var(--pt-h)"]],
+  ...["bg-warning/15", "bg-success/15", "bg-muted/10", "bg-muted/20"].map((name) => [name, ["background-color:transparent"]] as const),
+  // The conversation's file button (the reply form's attachment): the row's words, border and hover.
+  ["file:bg-background", ["background-color:transparent", "::file-selector-button"]],
+  ["file:text-foreground", ["color:var(--pt-t)", "::file-selector-button"]],
+  ["file:border-border", ["border-color:var(--pt-b)", "::file-selector-button"]],
+  ["hover:file:bg-muted", ["background-color:var(--pt-h)", "::file-selector-button"]],
+  // A thumbnail's count stands on the card's row (its own tint would be a surface no row claims).
+  ["bg-background/90", ["background-color:transparent"]],
   ["lg:hover:bg-muted", ["background-color:var(--pt-h)", ":hover"]],
   ...["border-muted-foreground/30", "hover:border-primary/40", "hover:border-foreground/25", "lg:border-border"].map((name) => [name, ["border-color:var(--pt-b)"]] as const),
   ["after:bg-primary", ["background-color:var(--pt-l)", "::after"]],
