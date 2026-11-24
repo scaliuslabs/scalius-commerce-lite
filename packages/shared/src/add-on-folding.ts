@@ -5,7 +5,8 @@
 // anchor's units per bundle unit, so its row counts it once per bundle unit.
 // The pages read the rows with add-on-totals.ts.
 import { LINE_ADJUSTMENT_KEY } from "./line-identity";
-import { ADD_ON_DETAILS_MAX, ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX, readAddOnDetails, type AddOnTotalRow, type AddOnTotals } from "./add-on-totals";
+import { ADD_ON_DETAILS_MAX, ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX, addOnFoldLabel, readAddOnDetails, type AddOnTotalRow, type AddOnTotals } from "./add-on-totals";
+import { readOrderLineProperties } from "./line-properties";
 
 /** One add-on on each unit of a line, in minor units of the summary's currency. */
 export interface LineAddOn {
@@ -60,18 +61,14 @@ export function aggregateLineAddOns(entries: ReadonlyArray<LineAddOn & { perUnit
   return [...sums.values()];
 }
 
-/** The neutral title of folded rows when no app name is known (a receipt names no app): the host's words. */
-export const ADD_ON_FOLD_WORDS = { en: "Add-ons", bn: "অ্যাড-অন" } as const;
-export function addOnFoldLabel(language: string | null | undefined): string {
-  return /^bn\b/iu.test(language ?? "") ? ADD_ON_FOLD_WORDS.bn : ADD_ON_FOLD_WORDS.en;
-}
+export { ADD_ON_FOLD_WORDS, addOnFoldLabel } from "./add-on-totals";
 
 /**
  * At most `max` rows with the same sum: first each app with several rows
  * (the most first) becomes one row under its name (`label`), then the rows
  * past the last place join one under the neutral label.
  */
-function foldRows(rows: AddOnTotalRow[], max: number, label: (appId: string | null) => string, neutral: string): AddOnTotalRow[] {
+function foldRows(rows: AddOnTotalRow[], max: number, label: (appId: string | null) => string | null | undefined, neutral: string): AddOnTotalRow[] {
   let list = rows;
   while (list.length > max) {
     const counts = new Map<string | null, number>();
@@ -81,14 +78,15 @@ function foldRows(rows: AddOnTotalRow[], max: number, label: (appId: string | nu
     const first = list.find((row) => row.appId === appId)!;
     const own = list.filter((row) => row.appId === appId);
     const details = own.reduce<string[] | undefined>((joined, row) => joinDetails(joined, row.details), undefined);
-    const merged: AddOnTotalRow = { appId, title: label(appId).slice(0, ADD_ON_TITLE_MAX), amountMinor: own.reduce((sum, row) => sum + row.amountMinor, 0), ...(details ? { details } : {}) };
+    const name = label(appId);
+    const merged: AddOnTotalRow = { appId, title: (name || neutral).slice(0, ADD_ON_TITLE_MAX), amountMinor: own.reduce((sum, row) => sum + row.amountMinor, 0), ...(details ? { details } : {}), ...(name ? {} : { folded: true as const }) };
     list = list.flatMap((row) => (row === first ? [merged] : row.appId === appId ? [] : [row]));
   }
   if (list.length > max) {
     const kept = list.slice(0, max - 1);
     const rest = list.slice(max - 1);
     const details = rest.reduce<string[] | undefined>((joined, row) => joinDetails(joined, row.details), undefined);
-    kept.push({ appId: null, title: neutral.slice(0, ADD_ON_TITLE_MAX), amountMinor: rest.reduce((sum, row) => sum + row.amountMinor, 0), ...(details ? { details } : {}) });
+    kept.push({ appId: null, title: neutral.slice(0, ADD_ON_TITLE_MAX), amountMinor: rest.reduce((sum, row) => sum + row.amountMinor, 0), ...(details ? { details } : {}), folded: true });
     list = kept;
   }
   return list;
@@ -129,7 +127,7 @@ export function addOnTotals(
       rows.set(key, row);
     }
   }
-  const list = foldRows([...rows.values()], ADD_ON_ROWS_MAX, (appId) => folding.appName?.(appId) || folding.foldLabel, folding.foldLabel);
+  const list = foldRows([...rows.values()], ADD_ON_ROWS_MAX, (appId) => folding.appName?.(appId), folding.foldLabel);
   const addOnsMinor = list.reduce((total, row) => total + row.amountMinor, 0);
   if (!Number.isSafeInteger(addOnsMinor) || addOnsMinor > subtotalMinor) {
     console.warn("[add-ons] the lines' add-ons exceed their subtotal; the summary shows no add-on rows");
@@ -207,4 +205,19 @@ export function buyerLineAddOns(
       : (sum.perLine.size === counted.length && new Set(sum.perLine.values()).size === 1 ? [...sum.perLine.values()][0]! : null);
     return { appId: sum.appId, title: sum.title, totalMinor: sum.totalMinor, amountMinor, per: sum.per, ...(sum.details?.length ? { details: sum.details } : {}) };
   });
+}
+
+/**
+ * An order's add-on summary rows (`frozenAddOnTotals`) from its REAL lines,
+ * before any fold: each line's add-ons times its own units, against the saved
+ * subtotal. The receipt, the account order, the order emails and the invoice
+ * read them (through `addOnDocumentRows`); no page or document computes money
+ * from a folded row's entries.
+ */
+export function buyerOrderAddOnTotals(
+  lines: ReadonlyArray<{ quantity: number; properties: string | null }>,
+  subtotalMinor: number,
+  language: string | null | undefined,
+): AddOnTotals {
+  return frozenAddOnTotals(lines.map((line) => ({ quantity: line.quantity, properties: readOrderLineProperties(line.properties) })), subtotalMinor, language);
 }

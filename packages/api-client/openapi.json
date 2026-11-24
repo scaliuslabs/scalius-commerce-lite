@@ -242387,6 +242387,46 @@
                             "attributeApps": {
                               "$ref": "#/components/schemas/CheckoutAttributeApps"
                             },
+                            "addOnRows": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "appId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "amountMinor": {
+                                    "type": "integer"
+                                  },
+                                  "details": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "maxLength": 80
+                                    },
+                                    "maxItems": 10
+                                  },
+                                  "folded": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      true
+                                    ],
+                                    "description": "Rows folded under the neutral label: print \"Add-ons\" in the invoice's language."
+                                  }
+                                },
+                                "required": [
+                                  "appId",
+                                  "title",
+                                  "amountMinor"
+                                ]
+                              },
+                              "maxItems": 50,
+                              "description": "The apps' add-ons as their own rows after Subtotal (`addOnDocumentRows` prints them, as the receipt and the emails do)."
+                            },
                             "taxExemption": {
                               "type": "object",
                               "nullable": true,
@@ -242507,6 +242547,43 @@
                                       ]
                                     },
                                     "x-scalius-app-owned": "items"
+                                  },
+                                  "addOns": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "appId": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "title": {
+                                          "type": "string"
+                                        },
+                                        "totalMinor": {
+                                          "type": "integer"
+                                        },
+                                        "amountMinor": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        },
+                                        "per": {
+                                          "type": "string",
+                                          "enum": [
+                                            "unit",
+                                            "bundle"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "appId",
+                                        "title",
+                                        "totalMinor",
+                                        "amountMinor",
+                                        "per"
+                                      ]
+                                    },
+                                    "maxItems": 10
                                   }
                                 },
                                 "required": [
@@ -243193,6 +243270,46 @@
                             "attributeApps": {
                               "$ref": "#/components/schemas/CheckoutAttributeApps"
                             },
+                            "addOnRows": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "appId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "amountMinor": {
+                                    "type": "integer"
+                                  },
+                                  "details": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "maxLength": 80
+                                    },
+                                    "maxItems": 10
+                                  },
+                                  "folded": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      true
+                                    ],
+                                    "description": "Rows folded under the neutral label: print \"Add-ons\" in the invoice's language."
+                                  }
+                                },
+                                "required": [
+                                  "appId",
+                                  "title",
+                                  "amountMinor"
+                                ]
+                              },
+                              "maxItems": 50,
+                              "description": "The apps' add-ons as their own rows after Subtotal (`addOnDocumentRows` prints them, as the receipt and the emails do)."
+                            },
                             "taxExemption": {
                               "type": "object",
                               "nullable": true,
@@ -243313,6 +243430,43 @@
                                       ]
                                     },
                                     "x-scalius-app-owned": "items"
+                                  },
+                                  "addOns": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "appId": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "title": {
+                                          "type": "string"
+                                        },
+                                        "totalMinor": {
+                                          "type": "integer"
+                                        },
+                                        "amountMinor": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        },
+                                        "per": {
+                                          "type": "string",
+                                          "enum": [
+                                            "unit",
+                                            "bundle"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "appId",
+                                        "title",
+                                        "totalMinor",
+                                        "amountMinor",
+                                        "per"
+                                      ]
+                                    },
+                                    "maxItems": 10
                                   }
                                 },
                                 "required": [

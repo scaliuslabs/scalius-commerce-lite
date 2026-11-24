@@ -69474,6 +69474,19 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                 };
                 attributeApps?: CheckoutAttributeApps;
                 /**
+                 * The apps' add-ons as their own rows after Subtotal (`addOnDocumentRows` prints them, as the receipt and the emails do).
+                 */
+                addOnRows?: Array<{
+                    appId: string | null;
+                    title: string;
+                    amountMinor: number;
+                    details?: Array<string>;
+                    /**
+                     * Rows folded under the neutral label: print "Add-ons" in the invoice's language.
+                     */
+                    folded?: true;
+                }>;
+                /**
                  * The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed.
                  */
                 taxExemption?: {
@@ -69502,6 +69515,13 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                         label: string;
                         displayValue: string;
                         priceMinor: number;
+                    }>;
+                    addOns?: Array<{
+                        appId: string | null;
+                        title: string;
+                        totalMinor: number;
+                        amountMinor: number | null;
+                        per: 'unit' | 'bundle';
                     }>;
                 }>;
             };
@@ -69699,6 +69719,19 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                 };
                 attributeApps?: CheckoutAttributeApps;
                 /**
+                 * The apps' add-ons as their own rows after Subtotal (`addOnDocumentRows` prints them, as the receipt and the emails do).
+                 */
+                addOnRows?: Array<{
+                    appId: string | null;
+                    title: string;
+                    amountMinor: number;
+                    details?: Array<string>;
+                    /**
+                     * Rows folded under the neutral label: print "Add-ons" in the invoice's language.
+                     */
+                    folded?: true;
+                }>;
+                /**
                  * The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed.
                  */
                 taxExemption?: {
@@ -69727,6 +69760,13 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                         label: string;
                         displayValue: string;
                         priceMinor: number;
+                    }>;
+                    addOns?: Array<{
+                        appId: string | null;
+                        title: string;
+                        totalMinor: number;
+                        amountMinor: number | null;
+                        per: 'unit' | 'bundle';
                     }>;
                 }>;
             };

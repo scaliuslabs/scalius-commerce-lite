@@ -46,12 +46,12 @@ import { listOrderRefundAttempts, summarizeActiveRefundOperation } from "../paym
 import { CUSTOMER_REQUEST_ACTION_COPY, getCustomerRequestPolicy } from "../settings";
 import { orderMoneyAmounts, orderMoneySelection } from "./money";
 import {
-    buyerOrderAddOnTotals,
     presentBuyerLineAddOns,
     presentOrderLineFulfilment,
     presentOrderPickup,
     presentShippingMethodKind,
 } from "./line-presentation";
+import { buyerOrderAddOnTotals } from "@scalius/shared/add-on-folding";
 import { findOrderConversationId, listBuyerOrderFulfilments } from "./fulfilment-reads";
 import {
     applyCustomerRequestPolicyToSupportActions,
