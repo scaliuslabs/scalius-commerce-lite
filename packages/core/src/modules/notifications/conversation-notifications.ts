@@ -147,14 +147,19 @@ function displayBody(thread: ThreadFacts, language: MessageLanguage): string | n
   return [thread.body?.trim(), `${MESSAGE_COPY[language].conversation.sharedProducts(cards.length)}\n${titles}`].filter(Boolean).join("\n\n");
 }
 
+/** One way to reach the buyer, and where that message links: their account inbox, or the order-proof page. */
+interface BuyerReach {
+  address: string;
+  /** A verified contact of the account that reads this thread: the link opens their account inbox. */
+  inAccount: boolean;
+}
+
 interface ThreadParty {
   /** The buyer's name, or null when none is known. */
   name: string | null;
-  email: string | null;
-  phone: string | null;
+  email: BuyerReach | null;
+  phone: BuyerReach | null;
   orderNumber: string | null;
-  /** The buyer reads this thread in their account (verified owner or store thread). */
-  inAccount: boolean;
   orderNumberRaw: number | null;
   /** The storefront presence of the thread's order (`bn`): the buyer's language and links. Null otherwise. */
   presence: string | null;
@@ -184,10 +189,12 @@ async function readAccountContacts(db: Database, customerId: string) {
 
 /**
  * The buyer side of a thread. A thread about an order (its order thread, a
- * warranty claim, a review) reaches the order's account owner by their
- * verified contacts, linking into their account; an order with no owner, or
- * whose owner account is gone, reaches the order's own contact with the
- * order-proof link. A store thread reaches its account's verified contacts.
+ * warranty claim, a review) reaches, per channel, the order's account owner
+ * by their verified contact, linking into their account; where the owner has
+ * no verified contact for that channel, or the order has no owner, or the
+ * owner account is gone, it reaches the order's own contact with the
+ * order-proof link, so a reachable buyer is never left unannounced. A store
+ * thread reaches its account's verified contacts.
  */
 async function readThreadParty(db: Database, thread: ThreadFacts): Promise<ThreadParty | null> {
   if (thread.orderId) {
@@ -207,18 +214,29 @@ async function readThreadParty(db: Database, thread: ThreadFacts): Promise<Threa
     if (!order) return null;
     const facts = { orderNumber: formatOrderNumber(order.orderNumber, order.id), orderNumberRaw: order.orderNumber, presence: order.presence ?? null };
     const owner = order.owner ? await readAccountContacts(db, order.owner) : null;
-    if (owner) return { ...owner, name: owner.name ?? (order.name?.trim() || null), ...facts, inAccount: true };
+    const reach = (verified: string | null | undefined, typed: string | null | undefined): BuyerReach | null => {
+      if (verified) return { address: verified, inAccount: true };
+      const address = typed?.trim();
+      return address ? { address, inAccount: false } : null;
+    };
     return {
-      name: order.name?.trim() || null,
-      email: order.email?.trim() || null,
-      phone: order.phone?.trim() || null,
+      name: owner?.name ?? (order.name?.trim() || null),
+      email: reach(owner?.email, order.email),
+      phone: reach(owner?.phone, order.phone),
       ...facts,
-      inAccount: false,
     };
   }
   if (thread.customerId) {
     const account = await readAccountContacts(db, thread.customerId);
-    return account ? { ...account, orderNumber: null, orderNumberRaw: null, inAccount: true, presence: null } : null;
+    if (!account) return null;
+    return {
+      name: account.name,
+      email: account.email ? { address: account.email, inAccount: true } : null,
+      phone: account.phone ? { address: account.phone, inAccount: true } : null,
+      orderNumber: null,
+      orderNumberRaw: null,
+      presence: null,
+    };
   }
   return null;
 }
@@ -235,10 +253,10 @@ function dashboardInboxLink(env: object | undefined, conversationId: string): st
 }
 
 /** Where the buyer reads the reply. Never a tokenized URL; phone and email never go in it. */
-function buyerThreadLink(storefrontUrl: unknown, thread: ThreadFacts, party: ThreadParty): string | null {
+function buyerThreadLink(storefrontUrl: unknown, thread: ThreadFacts, party: ThreadParty, reach: BuyerReach): string | null {
   const url = typeof storefrontUrl === "string" ? storefrontUrl : undefined;
   // In the presence the thread's order was placed on (`/bn/...`), as the message's language.
-  if (party.inAccount) return buyerStorefrontLink(url, party.presence, `/account/inbox/${encodeURIComponent(thread.id)}`);
+  if (reach.inAccount) return buyerStorefrontLink(url, party.presence, `/account/inbox/${encodeURIComponent(thread.id)}`);
   return buyerStorefrontLink(url, party.presence, `/track-order?order=${encodeURIComponent(String(party.orderNumberRaw ?? thread.orderId ?? ""))}`);
 }
 
@@ -342,18 +360,18 @@ async function sendReplyToBuyer(
   // The buyer's language: the presence of the thread's order, else the store's.
   const { language, locale } = buyerMessageScope(store, party?.presence);
   const { templates } = await getNotificationTemplates(db, language, { locale });
-  // No message text: only who replied, the order and where to read it.
-  const variables: NotificationVariableValues = {
+  // No message text: only who replied, the order and where this contact reads it.
+  const variables = (reach: BuyerReach | null | undefined): NotificationVariableValues => ({
     customer_name: party?.name ?? "",
     store_name: store.name ?? "",
     // The order number in the buyer's digits, as the storefront writes it.
     order_number: party?.orderNumber ? orderNumberTextIn(party.orderNumber, numberLocale(language)) : "",
-    conversation_link: (party ? buyerThreadLink(options.env.STOREFRONT_URL, thread, party) : null) ?? "",
-  };
+    conversation_link: (party && reach ? buyerThreadLink(options.env.STOREFRONT_URL, thread, party, reach) : null) ?? "",
+  });
   const emailContext: EmailRuntimeContext = { db, env: options.env as unknown as Record<string, unknown>, encryptionKey: options.encryptionKey, appProviders: options.appProviders };
 
   if (channels.includes("email")) {
-    const email = party?.email ?? null;
+    const email = party?.email?.address ?? null;
     if (!email) {
       outcomes.push(await recordSkippedDelivery({
         ...base,
@@ -372,7 +390,7 @@ async function sendReplyToBuyer(
           const rendered = renderMessageEmail({
             language,
             store,
-            ...renderEmailTemplate("conversation_reply", language, templates.email.conversation_reply, variables),
+            ...renderEmailTemplate("conversation_reply", language, templates.email.conversation_reply, variables(party?.email)),
           });
           return emailResultToDeliveryResult(await sendEmail({
             ...rendered,
@@ -386,7 +404,7 @@ async function sendReplyToBuyer(
   }
 
   if (channels.includes("sms")) {
-    outcomes.push(await sendReplySms(db, base, thread, party, renderSmsTemplate("conversation_reply", language, templates.sms.conversation_reply.body, variables), options));
+    outcomes.push(await sendReplySms(db, base, thread, party, renderSmsTemplate("conversation_reply", language, templates.sms.conversation_reply.body, variables(party?.phone)), options));
   }
 
   return buildDispatchResult(outcomes);
@@ -473,7 +491,7 @@ async function sendReplySms(
   text: string,
   options: ConversationNotificationOptions,
 ): Promise<OrderNotificationChannelOutcome> {
-  const phone = party?.phone ?? null;
+  const phone = party?.phone?.address ?? null;
   if (!phone) {
     return recordSkippedDelivery({
       ...base,
