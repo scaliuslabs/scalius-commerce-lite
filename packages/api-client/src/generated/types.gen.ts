@@ -497,7 +497,7 @@ export type MarketPresence = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 14;
+    version: 15;
     template: 'department-mall' | 'boutique' | 'marketplace' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: StorefrontThemeColors;
@@ -517,15 +517,15 @@ export type StorefrontThemeDocument = {
         container: '1200' | '1290' | '1360' | '1440' | 'full';
         pagePaint?: {
             kind: 'color';
-            color: 'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring';
+            color: 'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input';
         } | {
             kind: 'linear';
             angle: number;
-            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring'>;
+            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input'>;
         } | {
             kind: 'radial';
             at: 'top' | 'center' | 'bottom';
-            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring'>;
+            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input'>;
         };
     };
     brand: {
@@ -799,13 +799,6 @@ export type StorefrontThemeDocument = {
             };
             bindings?: StorefrontSettingBindings;
         };
-        cart: {
-            summary: 'side' | 'top';
-        };
-        cartDrawer: {
-            width: 'standard' | 'wide';
-            recommendations: 'shown' | 'hidden';
-        };
         checkout: {
             summary: 'side' | 'top';
             paymentChoices: 'list' | 'tiles';
@@ -860,6 +853,7 @@ export type StorefrontThemeDocument = {
             [key: string]: string;
         };
     }>;
+    privatePages: StorefrontPrivatePages;
 };
 
 export type StorefrontThemeColors = {
@@ -881,7 +875,6 @@ export type StorefrontThemeColors = {
     'destructive-foreground': string;
     border: string;
     input: string;
-    ring: string;
 };
 
 export type StorefrontSettingBindings = {
@@ -1348,6 +1341,89 @@ export type StorefrontPageTemplate = {
     main: number;
 };
 
+export type StorefrontPrivatePages = {
+    controls?: 'header' | 'footer' | 'none';
+    pages: {
+        cart?: StorefrontPrivateArrangement;
+        cartDrawer?: StorefrontPrivateArrangement;
+    };
+    tokens?: {
+        [key: string]: {
+            [key: string]: {
+                [key: string]: unknown;
+            };
+        };
+    };
+    labels: {
+        'cart.heading'?: StorefrontPrivateWords;
+        'cart.intro'?: StorefrontPrivateWords;
+        'cart.summaryHeading'?: StorefrontPrivateWords;
+        'cart.continue'?: 'continue-shopping' | 'keep-shopping' | 'back-to-store';
+        'cart.empty'?: StorefrontPrivateWords;
+        'cart.emptyText'?: StorefrontPrivateWords;
+        'cart.subtotal'?: 'subtotal' | 'items-total';
+        'cart.showSummary'?: 'show-summary' | 'show-cart';
+        'cart.hideSummary'?: 'hide-summary' | 'hide-cart';
+        'dialog.goBack'?: 'go-back' | 'cancel';
+        'dialog.confirm'?: 'confirm' | 'continue-checkout' | 'agree-and-continue';
+        'drawer.title'?: StorefrontPrivateWords;
+        'drawer.checkout'?: 'checkout' | 'proceed-to-checkout';
+        'drawer.viewCart'?: 'view-cart' | 'go-to-cart';
+        'drawer.continue'?: 'continue-shopping' | 'keep-shopping';
+        'drawer.empty'?: StorefrontPrivateWords;
+        'drawer.startShopping'?: 'start-shopping' | 'browse-products' | 'continue-shopping';
+    };
+    icons: {
+        'cart.empty'?: StorefrontPrivateAsset;
+        'drawer.empty'?: StorefrontPrivateAsset;
+    };
+    chrome?: unknown;
+    search?: unknown;
+    css?: unknown;
+    assets?: unknown;
+    compiled: {
+        anatomy: number;
+        sanitizer: number;
+        css: string;
+        refused?: boolean;
+        tokenMode?: boolean;
+    };
+};
+
+export type StorefrontPrivateArrangement = {
+    frame?: string;
+    layout?: Array<StorefrontPrivateNode>;
+    items?: {
+        [key: string]: Array<StorefrontPrivateNode>;
+    };
+};
+
+export type StorefrontPrivateNode = {
+    type: 'layout';
+    layout: 'stack' | 'columns' | 'grid' | 'group' | 'fold' | 'scroll';
+    hook?: string;
+    children: Array<StorefrontPrivateNode>;
+} | {
+    type: 'part';
+    part: string;
+    variant?: string;
+} | {
+    type: 'target';
+    target: string;
+} | {
+    type: 'content';
+    [key: string]: unknown;
+};
+
+export type StorefrontPrivateWords = {
+    [key: string]: string;
+};
+
+export type StorefrontPrivateAsset = {
+    app: string;
+    file: string;
+};
+
 export type StorefrontBrandImage = {
     id: string;
     url: string;
@@ -1634,6 +1710,7 @@ export type PluginUiNode = {
     type: 'stack';
     direction?: 'vertical' | 'horizontal';
     gap?: 'sm' | 'md' | 'lg';
+    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
     children: Array<PluginUiNode>;
 } | {
     type: 'columns';
@@ -2076,6 +2153,9 @@ export type PluginUiNode = {
     summary: string;
     open?: boolean;
     children: Array<PluginUiNode>;
+} | {
+    type: 'mark';
+    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
 };
 
 /**
@@ -2476,6 +2556,7 @@ export type CustomerAccountSummary = {
             type: 'stack';
             direction?: 'vertical' | 'horizontal';
             gap?: 'sm' | 'md' | 'lg';
+            tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
             children: Array<PluginUiNode>;
         } | {
             type: 'columns';
@@ -2918,6 +2999,9 @@ export type CustomerAccountSummary = {
             summary: string;
             open?: boolean;
             children: Array<PluginUiNode>;
+        } | {
+            type: 'mark';
+            tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
         };
         attributes: Array<{
             key: string;
@@ -10860,6 +10944,7 @@ export type GetApiV1StorefrontLayoutResponses = {
             };
             timeZone: string;
             cspAllowedDomains: string;
+            cspImageSources: string;
             policies: Array<{
                 kind: 'refund' | 'privacy' | 'terms' | 'shipping' | 'contact';
                 title: string;
@@ -15363,6 +15448,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     type: 'stack';
                     direction?: 'vertical' | 'horizontal';
                     gap?: 'sm' | 'md' | 'lg';
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     children: Array<PluginUiNode>;
                 } | {
                     type: 'columns';
@@ -15805,6 +15891,9 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     summary: string;
                     open?: boolean;
                     children: Array<PluginUiNode>;
+                } | {
+                    type: 'mark';
+                    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                 };
                 attributes: Array<{
                     key: string;
@@ -24447,6 +24536,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         type: 'stack';
                         direction?: 'vertical' | 'horizontal';
                         gap?: 'sm' | 'md' | 'lg';
+                        tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                         children: Array<PluginUiNode>;
                     } | {
                         type: 'columns';
@@ -24889,6 +24979,9 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         summary: string;
                         open?: boolean;
                         children: Array<PluginUiNode>;
+                    } | {
+                        type: 'mark';
+                        tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     };
                     attributes: Array<{
                         key: string;
@@ -25599,6 +25692,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                     type: 'stack';
                     direction?: 'vertical' | 'horizontal';
                     gap?: 'sm' | 'md' | 'lg';
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     children: Array<PluginUiNode>;
                 } | {
                     type: 'columns';
@@ -26041,6 +26135,9 @@ export type PostApiV1OrdersCartValidationResponses = {
                     summary: string;
                     open?: boolean;
                     children: Array<PluginUiNode>;
+                } | {
+                    type: 'mark';
+                    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                 };
                 attributes: Array<{
                     key: string;
@@ -26640,6 +26737,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     type: 'stack';
                     direction?: 'vertical' | 'horizontal';
                     gap?: 'sm' | 'md' | 'lg';
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     children: Array<PluginUiNode>;
                 } | {
                     type: 'columns';
@@ -27082,6 +27180,9 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     summary: string;
                     open?: boolean;
                     children: Array<PluginUiNode>;
+                } | {
+                    type: 'mark';
+                    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                 };
                 attributes: Array<{
                     key: string;
@@ -62374,6 +62475,10 @@ export type GetApiV1AdminSettingsSecurityResponses = {
         success: true;
         data: {
             cspAllowedDomains: string;
+            /**
+             * Hosts the storefront loads images from and nothing else (img-src), on every page, private and payment pages included; comma-separated.
+             */
+            imageSources: string;
             revision: number;
         };
     };
@@ -62385,6 +62490,7 @@ export type PostApiV1AdminSettingsSecurityData = {
     body: {
         expectedRevision: number;
         cspAllowedDomains?: string;
+        imageSources?: string;
     };
     path?: never;
     query?: never;
@@ -62503,6 +62609,56 @@ export type GetApiV1AdminSettingsSecurityRuntimeSourcesResponses = {
 };
 
 export type GetApiV1AdminSettingsSecurityRuntimeSourcesResponse = GetApiV1AdminSettingsSecurityRuntimeSourcesResponses[keyof GetApiV1AdminSettingsSecurityRuntimeSourcesResponses];
+
+export type GetApiV1AdminSettingsSecurityImageHostsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/security/image-hosts';
+};
+
+export type GetApiV1AdminSettingsSecurityImageHostsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsSecurityImageHostsError = GetApiV1AdminSettingsSecurityImageHostsErrors[keyof GetApiV1AdminSettingsSecurityImageHostsErrors];
+
+export type GetApiV1AdminSettingsSecurityImageHostsResponses = {
+    /**
+     * Image hosts outside the platform's origins
+     */
+    200: {
+        success: true;
+        data: {
+            hosts: Array<string>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSecurityImageHostsResponse = GetApiV1AdminSettingsSecurityImageHostsResponses[keyof GetApiV1AdminSettingsSecurityImageHostsResponses];
 
 export type GetApiV1AdminSettingsEmailData = {
     body?: never;

@@ -816,7 +816,8 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     // The first run of a new API version heals writes the previous version
-    // committed after the migration (scheduled/catalog-projections.ts).
+    // committed after the migration, and compiles the theme's private pages
+    // with this version's checker (scheduled/catalog-projections.ts).
     name: "post_deploy_projection_rebuild",
     async run({ env, timed }) {
       const requested = await timed("post_deploy_projection_rebuild", () => requestPostDeployProjectionRebuild(env));

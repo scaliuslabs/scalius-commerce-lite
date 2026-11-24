@@ -59,23 +59,23 @@ export const PLUGIN_UI_INPUT_TYPES = ["text-field", "textarea", "number-field", 
 
 const NODE_TYPES = [
   "page", "section", "card", "stack", "columns", "heading", "text", "badge", "banner", "key-value", "stat", "table",
-  "empty-state", "image", "link", "divider", "button", "form", ...PLUGIN_UI_INPUT_TYPES, "field", "progress", "disclosure",
+  "empty-state", "image", "link", "divider", "button", "form", ...PLUGIN_UI_INPUT_TYPES, "field", "progress", "disclosure", "mark",
 ] as const;
 export type PluginUiNodeType = (typeof NODE_TYPES)[number];
 
 /**
- * What each surface allows. `admin`: every node but `field` and
- * `disclosure` (`progress` only here), route and
- * navigate actions, links to app pages, resources and https sites, https
- * images. `buyer`: content nodes, buttons, checkout `field`s and
- * `disclosure`s (no pages, forms or tables), route, cart and navigate
- * actions, links to store paths,
+ * What each surface allows. `admin`: every node but `field`,
+ * `disclosure` and `mark` (`progress` only here), and no toned `stack`;
+ * route and navigate actions, links to app pages, resources and https
+ * sites, https images. `buyer`: content nodes, buttons, checkout `field`s,
+ * `disclosure`s, `mark`s and toned stacks (no pages, forms or tables),
+ * route, cart and navigate actions, links to store paths,
  * images from the store's media or the app's public files. A tree is also
  * held to its surface's node count, depth and size.
  */
 export const PLUGIN_UI_SURFACES = {
   admin: {
-    nodes: NODE_TYPES.filter((type) => type !== "field" && type !== "disclosure"),
+    nodes: NODE_TYPES.filter((type) => type !== "field" && type !== "disclosure" && type !== "mark"),
     actions: ["route", "navigate"],
     targets: ["app-page", "resource", "external"],
     images: "url",
@@ -84,7 +84,7 @@ export const PLUGIN_UI_SURFACES = {
     maxBytes: 256 * 1024,
   },
   buyer: {
-    nodes: ["stack", "columns", "heading", "text", "badge", "banner", "key-value", "image", "link", "divider", "button", "field", "disclosure"],
+    nodes: ["stack", "columns", "heading", "text", "badge", "banner", "key-value", "image", "link", "divider", "button", "field", "disclosure", "mark"],
     actions: ["route", "cart", "navigate"],
     targets: ["store"],
     images: "asset",
@@ -295,9 +295,19 @@ export type PluginUiNode =
   | { type: "page"; title?: string; description?: string; actions?: PluginUiButton[]; children: PluginUiNode[] }
   | { type: "section"; title?: string; description?: string; children: PluginUiNode[] }
   | { type: "card"; title?: string; description?: string; actions?: PluginUiButton[]; children: PluginUiNode[] }
-  | { type: "stack"; direction?: "vertical" | "horizontal"; gap?: "sm" | "md" | "lg"; children: PluginUiNode[] }
+  /**
+   * Children in a column, or in a row (`horizontal`): a row lays its pieces
+   * side by side where its box is wide enough and wraps them where it is
+   * not; a vertical stack in it (a column of words) takes the room left and
+   * goes to a line of its own before it gets too narrow to read. `tone`
+   * (buyer) draws it on a toned surface (an offer row, a status box) whose
+   * pieces a theme styles on that surface; a toned row keeps its last
+   * piece (its action) at the row's end when it wraps.
+   */
+  | { type: "stack"; direction?: "vertical" | "horizontal"; gap?: "sm" | "md" | "lg"; tone?: PluginUiTone; children: PluginUiNode[] }
   | { type: "columns"; children: PluginUiNode[] }
   | { type: "heading"; text: string; level?: 2 | 3 | 4 }
+  /** `tone` colours the words (a price, a warning); `mono` sets them in the monospace face (an ID, a code). */
   | { type: "text"; text: string; tone?: PluginUiTone; size?: "sm" | "md"; emphasis?: "strong" | "mono" }
   | { type: "badge"; text: string; tone?: PluginUiTone }
   | { type: "banner"; tone: PluginUiTone; title?: string; text?: string; actions?: PluginUiButton[] }
@@ -326,7 +336,13 @@ export type PluginUiNode =
    * Space and without scripts. `open` draws it open at first. Its nodes count
    * toward the tree's limit like any other.
    */
-  | { type: "disclosure"; summary: string; open?: boolean; children: PluginUiNode[] };
+  | { type: "disclosure"; summary: string; open?: boolean; children: PluginUiNode[] }
+  /**
+   * A small glyph of a tone in a circle (buyer): "!" warning, a tick
+   * success, "i" info, "×" critical, a dot neutral. Decoration beside the
+   * words that say the same, so assistive technology skips it.
+   */
+  | { type: "mark"; tone: PluginUiTone };
 
 const buttonSchema = z.object({
   type: z.literal("button"),
@@ -440,6 +456,7 @@ const nodeUnion = z.discriminatedUnion("type", [
     type: z.literal("stack"),
     direction: z.enum(["vertical", "horizontal"]).optional(),
     gap: z.enum(["sm", "md", "lg"]).optional(),
+    tone: tone.optional(),
     children,
   }).strict(),
   z.object({ type: z.literal("columns"), children: z.array(z.lazy(() => pluginUiNodeSchema)).min(1).max(4) }).strict(),
@@ -504,6 +521,7 @@ const nodeUnion = z.discriminatedUnion("type", [
   }).strict(),
   fileFieldSchema,
   z.object({ type: z.literal("disclosure"), summary: label, open: z.boolean().optional(), children }).strict(),
+  z.object({ type: z.literal("mark"), tone }).strict(),
 ]);
 
 /**
@@ -631,6 +649,7 @@ function checkTree(root: PluginUiNode, surface: PluginUiSurface, context: z.Refi
     if (!allowed(node, path)) return;
     if (attachedButtons(node).some((button, index) => !allowed(button, [...path, "actions", index]))) return;
     if (node.type === "page" && depth !== 1) return report(path, "A page is only ever the root.");
+    if (node.type === "stack" && node.tone && surface !== "buyer") return report([...path, "tone"], `A toned stack is not shown on the ${surface} surface.`);
     if (node.type === "field" && node.choices && new Set(node.choices.map((choice) => choice.value)).size !== node.choices.length) {
       return report([...path, "choices"], "Choice values must be unique.");
     }

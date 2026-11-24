@@ -65,7 +65,7 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `order-refund` | 24 | 44 | 19 | 26 | 3 | - |
 | `order-refund-gift-card` | 23 | 57 | 20 | 39 | 2 | - |
 | `sku-stock-change` | 9 | 17 | 6 | 14 | 2 | - |
-| `cron-idle` | 10 | 14 | 92 | 7,020 | 7 | 0 / 1.57 |
+| `cron-idle` | 10 | 14 | 92 | 7,020 | 7 | 0 / 1.6 |
 | `cron-nightly` | 26 | 61 | 194 | 20,323 | 61 | - |
 | `drain-busy` | 8 | 18 | 13 | 629 | 14 | - |
 | `order-3-line-commit` | 14 | 68 | 54 | 57 | 16 | - |

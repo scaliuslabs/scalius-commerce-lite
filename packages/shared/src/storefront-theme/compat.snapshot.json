@@ -1,5 +1,5 @@
 {
- "version": 14,
+ "version": 15,
  "oldestReadable": 10,
  "sections": {
   "hero": {
@@ -2003,6 +2003,9 @@
    },
    "translations": {
     "$ref": "#/$defs/__schema76"
+   },
+   "privatePages": {
+    "$ref": "#/$defs/__schema80"
    }
   },
   "required": [
@@ -2011,13 +2014,14 @@
    "tokens",
    "brand",
    "blocks",
-   "pages"
+   "pages",
+   "privatePages"
   ],
   "additionalProperties": false,
   "$defs": {
    "__schema0": {
     "type": "number",
-    "const": 14
+    "const": 15
    },
    "__schema1": {
     "type": "string",
@@ -2296,9 +2300,6 @@
      },
      "input": {
       "$ref": "#/$defs/__schema4"
-     },
-     "ring": {
-      "$ref": "#/$defs/__schema4"
      }
     },
     "required": [
@@ -2319,8 +2320,7 @@
      "destructive",
      "destructive-foreground",
      "border",
-     "input",
-     "ring"
+     "input"
     ],
     "additionalProperties": false
    },
@@ -2348,8 +2348,7 @@
      "destructive",
      "destructive-foreground",
      "border",
-     "input",
-     "ring"
+     "input"
     ]
    },
    "__schema6": {
@@ -3658,46 +3657,6 @@
        }
       ]
      },
-     "cart": {
-      "type": "object",
-      "properties": {
-       "summary": {
-        "type": "string",
-        "enum": [
-         "side",
-         "top"
-        ]
-       }
-      },
-      "required": [
-       "summary"
-      ],
-      "additionalProperties": false
-     },
-     "cartDrawer": {
-      "type": "object",
-      "properties": {
-       "width": {
-        "type": "string",
-        "enum": [
-         "standard",
-         "wide"
-        ]
-       },
-       "recommendations": {
-        "type": "string",
-        "enum": [
-         "shown",
-         "hidden"
-        ]
-       }
-      },
-      "required": [
-       "width",
-       "recommendations"
-      ],
-      "additionalProperties": false
-     },
      "checkout": {
       "type": "object",
       "properties": {
@@ -3774,8 +3733,6 @@
      "listing",
      "product",
      "footer",
-     "cart",
-     "cartDrawer",
      "checkout",
      "receipt",
      "account"
@@ -6401,7 +6358,8 @@
    "__schema79": {
     "type": "string",
     "maxLength": 8000
-   }
+   },
+   "__schema80": {}
   }
  }
 }
