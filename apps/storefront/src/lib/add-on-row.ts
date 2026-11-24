@@ -41,7 +41,7 @@ export function addOnRowHtml(row: AddOnTotalRow, amount: string, look: AddOnRowL
     // The bar is the control: 44px tall on a phone, the chevron turning as it opens.
     + `<summary class="${rowClass} min-h-11 cursor-pointer list-none items-center rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-0 [&::-webkit-details-marker]:hidden">`
     + `<span class="min-w-0">${escapeHtml(row.title)}<svg class="ms-1 inline size-4 align-text-bottom transition-transform group-open/add-on:rotate-180 motion-reduce:transition-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>${value}</summary>`
-    + `<ul class="mt-1 space-y-1 border-s border-border ps-3 text-xs text-muted-foreground [overflow-wrap:anywhere]">${row.details.map((line) => `<li data-part="add-on-detail">${escapeHtml(line)}</li>`).join("")}</ul></details>`;
+    + `<ul class="mt-1 space-y-1 border-s border-border ps-3 text-xs text-muted-foreground">${row.details.map((line) => `<li data-part="add-on-detail">${escapeHtml(line)}</li>`).join("")}</ul></details>`;
 }
 
 /** Appends the row to `parent` (a summary drawn row by row, the payment step's). */

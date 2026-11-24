@@ -341,6 +341,11 @@
   }
 }
 
+/* An app's words never leave their row: everything in an app's buyer UI block, and an add-on row's title and detail
+   lines, breaks a long word anywhere and shrinks below its content, in any flex or grid mount and on every surface
+   that draws them (cart, drawer, payment step, quick checkout, receipt, account order, the editor's preview). */
+:where([data-buyer-ui-app], [data-buyer-ui-app] *, [data-summary-row="add-on"] > span:first-child, [data-summary-row="add-on"] > summary > span:first-child, [data-part="add-on-detail"]) { overflow-wrap: anywhere; min-inline-size: 0; }
+
 /* The store's controls on a private page drawn from parts, where the theme places them (privatePages.controls): the
    light or dark switch and the market and language forms. Zero specificity, so the `scheme` and `localization`
    tokens, written after, set their look. */

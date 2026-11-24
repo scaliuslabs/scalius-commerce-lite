@@ -231,7 +231,7 @@ function drawNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptio
       return container;
     }
     case "heading": return element("h3", "text-base font-semibold text-foreground", node.text);
-    case "text": return element("p", `whitespace-pre-wrap break-words ${node.size === "md" ? "text-base" : "text-sm"}${node.emphasis === "strong" ? " font-semibold" : node.emphasis === "mono" ? " font-mono" : ""}${node.tone === "critical" ? " text-destructive" : ""}`, node.text);
+    case "text": return element("p", `whitespace-pre-wrap ${node.size === "md" ? "text-base" : "text-sm"}${node.emphasis === "strong" ? " font-semibold" : node.emphasis === "mono" ? " font-mono" : ""}${node.tone === "critical" ? " text-destructive" : ""}`, node.text);
     case "mark": {
       const [glyph, ring] = marks[node.tone];
       // Twice its words' size, so a theme's `size` scales the circle with the glyph.
@@ -243,14 +243,14 @@ function drawNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptio
     case "banner": {
       const container = element("div", `rounded-md border p-3 text-sm ${toneClasses[node.tone]}`);
       if (node.title) container.append(element("p", "font-medium", node.title));
-      if (node.text) container.append(element("p", "whitespace-pre-wrap break-words", node.text));
+      if (node.text) container.append(element("p", "whitespace-pre-wrap", node.text));
       for (const action of node.actions ?? []) { const rendered = buttonNode(action, block, options); if (rendered) container.append(rendered); }
       return container;
     }
     case "divider": return element("hr", "border-border");
     case "key-value": {
       const list = element("dl", "grid grid-cols-2 gap-x-3 gap-y-1 text-sm");
-      for (const item of node.items) list.append(element("dt", "text-muted-foreground", item.label), element("dd", "break-words text-end", keyValueText(item.value)));
+      for (const item of node.items) list.append(element("dt", "text-muted-foreground", item.label), element("dd", "text-end", keyValueText(item.value)));
       return list;
     }
     case "image": {
