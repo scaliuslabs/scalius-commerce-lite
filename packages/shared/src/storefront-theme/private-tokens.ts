@@ -327,15 +327,48 @@ export function compilePrivateTokens(page: PrivatePageKey, tokens: PrivateTokens
  * rules reach its element (`typeFrom`), else at the host's; checked where a
  * theme sets either side.
  */
+/** A target's words' size or weight as declared: its own token, else the token of the target whose rules reach it (`typeFrom`), else the host's. */
+function declared(spec: PrivatePageSpec, tokens: Record<string, Values>, name: string, by: "size" | "weight"): { value: number | undefined; set: string | undefined } {
+  const own = (key: string) => tokens[key]?.[by] === undefined ? undefined : Number(tokens[key]![by]);
+  const style = spec.styles[name];
+  const set = own(name) !== undefined ? name : style?.typeFrom && own(style.typeFrom) !== undefined ? style.typeFrom : undefined;
+  return { value: set ? own(set)! : by === "size" ? style?.hostSize : style?.hostWeight, set };
+}
+
+/** The app node keys with a size that may draw at one of `targets` (a key naming no target draws at every target). */
+function appSizes(tokens: Record<string, Values>, targets: readonly string[]): Array<{ key: string; size: number }> {
+  return Object.entries(tokens).flatMap(([key, values]) => {
+    const match = UI_KEY.exec(key);
+    return match && typeof values.size === "number" && (!match[4] || targets.includes(match[4])) ? [{ key, size: values.size }] : [];
+  });
+}
+
+/** The largest size a target outranks (each outranked target's declared size, the apps' nodes where it draws them): its size is drawn at least at it. */
+function sizeFloor(spec: PrivatePageSpec, tokens: Record<string, Values>, name: string): number {
+  const outranks = spec.styles[name]?.outranks;
+  if (!outranks) return 0;
+  const sizes = [
+    // (A target drawn at this one's own size, the total's label with none of its own, adds nothing.)
+    ...Object.entries(outranks.over).filter(([, by]) => by.includes("size")).map(([other]) => declared(spec, tokens, other, "size")).map((size) => size.set === name ? 0 : size.value ?? 0),
+    ...(outranks.apps ? appSizes(tokens, outranks.apps).map((entry) => entry.size) : []),
+  ];
+  let floor = 0;
+  for (const size of sizes) floor = Math.max(floor, size);
+  return floor;
+}
+
 function prominenceIssues(page: PrivatePageKey, tokens: Record<string, Values>): PrivateTokenIssue[] {
   const spec: PrivatePageSpec = PRIVATE_PAGES[page];
-  const own = (name: string, by: "size" | "weight") => tokens[name]?.[by] === undefined ? undefined : Number(tokens[name]![by]);
-  const drawn = (name: string, by: "size" | "weight") => {
-    const style = spec.styles[name];
-    const set = own(name, by) !== undefined ? name : style?.typeFrom && own(style.typeFrom, by) !== undefined ? style.typeFrom : undefined;
-    return { value: set ? own(set, by)! : by === "size" ? style?.hostSize : style?.hostWeight, set };
-  };
+  const drawn = (name: string, by: "size" | "weight") => declared(spec, tokens, name, by);
   const issues: PrivateTokenIssue[] = [];
+  // A figure an app draws where the target outranks its nodes is never larger than it.
+  for (const [name, style] of Object.entries(spec.styles)) {
+    const mine = drawn(name, "size").value;
+    if (mine === undefined || !style.outranks?.apps) continue;
+    for (const { key, size } of appSizes(tokens, style.outranks?.apps ?? [])) {
+      if (size > mine) issues.push({ path: ["privatePages", "tokens", page, key], reason: "prominence", message: `${key} is drawn at ${size}px where ${name} is drawn at ${mine}px: ${style.outranks!.why}.` });
+    }
+  }
   for (const [name, style] of Object.entries(spec.styles)) {
     for (const [other, ranks] of Object.entries(style.outranks?.over ?? {})) {
       for (const by of ranks) {
@@ -1085,6 +1118,9 @@ function shapeCss(page: PrivatePageKey, tokens: Record<string, Values>, unitHook
         const rule = `${selectors}{grid-template-columns:${tracks(value as Tracks, floor)};grid-auto-flow:row}`;
         const fit = Math.max(tracksFit(value as Tracks, gap, floor), name === "columns-wide" ? 640 : 0);
         narrow.push(`:where(${root} :has(> ${selector.slice(root.length + 1)})){container-type:inline-size}@container (min-width:${fit}px){${rule}}`);
+      } else if (name === "size" && sizeFloor(spec, tokens, target) > 0) {
+        // Never under what it outranks: a row the host keeps at 14px stays under a total its narrow box would shrink.
+        declare(false, selectors, `font-size:max(${sizeFloor(spec, tokens, target)}px,min(${value as number}px,max(12px,7cqi)))`);
       } else if (name === "padding") {
         // A box's padding leaves its children's focus rings (4px) and its own rounded corners (30% of the radius) on its surface.
         const room = Math.max(4, Math.ceil(0.3 * (typeof values.radius === "number" ? values.radius : 0)));

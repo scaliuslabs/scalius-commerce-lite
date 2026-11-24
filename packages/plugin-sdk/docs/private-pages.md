@@ -249,7 +249,7 @@ The check reads every row of every palette's table:
 | A field's border and error border | 3:1 | the box around the field |
 | A filled button's fill (Place order, Confirm); an outlined control's or a field's border, or its own fill where no border is drawn | 3:1 | what is around it |
 | Every focus ring | 3:1 | what is around the control or field; a box's rings on the box |
-| The total's amount | its size at least every money row's, every add-on line's and its own label's; its weight at least the rows'; its words' contrast on the summary at least the strongest of the rows' words (their own, their amounts', a discount's) | the summary |
+| The total's amount | its size at least every money row's, every add-on line's, its own label's, a line price's and an app's words drawn in the summary (`ui.*` at `cart.page.summary`, or naming no target); its weight at least the rows'; its words' contrast on the summary at least the strongest of the rows' words (their own, their amounts', a discount's). Its size is drawn at least at the largest of those, so a narrow summary never shrinks it under rows the store keeps at their size | the summary |
 | The total's label | its size at least every money row's | the summary |
 | Place order | its size and weight at least the store's other filled buttons' (`action`) | the page |
 | Confirm | its size and weight at least Go back's | the dialog |
@@ -658,7 +658,7 @@ cart style fold-toggle <root> [data-part="fold-toggle"] tokens=background,text,b
 cart style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap
 cart style summary-heading <root> [data-part="summary-heading"] tokens=text,font,weight,size,leading,case,tracking
 cart style summary-rows <root> [data-summary-row]:not([data-summary-row="total"]) tokens=text,size
-cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size
+cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size,line-price:size,ui/cart.page.summary:size
 cart style summary-total-label <root> [data-summary-row="total"] [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size
 cart style summary-add-on <root> [data-part="add-on-details"] > summary tokens=text,ring,radius
 cart style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size

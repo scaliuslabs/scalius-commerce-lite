@@ -168,9 +168,13 @@ export interface PrivateStyleSpec {
   /**
    * Its rank among its neighbours (`prominence`): the targets it is never
    * drawn less prominent than, each by size, weight and how strongly its
-   * words read (their contrast on their surface), and why.
+   * words read (their contrast on their surface), the apps' targets whose
+   * nodes it is never drawn smaller than (`apps`: a figure an app draws in
+   * the summary could be read as the amount), and why. Its `size` is drawn
+   * at least at the largest size it outranks, so no narrow box draws it
+   * smaller than a row the host keeps at its own size.
    */
-  readonly outranks?: { readonly why: string; readonly over: Readonly<Record<string, readonly PrivateRankBy[]>> };
+  readonly outranks?: { readonly why: string; readonly over: Readonly<Record<string, readonly PrivateRankBy[]>>; readonly apps?: readonly string[] };
 }
 
 /** What a rank compares: words' size, their weight, their contrast on their surface. */
@@ -321,7 +325,7 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   // add-on's lines and its own label, so no theme makes a subtotal read as the total.
   "summary-total": {
     selector: '[data-summary-row="total"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary", hostSize: 20, hostWeight: 600,
-    outranks: { why: "the total reads at least as strongly as every other amount, so a buyer never takes a subtotal for it", over: { "summary-rows": ["size", "weight", "contrast"], "summary-add-on-detail": ["size"], "summary-total-label": ["size"] } },
+    outranks: { why: "the total reads at least as strongly as every other amount, so a buyer never takes a subtotal for it", over: { "summary-rows": ["size", "weight", "contrast"], "summary-add-on-detail": ["size"], "summary-total-label": ["size"], "line-price": ["size"] }, apps: ["cart.page.summary"] },
   },
   // The total's label, apart from its amount; only the total row's (a label inside it), never another row's.
   "summary-total-label": {
@@ -582,7 +586,7 @@ export function privatePageAnatomy(): string[] {
     unit(page, spec);
     for (const [kind, hooks] of Object.entries(spec.layoutHooks ?? {})) lines.push(`${page} layout ${kind} hooks=${hooks.join(",")}`);
     for (const [kind, names] of Object.entries(spec.layoutContents ?? {})) lines.push(`${page} layout ${kind} holds=${names.join(",")}`);
-    for (const [name, style] of Object.entries(spec.styles)) lines.push(`${page} style ${name} ${style.absolute ? "" : "<root> "}${style.selector || "<root>"} tokens=${style.tokens.join(",")}${style.fields ? " fields" : ""}${style.targets ? ` targets=${style.targets.join(",")}` : ""}${style.outside ? ` outside-when=${style.outside.join("|")}` : ""}${style.boundary ? ` boundary=${style.boundary}` : ""}${style.outranks ? ` outranks=${Object.entries(style.outranks.over).map(([other, by]) => `${other}:${by.join("+")}`).join(",")}` : ""}`);
+    for (const [name, style] of Object.entries(spec.styles)) lines.push(`${page} style ${name} ${style.absolute ? "" : "<root> "}${style.selector || "<root>"} tokens=${style.tokens.join(",")}${style.fields ? " fields" : ""}${style.targets ? ` targets=${style.targets.join(",")}` : ""}${style.outside ? ` outside-when=${style.outside.join("|")}` : ""}${style.boundary ? ` boundary=${style.boundary}` : ""}${style.outranks ? ` outranks=${[...Object.entries(style.outranks.over).map(([other, by]) => `${other}:${by.join("+")}`), ...(style.outranks.apps ?? []).map((target) => `ui/${target}:size`)].join(",")}` : ""}`);
     for (const [name, item] of Object.entries(spec.items)) {
       lines.push(`${page}.${name} root ${PRIVATE_PART_ATTRIBUTE}=${PRIVATE_LINE_HOOK}`);
       unit(`${page}.${name}`, item);
