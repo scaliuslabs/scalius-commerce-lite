@@ -32,10 +32,9 @@ import type { StoreScriptSources } from "@/lib/analytics-csp";
  *
  * A buyer's private page (cart, checkout, the receipt, the account, …) loads
  * images only from the store's own origins and the hosts named for it (the
- * store's saved scripts, the merchant's sources), never any `https:` host. It
- * narrows where an image can come from; it is not what keeps a theme's
- * stylesheet from loading one (the save's check is: lib/private-pages and
- * private-css.ts refuse every loading function but the theme's own assets).
+ * store's saved scripts, the merchant's sources), never any `https:` host. No
+ * theme or app stylesheet is drawn there (a theme sets typed tokens the store
+ * compiles, private-tokens.ts), so this narrows the store's own images only.
  * The page draws an image from any other host as the store's placeholder,
  * decided from the same list (`privateImageOrigins`), so nothing breaks.
  *

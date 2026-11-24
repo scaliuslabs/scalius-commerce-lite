@@ -197,8 +197,8 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
     translations: storefrontThemeTranslationsSchema.optional(),
     /**
      * The buyer's private pages drawn from named parts (private-layout.ts):
-     * their arrangement, the theme's stylesheet, words and icons there, and
-     * the stylesheet as the store compiled it on save.
+     * their arrangement, typed tokens, words and icons there (no theme markup
+     * or CSS), and the CSS the store compiled from the tokens on save.
      */
     privatePages: name("StorefrontPrivatePages", storefrontPrivatePagesSchema),
   }).strict().superRefine((value, context) => {
