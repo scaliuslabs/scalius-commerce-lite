@@ -234,8 +234,8 @@ const CART_LINE_PARTS = {
 
 /**
  * The cart page's line: the shared parts, with the cart's own variants. Its
- * details as labelled lines (`lines`), as the chosen values only on one line
- * (`values`, "Rockstar Launcher / Account") or as a chip per fact (`chips`,
+ * details as labelled lines (`lines`), as the chosen values only, on one line
+ * where they fit (`values`, "Rockstar Launcher / Account") or as a chip per fact (`chips`,
  * `line-chip`); its remove as the × button (`icon`) or the word (`words`),
  * both 44px to tap. The drawer draws its lines as the public pages do.
  */

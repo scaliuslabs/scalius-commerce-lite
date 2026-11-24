@@ -54,8 +54,9 @@ export interface CartLineHtmlSlots {
   ruleBlock: string;
 }
 
+// Each stepper button keeps 24px (WCAG 2.5.8's least target) where a narrow column squeezes it.
 const STEPPER_BUTTON =
-  "flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent sm:w-9";
+  "flex h-full w-11 min-w-6 items-center justify-center text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent sm:w-9";
 
 /** A line's sub-parts' variants (private-anatomy.ts), by part; a part not named draws its default. */
 export type CartLineVariants = Readonly<Record<string, string>>;
@@ -64,8 +65,9 @@ const CHIP = "rounded-md bg-muted px-2 py-0.5 text-xs text-foreground";
 
 /**
  * What the buyer chose, as the `details` variant draws it: `lines` (each fact
- * on its own line), `values` (the option values only, " / " on one line cut
- * short on screen, whole in the text assistive technology reads) or `chips`
+ * on its own line), `values` (the option values only, " / ", on one line where
+ * they fit and wrapped where not: never cut, so a phone still shows what tells
+ * two lines of one product apart) or `chips`
  * (each fact a chip). The answers to the store's inputs stay rows in every
  * variant: their controls replace them by key.
  */
@@ -76,7 +78,7 @@ function detailsHtml(view: CartLineView, slots: CartLineHtmlSlots, variant: stri
     chips ? `<li class="${CHIP}" data-part="line-chip" ${attribute}>${text}</li>` : `<span class="${className}" ${attribute}>${text}</span>`;
   const values = view.options.map((each) => escapeHtml(each.label)).join(" / ");
   const options = variant === "values"
-    ? values && `<span class="block truncate" title="${values}" data-cart-line-options>${values}</span>`
+    ? values && `<span class="block break-words" data-cart-line-options>${values}</span>`
     : view.options.map((each) => option(`${escapeHtml(each.name)}: ${escapeHtml(each.label)}`, "data-cart-line-option")).join("");
   const purchaseOptions = view.purchaseOptions
     .map((each) => option(escapeHtml(each.title), "data-cart-line-purchase-option", "block font-medium text-foreground"))
@@ -139,7 +141,10 @@ export function cartLineParts(view: CartLineView, slots: CartLineHtmlSlots, vari
     remove: variants.remove === "words"
       ? `<button ${remove} inline-flex min-h-11 min-w-11 px-2 text-sm font-medium">${escapeHtml(privateVariantWord("remove", pageLanguage()))}</button>`
       : `<button ${remove} flex h-11 w-11 sm:h-9 sm:w-9"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`,
-    quantity: `<div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9" data-part="line-quantity">
+    // The stepper never shrinks beside a large price (the row wraps), nor below its 24px buttons and count with a
+    // 4px border (88px) in a theme's narrow column (a layout node is a size container: its content never widens
+    // a `min-content` track): it never cuts "−" or "+".
+    quantity: `<div class="flex h-11 min-w-22 shrink-0 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9" data-part="line-quantity">
                 <button type="button" aria-label="${escapeHtml(words.decrease)}"${describedBy} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.decreaseTo)}>−</button>
                 <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite" data-cart-line-quantity>${escapeHtml(view.quantityText)}</span>
                 <button type="button" aria-label="${escapeHtml(words.increase)}"${describedBy} ${view.increaseBlocked ? "disabled" : ""} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.increaseTo)}>+</button>
@@ -178,7 +183,7 @@ export function cartLineHtml(view: CartLineView, slots: CartLineHtmlSlots): stri
   if (template) return cartLineFromTemplate(template, view, slots);
   const parts = cartLineParts(view, slots);
   // The quantity and the price stay on every line, an issue or not: the issue says what is wrong under them.
-  const quantityRow = `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
+  const quantityRow = `<div class="mt-2 flex min-h-11 flex-wrap items-center justify-between gap-2">
               ${parts.quantity}
               ${parts.price}
             </div>${parts.limit ? `
