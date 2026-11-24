@@ -506,7 +506,7 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
       const match = UI_KEY.exec(key);
       if (match?.[3] && (!match[4] || match[4] === target)) apps.set(match[1]!, (apps.get(match[1]!) ?? new Set()).add(match[3]));
     }
-    const made: Array<{ place: Place; style: PrivateBuyerUiStyle; tone: string | undefined; app: string | undefined }> = [];
+    const made: Array<{ place: Place; name: string; style: PrivateBuyerUiStyle; tone: string | undefined; app: string | undefined }> = [];
     // Every kind and tone first, then the apps the theme names (an app's rows win over the generic ones).
     for (const app of [undefined, ...new Set([...apps.values()].flatMap((set) => [...set]))]) {
       for (const [kind, style] of Object.entries(kinds)) {
@@ -524,7 +524,7 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
             base: tone ? `ui.${kind}${app ? `@${app}` : ""}/${target}` : null, sources, writes: style.container ? "box" : "leaf",
           };
           places.push(row);
-          made.push({ place: row, style, tone, app });
+          made.push({ place: row, name: kind, style, tone, app });
         }
       }
     }
@@ -534,7 +534,9 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
       if (!box.style.container || !paints(box.place.sources)) continue;
       painted.set(parent, [...painted.get(parent) ?? [], box.place.key]);
       for (const inner of made) {
-        if (inner === box || (inner.app && box.app && inner.app !== box.app)) continue;
+        // Only the kinds it can hold (a banner holds its buttons), and only an app's own nodes in an app's box.
+        const holds = (box.style as { readonly holds?: readonly string[] }).holds;
+        if (inner === box || (holds && !holds.includes(inner.name)) || (inner.app && box.app && inner.app !== box.app)) continue;
         const app = inner.app ?? box.app;
         places.push({
           ...inner.place, key: `${inner.place.key} in ${box.place.key}`, parent: box.place.key, base: inner.place.key, share: undefined,

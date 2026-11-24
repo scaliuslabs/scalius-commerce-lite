@@ -128,7 +128,7 @@ export const REFERENCE_PRIVATE_PAGES = {
       [`ui.text@${APP}/cart.line.after`]: { text: { light: "#000000", dark: "#fef3c6" }, size: 14, weight: "500" },
       [`ui.text.success@${APP}/cart.line.after`]: { text: EMERALD, size: 14, weight: "600" },
       [`ui.link@${APP}/cart.line.after`]: { text: EMERALD, size: 12, weight: "500" },
-      [`ui.button@${APP}/cart.line.after`]: { background: "primary", text: "primary-foreground", border: "primary", "border-width": 0, radius: 0, weight: "600", size: 12 },
+      [`ui.button@${APP}/cart.line.after`]: { background: "primary", text: "primary-foreground", border: "primary", "border-width": 0, radius: 0, weight: "600", size: 12, inset: 16 },
       // On a protected line: "✓ GAMEGHOR Protection added".
       [`ui.badge.success@${APP}/cart.line.after`]: { background: "card", text: EMERALD, border: "card", radius: 0, padding: 0, weight: "600", size: 12 },
       // The status box in the summary: amber "recommended", green (light: yellow) "protected", its Remove.
@@ -138,7 +138,7 @@ export const REFERENCE_PRIVATE_PAGES = {
       [`ui.mark.success@${APP}/cart.page.summary`]: { text: { light: "#000000", dark: "#a4f4cf" }, border: { light: "#bede48", dark: "#36756b" }, size: 12 },
       [`ui.text@${APP}/cart.page.summary`]: { text: WHITE, size: 14, weight: "600" },
       [`ui.link@${APP}/cart.page.summary`]: { text: EMERALD, size: 12, weight: "500" },
-      [`ui.button@${APP}/cart.page.summary`]: { background: { light: "#fed700", dark: "muted" }, text: { light: "#000000", dark: "#a4f4cf" }, "border-width": 0, radius: 0, weight: "600", size: 12 },
+      [`ui.button@${APP}/cart.page.summary`]: { background: { light: "#fed700", dark: "muted" }, text: { light: "#000000", dark: "#a4f4cf" }, "border-width": 0, radius: 0, weight: "600", size: 12, inset: 8 },
       "@line-grid": { columns: [64, "1fr", 88], "columns-wide": [92, "1fr", 150], gap: 12 },
       "@line-side": { gap: 8 },
       "@cart-columns": { gap: 24 },
