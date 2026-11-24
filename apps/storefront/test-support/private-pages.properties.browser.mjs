@@ -137,10 +137,19 @@ if (args.includes("--mutations")) {
     process.exit(1);
   }
   const survived = [];
+  const broken = [];
   for (const [name, mutation] of Object.entries(MUTATIONS)) {
     const started = Date.now();
-    const run = gate(["--mutate", name, "--bail"], mutation.cases);
+    // A run that could not run (exit 2: a crash, a gallery that would not start) is run once more; twice is no answer.
+    let run = gate(["--mutate", name, "--bail"], mutation.cases);
+    if (run.status === 2) run = gate(["--mutate", name, "--bail"], mutation.cases);
     const output = `${run.stdout}\n${run.stderr}`;
+    if (run.status === 2) {
+      broken.push(name);
+      console.log(`COULD NOT RUN ${name} (${Math.round((Date.now() - started) / 1000)}s, exit 2, twice): neither caught nor survived`);
+      console.log(output.split("\n").filter((line) => line.trim()).slice(-12).map((line) => `    ${line}`).join("\n"));
+      continue;
+    }
     // Caught: the gate ran and reported a failing draw (not a crash, exit 2), and the check the mutation names failed.
     const caught = run.status === 1 && /\n✗ /.test(output) && problemsOf(output).some((problem) => mutation.expect.test(problem));
     console.log(`${caught ? "caught  " : "SURVIVED"} ${name} (${Math.round((Date.now() - started) / 1000)}s, exit ${run.status}): ${mutation.why}`);
@@ -151,8 +160,8 @@ if (args.includes("--mutations")) {
       console.log(output.split("\n").filter((line) => line.trim()).slice(-25).map((line) => `    ${line}`).join("\n"));
     }
   }
-  console.log(`private pages gate, mutations: ${Object.keys(MUTATIONS).length - survived.length} of ${Object.keys(MUTATIONS).length} caught${survived.length ? `; survived: ${survived.join(", ")}` : ""}`);
-  process.exit(survived.length > 0 ? 1 : 0);
+  console.log(`private pages gate, mutations: ${Object.keys(MUTATIONS).length - survived.length - broken.length} of ${Object.keys(MUTATIONS).length} caught${survived.length ? `; survived: ${survived.join(", ")}` : ""}${broken.length ? `; could not run: ${broken.join(", ")}` : ""}`);
+  process.exit(broken.length > 0 ? 2 : survived.length > 0 ? 1 : 0);
 }
 if (MUTATE) process.env.SCALIUS_GALLERY_MUTATION = MUTATE;
 
@@ -1552,7 +1561,11 @@ async function startGallery() {
   });
   return { url, close };
 }
-const gallery = await startGallery();
+// A gallery that does not start is started once more; twice, the gate could not run (exit 2, never a failing draw).
+const gallery = await startGallery().catch(() => startGallery()).catch((error) => {
+  console.error("the gate could not run: the gallery did not start, twice:", error);
+  process.exit(2);
+});
 const { styles, ui: UI_KINDS } = await fetch(`${gallery.url}/__gallery/private-anatomy`).then((answer) => answer.json());
 /** Each style target of the cart page with its whole selector (the page's own, `page`, is the body). */
 const STYLE_TARGETS = Object.entries(styles).map(([name, style]) => ({ name, selector: style.absolute ? style.selector : `[data-private="cart"] ${style.selector}`.trim() }));
@@ -1676,6 +1689,24 @@ function still(page) {
     requestAnimationFrame(tick);
   }));
 }
+/**
+ * A check that the dev server's one-time reload (Vite's optimizer, as `settle` meets it) cut short: once the same URL
+ * has loaded and settled, run again. A page that went anywhere else fails as before.
+ */
+async function reloadSafe(page, work) {
+  const at = page.url();
+  try {
+    return await work();
+  } catch (error) {
+    if (!/Execution context was destroyed|navigation/i.test(String(error?.message))) throw error;
+    await page.waitForLoadState("load");
+    if (page.url() !== at) throw new Error(`the page navigated from ${at} to ${page.url()} during a check`);
+    console.error(`(the dev server reloaded ${new URL(at).pathname} during a check; ran it again)`);
+    await settle(page);
+    return work();
+  }
+}
+
 
 async function open(context, id, width, server5xx, height = 900) {
   const page = await context.newPage();
@@ -1719,7 +1750,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   }
   // The first screen and Place order, as a buyer arrives: at scroll 0, then down the cart.
   at("first screen", await page.evaluate(firstScreen, LEAD));
-  if (state !== "empty") at("dock", await timed("dock", () => dockChecks(page)));
+  if (state !== "empty") at("dock", await timed("dock", () => reloadSafe(page, () => dockChecks(page))));
   // Phones: Tab order and the touch scroll run before anything is clicked.
   if (width < 1280 && state !== "empty") at("touch", await timed("touch", () => touchScroll(page)));
   if (focus) {
@@ -1732,7 +1763,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   await openAddOns(page, '[data-private="cart"]');
   await page.waitForTimeout(150);
   // Docked with the fold open too (a phone's cart unfolded is the longest page).
-  if (state !== "empty" && width < 1280) at("dock, fold open", await timed("dock", () => dockChecks(page)));
+  if (state !== "empty" && width < 1280) at("dock, fold open", await timed("dock", () => reloadSafe(page, () => dockChecks(page))));
   const page0 = await check(state, null, mandatory);
   at(state, await page.evaluate(controlsPlaced, controls));
   at(`${state} prominence`, await page.evaluate(prominence, '[data-private="cart"] [data-part="summary"]'));
