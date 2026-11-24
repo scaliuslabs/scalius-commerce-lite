@@ -50,6 +50,7 @@ import {
 } from "./private-anatomy";
 import {
   compactPrivateArrangement,
+  privateCheckoutBlockArrangement,
   fillPrivateArrangement,
   privateArrangementIssues,
   type PrivatePageArrangement,
@@ -70,9 +71,10 @@ import {
  * 7: the look is compiled per page, and a page is in token mode where it has
  * one; a filled button's fill and an outlined control's or a field's edge read
  * at 3:1, Place order and Confirm outrank their neighbours, the total by
- * weight and contrast too, and no descriptive label holds a figure.
+ * weight and contrast too, and no descriptive label holds a figure. Version 8:
+ * the look is compiled per page, and a page is in token mode where it has one.
  */
-export const PRIVATE_CHECKER_VERSION = 7;
+export const PRIVATE_CHECKER_VERSION = 8;
 
 /** The most compiled token CSS a document stores, every page's together. */
 export const PRIVATE_COMPILED_CSS_MAX_BYTES = 64 * 1024;
@@ -327,16 +329,21 @@ export interface PrivatePagesCompileContext {
   palettes: readonly PrivatePalette[];
   /** The app the theme is a template of: its files are the only ones an icon may name (null: no files). */
   themeApp: string | null;
+  /** A page's arrangement when the theme sets none (the payment step's, from the theme's `checkout` block). */
+  defaults?: Partial<Record<PrivatePageKey, PrivatePageArrangement>>;
 }
 
 /** The compile context of a theme document: its palettes and the app its look came from. */
 export function privatePagesContextOf(theme: {
   tokens: Pick<StorefrontThemeTokens, "colors" | "darkColors" | "colorScheme" | "colorSchemeToggle"> & Partial<Pick<StorefrontThemeTokens, "pagePaint">>;
   apps?: { template?: string } | undefined;
+  blocks?: { checkout?: { summary: string; paymentChoices: string } } | undefined;
 }): PrivatePagesCompileContext {
+  const checkout = privateCheckoutBlockArrangement(theme.blocks?.checkout);
   return {
     palettes: privatePalettes(theme.tokens, storefrontDarkPalette),
     themeApp: theme.apps?.template ? parsePluginSurfaceKey(theme.apps.template)?.pluginId ?? null : null,
+    ...(checkout ? { defaults: { checkout } } : {}),
   };
 }
 
@@ -376,7 +383,7 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
   for (const page of PRIVATE_PAGE_KEYS) {
     const tokens = Object.keys(value.tokens[page] ?? {}).length > 0 ? value.tokens[page]! : painted && privatePageHasOwnPage(page) ? {} : null;
     if (!tokens) continue;
-    const arrangement = privatePageArrangement({ ...value, pages, compiled: { ...value.compiled, anatomy: PRIVATE_ANATOMY_VERSION } }, page);
+    const arrangement = privatePageArrangement({ ...value, pages, compiled: { ...value.compiled, anatomy: PRIVATE_ANATOMY_VERSION } }, page) ?? context.defaults?.[page];
     const spec: PrivatePageSpec = PRIVATE_PAGES[page];
     const compiled = compilePrivateTokens(page, tokens, {
       layout: arrangement?.layout ?? spec.layout,

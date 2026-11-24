@@ -6404,6 +6404,9 @@
               },
               "cartDrawer": {
                 "$ref": "#/components/schemas/StorefrontPrivateArrangement"
+              },
+              "checkout": {
+                "$ref": "#/components/schemas/StorefrontPrivateArrangement"
               }
             },
             "additionalProperties": false
@@ -6545,13 +6548,23 @@
                 "minimum": 0
               },
               "css": {
-                "type": "string",
-                "maxLength": 65536
+                "type": "object",
+                "properties": {
+                  "cart": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "cartDrawer": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "checkout": {
+                    "type": "string",
+                    "maxLength": 65536
+                  }
+                }
               },
               "refused": {
-                "type": "boolean"
-              },
-              "tokenMode": {
                 "type": "boolean"
               }
             },

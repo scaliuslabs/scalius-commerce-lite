@@ -430,3 +430,22 @@ function fillWithOptional(page: PrivatePageKey, nodes: PrivateNode[], part: stri
 function privateLayoutHasKey(nodes: readonly PrivateNode[], key: string): boolean {
   return nodes.some((node) => leafKey(node) === key || (node.type === "layout" && privateLayoutHasKey(node.children, key)));
 }
+
+// ─── The payment step's old choices ───────────────────────────────────────
+
+/**
+ * The payment step's arrangement that draws what the theme's `checkout` block
+ * chose (`summary: top`: a narrow frame, the summary folded at every width;
+ * `paymentChoices: tiles`), for a theme that gives the step tokens but no
+ * arrangement: its look is checked on, and drawn in, the page the merchant chose.
+ */
+export function privateCheckoutBlockArrangement(block: { summary: string; paymentChoices: string } | undefined): PrivatePageArrangement | undefined {
+  if (!block || (block.summary !== "top" && block.paymentChoices !== "tiles")) return undefined;
+  const variant = (nodes: readonly PrivateNode[]): PrivateNode[] => nodes.map((node) => {
+    if (node.type === "layout") return { ...node, children: variant(node.children) };
+    if (node.type === "part" && node.part === "summary" && block.summary === "top") return { ...node, variant: "folded" };
+    if (node.type === "part" && node.part === "payment" && block.paymentChoices === "tiles") return { ...node, variant: "tiles" };
+    return node;
+  });
+  return { ...(block.summary === "top" ? { frame: "narrow" } : {}), layout: variant(PRIVATE_PAGES.checkout.layout) };
+}

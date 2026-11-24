@@ -112,6 +112,43 @@ cartDrawer label drawer.continue variants=continue-shopping|keep-shopping
 cartDrawer label drawer.empty max=80 no-figures
 cartDrawer label drawer.startShopping variants=start-shopping|browse-products|continue-shopping
 cartDrawer icon drawer.empty
+checkout root data-private=checkout frames=standard|narrow
+checkout part progress hooks=progress
+checkout part empty mandatory hooks=checkout-empty
+checkout part summary mandatory variants=open-wide|folded hooks=summary,fold-toggle,summary-panel,summary-heading,summary-total-label,add-on-details,add-on-detail
+checkout part heading mandatory hooks=heading
+checkout part notices mandatory hooks=notice
+checkout part gift-card mandatory hooks=gift-card
+checkout part payment mandatory variants=list|tiles hooks=payment,payment-method,payment-details,gateway,pay,legal
+checkout fields in gift-card
+checkout target checkout.payment.after
+checkout target checkout.actions.before
+checkout layouts stack,columns,grid,group
+checkout style page body[data-private-body] tokens=background,gradient,text,muted,link,error
+checkout style frame <root> <root> tokens=max-width
+checkout style action [data-private="checkout"] .bg-primary tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+checkout style input [data-private="checkout"] :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+checkout style field-label [data-private="checkout"] [data-part="field-label"] tokens=text,size,weight,case,tracking
+checkout style notice <root> [data-part="notice"] tokens=background,text,muted,link,error,border,border-width,radius
+checkout style checkout-empty <root> [data-part="checkout-empty"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+checkout style heading <root> [data-part="heading"] tokens=text,font,weight,size,leading,case,tracking
+checkout style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap targets=checkout.summary.after
+checkout style summary-heading <root> [data-part="summary-heading"] tokens=text,font,weight,size,leading,case,tracking
+checkout style summary-rows <root> [data-summary-row]:not(:is([data-summary-row="total"],[data-summary-row="due"])) tokens=text,size
+checkout style summary-total <root> :is([data-summary-row="total"],[data-summary-row="due"]) tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size
+checkout style summary-total-label <root> :is([data-summary-row="total"],[data-summary-row="due"]) [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size
+checkout style summary-add-on <root> [data-part="add-on-details"] > summary tokens=text,ring,radius
+checkout style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size
+checkout style fold-toggle <root> [data-part="fold-toggle"] tokens=background,text,border,border-width,radius,shadow,ring boundary=edge
+checkout style gift-card <root> [data-part="gift-card"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+checkout style payment-method <root> [data-part="payment-method"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+checkout style payment-chosen <root> [data-part="payment-method"][data-chosen] tokens=background,text,muted,border,border-width,shadow
+checkout style payment-details <root> [data-part="payment-details"] tokens=background,text,muted,link,error,border,border-width,radius,padding outside-when=tiles
+checkout style submit <root> [data-part="pay"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=action:size+weight
+checkout style legal <root> [data-part="legal"] tokens=text,size,align
+checkout style chrome :is([data-private="core-header"],[data-private="core-footer"]) tokens=background,gradient,text,muted,link,border,border-width
+checkout style scheme [data-host="scheme"] button tokens=text,ring,radius
+checkout style localization [data-host="localization"] tokens=text,muted,link fields
 receipt root data-private=receipt frames=standard|wide
 receipt part progress hooks=progress
 receipt part status mandatory hooks=status,status-mark,status-title,status-message,status-steps,status-retry

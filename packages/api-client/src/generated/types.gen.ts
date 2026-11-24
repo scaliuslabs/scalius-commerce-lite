@@ -1346,6 +1346,7 @@ export type StorefrontPrivatePages = {
     pages: {
         cart?: StorefrontPrivateArrangement;
         cartDrawer?: StorefrontPrivateArrangement;
+        checkout?: StorefrontPrivateArrangement;
     };
     tokens?: {
         [key: string]: {
@@ -1384,9 +1385,12 @@ export type StorefrontPrivatePages = {
     compiled: {
         anatomy: number;
         sanitizer: number;
-        css: string;
+        css: {
+            cart?: string;
+            cartDrawer?: string;
+            checkout?: string;
+        };
         refused?: boolean;
-        tokenMode?: boolean;
     };
 };
 
