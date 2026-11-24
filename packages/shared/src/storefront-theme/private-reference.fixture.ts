@@ -5,7 +5,11 @@
 // is the prototype's in each scheme (`{ light, dark }` where they differ);
 // where the prototype's own value is under the contrast floor the nearest
 // value that passes stands in, and private-tokens.test.ts shows the
-// prototype's refused. The theme authors' guide
+// prototype's refused. The two palettes are ones a store can save (the
+// store's colour rules: contrast.ts): where the prototype's own role breaks a
+// rule (the light yellow action as a link on white, the dark grey too near
+// the error red) the role takes the nearest legal value and the tokens name
+// the prototype's colour where it is drawn. The theme authors' guide
 // (packages/plugin-sdk/docs/private-pages.md) prints it, and
 // private-tokens.test.ts compiles it against its two palettes.
 import type { StorefrontThemeColors } from "./contrast";
@@ -20,16 +24,20 @@ export const REFERENCE_PALETTE: StorefrontThemeColors = {
   secondary: "#2b2346", "secondary-foreground": "#ffffff",
   muted: "#2b2346", "muted-foreground": "#9f9fa9",
   accent: "#2b2346", "accent-foreground": "#ffffff",
-  destructive: "#ffa2a2", "destructive-foreground": "#100c20",
+  // The prototype's #ffa2a2 is 39.3 from its grey #9f9fa9 (CIE76); the store keeps error words 40 apart.
+  destructive: "#ff9a9a", "destructive-foreground": "#100c20",
   border: "#524179", input: "#7a68a6",
 };
 
-/** Its light palette: white page, #f1f1f1 cards, black words, #111111 greys, the yellow action. */
+/**
+ * Its light palette: white page, #f1f1f1 cards, black words, #111111 greys. The yellow action (#fed700) reads
+ * 1.41:1 as a link on white: the role is the nearest dark yellow that reads (5.69:1), the tokens paint the yellow.
+ */
 export const REFERENCE_LIGHT_PALETTE: StorefrontThemeColors = {
   background: "#ffffff", foreground: "#000000",
   card: "#f1f1f1", "card-foreground": "#000000",
   popover: "#ffffff", "popover-foreground": "#000000",
-  primary: "#fed700", "primary-foreground": "#333e48",
+  primary: "#7a6500", "primary-foreground": "#ffffff",
   secondary: "#f8f9fa", "secondary-foreground": "#000000",
   muted: "#f8f9fa", "muted-foreground": "#111111",
   accent: "#f8f9fa", "accent-foreground": "#000000",
@@ -44,6 +52,9 @@ const APP = "gameghor.protection";
 const AMBER = { light: "#f2ebd9", dark: "#35282c" } as const;
 const EMERALD = { light: "#000000", dark: "#5ee9b5" } as const;
 const WHITE = { light: "#000000", dark: "#ffffff" } as const;
+/** The action: the prototype's yellow and its words in the light scheme, the palette's action in the dark. */
+const ACTION = { light: "#fed700", dark: "primary" } as const;
+const ON_ACTION = { light: "#333e48", dark: "primary-foreground" } as const;
 
 export const REFERENCE_PRIVATE_PAGES = {
   // The store's controls (the light or dark switch, the market and language forms) in its checkout header.
@@ -113,7 +124,7 @@ export const REFERENCE_PRIVATE_PAGES = {
       // The labels' grey (#9f9fa9, light #111111) would not read in the dark dialog in the light scheme: they keep their box's words.
       "field-label": { size: 12, weight: "600" },
       dock: { background: "card", border: "#524179", "border-width": 1 },
-      submit: { background: "primary", text: "primary-foreground", radius: 0, weight: "600", size: 14, inset: 20 },
+      submit: { background: ACTION, text: ON_ACTION, radius: 0, weight: "600", size: 14, inset: 20 },
       "cart-empty": { text: "foreground", muted: "muted-foreground" },
       // The decision: the dark dialog in both schemes (the prototype's light words on it do not read).
       dialog: { background: "#171124", text: "#ffffff", muted: "#d4d4d8", border: { light: "#eaeaea", dark: "#49396d" }, "border-width": 1, radius: 0, shadow: "lg" },
@@ -121,14 +132,14 @@ export const REFERENCE_PRIVATE_PAGES = {
       "dialog-text": { background: "#110d1e", border: "#443567", "border-width": 1, radius: 0, padding: 16, text: "#d4d4d8", muted: "#d4d4d8" },
       "dialog-agree": { background: "#241b39", border: "#49396d", "border-width": 1, radius: 0, padding: 16, text: "#e4e4e7" },
       "dialog-back": { background: "#211936", text: "#e4e4e7", border: "#49396d", "border-width": 1, radius: 0, weight: "700", inset: 20 },
-      "dialog-confirm": { background: "primary", text: "primary-foreground", radius: 0, weight: "800", inset: 20 },
+      "dialog-confirm": { background: ACTION, text: ON_ACTION, radius: 0, weight: "800", inset: 20 },
       // The offer row under an eligible line: amber, square, no border; its mark, its sentence, Learn more, the price and Add Now.
       [`ui.stack.warning@${APP}/cart.line.after`]: { background: AMBER, text: { light: "#000000", dark: "#fef3c6" }, "border-width": 0, radius: 0, padding: 8, gap: 8 },
       [`ui.mark.warning@${APP}/cart.line.after`]: { text: { light: "#000000", dark: "#fee685" }, border: { light: "#f7e195", dark: "#866c2e" }, size: 12 },
       [`ui.text@${APP}/cart.line.after`]: { text: { light: "#000000", dark: "#fef3c6" }, size: 14, weight: "500" },
       [`ui.text.success@${APP}/cart.line.after`]: { text: EMERALD, size: 14, weight: "600" },
       [`ui.link@${APP}/cart.line.after`]: { text: EMERALD, size: 12, weight: "500" },
-      [`ui.button@${APP}/cart.line.after`]: { background: "primary", text: "primary-foreground", border: "primary", "border-width": 0, radius: 0, weight: "600", size: 12, inset: 16 },
+      [`ui.button@${APP}/cart.line.after`]: { background: ACTION, text: ON_ACTION, border: ACTION, "border-width": 0, radius: 0, weight: "600", size: 12, inset: 16 },
       // On a protected line: "✓ GAMEGHOR Protection added".
       [`ui.badge.success@${APP}/cart.line.after`]: { background: "card", text: EMERALD, border: "card", radius: 0, padding: 0, weight: "600", size: 12 },
       // The status box in the summary: amber "recommended", green (light: yellow) "protected", its Remove.
