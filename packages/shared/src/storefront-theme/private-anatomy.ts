@@ -245,6 +245,8 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   summary: { selector: '[data-part="summary"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", part: "summary" },
   "summary-rows": { selector: '[data-summary-row]:not([data-summary-row="total"])', tokens: ["text", "size"], kind: "text", surface: "under", ink: "muted-foreground", on: "summary" },
   "summary-total": { selector: '[data-summary-row="total"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "summary" },
+  // An add-on row that opens to the app's lines: its bar is a control (a focus ring on the summary).
+  "summary-add-on": { selector: '[data-part="add-on-details"] > summary', tokens: ["text", "ring", "radius"], kind: "control", surface: "under", ink: "muted-foreground", on: "summary" },
   "details-form": { selector: '[data-part="details-form"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "details", targets: ["checkout.contact.after", "checkout.delivery.after"] },
   "section-heading": { selector: ':is([data-part="contact"],[data-part="delivery"]) h2', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "details-form" },
   // Place order with its total, the agreement and why it may be off: the page's last box, docked at the bottom
@@ -277,8 +279,9 @@ const CART_PAGE: PrivatePageSpec = {
     progress: part(false, ["progress"]),
     notices: part(true, ["notice"]),
     lines: part(true, ["lines", "lines-heading", "lines-continue", "lines-loading", "lines-list", "lines-clear", "lines-undo", "cart-empty", "cart-empty-icon"]),
-    // Its money rows carry `data-summary-row` (subtotal, add-on, delivery, discount, tax, total), as on every surface.
-    summary: part(true, ["summary", "summary-validation"]),
+    // Its money rows carry `data-summary-row` (subtotal, add-on, delivery, discount, tax, total), as on every surface;
+    // an add-on row with the app's lines under it opens to them (`add-on-details`, a disclosure the host draws).
+    summary: part(true, ["summary", "summary-validation", "add-on-details"]),
     discount: part(false, ["discount"], "fields"),
     details: part(true, ["details", "details-sign-in", "details-form", "contact", "delivery", "details-errors", "dock", "details-submit", "legal"], "fields"),
     empty: part(false, ["empty-extras"]),
@@ -344,7 +347,7 @@ const CART_DRAWER: PrivatePageSpec = {
     undo: part(true, ["drawer-undo"]),
     offers: part(false, ["drawer-offers"]),
     // Its money rows carry `data-summary-row`; `drawer-summary` is the box of rows above the total.
-    summary: part(true, ["drawer-summary", "drawer-total", "drawer-blocked"]),
+    summary: part(true, ["drawer-summary", "drawer-total", "drawer-blocked", "add-on-details"]),
     actions: part(true, ["drawer-checkout", "drawer-actions", "drawer-view-cart", "drawer-continue"]),
   },
   targets: ["cart_drawer.footer"],
