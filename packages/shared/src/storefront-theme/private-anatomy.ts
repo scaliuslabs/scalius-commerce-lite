@@ -27,7 +27,7 @@
 // mandatory part and target exactly once. Nothing else is per page.
 
 /** Rises when a page gains a mandatory part or target (a stored arrangement then fills it in on read). */
-export const PRIVATE_ANATOMY_VERSION = 2 as const;
+export const PRIVATE_ANATOMY_VERSION = 3 as const;
 
 /**
  * The host's layout nodes. `stack`: one column. `columns`: one column on
@@ -489,14 +489,168 @@ const CART_DRAWER: PrivatePageSpec = {
   icons: ["drawer.empty"],
 };
 
+// ─── The receipt and the account (the pages after the order) ──────────────
+
+/**
+ * What the receipt and the account share with the cart, by the cart's names
+ * (`privatePageStyles`, `privateSummaryStyles`): the page and its frame, every
+ * filled button and field, the money rows and the total (the total outranks
+ * every other row), and a line's image, title, facts and price. A theme gives
+ * the same thing one look on every page. Both keep the public header and
+ * footer (closed core variants in the palette's colours), so neither takes
+ * the store's checkout chrome.
+ */
+const RECEIPT_PAGE_STYLES = privatePageStyles("receipt", { dialogs: true, chrome: false });
+const ACCOUNT_PAGE_STYLES = privatePageStyles("account", { dialogs: true, chrome: false });
+/** The page-wide targets but the notices: neither page draws the cart's notices part. */
+const withoutNotices = ({ notice: _notice, ...rest }: Record<string, PrivateStyleSpec>) => rest;
+
+/** An order's line as the cart's line is styled, inside the box `on`, with the apps' `order.line.after` under it. */
+const afterOrderLineStyles = (on: string): Record<string, PrivateStyleSpec> => ({
+  line: { ...CART_STYLES.line!, on, targets: ["order.line.after"] },
+  "line-image": { ...CART_STYLES["line-image"]!, item: undefined, part: undefined, on: "line" },
+  "line-title": { ...CART_STYLES["line-title"]!, tokens: [...TEXT_TOKENS], item: undefined, part: undefined, on: "line" },
+  "line-details": { ...CART_STYLES["line-details"]!, item: undefined, part: undefined, on: "line" },
+  "line-price": { ...CART_STYLES["line-price"]!, item: undefined, part: undefined, on: "line" },
+});
+
+/** An order's or a request's state as a pill: words on a surface of their own (the receipt's order and payment states, the account's). */
+const STATUS_BADGE_TOKENS = ["background", "text", "border", "border-width", "radius"] as const satisfies readonly PrivateTokenName[];
+
+/**
+ * The receipt (`/order-success`, the confirmation and the order's status
+ * view, and the theme editor's sample receipt): the order's state, its
+ * tracking, the order with its totals, where it goes, what was bought, the
+ * account and support actions, the conversation with the store and the apps'
+ * targets. Every card a buyer must read is mandatory: a theme orders and lays
+ * them out and gives them their look, never leaves one out.
+ */
+const RECEIPT_STYLES: Record<string, PrivateStyleSpec> = {
+  ...withoutNotices(RECEIPT_PAGE_STYLES.head),
+  // The order's state: its mark, title (the page's h1), message and next steps; the payment retry under them.
+  status: { selector: '[data-part="status"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", part: "status" },
+  "status-mark": { selector: '[data-part="status-mark"]', tokens: ["background", "text", "border", "border-width", "radius"], kind: "text", surface: "under", ink: "primary", on: "status" },
+  "status-title": { selector: '[data-part="status-title"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "status" },
+  "status-message": { selector: '[data-part="status-message"]', tokens: ["text", "size", "weight", "leading"], kind: "text", surface: "under", ink: "muted-foreground", on: "status" },
+  "status-steps": { selector: '[data-part="status-steps"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", on: "status" },
+  tracking: { selector: '[data-part="tracking"]', tokens: [...BOX_TOKENS], kind: "box", surface: "background", ink: "foreground", part: "tracking" },
+  // The order card: its facts (the order number and its state among them), then the money rows and the total.
+  order: { selector: '[data-part="order"]', tokens: [...BOX_TOKENS], kind: "box", surface: "background", ink: "foreground", part: "summary" },
+  "order-facts": { selector: '[data-part="order-facts"]', tokens: ["text", "muted", "size"], kind: "text", surface: "under", ink: "foreground", on: "order" },
+  "status-badge": { selector: '[data-part="status-badge"]', tokens: [...STATUS_BADGE_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "order-facts" },
+  // The money block inside the order card; the total and its label drawn at the card's 16px.
+  ...privateSummaryStyles({ on: "order", total: 16, label: 16 }),
+  // Where it goes: the buyer's own name, address and contact.
+  delivery: { selector: '[data-part="delivery"]', tokens: [...BOX_TOKENS], kind: "box", surface: "background", ink: "foreground", part: "delivery" },
+  "section-heading": { selector: '[data-part="section-heading"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "delivery" },
+  "delivery-contact": { selector: '[data-part="delivery-contact"]', tokens: ["text", "muted", "size"], kind: "text", surface: "under", ink: "foreground", on: "delivery" },
+  // What was bought: the card, its heading and each line.
+  lines: { selector: '[data-part="lines"]', tokens: [...BOX_TOKENS], kind: "box", surface: "background", ink: "foreground", part: "lines" },
+  "lines-heading": { selector: '[data-part="lines-heading"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "lines" },
+  ...afterOrderLineStyles("lines"),
+  // The order's conversation with the store (it holds the reply form).
+  conversation: { selector: '[data-part="conversation"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "conversation", fields: true },
+  ...RECEIPT_PAGE_STYLES.tail,
+};
+
+const RECEIPT_PAGE: PrivatePageSpec = {
+  root: "receipt",
+  // `standard`: one column (48rem); `wide`: room for two (64rem).
+  frames: ["standard", "wide"],
+  parts: {
+    progress: part(false, ["progress"]),
+    status: part(true, ["status", "status-mark", "status-title", "status-message", "status-steps", "status-retry"]),
+    // The order's way to the buyer (its status view, when the order has tracking).
+    tracking: part(true, ["tracking"]),
+    // The order's number, state and payment, then every money row and the total.
+    summary: part(true, ["order", "order-facts", "order-number", "status-badge", "summary", "summary-heading", "summary-total-label", "add-on-details", "add-on-detail"]),
+    delivery: part(true, ["delivery", "section-heading", "delivery-contact"]),
+    lines: part(true, ["lines", "lines-heading", "line", "line-image", "line-title", "line-details", "line-price", "line-extras"]),
+    // The account and support actions (an account to make, a request to send): fields and buttons.
+    actions: part(true, ["actions"], "fields"),
+    conversation: part(true, ["conversation"], "fields"),
+    recommendations: part(false, ["recommendations"]),
+  },
+  // The confirmation draws `order.confirmation`, the status view `account.order`: each at its node.
+  targets: ["order.confirmation", "account.order"],
+  lead: ["status", "summary"],
+  layouts: ["stack", "columns", "grid", "group"],
+  styles: RECEIPT_STYLES,
+  layout: [
+    p("progress"),
+    p("status"),
+    p("tracking"),
+    l("stack", [p("summary"), p("delivery"), p("lines")]),
+    t("order.confirmation"),
+    t("account.order"),
+    p("actions"),
+    p("conversation"),
+    p("recommendations"),
+  ],
+  items: {},
+  labels: {},
+  icons: [],
+};
+
+/**
+ * The account (every page under `/account`): one shell (its navigation with
+ * Sign out, the page's heading) around the page's content. The content's
+ * elements a theme styles are the same on every account page: its cards, a
+ * state's pill, an order's lines and totals, a line's delivery message and
+ * its reveal, a conversation and its messages.
+ */
+const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
+  ...withoutNotices(ACCOUNT_PAGE_STYLES.head),
+  // The shell: the navigation (each page, the current one, Sign out) and the page's heading.
+  navigation: { selector: '[data-part="navigation"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", part: "navigation" },
+  "nav-item": { selector: '[data-part="nav-item"]:not([aria-current="page"])', tokens: ["text", "size", "weight", "radius", "ring"], kind: "control", surface: "under", ink: "muted-foreground", on: "navigation" },
+  // The current page: its words, and its marker in the link colour.
+  "nav-current": { selector: '[data-part="nav-item"][aria-current="page"]', tokens: ["text", "link", "size", "weight", "radius", "ring"], kind: "control", surface: "under", ink: "foreground", on: "navigation" },
+  "sign-out": { selector: '[data-part="sign-out"]', tokens: ["background", "text", "border", "border-width", "radius", "ring", "inset", "weight", "size"], kind: "control", surface: "under", ink: "muted-foreground", on: "navigation" },
+  "heading-title": { selector: '[data-part="heading-title"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", part: "heading" },
+  "heading-intro": { selector: '[data-part="heading-intro"]', tokens: ["text", "size", "weight", "leading"], kind: "text", surface: "under", ink: "muted-foreground", part: "heading" },
+  "heading-back": { selector: '[data-part="heading-back"]', tokens: ["text", "radius", "ring"], kind: "control", surface: "under", ink: "muted-foreground", part: "heading" },
+  // The page's content, with the apps' account targets in it.
+  content: { selector: '[data-part="content"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", part: "content", targets: ["account.overview", "account.order", "account.profile"] },
+  card: { selector: '[data-part="card"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", on: "content", fields: true },
+  "card-title": { selector: '[data-part="card-title"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "card" },
+  "status-badge": { selector: '[data-part="status-badge"]', tokens: [...STATUS_BADGE_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "card" },
+  // An order's totals inside its card, drawn at the card's 14px.
+  ...privateSummaryStyles({ on: "card", total: 14, label: 14 }),
+  ...afterOrderLineStyles("card"),
+  // A line's delivery message (the store's words for it) and the control that reveals it.
+  "delivery-message": { selector: '[data-part="delivery-message"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", on: "line" },
+  "delivery-reveal": { selector: '[data-part="delivery-reveal"]', tokens: [...BUTTON_TOKENS], kind: "control", surface: "background", ink: "foreground", on: "delivery-message" },
+  ...ACCOUNT_PAGE_STYLES.tail,
+};
+
+const ACCOUNT_PAGE: PrivatePageSpec = {
+  root: "account",
+  parts: {
+    // `tabs`: a strip over the page; `sidebar`: a list beside it on a wide screen (the strip on phones).
+    navigation: part(true, ["navigation", "nav-item", "nav-badge", "sign-out"], null, ["tabs", "sidebar"]),
+    heading: part(true, ["heading", "heading-title", "heading-intro", "heading-back"]),
+    content: part(true, ["content", "card", "card-title", "status-badge", "summary", "summary-total-label", "add-on-details", "add-on-detail", "line", "line-image", "line-title", "line-details", "line-price", "delivery-message", "delivery-reveal"], "fields"),
+  },
+  targets: [],
+  lead: ["heading", "content"],
+  layouts: ["stack", "columns", "grid", "group"],
+  styles: ACCOUNT_STYLES,
+  layout: [p("navigation"), p("heading"), p("content")],
+  items: {},
+  labels: {},
+  icons: [],
+};
+
 /**
  * Every private page the model draws, by its key in the theme document's
- * `privatePages.pages`. The checkout, the receipt and the account register
- * here as they convert.
+ * `privatePages.pages`. The checkout registers here as it converts.
  */
 export const PRIVATE_PAGES = {
   cart: CART_PAGE,
   cartDrawer: CART_DRAWER,
+  receipt: RECEIPT_PAGE,
+  account: ACCOUNT_PAGE,
 } as const satisfies Record<string, PrivatePageSpec>;
 
 export type PrivatePageKey = keyof typeof PRIVATE_PAGES;

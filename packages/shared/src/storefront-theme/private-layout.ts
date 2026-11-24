@@ -96,6 +96,13 @@ const hook = z.string().max(PRIVATE_HOOK_MAX);
 
 const name = z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/);
 
+/**
+ * The pages a theme gives a look (tokens) but does not arrange yet: the
+ * receipt and the account draw their parts in the store's order; an
+ * arrangement other than the default is refused (`not_available`).
+ */
+export const PRIVATE_LOOK_ONLY_PAGES: readonly PrivatePageKey[] = ["receipt", "account"];
+
 /** Refused with this reason and plain words: what a theme cannot set on a private page in this release. */
 export const PRIVATE_NOT_AVAILABLE = "not_available";
 const notAvailable = (what: string) => `${what} is not available yet: a theme arranges the store's parts and gives them tokens.`;
@@ -309,6 +316,11 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
     const arrangement = value.pages[page];
     if (!arrangement) continue;
     const base = ["privatePages", "pages", page];
+    // The receipt and the account take their look from tokens; their parts are not arranged by a theme yet.
+    if (PRIVATE_LOOK_ONLY_PAGES.includes(page) && compactPrivateArrangement(page, arrangement)) {
+      issues.push({ path: base, reason: PRIVATE_NOT_AVAILABLE, message: notAvailable(`Arranging the ${page} page`) });
+      continue;
+    }
     issues.push(...privateArrangementIssues(page, arrangement).map((issue) => ({ ...issue, path: [...base, ...issue.path] })));
     const compact = compactPrivateArrangement(page, arrangement);
     if (compact) pages[page] = compact;

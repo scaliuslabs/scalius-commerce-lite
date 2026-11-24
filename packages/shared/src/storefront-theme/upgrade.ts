@@ -14,6 +14,7 @@ import { STOREFRONT_SECTION_REGISTRY, type StorefrontSectionSettingsUpgrade } fr
 import { storefrontPrivatePageDefaults } from "./private-pages";
 import { privateCartPresetArrangement, privateDrawerWith, type PrivatePageArrangement } from "./private-arrangement";
 import { PRIVATE_CHECKER_VERSION } from "./private-layout";
+import { PRIVATE_ANATOMY_VERSION } from "./private-anatomy";
 
 /**
  * The oldest stored version that still reads. Migration 0155 reset every
@@ -158,11 +159,12 @@ function privatePageBlocks(document: Json): Json {
 }
 
 /**
- * The anatomy the 14 → 15 step checks against. It writes no tokens, and
+ * The anatomy the 14 → 15 step checks against: this build's, since the step
+ * builds its arrangements from the live specs. It writes no tokens, and
  * nothing compiles to nothing under any checker, so its empty output is
  * this build's checker's.
  */
-const V15_ANATOMY = 2;
+const V15_ANATOMY = PRIVATE_ANATOMY_VERSION;
 const V15_CHECKER = PRIVATE_CHECKER_VERSION;
 
 /**

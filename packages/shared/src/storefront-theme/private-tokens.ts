@@ -1098,6 +1098,17 @@ export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [decla
   ["has-[:checked]:border-primary", ["border-color:var(--pt-l)", ":has(:checked)"]],
   ["has-[:checked]:ring-primary", ["--tw-ring-color:var(--pt-l)", ":has(:checked)"]],
   ["aria-[invalid=true]:border-destructive", ["border-color:var(--pt-i)", '[aria-invalid="true"]']],
+  // The receipt and the account: their pills' and overlays' tints paint nothing (a thumbnail's count reads on the
+  // row's hover surface), their borders are the row's, the account menu's current marker is its link colour.
+  ...["bg-warning/15", "bg-muted/10", "bg-muted/20"].map((name) => [name, ["background-color:transparent"]] as const),
+  ["bg-background/90", ["background-color:var(--pt-h)"]],
+  ["lg:hover:bg-muted", ["background-color:var(--pt-h)", ":hover"]],
+  ...["border-muted-foreground/30", "hover:border-primary/40", "hover:border-foreground/25", "lg:border-border"].map((name) => [name, ["border-color:var(--pt-b)"]] as const),
+  ["after:bg-primary", ["background-color:var(--pt-l)", "::after"]],
+  ["ring-primary", ["--tw-ring-color:var(--pt-l)"]],
+  ["focus-visible:after:ring-ring", ["--tw-ring-color:var(--pt-r)", ":focus-visible"]],
+  ["focus:border-primary", ["border-color:var(--pt-r)", ":focus"]],
+  ["focus:ring-primary/20", ["--tw-ring-color:var(--pt-r)", ":focus"]],
 ]);
 
 const classSelector = (name: string) => `.${name.replace(/[^a-zA-Z0-9_-]/g, (character) => `\\${character}`)}`;
