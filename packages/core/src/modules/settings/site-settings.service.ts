@@ -42,6 +42,7 @@ import {
   THEME_VERSION_CHANGES_MAX,
   compareThemeDocuments,
   compileStorefrontPrivatePages,
+  storefrontThemeAssetIssues,
   privatePagesCompiledCurrent,
   privatePagesContextOf,
   PRIVATE_ANATOMY_VERSION,
@@ -328,6 +329,11 @@ function serializeThemeSettings(theme: StorefrontThemeDocument): {
   const translationProblems = storefrontThemeTranslationProblems(result.data);
   if (translationProblems.length > 0) {
     throw new ValidationError(translationProblems[0]!.message, translationProblems);
+  }
+  // Every app file the theme names (private page icons, tab icons) is its own app's.
+  const foreign = storefrontThemeAssetIssues(result.data);
+  if (foreign.length > 0) {
+    throw new ValidationError(foreign[0]!.message, { reason: foreign[0]!.reason, issues: foreign.slice(0, 20).map((issue) => ({ path: issue.path.join("."), message: issue.message })) });
   }
   // The private pages compile here, on every save and publish: each arrangement against its page's
   // parts, the tokens against the theme's palettes and the theme's words. What the request said was

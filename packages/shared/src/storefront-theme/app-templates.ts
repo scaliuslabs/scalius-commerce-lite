@@ -12,6 +12,7 @@
 // (contrast included) when it is saved, so an app can never write a theme the
 // storefront cannot draw.
 
+import { storefrontTemplateAssetApp, storefrontThemeAssetIssues, type StorefrontThemeAssetHolder } from "./theme-assets";
 import { z } from "zod";
 import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBlocksSchema } from "./blocks";
@@ -216,13 +217,15 @@ function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHa
     parsed = storefrontAppTemplateThemeSchema.safeParse(candidate);
   }
   if (!parsed.success) return { ok: false, problem: issueText(parsed.error) };
-  // Its private pages pass the checks a save runs (arrangements, tokens against its own colours,
-  // words, icons). Its files are its own app's: the one app every icon it names comes from.
+  // Its files are its own app's: the one app every file it names (private page icons, tab icons) comes from.
+  const assetApp = storefrontTemplateAssetApp(parsed.data as StorefrontThemeAssetHolder);
+  const foreign = storefrontThemeAssetIssues(parsed.data as StorefrontThemeAssetHolder, assetApp)[0];
+  if (foreign) return { ok: false, problem: `${foreign.path.join(".")}: ${foreign.message}` };
+  // Its private pages pass the checks a save runs (arrangements, tokens against its own colours, words, icons).
   if (parsed.data.privatePages) {
     const value = { ...storefrontPrivatePagesDefault(), ...parsed.data.privatePages } as StorefrontPrivatePages;
-    const apps = new Set(Object.values(value.icons).flatMap((ref) => ref ? [ref.app] : []));
     const context = privatePagesContextOf({ tokens: parsed.data.tokens ?? DEFAULT_STOREFRONT_THEME.tokens });
-    const compiled = compileStorefrontPrivatePages(value, { ...context, themeApp: apps.size === 1 ? [...apps][0]! : null });
+    const compiled = compileStorefrontPrivatePages(value, { ...context, themeApp: assetApp });
     if (!compiled.ok) {
       const issue = compiled.issues[0]!;
       return { ok: false, problem: `${issue.path.join(".")}: ${issue.message}` };
