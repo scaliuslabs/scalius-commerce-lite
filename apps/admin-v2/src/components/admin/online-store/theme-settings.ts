@@ -13,7 +13,6 @@ import {
   STOREFRONT_PRODUCT_MODULES,
   STOREFRONT_TEMPLATES,
   STOREFRONT_THEME_COLOR_KEYS,
-  STOREFRONT_THEME_DOCUMENT_VERSION,
   STOREFRONT_THEME_MAX_MUTED_CHROMA,
   STOREFRONT_THEME_MIN_CONTRAST,
   STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE,
@@ -22,7 +21,6 @@ import {
   isStorefrontThemeHexColor,
   listStorefrontThemeDocumentContrastProblems,
   canonicalStorefrontLink,
-  readStorefrontAppTemplateTheme,
   resolveStorefrontTheme,
   storefrontBlockSwitch,
   storefrontBlockValue,
@@ -628,15 +626,19 @@ export interface AppTemplateEntry {
 }
 
 /**
- * The active apps' templates, as the API lists them at this document version
- * (one that does not parse is left out). The check is the store's whole one:
- * call this once per list of apps (memoised on it), never per draft change.
+ * The active apps' templates as the API lists them: it reads each one at this
+ * store's document version and leaves out any that does not fit, so the list
+ * is offered as it is (every switch is checked again on the server).
  */
 export function appTemplates(apps: readonly ThemeApp[]): AppTemplateEntry[] {
-  return apps.flatMap((app) => app.templates.flatMap((template) => {
-    const theme = readStorefrontAppTemplateTheme(template.theme, STOREFRONT_THEME_DOCUMENT_VERSION, app.id, template.id);
-    return theme ? [{ key: template.key, name: template.name, description: template.description, app, theme, omittedCardFields: template.omittedCardFields }] : [];
-  }));
+  return apps.flatMap((app) => app.templates.map((template) => ({
+    key: template.key,
+    name: template.name,
+    description: template.description,
+    app,
+    theme: template.theme as StorefrontAppTemplateTheme,
+    omittedCardFields: template.omittedCardFields,
+  })));
 }
 
 /** An app template applied to the document (`applyStorefrontAppTemplate`): its look, skins and homepage sections. */

@@ -18,7 +18,7 @@ import { z } from "zod";
 import { parsePluginSurfaceKey } from "../plugins/storefront";
 import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBlocksSchema } from "./blocks";
-import { storefrontPrivatePagesDefault, storefrontPrivatePagesTemplateSchema, type StorefrontPrivatePages } from "./private-layout";
+import { storefrontPrivatePagesDefault, storefrontPrivatePagesTemplateSchema, type StorefrontPrivatePages } from "./private-schema";
 import { checkStorefrontThemeSave, type StorefrontThemeSaveIssue } from "./save";
 import { storefrontSectionListSchema, type StorefrontSection } from "./sections";
 import { storefrontDarkColorsMissing, storefrontThemeShowsDarkColors, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";

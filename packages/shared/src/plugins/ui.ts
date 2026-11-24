@@ -25,6 +25,7 @@ import { PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_URL_NAME_PATTERN, PLUGIN_UR
 import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "./ids";
 import { ADMIN_UPLOAD_TYPES, BUYER_UPLOAD_DECLARATION_LIMITS } from "../buyer-uploads";
 import { LINE_INPUT_CHANGE_KEY_PATTERN, LINE_INPUT_CHANGE_LIMITS } from "./line-input-change";
+import { isStoreActionOrAmountWord, STORE_WORDS_REASON } from "../store-words";
 
 export const PLUGIN_UI_VERSION = 1 as const;
 
@@ -621,10 +622,22 @@ export function pluginUiNodes(root: PluginUiNode): PluginUiNode[] {
 
 const inputTypes = new Set<string>(PLUGIN_UI_INPUT_TYPES);
 
+/** The words a buyer node draws as a label or a button: what may never be the store's (`isStoreActionOrAmountWord`). */
+function buyerLabels(node: PluginUiNode): Array<{ text: string; at: (string | number)[] }> {
+  switch (node.type) {
+    case "button": return [{ text: node.label, at: ["label"] }];
+    case "heading": case "badge": return [{ text: node.text, at: ["text"] }];
+    case "banner": return node.title ? [{ text: node.title, at: ["title"] }] : [];
+    case "key-value": return node.items.map((item, index) => ({ text: item.label, at: ["items", index, "label"] }));
+    default: return [];
+  }
+}
+
 /**
  * Structural rules zod cannot say: the surface's nodes, actions, link
  * targets and image sources, its size and depth, pages only at the root,
- * inputs only in forms, unique input names.
+ * inputs only in forms, unique input names, and on a buyer page no label or
+ * button that reads as the store's own action or amount word.
  */
 function checkTree(root: PluginUiNode, surface: PluginUiSurface, context: z.RefinementCtx): void {
   const rules = PLUGIN_UI_SURFACES[surface];
@@ -646,6 +659,20 @@ function checkTree(root: PluginUiNode, surface: PluginUiSurface, context: z.Refi
     if (target) return report(path, `A ${target.kind} link is not available on the ${surface} surface.`), false;
     if (node.type === "image" && (typeof node.src === "string") !== (rules.images === "url")) {
       return report([...path, "src"], surface === "admin" ? "Use an https:// image address." : "Use { media } or { app } for an image."), false;
+    }
+    // On a buyer page an app's labels and buttons never read as the store's action or amount words (store-words.ts).
+    if (surface === "buyer") {
+      const word = buyerLabels(node).find((entry) => isStoreActionOrAmountWord(entry.text));
+      if (word) {
+        if (!reported) context.addIssue({
+          code: "custom",
+          path: [...path, ...word.at],
+          message: `"${word.text}" is the store's own word for an action or an amount: say what your block does.`,
+          params: { reason: STORE_WORDS_REASON },
+        });
+        reported = true;
+        return false;
+      }
     }
     return true;
   };

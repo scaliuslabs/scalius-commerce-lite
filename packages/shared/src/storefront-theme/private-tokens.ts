@@ -20,17 +20,22 @@
 // words and of its muted, link and error words, its border and focus ring
 // (and a field's placeholder and error border). Each is the theme's token
 // where given, else a default that reads on the surface beneath. A filled
-// button's fill, and an outlined control's or a field's border (its own fill
-// where the theme draws no border), read at 3:1 on what is around it. The host
+// button's fill (or its edge, where the theme draws a solid border of at least
+// 2px over a fill clearly a colour of its own), and an outlined control's or a
+// field's border (its own fill where the theme draws no border), read at 3:1
+// on what is around it. The host
 // writes exactly those rows as CSS (`privateTableCss`), and the contrast check
 // runs over exactly those rows (`privateTablePairs`): a pair the CSS draws is
 // a pair the check reads. Inside the page, the host's palette classes read the
 // nearest row (`PRIVATE_TOKEN_MODE_CSS`): a translucent tint or a palette
 // colour never decides a colour there.
 import { z } from "zod";
+
+export { privateTokensSchema, type PrivateTokens } from "./private-schema";
 import { buyerUiButtonProminenceIssues, PRIVATE_UI_BUTTON_UNDER } from "./private-buyer-ui";
-import { STOREFRONT_THEME_COLOR_KEYS, storefrontThemeContrast, storefrontThemeHoverSurface, storefrontThemeMix, type StorefrontThemeColors } from "./contrast";
+import { STOREFRONT_THEME_COLOR_KEYS, STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE, storefrontThemeColorDistance, storefrontThemeContrast, storefrontThemeHoverSurface, storefrontThemeMix, type StorefrontThemeColors } from "./contrast";
 import { storefrontPagePaintColors, storefrontPagePaintCss, storefrontThemeFocusRing, type StorefrontPagePaint } from "./tokens";
+import { privateTokensSchema, type PrivateTokens } from "./private-schema";
 import {
   PRIVATE_BUYER_UI_STYLES,
   PRIVATE_HOOK_PATTERN,
@@ -52,9 +57,20 @@ import {
 /** The contrast floors: text (WCAG 1.4.3 AA) and a field's marks and focus rings (WCAG 1.4.11). */
 export const PRIVATE_CONTRAST_FLOOR = 4.5;
 export const PRIVATE_MARK_CONTRAST_FLOOR = 3;
+/**
+ * A filled button found by a drawn edge rather than its fill: the least
+ * border width it draws (px; an unset width draws none)...
+ */
+export const PRIVATE_EDGE_MIN_WIDTH = 2;
+/**
+ * ...and how far its fill stays from every point around it (CIE76, the
+ * store's "clearly apart"): a fill near what is around it with an edge is an
+ * outlined button, Go back's look, never the store's action.
+ */
+export const PRIVATE_EDGE_FILL_DISTANCE = STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE;
 
 const HEX = /^#[0-9a-f]{6}$/;
-const oneColorSchema = z.union([z.enum(STOREFRONT_THEME_COLOR_KEYS), z.string().regex(HEX)]);
+const oneColorSchema = /* @__PURE__ */ (() => z.union([z.enum(STOREFRONT_THEME_COLOR_KEYS), z.string().regex(HEX)]))();
 /**
  * A colour: a palette role or an opaque `#rrggbb`, the same in both schemes,
  * or `{ light, dark }` with one of those each (both: a half value would leave
@@ -62,21 +78,21 @@ const oneColorSchema = z.union([z.enum(STOREFRONT_THEME_COLOR_KEYS), z.string().
  * is not checked (a dark-only theme's `{ light, dark }` draws its dark one);
  * showing that scheme is a save, which checks it.
  */
-const colorSchema = z.union([oneColorSchema, z.object({ light: oneColorSchema, dark: oneColorSchema }).strict()], {
+const colorSchema = /* @__PURE__ */ (() => z.union([oneColorSchema, z.object({ light: oneColorSchema, dark: oneColorSchema }).strict()], {
   error: 'A colour is a palette role, an opaque #rrggbb in lowercase, or { "light": …, "dark": … } with one of those for each scheme.',
-});
+}))();
 type ColorValue = z.infer<typeof colorSchema>;
 /** A colour value as one palette draws it. */
 const inScheme = (value: unknown, scheme: "light" | "dark"): unknown => typeof value === "object" && value !== null ? (value as Record<string, unknown>)[scheme] : value;
-const gradientSchema = z.object({
+const gradientSchema = /* @__PURE__ */ (() => z.object({
   shape: z.enum(["linear", "radial"]),
   angle: z.number().int().min(0).max(360).optional(),
   from: colorSchema,
   to: colorSchema,
-}).strict();
+}).strict())();
 type Gradient = z.infer<typeof gradientSchema>;
-const trackSchema = z.union([z.enum(["auto", "min-content", "1fr", "2fr", "3fr", "4fr"]), z.number().int().min(24).max(480)]);
-const tracksSchema = z.array(trackSchema).min(1).max(4);
+const trackSchema = /* @__PURE__ */ (() => z.union([z.enum(["auto", "min-content", "1fr", "2fr", "3fr", "4fr"]), z.number().int().min(24).max(480)]))();
+const tracksSchema = /* @__PURE__ */ (() => z.array(trackSchema).min(1).max(4))();
 type Tracks = z.infer<typeof tracksSchema>;
 
 type TokenSpec = {
@@ -104,7 +120,7 @@ const choice = <T extends string>(values: Record<T, string>): Pick<TokenSpec, "s
 /** The colour tokens: each is a cell of the table, never a rule of its own. */
 export const PRIVATE_COLOUR_TOKENS = ["background", "gradient", "text", "muted", "link", "error", "placeholder", "ring", "invalid", "border"] as const satisfies readonly PrivateTokenName[];
 
-export const PRIVATE_TOKEN_SPECS: Record<PrivateTokenName, TokenSpec> = {
+export const PRIVATE_TOKEN_SPECS: Record<PrivateTokenName, TokenSpec> = /* @__PURE__ */ (() => ({
   background: { schema: colorSchema },
   gradient: { schema: gradientSchema },
   text: { schema: colorSchema },
@@ -160,18 +176,11 @@ export const PRIVATE_TOKEN_SPECS: Record<PrivateTokenName, TokenSpec> = {
   "height-wide": { schema: px(40, 320), write: (value: number) => `block-size:${value}px`, wide: true },
   fit: { ...choice({ contain: "object-fit:contain", cover: "object-fit:cover" }), on: [" img"] },
   "max-width": { schema: px(480, 1600), write: (value: number) => `max-inline-size:${value}px` },
-};
+}))();
 
 /** Where a phone ends (the store's `sm`). */
 export const PRIVATE_WIDE_MEDIA = "(min-width:40rem)";
 
-/** `privatePages.tokens`: per page, per style target (`@<layout hook>`, `ui.<kind>…`), per token, a value. */
-// Names are checked by the compile (`unknown_style`, `unknown_token`) so the schema stays small.
-export const privateTokensSchema = z.record(
-  z.string().regex(/^[a-zA-Z]{1,24}$/),
-  z.record(z.string().regex(/^(?:@[a-z][a-z0-9-]{0,40}|[a-z][a-z0-9-]{0,40}|ui\.[a-z]{1,12}(?:\.[a-z]{1,12})?(?:@[a-z0-9][a-z0-9.-]{0,63})?(?:\/[a-z_.]{1,64})?)$/), z.record(z.string().regex(/^[a-z][a-z-]{0,23}$/), z.unknown())),
-).refine((tokens) => Object.keys(tokens).every((page) => Object.hasOwn(PRIVATE_PAGES, page)), "Tokens are set per private page: cart.") as unknown as z.ZodType<PrivateTokens>;
-export type PrivateTokens = Partial<Record<PrivatePageKey, Record<string, Partial<Record<PrivateTokenName, unknown>>>>>;
 
 export type PrivateTokenReason = "unknown_style" | "unknown_token" | "token_value" | "contrast" | "no_row" | "prominence" | "too_large";
 
@@ -475,7 +484,10 @@ export interface PrivateTokenRow {
    * How a buyer tells it from what is around it (private-anatomy.ts
    * `boundary`; every field `edge`), and whether it draws its border (no
    * `border-width: 0`, no `border-style: none`): an edge that draws none is
-   * told by its fill.
+   * told by its fill. A filled button is `edge` where it is found by a drawn
+   * edge (a solid border of at least PRIVATE_EDGE_MIN_WIDTH reading 3:1 on
+   * every point around it, its fill at least PRIVATE_EDGE_FILL_DISTANCE from
+   * each): its border is then checked, never its fill.
    */
   boundary: "fill" | "edge" | null;
   bordered: boolean;
@@ -825,10 +837,15 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     // A control's or a field's own ring is drawn outside it; a box's rings are its children's, drawn on it.
     const ring = take("ring", "ring", [under?.ring, storefrontThemeFocusRing(colors), text, colors.foreground, colors.background], marked ? around : surface, PRIVATE_MARK_CONTRAST_FLOOR);
     // A field's and an outlined control's border is how a buyer finds it: it reads on what is around it.
-    const boundary = place.kind === "field" ? "edge" : place.boundary ?? null;
-    const border = boundary === "edge"
-      ? take("border", "border", [colors.input, colors.border, muted, text], around, PRIVATE_MARK_CONTRAST_FLOOR)
-      : take("border", "border", [under?.border ?? colors.border], surface, 1);
+    const edgeBorder = () => take("border", "border", [colors.input, colors.border, muted, text], around, PRIVATE_MARK_CONTRAST_FLOOR);
+    // A filled button is found by its fill, or by a drawn edge: a solid border the theme sets at least
+    // PRIVATE_EDGE_MIN_WIDTH wide, reading on every point around it, over a fill still clearly a colour of its own.
+    const width = values["border-width"];
+    const edged = place.boundary === "fill" && typeof width === "number" && width >= PRIVATE_EDGE_MIN_WIDTH && (values["border-style"] ?? "solid") === "solid"
+      && ((drawn: string) => around.every((back) => storefrontThemeContrast(drawn, back) >= PRIVATE_MARK_CONTRAST_FLOOR))(edgeBorder())
+      && surface.every((point) => around.every((back) => storefrontThemeColorDistance(point, back) >= PRIVATE_EDGE_FILL_DISTANCE));
+    const boundary = place.kind === "field" || edged ? "edge" : place.boundary ?? null;
+    const border = boundary === "edge" ? edgeBorder() : take("border", "border", [under?.border ?? colors.border], surface, 1);
     const field = place.kind === "field" || place.parent === null;
     const placeholder = field ? take("placeholder", "placeholder", [colors["muted-foreground"], muted, text], surface, PRIVATE_CONTRAST_FLOOR) : null;
     const invalid = field ? take("invalid", "invalid", [colors.destructive, error, text], around, PRIVATE_MARK_CONTRAST_FLOOR) : null;
@@ -888,8 +905,9 @@ export function privateTablePairs(table: PrivateTokenTable): PrivateTokenPair[] 
     };
     for (const what of ["text", "muted", "link", "error", "placeholder"] as const) add(what, row[what], row.surface, PRIVATE_CONTRAST_FLOOR);
     add("ring", row.ring, marked ? around : row.surface, PRIVATE_MARK_CONTRAST_FLOOR);
-    // An edge is found by its border where it draws one, else by its own fill; a filled button by its fill
-    // (WCAG 1.4.11): a pair the check reads is a pair the CSS draws.
+    // An edge is found by its border where it draws one, else by its own fill; a filled button by its fill, or
+    // where it draws a solid edge of its own over a fill clearly apart, as an edge (WCAG 1.4.11): a pair the check
+    // reads is a pair the CSS draws.
     if (row.boundary === "edge" && row.bordered) add("border", row.border, around, PRIVATE_MARK_CONTRAST_FLOOR);
     else add("border", row.border, row.surface, 1);
     if (row.boundary === "fill" || (row.boundary === "edge" && !row.bordered)) {
@@ -926,14 +944,18 @@ function tableIssues(page: PrivatePageKey, tables: readonly PrivateTokenTable[])
       seen.add(id);
       const where = pair.key === target ? target : `${target} (${pair.key})`;
       const what = pair.what === "fill" ? (row.boundary === "fill" ? "its fill" : "its fill, with no border drawn,") : pair.what;
-      issues.push({ path: ["privatePages", "tokens", page, target], reason: "contrast", message: `${where}: ${what} ${pair.fore} on ${pair.back} is ${ratio.toFixed(2)}:1 in the ${table.palette.scheme} colours, under the ${pair.floor}:1 a buyer needs${pair.what === "fill" ? " to find it" : ""}.` });
+      // A filled button refused by its fill may instead be found by a drawn edge: say so.
+      const instead = pair.what !== "fill" ? "" : row.boundary === "fill"
+        ? ` to find it: give it a fill that reads, or draw a solid border of at least ${PRIVATE_EDGE_MIN_WIDTH}px at ${PRIVATE_MARK_CONTRAST_FLOOR}:1 on it, with a fill clearly a colour of its own`
+        : " to find it";
+      issues.push({ path: ["privatePages", "tokens", page, target], reason: "contrast", message: `${where}: ${what} ${pair.fore} on ${pair.back} is ${ratio.toFixed(2)}:1 in the ${table.palette.scheme} colours, under the ${pair.floor}:1 a buyer needs${instead}.` });
     }
   }
   return issues;
 }
 
 const CELL_PROPERTIES = [["text", "--pt-t"], ["muted", "--pt-m"], ["link", "--pt-l"], ["error", "--pt-e"], ["border", "--pt-b"], ["ring", "--pt-r"], ["hover", "--pt-h"], ["placeholder", "--pt-p"], ["invalid", "--pt-i"]] as const;
-const CELL_PROPERTY = Object.fromEntries(CELL_PROPERTIES) as Record<PrivateRowColour, string>;
+const CELL_PROPERTY = /* @__PURE__ */ (() => Object.fromEntries(CELL_PROPERTIES))() as Record<PrivateRowColour, string>;
 
 /**
  * A row's cells as declarations: its paint, its own words' colour and the
@@ -1188,10 +1210,10 @@ export const PRIVATE_TOKEN_MODE = ":root[data-private-tokens]";
  * on its `<html>`), the store's dialogs over them and the store's own chrome
  * (its controls inside).
  */
-const TOKEN_SCOPE = [
+const TOKEN_SCOPE = /* @__PURE__ */ (() => [
   ...Object.values(PRIVATE_PAGES as Readonly<Record<string, PrivatePageSpec>>).filter((spec) => Object.hasOwn(spec.styles, "page")).map((spec) => `[data-private="${spec.root}"]`),
   ...PRIVATE_SCOPES.map((scope) => `[data-private="${scope}"]`),
-];
+])();
 /**
  * A payment provider's own surface (its card form, its frame: `data-part="gateway"`): token mode never reaches
  * into it, so it keeps the store's own colours whatever a theme sets (no row of the table names it either).
@@ -1203,8 +1225,8 @@ export const PRIVATE_GATEWAY_HOOK = "gateway";
  * them, no row of the table names them, and they read the palette's own words and surfaces again.
  */
 export const PRIVATE_OWN_LOOK_HOOKS = [PRIVATE_GATEWAY_HOOK, "recommendations"] as const;
-const OWN_LOOK = PRIVATE_OWN_LOOK_HOOKS.flatMap((hook) => [`[data-part="${hook}"]`, `[data-part="${hook}"] *`]).join(",");
-const IN_SCOPE = `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope} *`)].join(",")}):not(${OWN_LOOK})`;
+const OWN_LOOK = /* @__PURE__ */ (() => PRIVATE_OWN_LOOK_HOOKS.flatMap((hook) => [`[data-part="${hook}"]`, `[data-part="${hook}"] *`]).join(","))();
+const IN_SCOPE = /* @__PURE__ */ (() => `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope} *`)].join(",")}):not(${OWN_LOOK})`)();
 
 /**
  * Every palette class the host draws on a private page, and what it reads in
@@ -1216,7 +1238,7 @@ const IN_SCOPE = `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope}
  * its state (a hover only where the pointer can hover, as the store's own
  * classes). A class missing here fails the storefront's vocabulary test.
  */
-export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [declaration: string, state?: string]>> = Object.fromEntries([
+export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [declaration: string, state?: string]>> = /* @__PURE__ */ (() => Object.fromEntries([
   ...["bg-background", "bg-card", "bg-muted", "bg-muted/40", "bg-muted/50", "bg-muted/60", "bg-primary", "bg-primary/10", "bg-primary/5", "bg-destructive", "bg-destructive/10",
     "bg-success/10", "bg-warning/10", "dark:bg-card",
   ].map((name) => [name, ["background-color:transparent"]] as const),
@@ -1269,7 +1291,7 @@ export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [decla
   ["focus-visible:after:ring-ring", ["--tw-ring-color:var(--pt-r)", ":focus-visible"]],
   ["focus:border-primary", ["border-color:var(--pt-r)", ":focus"]],
   ["focus:ring-primary/20", ["--tw-ring-color:var(--pt-r)", ":focus"]],
-]);
+]))();
 
 const classSelector = (name: string) => `.${name.replace(/[^a-zA-Z0-9_-]/g, (character) => `\\${character}`)}`;
 
@@ -1289,7 +1311,7 @@ function classRules(names: readonly string[]): string {
   }).join("");
 }
 
-const SURFACE_CLASSES = Object.keys(PRIVATE_TOKEN_MODE_CLASSES).filter((name) => PRIVATE_TOKEN_MODE_CLASSES[name]![0] === "background-color:transparent");
+const SURFACE_CLASSES = /* @__PURE__ */ (() => Object.keys(PRIVATE_TOKEN_MODE_CLASSES).filter((name) => PRIVATE_TOKEN_MODE_CLASSES[name]![0] === "background-color:transparent"))();
 
 /**
  * The host's CSS around a page's table in token mode (`PRIVATE_TOKEN_MODE`):
@@ -1305,7 +1327,7 @@ const SURFACE_CLASSES = Object.keys(PRIVATE_TOKEN_MODE_CLASSES).filter((name) =>
  * cell of the row it stands on its ink names (`critical` words the error
  * colour). An app's node row writes a colour only where the theme set one.
  */
-const UI_WORDS_CSS = (() => {
+const UI_WORDS_CSS = /* @__PURE__ */ (() => {
   const byCell = new Map<string, string[]>([["text", []]]);
   for (const style of Object.values(PRIVATE_BUYER_UI_STYLES)) {
     if (!style.style) continue;

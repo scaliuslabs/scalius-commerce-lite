@@ -142,9 +142,9 @@ const codPlaceable = !checkoutUnavailable && canPlaceCashHere(checkoutConfig);
 const contactFields = checkoutContactFields(checkoutConfig.customerIdentity ?? DEFAULT_CUSTOMER_IDENTITY);
 const phoneOptionalForDigital = checkoutConfig.customerIdentity?.phoneOptionalForDigital === true;
 const allowedCountriesMode = checkoutConfig?.allowedCountriesMode || "include";
-// The theme the page draws with (the draft in a preview): the cart template's
-// sections around the cart, and the theme's arrangement, words and stylesheet
-// for the cart page (lib/private-pages). Read from the layout read: no query of its own.
+// The theme the page draws with (the draft in a preview): the theme's arrangement,
+// words, icons and typed tokens for the cart page (lib/private-pages); the cart takes
+// no template sections and no theme stylesheet. Read from the layout read: no query of its own.
 const cartRequestTheme = await resolveRequestTheme(Astro, layoutData);
 const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse || {
   id: "fallback",

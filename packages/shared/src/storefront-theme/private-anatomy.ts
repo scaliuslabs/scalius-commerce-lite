@@ -23,22 +23,26 @@
 // place (and its parts in that order) on read.
 //
 // Registering a page: add a `PrivatePageSpec` below (its root, frames,
-// parts, targets, layouts, default layout, items, style targets, labels and
-// icons) and add it to `PRIVATE_PAGES`. Its default layout must hold every
-// mandatory part and target exactly once. Nothing else is per page.
+// parts, targets, layouts, default layout, items and style targets; its
+// labels and icons in private-keys.ts) and add it to `PRIVATE_PAGES`. Its
+// default layout must hold every mandatory part and target exactly once. Nothing else is per page.
 
-/** Rises when a page gains a mandatory part or target or a reading order (a stored arrangement then fills it in on read). */
-export const PRIVATE_ANATOMY_VERSION = 5 as const;
 
-/**
- * The host's layout nodes. `stack`: one column. `columns`: one column on
- * phones, side by side from 64rem. `grid`: a grid the theme
- * shapes by its hook's `columns` tokens. `group`: a box with no layout of its own. `fold` (the cart page):
- * on phones its children fold behind a bar that states the total. `scroll`
- * (the drawer): the region that scrolls between the drawer's fixed parts.
- */
-export const PRIVATE_LAYOUT_KINDS = ["stack", "columns", "grid", "group", "fold", "scroll"] as const;
-export type PrivateLayoutKind = (typeof PRIVATE_LAYOUT_KINDS)[number];
+export {
+  PRIVATE_ANATOMY_VERSION,
+  PRIVATE_CONTROL_PLACES,
+  PRIVATE_HOOK_MAX,
+  PRIVATE_LAYOUT_KINDS,
+  PRIVATE_PAGE_KEYS,
+  privateIconKeys,
+  privateLabelKeys,
+  privateLabelVariants,
+  type PrivateControlPlace,
+  type PrivateLabelSpec,
+  type PrivateLayoutKind,
+  type PrivatePageKey,
+} from "./private-keys";
+import { PRIVATE_CONTROL_PLACES, PRIVATE_PAGE_KEYS, PRIVATE_PAGE_WORDS, type PrivateLabelSpec, type PrivateLayoutKind, type PrivatePageKey } from "./private-keys";
 
 export { PRIVATE_UI_TONES, PRIVATE_BUYER_UI_STYLES, type PrivateUiTone, type PrivateBuyerUiStyle } from "./private-buyer-ui";
 import { PRIVATE_BUYER_UI_STYLES } from "./private-buyer-ui";
@@ -149,7 +153,10 @@ export interface PrivateStyleSpec {
   /**
    * How a buyer tells the control or field from what is around it (WCAG
    * 1.4.11, 3:1 on what is around it): `fill`, a filled button (Place order,
-   * Confirm), by its own surface; `edge`, an outlined one (a stepper, the
+   * Confirm), by its own surface, or by a drawn edge where the theme sets a
+   * solid border of at least 2px that reads 3:1 on what is around it over a
+   * fill still clearly a colour of its own (CIE76 40 from every point around
+   * it: an outlined button is Go back's look); `edge`, an outlined one (a stepper, the
    * fold's bar, Go back) and every field, by its border, or by its own
    * surface where the theme draws no border (`border-width: 0`,
    * `border-style: none`).
@@ -218,10 +225,6 @@ export interface PrivateUnitSpec {
  * amount; only a sentence (`figures: true`: the cart's intro, its empty
  * text) may hold one.
  */
-export type PrivateLabelSpec =
-  | { readonly max: number; readonly figures?: true; readonly variants?: undefined }
-  | { readonly variants: readonly [string, ...string[]]; readonly max?: undefined; readonly figures?: undefined };
-
 export interface PrivatePageSpec extends PrivateUnitSpec {
   /** The elements a theme styles by tokens, by name (`page` is the page itself). */
   readonly styles: Readonly<Record<string, PrivateStyleSpec>>;
@@ -473,21 +476,7 @@ const CART_PAGE: PrivatePageSpec = {
       ],
     },
   },
-  labels: {
-    "cart.heading": { max: 60 },
-    // One sentence under the heading; the summary's heading, drawn only when set, among the amounts: words only.
-    "cart.intro": { max: 200, figures: true },
-    "cart.summaryHeading": { max: 40 },
-    "cart.continue": { variants: ["continue-shopping", "keep-shopping", "back-to-store"] },
-    "cart.empty": { max: 80 },
-    "cart.emptyText": { max: 200, figures: true },
-    "cart.subtotal": { variants: ["subtotal", "items-total"] },
-    "cart.showSummary": { variants: ["show-summary", "show-cart"] },
-    "cart.hideSummary": { variants: ["hide-summary", "hide-cart"] },
-    "dialog.goBack": { variants: ["go-back", "cancel"] },
-    "dialog.confirm": { variants: ["confirm", "continue-checkout", "agree-and-continue"] },
-  },
-  icons: ["cart.empty"],
+  ...PRIVATE_PAGE_WORDS.cart,
 };
 
 /** The cart drawer: the cart over any page, opened in the browser. */
@@ -536,15 +525,7 @@ const CART_DRAWER: PrivatePageSpec = {
       ],
     },
   },
-  labels: {
-    "drawer.title": { max: 40 },
-    "drawer.checkout": { variants: ["checkout", "proceed-to-checkout"] },
-    "drawer.viewCart": { variants: ["view-cart", "go-to-cart"] },
-    "drawer.continue": { variants: ["continue-shopping", "keep-shopping"] },
-    "drawer.empty": { max: 80 },
-    "drawer.startShopping": { variants: ["start-shopping", "browse-products", "continue-shopping"] },
-  },
-  icons: ["drawer.empty"],
+  ...PRIVATE_PAGE_WORDS.cartDrawer,
 };
 
 // ─── The payment step (`checkout`) ─────────────────────────────────────────
@@ -614,8 +595,7 @@ const CHECKOUT_PAGE: PrivatePageSpec = {
     ]),
   ],
   items: {},
-  labels: {},
-  icons: [],
+  ...PRIVATE_PAGE_WORDS.checkout,
 };
 
 // ─── The receipt and the account (the pages after the order) ──────────────
@@ -722,8 +702,7 @@ const RECEIPT_PAGE: PrivatePageSpec = {
     p("recommendations"),
   ],
   items: {},
-  labels: {},
-  icons: [],
+  ...PRIVATE_PAGE_WORDS.receipt,
 };
 
 /**
@@ -774,8 +753,7 @@ const ACCOUNT_PAGE: PrivatePageSpec = {
   styles: ACCOUNT_STYLES,
   layout: [p("navigation"), p("heading"), p("content")],
   items: {},
-  labels: {},
-  icons: [],
+  ...PRIVATE_PAGE_WORDS.account,
 };
 
 /**
@@ -788,10 +766,7 @@ export const PRIVATE_PAGES = {
   checkout: CHECKOUT_PAGE,
   receipt: RECEIPT_PAGE,
   account: ACCOUNT_PAGE,
-} as const satisfies Record<string, PrivatePageSpec>;
-
-export type PrivatePageKey = keyof typeof PRIVATE_PAGES;
-export const PRIVATE_PAGE_KEYS = Object.keys(PRIVATE_PAGES) as PrivatePageKey[];
+} as const satisfies Record<PrivatePageKey, PrivatePageSpec>;
 
 /** The hook every private surface's root carries (`data-private="<root>"`): the stylesheet's scope. */
 export const PRIVATE_SCOPE_ATTRIBUTE = "data-private";
@@ -801,21 +776,9 @@ export const PRIVATE_PART_ATTRIBUTE = "data-part";
 export const PRIVATE_HOOK_ATTRIBUTE = "data-hook";
 /** A theme hook: lowercase words joined by hyphens (`studio-summary`). */
 export const PRIVATE_HOOK_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+){0,5}$/;
-export const PRIVATE_HOOK_MAX = 40;
 
 /** Surfaces besides the pages that carry the scope: the store's dialogs and its own chrome there. */
 export const PRIVATE_SCOPES = ["dialog", "core-header", "core-footer"] as const;
-
-/**
- * Where the store's controls sit on a private page (`privatePages.controls`):
- * the light or dark switch (where the theme offers it) and the market and
- * language forms (where the store sells in several), in the store's checkout
- * header (`header`, unset), in a strip at the page's end (`footer`), or not at
- * all (`none`). Each is a host part, its look the `scheme` and `localization`
- * targets' tokens on the `chrome` row.
- */
-export const PRIVATE_CONTROL_PLACES = ["header", "footer", "none"] as const;
-export type PrivateControlPlace = (typeof PRIVATE_CONTROL_PLACES)[number];
 
 /**
  * The store's dialogs over a private page (`data-private="dialog"`): the
@@ -830,21 +793,6 @@ export const PRIVATE_DIALOG_HOOKS = ["sign-in", "dialog-title", "dialog-text", "
  * …) and tone on `data-tone`.
  */
 export const PRIVATE_BUYER_UI_HOOKS = ["data-buyer-ui-target", "data-buyer-ui-app", "data-ui"] as const;
-
-/** Every label key of every page, with its page and its spec. */
-export function privateLabelKeys(): Array<{ page: PrivatePageKey; key: string; spec: PrivateLabelSpec }> {
-  return PRIVATE_PAGE_KEYS.flatMap((page) => Object.entries(PRIVATE_PAGES[page].labels).map(([key, spec]) => ({ page, key, spec })));
-}
-
-/** Every variant any label offers (core's copy words each, in every language it translates). */
-export function privateLabelVariants(): string[] {
-  return [...new Set(privateLabelKeys().flatMap((entry) => entry.spec.variants ?? []))].sort();
-}
-
-/** Every icon key of every page. */
-export function privateIconKeys(): string[] {
-  return PRIVATE_PAGE_KEYS.flatMap((page) => [...PRIVATE_PAGES[page].icons]);
-}
 
 /**
  * The anatomy as one list of lines (`page part [mandatory] hook…`), the

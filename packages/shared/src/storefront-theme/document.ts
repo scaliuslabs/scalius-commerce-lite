@@ -43,7 +43,7 @@ import {
   type StorefrontThemeTokens,
 } from "./tokens";
 import { storefrontThemeTranslationsSchema } from "./text";
-import { storefrontPrivatePagesSchema } from "./private-layout";
+import { storefrontPrivatePagesSchema } from "./private-schema";
 
 export const STOREFRONT_THEME_DOCUMENT_VERSION = 16 as const;
 

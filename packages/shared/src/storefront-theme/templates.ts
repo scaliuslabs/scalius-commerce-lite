@@ -16,7 +16,7 @@ import {
 } from "./blocks";
 import { DEFAULT_STOREFRONT_THEME_BRAND } from "./brand";
 import { storefrontPrivatePageDefaults } from "./private-pages";
-import { storefrontPrivatePagesDefault } from "./private-layout";
+import { storefrontPrivatePagesDefault } from "./private-schema";
 import { emptyStorefrontPageTemplates } from "./pages";
 import {
   STOREFRONT_THEME_DOCUMENT_VERSION,

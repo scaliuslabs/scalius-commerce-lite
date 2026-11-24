@@ -1,0 +1,93 @@
+// What the theme document's `privatePages` schema reads of the private pages
+// (private-layout.ts): their keys, each page's host labels and icons, and the
+// closed lists a stored arrangement names. The anatomy (private-anatomy.ts)
+// takes its pages' labels and icons from here, so the two are one list; the
+// parts, styles and layouts stay there, read by the compiler alone. A bundle
+// that parses a document (the dashboard's draft check) carries this module,
+// never the anatomy's spec table.
+
+/** Rises when a page gains a mandatory part or target or a reading order (a stored arrangement then fills it in on read). */
+export const PRIVATE_ANATOMY_VERSION = 5 as const;
+
+/** A host label the theme may change: its own words (at most `max`, figures only where allowed) or one of the host's variants. */
+export type PrivateLabelSpec =
+  | { readonly max: number; readonly figures?: true; readonly variants?: undefined }
+  | { readonly variants: readonly [string, ...string[]]; readonly max?: undefined; readonly figures?: undefined };
+
+/** Each private page's host labels and the host icons a theme may replace with its own image. */
+export const PRIVATE_PAGE_WORDS = {
+  cart: {
+    labels: {
+      "cart.heading": { max: 60 },
+      // One sentence under the heading; the summary's heading, drawn only when set, among the amounts: words only.
+      "cart.intro": { max: 200, figures: true },
+      "cart.summaryHeading": { max: 40 },
+      "cart.continue": { variants: ["continue-shopping", "keep-shopping", "back-to-store"] },
+      "cart.empty": { max: 80 },
+      "cart.emptyText": { max: 200, figures: true },
+      "cart.subtotal": { variants: ["subtotal", "items-total"] },
+      "cart.showSummary": { variants: ["show-summary", "show-cart"] },
+      "cart.hideSummary": { variants: ["hide-summary", "hide-cart"] },
+      "dialog.goBack": { variants: ["go-back", "cancel"] },
+      "dialog.confirm": { variants: ["confirm", "continue-checkout", "agree-and-continue"] },
+    },
+    icons: ["cart.empty"],
+  },
+  cartDrawer: {
+    labels: {
+      "drawer.title": { max: 40 },
+      "drawer.checkout": { variants: ["checkout", "proceed-to-checkout"] },
+      "drawer.viewCart": { variants: ["view-cart", "go-to-cart"] },
+      "drawer.continue": { variants: ["continue-shopping", "keep-shopping"] },
+      "drawer.empty": { max: 80 },
+      "drawer.startShopping": { variants: ["start-shopping", "browse-products", "continue-shopping"] },
+    },
+    icons: ["drawer.empty"],
+  },
+  checkout: { labels: {}, icons: [] },
+  receipt: { labels: {}, icons: [] },
+  account: { labels: {}, icons: [] },
+} as const satisfies Record<string, { labels: Readonly<Record<string, PrivateLabelSpec>>; icons: readonly string[] }>;
+
+export type PrivatePageKey = keyof typeof PRIVATE_PAGE_WORDS;
+/** Every private page, in the anatomy's order. */
+export const PRIVATE_PAGE_KEYS = Object.keys(PRIVATE_PAGE_WORDS) as PrivatePageKey[];
+
+/**
+ * The host's layout nodes. `stack`: one column. `columns`: one column on
+ * phones, side by side from 64rem. `grid`: a grid the theme
+ * shapes by its hook's `columns` tokens. `group`: a box with no layout of its own. `fold` (the cart page):
+ * on phones its children fold behind a bar that states the total. `scroll`
+ * (the drawer): the region that scrolls between the drawer's fixed parts.
+ */
+export const PRIVATE_LAYOUT_KINDS = ["stack", "columns", "grid", "group", "fold", "scroll"] as const;
+export type PrivateLayoutKind = (typeof PRIVATE_LAYOUT_KINDS)[number];
+
+/** The longest theme hook (`data-hook`). */
+export const PRIVATE_HOOK_MAX = 40;
+
+/**
+ * Where the store's controls sit on a private page (`privatePages.controls`):
+ * the light or dark switch (where the theme offers it) and the market and
+ * language forms (where the store sells in several), in the store's checkout
+ * header (`header`, unset), in a strip at the page's end (`footer`), or not at
+ * all (`none`). Each is a host part, its look the `scheme` and `localization`
+ * targets' tokens on the `chrome` row.
+ */
+export const PRIVATE_CONTROL_PLACES = ["header", "footer", "none"] as const;
+export type PrivateControlPlace = (typeof PRIVATE_CONTROL_PLACES)[number];
+
+/** Every label key of every page, with its page and its spec. */
+export function privateLabelKeys(): Array<{ page: PrivatePageKey; key: string; spec: PrivateLabelSpec }> {
+  return PRIVATE_PAGE_KEYS.flatMap((page) => Object.entries(PRIVATE_PAGE_WORDS[page].labels as Readonly<Record<string, PrivateLabelSpec>>).map(([key, spec]) => ({ page, key, spec })));
+}
+
+/** Every variant any label offers (core's copy words each, in every language it translates). */
+export function privateLabelVariants(): string[] {
+  return [...new Set(privateLabelKeys().flatMap((entry) => entry.spec.variants ?? []))].sort();
+}
+
+/** Every icon key of every page. */
+export function privateIconKeys(): string[] {
+  return PRIVATE_PAGE_KEYS.flatMap((page) => [...PRIVATE_PAGE_WORDS[page].icons]);
+}
