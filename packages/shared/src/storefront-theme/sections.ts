@@ -53,6 +53,12 @@ const idList = (max: number, what: string) =>
 
 /** Slides one hero holds (each a computer image and an optional phone image). */
 export const STOREFRONT_HERO_SLIDE_LIMIT = 10;
+/**
+ * Distinct products one page's slides name: every slide of one hero. The page reads them as one
+ * list (one statement whatever the count; each product a few rows), so a page past it is refused.
+ */
+export const STOREFRONT_PAGE_SLIDE_PRODUCTS_LIMIT = STOREFRONT_HERO_SLIDE_LIMIT;
+export const STOREFRONT_PAGE_SLIDE_PRODUCTS_REFUSAL = "slide_products_over_limit";
 /** Categories one category-tiles section shows. */
 export const STOREFRONT_CATEGORY_TILES_LIMIT = 12;
 /** Collections one collections section shows, each a row of its products. */
@@ -555,9 +561,24 @@ export function storefrontSectionListSchemaOf(
   return z.array(storefrontSectionSchemaOf(skin, bindings, productSource, values)).max(STOREFRONT_MAX_SECTIONS)
     .superRefine((sections, context) => {
       const ids = new Set<string>();
+      // The products the page's shown slides name (hidden sections and slides read nothing).
+      const products = new Set<string>();
       sections.forEach((each, index) => {
         if (ids.has(each.id)) context.addIssue({ code: "custom", path: [index, "id"], message: "Section ids must be unique." });
         ids.add(each.id);
+        if (each.type !== "hero" || each.hidden) return;
+        each.settings.slides.forEach((slide, slideIndex) => {
+          if (!slide.product || slide.hidden) return;
+          products.add(slide.product);
+          if (products.size === STOREFRONT_PAGE_SLIDE_PRODUCTS_LIMIT + 1) {
+            context.addIssue({
+              code: "custom",
+              path: [index, "settings", "slides", slideIndex, "product"],
+              message: `A page's slides name at most ${STOREFRONT_PAGE_SLIDE_PRODUCTS_LIMIT} products.`,
+              params: { reason: STOREFRONT_PAGE_SLIDE_PRODUCTS_REFUSAL },
+            });
+          }
+        });
       });
     });
 }

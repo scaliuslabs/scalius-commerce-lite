@@ -11,7 +11,7 @@ import type { PluginSettingValue } from "../plugins/settings-schema";
 import { PLUGIN_HOME_SECTIONS_MAX, parsePluginSurfaceKey } from "../plugins/storefront";
 import type { StorefrontHomeMode } from "./document";
 import type { StorefrontProductAppBlock } from "./apps";
-import { storefrontVisibleSection, type StorefrontProductSource, type StorefrontSection } from "./sections";
+import { STOREFRONT_PAGE_SLIDE_PRODUCTS_LIMIT, storefrontVisibleSection, type StorefrontProductSource, type StorefrontSection } from "./sections";
 
 /** Most products one source feeds (a 6x6 grid). */
 export const HOME_PRODUCT_LIST_LIMIT = 36;
@@ -35,8 +35,8 @@ export const HOME_BRAND_LIMIT = 24;
 export const HOME_MAX_PROMOTIONS = 4;
 /** Object content types the Objects sections of one page read. */
 export const HOME_MAX_OBJECT_TYPES = 4;
-/** Products the sections of one page name by id (hero slides), all sections together. */
-export const HOME_MAX_PICKED_PRODUCTS = 8;
+/** Products the sections of one page name by id (hero slides), all sections together: a document past it is refused. */
+export const HOME_MAX_PICKED_PRODUCTS = STOREFRONT_PAGE_SLIDE_PRODUCTS_LIMIT;
 /** The key of the one list that holds the products sections name by id. */
 export const HOME_PICKED_PRODUCTS_KEY = "picked";
 
