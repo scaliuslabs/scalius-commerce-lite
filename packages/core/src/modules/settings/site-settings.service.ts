@@ -45,6 +45,7 @@ import {
   compileStorefrontPrivatePages,
   privatePagesCompiledCurrent,
   privatePagesContextOf,
+  privateTokenApps,
   filledPrivatePages,
   refusedPrivatePages,
   parseStoredStorefrontThemeDocument,
@@ -495,8 +496,10 @@ async function assertThemeReferences(db: Database, theme: StorefrontThemeDocumen
   const references = storefrontThemeMediaReferences(theme);
   const mediaIds = [...new Set(references.map((reference) => reference.mediaId))];
   const productId = theme.pages.homeMode.kind === "product" ? theme.pages.homeMode.productId : null;
-  if (mediaIds.length === 0 && productId === null) return;
-  const [mediaRows, productRows] = await safeBatch(db, [
+  // The apps a private page's tokens style by id (`ui.<kind>@<app>`): only installed ones (read only when named).
+  const apps = privateTokenApps(Object.fromEntries(Object.values(theme.privatePages.tokens).flatMap((page) => Object.keys(page ?? {}).map((key) => [key, true]))));
+  if (mediaIds.length === 0 && productId === null && apps.length === 0) return;
+  const [mediaRows, productRows, appRows] = await safeBatch(db, [
     db.select({ id: media.id, kind: media.kind }).from(media).where(and(
       sql`${media.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(mediaIds)}))`,
       notInArray(media.status, ["deleting", "deleted"]),
@@ -504,7 +507,14 @@ async function assertThemeReferences(db: Database, theme: StorefrontThemeDocumen
     db.select({ id: products.id }).from(products)
       .where(and(eq(products.id, productId ?? ""), isNull(products.deletedAt)))
       .limit(1),
+    db.select({ id: pluginInstallations.pluginId }).from(pluginInstallations)
+      .where(sql`${pluginInstallations.pluginId} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(apps)}))`),
   ]);
+  const installed = new Set((appRows as Array<{ id: string }>).map((row) => row.id));
+  const missing = apps.filter((app) => !installed.has(app));
+  if (missing.length > 0) {
+    throw new ValidationError(`${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} not installed: a private page styles only installed apps' blocks. Remove the ui.*@${missing[0]} tokens or install the app.`, { reason: "unknown_app", apps: missing });
+  }
   const images = new Set((mediaRows as Array<{ id: string; kind: string }>)
     .filter((row) => row.kind === "image")
     .map((row) => row.id));

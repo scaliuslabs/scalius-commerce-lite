@@ -92,6 +92,7 @@ cartDrawer part actions mandatory hooks=drawer-checkout,drawer-actions,drawer-vi
 cartDrawer target cart_drawer.footer
 cartDrawer layouts stack,columns,grid,group,scroll
 cartDrawer layout scroll hooks=drawer-scroll
+cartDrawer layout scroll holds=added,lines,recommendations,undo,offers
 cartDrawer.line root data-part=line
 cartDrawer.line part image hooks=line-image
 cartDrawer.line part title mandatory hooks=line-title

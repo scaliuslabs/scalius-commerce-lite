@@ -138,11 +138,14 @@ function arrangementDepth(value: unknown): number {
   return deepest;
 }
 
-/** Stands in for an arrangement nested too deep, before the recursive parse reaches it (it then fails as an unknown key). */
-const TOO_DEEP = { layoutsNestAtMost12Deep: true };
 
 export const privatePageArrangementSchema = z.preprocess(
-  (value) => arrangementDepth(value) <= PRIVATE_LAYOUT_MAX_DEPTH ? value : TOO_DEEP,
+  // Refused before the recursive parse reaches it, with its reason.
+  (value, context) => {
+    if (arrangementDepth(value) <= PRIVATE_LAYOUT_MAX_DEPTH) return value;
+    context.addIssue({ code: "custom", message: `Layouts nest at most ${PRIVATE_LAYOUT_MAX_DEPTH} deep in a stored arrangement.`, params: { reason: "too_deep" } });
+    return z.NEVER;
+  },
   z.object({
     frame: name.optional(),
     layout: z.array(privateNodeSchema).max(24).optional(),
@@ -327,8 +330,14 @@ export function privateWordsReadAsAmount(text: string): boolean {
 }
 /** Words without direction overrides or invisible characters. */
 export function plainPrivateWords(words: PrivateWords): PrivateWords {
-  return Object.fromEntries(Object.entries(words).map(([lang, text]) => [lang, text.replace(HIDDEN_CHARACTERS, "")]));
+  return Object.fromEntries(Object.entries(words).map(([lang, text]) => [lang, text.replace(HIDDEN_CHARACTERS, "").replace(LONE_TAGS, "$1")]));
 }
+
+/**
+ * Tag characters drawn by nothing: kept only as a subdivision flag's (a black flag, its tags, the cancel tag);
+ * anywhere else they hide words a buyer cannot see.
+ */
+const LONE_TAGS = /(\u{1F3F4}[\u{E0020}-\u{E007E}]+\u{E007F})|[\u{E0020}-\u{E007F}]/gu;
 
 function wordsIssues(words: PrivateWords | undefined, path: Array<string | number>, max: number, figures: boolean): PrivatePagesIssue[] {
   if (!words) return [];

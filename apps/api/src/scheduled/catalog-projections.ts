@@ -31,6 +31,9 @@ const NIGHTLY_WINDOW_MINUTES = 1;
 export const PROJECTIONS_REBUILT_FOR_VERSION_KEY = "catalog:projections:rebuilt-for-version";
 /** `system_kv` row: the hash of the projection definition the stored projections were built with. */
 export const PROJECTION_DEFINITION_KEY = "catalog:projections:definition";
+
+/** How many runs try a version's private pages compile that throws before it is settled for the version. */
+export const PRIVATE_PAGES_COMPILE_TRIES = 3;
 /** `system_kv` row: the product id the nightly drift check continues after ("" = from the start). */
 export const PROJECTION_DRIFT_CURSOR_KEY = "catalog:projections:drift-cursor";
 
@@ -52,10 +55,12 @@ export async function requestPostDeployProjectionRebuild(env: Env): Promise<bool
   const db = getDb(env);
   const current = await getSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY);
   if (current === version) return false;
-  // The version's own value while its theme compile is still to settle (`<version>:theme`).
+  // The version's own value while its theme compile is still to settle (`<version>:theme`, then
+  // `<version>:theme:<failed runs>`).
   const pending = `${version}:theme`;
+  const failed = current === pending ? 0 : current?.startsWith(`${pending}:`) ? Number(current.slice(pending.length + 1)) || 0 : null;
   let requested = false;
-  if (current !== pending) {
+  if (failed === null) {
     // First tick of this version: claimed (compare-and-set) so overlapping ticks rebuild once.
     if (!(await claimSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, pending))) return false;
     const { catalogProjectionDefinition } = await import("@scalius/core/modules/products");
@@ -75,7 +80,12 @@ export async function requestPostDeployProjectionRebuild(env: Env): Promise<bool
     // A compile a publish raced wrote nothing: the version stays pending and the next run compiles again.
     if (outcome !== "raced") await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version);
   } catch (error) {
-    console.warn("[scheduled] Private pages compile failed; retried next run", error instanceof Error ? error.name : "unknown");
+    // A compile that keeps throwing (a theme that costs more than a run) is tried a bounded number of times, then
+    // settled for the version: its pages keep serving the default look until the merchant saves.
+    const tries = (failed ?? 0) + 1;
+    const settle = tries >= PRIVATE_PAGES_COMPILE_TRIES;
+    console.warn(`[scheduled] Private pages compile failed; ${settle ? "settled for this version" : "retried next run"}`, error instanceof Error ? error.name : "unknown");
+    await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, settle ? version : `${pending}:${tries}`);
   }
   return requested;
 }

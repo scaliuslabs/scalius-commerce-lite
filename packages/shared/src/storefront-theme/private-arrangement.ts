@@ -61,8 +61,9 @@ const SINGLE_LAYOUTS: ReadonlySet<PrivateLayoutKind> = new Set(["fold", "scroll"
 
 type Holds = Partial<Record<PrivateLayoutKind, readonly string[]>>;
 
-const holdsMessage = (kind: PrivateLayoutKind, allowed: readonly string[]) =>
-  `The ${kind} holds only ${allowed.join(", ")}: it starts closed on phones, so what a buyer fills in or must read sits outside it.`;
+const holdsMessage = (kind: PrivateLayoutKind, allowed: readonly string[]) => kind === "scroll"
+  ? `The scroll holds only ${allowed.join(", ")}: the summary, its total and the way to check out stay in view outside it.`
+  : `The ${kind} holds only ${allowed.join(", ")}: it starts closed on phones, so what a buyer fills in or must read sits outside it.`;
 
 function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: Array<string | number>, what: string, holds: Holds = {}): PrivateArrangementIssue[] {
   const issues: PrivateArrangementIssue[] = [];

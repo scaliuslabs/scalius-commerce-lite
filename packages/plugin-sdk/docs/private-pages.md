@@ -93,7 +93,7 @@ Every arrangement holds each **mandatory** part and every target exactly once. Y
 
 The payment step reads `notices` before `payment`, as the cart reads them before `details`. `payment` is one part: the methods, the chosen method's details, the payment provider's own surface (its card form or frame), Pay and the terms beside it stay together in the store's order whatever you arrange. A theme with an arrangement for the payment step draws it from that; with tokens and no arrangement, from the arrangement its `blocks.checkout` chose (`top`: a `narrow` frame and the summary `folded`; `tiles`), so the look is checked on the page buyers get.
 
-The phone fold starts closed on phones, so it holds only `lines`, `summary`, `discount` and the `cart.page.summary` target (`layout_holds` otherwise).
+The phone fold starts closed on phones, so it holds only `lines`, `summary`, `discount` and the `cart.page.summary` target; the drawer's `scroll` holds only `added`, `lines`, `recommendations`, `undo` and `offers`, so its summary and the way to check out stay in view (`layout_holds` otherwise).
 
 When the store later makes another part mandatory, a saved arrangement without it shows it in its default place; a saved arrangement with `notices` after `details` reads with `notices` moved just before them (before the side-by-side layout that holds them, never into a column of its own); a part or target saved ahead of the lead parts reads just after the first of them, and an empty layout is dropped. A store upgrade never breaks your page.
 
@@ -212,7 +212,7 @@ A buyer must find each control and field where it stands (WCAG 1.4.11, 3:1 on wh
 | `section-heading` | The form's Contact and Delivery headings | text | `details-form` |
 | `dock` | The page's last box: Place order, the total, the terms and why Place order may be off. It always paints its own surface ([below](#what-the-store-guarantees-and-what-is-yours)) | box (`background`) | `page` |
 | `submit` | Place order (16px, 600; `action`'s `size` and `weight` reach it unless you set its own) | filled control (`primary`) | `dock` |
-| `legal` | The terms sentence or the required tick box | text (muted) | `dock` |
+| `legal` | The terms sentence or the required tick box (its tick drawn in the row's link colour, read at 4.5:1 on the dock) | text (muted) | `dock` |
 | `dialog` | The store's dialogs: the confirmation an app's choice asks for, sign-in | box (`card`), holds fields | `page` |
 | `dialog-title` | A dialog's title | text | `dialog` |
 | `dialog-text`, `dialog-agree` | What the buyer agrees to, and the row with the tick box saying so: side by side, neither inside the other | box | `dialog` |
@@ -290,14 +290,15 @@ A refusal names the theme key and the pair that set it, and the scheme: `summary
 | `lead_order` | A part or target other than `progress` and `notices` comes before the first of `lines`, `summary` and `details`. |
 | `empty_layout` | A layout holds nothing. |
 | `invalid_hook` | A hook that is not lowercase words joined by hyphens, or over 40 characters. |
-| `too_deep`, `too_many_nodes` | Layouts nested over 6 deep, a layout with over 24 nodes, or a unit with over 80. A document nested over 12 deep is refused before it is read. |
+| `too_deep`, `too_many_nodes` | Layouts nested over 6 deep, a layout with over 24 nodes, or a unit with over 80. A document nested over 12 deep is refused before it is read (`too_deep`). |
 | `unknown_style` | No such style target, node kind, tone or target on the page, no layout node with that hook, or any token on the drawer. |
 | `unknown_token` | The target does not take that token. |
 | `token_value` | Not a value of the token's type, outside its bounds, or a colour per scheme without both keys. |
 | `contrast` | A row reads under its floor in a scheme a buyer sees. |
 | `prominence` | The total drawn smaller than a money row, an add-on line or its own label, lighter than the rows, or with fainter words than theirs; its label smaller than the rows; Place order smaller or lighter than the other filled buttons; Confirm smaller or lighter than Go back. |
 | `no_row` | The page draws a target the colour table has no row for (a store defect; it never draws unchecked). |
-| `too_large` | A page's compiled look is over 64 KiB (each page has its own bound: it serves only its own look). |
+| `too_large` | A page's tokens name over 160 style keys or over 4 apps, would make over 6000 rows of its colour table (refused before anything is resolved), or its compiled look is over 64 KiB (each page has its own bound: it serves only its own look). |
+| `unknown_app` | A `ui.*@<app>` token names an app that is not installed. |
 | `label_variant` | A label that names an action or an amount set to something other than one of its variants, or a variant where your words go. |
 | `label_too_long`, `markup`, `label_figures` | Words over the label's bound, words with HTML, or a digit, a currency sign, a name of money or one of the store's amount words in a heading, title or empty state (only `cart.intro` and `cart.emptyText` may hold them). |
 | `foreign_asset` | An icon from an app other than your theme's. |
@@ -308,7 +309,7 @@ A value that is not of the document's shape (a wrong type, an unknown field) is 
 
 ## Words and icons
 
-A label that names an action or an amount takes one of the store's **variants**, which the store words in each language it translates (English, Bangla), so "Go back" never confirms and a subtotal never reads as the total. A heading, an intro or an empty state takes **your own words**, per language: plain text, a page shows its language, then English. Invisible characters and direction overrides are removed. A heading, a title or an empty state holds no digit or currency sign in any script, and none of the store's amount words or names of money as whole words, in English or Bangla ("Total", "Subtotal", "Amount due", "taka", "BDT", "dollar", "সর্বমোট", "মোট", "টাকা"; `PRIVATE_LABEL_AMOUNT_WORDS`), so no label reads as an amount (`label_figures`); only the sentences `cart.intro` and `cart.emptyText` may hold them. Words that read like an action ("Pay now" as a heading) are a known limit: they carry no figure and do nothing, but the store cannot tell what they say.
+A label that names an action or an amount takes one of the store's **variants**, which the store words in each language it translates (English, Bangla), so "Go back" never confirms and a subtotal never reads as the total. A heading, an intro or an empty state takes **your own words**, per language: plain text, a page shows its language, then English. Invisible characters, direction overrides and tag characters outside a flag are removed. A heading, a title or an empty state holds no digit or currency sign in any script, and none of the store's amount words or names of money as whole words, in English or Bangla ("Total", "Subtotal", "Amount due", "taka", "BDT", "dollar", "সর্বমোট", "মোট", "টাকা"; `PRIVATE_LABEL_AMOUNT_WORDS`), so no label reads as an amount (`label_figures`); only the sentences `cart.intro` and `cart.emptyText` may hold them. Words that read like an action ("Pay now" as a heading) are a known limit: they carry no figure and do nothing, but the store cannot tell what they say.
 
 | Label | Where | Value |
 | --- | --- | --- |
@@ -759,6 +760,7 @@ cartDrawer part actions mandatory hooks=drawer-checkout,drawer-actions,drawer-vi
 cartDrawer target cart_drawer.footer
 cartDrawer layouts stack,columns,grid,group,scroll
 cartDrawer layout scroll hooks=drawer-scroll
+cartDrawer layout scroll holds=added,lines,recommendations,undo,offers
 cartDrawer.line root data-part=line
 cartDrawer.line part image hooks=line-image
 cartDrawer.line part title mandatory hooks=line-title

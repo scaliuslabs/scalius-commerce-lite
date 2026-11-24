@@ -172,7 +172,20 @@ export const privateTokensSchema = z.record(
 ).refine((tokens) => Object.keys(tokens).every((page) => Object.hasOwn(PRIVATE_PAGES, page)), "Tokens are set per private page: cart.") as unknown as z.ZodType<PrivateTokens>;
 export type PrivateTokens = Partial<Record<PrivatePageKey, Record<string, Partial<Record<PrivateTokenName, unknown>>>>>;
 
-export type PrivateTokenReason = "unknown_style" | "unknown_token" | "token_value" | "contrast" | "no_row" | "prominence";
+export type PrivateTokenReason = "unknown_style" | "unknown_token" | "token_value" | "contrast" | "no_row" | "prominence" | "too_large";
+
+/**
+ * What one page's tokens may name, refused (`too_large`) before anything is
+ * resolved: style keys, distinct apps (each app's node kinds and tones add
+ * rows at every target and inside every box of its that paints), and the
+ * rows the colour table would hold per palette. A save stays a bounded cost.
+ */
+export const PRIVATE_TOKEN_LIMITS = { keys: 160, apps: 4, rows: 6000 } as const;
+
+/** The apps a page's tokens name (`ui.<kind>@<app>…`). */
+export function privateTokenApps(tokens: Readonly<Record<string, unknown>> | undefined): string[] {
+  return [...new Set(Object.keys(tokens ?? {}).flatMap((key) => { const app = UI_KEY.exec(key)?.[3]; return app ? [app] : []; }))].sort();
+}
 export interface PrivateTokenIssue {
   path: Array<string | number>;
   reason: PrivateTokenReason;
@@ -307,6 +320,11 @@ function validTokens(page: PrivatePageKey, tokens: NonNullable<PrivateTokens[Pri
  */
 export function compilePrivateTokens(page: PrivatePageKey, tokens: PrivateTokens[PrivatePageKey], context: PrivateTokenContext): { issues: PrivateTokenIssue[]; css: string; tables: PrivateTokenTable[] } {
   if (!tokens) return { issues: [], css: "", tables: [] };
+  const keys = Object.keys(tokens).length;
+  const apps = privateTokenApps(tokens).length;
+  if (keys > PRIVATE_TOKEN_LIMITS.keys || apps > PRIVATE_TOKEN_LIMITS.apps) {
+    return { issues: [{ path: ["privatePages", "tokens", page], reason: "too_large", message: `A page takes at most ${PRIVATE_TOKEN_LIMITS.keys} style keys naming at most ${PRIVATE_TOKEN_LIMITS.apps} apps; this one has ${keys} naming ${apps}.` }], css: "", tables: [] };
+  }
   const { valid, issues } = validTokens(page, tokens, context);
   issues.push(...prominenceIssues(page, valid));
   if (issues.length > 0) return { issues, css: "", tables: [] };
@@ -496,7 +514,12 @@ const cellOf = (role: PrivatePaletteRole) => ROLE_CELL[role] ?? "text";
 
 /** The first colour that reads at `floor` on every one of `backs`: the candidates, black or white, then a grey; else the best there is. */
 function readable(candidates: ReadonlyArray<string | null | undefined>, backs: readonly string[], floor: number): string {
-  const worst = (colour: string) => Math.min(...backs.map((back) => storefrontThemeContrast(colour, back)));
+  // A loop, never a spread: a row may stand on many surfaces.
+  const worst = (colour: string) => {
+    let least = Number.POSITIVE_INFINITY;
+    for (const back of backs) least = Math.min(least, storefrontThemeContrast(colour, back));
+    return least;
+  };
   for (const colour of [...candidates, "#000000", "#ffffff"]) if (colour && worst(colour) >= floor) return colour;
   let best = "#000000";
   let bestRatio = 0;
@@ -737,7 +760,9 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     return HEX.test(String(one)) ? String(one) : colors[one as keyof StorefrontThemeColors];
   };
   const byKey = new Map<string, PrivateTokenRow>();
-  const boxes = () => [...byKey.values()].filter((row) => row.kind === "box");
+  // Every box of the page, gathered once: the rows drawn anywhere are resolved after all of them.
+  let allBoxes: PrivateTokenRow[] | null = null;
+  const boxes = () => (allBoxes ??= [...byKey.values()].filter((row) => row.kind === "box"));
   const resolve = (place: Place): PrivateTokenRow => {
     const { values, from: set } = merged(tokens, place.sources);
     const parents = place.parent === "boxes" ? boxes() : place.parent ? [place.parent, ...place.more ?? []].map((key) => byKey.get(key)!) : [];
@@ -830,6 +855,10 @@ export function privateTokenTables(
   page: PrivatePageKey, tokens: Record<string, Values>, context: PrivateTokenContext, spec: PrivatePageSpec = PRIVATE_PAGES[page], kinds: Readonly<Record<string, PrivateBuyerUiStyle>> = PRIVATE_BUYER_UI_STYLES,
 ): { tables: PrivateTokenTable[]; issues: PrivateTokenIssue[] } {
   const places = placesOf(spec, tokens, context, kinds);
+  // Planned before any row is resolved: a table over the bound is refused at no further cost.
+  if (places.length > PRIVATE_TOKEN_LIMITS.rows) {
+    return { tables: [], issues: [{ path: ["privatePages", "tokens", page], reason: "too_large", message: `These tokens make ${places.length} rows of the page's colour table, over the ${PRIVATE_TOKEN_LIMITS.rows} a page holds: name fewer apps, targets or toned kinds.` }] };
+  }
   const issues: PrivateTokenIssue[] = [];
   const keys = new Set(places.map((place) => place.key));
   const layouts = new Set<string>();
@@ -1004,10 +1033,14 @@ export function privateTableRules(tables: readonly PrivateTokenTable[]): Private
       const at = `${kind}|${row.share.targets.join("+")}`;
       signature.set(at, `${signature.get(at) ?? ""}|${row.share.id}=${declared.get(row.key) ?? ""}`);
     }
-    const groupOf = (row: PrivateTokenRow) => {
-      const kind = /^ui\.[a-z]+/.exec(row.share!.id)![0];
-      return `${kind}${signature.get(`${kind}|${row.share!.targets.join("+")}`)}`;
-    };
+    // Each signature as a short id, so grouping a row never builds a key the length of its group.
+    const ids = new Map<string, number>();
+    const groupKey = new Map<string, string>();
+    for (const [at, text] of signature) {
+      if (!ids.has(text)) ids.set(text, ids.size);
+      groupKey.set(at, `${at.slice(0, at.indexOf("|"))}#${ids.get(text)}`);
+    }
+    const groupOf = (row: PrivateTokenRow) => groupKey.get(`${/^ui\.[a-z]+/.exec(row.share!.id)![0]}|${row.share!.targets.join("+")}`)!;
     for (const row of table.rows) {
       if (!row.share) continue;
       const id = groupOf(row);
