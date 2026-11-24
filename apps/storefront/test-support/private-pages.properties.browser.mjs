@@ -912,9 +912,13 @@ function appsFit() {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (!node.textContent.trim() || !node.parentElement?.checkVisibility() || node.parentElement.closest(".sr-only")) continue;
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      for (const rect of range.getClientRects()) if (rect.width >= 1) out.push({ text: node.textContent.trim().slice(0, 24), rect });
+      // Word by word: a space at a line's end may hang past the box (CSS lets it), a word may not.
+      for (const word of node.textContent.matchAll(/\S+/g)) {
+        const range = document.createRange();
+        range.setStart(node, word.index);
+        range.setEnd(node, word.index + word[0].length);
+        for (const rect of range.getClientRects()) if (rect.width >= 1) out.push({ text: word[0].slice(0, 24), rect });
+      }
     }
     return out;
   };

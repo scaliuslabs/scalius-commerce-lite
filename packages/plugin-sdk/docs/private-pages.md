@@ -666,7 +666,7 @@ In every draw: the first screen, the store's controls, prominence, apps and add-
 | Whole text | A text is cut off at the side, a glyph is cut by its box, or a word breaks inside itself where it would fit whole on a line of its box (a word wider than its box may only break). |
 | Controls | A click at a control's centre lands elsewhere; Tab does not reach it, or reaches it out of document order; its focus ring changes under three quarters of its perimeter at 3:1. |
 | Hover | Under the pointer, a control's words read under their floor at their worst pixel, or a control the store gives a hover surface changes under a quarter of its box. |
-| Apps and add-ons fit | A text under an app's block runs out of the block, or an add-on row's title runs out of its bar or lies over its amount. |
+| Apps and add-ons fit | A word under an app's block runs out of the block (a space hanging at a line's end aside), or an add-on row's title runs out of its bar or lies over its amount. |
 | Floors | The lines, the summary or the details form is drawn more than 8px narrower than a page track's floor (20rem) or the cart's own width where that is less. |
 | Prominence | The total is drawn smaller than another summary row, its amount smaller than its label, lighter than a row's word, or reading fainter on what is behind it than a row's word (an add-on's app lines aside). |
 | Finding actions and fields | Under a theme's tokens: Place order's or Confirm's fill reads under 3:1 on what is behind it; Place order is smaller or lighter than another filled button on the page; Go back paints a fill of its own; Confirm is smaller or lighter than Go back; a field, the stepper, the fold's bar or Go back shows its border under 3:1 on what is behind it, or, drawing none, its own fill. |
@@ -684,7 +684,7 @@ In every draw: the first screen, the store's controls, prominence, apps and add-
 | The gate (named cases and the fast seed set) | `pnpm test:private-pages` |
 | A longer run | `pnpm test:private-pages --seeds 30 --from 100` (`--no-named` for seeds only, `--all-states` for every state of each) |
 | One seed or case | `--seed 7`, `--case "B4"` (a failing seed prints its document) |
-| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (41 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, the total ranked by size only, a filled button's fill unchecked, an edge read by a border it does not draw, Go back filled, and the switch drawn under `controls: none`) |
+| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (49 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, the total ranked by size only, a filled button's fill unchecked, an edge read by a border it does not draw, Go back filled, and the switch drawn under `controls: none`) |
 
 The gate checks the cart page with the fixture store's data, not every store's data.
 

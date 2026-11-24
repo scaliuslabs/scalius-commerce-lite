@@ -122,6 +122,12 @@ export const MUTATIONS = {
     cases: ["the required terms box, light and dark"],
     expect: /cartTermsAccepted.*(?:not visible|missing)/,
   },
+  "G10 an app's words never wrap": {
+    why: "an app's nodes keep their words on one line: a 120-letter word runs out of its block",
+    rewrites: [rewrite("apps/storefront/src/lib/buyer-ui/index.ts", "  node.className = className;\n", "  node.className = className;\n  node.style.whiteSpace = \"nowrap\";\n")],
+    cases: ["120-letter words in an app's blocks and an add-on's title, English and Bangla"],
+    expect: /apps fit: .*runs out of/,
+  },
   // The reviews' fixes, each reverted: its named case must fail again.
   "B1 token mode draws the host's own page": {
     why: "the default arrangement's tokens drawn on the host's page, whose summary sits in the lines panel",
