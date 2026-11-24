@@ -68,7 +68,7 @@ const frames = layout === "full-bleed" || layout === "full-screen" || layout ===
 const compactPhone = layout === "full-screen"
   && phoneHeight === "compact"
   && hero.mobile.length > 0
-  && hero.mobile.every((slide) => !slide.heading?.trim() && !slide.supportingText?.trim() && !(slide.link && slide.buttonLabel?.trim()));
+  && hero.mobile.every((slide) => !slide.heading?.trim() && !slide.supportingText?.trim() && !(slide.link && slide.buttonLabel?.trim()) && !slide.price);
 const edgeToEdge = layout === "full-bleed" || layout === "full-screen";
 // One carousel per viewport; CSS shows the one that fits.
 const carousels = [

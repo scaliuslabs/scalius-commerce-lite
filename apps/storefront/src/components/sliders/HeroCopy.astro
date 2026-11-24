@@ -8,6 +8,7 @@
 // wide-editorial layout's panel beside the photo; `plain` is a colour banner
 // without a photo (the secondary colour behind the words).
 import Button from "@/components/ui/Button.astro";
+import type { HeroSlidePrice } from "@scalius/shared/hero-slider";
 
 interface Props {
   previewFields?: boolean;
@@ -15,6 +16,8 @@ interface Props {
   text?: string;
   /** The button's words; none draws no button. */
   buttonLabel?: string;
+  /** The slide's product price: the supporting line's own type, the regular price struck through. */
+  price?: HeroSlidePrice | undefined;
   tone?: "band" | "editorial" | "plain";
   /** Heading size: a banner in a four-up row is smaller. */
   size?: "lg" | "md";
@@ -23,16 +26,21 @@ interface Props {
   headingLevel?: "p" | "h2";
 }
 
-const { previewFields = false, heading, text, buttonLabel, tone = "band", size = "lg", headingId, headingLevel = "p" } = Astro.props;
+const { previewFields = false, heading, text, buttonLabel, price, tone = "band", size = "lg", headingId, headingLevel = "p" } = Astro.props;
 const Heading = headingLevel;
 ---
 
-{(heading || text || buttonLabel) && (
+{(heading || text || buttonLabel || price) && (
   <div class="hero-copy" data-tone={tone} data-size={size}>
     {tone === "band" && <div class="hero-copy-lead" aria-hidden="true" />}
     <div class="hero-copy-body">
       {heading && <Heading data-theme-field={previewFields ? "heading" : undefined} id={headingId} class="hero-copy-heading">{heading}</Heading>}
       {text && <p data-theme-field={previewFields ? "text" : undefined} class="hero-copy-text">{text}</p>}
+      {price && (
+        <p class="hero-copy-text" data-hero-price>
+          <strong>{price.current}</strong>{price.regular && <Fragment> <s>{price.regular}</s></Fragment>}{price.soldOut && <Fragment> · {price.soldOut}</Fragment>}
+        </p>
+      )}
       {buttonLabel && (
         <Button data-theme-field={previewFields ? "cta.label" : undefined} as="span" variant="primary" class="hero-copy-button">{buttonLabel}</Button>
       )}

@@ -85,7 +85,7 @@ if (images.length === 0) return;
           const headline = image.heading?.trim();
           const supportingText = image.supportingText?.trim();
           const buttonLabel = image.link ? image.buttonLabel?.trim() : "";
-          const editorial = overlay === "editorial" && Boolean(headline || supportingText || buttonLabel);
+          const editorial = overlay === "editorial" && Boolean(headline || supportingText || buttonLabel || image.price);
           const focalPoint = image.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT;
           // Every rendition with the rendered width, built by the same helper
           // as the LCP preload in pages/index.astro, so the browser picks one
@@ -130,7 +130,7 @@ if (images.length === 0) return;
                     decoding={index === 0 && priority ? "sync" : "async"}
                   />
                 </picture>
-                <HeroCopy heading={headline} text={supportingText} buttonLabel={buttonLabel} tone={overlay} />
+                <HeroCopy heading={headline} text={supportingText} buttonLabel={buttonLabel} price={image.price} tone={overlay} />
               </SlideFrame>
             </div>
           );

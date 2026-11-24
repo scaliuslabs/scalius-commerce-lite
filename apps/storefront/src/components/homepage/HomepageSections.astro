@@ -175,7 +175,7 @@ const root = only
         {section.type === "hero" && (
           <section class:list={["w-full", section.settings.layout === "wide-editorial" && "md:mb-5"]}>
             <Hero
-              hero={homepageHero(section, content)}
+              hero={homepageHero(section, content, money)}
               priority={lead}
               phonePriority={lead && !phoneHeroAfterCategories}
               layout={section.settings.layout}
