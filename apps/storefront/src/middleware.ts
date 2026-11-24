@@ -165,7 +165,7 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
       inlineScriptHashes,
       storeScripts,
       paymentPage,
-      // A buyer's own page loads images from named origins only (a theme's stylesheet there reaches no other host).
+      // A buyer's own page loads images from named origins only (no theme or app stylesheet is drawn there).
       privatePage: storefrontAppPage(url.pathname) === "private",
     }),
   });

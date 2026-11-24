@@ -42,6 +42,7 @@ import {
   type StorefrontTemplateId,
   type StorefrontSkinRef,
   type StorefrontThemeDocument,
+  STOREFRONT_PAGE_TEMPLATES,
 } from "@scalius/shared/storefront-theme";
 import { ARABIC_TEXT, BANGLA_LONG, cardProduct, type ProductScenario } from "./fixtures";
 import { fixtureProductSoldOut, GALLERY_KIT, galleryCartSeed, galleryCustomerCart, type GalleryCartSeed } from "./cart-seed";
@@ -606,7 +607,7 @@ function pageEntries(): GalleryEntry[] {
   const base = baseTheme();
   const templated = clone(base);
   const around = (id: string, heading: string): StorefrontSection => contentSection("editorial", id, { layout: "rich-text", heading, body: "Free delivery inside Dhaka on orders over ৳3,000. Cash on delivery everywhere." });
-  for (const kind of ["product", "collection", "cart", "page"] as const) {
+  for (const kind of STOREFRONT_PAGE_TEMPLATES) {
     templated.pages.templates[kind] = { sections: [around(`${kind}-above`, "Before the page"), contentSection("product_rail", `${kind}-rail`, { title: "You may also like" })], main: 1 };
   }
   const landing = clone(base);
@@ -634,7 +635,7 @@ function pageEntries(): GalleryEntry[] {
     { id: entryId("page", "cms"), family: "page:cms", title: "CMS page", page: "page", theme: clone(base), focus: MAIN, scenario: {} },
     { id: entryId("page", "landing"), family: "page:landing", title: "Landing page with sections", page: "landing", theme: landing, focus: MAIN, scenario: {} },
     { id: entryId("page", "logo"), family: "page:home", title: "Home with the merchant's logo", page: "home", theme: productHome, focus: CHROME, scenario: { logo: true } },
-    ...(["product", "category", "cart", "page"] as const).map((page) => ({
+    ...(["product", "category", "page"] as const).map((page) => ({
       id: entryId("page", "template-sections", page),
       family: "page:template-sections",
       title: `Template sections around the ${page} page`,

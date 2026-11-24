@@ -68,6 +68,8 @@ function bindingSites(theme: StorefrontThemeDocument): BindingSite[] {
 }
 
 function unwrap(schema: z.ZodType): z.ZodType {
+  // A preprocess (`pages.templates`, which refuses a private page's template by reason) is its output schema.
+  if (schema instanceof z.ZodPipe) return unwrap(schema.out as z.ZodType);
   if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable || schema instanceof z.ZodDefault) return unwrap(schema.unwrap() as z.ZodType);
   return schema;
 }

@@ -28,6 +28,7 @@
 // nearest row (`PRIVATE_TOKEN_MODE_CSS`): a translucent tint or a palette
 // colour never decides a colour there.
 import { z } from "zod";
+import { buyerUiButtonProminenceIssues, PRIVATE_UI_BUTTON_UNDER } from "./private-buyer-ui";
 import { STOREFRONT_THEME_COLOR_KEYS, storefrontThemeContrast, storefrontThemeHoverSurface, storefrontThemeMix, type StorefrontThemeColors } from "./contrast";
 import { storefrontPagePaintColors, storefrontPagePaintCss, storefrontThemeFocusRing, type StorefrontPagePaint } from "./tokens";
 import {
@@ -327,6 +328,7 @@ export function compilePrivateTokens(page: PrivatePageKey, tokens: PrivateTokens
   }
   const { valid, issues } = validTokens(page, tokens, context);
   issues.push(...prominenceIssues(page, valid));
+  issues.push(...buyerUiButtonProminenceIssues(page, valid, (by) => Object.hasOwn(PRIVATE_PAGES[page].styles, PRIVATE_UI_BUTTON_UNDER) ? declared(PRIVATE_PAGES[page], valid, PRIVATE_UI_BUTTON_UNDER, by).value : undefined));
   if (issues.length > 0) return { issues, css: "", tables: [] };
   const built = privateTokenTables(page, valid, context);
   if (built.issues.length > 0) return { issues: built.issues, css: "", tables: built.tables };

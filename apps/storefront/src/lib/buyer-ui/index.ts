@@ -145,6 +145,8 @@ function storeHref(to: PluginUiTarget): string | null {
 
 function buttonNode(node: PluginUiButton, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement | null {
   const action = node.action;
+  // Its own tone on the element a theme's `ui.button.<tone>` row addresses (an untoned button is secondary).
+  const tone = node.tone ?? "secondary";
   if (action.kind === "cart" && !isCartSlot(block.target)) return null;
   // At least 44px tall on a phone (a tap target); its words decide its height from `sm`.
   const buttonClass = "inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 sm:min-h-0";
@@ -152,13 +154,14 @@ function buttonNode(node: PluginUiButton, block: BuyerUiBlock, options: BuyerUiO
     const href = storeHref(action.to);
     if (!href) return null;
     const link = element("a", `w-fit ${buttonClass}`, node.label);
-    link.href = href; link.dataset.ui = "button"; return link;
+    link.href = href; link.dataset.ui = "button"; link.dataset.tone = tone; return link;
   }
   const wrap = element("div", "space-y-1");
   // A banner's own buttons are drawn here too: the hook is the button's, wherever it stands.
   wrap.dataset.ui = "button";
   const button = element("button", buttonClass, node.label);
   button.type = "button";
+  button.dataset.tone = tone;
   button.disabled = node.disabled === true;
   const status = element("p", "text-sm text-muted-foreground"); status.setAttribute("role", "status");
   button.addEventListener("click", async () => {
@@ -228,7 +231,7 @@ function drawNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptio
       return container;
     }
     case "heading": return element("h3", "text-base font-semibold text-foreground", node.text);
-    case "text": return element("p", `whitespace-pre-wrap break-words ${node.size === "md" ? "text-base" : "text-sm"}${node.emphasis === "strong" ? " font-semibold" : node.emphasis === "mono" ? " font-mono" : ""}${node.tone === "critical" ? " text-destructive" : ""}`, node.text);
+    case "text": return element("p", `whitespace-pre-wrap ${node.size === "md" ? "text-base" : "text-sm"}${node.emphasis === "strong" ? " font-semibold" : node.emphasis === "mono" ? " font-mono" : ""}${node.tone === "critical" ? " text-destructive" : ""}`, node.text);
     case "mark": {
       const [glyph, ring] = marks[node.tone];
       // Twice its words' size, so a theme's `size` scales the circle with the glyph.
@@ -240,14 +243,14 @@ function drawNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptio
     case "banner": {
       const container = element("div", `rounded-md border p-3 text-sm ${toneClasses[node.tone]}`);
       if (node.title) container.append(element("p", "font-medium", node.title));
-      if (node.text) container.append(element("p", "whitespace-pre-wrap break-words", node.text));
+      if (node.text) container.append(element("p", "whitespace-pre-wrap", node.text));
       for (const action of node.actions ?? []) { const rendered = buttonNode(action, block, options); if (rendered) container.append(rendered); }
       return container;
     }
     case "divider": return element("hr", "border-border");
     case "key-value": {
       const list = element("dl", "grid grid-cols-2 gap-x-3 gap-y-1 text-sm");
-      for (const item of node.items) list.append(element("dt", "text-muted-foreground", item.label), element("dd", "break-words text-end", keyValueText(item.value)));
+      for (const item of node.items) list.append(element("dt", "text-muted-foreground", item.label), element("dd", "text-end", keyValueText(item.value)));
       return list;
     }
     case "image": {

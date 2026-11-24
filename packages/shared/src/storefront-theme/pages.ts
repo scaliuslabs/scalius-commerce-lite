@@ -62,13 +62,18 @@ export type StorefrontLandingPage = z.infer<typeof storefrontLandingPageSchema>;
 
 /**
  * The page templates a merchant adds ordinary sections to (Online Store
- * 2.0): every product page, every collection, category and brand page, the
- * cart and every CMS page. Each has one fixed part (the product
- * information, the products and filters, the cart, the page's content) that
- * moves among the sections but is never removed. The fixed part's own
- * structure stays `blocks.product` and `blocks.listing`.
+ * 2.0): every product page, every collection, category and brand page, and
+ * every CMS page. Each has one fixed part (the product information, the
+ * products and filters, the page's content) that moves among the sections
+ * but is never removed. The fixed part's own structure stays
+ * `blocks.product` and `blocks.listing`. A buyer's private page (the cart,
+ * checkout, receipt, account) takes no template sections: the theme only
+ * arranges its host parts (`privatePages`); a document naming a cart template
+ * is refused (`STOREFRONT_PRIVATE_TEMPLATE_REASON`).
  */
-export const STOREFRONT_PAGE_TEMPLATES = ["product", "collection", "cart", "page"] as const;
+export const STOREFRONT_PAGE_TEMPLATES = ["product", "collection", "page"] as const;
+/** The machine-readable reason a theme naming a template for a private page is refused. */
+export const STOREFRONT_PRIVATE_TEMPLATE_REASON = "private_page_template";
 export type StorefrontPageTemplate = (typeof STOREFRONT_PAGE_TEMPLATES)[number];
 
 /** A template's sections; the first `main` of them come before its fixed part. */
@@ -83,7 +88,24 @@ export function storefrontPageTemplateSchemaOf<Sections extends typeof storefron
 }
 
 export function storefrontPageTemplatesSchemaOf<Template extends z.ZodType>(template: Template) {
-  return z.object(Object.fromEntries(STOREFRONT_PAGE_TEMPLATES.map((kind) => [kind, template])) as Record<StorefrontPageTemplate, Template>).strict();
+  const templates = z.object(Object.fromEntries(STOREFRONT_PAGE_TEMPLATES.map((kind) => [kind, template])) as Record<StorefrontPageTemplate, Template>).strict();
+  // The cart's template, once offered: an empty one (what every document carried) is left out; one with
+  // sections is refused by name and reason, never as a bare unknown key. A preprocess keeps the input and
+  // output JSON Schema the strict object's.
+  return z.preprocess((value, context) => {
+    if (typeof value !== "object" || value === null || !Object.hasOwn(value, "cart")) return value;
+    const { cart, ...rest } = value as Record<string, unknown>;
+    const sections = typeof cart === "object" && cart !== null ? (cart as { sections?: unknown }).sections : undefined;
+    if (Array.isArray(sections) && sections.length === 0) return rest;
+    context.addIssue({
+      code: "custom",
+      path: ["cart"],
+      input: value,
+      message: "The cart is a buyer's private page and takes no sections: arrange its parts in privatePages.pages.cart instead.",
+      params: { reason: STOREFRONT_PRIVATE_TEMPLATE_REASON },
+    });
+    return value;
+  }, templates);
 }
 
 export const storefrontPageTemplateSchema = storefrontPageTemplateSchemaOf(storefrontSectionListSchema);

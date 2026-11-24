@@ -4325,9 +4325,6 @@
        "collection": {
         "$ref": "#/$defs/__schema74"
        },
-       "cart": {
-        "$ref": "#/$defs/__schema74"
-       },
        "page": {
         "$ref": "#/$defs/__schema74"
        }
@@ -4335,7 +4332,6 @@
       "required": [
        "product",
        "collection",
-       "cart",
        "page"
       ],
       "additionalProperties": false

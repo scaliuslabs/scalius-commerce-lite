@@ -55,7 +55,7 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
   dialog.setAttribute("aria-labelledby", `${id}-title`);
   dialog.setAttribute("aria-describedby", `${id}-text`);
   dialog.dataset.cartLineConfirm = "";
-  // The private pages' anatomy: a theme's stylesheet reaches the dialog by these hooks.
+  // The private pages' anatomy: a theme's tokens reach the dialog by these hooks (never a stylesheet).
   dialog.dataset.private = "dialog";
   dialog.className = "m-auto w-[min(32rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-0 text-card-foreground shadow-xl backdrop:bg-black/50";
 

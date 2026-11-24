@@ -15,6 +15,7 @@ import {
 } from "@scalius/api-client/sdk";
 import {
   compareThemeDocuments,
+  type StorefrontPageTemplate,
   type StorefrontSection,
   type StorefrontThemeDocument,
   type ThemeDocumentChange,
@@ -48,7 +49,7 @@ export function useChangeText(documents: readonly StorefrontThemeDocument[], sec
   const store = useMessages(onlineStoreMessages);
   const pageName = (page: string) => {
     if (page === "home") return t("page_home");
-    if (page.startsWith("template/")) return t(`templateName_${page.slice("template/".length) as "product" | "collection" | "cart" | "page"}`);
+    if (page.startsWith("template/")) return t(`templateName_${page.slice("template/".length) as StorefrontPageTemplate}`);
     const slug = page.startsWith("landing/") ? page.slice("landing/".length) : page;
     return documents.map((document) => document.pages.landing[slug]?.title).find(Boolean) ?? `/pages/${slug}`;
   };

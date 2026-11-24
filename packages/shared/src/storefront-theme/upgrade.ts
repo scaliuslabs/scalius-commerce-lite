@@ -371,6 +371,20 @@ export function upgradeStorefrontThemeDocument(value: unknown, chain: Storefront
   return upgradeSectionLists(named, chain);
 }
 
+/**
+ * A stored document at any version without a template for a buyer's private
+ * page: the cart once took template sections (`pages.templates.cart`), drawn
+ * around the cart outside its private root. A private page takes none now
+ * (pages.ts), so a stored one is dropped when read and the rest of the
+ * document reads as it was; a save that names one is refused.
+ */
+function withoutPrivatePageTemplates(document: Json): Json {
+  const pages = document.pages;
+  if (!isRecord(pages) || !isRecord(pages.templates) || !Object.hasOwn(pages.templates, "cart")) return document;
+  const { cart: _dropped, ...templates } = pages.templates;
+  return { ...document, pages: { ...pages, templates } };
+}
+
 /** A stored document read through the chain: the current document and the version it was stored at. */
 export type StoredStorefrontThemeRead =
   | { ok: true; document: StorefrontThemeDocument; storedVersion: number }
@@ -399,6 +413,7 @@ export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefr
   } catch (error) {
     return { ok: false, reason: error instanceof StorefrontThemeUpgradeError ? error.message : "The stored theme did not upgrade." };
   }
+  upgraded = withoutPrivatePageTemplates(upgraded);
   const released = readStoredPrivatePages(upgraded.privatePages);
   const result = storefrontThemeDocumentSchema.safeParse("privatePages" in upgraded ? { ...upgraded, privatePages: released.value } : upgraded);
   if (!result.success) {

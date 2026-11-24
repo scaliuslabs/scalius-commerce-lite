@@ -227,6 +227,8 @@ export function resolveDocumentBindings<T>(value: T, context: SettingBindingCont
 }
 
 function unwrappedSchema(schema: z.ZodType | undefined): z.ZodType | undefined {
+  // A preprocess (`pages.templates`, which refuses a private page's template by reason) is its output schema.
+  if (schema instanceof z.ZodPipe) return unwrappedSchema(schema.out as z.ZodType);
   return schema instanceof z.ZodOptional || schema instanceof z.ZodNullable || schema instanceof z.ZodDefault
     ? unwrappedSchema(schema.unwrap() as z.ZodType) : schema;
 }

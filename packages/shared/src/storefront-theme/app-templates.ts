@@ -47,8 +47,9 @@ export const storefrontAppTemplateThemeSchema = z.object({
   /** The homepage sections. */
   sections: storefrontSectionListSchema.optional(),
   /**
-   * The cart page and drawer: the chrome, an arrangement per page (each page
-   * it names replaces the merchant's), the stylesheet, words and icons.
+   * The cart page and drawer: an arrangement per page, typed tokens, words
+   * and icons (never markup or CSS); applied, it replaces the merchant's whole
+   * object.
    */
   privatePages: storefrontPrivatePagesTemplateSchema.optional(),
 }).strict().superRefine((value, context) => {
