@@ -710,7 +710,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
     const cell = (value: string, className = "") => `<span${className ? ` class="${className}"` : ""}>${escapeHtml(value)}</span>`;
     // Rows of label and amount, as on every money summary (an add-on row may open to its app's lines).
     const row = (label: string, valueHtml: string, kind: MoneySummaryRow) =>
-      `<div class="flex justify-between gap-4 ${kind === "total" ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}" data-summary-row="${kind}"><span${kind === "total" ? ' data-part="summary-total-label"' : ""}>${escapeHtml(label)}</span><span class="text-end tabular-nums">${valueHtml}</span></div>`;
+      `<div class="flex justify-between gap-4 ${kind === "total" ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}" data-summary-row="${kind}"><dt${kind === "total" ? ' data-part="summary-total-label"' : ""}>${escapeHtml(label)}</dt><dd class="text-end tabular-nums">${valueHtml}</dd></div>`;
     const major = (value: number) => fromMinor(value, places);
     const money = (value: number) => accountMoney(value, order.currencyCode);
     const tax = order.taxAmountMinor ?? 0;
