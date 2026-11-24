@@ -239,7 +239,8 @@ function drawNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptio
       mark.setAttribute("aria-hidden", "true");
       return mark;
     }
-    case "badge": return element("span", `w-fit rounded-full border px-2 py-1 text-xs ${toneClasses[node.tone ?? "neutral"]}`, node.text);
+    // One box (inline-block): a badge that wraps keeps its words inside its border, never cut through by it.
+    case "badge": return element("span", `inline-block w-fit max-w-full rounded-full border px-2 py-1 text-xs ${toneClasses[node.tone ?? "neutral"]}`, node.text);
     case "banner": {
       const container = element("div", `rounded-md border p-3 text-sm ${toneClasses[node.tone]}`);
       if (node.title) container.append(element("p", "font-medium", node.title));
