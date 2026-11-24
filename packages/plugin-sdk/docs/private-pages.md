@@ -337,11 +337,12 @@ A thing that is the same thing as on the cart has the cart's name: `page`, `fram
 | Receipt | `delivery`, `section-heading`, `delivery-contact` | Where it goes, its heading, the buyer's own name, address and contact | box, text, text |
 | Receipt | `lines`, `lines-heading` | What was bought, its heading; each line under it | box, text |
 | Receipt | `conversation` | The order's conversation with the store (it holds the reply form) | box (`card`) |
+| Receipt | (none) | The recommendations: public product cards on the store's own look and the palette's page, never in token mode and no row of the table | |
 | Account | `navigation`, `nav-item`, `nav-current`, `sign-out` | The menu, each page in it, the current page (its marker is its `link` colour), Sign out | box, control (muted), control, control (muted) |
 | Account | `heading-title`, `heading-intro`, `heading-back` | The page's `h1`, its intro, the way back | text, text (muted), control |
-| Account | `content` | The page's content; it holds the apps' targets `account.overview`, `account.order`, `account.profile` | box |
+| Account | `content` | The page's content; it holds the apps' targets `account.overview`, `account.order`, `account.profile`. It takes no tokens: most account pages draw no box around it, so what stands in it stands on the page | box (no tokens) |
 | Account | `card`, `card-title`, `status-badge` | Every account card, its heading, a state's pill | box (`card`), text, text on its own surface |
-| Account | `delivery-message`, `delivery-reveal` | A line's delivery message and the button that reveals it | box, control |
+| Account | `delivery-message`, `delivery-reveal` | A line's delivery message and the button that reveals it (with no border drawn, its fill reads 3:1 on the message, as Sign out's does) | box, control |
 
 The money summary sits in the receipt's `order` card and in an account order's `card`. An order's `line` holds the apps' `order.line.after` (drawn under a line only where an app answered for it). The apps' blocks take the same `ui.<kind>…` rows as on the cart, at these pages' targets (`order.confirmation`, `account.order`, `order.line.after` on the receipt; `account.overview`, `account.order`, `account.profile`, `order.line.after` in the account).
 
@@ -830,7 +831,7 @@ receipt target account.order
 receipt layouts stack,columns,grid,group
 receipt style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 receipt style frame <root> <root> tokens=max-width
-receipt style action :is([data-private="receipt"],[data-private="dialog"]) .bg-primary tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+receipt style action :is([data-private="receipt"],[data-private="dialog"]) .bg-primary:not([data-part="recommendations"] *) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
 receipt style input :is([data-private="receipt"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 receipt style field-label :is([data-private="receipt"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
 receipt style status <root> [data-part="status"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
@@ -880,11 +881,11 @@ account style field-label :is([data-private="account"],[data-private="dialog"]) 
 account style navigation <root> [data-part="navigation"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 account style nav-item <root> [data-part="nav-item"]:not([aria-current="page"]) tokens=text,size,weight,radius,ring
 account style nav-current <root> [data-part="nav-item"][aria-current="page"] tokens=text,link,size,weight,radius,ring
-account style sign-out <root> [data-part="sign-out"] tokens=background,text,border,border-width,radius,ring,inset,weight,size
+account style sign-out <root> [data-part="sign-out"] tokens=background,text,border,border-width,radius,ring,inset,weight,size boundary=edge
 account style heading-title <root> [data-part="heading-title"] tokens=text,font,weight,size,leading,case,tracking
 account style heading-intro <root> [data-part="heading-intro"] tokens=text,size,weight,leading
 account style heading-back <root> [data-part="heading-back"] tokens=text,radius,ring
-account style content <root> [data-part="content"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding targets=account.overview,account.order,account.profile
+account style content <root> [data-part="content"] tokens= targets=account.overview,account.order,account.profile
 account style card <root> [data-part="card"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap fields
 account style card-title <root> [data-part="card-title"] tokens=text,font,weight,size,leading,case,tracking
 account style status-badge <root> [data-part="status-badge"] tokens=background,text,border,border-width,radius
@@ -901,7 +902,7 @@ account style line-title <root> [data-part="line-title"] tokens=text,font,weight
 account style line-details <root> [data-part="line-details"] tokens=text,size
 account style line-price <root> [data-part="line-price"] tokens=text,muted,font,weight,size,align
 account style delivery-message <root> [data-part="delivery-message"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
-account style delivery-reveal <root> [data-part="delivery-reveal"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+account style delivery-reveal <root> [data-part="delivery-reveal"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=edge
 account style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow fields
 account style dialog-title [data-private="dialog"] [data-part="dialog-title"] tokens=text,font,weight,size,leading,case,tracking
 account style dialog-text [data-private="dialog"] [data-part="dialog-text"] tokens=background,text,muted,border,border-width,radius,padding

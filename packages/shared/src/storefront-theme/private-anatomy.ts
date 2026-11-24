@@ -644,6 +644,8 @@ const STATUS_BADGE_TOKENS = ["background", "text", "border", "border-width", "ra
  */
 const RECEIPT_STYLES: Record<string, PrivateStyleSpec> = {
   ...withoutNotices(RECEIPT_PAGE_STYLES.head),
+  // The recommendations keep the store's own look (private-tokens.ts PRIVATE_OWN_LOOK_HOOKS): no row reaches their buttons.
+  action: { ...RECEIPT_PAGE_STYLES.head.action!, selector: `${RECEIPT_PAGE_STYLES.head.action!.selector}:not([data-part="recommendations"] *)` },
   // The order's state: its mark, title (the page's h1), message and next steps; the payment retry under them.
   status: { selector: '[data-part="status"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", part: "status" },
   "status-mark": { selector: '[data-part="status-mark"]', tokens: ["background", "text", "border", "border-width", "radius"], kind: "text", surface: "under", ink: "primary", on: "status" },
@@ -723,12 +725,13 @@ const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
   "nav-item": { selector: '[data-part="nav-item"]:not([aria-current="page"])', tokens: ["text", "size", "weight", "radius", "ring"], kind: "control", surface: "under", ink: "muted-foreground", on: "navigation" },
   // The current page: its words, and its marker in the link colour.
   "nav-current": { selector: '[data-part="nav-item"][aria-current="page"]', tokens: ["text", "link", "size", "weight", "radius", "ring"], kind: "control", surface: "under", ink: "foreground", on: "navigation" },
-  "sign-out": { selector: '[data-part="sign-out"]', tokens: ["background", "text", "border", "border-width", "radius", "ring", "inset", "weight", "size"], kind: "control", surface: "under", ink: "muted-foreground", on: "navigation" },
+  "sign-out": { selector: '[data-part="sign-out"]', tokens: ["background", "text", "border", "border-width", "radius", "ring", "inset", "weight", "size"], kind: "control", surface: "under", ink: "muted-foreground", on: "navigation", boundary: "edge" },
   "heading-title": { selector: '[data-part="heading-title"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", part: "heading" },
   "heading-intro": { selector: '[data-part="heading-intro"]', tokens: ["text", "size", "weight", "leading"], kind: "text", surface: "under", ink: "muted-foreground", part: "heading" },
   "heading-back": { selector: '[data-part="heading-back"]', tokens: ["text", "radius", "ring"], kind: "control", surface: "under", ink: "muted-foreground", part: "heading" },
-  // The page's content, with the apps' account targets in it.
-  content: { selector: '[data-part="content"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", part: "content", targets: ["account.overview", "account.order", "account.profile"] },
+  // The page's content, with the apps' account targets in it. It takes no tokens: most account pages draw no box of
+  // their own around it (only the workspace layout does), so it never paints; what stands in it stands on the page.
+  content: { selector: '[data-part="content"]', tokens: [], kind: "box", surface: "under", ink: "foreground", part: "content", targets: ["account.overview", "account.order", "account.profile"] },
   card: { selector: '[data-part="card"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", on: "content", fields: true },
   "card-title": { selector: '[data-part="card-title"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "card" },
   "status-badge": { selector: '[data-part="status-badge"]', tokens: [...STATUS_BADGE_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "card" },
@@ -737,7 +740,8 @@ const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
   ...afterOrderLineStyles("card"),
   // A line's delivery message (the store's words for it) and the control that reveals it.
   "delivery-message": { selector: '[data-part="delivery-message"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", on: "line" },
-  "delivery-reveal": { selector: '[data-part="delivery-reveal"]', tokens: [...BUTTON_TOKENS], kind: "control", surface: "background", ink: "foreground", on: "delivery-message" },
+  // An outlined control: with its border drawn its edge reads 3:1 on the box around it, without one its fill does.
+  "delivery-reveal": { selector: '[data-part="delivery-reveal"]', tokens: [...BUTTON_TOKENS], kind: "control", surface: "background", ink: "foreground", on: "delivery-message", boundary: "edge" },
   ...ACCOUNT_PAGE_STYLES.tail,
 };
 
