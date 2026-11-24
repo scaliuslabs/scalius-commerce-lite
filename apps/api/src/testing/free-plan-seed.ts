@@ -3,14 +3,15 @@
  * in Node, free-plan-workerd.test.ts in workerd): a published category, 3 SKUs
  * (one optioned product), 100 single-SKU products for the 20- and 99-line
  * carts, shipping and delivery locations, email and customer sign-in settings,
- * a published theme whose hero shows two products (one slide's product not
- * public), 1,000 orders for the order list.
+ * the default theme published (a store's own saved theme), 1,000 orders for
+ * the order list. `heroWithProductsTheme` is the published theme of the
+ * homepage case whose hero sells products.
  */
 import type { DatabaseSync } from "node:sqlite";
 import { DEFAULT_STOREFRONT_THEME, type StorefrontSection } from "@scalius/shared/storefront-theme";
 
-/** The default theme with its hero's slides naming products, as a store whose hero sells games has it. */
-function heroWithProductsTheme(): string {
+/** The default theme with its hero's slides naming products (one that does not exist), as a store whose hero sells games has it. */
+export function heroWithProductsTheme(): string {
   const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
   const slide = (product: string) => ({ image: "media_linen", focalPoint: { x: 50, y: 50 }, alt: product, heading: "New in", buttonLabel: "Buy", link: "/products/linen-panjabi", product });
   theme.pages.home = theme.pages.home.map((section) => section.type === "hero"
@@ -47,7 +48,7 @@ export function seedCatalog(sqlite: DatabaseSync): void {
     INSERT INTO settings (id, key, value, type, category)
       VALUES ('auth', 'document', '{"email":"optional","whatsapp":"off","channels":["email"]}', 'json', 'customer_auth');
   `);
-  sqlite.prepare("INSERT INTO theme_settings (id, colors, revision) VALUES ('default', ?, 1) ON CONFLICT(id) DO UPDATE SET colors = excluded.colors").run(heroWithProductsTheme());
+  sqlite.prepare("INSERT INTO theme_settings (id, colors, revision) VALUES ('default', ?, 1) ON CONFLICT(id) DO UPDATE SET colors = excluded.colors").run(JSON.stringify(DEFAULT_STOREFRONT_THEME));
   // 100 single-SKU products for the 20- and 99-line carts, at whole-taka
   // prices: cash on delivery collects whole taka, so a paisa total is refused.
   const insertProduct = sqlite.prepare("INSERT INTO products (id, name, price_minor, slug, category_id, is_active) VALUES (?, ?, ?, ?, 'cat_panjabi', 1)");

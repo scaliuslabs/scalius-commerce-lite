@@ -39,8 +39,9 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `checkout-3-commit-signed-in` | 14 | 70 | 46 | 60 | 16 | - |
 | `order-refund-signed-in` | 24 | 44 | 20 | 26 | 3 | - |
 | `order-refund-signed-in-300` | 24 | 44 | 20 | 26 | 3 | - |
-| `page-home-miss` | 11 | 29 | 0 | 52 | 13 | - |
+| `page-home-miss` | 11 | 25 | 0 | 43 | 11 | - |
 | `page-home-hit` | 1 | 1 | 0 | 1 | 0 | - |
+| `page-home-miss-hero-products` | 11 | 29 | 0 | 52 | 13 | - |
 | `page-product-miss` | 19 | 36 | 0 | 50 | 10 | - |
 | `page-product-hit` | 1 | 1 | 0 | 1 | 0 | - |
 | `page-category-miss` | 6 | 19 | 0 | 52 | 5 | - |
