@@ -930,7 +930,7 @@ export function galleryEntry(id: string): GalleryEntry | null {
 }
 
 /** The states the private pages' rendered tests draw a theme in (each a cart the buyer can hold). */
-export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many", "one", "max", "customer", "customer-protected"] as const;
+export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many", "one", "max", "customer", "customer-protected", "long-words"] as const;
 export type PrivatePagesState = (typeof PRIVATE_PAGES_STATES)[number];
 
 /** Long Bangla titles: a line's words at their longest in the store's second language. */
@@ -995,6 +995,7 @@ export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocu
     ...(options.localization ? { localization: true } : {}),
     ...(options.terms ? { requireTerms: true } : {}),
     ...(state === "lines" || state === "decide" ? { lineStates: true } : {}),
+    ...(state === "long-words" ? { longWords: true } : {}),
     // The customer's cart: its protection app's blocks alone.
     ...(customer ? { customer, buyerUiKinds: false } : {}),
     ...(state === "bn" ? { locale: "bn" as const, product: "bangla" as const } : state === "ar" ? { locale: "ar" as const } : {}),
