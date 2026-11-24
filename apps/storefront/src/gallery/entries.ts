@@ -99,6 +99,10 @@ export interface GalleryScenario {
   delivering?: boolean;
   /** With `checkoutBuyerUi`: an app draws every node kind and tone in the summary, below the cart and under a line. */
   buyerUiKinds?: boolean;
+  /** An app block on a line and in the summary, and an add-on row, whose words run 120 letters (English and Bangla). */
+  longWords?: boolean;
+  /** The store asks the buyer to tick its terms before placing the order. */
+  requireTerms?: boolean;
   /** The cart check asks for a protection decision on the first line (declining needs agreement) and prices an add-on into the second. */
   lineStates?: boolean;
   /**
@@ -978,7 +982,7 @@ function manyCart(): string {
  * store has Noor installed, so a theme from it draws its header and footer;
  * with `localization`, the store sells in two markets.
  */
-export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean; page?: "home" } = {}): GalleryEntry {
+export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean; terms?: boolean; page?: "home" } = {}): GalleryEntry {
   const base = galleryEntry(entryId("app", "buyer-ui"))!;
   // `decide`: the base cart, whose first line asks for a decision and every line sells, so Place order reaches the question.
   const customer = state === "customer" ? "offer" as const : state === "customer-protected" ? "protected" as const : undefined;
@@ -989,6 +993,7 @@ export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocu
     ...(options.noor ? { noor: "active" as const, menu: "compact" as const } : {}),
     // Two markets, the first in two languages: a public footer offers a country and a language.
     ...(options.localization ? { localization: true } : {}),
+    ...(options.terms ? { requireTerms: true } : {}),
     ...(state === "lines" || state === "decide" ? { lineStates: true } : {}),
     // The customer's cart: its protection app's blocks alone.
     ...(customer ? { customer, buyerUiKinds: false } : {}),

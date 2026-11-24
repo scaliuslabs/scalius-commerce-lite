@@ -83,6 +83,12 @@ export const MUTATIONS = {
     cases: [S8],
     expect: /^5xx: 503 POST/,
   },
+  "G8 the required terms box is hidden": {
+    why: "the store asks for its terms and the tick box and its words are not drawn: the buyer cannot accept them",
+    rewrites: [rewrite("apps/storefront/src/components/checkout/CheckoutTermsAgreement.astro", '<label for={id} class="flex min-h-11', '<label for={id} class="hidden min-h-11')],
+    cases: ["the required terms box, light and dark"],
+    expect: /cartTermsAccepted.*(?:not visible|missing)/,
+  },
   // The reviews' fixes, each reverted: its named case must fail again.
   "B1 token mode draws the host's own page": {
     why: "the default arrangement's tokens drawn on the host's page, whose summary sits in the lines panel",

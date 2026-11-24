@@ -427,6 +427,9 @@ const REGRESSIONS = {
   // The customer's cart (private-look.md 2.1, 2.2, 3) in its own look, light and dark, at 390 and 1280: offered its
   // protection, and protected on two accounts with the add-on row opened.
   "the customer's cart, its protection offered": { states: ["customer"], request: REFERENCE },
+  // A store that asks for its terms: the required tick box and its words on screen, reached by Tab, its ring and its
+  // words readable, in the light colours and the dark, on a dark details form.
+  "the required terms box, light and dark": { request: { terms: true, scheme: "system", toggle: true }, privatePages: { tokens: { cart: { "details-form": BY_SCHEME, input: { ring: SCHEMED("#6d28d9", "#a78bfa"), invalid: SCHEMED("#b91c1c", "#f87171") } } } } },
   "the customer's cart, protected": { states: ["customer-protected"], request: REFERENCE },
   // A stored document forged past the save (a row edited by hand): content blocks in the page and the line, a
   // stylesheet, the theme's chrome and its search. The store reads it with all of that dropped and its private pages'
@@ -1516,7 +1519,9 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   if (request?.page === "home") return drawDrawer({ context, id, width, problems, server5xx, rows, state });
   const page = await timed("load", () => open(context, id, width, server5xx, height));
   // The store's own checkout header, and its controls where the theme places them.
-  const mandatory = [...(state === "empty" ? EMPTY_MANDATORY : state === "lines" ? LINES_MANDATORY : MANDATORY), '[data-private="core-header"]'];
+  // A store that asks for its terms: the required box and its words, wherever the cart is not empty.
+  const terms = request?.terms && state !== "empty" ? ["#cartTermsAccepted", 'label[for="cartTermsAccepted"]'] : [];
+  const mandatory = [...(state === "empty" ? EMPTY_MANDATORY : state === "lines" ? LINES_MANDATORY : MANDATORY), '[data-private="core-header"]', ...terms];
   const at = (label, list) => problems.push(...list.map((problem) => `${label}: ${problem}`));
   const check = async (label, scope, list, { controls: wantControls = true } = {}) => {
     await timed("settle", () => settle(page));
@@ -1687,8 +1692,8 @@ async function dockChecks(page) {
 /** Place order's place under the default look, for the same store and cart at this size (measured once each). */
 const defaults = new Map();
 function defaultInFlow(request = {}, state, width, height = 900) {
-  const { noor, localization, tabs, toggle, reference } = request;
-  const shape = { noor, localization, tabs, toggle, reference };
+  const { noor, localization, tabs, toggle, reference, terms } = request;
+  const shape = { noor, localization, tabs, toggle, reference, terms };
   const key = `${JSON.stringify(shape)}|${state}|${width}|${height}`;
   if (!defaults.has(key)) {
     defaults.set(key, (async () => {

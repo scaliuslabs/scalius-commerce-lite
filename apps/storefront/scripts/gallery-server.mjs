@@ -353,7 +353,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         // cannot read serves the default theme whole; the storefront draws what that read served.
         const reread = shared.readStoredStorefrontThemeDocument(JSON.stringify(stored));
         const served = reread.ok ? reread.document : shared.DEFAULT_STOREFRONT_THEME;
-        const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, ...(body.page === "home" ? { page: "home" } : {}) });
+        const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, terms: body.terms === true, ...(body.page === "home" ? { page: "home" } : {}) });
         const tables = shared.privatePageTokenMode(served.privatePages, "cart") ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served)) : [];
         return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: served.privatePages.compiled.refused === true });
       }

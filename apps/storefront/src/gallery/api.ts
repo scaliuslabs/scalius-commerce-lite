@@ -441,7 +441,9 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
   if (path === "/api/v1/checkout/config") {
     const gateways = entry.scenario.checkout === "no-cod" ? [] : [{ id: "cod", name: "Cash on delivery", countries: ["BD"] }];
     // A store that delivers: a Bangladesh zone serves every address and a city has its thanas, so Place order is on.
-    return entry.scenario.delivering ? { gateways, checkoutReadiness: { status: "ready", issues: [], hasActiveShippingMethod: true, hasActiveDeliveryHierarchy: true } } : { gateways };
+    // A store that asks for its terms to be accepted (`requireTerms`): the required box, not the sentence.
+    const terms = entry.scenario.requireTerms ? { requireTermsAcceptance: true } : {};
+    return entry.scenario.delivering ? { gateways, ...terms, checkoutReadiness: { status: "ready", issues: [], hasActiveShippingMethod: true, hasActiveDeliveryHierarchy: true } } : { gateways, ...terms };
   }
   if (path === "/api/v1/products/recommendations") {
     const limit = Math.min(positiveInteger(search.get("limit"), 8), 20);
