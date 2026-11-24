@@ -66,6 +66,7 @@ const {
   social,
   variant: headerStyle,
   navigationStyle,
+  mobileNavigation,
 } = Astro.props;
 
 const { theme, resolved, brand, preview, language } = await currentRequestTheme(Astro.locals);
@@ -105,8 +106,9 @@ const desktopSettings = desktopNav.settings as Record<string, unknown>;
 const railAlways = desktopKind === "departments-rail" && desktopSettings.open === "always";
 const phone = phoneNavigation(resolved.blocks);
 const phoneTree = phone.menu;
-const tabs = phone.tabBar ? phone.tabs ?? null : null;
-const tabBar = phone.tabBar;
+// The Layout decides where the bar draws (never where the buyer is paying); the theme, which tabs.
+const tabBar = phone.tabBar && mobileNavigation === "tabs";
+const tabs = tabBar ? phone.tabs ?? null : null;
 const comparable = phone.compare;
 const desktopDrill = hasNavigation && desktopKind === "drill-in-drawer";
 // One drawer serves both screens when both drill in.

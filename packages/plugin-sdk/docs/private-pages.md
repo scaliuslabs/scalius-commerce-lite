@@ -310,7 +310,7 @@ A row with no details is a plain row of its title and amount. On the cart page t
 
 ## The store's controls
 
-A private page draws only the store's chrome: its checkout header, no theme or app header or footer, and no phone tab bar. `controls` places the store's controls:
+A private page draws only the store's chrome: its checkout header, no theme or app header or footer. The phone tab bar never draws where the buyer is paying (the cart, the checkout and quick checkout, buy now, payment recovery); the receipt and the account pages keep it. `controls` places the store's controls:
 
 | `controls` | Where |
 | --- | --- |
