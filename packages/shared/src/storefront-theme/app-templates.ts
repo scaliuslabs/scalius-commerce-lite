@@ -21,7 +21,7 @@ import { storefrontThemeBlocksSchema } from "./blocks";
 import { storefrontPrivatePagesDefault, storefrontPrivatePagesTemplateSchema, type StorefrontPrivatePages } from "./private-layout";
 import { checkStorefrontThemeSave, type StorefrontThemeSaveIssue } from "./save";
 import { storefrontSectionListSchema, type StorefrontSection } from "./sections";
-import { storefrontDarkColorsMissing, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";
+import { storefrontDarkColorsMissing, storefrontThemeShowsDarkColors, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";
 import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { StorefrontThemeUpgradeError, upgradeStorefrontThemeDocument } from "./upgrade";
 import { DEFAULT_STOREFRONT_THEME } from "./templates";
@@ -222,9 +222,11 @@ export function fillRequiredBlockFields(
 function templatePath(path: string, template: StorefrontAppTemplateTheme): string {
   const [root, slot] = path.split(".");
   if (root === "pages" && slot === "home") return `theme.sections${path.slice("pages.home".length)}`;
+  // Dark colours are the template's only when it shows them; otherwise the default theme's stay.
   const owns = root === "blocks" ? template.blocks?.[slot as keyof NonNullable<StorefrontAppTemplateTheme["blocks"]>] !== undefined
-    : root === "tokens" || root === "privatePages" || root === "apps" ? template[root] !== undefined
-      : false;
+    : root === "tokens" && slot === "darkColors" ? template.tokens !== undefined && storefrontThemeShowsDarkColors(template.tokens)
+      : root === "tokens" || root === "privatePages" || root === "apps" ? template[root] !== undefined
+        : false;
   return owns ? `theme.${path}` : `theme (the default theme's ${path || "document"}, which this template keeps)`;
 }
 

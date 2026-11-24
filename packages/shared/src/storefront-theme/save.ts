@@ -63,7 +63,7 @@ export function checkStorefrontThemeSave(theme: unknown): StorefrontThemeSaveChe
   const stored = { ...result.data, privatePages: privatePages.value };
   const serialized = JSON.stringify(stored);
   if (new TextEncoder().encode(serialized).byteLength > STOREFRONT_THEME_DOCUMENT_MAX_BYTES) {
-    return refused([{ path: "", message: "Storefront style is too large. Shorten page content or remove unused landing pages.", reason: "too_large" }], "");
+    return refused([{ path: "", message: "Storefront style is too large. Shorten page content or remove unused landing pages.", reason: "document_too_large" }], "");
   }
   return { ok: true, theme: stored, serialized };
 }
