@@ -222,6 +222,15 @@ Its `tokens` can set the colour scheme too, checked like any theme when the merc
 
 A template that leaves dark off (`light`, no switch) keeps the merchant's own scheme, dark colours and switch when applied; one that shows dark brings its own. A template written for version 12 reads as `light`, no dark colours and no switch.
 
+**What the store refuses is what validate refuses.** The store checks a template by applying it to the default theme and running the save check every theme save and publish runs: readable text in every colour set the template shows (its `colors`, and its `darkColors` and `pagePaint` as you wrote them, never remade), helper text apart from the error colour, the private pages (arrangement, tokens, words, icons) and the homepage sections. A template that fails is not offered in the store's template library, and the app's page says why. `validate` runs the same function and prints each refused value with its place in your manifest, the store's words (what is wrong and what is allowed) and its reason when it has one:
+
+```text
+✗ Theme templates: storefront.templates[0] (studio).theme.tokens.colors.destructive: destructive on card has contrast 4.28:1; it needs at least 4.5:1.
+✗ Theme templates: storefront.templates[0] (studio).theme.privatePages.labels.cart.summaryHeading.en: These words sit among the amounts: no digits or currency signs; the store writes every amount. [label_figures]
+```
+
+A template that sets blocks but no tokens is checked against the default colours it keeps (`theme (the default theme's tokens.colors…, which this template keeps)`). A merchant's own blocks can still add a pair your palette fails; set the blocks your palette is made for.
+
 ```ts
 templates: [{
   id: "studio",

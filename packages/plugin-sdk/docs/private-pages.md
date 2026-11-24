@@ -274,6 +274,8 @@ A refusal names the theme key and the pair that set it, and the scheme: `summary
 
 A value that is not of the document's shape (a wrong type, an unknown field) is refused by the schema, naming its path.
 
+`validate` runs these same checks on every template you ship, through the store's own code, and prints each with its place and reason (`✗ Theme templates: storefront.templates[0] (studio).theme.privatePages.tokens.cart.summary-total: … [contrast]`), so a template that validates is one the store applies and saves.
+
 ## Words and icons
 
 A label that names an action or an amount takes one of the store's **variants**, which the store words in each language it translates (English, Bangla), so "Go back" never confirms and a subtotal never reads as the total. A heading, an intro or an empty state takes **your own words**, per language: plain text, a page shows its language, then English. Invisible characters and direction overrides are removed.
