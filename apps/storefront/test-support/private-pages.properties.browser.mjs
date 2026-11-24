@@ -260,6 +260,9 @@ function generate(seed) {
   maybe("summary-heading", { ...text(), size: int(14, 24) });
   maybe("summary-rows", { size: int(12, 18) });
   maybe("summary-total", { ...text(), size: int(20, 40), weight: "800" });
+  // No money figure outsizes the total: a line price over the total's size raises the total to it.
+  const price = tokens["line-price"]?.size;
+  if (price !== undefined && price > (tokens["summary-total"]?.size ?? 20)) set("summary-total", { size: price, weight: "800" });
   maybe("summary-total-label", { ...text(), size: int(18, 20) });
   maybe("summary-add-on", { radius: int(0, 12), ring: "#7c3aed" });
   maybe("section-heading", text());
@@ -315,8 +318,11 @@ const DARK = { background: "#111111", text: "#ffffff", muted: "#d4d4d4", link: "
 const BY_SCHEME = { background: SCHEMED("#ffffff", "#111111"), text: SCHEMED("#111111", "#ffffff"), muted: SCHEMED("#4b5563", "#d4d4d4"), link: SCHEMED("#5b21b6", "#c4b5fd"), error: SCHEMED("#b91c1c", "#fca5a5") };
 /** The cart line's default arrangement (private-anatomy.ts). */
 const DEFAULT_LINE = [{ type: "part", part: "image" }, { type: "layout", layout: "stack", children: [{ type: "layout", layout: "columns", children: [{ type: "layout", layout: "stack", children: [{ type: "part", part: "title" }, { type: "part", part: "details" }, { type: "part", part: "inputs" }, { type: "target", target: "cart.line.after" }] }, { type: "part", part: "remove" }] }, { type: "layout", layout: "columns", children: [{ type: "part", part: "quantity" }, { type: "part", part: "price" }] }, { type: "part", part: "limit" }, { type: "part", part: "issue" }, { type: "part", part: "rule" }] }];
-/** The largest a line's tokens make it: a 320px image, 48px padding, a 40px title on three lines. */
-const LARGEST_LINE = { line: { padding: 48, "border-width": 4 }, "line-image": { width: 240, height: 320, "width-wide": 240, "height-wide": 320 }, "line-title": { size: 40, tracking: "wider", clamp: "3" }, "line-price": { size: 28 } };
+/**
+ * The largest a line's tokens make it: a 320px image, 48px padding, a 40px title on three lines and a 28px price,
+ * with the total raised to the price (no money figure outsizes the total, so the save takes the largest line only so).
+ */
+const LARGEST_LINE = { line: { padding: 48, "border-width": 4 }, "line-image": { width: 240, height: 320, "width-wide": 240, "height-wide": 320 }, "line-title": { size: 40, tracking: "wider", clamp: "3" }, "line-price": { size: 28 }, "summary-total": { size: 28, weight: "800" } };
 const PAINT = { kind: "linear", angle: 160, stops: ["background", "muted", "secondary"] };
 const DARK_PAINT = { kind: "radial", at: "top", stops: ["muted", "background", "secondary"] };
 /** What a stored document forged past the save carries (none of it may draw): its words and its stylesheet's mark. */
