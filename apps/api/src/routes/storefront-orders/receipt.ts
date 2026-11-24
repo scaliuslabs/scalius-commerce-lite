@@ -46,13 +46,13 @@ import {
 import {
   orderMoneyAmounts,
   orderMoneySelection,
-  buyerOrderAddOnTotals,
   buyerUiOrderLines,
   presentBuyerLineAddOns,
   presentOrderLineFulfilment,
   presentOrderPickup,
   presentShippingMethodKind,
 } from "@scalius/core/modules/orders/browser";
+import { buyerOrderAddOnTotals } from "@scalius/shared/add-on-document";
 import {
   buyerLineAddOnsSchema,
   buyerLineIdsSchema,

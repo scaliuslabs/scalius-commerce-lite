@@ -65,8 +65,8 @@ import {
   showsOrderLineGroupHeadings,
   supportActionDescription,
 } from "@/lib/order-line-groups";
-import { buyerLineAddOnRows, readBuyerLineAddOns } from "@scalius/shared/buyer-line-add-on-text";
-import { orderEntries, rowItemsOnly, withoutBundleEntry, type OrderEntry } from "@/lib/order-bundles";
+import { buyerLineAddOnRows, readBuyerLineAddOns, rowItemsOnly } from "@scalius/shared/buyer-line-add-on-text";
+import { orderEntries, withoutBundleEntry, type OrderEntry } from "@/lib/order-bundles";
 import { pagePath } from "@/lib/presence-url";
 import { longAnswerHtml, longAnswerWords } from "@/lib/long-answer";
 import type { MoneySummaryRow } from "@/lib/money-summary-order";

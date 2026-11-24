@@ -2,7 +2,8 @@ import { countryDisplayName } from "@scalius/shared/address";
 import { formatOrderShippingAddress } from "../shipping-address";
 import { formatOrderBillingAddress } from "../billing-display";
 import type { InvoiceDocument, InvoiceOrderItemSnapshot } from "./snapshot";
-import { buyerLineAddOnRows } from "@scalius/shared/buyer-line-add-on-text";
+import { buyerLineAddOnRows, rowItemsOnly } from "@scalius/shared/buyer-line-add-on-text";
+import { addOnDocumentRows } from "@scalius/shared/add-on-document";
 import { formatOrderNumberIn } from "@scalius/shared/order-utils";
 import { ServiceUnavailableError } from "../../../errors";
 import { paymentMethodLabel } from "../../payments";
@@ -139,15 +140,24 @@ export function renderPrintableInvoice(
     words: lineEntryWords(language),
   }).flatMap((group) => group.entries.map((entry) => `<p>${html(entry.label)}: ${html(entry.value)}</p>`)).join("");
   const free = (amount: string) => `<s>${amount}</s> ${money(0)}`;
+  const subtotalMinor = order.subtotalAmountMinor ?? Math.round((order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)) * (10 ** decimals));
+  // The apps' add-ons as their own rows after Subtotal: the receipt's rows and words (`addOnDocumentRows`).
+  // Subtotal is then the items alone, and so is each line's amount (`rowItemsOnly`).
+  const addOns = addOnDocumentRows(subtotalMinor, order.addOnRows, (minor) => money(minor));
+  const addOnsInSummary = addOns.rows.length > 0;
+  const addOnRows = addOns.rows.map((row) => `<div><span>${html(row.title)}${row.details.map((line) => `<small>${html(line)}</small>`).join("")}</span><span>${row.amount}</span></div>`).join("");
   const rows = order.items.map((item) => {
-    const unit = money(item.unitPriceMinor ?? Math.round(item.price * (10 ** decimals)));
-    const total = money(itemTotal(item, decimals));
+    const own = rowItemsOnly({
+      unitPriceMinor: item.unitPriceMinor ?? Math.round(item.price * (10 ** decimals)),
+      grossSubtotalMinor: itemTotal(item, decimals),
+    }, item, addOnsInSummary)!;
+    const unit = own.unitPriceMinor === null ? "" : money(own.unitPriceMinor);
+    const total = money(own.grossSubtotalMinor);
     return `
     <tr><td>${html(item.productName || item.productId)}${item.variantLabel ? `<small>${html(item.variantLabel)}</small>` : ""}${itemProperties(item, order.currencyCode, decimals, language)}</td>
     <td>${number(item.quantity)}${item.returnedQuantity ? `<small>${copy.returned(number(item.returnedQuantity))}</small>` : ""}</td><td>${isFreeLine(item) ? free(unit) : unit}</td>
     <td>${isFreeLine(item) ? free(total) : total}</td></tr>`;
   }).join("");
-  const subtotalMinor = order.subtotalAmountMinor ?? Math.round((order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)) * (10 ** decimals));
   const shippingMinor = order.shippingAmountMinor ?? Math.round(order.shippingCharge * (10 ** decimals));
   const shippingLabel = order.shippingMethodName
     ? copy.deliveryMethod(order.shippingMethodName)
@@ -173,7 +183,7 @@ export function renderPrintableInvoice(
 <div><strong>${html(document.invoiceNumber ?? copy.draft)}</strong><p>${date}</p><p>${html(copy.order(orderNumber))}</p></div></header>
 <section class="meta"><div><strong>${copy.billTo}</strong>${billTo}</div><div><strong>${shipToHeading}</strong><p>${shipToText}</p><p>${copy.payment}: ${html(payment)}${paymentStatus ? ` (${html(paymentStatus)})` : ""}</p>${terms}${appAnswers}</div></section>
 <table><thead><tr><th>${copy.item}</th><th>${copy.qty}</th><th>${copy.unitPrice}</th><th>${copy.amount}</th></tr></thead><tbody>${rows}</tbody></table>
-<section class="totals"><div><span>${copy.subtotal}</span><span>${money(subtotalMinor)}</span></div><div><span>${html(shippingLabel)}${shippingDetails ? `<small>${html(shippingDetails)}</small>` : ""}</span><span>${money(shippingMinor)}</span></div>${discountMinor > 0 ? `<div><span>${copy.discount}</span><span>-${money(discountMinor)}</span></div>` : ""}<div><span>${html(order.taxLabel && order.taxLabel.trim().toLowerCase() !== "tax" ? order.taxLabel : copy.tax)}</span><span>${money(order.taxAmountMinor)}</span></div><div class="total"><span>${copy.total}</span><span>${money(totalMinor)}</span></div>${refundedMinor > 0 ? `<div><span>${copy.refunded}</span><span>-${money(refundedMinor)}</span></div>` : ""}${refundedSinceIssueMinor > 0 ? `<div><span>${copy.refundedSinceIssue}</span><span>-${money(refundedSinceIssueMinor)}</span></div>` : ""}${totalRefundedMinor > 0 ? `<div class="total"><span>${copy.totalAfterRefunds}</span><span>${money(netTotalMinor)}</span></div>` : ""}</section>
+<section class="totals"><div><span>${copy.subtotal}</span><span>${money(addOns.itemsSubtotalMinor)}</span></div>${addOnRows}<div><span>${html(shippingLabel)}${shippingDetails ? `<small>${html(shippingDetails)}</small>` : ""}</span><span>${money(shippingMinor)}</span></div>${discountMinor > 0 ? `<div><span>${copy.discount}</span><span>-${money(discountMinor)}</span></div>` : ""}<div><span>${html(order.taxLabel && order.taxLabel.trim().toLowerCase() !== "tax" ? order.taxLabel : copy.tax)}</span><span>${money(order.taxAmountMinor)}</span></div><div class="total"><span>${copy.total}</span><span>${money(totalMinor)}</span></div>${refundedMinor > 0 ? `<div><span>${copy.refunded}</span><span>-${money(refundedMinor)}</span></div>` : ""}${refundedSinceIssueMinor > 0 ? `<div><span>${copy.refundedSinceIssue}</span><span>-${money(refundedSinceIssueMinor)}</span></div>` : ""}${totalRefundedMinor > 0 ? `<div class="total"><span>${copy.totalAfterRefunds}</span><span>${money(netTotalMinor)}</span></div>` : ""}</section>
 <footer><p>${html(businessInfo.invoiceFooterText)}</p><p>${copy.noSignature}</p></footer></main></body></html>`;
 
   if (new TextEncoder().encode(output).byteLength > MAX_PRINTABLE_INVOICE_BYTES) {

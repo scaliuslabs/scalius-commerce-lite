@@ -5,7 +5,6 @@
 // buyer bought it, and a row's amounts leave out what the apps charged on it,
 // because the summary shows those as their own rows (`addOns`). Pure and small:
 // the account page's script, the receipt and the order cards share it.
-import { readBuyerLineAddOns } from "@scalius/shared/buyer-line-add-on-text";
 import { LINE_BUNDLE_KEY } from "@scalius/shared/line-identity";
 
 /** A row's bundle as the API sends it (`OrderLineBundle`). */
@@ -65,27 +64,3 @@ export function withoutBundleEntry<P extends { key?: unknown }>(properties: read
   return Array.isArray(properties) ? properties.filter((property) => property?.key !== LINE_BUNDLE_KEY) : null;
 }
 
-/** What the apps charged on a row, exactly (its `addOns`' totals). */
-export function rowAddOnsMinor(row: { addOns?: unknown }): number {
-  return readBuyerLineAddOns(row.addOns).reduce((sum, addOn) => sum + addOn.totalMinor, 0);
-}
-
-/**
- * A row's own amounts when the summary shows the apps' add-ons as their own
- * rows: its gross less what the apps charged on it, and the unit price of
- * that when it is exact. Then the rows add up to the summary's Subtotal (the
- * items alone) and the add-on rows to the rest, the same on every page.
- */
-export function rowItemsOnly<T extends { unitPriceMinor: number | null; grossSubtotalMinor: number }>(
-  line: T | null,
-  row: { quantity: number; addOns?: unknown },
-  addOnsInSummary: boolean,
-): T | null {
-  if (!line || !addOnsInSummary) return line;
-  const addOnsMinor = rowAddOnsMinor(row);
-  if (addOnsMinor === 0 || addOnsMinor > line.grossSubtotalMinor) return line;
-  const grossSubtotalMinor = line.grossSubtotalMinor - addOnsMinor;
-  const unitPriceMinor = row.quantity > 0 && grossSubtotalMinor % row.quantity === 0 ? grossSubtotalMinor / row.quantity : null;
-  const total = (line as { totalMinor?: unknown }).totalMinor;
-  return { ...line, grossSubtotalMinor, unitPriceMinor, ...(typeof total === "number" ? { totalMinor: total - addOnsMinor } : {}) };
-}

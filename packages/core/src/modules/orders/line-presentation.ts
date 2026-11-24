@@ -15,8 +15,7 @@ import { MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { LINE_ADD_ONS_MAX, LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-identity";
 import { isFulfillmentType, type DeliveryMethodKind, type FulfillmentType } from "@scalius/shared/fulfilment";
 import { fromMinor } from "@scalius/shared/money";
-import { frozenAddOnTotals, type BuyerLineAddOn } from "@scalius/shared/add-on-folding";
-import type { AddOnTotals } from "@scalius/shared/add-on-totals";
+import type { BuyerLineAddOn } from "@scalius/shared/add-on-folding";
 
 export interface PresentedOrderLineProperty extends ResolvedLineProperty {
     price: number;
@@ -69,20 +68,6 @@ export function presentBuyerLineAddOns(addOns: readonly BuyerLineAddOn[], decima
         amount: addOn.amountMinor === null ? null : fromMinor(addOn.amountMinor, decimalPlaces),
         total: fromMinor(addOn.totalMinor, decimalPlaces),
     }));
-}
-
-/**
- * An order's add-on summary rows (`frozenAddOnTotals`) from its REAL lines,
- * before any fold: each line's add-ons times its own units, against the saved
- * subtotal. The receipt and the account order answer it; no page computes
- * money from a folded row's entries.
- */
-export function buyerOrderAddOnTotals(
-    lines: ReadonlyArray<{ quantity: number; properties: string | null }>,
-    subtotalMinor: number,
-    language: string | null | undefined,
-): AddOnTotals {
-    return frozenAddOnTotals(lines.map((line) => ({ quantity: line.quantity, properties: readOrderLineProperties(line.properties) })), subtotalMinor, language);
 }
 
 /** A buyer's order row as the order's UI slots read it (`buyerUiOrderLines`). */
