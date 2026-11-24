@@ -277,7 +277,8 @@ A refusal names the theme key and the pair that set it, and the scheme: `summary
 | `contrast` | A row reads under its floor in a scheme a buyer sees. |
 | `prominence` | The total drawn smaller than a money row, an add-on line or its own label, lighter than the rows, or with fainter words than theirs; its label smaller than the rows; Place order smaller or lighter than the other filled buttons; Confirm smaller or lighter than Go back. |
 | `no_row` | The page draws a target the colour table has no row for (a store defect; it never draws unchecked). |
-| `too_large` | The compiled look is over 64 KiB. |
+| `too_large` | A page's tokens name over 160 style keys or over 4 apps, would make over 6000 rows of its colour table (refused before anything is resolved), or the compiled look is over 64 KiB. |
+| `unknown_app` | A `ui.*@<app>` token names an app that is not installed. |
 | `label_variant` | A label that names an action or an amount set to something other than one of its variants, or a variant where your words go. |
 | `label_too_long`, `markup`, `label_figures` | Words over the label's bound, words with HTML, or a digit, a currency sign, a name of money or one of the store's amount words in a heading, title or empty state (only `cart.intro` and `cart.emptyText` may hold them). |
 | `foreign_asset` | An icon from an app other than your theme's. |
