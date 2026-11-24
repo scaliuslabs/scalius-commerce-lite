@@ -10,6 +10,7 @@ cart fields in discount,details
 cart target cart.page.summary
 cart target cart.page.below
 cart order notices before details
+cart lead lines,summary,details
 cart layouts stack,columns,grid,group,fold
 cart layout fold hooks=fold-toggle,fold-body
 cart layout fold holds=lines,summary,discount,cart.page.summary
