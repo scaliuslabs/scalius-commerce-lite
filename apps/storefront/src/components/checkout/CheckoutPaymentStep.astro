@@ -184,10 +184,10 @@ const narrow = arranged ? arranged.frame === "narrow" : top;
             {copy.testModeNoticeText}
           </div>
 
-          {/* The gateway's own surface (its card form, its frame): no theme reaches into it. */}
-          <div id="stripeSection" class="hidden space-y-2" data-part="gateway">
+          <div id="stripeSection" class="hidden space-y-2">
             <h3 class="text-sm font-semibold text-foreground">{copy.cardDetailsText}</h3>
-            <div id="stripeCardElement" class="min-h-12 rounded-lg border border-input bg-background p-3"></div>
+            {/* The gateway's own surface (its card form, its frame): no theme reaches into it; the store's words around it read their row. */}
+            <div id="stripeCardElement" class="min-h-12 rounded-lg border border-input bg-background p-3" data-part="gateway"></div>
             <div id="stripeError" class="hidden text-xs font-medium text-foreground" role="alert" aria-live="polite"></div>
           </div>
 

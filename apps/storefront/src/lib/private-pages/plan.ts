@@ -16,6 +16,7 @@ import {
   privateLayoutIsDefault,
   privatePageArrangement,
   privatePageLabels,
+  privateCheckoutBlockArrangement,
   type PrivateNode,
   type PrivatePageKey,
   type PrivateUnitSpec,
@@ -51,9 +52,10 @@ export interface PrivatePagePlan {
 
 export function privatePagePlan(theme: StorefrontThemeDocument, page: PrivatePageKey, language: string, asset: PrivateAssetUrl): PrivatePagePlan {
   const privatePages = servedPrivatePages(theme.privatePages);
-  const arrangement = privatePageArrangement(privatePages, page);
   const spec = PRIVATE_PAGES[page];
   const tokens = privatePageTokenMode(theme.privatePages, page);
+  // In token mode a page with no arrangement draws the one its look was checked on (the payment step's from its block).
+  const arrangement = privatePageArrangement(privatePages, page) ?? (tokens && page === "checkout" ? privateCheckoutBlockArrangement(theme.blocks.checkout) : undefined);
   const layout = tokens ? [...arrangement?.layout ?? spec.layout] : privateLayoutIsDefault(page, arrangement) ? null : arrangement!.layout!;
   const icons = Object.fromEntries(spec.icons.flatMap((key) => {
     const ref = privatePages.icons[key];

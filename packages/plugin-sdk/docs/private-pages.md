@@ -91,7 +91,7 @@ Every arrangement holds each **mandatory** part and every target exactly once. Y
 | Drawer line | as the cart line | `image` |
 | Payment step | `empty` (no checkout to pay for), `heading`, `notices`, `summary` (its target `checkout.summary.after` sits inside it), `gift-card`, `payment`; targets `checkout.payment.after`, `checkout.actions.before` | `progress` |
 
-`payment` is one part: the methods, the chosen method's details, the payment provider's own surface (its card form or frame), Pay and the terms beside it stay together in the store's order whatever you arrange. A theme with tokens or an arrangement for the payment step draws it from them; `blocks.checkout` then decides nothing.
+`payment` is one part: the methods, the chosen method's details, the payment provider's own surface (its card form or frame), Pay and the terms beside it stay together in the store's order whatever you arrange. A theme with an arrangement for the payment step draws it from that; with tokens and no arrangement, from the arrangement its `blocks.checkout` chose (`top`: a `narrow` frame and the summary `folded`; `tiles`), so the look is checked on the page buyers get.
 
 The phone fold starts closed on phones, so it holds only `lines`, `summary`, `discount` and the `cart.page.summary` target (`layout_holds` otherwise).
 

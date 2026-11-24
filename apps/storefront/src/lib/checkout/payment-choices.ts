@@ -159,8 +159,10 @@ export function buildPaymentChoice(input: {
 }
 
 /** A method's parts into the page: its details in its card (list), or under the tiles. */
-export function placePaymentChoice(container: HTMLElement, parts: PaymentChoiceParts, style: StorefrontPaymentChoiceStyle): void {
-  const host = style === "tiles" ? document.getElementById(PAYMENT_CHOICE_DETAILS_ID) : null;
+export function placePaymentChoice(container: HTMLElement, parts: PaymentChoiceParts, _style: StorefrontPaymentChoiceStyle): void {
+  // Under the grid whenever the page asks for tiles, one method's too: the theme's colour table stands the
+  // details there (private-anatomy.ts `payment-details`, outside its card under `tiles`).
+  const host = container.dataset.paymentChoices === "tiles" ? document.getElementById(PAYMENT_CHOICE_DETAILS_ID) : null;
   if (host) host.appendChild(parts.details);
   else parts.card.appendChild(parts.details);
   container.appendChild(parts.card);

@@ -47,6 +47,7 @@ import {
 } from "./private-anatomy";
 import {
   compactPrivateArrangement,
+  privateCheckoutBlockArrangement,
   fillPrivateArrangement,
   privateArrangementIssues,
   type PrivatePageArrangement,
@@ -281,16 +282,21 @@ export interface PrivatePagesCompileContext {
   palettes: readonly PrivatePalette[];
   /** The app the theme is a template of: its files are the only ones an icon may name (null: no files). */
   themeApp: string | null;
+  /** A page's arrangement when the theme sets none (the payment step's, from the theme's `checkout` block). */
+  defaults?: Partial<Record<PrivatePageKey, PrivatePageArrangement>>;
 }
 
 /** The compile context of a theme document: its palettes and the app its look came from. */
 export function privatePagesContextOf(theme: {
   tokens: Pick<StorefrontThemeTokens, "colors" | "darkColors" | "colorScheme" | "colorSchemeToggle"> & Partial<Pick<StorefrontThemeTokens, "pagePaint">>;
   apps?: { template?: string } | undefined;
+  blocks?: { checkout?: { summary: string; paymentChoices: string } } | undefined;
 }): PrivatePagesCompileContext {
+  const checkout = privateCheckoutBlockArrangement(theme.blocks?.checkout);
   return {
     palettes: privatePalettes(theme.tokens, storefrontDarkPalette),
     themeApp: theme.apps?.template ? parsePluginSurfaceKey(theme.apps.template)?.pluginId ?? null : null,
+    ...(checkout ? { defaults: { checkout } } : {}),
   };
 }
 
@@ -325,7 +331,7 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
   for (const page of PRIVATE_PAGE_KEYS) {
     const tokens = Object.keys(value.tokens[page] ?? {}).length > 0 ? value.tokens[page]! : painted && privatePageHasOwnPage(page) ? {} : null;
     if (!tokens) continue;
-    const arrangement = privatePageArrangement({ ...value, pages, compiled: { ...value.compiled, anatomy: PRIVATE_ANATOMY_VERSION } }, page);
+    const arrangement = privatePageArrangement({ ...value, pages, compiled: { ...value.compiled, anatomy: PRIVATE_ANATOMY_VERSION } }, page) ?? context.defaults?.[page];
     const spec: PrivatePageSpec = PRIVATE_PAGES[page];
     const compiled = compilePrivateTokens(page, tokens, {
       layout: arrangement?.layout ?? spec.layout,
