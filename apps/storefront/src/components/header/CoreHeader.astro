@@ -20,7 +20,7 @@ import DepartmentsRail from "./DepartmentsRail.astro";
 import DrawerTrigger from "./DrawerTrigger.astro";
 import MobileMenu from "./MobileMenu.astro";
 import MobileTabBar from "./MobileTabBar.astro";
-import { phoneNavigation } from "./phone-navigation";
+import { phoneDrops, phoneNavigation } from "./phone-navigation";
 import PillNav from "./PillNav.astro";
 import { normalizeHeaderLogoWidth } from "@scalius/shared/brand-presentation";
 import type {
@@ -174,7 +174,7 @@ const noScriptFit = inlineRowPx !== null && plan.allCategories
 
 const flyouts = desktopSettings.flyouts === "cascading" ? "cascading" : "dropdown";
 const departments = tree.filter((item) => item.href).slice(0, navigation.maxTopItems);
-const phoneDrop = tabs?.includes("account") ? "account" : "";
+const phoneDrop = phoneDrops(tabs);
 const drawerTitle = treeSourced ? copy.nav.shopByDepartment : copy.nav.menu;
 
 // A menu row of its own stays when the top row scrolls away.
@@ -463,8 +463,9 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec));
         code: window.__CURRENCY_CODE__ || DEFAULT_CURRENCY.code,
       });
 
+      // The header's count and the bottom bar's Cart tab badge.
       const countElements = document.querySelectorAll(
-        "#cart-count",
+        "#cart-count, [data-tab-cart-count]",
       );
       countElements.forEach((el) => {
         if (el instanceof HTMLElement) {

@@ -22,6 +22,7 @@ import {
 } from "./fit";
 import { storefrontAppValuesSchema, storefrontProductAppBlocksSchemaOf } from "./apps";
 import { storefrontLinkSchema } from "./links";
+import { PLUGIN_ID_PATTERN } from "../plugins/ids";
 import { storefrontSettingBindingsSchema, type StorefrontSettingBindings } from "./bindings";
 import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-field-keys";
 import {
@@ -272,23 +273,89 @@ export const STOREFRONT_DESKTOP_NAV_VARIANTS = {
 };
 
 /**
- * The bottom bar's shortcuts. The header always carries the cart and the
- * search on phones, so the bar never repeats them: no Cart and no Search tab.
+ * The bottom bar's store destinations: each a page the store knows and keeps
+ * (the cart tab's live count included). A theme picks 3 to 5 tabs from these
+ * and its own link tabs, in order.
  */
-export const STOREFRONT_MOBILE_TABS = ["home", "categories", "offers", "compare", "account"] as const;
+export const STOREFRONT_MOBILE_TABS = ["home", "categories", "offers", "search", "compare", "cart", "account"] as const;
+export type StorefrontMobileTab = (typeof STOREFRONT_MOBILE_TABS)[number];
+
+/** The store's tab icons: one per destination, and a few for link tabs. */
+export const STOREFRONT_MOBILE_TAB_ICONS = [...STOREFRONT_MOBILE_TABS, "link", "page", "news", "support", "gift", "heart", "star", "chat", "bolt"] as const;
+
+export const STOREFRONT_MOBILE_TAB_LIMITS = { min: 3, max: 5, label: 24 } as const;
+
+/** Why a theme's tab list is refused (`params.reason` of the issue). */
+export const STOREFRONT_MOBILE_TAB_REFUSALS = {
+  repeated: "tab_repeated",
+  external: "tab_link_external",
+} as const;
+
+/** A tab's icon: the store's, or a file the theme's app ships in `public/` (drawn only while that app is active). */
+const mobileTabIconSchema = z.discriminatedUnion("source", [
+  z.object({ source: z.literal("store"), name: z.enum(STOREFRONT_MOBILE_TAB_ICONS) }).strict(),
+  z.object({
+    source: z.literal("app"),
+    app: z.string().regex(PLUGIN_ID_PATTERN),
+    file: z.string().regex(/^[A-Za-z0-9_-][A-Za-z0-9._/-]{0,200}$/).refine((file) => !file.split("/").includes(".."), "A file inside public/."),
+  }).strict(),
+]);
+
+/** A link tab: the theme's words (translated like every theme word), an icon and a page of this store. */
+const mobileLinkTabSchema = z.object({
+  kind: z.literal("link"),
+  label: z.string().trim().min(1).max(STOREFRONT_MOBILE_TAB_LIMITS.label),
+  icon: mobileTabIconSchema,
+  href: storefrontLinkSchema,
+}).strict();
+
+const destinationTab = <Kind extends StorefrontMobileTab>(kind: Kind) => z.object({ kind: z.literal(kind) }).strict();
+
+/** One tab: a store destination (its page, words and icon are the store's), or a link tab. */
+export const storefrontMobileTabSchema = z.discriminatedUnion("kind", [
+  destinationTab("home"),
+  destinationTab("categories"),
+  destinationTab("offers"),
+  destinationTab("search"),
+  destinationTab("compare"),
+  destinationTab("cart"),
+  destinationTab("account"),
+  mobileLinkTabSchema,
+]);
+export type StorefrontMobileTabValue = z.infer<typeof storefrontMobileTabSchema>;
+
+/** A link tab opens a page of this store: a path, never another site or a protocol-relative link. */
+const sameSitePath = (href: string) => href.startsWith("/") && !href.startsWith("//");
+
+const mobileTabsSchema = z.array(storefrontMobileTabSchema).min(STOREFRONT_MOBILE_TAB_LIMITS.min).max(STOREFRONT_MOBILE_TAB_LIMITS.max)
+  .superRefine((tabs, context) => {
+    const seen = new Set<string>();
+    tabs.forEach((tab, index) => {
+      const key = tab.kind === "link" ? `link:${tab.href}` : tab.kind;
+      if (seen.has(key)) {
+        context.addIssue({ code: "custom", path: [index], message: "Each tab appears once.", params: { reason: STOREFRONT_MOBILE_TAB_REFUSALS.repeated } });
+      }
+      seen.add(key);
+      if (tab.kind === "link" && !sameSitePath(tab.href)) {
+        context.addIssue({ code: "custom", path: [index, "href"], message: "A tab opens a page of this store: use a path such as /support.", params: { reason: STOREFRONT_MOBILE_TAB_REFUSALS.external } });
+      }
+    });
+  });
+
+/** Today's bar: Home, Categories, Offers and Account. */
+export const STOREFRONT_MOBILE_DEFAULT_TABS: readonly StorefrontMobileTabValue[] = [{ kind: "home" }, { kind: "categories" }, { kind: "offers" }, { kind: "account" }];
 
 export const STOREFRONT_MOBILE_NAV_VARIANTS = {
   "accordion-drawer": variant({ renders: "drawer" }),
   // One level at a time.
   "drill-in-drawer": variant({ renders: "drawer" }),
-  // 56-61px, 3-5 items; the account moves from the header to the tabs. The cart and the search stay in the header.
+  // 56-61px, 3-5 items; the account moves from the header to the tabs. The header keeps its cart and search.
   "bottom-tabs": variant({
     settings: {
-      tabs: z.array(z.enum(STOREFRONT_MOBILE_TABS)).min(3).max(5)
-        .refine((tabs) => new Set(tabs).size === tabs.length, "Each tab appears once."),
+      tabs: mobileTabsSchema,
       drawer: z.enum(["accordion", "drill-in"]),
     },
-    defaults: { tabs: ["home", "categories", "offers", "account"], drawer: "accordion" },
+    defaults: { tabs: STOREFRONT_MOBILE_DEFAULT_TABS.map((tab) => ({ ...tab })), drawer: "accordion" },
     renders: "tabs",
   }),
 };

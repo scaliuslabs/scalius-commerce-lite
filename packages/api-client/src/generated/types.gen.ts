@@ -497,7 +497,7 @@ export type MarketPresence = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 15;
+    version: 16;
     template: 'department-mall' | 'boutique' | 'marketplace' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: StorefrontThemeColors;
@@ -639,7 +639,33 @@ export type StorefrontThemeDocument = {
         } | {
             variant: 'bottom-tabs';
             settings: {
-                tabs: Array<'home' | 'categories' | 'offers' | 'compare' | 'account'>;
+                tabs: Array<{
+                    kind: 'home';
+                } | {
+                    kind: 'categories';
+                } | {
+                    kind: 'offers';
+                } | {
+                    kind: 'search';
+                } | {
+                    kind: 'compare';
+                } | {
+                    kind: 'cart';
+                } | {
+                    kind: 'account';
+                } | {
+                    kind: 'link';
+                    label: string;
+                    icon: {
+                        source: 'store';
+                        name: 'home' | 'categories' | 'offers' | 'search' | 'compare' | 'cart' | 'account' | 'link' | 'page' | 'news' | 'support' | 'gift' | 'heart' | 'star' | 'chat' | 'bolt';
+                    } | {
+                        source: 'app';
+                        app: string;
+                        file: string;
+                    };
+                    href: string;
+                }>;
                 drawer: 'accordion' | 'drill-in';
             };
             bindings?: StorefrontSettingBindings;

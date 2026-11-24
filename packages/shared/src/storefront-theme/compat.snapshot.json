@@ -1,5 +1,5 @@
 {
- "version": 15,
+ "version": 16,
  "oldestReadable": 10,
  "sections": {
   "hero": {
@@ -1969,6 +1969,9 @@
     "tagline",
     "about",
     "copyright"
+   ],
+   "mobileNav": [
+    "tabs.*.label"
    ]
   },
   "landing": [
@@ -2021,7 +2024,7 @@
   "$defs": {
    "__schema0": {
     "type": "number",
-    "const": 15
+    "const": 16
    },
    "__schema1": {
     "type": "string",
@@ -3786,13 +3789,184 @@
     "type": "boolean"
    },
    "__schema17": {
-    "type": "string",
-    "enum": [
-     "home",
-     "categories",
-     "offers",
-     "compare",
-     "account"
+    "oneOf": [
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "home"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "categories"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "offers"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "search"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "compare"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "cart"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "account"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "link"
+       },
+       "label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 24
+       },
+       "icon": {
+        "oneOf": [
+         {
+          "type": "object",
+          "properties": {
+           "source": {
+            "type": "string",
+            "const": "store"
+           },
+           "name": {
+            "type": "string",
+            "enum": [
+             "home",
+             "categories",
+             "offers",
+             "search",
+             "compare",
+             "cart",
+             "account",
+             "link",
+             "page",
+             "news",
+             "support",
+             "gift",
+             "heart",
+             "star",
+             "chat",
+             "bolt"
+            ]
+           }
+          },
+          "required": [
+           "source",
+           "name"
+          ],
+          "additionalProperties": false
+         },
+         {
+          "type": "object",
+          "properties": {
+           "source": {
+            "type": "string",
+            "const": "app"
+           },
+           "app": {
+            "type": "string",
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$"
+           },
+           "file": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._/-]{0,200}$"
+           }
+          },
+          "required": [
+           "source",
+           "app",
+           "file"
+          ],
+          "additionalProperties": false
+         }
+        ]
+       },
+       "href": {
+        "$ref": "#/$defs/__schema15"
+       }
+      },
+      "required": [
+       "kind",
+       "label",
+       "icon",
+       "href"
+      ],
+      "additionalProperties": false
+     }
     ]
    },
    "__schema18": {

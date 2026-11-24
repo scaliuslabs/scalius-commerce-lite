@@ -1,6 +1,6 @@
-import type { STOREFRONT_MOBILE_TABS } from "@scalius/shared/storefront-theme";
+import { STOREFRONT_MOBILE_DEFAULT_TABS, type StorefrontMobileTabValue } from "@scalius/shared/storefront-theme";
 
-type Tab = (typeof STOREFRONT_MOBILE_TABS)[number];
+export type PhoneTab = StorefrontMobileTabValue;
 
 /** The theme's phone navigation (`blocks.mobileNav`), as every header draws it. */
 export interface PhoneNavigation {
@@ -9,7 +9,7 @@ export interface PhoneNavigation {
   /** The store draws its bottom tab bar on phones. */
   tabBar: boolean;
   /** The tabs the theme chose (the bar falls back to its standard ones). */
-  tabs?: readonly Tab[];
+  tabs?: readonly PhoneTab[];
   /** Compare has somewhere to start: the product page lists compare-similar. */
   compare: boolean;
 }
@@ -25,7 +25,21 @@ export function phoneNavigation(blocks: {
   return {
     menu: variant === "drill-in-drawer" || (tabBar && settings.drawer === "drill-in") ? "drill" : "accordion",
     tabBar,
-    ...(tabBar && Array.isArray(settings.tabs) ? { tabs: settings.tabs as Tab[] } : {}),
+    ...(tabBar && Array.isArray(settings.tabs) ? { tabs: settings.tabs as PhoneTab[] } : {}),
     compare: blocks.product.below.includes("compare_similar"),
   };
+}
+
+/** What the bar shows: the chosen tabs that have a page here (Compare only where comparing is possible), topped up to three with the standard ones. */
+export function shownPhoneTabs(tabs: readonly PhoneTab[] = STOREFRONT_MOBILE_DEFAULT_TABS, compare = false): PhoneTab[] {
+  const chosen = tabs.filter((tab) => tab.kind !== "compare" || compare);
+  if (chosen.length >= 3) return chosen;
+  const missing = STOREFRONT_MOBILE_DEFAULT_TABS.filter((tab) => !chosen.some((each) => each.kind === tab.kind));
+  return [...chosen, ...missing].slice(0, 3);
+}
+
+/** The header's phone icons the bar carries instead (`data-phone-drop`): the account and the cart. */
+export function phoneDrops(tabs: readonly PhoneTab[] | null): string {
+  if (!tabs) return "";
+  return (["account", "cart"] as const).filter((kind) => tabs.some((tab) => tab.kind === kind)).join(" ");
 }

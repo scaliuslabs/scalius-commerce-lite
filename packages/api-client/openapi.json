@@ -1671,7 +1671,7 @@
           "version": {
             "type": "number",
             "enum": [
-              15
+              16
             ]
           },
           "template": {
@@ -2534,13 +2534,205 @@
                           "tabs": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "enum": [
-                                "home",
-                                "categories",
-                                "offers",
-                                "compare",
-                                "account"
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "home"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "categories"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "offers"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "search"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "compare"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "cart"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "account"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "link"
+                                      ]
+                                    },
+                                    "label": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 24
+                                    },
+                                    "icon": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "source": {
+                                              "type": "string",
+                                              "enum": [
+                                                "store"
+                                              ]
+                                            },
+                                            "name": {
+                                              "type": "string",
+                                              "enum": [
+                                                "home",
+                                                "categories",
+                                                "offers",
+                                                "search",
+                                                "compare",
+                                                "cart",
+                                                "account",
+                                                "link",
+                                                "page",
+                                                "news",
+                                                "support",
+                                                "gift",
+                                                "heart",
+                                                "star",
+                                                "chat",
+                                                "bolt"
+                                              ]
+                                            }
+                                          },
+                                          "required": [
+                                            "source",
+                                            "name"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "source": {
+                                              "type": "string",
+                                              "enum": [
+                                                "app"
+                                              ]
+                                            },
+                                            "app": {
+                                              "type": "string",
+                                              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$"
+                                            },
+                                            "file": {
+                                              "type": "string",
+                                              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._/-]{0,200}$"
+                                            }
+                                          },
+                                          "required": [
+                                            "source",
+                                            "app",
+                                            "file"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      ]
+                                    },
+                                    "href": {
+                                      "type": "string",
+                                      "maxLength": 2048
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "label",
+                                    "icon",
+                                    "href"
+                                  ],
+                                  "additionalProperties": false
+                                }
                               ]
                             },
                             "minItems": 3,
