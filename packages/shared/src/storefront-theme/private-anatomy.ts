@@ -578,6 +578,7 @@ export function privatePageAnatomy(): string[] {
     if (fields.length > 0) lines.push(`${prefix} fields in ${fields.join(",")}`);
     for (const target of spec.targets) lines.push(`${prefix} target ${target}`);
     for (const [before, after] of spec.order ?? []) lines.push(`${prefix} order ${before} before ${after}`);
+    if (spec.lead) lines.push(`${prefix} lead ${spec.lead.join(",")}`);
     lines.push(`${prefix} layouts ${spec.layouts.join(",")}`);
   };
   for (const page of PRIVATE_PAGE_KEYS) {

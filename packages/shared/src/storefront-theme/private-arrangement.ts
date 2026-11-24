@@ -45,7 +45,7 @@ export const PRIVATE_ARRANGEMENT_REASONS = [
   "missing_part", "duplicate_part", "unknown_part",
   "missing_target", "duplicate_target", "unknown_target",
   "unknown_layout", "layout_once", "layout_holds", "unknown_variant", "unknown_frame", "unknown_item", "invalid_hook",
-  "too_deep", "too_many_nodes", "part_order",
+  "too_deep", "too_many_nodes", "part_order", "empty_layout", "lead_order",
 ] as const;
 export type PrivateArrangementReason = (typeof PRIVATE_ARRANGEMENT_REASONS)[number];
 
@@ -73,8 +73,9 @@ function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: 
   };
   const parts = new Map<string, number>();
   const targets = new Map<string, number>();
-  // Each part's place in reading order (depth first) and its path, for the unit's `order`.
+  // Each part's place in reading order (depth first) and its path, for the unit's `order`; every leaf in reading order, for its `lead`.
   const read = new Map<string, { at: number; path: Array<string | number> }>();
+  const leaves: Array<{ key: string; path: Array<string | number> }> = [];
   const singles = new Set<PrivateLayoutKind>();
   let count = 0;
   const visit = (list: readonly PrivateNode[], path: Array<string | number>, depth: number) => {
@@ -96,6 +97,7 @@ function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: 
           singles.add(node.layout);
         }
         if (node.hook !== undefined && !validHook(node.hook)) issues.push({ path: [...at, "hook"], reason: "invalid_hook", message: hookMessage });
+        if (node.children.length === 0 && spec.layouts.includes(node.layout)) issues.push({ path: at, reason: "empty_layout", message: `A ${node.layout} layout holds at least one part or target: an empty one draws a track that squeezes the parts beside it.` });
         const allowed = holds[node.layout];
         if (allowed) within.push({ kind: node.layout, allowed });
         visit(node.children, [...at, "children"], depth + 1);
@@ -110,6 +112,7 @@ function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: 
         heldWrongly(node.part, [...at, "part"]);
         parts.set(node.part, index);
         if (!read.has(node.part)) read.set(node.part, { at: read.size, path: [...at, "part"] });
+        leaves.push({ key: `part:${node.part}`, path: [...at, "part"] });
         if (node.variant !== undefined && !entry.variants?.includes(node.variant)) {
           issues.push({ path: [...at, "variant"], reason: "unknown_variant", message: entry.variants ? `The ${node.part} part's variants are ${entry.variants.join(", ")}.` : `The ${node.part} part has no variants.` });
         }
@@ -121,6 +124,7 @@ function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: 
         if (targets.has(node.target)) issues.push({ path: [...at, "target"], reason: "duplicate_target", message: `The ${node.target} target appears once.` });
         heldWrongly(node.target, [...at, "target"]);
         targets.set(node.target, index);
+        leaves.push({ key: `target:${node.target}`, path: [...at, "target"] });
       }
     });
   };
@@ -139,6 +143,14 @@ function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: 
   for (const [before, after] of spec.order ?? []) {
     const [first, second] = [read.get(before), read.get(after)];
     if (first && second && first.at > second.at) issues.push({ path: first.path, reason: "part_order", message: `${what} reads the ${before} part before the ${after} part: on a phone a buyer reads it first.` });
+  }
+  if (spec.lead) {
+    // A buyer's first screen reaches the cart, the summary or the form: only what the default puts ahead of them may come first.
+    const allowed = beforeLead(spec);
+    const first = leaves.findIndex((leaf) => spec.lead!.some((part) => leaf.key === `part:${part}`));
+    for (const leaf of leaves.slice(0, Math.max(0, first))) {
+      if (!allowed.has(leaf.key)) issues.push({ path: leaf.path, reason: "lead_order", message: `${what} draws ${leaf.key.split(":")[1]} before its ${spec.lead.join(", ")}: only ${[...allowed].map((key) => key.split(":")[1]).join(", ") || "nothing"} may come before the first of them, so a buyer's first screen reaches it.` });
+    }
   }
   return issues;
 }
@@ -199,7 +211,8 @@ function fillUnit(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], holds: H
         if (depth >= PRIVATE_ARRANGEMENT_LIMITS.depth || !spec.layouts.includes(node.layout)) continue;
         const own = holds[node.layout] ?? allowed;
         const kept = keep(node.children, depth + 1, own);
-        inside.push({ ...node, children: kept.inside });
+        // A layout with nothing in it draws nothing but a track that squeezes its neighbours: it goes.
+        if (kept.inside.length > 0) inside.push({ ...node, children: kept.inside });
         for (const leaf of kept.out) (allowed === null || (leaf.type !== "layout" && allowed.includes(leafName(leaf as Leaf))) ? inside : out).push(leaf);
         continue;
       }
@@ -225,38 +238,71 @@ function fillUnit(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], holds: H
     seen.add(key);
   }
   for (const [before, after] of spec.order ?? []) inReadingOrder(result, before, after, holds);
+  leadFirst(spec, result, holds);
   return result;
 }
 
 /** Side-by-side layouts: a part put beside another there would draw as a column of its own on wide screens. */
 const BESIDE: ReadonlySet<PrivateLayoutKind> = new Set(["columns", "grid"]);
 
+type Step = { list: PrivateNode[]; at: number; kind: PrivateLayoutKind | null };
+
+/** Where a leaf (a part or a target, by its key) sits: each list down to it, and the layout kind holding each list. */
+function pathTo(key: string, list: PrivateNode[], kind: PrivateLayoutKind | null = null, trail: Step[] = []): Step[] | null {
+  for (let at = 0; at < list.length; at += 1) {
+    const node = list[at]!;
+    if (leafKey(node) === key) return [...trail, { list, at, kind }];
+    if (node.type === "layout") {
+      const found = pathTo(key, node.children, node.layout, [...trail, { list, at, kind }]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 /**
- * Moves the part `before` to just ahead of the part `after` when it reads
- * after it: into the nearest list holding `after` that stacks its children
+ * Moves the leaf `moving` (by its key) to just before (or after) the leaf
+ * `anchor`: into the nearest list holding the anchor that stacks its children
  * (never into a side-by-side layout, nor one that may not hold it).
  */
+function moveBeside(nodes: PrivateNode[], moving: string, anchor: string, after: boolean, holds: Holds): void {
+  const from = pathTo(moving, nodes)?.at(-1);
+  if (!from) return;
+  const [moved] = from.list.splice(from.at, 1);
+  const trail = pathTo(anchor, nodes);
+  if (!trail) return void from.list.splice(from.at, 0, moved!);
+  const name = leafName(moved as Leaf);
+  const step = [...trail].reverse().find((each) => !(each.kind && (BESIDE.has(each.kind) || (holds[each.kind] && !holds[each.kind]!.includes(name))))) ?? trail[0]!;
+  step.list.splice(step.at + (after ? 1 : 0), 0, moved!);
+}
+
+/** Moves the part `before` to just ahead of the part `after` when it reads after it. */
 function inReadingOrder(nodes: PrivateNode[], before: string, after: string, holds: Holds): void {
-  type Step = { list: PrivateNode[]; at: number; kind: PrivateLayoutKind | null };
-  const path = (name: string, list: PrivateNode[], kind: PrivateLayoutKind | null, trail: Step[]): Step[] | null => {
-    for (let at = 0; at < list.length; at += 1) {
-      const node = list[at]!;
-      if (node.type === "part" && node.part === name) return [...trail, { list, at, kind }];
-      if (node.type === "layout") {
-        const found = path(name, node.children, node.layout, [...trail, { list, at, kind }]);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
   const leaves = defaultLeaves(nodes).flatMap((leaf) => leaf.type === "part" ? [leaf.part] : []);
   if (!leaves.includes(before) || !leaves.includes(after) || leaves.indexOf(before) < leaves.indexOf(after)) return;
-  const from = path(before, nodes, null, [])!.at(-1)!;
-  const [moved] = from.list.splice(from.at, 1);
-  const trail = path(after, nodes, null, [])!;
-  // From the part `after` outwards, the first list that stacks and may hold the moved part.
-  const step = [...trail].reverse().find((each) => !(each.kind && (BESIDE.has(each.kind) || (holds[each.kind] && !holds[each.kind]!.includes(before))))) ?? trail[0]!;
-  step.list.splice(step.at, 0, moved!);
+  moveBeside(nodes, `part:${before}`, `part:${after}`, false, holds);
+}
+
+/**
+ * What may come before a unit's first lead part (`lead`): what its default
+ * layout puts there (the cart's progress and notices). Anything else a buyer
+ * would scroll past before the cart, the summary or the form.
+ */
+function beforeLead(spec: PrivateUnitSpec): Set<string> {
+  const leaves = defaultLeaves(spec.layout);
+  const first = leaves.findIndex((leaf) => leaf.type === "part" && spec.lead!.includes(leaf.part));
+  return new Set(leaves.slice(0, Math.max(0, first)).map((leaf) => leafKey(leaf)!));
+}
+
+/** Moves each leaf ahead of the first lead part that may not be there to just after it. */
+function leadFirst(spec: PrivateUnitSpec, nodes: PrivateNode[], holds: Holds): void {
+  if (!spec.lead) return;
+  const allowed = beforeLead(spec);
+  const leaves = defaultLeaves(nodes);
+  const first = leaves.findIndex((leaf) => leaf.type === "part" && spec.lead!.includes(leaf.part));
+  if (first < 0) return;
+  const anchor = leafKey(leaves[first]!)!;
+  for (const leaf of leaves.slice(0, first).reverse()) if (!allowed.has(leafKey(leaf)!)) moveBeside(nodes, leafKey(leaf)!, anchor, true, holds);
 }
 
 /**

@@ -31,7 +31,8 @@ export interface PrivateNodeRenderers {
  */
 export const PRIVATE_LAYOUT_CLASSES: Record<PrivateLayoutKind, string> = {
   stack: "@container flex min-w-0 flex-col gap-4",
-  columns: "@container grid min-w-0 gap-4 @3xl:grid-flow-col @3xl:auto-cols-fr @3xl:gap-8",
+  // Side by side from 48rem, and only as many as keep each child at least 20rem: never a part squeezed to nothing.
+  columns: "@container grid min-w-0 gap-4 @3xl:grid-cols-[repeat(auto-fit,minmax(min(20rem,100%),1fr))] @3xl:gap-8",
   grid: "@container grid min-w-0 gap-4",
   group: "@container min-w-0",
   fold: "@container min-w-0",

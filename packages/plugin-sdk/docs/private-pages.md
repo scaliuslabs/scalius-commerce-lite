@@ -77,7 +77,7 @@ The drawer's parts have no variants. A variant a part does not have is refused (
 
 ### What must stay
 
-Every arrangement holds each **mandatory** part and every target exactly once. You may leave out the **optional** parts. Reading order is your order at every width, so put what a buyer needs first in a sensible place; the cart page's `notices` (cart-wide alerts) always come before its `details` (the form), so a buyer on a phone reads them first (`part_order` otherwise). The page keeps one `h1`: the lines' heading.
+Every arrangement holds each **mandatory** part and every target exactly once. You may leave out the **optional** parts. Reading order is your order at every width, so put what a buyer needs first in a sensible place; the cart page's `notices` (cart-wide alerts) always come before its `details` (the form), so a buyer on a phone reads them first (`part_order` otherwise). Only what the store's default puts ahead of the cart's lead parts (`progress`, `notices`) may come before the first of `lines`, `summary` and `details`, so a buyer's first screen reaches one of them (`lead_order`). A layout holds at least one part or target (`empty_layout`). The page keeps one `h1`: the lines' heading.
 
 | Unit | Mandatory | Optional |
 | --- | --- | --- |
@@ -88,7 +88,7 @@ Every arrangement holds each **mandatory** part and every target exactly once. Y
 
 The phone fold starts closed on phones, so it holds only `lines`, `summary`, `discount` and the `cart.page.summary` target (`layout_holds` otherwise).
 
-When the store later makes another part mandatory, a saved arrangement without it shows it in its default place; a saved arrangement with `notices` after `details` reads with `notices` moved just before them (before the side-by-side layout that holds them, never into a column of its own). A store upgrade never breaks your page.
+When the store later makes another part mandatory, a saved arrangement without it shows it in its default place; a saved arrangement with `notices` after `details` reads with `notices` moved just before them (before the side-by-side layout that holds them, never into a column of its own); a part or target saved ahead of the lead parts reads just after the first of them, and an empty layout is dropped. A store upgrade never breaks your page.
 
 Example: the heading above the lines, an Items row in the summary, the summary beside the form, and a line with its price column.
 
@@ -215,7 +215,7 @@ A buyer must find each control and field where it stands (WCAG 1.4.11, 3:1 on wh
 | `scheme` | The light or dark switch | control | `chrome` |
 | `localization` | The market and language forms | box, holds fields | `chrome` |
 
-**Layout nodes.** A layout node takes `background`, `gradient`, `border`, `border-width`, `border-style`, `radius`, `shadow`, `padding`, `gap`, `columns` and `columns-wide` through its hook: `"@line-grid": { "columns": [64, "1fr", 88] }`. A hook with a colour is a row of the table. Its `columns` apply only where the box holding it fits every track at its floor (20rem for a track that holds the page's parts, 4rem inside a line) and the gaps between; `columns-wide` from 40rem. Elsewhere the store's one column draws, so a part is never squeezed. The store's own layouts split by the width of the box they sit in, never the screen's.
+**Layout nodes.** A layout node takes `background`, `gradient`, `border`, `border-width`, `border-style`, `radius`, `shadow`, `padding`, `gap`, `columns` and `columns-wide` through its hook: `"@line-grid": { "columns": [64, "1fr", 88] }`. A hook with a colour is a row of the table. Its `columns` apply only where the box holding it fits every track at its floor (20rem for a track that holds the page's parts, 4rem inside a line) and the gaps between; `columns-wide` from 40rem. Elsewhere the store's one column draws, so a part is never squeezed. The store's own layouts split by the width of the box they sit in, never the screen's: a `columns` draws its children side by side from 48rem, and only as many in a row as keep each at least 20rem wide.
 
 ### Apps' blocks
 
@@ -267,6 +267,8 @@ A refusal names the theme key and the pair that set it, and the scheme: `summary
 | `layout_once` | A second `fold` or `scroll`. |
 | `layout_holds` | The fold holds what a buyer fills in or must read first. |
 | `part_order` | The cart's `notices` come after its `details` in reading order. |
+| `lead_order` | A part or target other than `progress` and `notices` comes before the first of `lines`, `summary` and `details`. |
+| `empty_layout` | A layout holds nothing. |
 | `invalid_hook` | A hook that is not lowercase words joined by hyphens, or over 40 characters. |
 | `too_deep`, `too_many_nodes` | Layouts nested over 6 deep, a layout with over 24 nodes, or a unit with over 80. A document nested over 12 deep is refused before it is read. |
 | `unknown_style` | No such style target, node kind, tone or target on the page, no layout node with that hook, or any token on the drawer. |
@@ -633,6 +635,7 @@ cart fields in discount,details
 cart target cart.page.summary
 cart target cart.page.below
 cart order notices before details
+cart lead lines,summary,details
 cart layouts stack,columns,grid,group,fold
 cart layout fold hooks=fold-toggle,fold-body
 cart layout fold holds=lines,summary,discount,cart.page.summary
