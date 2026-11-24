@@ -448,6 +448,8 @@ const CART_DRAWER: PrivatePageSpec = {
   root: "cart-drawer",
   frames: ["standard", "wide"],
   layoutHooks: { scroll: ["drawer-scroll"] },
+  // The scroll region holds what a buyer browses; the summary, its total and the way to check out stay in view.
+  layoutContents: { scroll: ["added", "lines", "recommendations", "undo", "offers"] },
   parts: {
     header: part(true, ["drawer-header", "drawer-title", "drawer-count", "drawer-close"]),
     added: part(false, ["drawer-added"]),
