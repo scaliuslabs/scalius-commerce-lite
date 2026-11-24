@@ -155,10 +155,34 @@ interface ThreadParty {
   presence: string | null;
 }
 
+/** An account's verified contacts, or null when the account is gone. Unverified contacts never receive account-thread messages (§4.3). */
+async function readAccountContacts(db: Database, customerId: string) {
+  const customer = await db
+    .select({
+      name: customers.name,
+      email: customers.email,
+      emailVerifiedAt: customers.emailVerifiedAt,
+      phone: customers.phone,
+      phoneVerifiedAt: customers.phoneVerifiedAt,
+      deletedAt: customers.deletedAt,
+    })
+    .from(customers)
+    .where(eq(customers.id, customerId))
+    .get();
+  if (!customer || customer.deletedAt) return null;
+  return {
+    name: customer.name?.trim() || null,
+    email: customer.emailVerifiedAt ? customer.email?.trim() || null : null,
+    phone: customer.phoneVerifiedAt ? customer.phone?.trim() || null : null,
+  };
+}
+
 /**
- * The buyer side of a thread: the order's own contact for every thread about
- * an order (its order thread, a warranty claim, a review), else the account's
- * verified contacts (a store thread).
+ * The buyer side of a thread. A thread about an order (its order thread, a
+ * warranty claim, a review) reaches the order's account owner by their
+ * verified contacts, linking into their account; an order with no owner, or
+ * whose owner account is gone, reaches the order's own contact with the
+ * order-proof link. A store thread reaches its account's verified contacts.
  */
 async function readThreadParty(db: Database, thread: ThreadFacts): Promise<ThreadParty | null> {
   if (thread.orderId) {
@@ -176,40 +200,20 @@ async function readThreadParty(db: Database, thread: ThreadFacts): Promise<Threa
       .where(eq(orders.id, thread.orderId))
       .get();
     if (!order) return null;
+    const facts = { orderNumber: formatOrderNumber(order.orderNumber, order.id), orderNumberRaw: order.orderNumber, presence: order.presence ?? null };
+    const owner = order.owner ? await readAccountContacts(db, order.owner) : null;
+    if (owner) return { ...owner, name: owner.name ?? (order.name?.trim() || null), ...facts, inAccount: true };
     return {
       name: order.name?.trim() || null,
       email: order.email?.trim() || null,
       phone: order.phone?.trim() || null,
-      orderNumber: formatOrderNumber(order.orderNumber, order.id),
-      orderNumberRaw: order.orderNumber,
-      inAccount: Boolean(order.owner),
-      presence: order.presence ?? null,
+      ...facts,
+      inAccount: false,
     };
   }
   if (thread.customerId) {
-    const customer = await db
-      .select({
-        name: customers.name,
-        email: customers.email,
-        emailVerifiedAt: customers.emailVerifiedAt,
-        phone: customers.phone,
-        phoneVerifiedAt: customers.phoneVerifiedAt,
-        deletedAt: customers.deletedAt,
-      })
-      .from(customers)
-      .where(eq(customers.id, thread.customerId))
-      .get();
-    if (!customer || customer.deletedAt) return null;
-    // Unverified contacts never receive account-thread messages (§4.3).
-    return {
-      name: customer.name?.trim() || null,
-      email: customer.emailVerifiedAt ? customer.email?.trim() || null : null,
-      phone: customer.phoneVerifiedAt ? customer.phone?.trim() || null : null,
-      orderNumber: null,
-      orderNumberRaw: null,
-      inAccount: true,
-      presence: null,
-    };
+    const account = await readAccountContacts(db, thread.customerId);
+    return account ? { ...account, orderNumber: null, orderNumberRaw: null, inAccount: true, presence: null } : null;
   }
   return null;
 }
