@@ -345,21 +345,12 @@
   }
 }
 
-/* The theme header's search form on a private page: a host island inside the
-   theme's chrome (packages/shared/src/plugins/inert-html.ts). Zero specificity,
-   so a theme's `search` tokens, written after, set its look; no theme rule
-   reaches it. */
-:where([data-host="search"]) { display: flex; align-items: center; gap: 0.5rem; max-inline-size: 100%; min-block-size: 2.75rem; padding-inline: 0.75rem; border: 1px solid var(--color-input); border-radius: 0.5rem; background: var(--color-background); color: var(--color-foreground); }
-:where([data-host="search"] input) { flex: 1; min-inline-size: 0; border: 0; background: transparent; color: inherit; font: inherit; padding-block: 0.5rem; }
-:where([data-host="search"] input)::placeholder { color: var(--color-muted-foreground); }
-:where([data-host="search"] button) { display: inline-flex; border: 0; background: transparent; color: inherit; padding: 0.25rem; }
-
-/* The store's controls in a private page's theme chrome (privatePages.controls): the light or dark switch beside the
-   header's region, the market and language forms beside the footer's. Zero specificity, so the `scheme` and
-   `localization` tokens, written after, set their look; no theme rule reaches them. */
+/* The store's controls on a private page drawn from parts, where the theme places them (privatePages.controls): the
+   light or dark switch and the market and language forms. Zero specificity, so the `scheme` and `localization`
+   tokens, written after, set their look. */
 :where([data-host="scheme"]) { display: flex; justify-content: flex-end; color: var(--color-foreground); }
 :where([data-host="scheme"] button) { display: inline-flex; inline-size: 2.75rem; block-size: 2.75rem; align-items: center; justify-content: center; border: 0; border-radius: 9999px; background: transparent; color: inherit; }
-:where([data-host="localization"]) { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; padding: 1rem; font-size: 0.875rem; color: var(--color-foreground); }
+:where([data-host="localization"]) { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; padding-block: 0.5rem; font-size: 0.875rem; color: var(--color-foreground); }
 :where([data-host="localization"] form) { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-inline-size: 0; }
 :where([data-host="localization"] select) { min-block-size: 2.75rem; min-inline-size: 0; max-inline-size: 100%; padding-inline: 0.75rem; border: 1px solid var(--color-input); border-radius: 0.5rem; background: var(--color-background); color: var(--color-foreground); font: inherit; }
 :where([data-host="localization"] button) { min-block-size: 2.75rem; padding-inline: 0.75rem; border: 1px solid var(--color-input); border-radius: 0.5rem; background: transparent; color: inherit; font: inherit; }

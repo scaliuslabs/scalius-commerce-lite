@@ -1,9 +1,9 @@
 ---
-// The store's market and language forms on a private page with the theme's
-// chrome (`privatePages.controls`), in their own slot of the footer's frame,
-// never inside the theme's region: the same plain POSTs to /localization as
-// the public footer's (FooterLocalization), without a stylesheet of their own,
-// so the `localization` target's tokens give them their look.
+// The store's market and language forms on a private page drawn from parts,
+// in the store's chrome where the theme places the store's controls
+// (`privatePages.controls`): the same plain POSTs to /localization as the
+// public footer's (FooterLocalization), without a stylesheet of their own, so
+// the `localization` target's tokens give them their look.
 import { MARKET_SELECTION_PATH } from "@scalius/shared/markets";
 import { languageOptions, marketCountryOptions, marketSelectorCopy, selectedMarketCountry } from "@/lib/market-selector";
 import type { FooterLocalizationModel } from "./footer-localization";

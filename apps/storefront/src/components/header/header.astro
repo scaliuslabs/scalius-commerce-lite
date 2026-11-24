@@ -3,17 +3,11 @@
 // (`apps.skins.header`), else the theme's own header (CoreHeader.astro). An
 // app header that is inactive, fails or is late gives way to the core
 // header, so a page always has one. Under an app header the store adds the
-// theme's phone tab bar (never on a private page, as under the store's own
-// checkout header) and its menu disclosure behaviour (nav-disclosure.ts),
-// and the merchant's light or dark switch where the skin places `header.actions`
-// (on a public page: a private page's theme header draws none of its slots, and
-// the store draws the switch beside its region, `privatePages.controls`).
+// theme's phone tab bar and its menu disclosure behaviour (nav-disclosure.ts),
+// and the merchant's light or dark switch where the skin places `header.actions`.
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import Skin from "@/components/apps/Skin.astro";
-import { appSkin, privateChromeControls, privateChromeMarkup, privateHeaderSearch, requestExtensions } from "@/lib/extensions";
-import PrivateMarkup from "@/components/private/PrivateMarkup.astro";
-import PrivateSearch from "./PrivateSearch.astro";
-import PrivateSchemeSwitch from "./PrivateSchemeSwitch.astro";
+import { appSkin, requestExtensions } from "@/lib/extensions";
 import { headerData, headerMarket, headerPageData } from "@/lib/extensions/data";
 import { getLayoutData } from "@/lib/api";
 import { getRuntimePresence } from "@/lib/api/runtime";
@@ -27,13 +21,9 @@ import MobileTabBar from "./MobileTabBar.astro";
 import AppHeaderBehaviour from "./AppHeaderBehaviour.astro";
 import { phoneNavigation } from "./phone-navigation";
 
-type Props = import("astro/types").ComponentProps<typeof CoreHeader> & {
-  pageLead?: HomepageHeaderLead;
-  /** A buyer's private page: the theme's header drawn inert, or the store's (lib/extensions `privateChromeMarkup`). */
-  private?: boolean;
-};
+type Props = import("astro/types").ComponentProps<typeof CoreHeader> & { pageLead?: HomepageHeaderLead };
 
-const { pageLead, private: privatePage = false, ...props } = Astro.props;
+const { pageLead, ...props } = Astro.props;
 const theme = await currentRequestTheme(Astro.locals);
 // Under an app header the store still draws the theme's phone tab bar.
 const phone = phoneNavigation(theme.resolved.blocks);
@@ -56,31 +46,14 @@ const data = async () => {
     currency,
     shopCurrency: layout?.currency?.shopCode ?? currency,
     language: host.context.store.language,
-    // A private page's skin learns its root only (`/cart`, `/account`): never an order's or a claim's path.
-    pathname: privatePage ? `/${Astro.url.pathname.split("/").filter(Boolean)[0] ?? ""}` : Astro.url.pathname,
+    pathname: Astro.url.pathname,
   });
   return headerData({ theme, storeName: props.storeName ?? null, navigation: props.navigation ?? [], categoryTree: props.categoryTree, market,
     ...(pageLead !== undefined && skin ? { page: headerPageData(pageLead, skin.extension) } : {}),
   });
 };
-// On a private page only the theme's own header draws, from the store's projection alone, its slots
-// empty (no host control inside its region); the store's search, where the theme places it, sits beside
-// it in the frame.
-// With no theme header to draw (no skin, an inactive app), the page's own fallback draws: the store's
-// checkout header, exactly as with the store's chrome (`private-fallback`), never the full store header.
-const privateMarkup = privatePage ? await privateChromeMarkup(Astro.locals, Astro.url, "header", data) : null;
-const privateSearch = privateMarkup ? await privateHeaderSearch(Astro.locals) : null;
-// The store's light or dark switch beside the theme's region, where the theme places the store's controls.
-const privateControls = privateMarkup ? await privateChromeControls(Astro.locals) : null;
 ---
 
-{privatePage ? (
-<div class="contents" data-storefront-header data-private="header">
-  {privateMarkup ? (
-    <Fragment>{privateControls === "before" && <PrivateSchemeSwitch />}{privateSearch?.place === "before" && <PrivateSearch {...privateSearch.form} />}<div data-free="header"><PrivateMarkup markup={privateMarkup} /></div>{privateSearch?.place === "after" && <PrivateSearch {...privateSearch.form} />}{privateControls === "after" && <PrivateSchemeSwitch />}</Fragment>
-  ) : <slot name="private-fallback" />}
-</div>
-) : (
 <div class="contents" data-storefront-header>
   <Skin target="header" data={data} embeds={embeds} editorMark={theme.preview !== null ? THEME_EDITOR_MARKS.header : undefined}>
     <CoreHeader {...props} />
@@ -92,4 +65,3 @@ const privateControls = privateMarkup ? await privateChromeControls(Astro.locals
     </Fragment>
   </Skin>
 </div>
-)}

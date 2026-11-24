@@ -39,8 +39,7 @@ cart style legal <root> [data-part="legal"] tokens=text,size,align
 cart style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow fields
 cart style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=background,text,border,border-width,radius,ring,weight
 cart style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,font,weight,size,case,tracking
-cart style chrome [data-private="core-header"] tokens=background,gradient,text,muted,link,border,border-width
-cart style search [data-host="search"] tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+cart style chrome :is([data-private="core-header"],[data-private="core-footer"]) tokens=background,gradient,text,muted,link,border,border-width
 cart style scheme [data-host="scheme"] button tokens=text,ring,radius
 cart style localization [data-host="localization"] tokens=text,muted,link fields
 cart.line root data-part=line
@@ -102,7 +101,7 @@ cartDrawer label drawer.startShopping variants=start-shopping|browse-products|co
 cartDrawer icon drawer.empty
 dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-agree,dialog-actions,dialog-back,dialog-confirm
 buyer-ui attributes=data-buyer-ui-target,data-buyer-ui-app,data-ui
-chrome roots data-private=header|footer search=before|after controls=before|after|none
+chrome roots data-private=core-header|core-footer controls=header|footer|none
 layout tokens=background,gradient,border,border-width,border-style,radius,shadow,padding,gap,columns,columns-wide
 buyer-ui style ui.banner[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="banner"] tokens=background,text,border,border-width,radius,shadow,padding
 buyer-ui style ui.button[@<app>][/<target>] :is(a[data-ui="button"],[data-ui="button"]>button) tokens=background,text,border,border-width,radius,ring,weight,size,case
@@ -111,4 +110,3 @@ buyer-ui style ui.text[@<app>][/<target>] [data-ui="text"] tokens=text,size,weig
 buyer-ui style ui.heading[@<app>][/<target>] [data-ui="heading"] tokens=text,size,weight,font,case
 buyer-ui style ui.disclosure[@<app>][/<target>] [data-ui="disclosure"] tokens=background,text,border,radius
 buyer-ui style ui.row[@<app>][/<target>] :is([data-ui="stack"],[data-ui="columns"]) tokens=gap
-free regions data-free=block|header|footer

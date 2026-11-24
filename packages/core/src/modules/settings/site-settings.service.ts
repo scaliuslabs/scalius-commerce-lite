@@ -45,7 +45,7 @@ import {
   privatePagesCompiledCurrent,
   privatePagesContextOf,
   PRIVATE_ANATOMY_VERSION,
-  PRIVATE_CSS_SANITIZER_VERSION,
+  PRIVATE_CHECKER_VERSION,
   PRIVATE_PAGE_KEYS,
   privatePageArrangement,
   parseStoredStorefrontThemeDocument,
@@ -314,13 +314,15 @@ function serializeThemeSettings(theme: StorefrontThemeDocument): {
 } {
   const result = storefrontThemeDocumentSchema.safeParse(theme);
   if (!result.success) {
-    throw new ValidationError(
-      result.error.issues[0]?.message ?? "The storefront style is not a valid theme document.",
-      result.error.issues.map((issue) => ({
-        path: issue.path.map(String).join("."),
-        message: issue.message,
-      })),
-    );
+    const issues = result.error.issues.map((issue) => ({
+      path: issue.path.map(String).join("."),
+      message: issue.message,
+    }));
+    // A refusal that names its reason (a private page's `not_available`) says it once, machine-readable.
+    const reasonOf = (issue: (typeof result.error.issues)[number]) => issue.code === "custom" && typeof issue.params?.reason === "string" ? issue.params.reason : null;
+    const named = result.error.issues.find((issue) => reasonOf(issue) !== null);
+    if (named) throw new ValidationError(named.message, { reason: reasonOf(named), issues: issues.slice(0, 20) });
+    throw new ValidationError(issues[0]?.message ?? "The storefront style is not a valid theme document.", issues);
   }
   // A translation must fit every place its words appear, so a read never falls back to the source words.
   const translationProblems = storefrontThemeTranslationProblems(result.data);
@@ -328,8 +330,8 @@ function serializeThemeSettings(theme: StorefrontThemeDocument): {
     throw new ValidationError(translationProblems[0]!.message, translationProblems);
   }
   // The private pages compile here, on every save and publish: each arrangement against its page's
-  // parts, the tokens against the theme's palettes, the theme's words, and its stylesheet checked and
-  // scoped. What the request said was compiled is never kept: the page reads only what this wrote.
+  // parts, the tokens against the theme's palettes and the theme's words. What the request said was
+  // compiled is never kept: the page reads only what this wrote.
   const privatePages = compileStorefrontPrivatePages(result.data.privatePages, privatePagesContextOf(result.data));
   if (!privatePages.ok) {
     const first = privatePages.issues[0]!;
@@ -453,7 +455,7 @@ export async function recompilePublishedPrivatePages(db: Database): Promise<"non
   const result = compileStorefrontPrivatePages(filled, privatePagesContextOf(theme));
   const privatePages = result.ok
     ? result.value
-    : { ...filled, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CSS_SANITIZER_VERSION, css: "", refused: true } };
+    : { ...filled, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: "", refused: true } };
   const written = await db.update(themeSettings)
     .set({ colors: JSON.stringify({ ...theme, privatePages }), updatedAt: sql`unixepoch()` })
     .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)))

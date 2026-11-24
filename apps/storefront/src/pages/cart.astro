@@ -4,7 +4,6 @@ import WindowGlobals from "@/components/WindowGlobals.astro";
 import { CART_COLUMN_PLACE_SCRIPT, CART_EARLY_CONTROLS_SCRIPT, CART_FIRST_PAINT_SCRIPT, CART_LOADING_LINES_SCRIPT, CART_PICKUP_CHOICE_SCRIPT, CART_QUICK_BUY_NOTICE_SCRIPT, CART_SUMMARY_FOLD_SCRIPT } from "@/lib/cart/cart-page-scripts";
 import { DEFAULT_CUSTOMER_IDENTITY, checkoutContactFields } from "@scalius/shared/customer-auth-policy";
 import Layout from "@/layouts/Layout.astro";
-import CheckoutHeader from "@/components/CheckoutHeader.astro";
 import LocationFields from "@/components/checkout/LocationFields.astro";
 import CheckoutShippingMethods from "@/components/checkout/CheckoutShippingMethods.astro";
 import CheckoutPhoneField from "@/components/CheckoutPhoneField.astro";
@@ -52,7 +51,7 @@ import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import TemplateSections from "@/components/homepage/TemplateSections.astro";
 import { shopCopy } from "@/lib/storefront-shop-copy";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
-import { servedPrivatePages } from "@scalius/shared/storefront-theme";
+import { privateControlsPlace } from "@scalius/shared/storefront-theme";
 import { templateSectionData } from "@/lib/template-sections";
 import { markRenderUncacheable } from "@/lib/cache-policy";
 import { getRuntimePresence } from "@/lib/api/runtime";
@@ -370,10 +369,8 @@ const emptyCartCategories = (layoutData?.categoryTree?.nodes ?? []).filter((node
 const cartTemplate = cartRequestTheme.resolved.pages.templates.cart;
 // The phone summary bar's words (the theme may reword them).
 const foldWords = { show: cartPlan.labels["cart.showSummary"] ?? cartWords.showSummary, hide: cartPlan.labels["cart.hideSummary"] ?? cartWords.hideSummary };
-// The theme's own header and footer (`privatePages.chrome: theme`), script-free; else the store's checkout header.
-const themeChrome = servedPrivatePages(cartRequestTheme.theme.privatePages).chrome === "theme";
-// The theme's stylesheet for these pages, compiled when it was saved, and what its guard checks.
-const cartStyle = privateStyle(cartRequestTheme.theme, privateAsset);
+// The theme's look for this page: host token rules compiled when it was saved.
+const cartStyle = privateStyle(cartRequestTheme.theme);
 // The theme's words for the confirmation dialog's buttons (lib/cart/confirm-dialog.ts reads them).
 const dialogLabels = Object.fromEntries(Object.entries(cartPlan.labels).filter(([key]) => key.startsWith("dialog.")));
 const templateData = await templateSectionData("cart", cartRequestTheme);
@@ -384,16 +381,13 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   layoutData={layoutData}
   documentLanguage={checkoutLanguageBaseCode(lang.code)}
   noindex
-  hideHeader={!themeChrome}
-  hideFooter={!themeChrome}
+  hideHeader
+  hideFooter
   hideNavigationSidebar
-  privateChrome={themeChrome}
+  privateHeader={{ copy, controls: privateControlsPlace(cartRequestTheme.theme.privatePages) }}
   privateStyle={cartStyle}
   privateTokens={cartPlan.tokens}
 >
-  {!themeChrome && <CheckoutHeader layoutData={layoutData} copy={copy} />}
-  {/* The theme's chrome with no header of its own to draw: the store's checkout header in the header's place. */}
-  {themeChrome && <CheckoutHeader slot="private-header" layoutData={layoutData} copy={copy} />}
   {Object.keys(dialogLabels).length > 0 && (
     <script is:inline type="application/json" id="privateLabels" set:html={serializeJsonForInlineScript(dialogLabels)} />
   )}
@@ -466,7 +460,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         {copy.noScriptText}
       </div>
     </noscript>
-    <CartPageLayout plan={cartPlan} language={pageLanguageCode} asset={privateAsset}>
+    <CartPageLayout plan={cartPlan}>
       <Fragment slot="progress">
     <div class="group-data-[cart-state=empty]:hidden" data-part="progress">
       <CheckoutProgress current="information" paymentRequired={!codOnly} paymentStepMayHide={codPlaceable && !codOnly} copy={copy} />

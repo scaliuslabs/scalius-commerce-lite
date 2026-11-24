@@ -6388,25 +6388,11 @@
       "StorefrontPrivatePages": {
         "type": "object",
         "properties": {
-          "chrome": {
-            "type": "string",
-            "enum": [
-              "core",
-              "theme"
-            ]
-          },
-          "search": {
-            "type": "string",
-            "enum": [
-              "before",
-              "after"
-            ]
-          },
           "controls": {
             "type": "string",
             "enum": [
-              "before",
-              "after",
+              "header",
+              "footer",
               "none"
             ]
           },
@@ -6431,10 +6417,6 @@
                 "additionalProperties": {}
               }
             }
-          },
-          "css": {
-            "type": "string",
-            "maxLength": 24576
           },
           "labels": {
             "type": "object",
@@ -6541,12 +6523,10 @@
               }
             }
           },
-          "assets": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/StorefrontPrivateAsset"
-            }
-          },
+          "chrome": {},
+          "search": {},
+          "css": {},
+          "assets": {},
           "compiled": {
             "type": "object",
             "properties": {
@@ -6578,12 +6558,9 @@
           }
         },
         "required": [
-          "chrome",
           "pages",
-          "css",
           "labels",
           "icons",
-          "assets",
           "compiled"
         ],
         "additionalProperties": false
@@ -6708,214 +6685,12 @@
                 "enum": [
                   "content"
                 ]
-              },
-              "content": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
-                        "enum": [
-                          "heading"
-                        ]
-                      },
-                      "text": {
-                        "$ref": "#/components/schemas/StorefrontPrivateWords"
-                      },
-                      "level": {
-                        "anyOf": [
-                          {
-                            "type": "number",
-                            "enum": [
-                              2
-                            ]
-                          },
-                          {
-                            "type": "number",
-                            "enum": [
-                              3
-                            ]
-                          }
-                        ]
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "text"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
-                        "enum": [
-                          "text"
-                        ]
-                      },
-                      "text": {
-                        "$ref": "#/components/schemas/StorefrontPrivateWords"
-                      },
-                      "tone": {
-                        "type": "string",
-                        "enum": [
-                          "neutral",
-                          "info",
-                          "success",
-                          "warning",
-                          "critical"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "text"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
-                        "enum": [
-                          "link"
-                        ]
-                      },
-                      "text": {
-                        "$ref": "#/components/schemas/StorefrontPrivateWords"
-                      },
-                      "href": {
-                        "type": "string",
-                        "maxLength": 300
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "text",
-                      "href"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
-                        "enum": [
-                          "image"
-                        ]
-                      },
-                      "image": {
-                        "$ref": "#/components/schemas/StorefrontPrivateAsset"
-                      },
-                      "alt": {
-                        "$ref": "#/components/schemas/StorefrontPrivateWords"
-                      },
-                      "width": {
-                        "type": "integer",
-                        "minimum": 1,
-                        "maximum": 2000
-                      },
-                      "height": {
-                        "type": "integer",
-                        "minimum": 1,
-                        "maximum": 2000
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "image",
-                      "alt",
-                      "width",
-                      "height"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
-                        "enum": [
-                          "banner"
-                        ]
-                      },
-                      "tone": {
-                        "type": "string",
-                        "enum": [
-                          "neutral",
-                          "info",
-                          "success",
-                          "warning",
-                          "critical"
-                        ]
-                      },
-                      "title": {
-                        "$ref": "#/components/schemas/StorefrontPrivateWords"
-                      },
-                      "text": {
-                        "$ref": "#/components/schemas/StorefrontPrivateWords"
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "tone"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
-                        "enum": [
-                          "disclosure"
-                        ]
-                      },
-                      "summary": {
-                        "$ref": "#/components/schemas/StorefrontPrivateWords"
-                      },
-                      "text": {
-                        "$ref": "#/components/schemas/StorefrontPrivateWords"
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "summary",
-                      "text"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
-                        "enum": [
-                          "divider"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "kind"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
-              },
-              "hook": {
-                "type": "string",
-                "maxLength": 40
               }
             },
             "required": [
-              "type",
-              "content"
+              "type"
             ],
-            "additionalProperties": false
+            "additionalProperties": {}
           }
         ]
       },

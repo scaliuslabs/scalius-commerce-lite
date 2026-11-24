@@ -7,23 +7,15 @@
 // is the arrangement's order at every width. A part the arrangement leaves
 // out (only optional ones may go) is never rendered. The theme's line, when
 // it has one, is a `<template>` the cart script fills per line.
-import {
-  layoutBox,
-  privateContentHtml,
-  privateLeadBlocks,
-  renderPrivateNodes,
-  type PrivateAssetUrl,
-} from "@/lib/private-pages/html";
+import { layoutBox, renderPrivateNodes } from "@/lib/private-pages/html";
 import type { PrivatePagePlan } from "@/lib/private-pages/plan";
-import { PRIVATE_PAGES, type PrivateNode } from "@scalius/shared/storefront-theme";
+import type { PrivateNode } from "@scalius/shared/storefront-theme";
 
 interface Props {
   plan: PrivatePagePlan;
-  language: string;
-  asset: PrivateAssetUrl;
 }
 
-const { plan, language, asset } = Astro.props;
+const { plan } = Astro.props;
 const custom = plan.layout !== null;
 const slot = async (name: string) => (Astro.slots.has(name) ? await Astro.slots.render(name) : "");
 
@@ -54,12 +46,9 @@ if (custom) {
   collect(plan.layout!);
   for (const name of names) if (parts[name]) rendered.set(name, await parts[name]!());
   const foldBar = await slot("foldBar");
-  // The blocks above the page's first part share one height in screen terms (the seal's `data-lead`).
-  const lead = privateLeadBlocks(plan.layout!, PRIVATE_PAGES.cart.lead ?? []);
   html = renderPrivateNodes(plan.layout!, {
     part: (name) => rendered.get(name) ?? "",
     target: (name) => targets[name] ?? "",
-    content: (block, hook) => privateContentHtml(block, hook, language, asset, lead.has(block) ? lead.size : 0),
     // The phone fold: its bar states the total; its body folds below 64rem until opened.
     layout: (kind, inner, hook) => kind === "fold"
       ? layoutBox("fold", `${foldBar}<div id="orderSummaryBody" data-summary-body data-part="fold-body" class="flex min-w-0 flex-col gap-4">${inner}</div>`, hook)
@@ -72,7 +61,6 @@ const lineTemplate = plan.items.line
   ? `<li class="@container py-3 first:pt-0" data-part="line" data-line-key="">${renderPrivateNodes(plan.items.line, {
     part: (name) => `<!--line:${name}-->`,
     target: () => "<!--line:target-->",
-    content: (block, hook) => privateContentHtml(block, hook, language, asset),
   })}</li>`
   : null;
 ---

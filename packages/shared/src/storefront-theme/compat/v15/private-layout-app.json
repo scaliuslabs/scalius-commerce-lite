@@ -2,13 +2,11 @@
  "templates": [
   {
    "privatePages": {
-    "chrome": "theme",
     "pages": {
      "cartDrawer": {
       "frame": "wide"
      }
     },
-    "css": "[data-free=\"header\"] nav { border: 0 }",
     "labels": {
      "drawer.title": {
       "en": "Bag",

@@ -13,7 +13,7 @@ import { STOREFRONT_THEME_DOCUMENT_VERSION, storefrontThemeDocumentSchema, type 
 import { STOREFRONT_SECTION_REGISTRY, type StorefrontSectionSettingsUpgrade } from "./sections";
 import { storefrontPrivatePageDefaults } from "./private-pages";
 import { privateCartPresetArrangement, privateDrawerWith, type PrivatePageArrangement } from "./private-arrangement";
-import { PRIVATE_CSS_SANITIZER_VERSION } from "./private-css";
+import { PRIVATE_CHECKER_VERSION } from "./private-layout";
 
 /**
  * The oldest stored version that still reads. Migration 0155 reset every
@@ -158,12 +158,12 @@ function privatePageBlocks(document: Json): Json {
 }
 
 /**
- * The anatomy the 14 → 15 step checks against. It writes no stylesheet and
- * no tokens, and nothing compiles to nothing under any checker, so its
- * empty output is this build's checker's.
+ * The anatomy the 14 → 15 step checks against. It writes no tokens, and
+ * nothing compiles to nothing under any checker, so its empty output is
+ * this build's checker's.
  */
 const V15_ANATOMY = 2;
-const V15_SANITIZER = PRIVATE_CSS_SANITIZER_VERSION;
+const V15_CHECKER = PRIVATE_CHECKER_VERSION;
 
 /**
  * Version 14 → 15 too: the colours and the dark colours (a document's, or an
@@ -190,8 +190,8 @@ function unstoredFocusRing(document: Json): Json {
  * arrangement that draws the same page (`summary: top` the cart above the
  * form in the narrow frame, `width: wide` the wide frame, `recommendations:
  * hidden` the drawer without its suggestions; the defaults no arrangement at
- * all). A whole stored document gains `privatePages` (the store's chrome, no
- * stylesheet, words or icons of the theme's); an app template's blocks move
+ * all). A whole stored document gains `privatePages` (no tokens, words or
+ * icons of the theme's); an app template's blocks move
  * into its `privatePages`, so applying it sets only what it set.
  */
 function privatePageLayouts(document: Json): Json {
@@ -212,7 +212,7 @@ function privatePageLayouts(document: Json): Json {
     return {
       ...document,
       blocks: rest,
-      privatePages: { chrome: "core", pages: stored, tokens: {}, css: "", labels: {}, icons: {}, assets: {}, compiled: { anatomy: V15_ANATOMY, sanitizer: V15_SANITIZER, css: "" } },
+      privatePages: { pages: stored, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: V15_ANATOMY, sanitizer: V15_CHECKER, css: "" } },
     };
   }
   if (!("cart" in blocks) && !("cartDrawer" in blocks)) return document;

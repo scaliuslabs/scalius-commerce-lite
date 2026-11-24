@@ -217,10 +217,10 @@ function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHa
   }
   if (!parsed.success) return { ok: false, problem: issueText(parsed.error) };
   // Its private pages pass the checks a save runs (arrangements, tokens against its own colours,
-  // words, stylesheet). Its files are its own app's: the one app every file it names comes from.
+  // words, icons). Its files are its own app's: the one app every icon it names comes from.
   if (parsed.data.privatePages) {
     const value = { ...storefrontPrivatePagesDefault(), ...parsed.data.privatePages } as StorefrontPrivatePages;
-    const apps = new Set([...Object.values(value.assets), ...Object.values(value.icons)].flatMap((ref) => ref ? [ref.app] : []));
+    const apps = new Set(Object.values(value.icons).flatMap((ref) => ref ? [ref.app] : []));
     const context = privatePagesContextOf({ tokens: parsed.data.tokens ?? DEFAULT_STOREFRONT_THEME.tokens });
     const compiled = compileStorefrontPrivatePages(value, { ...context, themeApp: apps.size === 1 ? [...apps][0]! : null });
     if (!compiled.ok) {

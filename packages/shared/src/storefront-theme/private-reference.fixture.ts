@@ -1,6 +1,6 @@
 // The reference design's cart (theme-gaps.md F1 to F21: a dark purple store)
-// expressed with the private-page model alone: an arrangement, typed tokens
-// for the host parts and free CSS for the theme's own regions. The theme
+// expressed with the private-page model alone: an arrangement and typed
+// tokens for the host parts and the apps' blocks. The theme
 // authors' guide (packages/plugin-sdk/docs/private-pages.md) prints it, and
 // private-tokens.test.ts compiles it against its palette.
 import type { StorefrontThemeColors } from "./contrast";
@@ -20,15 +20,13 @@ export const REFERENCE_PALETTE: StorefrontThemeColors = {
 };
 
 export const REFERENCE_PRIVATE_PAGES = {
-  chrome: "theme",
-  // F1: the theme's full header, the store's search after it.
-  search: "after",
+  // F1: the store's controls (the light or dark switch, the market and language forms) in its checkout header.
+  controls: "header",
   pages: {
     cart: {
-      // F3 a line under the heading; F5 no progress; F16 no code entry; F21 no merchandising.
+      // F5 no progress; F16 no code entry; F21 no merchandising.
       layout: [
         { type: "part", part: "notices" },
-        { type: "content", hook: "cart-intro", content: { kind: "text", text: { en: "Review your items before checkout.", bn: "চেকআউটের আগে আপনার পণ্যগুলো দেখে নিন।" } } },
         {
           type: "layout", layout: "columns", hook: "cart-columns", children: [
             { type: "layout", layout: "stack", children: [
@@ -85,12 +83,6 @@ export const REFERENCE_PRIVATE_PAGES = {
       "@cart-columns": { gap: 24 },
     },
   },
-  // Free regions only: the theme's own words and its header.
-  css: [
-    '[data-hook="cart-intro"] p { color: #b9b0d6; margin: 0 }',
-    '[data-free="header"] .site-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: #120d22 }',
-    '[data-free="header"] .site-header a { color: #f4f1ff; text-decoration: none }',
-  ].join("\n"),
   // F3, F19, F22: the heading in its own words; the actions as the store's variants (the store words them in each language).
   labels: {
     "cart.heading": { en: "Your Cart", bn: "আপনার কার্ট" },

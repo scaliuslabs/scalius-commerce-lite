@@ -1,18 +1,16 @@
 // The buyer's private pages as named host parts (docs: packages/plugin-sdk/docs/private-pages.md).
 //
 // Each private page is drawn by the host from named parts. A part is core
-// markup with stable `data-part` hooks inside it; a theme arranges parts,
-// its own content blocks and the apps' extension targets in a tree of
-// layout nodes (private-arrangement.ts). A theme never writes a selector
-// for a host part: each page names its style targets (`styles`), the parts'
-// elements a theme gives a look through typed tokens (private-tokens.ts),
-// and the host writes all the CSS that reads them; in token mode every
-// target is a row of the page's colour table, which drives the CSS and the
-// contrast check alike. The theme's own
-// stylesheet (private-css.ts) reaches only inside free regions (its content
-// blocks, its header and footer, the inside of an app's block), which the
-// host seals. No theme or app script ever runs on these pages. Each page says which parts a buyer must see and do (mandatory:
-// every arrangement holds them exactly once) and which a theme may leave out.
+// markup with stable `data-part` hooks inside it; a theme arranges parts
+// and the apps' extension targets in a tree of layout nodes
+// (private-arrangement.ts). A theme writes no markup and no CSS here: each
+// page names its style targets (`styles`), the parts' elements a theme gives
+// a look through typed tokens (private-tokens.ts), and the host writes all
+// the CSS that reads them; in token mode every target is a row of the page's
+// colour table, which drives the CSS and the contrast check alike. No theme
+// or app script ever runs on these pages. Each page says which parts a buyer
+// must see and do (mandatory: every arrangement holds them exactly once) and
+// which a theme may leave out.
 // A repeated unit (a cart line) has its own arrangement of its sub-parts.
 //
 // This module is data only (no zod): the dashboard and the storefront's
@@ -31,43 +29,32 @@ export const PRIVATE_ANATOMY_VERSION = 2 as const;
 
 /**
  * The host's layout nodes. `stack`: one column. `columns`: one column on
- * phones, side by side from 64rem. `grid`: a grid the theme's stylesheet
- * shapes. `group`: a box with no layout of its own. `fold` (the cart page):
+ * phones, side by side from 64rem. `grid`: a grid the theme
+ * shapes by its hook's `columns` tokens. `group`: a box with no layout of its own. `fold` (the cart page):
  * on phones its children fold behind a bar that states the total. `scroll`
  * (the drawer): the region that scrolls between the drawer's fixed parts.
  */
 export const PRIVATE_LAYOUT_KINDS = ["stack", "columns", "grid", "group", "fold", "scroll"] as const;
 export type PrivateLayoutKind = (typeof PRIVATE_LAYOUT_KINDS)[number];
 
-/** A theme content block's tone (the buyer UI's tones). */
-export const PRIVATE_CONTENT_TONES = ["neutral", "info", "success", "warning", "critical"] as const;
-export type PrivateContentTone = (typeof PRIVATE_CONTENT_TONES)[number];
+/** The buyer UI's tones (an app's banner and badge), each with its rows in the colour table. */
+export const PRIVATE_UI_TONES = ["neutral", "info", "success", "warning", "critical"] as const;
+export type PrivateUiTone = (typeof PRIVATE_UI_TONES)[number];
 
 /** Words in each language the theme writes them in, keyed by base language (`en`, `bn`). */
 export type PrivateWords = Record<string, string>;
 
-/** A file the theme's app ships in `public/` (served from the store's own origin). */
+/** A file the theme's app ships in `public/` (served from the store's own origin): an icon's image. */
 export interface PrivateAssetRef {
   app: string;
   file: string;
 }
 
-/** A theme's own script-free content (the buyer UI's building blocks, drawn by the host). */
-export type PrivateContentBlock =
-  | { kind: "heading"; text: PrivateWords; level?: 2 | 3 }
-  | { kind: "text"; text: PrivateWords; tone?: PrivateContentTone }
-  | { kind: "link"; text: PrivateWords; href: string }
-  | { kind: "image"; image: PrivateAssetRef; alt: PrivateWords; width: number; height: number }
-  | { kind: "banner"; tone: PrivateContentTone; title?: PrivateWords; text?: PrivateWords }
-  | { kind: "disclosure"; summary: PrivateWords; text: PrivateWords }
-  | { kind: "divider" };
-
-/** One node of an arrangement. */
+/** One node of an arrangement: a host layout, a host part or an apps' target. Nothing else draws. */
 export type PrivateNode =
   | { type: "layout"; layout: PrivateLayoutKind; hook?: string; children: PrivateNode[] }
   | { type: "part"; part: string; variant?: string }
-  | { type: "target"; target: string }
-  | { type: "content"; content: PrivateContentBlock; hook?: string };
+  | { type: "target"; target: string };
 
 export interface PrivatePartSpec {
   /** A buyer must see it (or use it): every arrangement holds it exactly once. */
@@ -165,13 +152,11 @@ export interface PrivateUnitSpec {
   readonly layouts: readonly PrivateLayoutKind[];
   /** The layout the host draws without an arrangement: today's page. */
   readonly layout: readonly PrivateNode[];
-  /** A repeated unit's: the page's part that draws it (its content blocks count where that part sits). */
+  /** A repeated unit's: the page's part that draws it. */
   readonly part?: string;
   /**
-   * The parts a buyer's first screen reaches (a page's): the content blocks
-   * the arrangement puts before the first of them share one height in
-   * viewport terms (`data-lead`, the seal), so one of them starts inside the
-   * first screen at every width.
+   * The parts a buyer's first screen reaches (a page's): the rendered gate
+   * requires one of them to start inside the first screen at every width.
    */
   readonly lead?: readonly string[];
 }
@@ -195,7 +180,7 @@ export interface PrivatePageSpec extends PrivateUnitSpec {
   readonly frames?: readonly [string, ...string[]];
   /** The hooks a host layout draws inside itself (the fold's bar and body). */
   readonly layoutHooks?: Partial<Record<PrivateLayoutKind, readonly string[]>>;
-  /** What a host layout may hold (parts and targets by name; content blocks and plain layouts always). */
+  /** What a host layout may hold (parts and targets by name; plain layouts always). */
   readonly layoutContents?: Partial<Record<PrivateLayoutKind, readonly string[]>>;
   /** Repeated units, by name. */
   readonly items: Readonly<Record<string, PrivateUnitSpec>>;
@@ -272,14 +257,13 @@ const CART_STYLES: Record<string, PrivateStyleSpec> = {
   dialog: { selector: '[data-private="dialog"]', absolute: true, tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "shadow"], kind: "box", surface: "card", ink: "foreground", on: "page", fields: true },
   "dialog-back": { selector: '[data-private="dialog"] [data-part="dialog-back"]', absolute: true, tokens: ["background", "text", "border", "border-width", "radius", "ring", "weight"], kind: "control", surface: "under", ink: "foreground", on: "dialog" },
   "dialog-confirm": { selector: '[data-private="dialog"] [data-part="dialog-confirm"]', absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on: "dialog" },
-  // The store's own header (`chrome: core`): its surface, words and border.
-  chrome: { selector: '[data-private="core-header"]', absolute: true, tokens: ["background", "gradient", "text", "muted", "link", "border", "border-width"], kind: "box", surface: "background", ink: "foreground", on: "page" },
-  // The host's search in the theme header's frame (`privatePages.search`), never inside the theme's region.
-  search: { selector: '[data-host="search"]', absolute: true, tokens: [...FIELD_TOKENS], kind: "field", surface: "background", ink: "foreground", on: "page" },
-  // The store's controls in the theme's chrome frames (`privatePages.controls`), never inside its regions:
-  // the light or dark switch beside the header, the market and language forms beside the footer.
-  scheme: { selector: '[data-host="scheme"] button', absolute: true, tokens: ["text", "ring", "radius"], kind: "control", surface: "under", ink: "foreground", on: "page" },
-  localization: { selector: '[data-host="localization"]', absolute: true, tokens: ["text", "muted", "link"], kind: "box", surface: "under", ink: "foreground", on: "page", fields: true },
+  // The store's own chrome: its checkout header, and the strip at the page's end that holds the store's controls
+  // when the theme places them there (`privatePages.controls: footer`). Their surface, words and border.
+  chrome: { selector: ':is([data-private="core-header"],[data-private="core-footer"])', absolute: true, tokens: ["background", "gradient", "text", "muted", "link", "border", "border-width"], kind: "box", surface: "background", ink: "foreground", on: "page" },
+  // The store's controls in its chrome, where the theme places them (`privatePages.controls`): the light or
+  // dark switch and the market and language forms.
+  scheme: { selector: '[data-host="scheme"] button', absolute: true, tokens: ["text", "ring", "radius"], kind: "control", surface: "under", ink: "foreground", on: "chrome" },
+  localization: { selector: '[data-host="localization"]', absolute: true, tokens: ["text", "muted", "link"], kind: "box", surface: "under", ink: "foreground", on: "chrome", fields: true },
 };
 
 /** The cart page: the information step (lines, totals, the details form and its submit). */
@@ -419,65 +403,37 @@ export const PRIVATE_PAGE_KEYS = Object.keys(PRIVATE_PAGES) as PrivatePageKey[];
 export const PRIVATE_SCOPE_ATTRIBUTE = "data-private";
 /** The hook on each part's elements. */
 export const PRIVATE_PART_ATTRIBUTE = "data-part";
-/** A layout node's or content block's theme hook (`data-hook="<name>"`). */
+/** A layout node's theme hook (`data-hook="<name>"`), the name its tokens take (`@<hook>`). */
 export const PRIVATE_HOOK_ATTRIBUTE = "data-hook";
 /** A theme hook: lowercase words joined by hyphens (`studio-summary`). */
 export const PRIVATE_HOOK_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+){0,5}$/;
 export const PRIVATE_HOOK_MAX = 40;
 
-/** Surfaces besides the pages that carry the scope: the store's dialogs, the theme's chrome there and the store's own header. */
-export const PRIVATE_SCOPES = ["dialog", "header", "footer", "core-header"] as const;
+/** Surfaces besides the pages that carry the scope: the store's dialogs and its own chrome there. */
+export const PRIVATE_SCOPES = ["dialog", "core-header", "core-footer"] as const;
 
 /**
- * Free regions: boxes the host seals (nothing inside paints, lays out,
- * widens the page or acts outside them) and the only places the theme's
- * stylesheet reaches, strictly inside the wrapper (`data-free`): the
- * theme's content blocks (`block`, with their `data-hook`) and its header
- * and footer (`header`, `footer`). Nothing of the host's is ever inside one:
- * the host's search and controls sit beside the theme's header and footer
- * (`PRIVATE_SEARCH_PLACES`, `PRIVATE_CONTROL_PLACES`).
+ * Where the store's controls sit on a private page (`privatePages.controls`):
+ * the light or dark switch (where the theme offers it) and the market and
+ * language forms (where the store sells in several), in the store's checkout
+ * header (`header`, unset), in a strip at the page's end (`footer`), or not at
+ * all (`none`). Each is a host part, its look the `scheme` and `localization`
+ * targets' tokens on the `chrome` row.
  */
-export const PRIVATE_FREE_REGIONS = ["block", "header", "footer"] as const;
-
-/**
- * Where the host's search form sits in the header's frame on a private page
- * with the theme's chrome (`privatePages.search`): before or after the
- * theme's header region, or (unset) nowhere. Its look is the `search` target's
- * tokens; whatever search form the theme's header draws is dropped.
- */
-export const PRIVATE_SEARCH_PLACES = ["before", "after"] as const;
-export type PrivateSearchPlace = (typeof PRIVATE_SEARCH_PLACES)[number];
-
-/**
- * Where the store's controls sit in the theme's chrome frames on a private
- * page (`privatePages.controls`): the light or dark switch (where the theme
- * offers it) before or after the header's region, the market and language
- * forms (where the store sells in several) before or after the footer's;
- * `none` leaves them out. Unset: after. Each is a host part, its look the
- * `scheme` and `localization` targets' tokens; none is ever inside a region.
- */
-export const PRIVATE_CONTROL_PLACES = ["before", "after", "none"] as const;
+export const PRIVATE_CONTROL_PLACES = ["header", "footer", "none"] as const;
 export type PrivateControlPlace = (typeof PRIVATE_CONTROL_PLACES)[number];
-
-/**
- * The most content blocks a page holds, and the most before and after its
- * last mandatory part (each at most 30rem tall), and in one repeated unit
- * (each at most 4rem tall there, as many times as the cart has lines). A
- * unit's blocks count once in the page's limits, where its part sits.
- */
-export const PRIVATE_CONTENT_LIMITS = { perPage: 8, beforeLastMandatory: 3, afterLastMandatory: 3, perUnit: 2 } as const;
 
 /** An app node kind's style target (`ui.<kind>`): what it is to the colour table, by tone. */
 export interface PrivateBuyerUiStyle {
   /** The node's selector inside its block (`data-ui`, with `data-tone` added per tone). */
   readonly kind: string;
-  readonly tones?: readonly PrivateContentTone[];
+  readonly tones?: readonly PrivateUiTone[];
   readonly tokens: readonly PrivateTokenName[];
   /** Null for a node that draws no colour (a row of nodes): it has no row in the table. */
   readonly style: PrivateStyleKind | null;
   /** The palette role of its own words, per tone (`critical` words are the error colour). */
   readonly ink?: PrivatePaletteRole;
-  readonly toneInk?: Partial<Record<PrivateContentTone, PrivatePaletteRole>>;
+  readonly toneInk?: Partial<Record<PrivateUiTone, PrivatePaletteRole>>;
 }
 
 /**
@@ -488,16 +444,14 @@ export interface PrivateBuyerUiStyle {
  * every one of the page's targets, on whatever that target sits on.
  */
 export const PRIVATE_BUYER_UI_STYLES: Readonly<Record<string, PrivateBuyerUiStyle>> = {
-  banner: { kind: '[data-ui="banner"]', tones: PRIVATE_CONTENT_TONES, tokens: ["background", "text", "border", "border-width", "radius", "shadow", "padding"], style: "box", ink: "foreground", toneInk: { critical: "destructive" } },
+  banner: { kind: '[data-ui="banner"]', tones: PRIVATE_UI_TONES, tokens: ["background", "text", "border", "border-width", "radius", "shadow", "padding"], style: "box", ink: "foreground", toneInk: { critical: "destructive" } },
   button: { kind: ':is(a[data-ui="button"],[data-ui="button"]>button)', tokens: ["background", "text", "border", "border-width", "radius", "ring", "weight", "size", "case"], style: "control", ink: "foreground" },
-  badge: { kind: '[data-ui="badge"]', tones: PRIVATE_CONTENT_TONES, tokens: ["background", "text", "border", "radius"], style: "text", ink: "foreground", toneInk: { critical: "destructive" } },
+  badge: { kind: '[data-ui="badge"]', tones: PRIVATE_UI_TONES, tokens: ["background", "text", "border", "radius"], style: "text", ink: "foreground", toneInk: { critical: "destructive" } },
   text: { kind: '[data-ui="text"]', tokens: ["text", "size", "weight"], style: "text", ink: "foreground" },
   heading: { kind: '[data-ui="heading"]', tokens: ["text", "size", "weight", "font", "case"], style: "text", ink: "foreground" },
   disclosure: { kind: '[data-ui="disclosure"]', tokens: ["background", "text", "border", "radius"], style: "box", ink: "foreground" },
   row: { kind: ':is([data-ui="stack"],[data-ui="columns"])', tokens: ["gap"], style: null },
 };
-export type PrivateFreeRegion = (typeof PRIVATE_FREE_REGIONS)[number];
-export const PRIVATE_FREE_ATTRIBUTE = "data-free";
 
 /**
  * The store's dialogs over a private page (`data-private="dialog"`): the
@@ -509,7 +463,7 @@ export const PRIVATE_DIALOG_HOOKS = ["sign-in", "dialog-title", "dialog-text", "
  * An app's buyer UI block, wherever a private page draws it: its mount's
  * `data-buyer-ui-target`, the block's wrapper with `data-buyer-ui-app` (the
  * app's id) and each node's kind on `data-ui` (`banner`, `text`, `button`,
- * …) and tone on `data-tone`. A theme's content blocks carry the same kinds.
+ * …) and tone on `data-tone`.
  */
 export const PRIVATE_BUYER_UI_HOOKS = ["data-buyer-ui-target", "data-buyer-ui-app", "data-ui"] as const;
 
@@ -559,9 +513,8 @@ export function privatePageAnatomy(): string[] {
   }
   lines.push(`dialog root ${PRIVATE_SCOPE_ATTRIBUTE}=dialog hooks=${PRIVATE_DIALOG_HOOKS.join(",")}`);
   lines.push(`buyer-ui attributes=${PRIVATE_BUYER_UI_HOOKS.join(",")}`);
-  lines.push(`chrome roots ${PRIVATE_SCOPE_ATTRIBUTE}=header|footer search=${PRIVATE_SEARCH_PLACES.join("|")} controls=${PRIVATE_CONTROL_PLACES.join("|")}`);
+  lines.push(`chrome roots ${PRIVATE_SCOPE_ATTRIBUTE}=core-header|core-footer controls=${PRIVATE_CONTROL_PLACES.join("|")}`);
   lines.push(`layout tokens=${PRIVATE_LAYOUT_TOKENS.join(",")}`);
   for (const [kind, style] of Object.entries(PRIVATE_BUYER_UI_STYLES)) lines.push(`buyer-ui style ui.${kind}${style.tones ? `[.${style.tones.join("|")}]` : ""}[@<app>][/<target>] ${style.kind} tokens=${style.tokens.join(",")}`);
-  lines.push(`free regions ${PRIVATE_FREE_ATTRIBUTE}=${PRIVATE_FREE_REGIONS.join("|")}`);
   return lines;
 }

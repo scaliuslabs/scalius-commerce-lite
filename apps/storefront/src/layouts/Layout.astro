@@ -6,6 +6,10 @@ import { DEFAULT_STORE_REGION, textDirection } from "@scalius/shared/locale-form
 import "../styles/global.css";
 import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
+import CheckoutHeader from "../components/CheckoutHeader.astro";
+import PrivateControlsStrip from "../components/footer/PrivateControlsStrip.astro";
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import type { PrivateControlPlace } from "@scalius/shared/storefront-theme";
 import SidebarNav from "../components/header/SidebarNav.astro";
 import ThemeFonts from "../components/ThemeFonts.astro";
 import ThemeHead from "../components/ThemeHead.astro";
@@ -17,7 +21,6 @@ import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-form
 import { themePaint } from "@/lib/theme-paint";
 import { privateImageOrigins } from "@/lib/middleware-helper/csp-handler";
 import { cartDrawerPlan } from "@/lib/private-pages/drawer";
-import { PRIVATE_FREE_REGION_SEAL, privateFreeRegions } from "@/lib/private-pages/plan";
 import { privateAssetUrls } from "@/lib/private-pages/html";
 import { CART_DRAWER_PLAN_ID } from "@/lib/cart/drawer-plan";
 import type { AnalyticsConfig } from "@/lib/api";
@@ -123,8 +126,8 @@ interface Props {
   libraryPreview?: boolean;
   /**
    * A buyer's private page drawn from parts (lib/private-pages): the theme's
-   * look for it (the region seal, token rules and the free regions'
-   * stylesheet), compiled when the theme was saved. Empty: the default look.
+   * look for it (host token rules), compiled when the theme was saved. Empty:
+   * the default look.
    */
   privateStyle?: string;
   /**
@@ -134,11 +137,12 @@ interface Props {
    */
   privateTokens?: boolean;
   /**
-   * A private page that shows the theme's own header and footer
-   * (`privatePages.chrome: theme`): drawn script-free, from the store's
-   * projections only (components/private/PrivateChrome.astro).
+   * A private page drawn from parts: the store's checkout header in the
+   * header's place, its words (`copy`), and where the store's controls sit
+   * (`privatePages.controls`: in that header, in a strip at the page's end,
+   * or none).
    */
-  privateChrome?: boolean;
+  privateHeader?: { copy: CheckoutLanguageData; controls: PrivateControlPlace };
 }
 
 const {
@@ -162,7 +166,7 @@ const {
   libraryPreview = false,
   privateStyle,
   privateTokens = false,
-  privateChrome = false,
+  privateHeader,
 } = Astro.props;
 
 // Use provided layout data when pages load it in parallel; otherwise fetch here.
@@ -243,7 +247,7 @@ const showNavigationSidebar =
   themeLayout.navigation === "sidebar" &&
   (navigationData.length > 0 || (categoryTree?.nodes.length ?? 0) > 0);
 // A private page draws no phone tab bar, the theme's chrome there included (as the store's checkout header).
-const showMobileTabs = !hideHeader && !privateChrome && themeLayout.mobileNavigation === "tabs";
+const showMobileTabs = !hideHeader && themeLayout.mobileNavigation === "tabs";
 
 // The theme's brand images (the draft's under a preview): the tab icon, the
 // header logo that also stands in for a missing share image and schema logo.
@@ -388,10 +392,7 @@ const paint = themePaint(privateStyle !== undefined && !privateTokens ? { ...sto
 // The cart drawer's arrangement, words and icons where the theme set them (lib/cart/drawer-plan.ts):
 // the drawer mounts in the browser, so it reads them from the page. The default writes nothing.
 const drawerPlan = libraryPreview ? null : cartDrawerPlan(storefrontTheme, documentLanguage, privateAssetUrls(readStorefrontExtensions(layoutData?.appExtensions)));
-// The free regions' seal is host CSS: on every page that can draw one (a private page drawn from
-// parts, or the drawer's arrangement), whatever the theme's compiled look holds.
-const freeRegionSeal = (privateStyle !== undefined || drawerPlan !== null) && privateFreeRegions(storefrontTheme) ? PRIVATE_FREE_REGION_SEAL : "";
-const pageStyle = `${freeRegionSeal}${privateStyle ?? ""}`;
+const pageStyle = privateStyle ?? "";
 const storefrontRouteKind = Astro.url.pathname.startsWith("/products/")
   ? "product"
   : "standard";
@@ -617,12 +618,10 @@ const pageStoreTimeZone = storeTimeZone();
             variant={themeLayout.header}
             navigationStyle={themeLayout.navigation}
             mobileNavigation={showMobileTabs ? "tabs" : "drawer"}
-            private={privateChrome}
-          >
-            <slot name="private-header" slot="private-fallback" />
-          </Header>
+          />
         )
       }
+      {privateHeader && <CheckoutHeader layoutData={layoutData} copy={privateHeader.copy} controls={privateHeader.controls === "header" ? { localization: footerLocalization } : undefined} />}
       {/* With the sidebar, <main> is the content column: full-bleed sections
           span the column, never the sidebar. */}
       <div class="site-shell" data-site-shell={showNavigationSidebar ? "sidebar" : undefined}>
@@ -646,11 +645,11 @@ const pageStoreTimeZone = storeTimeZone();
             business={businessInfo}
             languageCode={layoutData?.storefrontCopy?.languageCode}
             localization={footerLocalization}
-            private={privateChrome}
           />
         </div>
       )
     }
+    {privateHeader?.controls === "footer" && <PrivateControlsStrip localization={footerLocalization} />}
 
     {/* Google accepts JSON-LD in body. Keep it in initial SSR HTML while
         placing machine-only bytes after buyer-visible content. */}

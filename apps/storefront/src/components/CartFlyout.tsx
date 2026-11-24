@@ -336,8 +336,7 @@ function drawerHas(nodes: readonly CartDrawerNode[], part: string): boolean {
 
 /**
  * A theme's arrangement of the drawer or of its line: its parts where it put
- * them, its content (drawn on the server as escaped HTML) and the host's
- * layouts. `target` draws an extension target (a line's is its `target` part);
+ * them and the host's layouts. `target` draws an extension target (a line's is its `target` part);
  * `scroll` the drawer's scrolling region.
  */
 function drawerNodes(
@@ -348,7 +347,8 @@ function drawerNodes(
   return nodes.map((node, index) => {
     if (node.type === "part") return <React.Fragment key={index}>{parts[node.part]}</React.Fragment>;
     if (node.type === "target") return <React.Fragment key={index}>{hosts.target ? hosts.target(node.target) : parts.target}</React.Fragment>;
-    if (node.type === "html") return <div key={index} className="contents" dangerouslySetInnerHTML={{ __html: node.html }} />;
+    // The plan names host parts, targets and layouts only: anything else draws nothing.
+    if (node.type !== "layout" || !Array.isArray(node.children)) return null;
     const children = drawerNodes(node.children, parts, hosts);
     if (node.layout === "scroll" && hosts.scroll) return hosts.scroll(children, index);
     return <div key={index} data-layout={node.layout} data-hook={node.hook} className={DRAWER_LAYOUTS[node.layout] ?? "min-w-0"}>{children}</div>;

@@ -61,7 +61,7 @@ const SINGLE_LAYOUTS: ReadonlySet<PrivateLayoutKind> = new Set(["fold", "scroll"
 type Holds = Partial<Record<PrivateLayoutKind, readonly string[]>>;
 
 const holdsMessage = (kind: PrivateLayoutKind, allowed: readonly string[]) =>
-  `The ${kind} holds only ${allowed.join(", ")} (and your own content): it starts closed on phones, so what a buyer fills in or must read sits outside it.`;
+  `The ${kind} holds only ${allowed.join(", ")}: it starts closed on phones, so what a buyer fills in or must read sits outside it.`;
 
 function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: Array<string | number>, what: string, holds: Holds = {}): PrivateArrangementIssue[] {
   const issues: PrivateArrangementIssue[] = [];
@@ -117,8 +117,6 @@ function unitIssues(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], base: 
         if (targets.has(node.target)) issues.push({ path: [...at, "target"], reason: "duplicate_target", message: `The ${node.target} target appears once.` });
         heldWrongly(node.target, [...at, "target"]);
         targets.set(node.target, index);
-      } else if (node.hook !== undefined && !validHook(node.hook)) {
-        issues.push({ path: [...at, "hook"], reason: "invalid_hook", message: hookMessage });
       }
     });
   };
@@ -194,10 +192,11 @@ function fillUnit(spec: PrivateUnitSpec, nodes: readonly PrivateNode[], holds: H
         const own = holds[node.layout] ?? allowed;
         const kept = keep(node.children, depth + 1, own);
         inside.push({ ...node, children: kept.inside });
-        for (const leaf of kept.out) (allowed === null || (leaf.type !== "layout" && leaf.type !== "content" && allowed.includes(leafName(leaf as Leaf))) ? inside : out).push(leaf);
+        for (const leaf of kept.out) (allowed === null || (leaf.type !== "layout" && allowed.includes(leafName(leaf as Leaf))) ? inside : out).push(leaf);
         continue;
       }
-      if (node.type === "content") { inside.push(node); continue; }
+      // Only host parts and targets draw: any other node a stored document holds is dropped.
+      if (node.type !== "part" && node.type !== "target") continue;
       const key = leafKey(node)!;
       const known = node.type === "part" ? Object.hasOwn(spec.parts, node.part) : spec.targets.includes(node.target);
       if (!known || seen.has(key)) continue;

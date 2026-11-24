@@ -1342,9 +1342,7 @@ export type StorefrontPageTemplate = {
 };
 
 export type StorefrontPrivatePages = {
-    chrome: 'core' | 'theme';
-    search?: 'before' | 'after';
-    controls?: 'before' | 'after' | 'none';
+    controls?: 'header' | 'footer' | 'none';
     pages: {
         cart?: StorefrontPrivateArrangement;
         cartDrawer?: StorefrontPrivateArrangement;
@@ -1356,7 +1354,6 @@ export type StorefrontPrivatePages = {
             };
         };
     };
-    css: string;
     labels: {
         'cart.heading'?: StorefrontPrivateWords;
         'cart.continue'?: 'continue-shopping' | 'keep-shopping' | 'back-to-store';
@@ -1378,9 +1375,10 @@ export type StorefrontPrivatePages = {
         'cart.empty'?: StorefrontPrivateAsset;
         'drawer.empty'?: StorefrontPrivateAsset;
     };
-    assets: {
-        [key: string]: StorefrontPrivateAsset;
-    };
+    chrome?: unknown;
+    search?: unknown;
+    css?: unknown;
+    assets?: unknown;
     compiled: {
         anatomy: number;
         sanitizer: number;
@@ -1412,37 +1410,7 @@ export type StorefrontPrivateNode = {
     target: string;
 } | {
     type: 'content';
-    content: {
-        kind: 'heading';
-        text: StorefrontPrivateWords;
-        level?: 2 | 3;
-    } | {
-        kind: 'text';
-        text: StorefrontPrivateWords;
-        tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
-    } | {
-        kind: 'link';
-        text: StorefrontPrivateWords;
-        href: string;
-    } | {
-        kind: 'image';
-        image: StorefrontPrivateAsset;
-        alt: StorefrontPrivateWords;
-        width: number;
-        height: number;
-    } | {
-        kind: 'banner';
-        tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
-        title?: StorefrontPrivateWords;
-        text?: StorefrontPrivateWords;
-    } | {
-        kind: 'disclosure';
-        summary: StorefrontPrivateWords;
-        text: StorefrontPrivateWords;
-    } | {
-        kind: 'divider';
-    };
-    hook?: string;
+    [key: string]: unknown;
 };
 
 export type StorefrontPrivateWords = {

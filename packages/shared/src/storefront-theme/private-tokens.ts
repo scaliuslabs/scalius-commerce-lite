@@ -31,7 +31,7 @@ import {
   PRIVATE_HOOK_PATTERN,
   PRIVATE_LAYOUT_TOKENS,
   PRIVATE_PAGES,
-  type PrivateContentTone,
+  type PrivateUiTone,
   type PrivateNode,
   type PrivatePageKey,
   type PrivatePageSpec,
@@ -191,7 +191,7 @@ function styleOf(spec: PrivatePageSpec, key: string): { tokens: readonly Private
   if (!match) return null;
   const [, kind, tone, app, target] = match;
   const ui = Object.hasOwn(PRIVATE_BUYER_UI_STYLES, kind!) ? PRIVATE_BUYER_UI_STYLES[kind!]! : null;
-  if (!ui || (tone && !ui.tones?.includes(tone as PrivateContentTone))) return null;
+  if (!ui || (tone && !ui.tones?.includes(tone as PrivateUiTone))) return null;
   if (target && !pageTargets(spec).includes(target)) return null;
   return { tokens: ui.tokens, selector: uiSelector(ui.kind, tone, app, target) };
 }
@@ -379,7 +379,7 @@ interface Place {
   ink: PrivatePaletteRole;
   /** The row beneath it, or `boxes`: every box of the page. */
   parent: string | "boxes" | null;
-  /** Its element sits inside its parent's element, so it inherits the parent's cells (not a dialog, not the header's search). */
+  /** Its element sits inside its parent's element, so it inherits the parent's cells (not a dialog, not the store's chrome). */
   nested: boolean;
   /** A row whose selector reaches every element this one does, always written before it (an app node kind's row with no tone). */
   base: string | null;
@@ -473,7 +473,7 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
   // The page itself (`page`, the body) is the row everything else sits on.
   const pageKey = "page";
   place(pageKey, spec.styles[pageKey]!, null);
-  // The page's frame, then the fields and buttons drawn anywhere, then the arrangement, then the dialogs and the header's search.
+  // The page's frame, then the fields and buttons drawn anywhere, then the arrangement, then the dialogs and the store's chrome with its controls.
   for (const [name, style] of styles) if (style.on === pageKey && !style.absolute) place(name, style, pageKey);
   for (const [name, style] of styles) if (!style.on && !style.part && !style.item && !style.layout && !style.element && name !== pageKey) place(name, style, "boxes");
   const frame = places[1]?.key ?? pageKey;
@@ -482,7 +482,12 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
     if (!style.absolute || style.on !== pageKey) continue;
     place(name, style, pageKey);
     if (style.fields) holders.add(name);
-    for (const [child, inner] of styles) if (inner.on === name) place(child, inner, name);
+    for (const [child, inner] of styles) {
+      if (inner.on !== name) continue;
+      place(child, inner, name);
+      // The store's market and language forms hold fields: a field row stands on their row.
+      if (inner.fields) holders.add(child);
+    }
   }
   // A field style's rows, one in each box that holds fields, outer before inner (a field takes its nearest box's
   // row): its marks are checked on the box it is drawn on, never on every box of the page.
@@ -799,8 +804,8 @@ function shapeCss(page: PrivatePageKey, tokens: Record<string, Values>, unitHook
  */
 export const PRIVATE_TOKEN_MODE = ":root[data-private-tokens]";
 
-/** Where token mode reaches: the private pages, the store's dialogs over them, the host's controls and search, and the store's own header. */
-const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]', '[data-host="scheme"]', '[data-host="localization"]', '[data-host="search"]', '[data-private="core-header"]'];
+/** Where token mode reaches: the private pages, the store's dialogs over them and the store's own chrome (its controls inside). */
+const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]', '[data-private="core-header"]', '[data-private="core-footer"]'];
 const IN_SCOPE = `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope} *`)].join(",")})`;
 
 /**
