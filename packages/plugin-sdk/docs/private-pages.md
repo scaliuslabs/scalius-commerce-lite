@@ -274,7 +274,7 @@ A refusal names the theme key and the pair that set it, and the scheme: `summary
 
 A value that is not of the document's shape (a wrong type, an unknown field) is refused by the schema, naming its path.
 
-`validate` runs these same checks on every template you ship, through the store's own code, and prints each with its place and reason (`✗ Theme templates: storefront.templates[0] (studio).theme.privatePages.tokens.cart.summary-total: … [contrast]`), so a template that validates is one the store applies and saves.
+`validate` runs these same checks on every template you ship, through the store's own code, and prints each with its place and reason (`✗ Theme templates: storefront.templates[0] (studio).theme.privatePages.tokens.cart.summary-total: … [contrast]`), so a template that validates is one the store applies and saves. An icon names a file your release carries in `public/`; the install refuses a release without it, and `validate` names the missing file.
 
 ## Words and icons
 

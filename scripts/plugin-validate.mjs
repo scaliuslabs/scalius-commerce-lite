@@ -141,6 +141,11 @@ export async function validatePlugin(directory) {
   // Templates and page presets through the store's own check (the one install, the library and an
   // apply run): each template applied to the default theme and run through the save checker.
   for (const check of themeTemplateChecks(contract, manifest.storefront, manifest.id)) add(check.status, "Theme templates", check.detail);
+  // Icons a template names from the app's own files: the install refuses a release without them.
+  if (files) {
+    const publicFiles = new Set(files.filter((file) => file.path.startsWith("public/")).map((file) => file.path.slice("public/".length)));
+    for (const problem of contract.storefrontTemplateIconFileProblems(manifest, publicFiles)) add("fail", "Theme templates", problem);
+  }
 
   // Card fields a template names: a store keeps only the ones it has, so these warn, never fail.
   for (const note of contract.storefrontTemplateCardFieldNotes(manifest)) add(note.level, "Template card fields", note.message);
