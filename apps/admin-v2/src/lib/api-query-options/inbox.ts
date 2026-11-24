@@ -15,6 +15,8 @@ import { pollWhileOffline } from "../admin-query-client";
 
 export type InboxQuery = ApiBody<typeof postApiV1AdminConversationsQuery>;
 export type InboxItem = ApiResult<typeof getApiV1AdminConversations>["items"][number];
+/** One of the merchant's topics with every name it has (the list's `topics`). */
+export type InboxTopic = ApiResult<typeof getApiV1AdminConversations>["topics"][number];
 export type StaffThread = ApiResult<typeof getApiV1AdminConversationsById>["conversation"];
 export type StaffMessage = StaffThread["messages"][number];
 

@@ -1071,6 +1071,8 @@ export interface StaffInboxFilters {
   status?: ConversationStatus | "all";
   assignee?: "me" | "none" | string;
   subjectType?: ConversationSubjectType;
+  /** One of the merchant's topic keys: only threads the buyer gave that topic. */
+  topic?: string;
   q?: string;
   cursor?: string | null;
   unread?: boolean;
@@ -1157,6 +1159,7 @@ export async function listStaffInbox(
   else if (filters.assignee === "none") conditions.push(isNull(conversations.assigneeUserId));
   else if (filters.assignee) conditions.push(eq(conversations.assigneeUserId, filters.assignee));
   if (filters.subjectType) conditions.push(eq(conversations.subjectType, filters.subjectType));
+  if (filters.topic) conditions.push(eq(conversations.topic, filters.topic));
   const q = filters.q?.trim().slice(0, 100);
   if (q) {
     const number = parseOrderNumberSearch(q);
@@ -1202,6 +1205,7 @@ export async function queryStaffInbox(db: Database, userId: string, filters: Sta
   else if (filters.assignee === "none") conditions.push(isNull(conversations.assigneeUserId));
   else if (filters.assignee) conditions.push(eq(conversations.assigneeUserId, filters.assignee));
   if (filters.subjectType) conditions.push(eq(conversations.subjectType, filters.subjectType));
+  if (filters.topic) conditions.push(eq(conversations.topic, filters.topic));
   const q = filters.q?.normalize("NFC").trim();
   if (q && [...q].length > 100) throw new ValidationError("Search with up to 100 characters.");
   const number = q ? parseOrderNumberSearch(q) : null;

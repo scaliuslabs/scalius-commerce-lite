@@ -32,6 +32,25 @@ export function threadTitle(t: T, thread: ThreadTitleSource): string {
   return thread.subject?.trim() || t("storeThread");
 }
 
+/** A thread's topic as staff see it: every name the merchant gave it (`labels` by two-letter language). */
+export interface TopicSource {
+  key: string;
+  label: string | null;
+  labels: Record<string, string>;
+}
+
+/** The topic in the dashboard's language: its name there, else the merchant's first name, else its key (a removed topic). */
+export function topicName(topic: TopicSource | null | undefined, locale: string): string | null {
+  if (!topic) return null;
+  return topic.labels[locale]?.trim() || topic.label?.trim() || topic.key;
+}
+
+/** "Order #1057 · Warranty": the thread's title and, when the buyer chose one, its topic. */
+export function threadTitleWithTopic(t: T, thread: ThreadTitleSource & { topic?: TopicSource | null }, locale: string): string {
+  const topic = topicName(thread.topic, locale);
+  return topic ? `${threadTitle(t, thread)} · ${topic}` : threadTitle(t, thread);
+}
+
 /** The list's second line: the last text, or who acted last when it was an event or an image. */
 export function threadPreview(
   t: T,

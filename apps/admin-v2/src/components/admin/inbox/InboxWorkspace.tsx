@@ -92,7 +92,7 @@ function AccountWorkspace({ search, selectedId, currentUserId }: WorkspaceProps 
   useEffect(() => {
     if (initializedScope.current || !summary.data) return;
     initializedScope.current = true;
-    if (search.assignee !== undefined || search.status || search.subject || search.unread || search.sort) return;
+    if (search.assignee !== undefined || search.status || search.subject || search.topic || search.unread || search.sort) return;
     let scope: string | null = null;
     try { scope = localStorage.getItem(`${preferenceKey}:scope`); } catch { /* Default from the existing summary. */ }
     const assignee = scope === "me" || scope === "none" ? scope : scope === "all" ? undefined : summary.data.mineOpen > 0 ? "me" : undefined;
@@ -123,7 +123,7 @@ function AccountWorkspace({ search, selectedId, currentUserId }: WorkspaceProps 
                   : <section className="flex min-w-0 flex-1 items-center justify-center">
                     <InboxEmpty kind={listView} onClear={() => {
                       setInboxSearch(currentUserId, "");
-                      onSearchChange({ assignee: undefined, subject: undefined, unread: undefined, sort: undefined });
+                      onSearchChange({ assignee: undefined, subject: undefined, topic: undefined, unread: undefined, sort: undefined });
                     }} />
                   </section>}
           {railOpen && activeThread ? <ContextRail thread={activeThread} className="w-72 shrink-0 border-s" /> : null}
