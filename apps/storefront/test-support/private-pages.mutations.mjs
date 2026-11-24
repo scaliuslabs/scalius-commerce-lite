@@ -212,10 +212,46 @@ export const MUTATIONS = {
     expect: /the style target summary-add-on names it and no row of the table is its/,
   },
   "PR1 prominence off": {
-    why: "the save stops ranking the amounts: a 12px total under 18px rows is saved and drawn smaller than a row",
+    why: "the save stops ranking by size and weight: a 12px total under 18px rows, and a 40px label over a 20px amount, are saved and drawn",
     rewrites: [rewrite(TOKENS, "  issues.push(...prominenceIssues(page, valid));\n", "")],
-    cases: ["a total drawn smaller than its rows"],
-    expect: /prominence: the total's .* is drawn at [\d.]+px, under the row/,
+    cases: ["a total drawn smaller than its rows", "a total's label drawn over its amount"],
+    expect: /prominence: the total's .* is drawn at [\d.]+px, under (?:the row|its label)/,
+  },
+  "PR2 the total ranked by size only": {
+    why: "the save stops ranking the total by weight and by how strongly its words read: a muted 400 total under rows in the words' colour is saved and drawn",
+    rewrites: [
+      rewrite(TOKENS, '        if (by === "contrast") continue;\n', '        if (by !== "size") continue;\n'),
+      rewrite(TOKENS, '      if (!ranks.includes("contrast")) continue;\n', "      continue;\n"),
+    ],
+    cases: ["a total drawn lighter and fainter than its rows"],
+    expect: /prominence: the total's .* (?:is drawn at weight \d+, under the row|reads [\d.]+:1, under the row)/,
+  },
+  "PR3 Confirm unranked": {
+    why: "the save stops ranking Confirm over Go back: a 12px light Confirm beside a bold Go back is saved and drawn",
+    rewrites: [rewrite(TOKENS, "      for (const by of ranks) {\n", '      for (const by of name === "dialog-confirm" ? [] : ranks) {\n')],
+    cases: ["Confirm smaller and lighter than Go back"],
+    expect: /Confirm is drawn at (?:[\d.]+px|weight \d+), under Go back/,
+  },
+  "F1 a filled button's fill unchecked": {
+    why: "the save stops reading Place order's and Confirm's fill on what is around them: a Place order or a Confirm the colour of its box is saved and drawn as plain words",
+    rewrites: [rewrite(TOKENS, '    if (row.boundary === "fill" || (row.boundary === "edge" && !row.bordered)) {\n', '    if (row.boundary === "edge" && !row.bordered) {\n')],
+    cases: ["Place order drawn as plain words", "Confirm drawn as Go back"],
+    expect: /(?:Place order|Confirm): its fill reads [\d.]+:1 on what is behind it/,
+  },
+  "E1 an edge read by its border whether drawn or not": {
+    why: "the save reads a field's and the stepper's border even where border-width 0 draws none, and never their fill: a borderless field the colour of its form is saved",
+    rewrites: [
+      rewrite(TOKENS, '    if (row.boundary === "edge" && row.bordered) add(', '    if (row.boundary === "edge") add('),
+      rewrite(TOKENS, '    if (row.boundary === "fill" || (row.boundary === "edge" && !row.bordered)) {\n', '    if (row.boundary === "fill") {\n'),
+    ],
+    cases: ["a borderless field the colour of its card form", "a borderless stepper on its line"],
+    expect: /its fill, with no border drawn, reads [\d.]+:1 on what is behind it/,
+  },
+  "D1 Go back takes a fill": {
+    why: "Go back takes a background token again: filled with the action colour it reads as Confirm",
+    rewrites: [rewrite("packages/shared/src/storefront-theme/private-anatomy.ts", 'tokens: ["text", "border", "border-width", "radius", "ring", "inset", "weight"], kind: "control", surface: "under", ink: "foreground", on: "dialog", boundary: "edge"', 'tokens: ["background", "text", "border", "border-width", "radius", "ring", "inset", "weight"], kind: "control", surface: "under", ink: "foreground", on: "dialog", boundary: "edge"')],
+    cases: ["Go back filled as Confirm"],
+    expect: /Go back paints a fill of its own/,
   },
   "C1 the checkout header draws the switch wherever the controls are placed": {
     why: "the store's checkout header draws its light or dark switch even where the theme places the controls nowhere",

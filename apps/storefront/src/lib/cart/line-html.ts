@@ -136,8 +136,9 @@ export function hostLineParts(view: CartLineView, slots: CartLineHtmlSlots): Rec
     remove: lineRemove(slots, "flex h-11 w-11 sm:h-9 sm:w-9", `<svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`),
     // The stepper never shrinks beside a large price (the row wraps), nor below its 24px buttons and count with a
     // 4px border (88px) in a theme's narrow column (a layout node is a size container: its content never widens
-    // a `min-content` track): it never cuts "−" or "+".
-    quantity: `<div class="flex h-11 min-w-22 shrink-0 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9" data-part="line-quantity">
+    // a `min-content` track): it never cuts "−" or "+". Its edge is a border, so a theme's `border-width` and
+    // `border-style` are what a buyer sees, and the save checks the edge it draws (or, with none, its fill).
+    quantity: `<div class="flex h-11 min-w-22 shrink-0 items-center overflow-hidden rounded-md border border-border sm:h-9" data-part="line-quantity">
                 <button type="button" aria-label="${escapeHtml(words.decrease)}"${describedBy} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.decreaseTo)}>−</button>
                 <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite" data-cart-line-quantity>${escapeHtml(view.quantityText)}</span>
                 <button type="button" aria-label="${escapeHtml(words.increase)}"${describedBy} ${view.increaseBlocked ? "disabled" : ""} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.increaseTo)}>+</button>

@@ -18,7 +18,9 @@
 //
 // A theme here arranges the store's parts and gives them typed tokens: it
 // writes no markup and no CSS. Each document is a LEGAL theme (or a named
-// break the save must refuse, or a stored document forged past the save).
+// break the save must refuse, or a stored document forged past the save,
+// which the store reads with what it held dropped and its private pages'
+// compile refused).
 // A named document the save refuses fails the gate unless it names the
 // reason it must be refused for; a refused seed is counted, not drawn. Each
 // accepted one is drawn in its states (a store that delivers; a line asking
@@ -48,7 +50,13 @@
 //   behind it (the text hidden, the page photographed);
 // - every text whole: nothing cut sideways, no glyph cut by a clip, no word
 //   broken inside itself;
-// - the summary's total drawn no smaller than any other summary row;
+// - the summary's total drawn no smaller than any other summary row, its
+//   amount no smaller than its label, no lighter and no fainter than a row;
+// - under a theme's tokens: Place order's and Confirm's fill at 3:1 on what
+//   is behind them, Place order never smaller or lighter than another filled
+//   button, Go back with no fill of its own and Confirm never smaller or
+//   lighter than it, and every field, the stepper, the fold's bar and Go back
+//   found by a border at 3:1 or, drawing none, by their own fill;
 // - every control takes a click at its centre, is reached by Tab in document
 //   order, shows a focus ring at 3:1 against what is around it, and under the
 //   pointer still reads (and shows its hover where the host draws one);
@@ -238,10 +246,11 @@ function generate(seed) {
   maybe("line-title", { ...text(), ...(chance(0.6) ? { clamp: pick(["none", "2", "3"]) } : {}) });
   maybe("line-details", { size: int(12, 20) });
   maybe("line-price", { size: int(12, 28), weight: pick(["400", "700"]), align: pick(["start", "center", "end"]) });
-  maybe("line-quantity", { radius: int(0, 32), "border-width": int(0, 4), "border-style": pick(["solid", "dashed"]), ring: "#7c3aed" });
+  // The stepper, the fold's bar and a field are found by their edge: a seed draws one (none and its fill is a named break).
+  maybe("line-quantity", { radius: int(0, 32), "border-width": int(1, 4), "border-style": pick(["solid", "dashed"]), ring: "#7c3aed" });
   maybe("line-remove", { radius: int(0, 32), ring: "#7c3aed", size: int(12, 18), weight: pick(["400", "600"]) });
   maybe("line-image", { width: pick([40, 240]), height: pick([40, 320]), "width-wide": pick([40, 240]), radius: int(0, 32), fit: pick(["contain", "cover"]) });
-  maybe("fold-toggle", { radius: int(0, 32), shadow: pick(["none", "md"]), "border-width": int(0, 4) });
+  maybe("fold-toggle", { radius: int(0, 32), shadow: pick(["none", "md"]), "border-width": int(1, 4) });
   // The total outranks every other summary row (the save refuses a smaller one): rows to 18px, the total from 20.
   maybe("summary-heading", { ...text(), size: int(14, 24) });
   maybe("summary-rows", { size: int(12, 18) });
@@ -252,12 +261,14 @@ function generate(seed) {
   maybe("field-label", { size: int(12, 16), weight: pick(["500", "600"]), case: pick(["none", "uppercase"]), tracking: pick(["normal", "wide"]) });
   maybe("dialog-title", { ...text(), size: int(18, 28) });
   maybe("legal", { size: int(12, 18), align: pick(["start", "center", "end"]) });
-  maybe("submit", { background: "#7c3aed", text: "#ffffff", radius: pick([0, 32]), case: "uppercase", size: pick([12, 40]), tracking: pick(["normal", "wider"]) });
+  // Place order is never smaller than the other filled buttons (14px with no token, or the action's size).
+  maybe("submit", { background: "#7c3aed", text: "#ffffff", radius: pick([0, 32]), case: "uppercase", size: pick([16, 40]), tracking: pick(["normal", "wider"]) });
   maybe("action", { radius: int(0, 32), weight: "700" });
-  maybe("input", { radius: int(0, 32), "border-width": int(0, 4) });
+  maybe("input", { radius: int(0, 32), "border-width": int(1, 4) });
   maybe("frame", { "max-width": pick([480, 1600]) });
-  maybe("dialog-back", { radius: int(0, 32), weight: "600" });
-  maybe("dialog-confirm", { background: "#7c3aed", text: "#ffffff", radius: int(0, 32) });
+  // Confirm is never lighter than Go back.
+  maybe("dialog-back", { radius: int(0, 32), weight: "500" });
+  maybe("dialog-confirm", { background: "#7c3aed", text: "#ffffff", radius: int(0, 32), weight: "600" });
   maybe("cart-empty", { text: "foreground" });
   // The apps' nodes by kind, narrowed by tone, app and target.
   for (let count = int(0, 5); count > 0; count -= 1) {
@@ -416,9 +427,10 @@ const REGRESSIONS = {
   "the customer's cart, its protection offered": { states: ["customer"], request: REFERENCE },
   "the customer's cart, protected": { states: ["customer-protected"], request: REFERENCE },
   // A stored document forged past the save (a row edited by hand): content blocks in the page and the line, a
-  // stylesheet, the theme's chrome and its search. The storefront cannot read it and draws the store's default theme
-  // whole: no free region, none of its words, none of its CSS, and every check holds.
-  "a stored document forged past the save": { request: { forged: {
+  // stylesheet, the theme's chrome and its search. The store reads it with all of that dropped and its private pages'
+  // compile refused: the theme stays (its light or dark switch is drawn), its cart draws the default look with no
+  // free region, none of its words and none of its CSS, and every check holds.
+  "a stored document forged past the save": { request: { toggle: true, scheme: "system", forged: {
     pages: { cart: { layout: [FORGED_BLOCK("forged-page"), ...LEGAL_COLUMNS], items: { line: [...DEFAULT_LINE, FORGED_BLOCK("forged-line")] } } },
     css: `/*${FORGED_MARK}*/[data-part="summary"]{display:none}body::after{content:"${FORGED_WORDS}"}`, chrome: "theme", search: "after", assets: { "pp/a.svg": "x" },
   } }, privatePages: { tokens: { cart: { summary: DARK } } } },
@@ -434,6 +446,19 @@ const REGRESSIONS = {
   "an app's button with white words in a light amber box on a dark line": { refused: "contrast", refusedFor: /ui\.button\/cart\.line\.after.*#ffffff on #fde68a/, privatePages: { tokens: { cart: { lines: DARK, "ui.stack.warning/cart.line.after": { background: "#fde68a", text: "#111111" }, "ui.button/cart.line.after": { text: "#ffffff" } } } } },
   // The total outranks every other summary row: a 12px total under 18px rows is refused (`prominence`).
   "a total drawn smaller than its rows": { refused: "prominence", refusedFor: /summary-total/, privatePages: { tokens: { cart: { "summary-total": { size: 12 }, "summary-rows": { size: 18 } } } } },
+  // Nor lighter or fainter: the amount muted at normal weight under rows in the words' colour, and a 40px label over it.
+  "a total drawn lighter and fainter than its rows": { refused: "prominence", refusedFor: /summary-total/, privatePages: { tokens: { cart: { "summary-total": { weight: "400", text: "muted-foreground" }, "summary-rows": { text: "foreground" } } } } },
+  "a total's label drawn over its amount": { refused: "prominence", refusedFor: /summary-total-label is drawn at 40px|summary-total is drawn at 20px, under summary-total-label/, privatePages: { tokens: { cart: { "summary-total-label": { size: 40 } } } } },
+  // Place order as plain words: filled with the dock's own colour, small and light beside the store's filled buttons.
+  "Place order drawn as plain words": { refused: "contrast", refusedFor: /submit: its fill/, privatePages: { tokens: { cart: { submit: { background: "background", text: "foreground" } } } } },
+  "Place order smaller and lighter than the other filled buttons": { refused: "prominence", refusedFor: /submit is drawn at/, privatePages: { tokens: { cart: { submit: { size: 12, weight: "400" } } } } },
+  // The decision's buttons swapped: Confirm drawn as Go back (its fill the dialog's, muted, smaller), in the dialog.
+  "Confirm drawn as Go back": { refused: "contrast", refusedFor: /dialog-confirm: its fill/, states: ["lines"], privatePages: { tokens: { cart: { "dialog-confirm": { background: "card", text: "muted-foreground", "border-width": 0 } } } } },
+  "Go back filled as Confirm": { refused: "unknown_token", refusedFor: /dialog-back takes/, states: ["lines"], privatePages: { tokens: { cart: { "dialog-back": { background: "primary", text: "primary-foreground" } } } } },
+  "Confirm smaller and lighter than Go back": { refused: "prominence", refusedFor: /dialog-confirm is drawn at/, states: ["lines"], privatePages: { tokens: { cart: { "dialog-back": { weight: "700" }, "dialog-confirm": { size: 12, weight: "400" } } } } },
+  // A field or the stepper that draws no border and fills itself with its box's colour: nothing shows where it is.
+  "a borderless field the colour of its card form": { refused: "contrast", refusedFor: /input .*its fill, with no border drawn/, privatePages: { tokens: { cart: { "details-form": { background: "card" }, input: { "border-width": 0, background: "card" } } } } },
+  "a borderless stepper on its line": { refused: "contrast", refusedFor: /line-quantity: its fill, with no border drawn/, privatePages: { tokens: { cart: { "line-quantity": { "border-width": 0 } } } } },
 };
 
 // ─── PNG pixels (Chromium's 8-bit RGB or RGBA screenshots) ────────────────
@@ -809,27 +834,106 @@ function actionInFlow() {
 
 /**
  * The total outranks every other summary row: no word of the total's row is drawn smaller than any word of
- * another row (an add-on row's lines included), so no look makes a subtotal read as the total.
+ * another row (an add-on row's lines included), so no look makes a subtotal read as the total; its amount is drawn
+ * no smaller than its own label, no lighter than any row's word and reads no fainter on what is behind it than any
+ * row's word (an add-on's app lines, ranked by size only, aside).
  */
 function prominence(scope) {
   const problems = [];
+  const linear = (channel) => { const value = channel / 255; return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4; };
+  const rgb = (value) => { const found = /rgba?\(([\d.]+)[ ,]+([\d.]+)[ ,]+([\d.]+)(?:[ ,/]+([\d.]+%?))?/.exec(value); return found ? { channels: [found[1], found[2], found[3]].map(Number), alpha: found[4] === undefined ? 1 : Number.parseFloat(found[4]) / (found[4].endsWith("%") ? 100 : 1) } : null; };
+  const luminance = ([r, g, b]) => 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+  const ratio = (a, b) => { const [x, y] = [luminance(a), luminance(b)]; return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const behind = (element) => { for (let at = element; at; at = at.parentElement) { const back = rgb(getComputedStyle(at).backgroundColor); if (back && back.alpha > 0.99) return back.channels; } return [255, 255, 255]; };
   for (const summary of document.querySelectorAll(scope)) {
-    const sizes = (elements) => elements.flatMap((element) => {
+    const words = (elements) => elements.flatMap((element) => {
       const out = [];
       const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         const parent = node.parentElement;
         if (!node.textContent.trim() || !parent?.checkVisibility() || parent.closest(".sr-only")) continue;
-        out.push({ text: node.textContent.trim().slice(0, 24), size: Number.parseFloat(getComputedStyle(parent).fontSize) });
+        const style = getComputedStyle(parent);
+        const colour = rgb(style.color)?.channels ?? [0, 0, 0];
+        out.push({ text: node.textContent.trim().slice(0, 24), size: Number.parseFloat(style.fontSize), weight: Number(style.fontWeight), contrast: ratio(colour, behind(parent)), app: parent.closest('[data-part="add-on-detail"]') !== null, label: parent.closest('[data-part="summary-total-label"]') !== null });
       }
       return out;
     });
-    const total = sizes([...summary.querySelectorAll('[data-summary-row="total"]')]);
-    const others = sizes([...summary.querySelectorAll('[data-summary-row]:not([data-summary-row="total"])')]);
-    if (total.length === 0 || others.length === 0) continue;
-    const least = total.reduce((a, b) => (b.size < a.size ? b : a));
-    const most = others.reduce((a, b) => (b.size > a.size ? b : a));
-    if (least.size < most.size - 0.25) problems.push(`the total's "${least.text}" is drawn at ${least.size.toFixed(1)}px, under the row "${most.text}" at ${most.size.toFixed(1)}px`);
+    const total = words([...summary.querySelectorAll('[data-summary-row="total"]')]);
+    const others = words([...summary.querySelectorAll('[data-summary-row]:not([data-summary-row="total"])')]);
+    if (total.length === 0) continue;
+    const amount = total.filter((word) => !word.label);
+    const label = total.filter((word) => word.label);
+    const most = (list, key) => list.reduce((a, b) => (b[key] > a[key] ? b : a));
+    const least = (list, key) => list.reduce((a, b) => (b[key] < a[key] ? b : a));
+    if (others.length > 0) {
+      const [small, big] = [least(total, "size"), most(others, "size")];
+      if (small.size < big.size - 0.25) problems.push(`the total's "${small.text}" is drawn at ${small.size.toFixed(1)}px, under the row "${big.text}" at ${big.size.toFixed(1)}px`);
+    }
+    if (amount.length > 0 && label.length > 0 && least(amount, "size").size < most(label, "size").size - 0.25) problems.push(`the total's amount "${least(amount, "size").text}" is drawn at ${least(amount, "size").size.toFixed(1)}px, under its label "${most(label, "size").text}" at ${most(label, "size").size.toFixed(1)}px`);
+    const rows = others.filter((word) => !word.app);
+    if (amount.length > 0 && rows.length > 0) {
+      const [light, heavy] = [least(amount, "weight"), most(rows, "weight")];
+      if (light.weight < heavy.weight) problems.push(`the total's "${light.text}" is drawn at weight ${light.weight}, under the row "${heavy.text}" at weight ${heavy.weight}`);
+      const [faint, strong] = [least(amount, "contrast"), most(rows, "contrast")];
+      if (faint.contrast < strong.contrast - 0.05) problems.push(`the total's "${faint.text}" reads ${faint.contrast.toFixed(2)}:1, under the row "${strong.text}" at ${strong.contrast.toFixed(2)}:1`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * How a buyer finds the page's actions and fields (WCAG 1.4.11), measured under a theme's tokens (the colour
+ * table's look): Place order's fill reads at 3:1 on what is behind it and it is never smaller or lighter than another
+ * filled button on the page; in a dialog Go back paints no fill of its own, Confirm's fill reads at 3:1 on the
+ * dialog and it is never smaller or lighter than Go back; a field, the stepper, the fold's bar and Go back show their
+ * border at 3:1 on what is behind them or, drawing none, their own fill.
+ */
+function boundaries(scope) {
+  const problems = [];
+  const root = scope ? document.querySelector(scope) : document;
+  if (!root) return problems;
+  const linear = (channel) => { const value = channel / 255; return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4; };
+  const rgb = (value) => { const found = /rgba?\(([\d.]+)[ ,]+([\d.]+)[ ,]+([\d.]+)(?:[ ,/]+([\d.]+%?))?/.exec(value); return found ? { channels: [found[1], found[2], found[3]].map(Number), alpha: found[4] === undefined ? 1 : Number.parseFloat(found[4]) / (found[4].endsWith("%") ? 100 : 1) } : null; };
+  const luminance = ([r, g, b]) => 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+  const ratio = (a, b) => { const [x, y] = [luminance(a), luminance(b)]; return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const own = (element) => { const back = rgb(getComputedStyle(element).backgroundColor); return back && back.alpha > 0.99 ? back.channels : null; };
+  const behind = (element) => { for (let at = element.parentElement; at; at = at.parentElement) { const back = own(at); if (back) return back; } return [255, 255, 255]; };
+  const shown = (element) => element.checkVisibility() && element.getBoundingClientRect().width > 0 && !element.closest(".sr-only");
+  const type = (element) => { const style = getComputedStyle(element); return { size: Number.parseFloat(style.fontSize), weight: Number(style.fontWeight) }; };
+  const name = (element) => element.dataset.part ?? (element.id ? `#${element.id}` : element.tagName.toLowerCase());
+  const filled = (element, what) => {
+    const ratioOf = ratio(own(element) ?? behind(element), behind(element));
+    if (ratioOf < 2.95) problems.push(`${what}: its fill reads ${ratioOf.toFixed(2)}:1 on what is behind it, under 3:1: a buyer does not see a button`);
+  };
+  const outranks = (element, other, what, whom) => {
+    const [mine, theirs] = [type(element), type(other)];
+    if (mine.size < theirs.size - 0.5) problems.push(`${what} is drawn at ${mine.size.toFixed(1)}px, under ${whom} at ${theirs.size.toFixed(1)}px`);
+    if (mine.weight < theirs.weight) problems.push(`${what} is drawn at weight ${mine.weight}, under ${whom} at weight ${theirs.weight}`);
+  };
+  const submit = scope ? null : document.querySelector('[data-part="details-submit"]');
+  if (submit && shown(submit)) {
+    filled(submit, "Place order");
+    for (const other of document.querySelectorAll('[data-private="cart"] .bg-primary')) if (other !== submit && shown(other)) outranks(submit, other, "Place order", `the filled button "${other.textContent.trim().slice(0, 24)}"`);
+  }
+  for (const dialog of scope ? [root] : document.querySelectorAll('[data-private="dialog"]')) {
+    const [back, confirm] = ['[data-part="dialog-back"]', '[data-part="dialog-confirm"]'].map((selector) => [...dialog.querySelectorAll(selector)].find(shown));
+    if (back) {
+      const fill = own(back);
+      if (fill && ratio(fill, behind(back)) > 1.1) problems.push(`Go back paints a fill of its own (${ratio(fill, behind(back)).toFixed(2)}:1 on the dialog): it would read as Confirm`);
+    }
+    if (confirm) filled(confirm, "Confirm");
+    if (back && confirm) outranks(confirm, back, "Confirm", "Go back");
+  }
+  // A field drawn as a box around its input (`data-field`) is that box.
+  const edged = [...root.querySelectorAll('input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field],[data-part="line-quantity"],[data-part="fold-toggle"],[data-part="dialog-back"]')];
+  for (const element of edged) {
+    if (!shown(element)) continue;
+    const style = getComputedStyle(element);
+    const bordered = Number.parseFloat(style.borderTopWidth) > 0 && style.borderTopStyle !== "none";
+    const back = behind(element);
+    const edge = bordered ? rgb(style.borderTopColor)?.channels ?? back : own(element) ?? back;
+    const reads = ratio(edge, back);
+    if (reads < 2.95) problems.push(`${name(element)}: its ${bordered ? "border" : "fill, with no border drawn,"} reads ${reads.toFixed(2)}:1 on what is behind it, under 3:1: a buyer does not find it`);
   }
   return problems;
 }
@@ -1406,6 +1510,8 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
     const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: list, scope, exempt: EXEMPT, styleTargets: STYLE_TARGETS }));
     at(label, walked.problems);
     if (request?.forged) at(label, await page.evaluate(forgedAbsent, { words: FORGED_WORDS, mark: FORGED_MARK }));
+    // Under a theme's tokens, the table's look: every action and field is found where it stands.
+    if (rows.length > 0) at(label, await page.evaluate(boundaries, scope));
     at(label, await timed("whole", () => page.evaluate(wholeTexts)));
     at(label, await timed("contrast", () => textContrast(page, walked.texts)));
     if (wantControls) at(label, await timed("clicks", () => page.evaluate(clicks)));
@@ -1636,14 +1742,17 @@ try {
       }
       assert.equal(answer.status, 200, `${entry.name}: the gallery did not take the document`);
       if (entry.refused && state === states[0]) failures.push({ index, name: entry.name, where: "save", problems: [`the save took it; it must be refused (${entry.refused})`], document: entry });
-      const { storage, tables, degraded } = await answer.json();
+      const { storage, tables, degraded, refused: compileRefused } = await answer.json();
       if (state === states[0]) drawn += 1;
-      // Only a forged document falls back to the default theme; a legal one the storefront cannot read tests nothing.
-      if (degraded !== Boolean(entry.request?.forged) && state === states[0]) failures.push({ index, name: entry.name, where: "read", problems: [degraded ? "the storefront cannot read the saved document: it draws the default theme" : "the storefront reads the forged document"], document: entry });
+      // Every stored document reads (one the storefront cannot read draws the default theme and tests nothing); a forged
+      // one reads with what it held dropped and its private pages' compile refused, a legal one never refused.
+      if (degraded && state === states[0]) failures.push({ index, name: entry.name, where: "read", problems: ["the storefront cannot read the saved document: it draws the default theme"], document: entry });
+      if (compileRefused !== Boolean(entry.request?.forged) && state === states[0]) failures.push({ index, name: entry.name, where: "read", problems: [compileRefused ? "the read refused a legal document's private pages" : "the read kept the private pages of a document holding what a theme cannot set"], document: entry });
       // Where the store's controls are drawn: the theme's place (the customer's: the header), the switch where the store
-      // offers it, the market forms where it sells in two markets. A forged document draws the default theme's.
+      // offers it, the market forms where it sells in two markets. A forged document's private pages draw the default
+      // look's place (the header) under its own theme's switch.
       const controls = {
-        place: degraded ? "header" : entry.request?.reference && !entry.privatePages ? "header" : entry.privatePages?.controls ?? "header",
+        place: degraded || compileRefused ? "header" : entry.request?.reference && !entry.privatePages ? "header" : entry.privatePages?.controls ?? "header",
         scheme: !degraded && entry.request?.toggle === true,
         localization: entry.request?.localization === true,
       };

@@ -303,8 +303,9 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       // reference look (`reference`: its two palettes, and its privatePages unless the body names others).
       // `forged` is written onto the stored document past the compiler, as a row edited by hand would be.
       // The answer carries the colour table of the page as the storefront reads the document (each row's
-      // key, selector, kind and paint) for the coverage walk, and whether that read fell back to the
-      // store's default theme (`degraded`).
+      // key, selector, kind and paint) for the coverage walk, whether that read fell back to the store's
+      // default theme (`degraded`), and whether it refused the private pages' compile (`refused`: a stored
+      // document holding what a theme cannot set reads, its private pages drawing the default look).
       if (url.pathname === `${GALLERY_PREFIX}/private-theme` && request.method === "POST") {
         const body = JSON.parse(await readBody(request) || "{}");
         const shared = await vite.ssrLoadModule("@scalius/shared/storefront-theme");
@@ -348,12 +349,13 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         // A look an older checker compiled (`stale`: between a deploy and the maintenance compile): the page serves the default look.
         if (body.stale === true) compiled.value.compiled = { ...compiled.value.compiled, sanitizer: 0 };
         const stored = { ...theme, privatePages: body.forged ? { ...compiled.value, ...structuredClone(body.forged) } : compiled.value };
-        const entry = registerPrivatePagesEntry(String(body.id), stored, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, ...(body.page === "home" ? { page: "home" } : {}) });
-        // The document as the storefront reads it (storefront-theme-context.ts): one it cannot read draws the default theme whole.
-        const reread = shared.storefrontThemeDocumentSchema.safeParse(stored);
-        const served = reread.success ? reread.data : shared.DEFAULT_STOREFRONT_THEME;
+        // The stored document as the store reads it (storefront.service.ts, `readStoredStorefrontThemeDocument`): one it
+        // cannot read serves the default theme whole; the storefront draws what that read served.
+        const reread = shared.readStoredStorefrontThemeDocument(JSON.stringify(stored));
+        const served = reread.ok ? reread.document : shared.DEFAULT_STOREFRONT_THEME;
+        const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, ...(body.page === "home" ? { page: "home" } : {}) });
         const tables = shared.privatePageTokenMode(served.privatePages, "cart") ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served)) : [];
-        return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.success });
+        return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: served.privatePages.compiled.refused === true });
       }
       // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens), and the
       // app node kinds that have rows (their selectors inside a block).
