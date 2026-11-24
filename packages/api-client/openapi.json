@@ -231360,6 +231360,23 @@
                                     "subject",
                                     "body"
                                   ]
+                                },
+                                "conversation_reply": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
                                 }
                               },
                               "required": [
@@ -231385,7 +231402,8 @@
                                 "order_digital_delivered",
                                 "gift_card_issued",
                                 "gift_card_sent",
-                                "review_request"
+                                "review_request",
+                                "conversation_reply"
                               ]
                             },
                             "sms": {
@@ -231666,6 +231684,18 @@
                                   "required": [
                                     "body"
                                   ]
+                                },
+                                "conversation_reply": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
                                 }
                               },
                               "required": [
@@ -231691,7 +231721,8 @@
                                 "order_digital_delivered",
                                 "gift_card_issued",
                                 "gift_card_sent",
-                                "review_request"
+                                "review_request",
+                                "conversation_reply"
                               ]
                             }
                           },
@@ -231924,7 +231955,8 @@
                       "order_digital_delivered",
                       "gift_card_issued",
                       "gift_card_sent",
-                      "review_request"
+                      "review_request",
+                      "conversation_reply"
                     ]
                   },
                   "email": {
@@ -232388,6 +232420,23 @@
                                     "subject",
                                     "body"
                                   ]
+                                },
+                                "conversation_reply": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
                                 }
                               },
                               "required": [
@@ -232413,7 +232462,8 @@
                                 "order_digital_delivered",
                                 "gift_card_issued",
                                 "gift_card_sent",
-                                "review_request"
+                                "review_request",
+                                "conversation_reply"
                               ]
                             },
                             "sms": {
@@ -232694,6 +232744,18 @@
                                   "required": [
                                     "body"
                                   ]
+                                },
+                                "conversation_reply": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
                                 }
                               },
                               "required": [
@@ -232719,7 +232781,8 @@
                                 "order_digital_delivered",
                                 "gift_card_issued",
                                 "gift_card_sent",
-                                "review_request"
+                                "review_request",
+                                "conversation_reply"
                               ]
                             }
                           },
@@ -232947,7 +233010,8 @@
                           "order_digital_delivered",
                           "gift_card_issued",
                           "gift_card_sent",
-                          "review_request"
+                          "review_request",
+                          "conversation_reply"
                         ]
                       },
                       "subject": {
@@ -233006,7 +233070,8 @@
                           "order_digital_delivered",
                           "gift_card_issued",
                           "gift_card_sent",
-                          "review_request"
+                          "review_request",
+                          "conversation_reply"
                         ]
                       },
                       "body": {
@@ -262204,6 +262269,17 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 40,
+              "description": "One of the store's topic keys (`topics` on this list): only conversations the buyer gave that topic"
+            },
+            "required": false,
+            "description": "One of the store's topic keys (`topics` on this list): only conversations the buyer gave that topic",
+            "name": "topic",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "maxLength": 100
             },
             "required": false,
@@ -262255,8 +262331,28 @@
                                 "x-scalius-buyer-text": true
                               },
                               "topic": {
-                                "type": "string",
-                                "nullable": true
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "labels": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label",
+                                  "labels"
+                                ]
                               },
                               "status": {
                                 "type": "string",
@@ -262366,11 +262462,37 @@
                         "nextCursor": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "topics": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "labels": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "label",
+                              "labels"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "items",
-                        "nextCursor"
+                        "nextCursor",
+                        "topics"
                       ]
                     }
                   },
@@ -263496,6 +263618,11 @@
                       "review"
                     ]
                   },
+                  "topic": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "description": "One of the store's topic keys (`topics` on this list): only conversations the buyer gave that topic"
+                  },
                   "q": {
                     "type": "string",
                     "maxLength": 100
@@ -263565,8 +263692,28 @@
                                 "x-scalius-buyer-text": true
                               },
                               "topic": {
-                                "type": "string",
-                                "nullable": true
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "labels": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label",
+                                  "labels"
+                                ]
                               },
                               "status": {
                                 "type": "string",
@@ -263682,13 +263829,39 @@
                         },
                         "scanned": {
                           "type": "integer"
+                        },
+                        "topics": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "labels": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "label",
+                              "labels"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "items",
                         "nextCursor",
                         "scanExhausted",
-                        "scanned"
+                        "scanned",
+                        "topics"
                       ]
                     }
                   },
@@ -265068,8 +265241,28 @@
                               "x-scalius-buyer-text": true
                             },
                             "topic": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "labels": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "labels"
+                              ]
                             },
                             "status": {
                               "type": "string",
@@ -265684,8 +265877,28 @@
                               "x-scalius-buyer-text": true
                             },
                             "topic": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "labels": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "labels"
+                              ]
                             },
                             "status": {
                               "type": "string",
@@ -266303,8 +266516,28 @@
                               "x-scalius-buyer-text": true
                             },
                             "topic": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "labels": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "labels"
+                              ]
                             },
                             "status": {
                               "type": "string",
@@ -266887,8 +267120,28 @@
                               "x-scalius-buyer-text": true
                             },
                             "topic": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "labels": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "labels"
+                              ]
                             },
                             "status": {
                               "type": "string",
@@ -267550,8 +267803,28 @@
                               "x-scalius-buyer-text": true
                             },
                             "topic": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "labels": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "labels"
+                              ]
                             },
                             "status": {
                               "type": "string",
