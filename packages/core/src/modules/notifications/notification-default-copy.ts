@@ -110,6 +110,11 @@ export const NOTIFICATION_DEFAULT_COPY: Record<MessageLanguage, { greeting: stri
         message: "Your {{support_request}} is {{support_status}}.",
         sms: "your {{support_request}} for order {{order_number}} is now {{support_status}}.",
       },
+      conversation_reply: {
+        subject: "{{store_name}} replied to your message",
+        message: "There is a new reply to your message.\nOrder: {{order_number}}\nRead it and reply here: {{conversation_link}}\nPlease reply on the store's website, not to this email.",
+        sms: "{{store_name}} replied to your message. Read it: {{conversation_link}}",
+      },
       order_digital_delivered: {
         subject: "Your downloads for order {{order_number}} are ready",
         message: "Your digital items are ready.\nFiles: {{download_names}}\nLicence keys: {{licence_keys}}\nGet them here: {{access_link}}",
@@ -229,6 +234,11 @@ export const NOTIFICATION_DEFAULT_COPY: Record<MessageLanguage, { greeting: stri
         subject: "অর্ডার {{order_number}}-এর {{support_request}} নিয়ে আপডেট",
         message: "আপনার {{support_request}} {{support_status}}।",
         sms: "অর্ডার {{order_number}}-এর {{support_request}} {{support_status}}।",
+      },
+      conversation_reply: {
+        subject: "{{store_name}} আপনার মেসেজের উত্তর দিয়েছে",
+        message: "আপনার মেসেজের একটি নতুন উত্তর এসেছে।\nঅর্ডার: {{order_number}}\nএখানে পড়ুন ও উত্তর দিন: {{conversation_link}}\nএই ইমেইলে উত্তর দেবেন না, স্টোরের ওয়েবসাইট থেকে উত্তর দিন।",
+        sms: "{{store_name}} আপনার মেসেজের উত্তর দিয়েছে। পড়ুন: {{conversation_link}}",
       },
       order_digital_delivered: {
         subject: "অর্ডার {{order_number}}-এর ডাউনলোড প্রস্তুত",

@@ -2,10 +2,14 @@ import { recordStaffAlert } from "./staff-alerts";
 // Thread notifications at send time (Wave A §10). The outbox row carries only
 // the thread id and the message seq; this reads the line and resolves the
 // recipients now:
-//   conversation_reply (staff → buyer): the order's own contact for order
-//     threads, verified account contacts for store threads. Email carries the
-//     message text (HTML-escaped); SMS is off by default and, when on, carries
-//     no text and is coalesced to one per thread per hour.
+//   conversation_reply (staff → buyer): the order's own contact for every
+//     thread about an order (order, warranty claim and review threads),
+//     verified account contacts for store threads. The merchant's
+//     `conversation_reply` template, never the message text (a staff line
+//     can hold a sign-in, which stays behind the buyer's own read, as a
+//     delivery message does): a link to where the buyer reads it. Email is
+//     coalesced to one per thread per 15 minutes; SMS (off by default) to one
+//     per thread per hour.
 //   conversation_message (buyer → staff): push ("New message about #1234", no
 //     text) and, when enabled, the staff email recipients.
 //   A chat-channel thread (0202) replies on its channel only: the line's
@@ -37,7 +41,8 @@ import { messagingSendSchema, providerErrorOf, type MessagingChannel } from "@sc
 import { notificationsDocument } from "./documents";
 import { getAdminNotificationChannels, getNotificationChannels } from "./channel-settings";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
-import { storeHeaderHtml, type EmailStore } from "./notification-templates";
+import { renderEmailTemplate, renderMessageEmail, renderSmsTemplate, storeHeaderHtml, type EmailStore, type NotificationVariableValues } from "./notification-templates";
+import { getNotificationTemplates } from "./notification-templates.service";
 import {
   NOTIFICATION_TURNED_OFF,
   buildDispatchResult,
@@ -59,6 +64,9 @@ import { buyerMessageScope, buyerStorefrontLink, readStoreIdentity } from "./sto
 /** An SMS reply alert goes out at most once per thread per hour (§15 q8). */
 export const CONVERSATION_SMS_COALESCE_SECONDS = 60 * 60;
 export const CONVERSATION_SMS_COALESCED = "conversation_sms_coalesced";
+/** A burst of staff replies is one email: at most one per thread per 15 minutes. */
+export const CONVERSATION_EMAIL_COALESCE_SECONDS = 15 * 60;
+export const CONVERSATION_EMAIL_COALESCED = "conversation_email_coalesced";
 
 export interface ConversationNotificationClaim {
   outboxId: string;
@@ -132,7 +140,8 @@ function displayBody(thread: ThreadFacts, language: MessageLanguage): string | n
 }
 
 interface ThreadParty {
-  name: string;
+  /** The buyer's name, or null when none is known. */
+  name: string | null;
   email: string | null;
   phone: string | null;
   orderNumber: string | null;
@@ -143,9 +152,13 @@ interface ThreadParty {
   presence: string | null;
 }
 
-/** The buyer side of a thread: the order's own contact, or the account's verified contacts. */
+/**
+ * The buyer side of a thread: the order's own contact for every thread about
+ * an order (its order thread, a warranty claim, a review), else the account's
+ * verified contacts (a store thread).
+ */
 async function readThreadParty(db: Database, thread: ThreadFacts): Promise<ThreadParty | null> {
-  if (thread.subjectType === "order" && thread.orderId) {
+  if (thread.orderId) {
     const order = await db
       .select({
         id: orders.id,
@@ -161,7 +174,7 @@ async function readThreadParty(db: Database, thread: ThreadFacts): Promise<Threa
       .get();
     if (!order) return null;
     return {
-      name: order.name?.trim() || "Customer",
+      name: order.name?.trim() || null,
       email: order.email?.trim() || null,
       phone: order.phone?.trim() || null,
       orderNumber: formatOrderNumber(order.orderNumber, order.id),
@@ -186,7 +199,7 @@ async function readThreadParty(db: Database, thread: ThreadFacts): Promise<Threa
     if (!customer || customer.deletedAt) return null;
     // Unverified contacts never receive account-thread messages (§4.3).
     return {
-      name: customer.name?.trim() || "Customer",
+      name: customer.name?.trim() || null,
       email: customer.emailVerifiedAt ? customer.email?.trim() || null : null,
       phone: customer.phoneVerifiedAt ? customer.phone?.trim() || null : null,
       orderNumber: null,
@@ -219,20 +232,16 @@ function buyerThreadLink(storefrontUrl: unknown, thread: ThreadFacts, party: Thr
 
 const BUTTON = "display:inline-block;padding:12px 20px;background:#202124;color:#ffffff;text-decoration:none;border-radius:4px;";
 
-/** A short branded email around one message. Every value is escaped. */
+/** The short branded staff email about a buyer's message (never its text). Every value is escaped. */
 export function renderConversationEmail(input: {
   language: MessageLanguage;
   store: EmailStore;
   subject: string;
   intro: string;
-  message: string | null;
   action: { label: string; href: string } | null;
   footer: string | null;
 }): { subject: string; html: string; text: string } {
   const subject = input.subject.replace(/[\r\n]+/g, " ").trim();
-  const quoted = input.message
-    ? `<div style="margin:0 0 24px;padding:16px;background:#f1f3f4;border-radius:8px;white-space:pre-wrap;">${escapeHtml(input.message).replace(/\n/g, "<br>")}</div>`
-    : "";
   const action = input.action
     ? `<p style="margin:0 0 24px;"><a href="${escapeHtml(input.action.href)}" style="${BUTTON}">${escapeHtml(input.action.label)}</a></p>`
     : "";
@@ -242,28 +251,28 @@ export function renderConversationEmail(input: {
 <div role="main" style="max-width:560px;margin:0 auto;padding:24px 20px;overflow-wrap:anywhere;background:#ffffff;color:#202124;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5;">
 ${storeHeaderHtml(input.store)}
 <p style="margin:0 0 16px;">${escapeHtml(input.intro)}</p>
-${quoted}${action}${footer}
+${action}${footer}
 </div></body></html>`;
   const text = [
     input.store.name,
     input.intro,
-    input.message,
     input.action ? `${input.action.label}: ${input.action.href}` : null,
     input.footer,
   ].filter(Boolean).join("\n\n");
   return { subject, html, text };
 }
 
-/** An SMS alert for this thread was accepted within the last hour. */
-async function smsRecentlyAccepted(db: Database, conversationId: string, now: number): Promise<boolean> {
+/** A reply alert on `channel` for this thread was accepted within the last `windowSeconds`. */
+async function replyRecentlyAccepted(db: Database, conversationId: string, channel: "email" | "sms", windowSeconds: number): Promise<boolean> {
   const row = await db
     .select({ id: notificationDeliveryReceipts.id })
     .from(notificationDeliveryReceipts)
     .where(and(
       eq(notificationDeliveryReceipts.subjectType, "conversation"),
       eq(notificationDeliveryReceipts.subjectId, conversationId),
-      eq(notificationDeliveryReceipts.channel, "sms"),
-      gt(notificationDeliveryReceipts.acceptedAt, now - CONVERSATION_SMS_COALESCE_SECONDS),
+      eq(notificationDeliveryReceipts.notificationType, "conversation_reply"),
+      eq(notificationDeliveryReceipts.channel, channel),
+      gt(notificationDeliveryReceipts.acceptedAt, Math.floor(Date.now() / 1000) - windowSeconds),
     ))
     .limit(1)
     .get();
@@ -323,10 +332,16 @@ async function sendReplyToBuyer(
 
   const store = await readStoreIdentity(db);
   // The buyer's language: the presence of the thread's order, else the store's.
-  const { language } = buyerMessageScope(store, party?.presence);
-  const copy = MESSAGE_COPY[language].conversation;
-  // The order number in the buyer's digits, as the storefront writes it.
-  const order = party?.orderNumber ? orderNumberTextIn(party.orderNumber, numberLocale(language)) : null;
+  const { language, locale } = buyerMessageScope(store, party?.presence);
+  const { templates } = await getNotificationTemplates(db, language, { locale });
+  // No message text: only who replied, the order and where to read it.
+  const variables: NotificationVariableValues = {
+    customer_name: party?.name ?? "",
+    store_name: store.name ?? "",
+    // The order number in the buyer's digits, as the storefront writes it.
+    order_number: party?.orderNumber ? orderNumberTextIn(party.orderNumber, numberLocale(language)) : "",
+    conversation_link: (party ? buyerThreadLink(options.env.STOREFRONT_URL, thread, party) : null) ?? "",
+  };
   const emailContext: EmailRuntimeContext = { db, env: options.env as unknown as Record<string, unknown>, encryptionKey: options.encryptionKey, appProviders: options.appProviders };
 
   if (channels.includes("email")) {
@@ -340,21 +355,25 @@ async function sendReplyToBuyer(
         recipientMasked: "missing-email",
         reason: "missing_email_recipient",
       }));
+    } else if (await replyRecentlyAccepted(db, thread.id, "email", CONVERSATION_EMAIL_COALESCE_SECONDS)) {
+      outcomes.push(await recordSkippedDelivery({
+        ...base,
+        channel: "email",
+        provider: "email",
+        recipient: email,
+        recipientMasked: maskEmail(email),
+        reason: CONVERSATION_EMAIL_COALESCED,
+      }));
     } else {
       const target = { ...base, channel: "email" as const, provider: "email", recipient: email, recipientMasked: maskEmail(email) };
       const blocked = await recordProviderBlockedDeliveryIfNeeded(target);
       outcomes.push(blocked ?? await dispatchWithReceipt({
         ...target,
         send: async (delivery) => {
-          const link = party ? buyerThreadLink(options.env.STOREFRONT_URL, thread, party) : null;
-          const rendered = renderConversationEmail({
+          const rendered = renderMessageEmail({
             language,
             store,
-            subject: copy.replySubject(store.name, order),
-            intro: copy.replyIntro(store.name, order),
-            message: displayBody(thread, language),
-            action: link ? { label: copy.replyAction, href: link } : null,
-            footer: copy.replyNoReply,
+            ...renderEmailTemplate("conversation_reply", language, templates.email.conversation_reply, variables),
           });
           return emailResultToDeliveryResult(await sendEmail({
             ...rendered,
@@ -368,7 +387,7 @@ async function sendReplyToBuyer(
   }
 
   if (channels.includes("sms")) {
-    outcomes.push(await sendReplySms(db, base, thread, party, store.name, order, options));
+    outcomes.push(await sendReplySms(db, base, thread, party, renderSmsTemplate("conversation_reply", language, templates.sms.conversation_reply.body, variables), options));
   }
 
   return buildDispatchResult(outcomes);
@@ -451,8 +470,8 @@ async function sendReplySms(
   base: DeliveryReceiptSubject & { db: Database; outboxId: string; notificationType: ConversationNotificationClaim["notificationType"] },
   thread: ThreadFacts,
   party: ThreadParty | null,
-  storeName: string | null,
-  order: string | null,
+  /** The rendered `conversation_reply` SMS template (no message text). */
+  text: string,
   options: ConversationNotificationOptions,
 ): Promise<OrderNotificationChannelOutcome> {
   const phone = party?.phone ?? null;
@@ -466,7 +485,7 @@ async function sendReplySms(
       reason: "missing_sms_recipient",
     });
   }
-  if (await smsRecentlyAccepted(db, thread.id, Math.floor(Date.now() / 1000))) {
+  if (await replyRecentlyAccepted(db, thread.id, "sms", CONVERSATION_SMS_COALESCE_SECONDS)) {
     return recordSkippedDelivery({
       ...base,
       channel: "sms",
@@ -494,7 +513,6 @@ async function sendReplySms(
     const target = { ...base, channel: "sms" as const, provider: provider?.id ?? providerName, recipient: phone, recipientMasked: maskPhone(phone) };
     const blocked = await recordProviderBlockedDeliveryIfNeeded(target);
     if (blocked) return blocked;
-    const copy = MESSAGE_COPY[buyerMessageScope(await readStoreIdentity(db), party?.presence).language].conversation;
     return await dispatchWithReceipt({
       ...target,
       send: async (delivery) => {
@@ -504,7 +522,7 @@ async function sendReplySms(
         // The receipt's reference keys the provider's idempotency, as for every other SMS.
         const result = await provider.send({
           to: phone,
-          text: copy.replySms(storeName, order),
+          text,
           idempotencyKey: createProviderClientReference(delivery),
         }, {});
         return {
@@ -592,7 +610,6 @@ async function sendMessageToStaff(
             store,
             subject: copy.staffEmailSubject(store.name, order, customer),
             intro: copy.staffEmailBody(customer, order),
-            message: null,
             action: link ? { label: copy.staffAction, href: link } : null,
             footer: null,
           }),

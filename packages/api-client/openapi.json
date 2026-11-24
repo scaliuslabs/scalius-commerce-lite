@@ -231360,6 +231360,23 @@
                                     "subject",
                                     "body"
                                   ]
+                                },
+                                "conversation_reply": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
                                 }
                               },
                               "required": [
@@ -231385,7 +231402,8 @@
                                 "order_digital_delivered",
                                 "gift_card_issued",
                                 "gift_card_sent",
-                                "review_request"
+                                "review_request",
+                                "conversation_reply"
                               ]
                             },
                             "sms": {
@@ -231666,6 +231684,18 @@
                                   "required": [
                                     "body"
                                   ]
+                                },
+                                "conversation_reply": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
                                 }
                               },
                               "required": [
@@ -231691,7 +231721,8 @@
                                 "order_digital_delivered",
                                 "gift_card_issued",
                                 "gift_card_sent",
-                                "review_request"
+                                "review_request",
+                                "conversation_reply"
                               ]
                             }
                           },
@@ -231924,7 +231955,8 @@
                       "order_digital_delivered",
                       "gift_card_issued",
                       "gift_card_sent",
-                      "review_request"
+                      "review_request",
+                      "conversation_reply"
                     ]
                   },
                   "email": {
@@ -232388,6 +232420,23 @@
                                     "subject",
                                     "body"
                                   ]
+                                },
+                                "conversation_reply": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
                                 }
                               },
                               "required": [
@@ -232413,7 +232462,8 @@
                                 "order_digital_delivered",
                                 "gift_card_issued",
                                 "gift_card_sent",
-                                "review_request"
+                                "review_request",
+                                "conversation_reply"
                               ]
                             },
                             "sms": {
@@ -232694,6 +232744,18 @@
                                   "required": [
                                     "body"
                                   ]
+                                },
+                                "conversation_reply": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
                                 }
                               },
                               "required": [
@@ -232719,7 +232781,8 @@
                                 "order_digital_delivered",
                                 "gift_card_issued",
                                 "gift_card_sent",
-                                "review_request"
+                                "review_request",
+                                "conversation_reply"
                               ]
                             }
                           },
@@ -232947,7 +233010,8 @@
                           "order_digital_delivered",
                           "gift_card_issued",
                           "gift_card_sent",
-                          "review_request"
+                          "review_request",
+                          "conversation_reply"
                         ]
                       },
                       "subject": {
@@ -233006,7 +233070,8 @@
                           "order_digital_delivered",
                           "gift_card_issued",
                           "gift_card_sent",
-                          "review_request"
+                          "review_request",
+                          "conversation_reply"
                         ]
                       },
                       "body": {

@@ -72,13 +72,7 @@ export interface MessageCopy {
   agentRefreshTokenReused: { title: string; body: (name: string) => string };
   /** Thread notifications: a reply to the buyer, a new buyer message to staff. `order` is "#1057" or null. */
   conversation: {
-    replySubject: (store: string | null, order: string | null) => string;
-    replyIntro: (store: string | null, order: string | null) => string;
-    replyAction: string;
-    replyNoReply: string;
     sharedProducts: (count: number) => string;
-    /** No message text in SMS. */
-    replySms: (store: string | null, order: string | null) => string;
     staffTitle: (order: string | null) => string;
     staffBody: string;
     staffEmailSubject: (store: string | null, order: string | null, customer: string) => string;
@@ -198,12 +192,7 @@ const EN: MessageCopy = {
     body: (host) => `Deliveries to ${host} failed for a day, so the webhook was turned off. Fix the endpoint, then turn it back on in Settings → Webhooks.`,
   },
   conversation: {
-    replySubject: (store, order) => `${store ?? "The store"} replied${order ? ` about order ${order}` : ""}`,
-    replyIntro: (store, order) => `${store ?? "The store"} sent you a message${order ? ` about order ${order}` : ""}:`,
-    replyAction: "Reply",
-    replyNoReply: "Please reply from the store's website, not to this email.",
     sharedProducts: (count) => `Shared ${formatNumber(count, "en")} ${pluralCategory(count, "en") === "one" ? "product" : "products"}`,
-    replySms: (store, order) => `${store ?? "The store"} replied to your message${order ? ` about order ${order}` : ""}. Check your email or your account to read it.`,
     staffTitle: (order) => (order ? `New message about ${order}` : "New customer message"),
     staffBody: "Open the inbox to read and reply.",
     staffEmailSubject: (store, order, customer) => `${store ? `[${store}] ` : ""}New message from ${customer}${order ? ` about ${order}` : ""}`,
@@ -324,12 +313,7 @@ const BN: MessageCopy = {
     body: (host) => `${host}-এ এক দিন ধরে ডেলিভারি ব্যর্থ হয়েছে, তাই ওয়েবহুকটি বন্ধ করা হয়েছে। এন্ডপয়েন্ট ঠিক করে সেটিংস → ওয়েবহুক থেকে আবার চালু করুন।`,
   },
   conversation: {
-    replySubject: (store, order) => `${store ?? "স্টোর"} উত্তর দিয়েছে${order ? ` (অর্ডার ${order})` : ""}`,
-    replyIntro: (store, order) => `${store ?? "স্টোর"} আপনাকে একটি মেসেজ পাঠিয়েছে${order ? ` (অর্ডার ${order})` : ""}:`,
-    replyAction: "উত্তর দিন",
-    replyNoReply: "এই ইমেইলে উত্তর দেবেন না, স্টোরের ওয়েবসাইট থেকে উত্তর দিন।",
     sharedProducts: (count) => `${formatNumber(count, "bn-BD")}টি পণ্য শেয়ার করা হয়েছে`,
-    replySms: (store, order) => `${store ?? "স্টোর"} আপনার মেসেজের উত্তর দিয়েছে${order ? ` (অর্ডার ${order})` : ""}। পড়তে ইমেইল বা অ্যাকাউন্ট দেখুন।`,
     staffTitle: (order) => (order ? `${order} নিয়ে নতুন মেসেজ` : "ক্রেতার নতুন মেসেজ"),
     staffBody: "পড়তে ও উত্তর দিতে ইনবক্স খুলুন।",
     staffEmailSubject: (store, order, customer) => `${store ? `[${store}] ` : ""}${customer}-এর নতুন মেসেজ${order ? ` (${order})` : ""}`,

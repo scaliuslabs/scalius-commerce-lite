@@ -66413,6 +66413,10 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    conversation_reply: {
+                        subject: string;
+                        body: string;
+                    };
                 };
                 sms: {
                     order_created: {
@@ -66484,6 +66488,9 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     review_request: {
                         body: string;
                     };
+                    conversation_reply: {
+                        body: string;
+                    };
                 };
             };
             revision: number;
@@ -66517,7 +66524,7 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponse = GetApiV
 
 export type PutApiV1AdminSettingsNotificationChannelsTemplatesData = {
     body: {
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request' | 'conversation_reply';
         email?: {
             subject: string;
             body: string;
@@ -66681,6 +66688,10 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    conversation_reply: {
+                        subject: string;
+                        body: string;
+                    };
                 };
                 sms: {
                     order_created: {
@@ -66752,6 +66763,9 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     review_request: {
                         body: string;
                     };
+                    conversation_reply: {
+                        body: string;
+                    };
                 };
             };
             revision: number;
@@ -66765,7 +66779,7 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponse = PutApiV
 export type PostApiV1AdminSettingsNotificationChannelsTemplatesTestData = {
     body: {
         channel: 'email';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request' | 'conversation_reply';
         subject: string;
         body: string;
         /**
@@ -66774,7 +66788,7 @@ export type PostApiV1AdminSettingsNotificationChannelsTemplatesTestData = {
         locale?: string;
     } | {
         channel: 'sms';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request' | 'conversation_reply';
         body: string;
         phone: string;
         /**

@@ -50,6 +50,8 @@ export const NOTIFICATION_VARIABLES = [
   "gift_card_sender",
   "gift_card_link",
   "gift_card_recipient",
+  // Where the buyer reads a staff reply (their account inbox, or the order's tracking page).
+  "conversation_link",
 ] as const;
 
 export type NotificationVariable = (typeof NOTIFICATION_VARIABLES)[number];
@@ -70,6 +72,8 @@ export function variablesForEvent(event: TemplatedNotificationType): readonly No
   if (event === "order_digital_delivered") {
     return ["customer_name", "order_number", "store_name", "download_names", "licence_keys", "sms_licence_keys", "access_link"];
   }
+  // Never the reply's text: a staff line can hold a sign-in, which stays behind the buyer's own read.
+  if (event === "conversation_reply") return ["customer_name", "order_number", "store_name", "conversation_link"];
   if (event === "review_request") return ["customer_name", "order_number", "store_name", "review_products", "review_link"];
   if (event === "gift_card_issued") {
     return [
@@ -544,6 +548,7 @@ export function sampleVariables(storeName: string, language: MessageLanguage): N
     gift_card_message: "Happy Eid!",
     gift_card_sender: "Karim",
     gift_card_link: "https://example.com/",
+    conversation_link: "https://example.com/account/inbox",
   };
 }
 
@@ -564,7 +569,7 @@ export function sampleOrderEmail(options: {
   const origin = trimTrailingCharacter(options.origin ?? "", "/") || null;
   const values = sampleVariables(options.store.name ?? "", options.language);
   const money = (amount: number) => formatMoney(amount, { code: "BDT", language: options.language });
-  if (isResolvedNotificationType(options.event)) {
+  if (isResolvedNotificationType(options.event) || options.event === "conversation_reply") {
     return renderMessageEmail({
       language: options.language,
       store: options.store,
