@@ -197,6 +197,7 @@ Buyer UI is a storefront extension, not a function. Declare `storefront.extensio
   - **Text.** `ui.text(text, { tone })` colours the words (critical words take the error colour), and `emphasis: "mono"` sets an ID or a code in the monospace face.
   - **Buttons** are at least 44px tall on a phone.
   - A toned stack and a mark show only on buyer pages: a dashboard tree that uses one is refused.
+- A buyer link (`ui.to.store(path)`, a link or a `navigate` button) opens a page of the store. `/api`, `/apps` (any app's routes; reach your own with a `route` action), `/_x` (your files are `{ app }` image sources) and every path whose first segment starts with `_` or `~` are refused: the run fails as `function_invalid_output` with reason `store_path_reserved`.
 
   The offer row under a cart line:
 
