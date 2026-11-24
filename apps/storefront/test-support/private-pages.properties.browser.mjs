@@ -20,7 +20,8 @@
 // writes no markup and no CSS. Each document is a LEGAL theme (or a named
 // break the save must refuse, or a stored document forged past the save).
 // A named document the save refuses fails the gate unless it names the
-// reason it must be refused for; a refused seed is counted, not drawn. Each
+// reason it must be refused for; a seed's refused draft is counted, and its
+// next draft drawn (a seed with no draft taken fails). Each
 // accepted one is drawn in its states (a store that delivers; a line asking
 // for a decision, a store kit with an add-on once per kit and an app's offer
 // row, and a sold-out line; an empty cart; long Bangla titles; an Arabic
@@ -44,15 +45,16 @@
 //   the table does not know lies between them and the row, and every element
 //   a style target names is drawn by a row of that target); with no tokens,
 //   to a surface the anatomy names, and the page shows no paint of its own;
-// - every text, with no budget, at its contrast floor against the pixels
-//   behind it (the text hidden, the page photographed);
+// - every text at its contrast floor against the pixels behind it (the text
+//   hidden, the page photographed): its 5th-percentile pixel, 0.05 of budget;
 // - every text whole: nothing cut sideways, no glyph cut by a clip, no word
 //   broken inside itself;
 // - the summary's total drawn no smaller than any other summary row;
 // - every control takes a click at its centre, is reached by Tab in document
 //   order, shows a focus ring at 3:1 against what is around it, and under the
 //   pointer still reads (and shows its hover where the host draws one);
-// - on a phone, the page scrolls by touch from the top to Place order;
+// - on a phone, the page scrolls by touch from the top to the details form's
+//   end, Place order's own place (docked, Place order is on screen at once);
 // - under the customer's look: the offer row's mark, sentence, price and Add
 //   Now on one line at 1280 and on at most two at 390, the status box on its
 //   tone's own surface, the add-on row opening to its three detail lines in
@@ -1208,8 +1210,12 @@ async function hovers(page, controls) {
   return problems;
 }
 
-/** On a phone: swiping from the top reaches Place order (nothing on the way takes the gesture). */
-async function touchScroll(page, selector) {
+/**
+ * On a phone: swiping from the top reaches the end of the details form, where Place order's own place is
+ * (nothing on the way takes the gesture). Never Place order's docked bar: it is on screen from the start.
+ */
+async function touchScroll(page) {
+  const selector = '[data-part="details-form"]';
   const session = await page.context().newCDPSession(page);
   const viewport = page.viewportSize();
   const x = Math.round(viewport.width / 2);
@@ -1219,9 +1225,12 @@ async function touchScroll(page, selector) {
     let last = -1;
     let stuck = 0;
     for (let swipe = 0; swipe < 60; swipe += 1) {
-      const { top, y } = await page.evaluate((selector) => ({ top: document.querySelector(selector)?.getBoundingClientRect().top ?? null, y: Math.round(scrollY) }), selector);
-      if (top === null) return [`${selector}: missing for the touch scroll`];
-      if (top < viewport.height - 48) return [];
+      // The form's end in the page's flow; reached once it is on screen (or the page can scroll no further).
+      const { bottom, y, end } = await page.evaluate((selector) => ({ bottom: document.querySelector(selector)?.getBoundingClientRect().bottom ?? null, y: Math.round(scrollY), end: document.documentElement.scrollHeight - innerHeight }), selector);
+      if (bottom === null) return [`${selector}: missing for the touch scroll`];
+      if (swipe === 0 && bottom <= viewport.height) return [];
+      if (bottom <= viewport.height || y >= end - 1) return swipe > 0 ? [] : [`${selector}: its end lies below the screen and the page cannot scroll`];
+      const top = bottom;
       // Three swipes in a row that move nothing: something on the way takes the gesture.
       stuck = y === last ? stuck + 1 : 0;
       if (stuck >= 3) return [`a touch swipe stops at ${y}px, ${Math.round(top - viewport.height)}px above ${selector}`];
@@ -1279,6 +1288,10 @@ let drawn = 0;
 let draws = 0;
 let refused = 0;
 const reasons = {};
+/** The drafts a seed tries before one the save takes, and the refused drafts (counted, never drawn). */
+const SEED_DRAFTS = 8;
+let draftsRefused = 0;
+const draftReasons = {};
 const started = Date.now();
 /** The most a draw's theme added above Place order, against its bound (printed with the run's result). */
 let deepest = null;
@@ -1420,7 +1433,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   at("first screen", await page.evaluate(firstScreen, LEAD));
   if (state !== "empty") at("dock", await timed("dock", () => dockChecks(page)));
   // Phones: Tab order and the touch scroll run before anything is clicked.
-  if (width < 1280 && state !== "empty") at("touch", await timed("touch", () => touchScroll(page, '[data-part="details-submit"]')));
+  if (width < 1280 && state !== "empty") at("touch", await timed("touch", () => touchScroll(page)));
   if (focus) {
     const { controls } = await page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: [], scope: null, exempt: EXEMPT, styleTargets: [] });
     at("focus order", await timed("tab", () => focusOrder(page, controls)));
@@ -1430,6 +1443,8 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   if (await toggle.isVisible().catch(() => false)) await toggle.click().catch(() => {});
   await openAddOns(page, '[data-private="cart"]');
   await page.waitForTimeout(150);
+  // Docked with the fold open too (a phone's cart unfolded is the longest page).
+  if (state !== "empty" && width < 1280) at("dock, fold open", await timed("dock", () => dockChecks(page)));
   const page0 = await check(state, null, mandatory);
   at(state, await page.evaluate(controlsPlaced, controls));
   at(`${state} prominence`, await page.evaluate(prominence, '[data-private="cart"] [data-part="summary"]'));
@@ -1438,7 +1453,9 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   if (state !== "empty") {
     const here = await page.evaluate(actionInFlow);
     const before = await timed("default", () => defaultInFlow(request, state, width, height));
-    if (here && before) {
+    // A baseline that cannot be measured is a failure, never a skipped check.
+    if (!here || !before) problems.push(`depth: Place order's place cannot be measured (${!here ? "under the theme" : "under the default look"})`);
+    else {
       const added = here.top - before.top;
       const allowed = THEME_DEPTH_PX + LINE_DEPTH_PX * here.lines;
       if (!deepest || added / allowed > deepest.added / deepest.allowed) deepest = { added: Math.round(added), allowed, lines: here.lines };
@@ -1617,7 +1634,22 @@ try {
     .filter(([name]) => !CASE || args.flatMap((value, index) => args[index - 1] === "--case" ? [value] : []).some((needle) => name.includes(needle)))
     .map(([name, entry]) => ({ name, ...entry }));
   const seeds = NO_SEEDS || (CASE && ONLY === null) ? [] : (ONLY !== null ? [ONLY] : Array.from({ length: SEEDS }, (_, index) => FROM + index));
-  const cases = [...(ONLY !== null || args.includes("--no-named") ? [] : named), ...seeds.map((seed) => ({ name: `seed ${seed}`, seed, ...generate(seed) }))];
+  // Each seed draws a look the save takes: its first draft the save refuses gives way to the next of the seed's
+  // drafts (the same ones in every run, so `--seed` replays it), each refusal counted. A seed none of whose
+  // SEED_DRAFTS the save takes fails the gate: the drawn count is the seed count.
+  const accepted = await Promise.all(seeds.map(async (seed) => {
+    for (let draft = 0; draft < SEED_DRAFTS; draft += 1) {
+      const generated = generate(draft === 0 ? seed : seed + draft * 100_003);
+      const answer = await fetch(`${gallery.url}/__gallery/private-theme`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: `pp-draft-${seed}-${draft}`, state: "base", ...generated.request, privatePages: generated.privatePages }) });
+      if (answer.status === 200) return { name: `seed ${seed}${draft ? ` (draft ${draft})` : ""}`, seed, ...generated };
+      const issue = answer.status === 422 ? (await answer.json()).issues[0] : null;
+      draftsRefused += 1;
+      draftReasons[issue?.reason ?? `status ${answer.status}`] = (draftReasons[issue?.reason ?? `status ${answer.status}`] ?? 0) + 1;
+    }
+    failures.push({ index: -1, name: `seed ${seed}`, where: "save", problems: [`none of its ${SEED_DRAFTS} drafts is taken by the save: the gate draws fewer looks than it says`], document: generate(seed) });
+    return null;
+  }));
+  const cases = [...(ONLY !== null || args.includes("--no-named") ? [] : named), ...accepted.filter(Boolean)];
   /** One case: its document saved, then drawn in each of its states. */
   const runCase = async (entry, index) => {
     const states = entry.states === "all" || ALL_STATES ? STATES : Array.isArray(entry.states) ? entry.states : entry.seed !== undefined ? ["base", STATES[1 + (entry.seed % (STATES.length - 1))]] : ["base"];
@@ -1697,5 +1729,5 @@ for (const failure of failures) {
   console.error(`\n✗ ${failure.name}, ${failure.where}:\n  ${failure.problems.slice(0, shown).join("\n  ")}${failure.problems.length > shown ? `\n  … and ${failure.problems.length - shown} more` : ""}\n  document: ${JSON.stringify({ request: failure.document.request, privatePages: failure.document.privatePages })}`);
 }
 if (args.includes("--profile")) console.log(`time (s): ${Object.entries(PROFILE).map(([label, ms]) => `${label} ${(ms / 1000).toFixed(1)}`).join(", ")}`);
-console.log(`private pages, rendered: ${drawn} documents drawn in ${draws} draws (${refused} refused at save: ${JSON.stringify(reasons)}) at ${WIDTHS.join(", ")} px, light and dark, in ${Math.round((Date.now() - started) / 1000)}s: ${failures.length} failures${MUTATE ? ` (under mutation ${MUTATE})` : ""}${deepest ? `; the most a theme added above Place order: ${deepest.added}px with ${deepest.lines} lines (bound ${deepest.allowed}px)` : ""}`);
+console.log(`private pages, rendered: ${drawn} documents drawn in ${draws} draws (${refused} refused at save: ${JSON.stringify(reasons)}; seeds' drafts refused before one was taken: ${draftsRefused} ${JSON.stringify(draftReasons)}) at ${WIDTHS.join(", ")} px, light and dark, in ${Math.round((Date.now() - started) / 1000)}s: ${failures.length} failures${MUTATE ? ` (under mutation ${MUTATE})` : ""}${deepest ? `; the most a theme added above Place order: ${deepest.added}px with ${deepest.lines} lines (bound ${deepest.allowed}px)` : ""}`);
 if (process.exitCode !== 2) process.exitCode = failures.length > 0 ? 1 : 0;

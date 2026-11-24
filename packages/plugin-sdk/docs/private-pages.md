@@ -565,7 +565,7 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
 
 ## The rendered gate
 
-What the save proves is checked again by drawing. `pnpm test:private-pages` (in the Scalius repository) compiles each theme with the store's compiler and draws the real cart page in headless Chromium on a fixture store that delivers (Place order is on), with an app block of every node kind and tone in the summary, below the cart, under a line and inside the details form. Each document is a legal theme, or a named break the save must refuse; a refused document is not drawn.
+What the save proves is checked again by drawing. `pnpm test:private-pages` (in the Scalius repository) compiles each theme with the store's compiler and draws the real cart page in headless Chromium on a fixture store that delivers (Place order is on), with an app block of every node kind and tone in the summary, below the cart, under a line and inside the details form. Each document is a legal theme, or a named break the save must refuse; a refused document is not drawn. A seed draws a look the save takes: a draft the save refuses gives way to the seed's next draft (up to eight, the same ones every run), the refused drafts are counted and printed, and a seed with no draft taken fails the gate, so every seed is drawn.
 
 **What it draws.** The reviews' named cases and seeded legal themes, each in its states (the base cart; a line asking for a decision, a store kit as one line with an add-on once per kit and an app's offer row under it, and a sold-out line; an empty cart; long Bangla titles; an Arabic right-to-left presence; field errors showing; the sign-in and confirmation dialogs open), at 320, 390 and 1280 px, light and dark. Seeds carry colours per scheme, `controls`, every variant, label and style target, `leading`, `mono`, and every app node kind, the toned stack, mark, link and key-value included. Besides them:
 
@@ -584,15 +584,15 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 | Nothing of the theme's | Any `[data-free]` region, or a forged document's words or CSS, reaches the page. |
 | Scheme | The page draws a colour scheme the store does not show. |
 | Coverage walk | In token mode, a text or a focusable control belongs to no row of the colour table (its words are none of its row's resolved colours, its row's element paints something other than the row's paint, a surface the table does not know lies between it and its row, or an element a style target names is drawn by another row), with every add-on row opened; with no tokens, it stands on no surface the anatomy names, or the page shows a paint of its own. |
-| Contrast | Any text, with no budget, reads under 4.5:1 (3:1 large) against the pixels behind it (every text hidden, the page photographed). |
+| Contrast | Any text reads under 4.5:1 (3:1 large) against the pixels behind it (every text hidden, the page photographed): the ratio taken is the 5th-percentile pixel inside its line boxes (each inset 1px), and a text fails under its floor less 0.05. The same holds for a control's words under the pointer. |
 | Whole text | A text is cut off at the side, a glyph is cut by its box, or a word breaks inside itself. |
 | Controls | A click at a control's centre lands elsewhere; Tab does not reach it, or reaches it out of document order; its focus ring changes under three quarters of its perimeter at 3:1. |
 | Hover | Under the pointer, a control's words read under their floor, or a control the store gives a hover surface changes under a quarter of its box. |
 | Prominence | The total is drawn smaller than another summary row. |
-| Place order | At scroll 0 and at three places down the cart, Place order or its total is off screen, does not take a click there, or shows no total. |
+| Place order | At scroll 0 and at three places down the cart, Place order or its total is off screen, does not take a click there, or shows no total; on a phone, with the cart's fold closed and again with it open. |
 | First screen | At scroll 0, none of the page's lead parts starts inside the screen. |
-| Depth | What the theme adds above Place order (its place under the theme less its place under the default look, same cart, the fold open) is over 3200px and 448px a line. |
-| Touch | On a phone, swiping from the top does not reach Place order. |
+| Depth | What the theme adds above Place order (its place under the theme less its place under the default look, same cart, the fold open) is over 3200px and 448px a line, or either place cannot be measured. |
+| Touch | On a phone, swiping from the top does not reach the end of the details form, Place order's own place (never its docked bar, on screen from the start). |
 | The customer's cart | The offer row's mark, sentence, price and Add Now are not in one band at 1280 or take more than two at 390; a status box does not paint its tone's surface; the add-on row does not open to its three lines in order, or its amount shows more than once. |
 | Server | Any request answers 5xx. |
 
