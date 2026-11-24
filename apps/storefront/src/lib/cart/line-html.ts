@@ -163,10 +163,10 @@ let themeLineLoad: Promise<void> | undefined;
  */
 export function cartLinePending(): Promise<void> | undefined {
   if (themeLine !== undefined) return undefined;
-  const template = document.querySelector<HTMLTemplateElement>("template[data-cart-line-template]")?.innerHTML;
-  return template === undefined ? undefined : themeLineLoad ??= loadLazyScript(() => import("./theme-line"), { draftRestores: true }).then(
+  const lineMarkup = document.querySelector<HTMLTemplateElement>("template[data-cart-line-template]")?.innerHTML;
+  return lineMarkup === undefined ? undefined : themeLineLoad ??= loadLazyScript(() => import("./theme-line"), { draftRestores: true }).then(
     ({ cartLineFromTemplate }) => {
-      themeLine = (view, slots) => cartLineFromTemplate(template, view, slots);
+      themeLine = (view, slots) => cartLineFromTemplate(lineMarkup, view, slots);
     },
     () => {
       themeLine = null;
