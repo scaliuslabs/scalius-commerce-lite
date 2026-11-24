@@ -119,7 +119,7 @@ chrome roots data-private=core-header|core-footer controls=header|footer|none
 layout tokens=background,gradient,border,border-width,border-style,radius,shadow,padding,gap,columns,columns-wide
 buyer-ui style ui.banner[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="banner"] tokens=background,text,border,border-width,radius,shadow,padding
 buyer-ui style ui.stack[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="stack"][data-tone] tokens=background,text,border,border-width,radius,shadow,padding,gap
-buyer-ui style ui.button[@<app>][/<target>] :is(a[data-ui="button"],[data-ui="button"]>button) tokens=background,text,border,border-width,radius,ring,inset,weight,size,case
+buyer-ui style ui.button[.primary|secondary|critical][@<app>][/<target>] :is(a[data-ui="button"],[data-ui="button"]>button) tokens=background,text,border,border-width,radius,ring,inset,weight,size,case
 buyer-ui style ui.badge[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="badge"] tokens=background,text,border,radius,padding,inset,weight,size
 buyer-ui style ui.mark[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="mark"] tokens=text,border,size
 buyer-ui style ui.text[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="text"] tokens=text,font,size,weight,leading

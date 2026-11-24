@@ -145,6 +145,8 @@ function storeHref(to: PluginUiTarget): string | null {
 
 function buttonNode(node: PluginUiButton, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement | null {
   const action = node.action;
+  // Its own tone on the element a theme's `ui.button.<tone>` row addresses (an untoned button is secondary).
+  const tone = node.tone ?? "secondary";
   if (action.kind === "cart" && !isCartSlot(block.target)) return null;
   // At least 44px tall on a phone (a tap target); its words decide its height from `sm`.
   const buttonClass = "inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 sm:min-h-0";
@@ -152,13 +154,14 @@ function buttonNode(node: PluginUiButton, block: BuyerUiBlock, options: BuyerUiO
     const href = storeHref(action.to);
     if (!href) return null;
     const link = element("a", `w-fit ${buttonClass}`, node.label);
-    link.href = href; link.dataset.ui = "button"; return link;
+    link.href = href; link.dataset.ui = "button"; link.dataset.tone = tone; return link;
   }
   const wrap = element("div", "space-y-1");
   // A banner's own buttons are drawn here too: the hook is the button's, wherever it stands.
   wrap.dataset.ui = "button";
   const button = element("button", buttonClass, node.label);
   button.type = "button";
+  button.dataset.tone = tone;
   button.disabled = node.disabled === true;
   const status = element("p", "text-sm text-muted-foreground"); status.setAttribute("role", "status");
   button.addEventListener("click", async () => {

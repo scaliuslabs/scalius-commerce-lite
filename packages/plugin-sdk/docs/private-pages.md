@@ -225,7 +225,7 @@ The store draws an app's block from typed nodes ([commerce hooks](commerce-hooks
 | --- | --- | --- | --- |
 | `ui.banner` | A banner; it holds only its own buttons | each | `background`, `text`, `border`, `border-width`, `radius`, `shadow`, `padding` |
 | `ui.stack` | A toned stack: an offer row, a status box | each | `background`, `text`, `border`, `border-width`, `radius`, `shadow`, `padding`, `gap` |
-| `ui.button` | A button or a button-like link | | `background`, `text`, `border`, `border-width`, `radius`, `ring`, `inset`, `weight`, `size`, `case` |
+| `ui.button` | A button or a button-like link | `primary`, `secondary`, `critical` (the button's own; untoned is `secondary`) | `background`, `text`, `border`, `border-width`, `radius`, `ring`, `inset`, `weight`, `size`, `case` |
 | `ui.badge` | A badge | each | `background`, `text`, `border`, `radius`, `padding`, `inset`, `weight`, `size` |
 | `ui.mark` | A tone's glyph in a circle (the circle is twice its `size`) | each | `text`, `border`, `size` |
 | `ui.text` | Words | each | `text`, `font`, `size`, `weight`, `leading` |
@@ -236,6 +236,8 @@ The store draws an app's block from typed nodes ([commerce hooks](commerce-hooks
 | `ui.row` | A plain stack or columns (no colour, no row of the table) | | `gap` |
 
 The tones are `neutral`, `info`, `success`, `warning` and `critical`; critical words default to the error colour.
+
+A button's tones are its own: fill `ui.button.primary` ("Add Now") and a protected line's `critical` "Remove" keeps its own look. Each tone reads on the surface it sits on, and no `ui.button` key, in any tone, is drawn larger or heavier than the store's own action on the page (Place order on the cart): `prominence` otherwise. The cart drawer's buttons carry the same `data-tone` for your public stylesheet.
 
 **What a box holds.** A banner, a toned stack and a disclosure draw their children on their own surface. When you give one a surface (`background` or `gradient`), every kind and tone it can hold gets a row inside it (a banner: its buttons only; an app's box: that app's nodes only), checked on that box in each scheme: a link or a price inside an amber offer row is checked on amber, not on the line. A box that paints nothing adds no rows. A node writes only the colours you set for it and reads the rest from the row it stands on, so its rule is the same in every box at any depth. A field or a field label drawn in an app's painted box is checked on it too.
 
@@ -744,7 +746,7 @@ chrome roots data-private=core-header|core-footer controls=header|footer|none
 layout tokens=background,gradient,border,border-width,border-style,radius,shadow,padding,gap,columns,columns-wide
 buyer-ui style ui.banner[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="banner"] tokens=background,text,border,border-width,radius,shadow,padding
 buyer-ui style ui.stack[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="stack"][data-tone] tokens=background,text,border,border-width,radius,shadow,padding,gap
-buyer-ui style ui.button[@<app>][/<target>] :is(a[data-ui="button"],[data-ui="button"]>button) tokens=background,text,border,border-width,radius,ring,inset,weight,size,case
+buyer-ui style ui.button[.primary|secondary|critical][@<app>][/<target>] :is(a[data-ui="button"],[data-ui="button"]>button) tokens=background,text,border,border-width,radius,ring,inset,weight,size,case
 buyer-ui style ui.badge[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="badge"] tokens=background,text,border,radius,padding,inset,weight,size
 buyer-ui style ui.mark[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="mark"] tokens=text,border,size
 buyer-ui style ui.text[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="text"] tokens=text,font,size,weight,leading
