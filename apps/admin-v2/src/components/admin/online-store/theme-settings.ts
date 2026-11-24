@@ -69,7 +69,8 @@ import { sameFormValue } from "~/lib/form-values";
 export const COLOR_ROLES = {
   background: ["background"],
   text: ["foreground", "card-foreground", "popover-foreground", "secondary-foreground"],
-  buttons: ["primary", "ring"],
+  // The focus ring is made from it when the colours are read (`storefrontThemeFocusRing`), never stored.
+  buttons: ["primary"],
   buttonText: ["primary-foreground"],
   highlight: ["accent"],
   highlightText: ["accent-foreground"],

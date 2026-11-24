@@ -88,9 +88,11 @@ import {
 } from "../checkout/field-validation";
 import { createSubmit, onHistoryRestore, submitBusy, SubmitStepTimeout, withinStepLimit } from "../checkout/submit-machine";
 import { loadLazyScript } from "@/scripts/lazy-script";
+import { formatCount } from "@/lib/store-time-zone";
 
 /** The real export behind every value the page script imports. */
 const realImports: Record<string, unknown> = {
+  formatCount,
   onTextEdit,
   codPaymentStep,
   createSubmit,

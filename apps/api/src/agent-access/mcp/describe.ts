@@ -9,13 +9,13 @@ import { resolveComponentSchemaRef } from "@scalius/shared/openapi-schema-refs";
 import { moneyMarkerOf } from "@scalius/shared/money-field";
 import { utf8ByteLength } from "../limits";
 import { isConfirmGated } from "./confirm";
-import { describeOperation } from "./operations";
+import { FULL_DESCRIBE_MAX_BYTES, describeOperation } from "./operations";
 
 export type AgentDryRunSupport = "native" | `preview:${string}` | "none";
 export type AgentDescribeDetail = "compact" | "full" | "examples";
 
 /** Full descriptions over this many bytes are served as the `scalius://ops/{id}` resource instead. */
-export const FULL_DESCRIBE_MAX_BYTES = 32 * 1024;
+export { FULL_DESCRIBE_MAX_BYTES } from "./operations";
 
 const MAX_FIELDS = 40;
 const MAX_ENUM_INLINE = 6;

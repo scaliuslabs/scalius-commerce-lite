@@ -17,6 +17,7 @@ import {
   normalizePlatformOriginUrl,
 } from "@scalius/shared/platform-config";
 import {
+  cspSourcesAllowOrigin,
   normalizeMerchantCspSource,
   serializeMerchantCspSources,
   type CspSourceProblem,
@@ -29,6 +30,7 @@ import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiResult } from "~/lib/api";
 import {
+  catalogueImageHostsQuery,
   mediaQuery,
   platformQuery,
   trustedWebsitesQuery,
@@ -150,19 +152,23 @@ export function TrustedWebsitesCard() {
   const t = useMessages(advancedSettingsMessages);
   const common = useMessages(settingsMessages);
   const canEdit = useCanEdit();
-  const { values, setValue, isLoadError, refetch } = useSettingsForm<{ sources: string[] }>({
+  const { values, setValue, isLoadError, refetch } = useSettingsForm<{ sources: string[]; images: string[] }>({
     label: t("trustedTitle"),
     queryKey: trustedWebsitesQuery.queryKey,
     fetchFn: trustedWebsitesQuery.queryFn,
     saveFn: (draft, expectedRevision) =>
       apiData(postApiV1AdminSettingsSecurity({
-        body: { cspAllowedDomains: serializeMerchantCspSources(draft.sources), expectedRevision },
+        body: { cspAllowedDomains: serializeMerchantCspSources(draft.sources), imageSources: serializeMerchantCspSources(draft.images), expectedRevision },
       })),
-    defaultValues: { sources: [] },
+    defaultValues: { sources: [], images: [] },
     errorMessage: common("saveFailed"),
     canEdit,
-    fields: { cspAllowedDomains: "trusted-website" },
+    fields: { cspAllowedDomains: "trusted-website", imageSources: "image-host" },
   });
+  // Hosts the catalogue's images come from that a buyer's private pages do not allow yet.
+  // Allowing one adds it as an image host: images only, never scripts, styles, frames or requests.
+  const imageHosts = useQuery(catalogueImageHostsQuery);
+  const blocked = (imageHosts.data ?? []).filter((host) => !cspSourcesAllowOrigin(host, values.images));
   if (isLoadError) return <SettingsLoadFailure title={t("trustedLoad")} onRetry={refetch} />;
   return (
     <SettingsCard id="trustedWebsites" title={t("trustedTitle")} description={t("trustedDescription")}>
@@ -174,6 +180,34 @@ export function TrustedWebsitesCard() {
         normalize={normalizeMerchantCspSource}
         onChange={(sources) => setValue("sources", sources)}
       />
+      <OriginList
+        id="image-host"
+        label={t("imageHostsLabel")}
+        origins={values.images}
+        disabled={!canEdit}
+        normalize={normalizeMerchantCspSource}
+        onChange={(images) => setValue("images", images)}
+      />
+      {blocked.length > 0 ? (
+        <div className="space-y-2" data-blocked-image-hosts>
+          <p className="text-body font-medium">{t("imageHostsTitle")}</p>
+          <p className="text-body text-muted-foreground">{t("imageHostsHelp")}</p>
+          <ul className="divide-y divide-border border-y border-border">
+            {blocked.map((host) => (
+              <li key={host} className="flex min-h-11 items-center justify-between gap-3">
+                <span className="min-w-0 truncate text-body">
+                  {host}
+                  {/* Trusted websites cover cart and account pages, never payment pages. */}
+                  {cspSourcesAllowOrigin(host, values.sources) ? <span className="ms-2 text-muted-foreground">{t("imageHostsPaymentOnly")}</span> : null}
+                </span>
+                <Button type="button" variant="outline" disabled={!canEdit} aria-label={`${t("imageHostsAllow")} ${host}`} onClick={() => setValue("images", [...values.images, host])}>
+                  {t("imageHostsAllow")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </SettingsCard>
   );
 }

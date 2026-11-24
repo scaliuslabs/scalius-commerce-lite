@@ -11,6 +11,11 @@ export const advancedSettingsMessages = defineMessages({
     trustedDuplicate: "This website is already listed.",
     trustedEmpty: "No websites added.",
     trustedLoad: "Trusted websites",
+    imageHostsLabel: "Image hosts",
+    imageHostsPaymentOnly: "Blocked on payment pages only",
+    imageHostsTitle: "Image hosts your catalogue uses",
+    imageHostsHelp: "Cart, checkout and account pages show images only from allowed image hosts. Until you allow one, its images show as a placeholder there. An image host is used for images only.",
+    imageHostsAllow: "Allow",
     websiteLabel: "Website",
 
     imagesTitle: "Image delivery",
@@ -70,6 +75,11 @@ export const advancedSettingsMessages = defineMessages({
     trustedDuplicate: "এই ওয়েবসাইট আগেই যোগ করা আছে।",
     trustedEmpty: "কোনো ওয়েবসাইট যোগ করা হয়নি।",
     trustedLoad: "বিশ্বস্ত ওয়েবসাইট",
+    imageHostsLabel: "ছবির সাইট",
+    imageHostsPaymentOnly: "শুধু পেমেন্ট পেজে বন্ধ",
+    imageHostsTitle: "আপনার ক্যাটালগের ছবি যেসব সাইটে আছে",
+    imageHostsHelp: "কার্ট, চেকআউট ও অ্যাকাউন্ট পেজ শুধু অনুমোদিত সাইটের ছবি দেখায়। অনুমতি না দেওয়া পর্যন্ত সেখানে এদের ছবির জায়গায় প্লেসহোল্ডার দেখাবে।",
+    imageHostsAllow: "অনুমতি দিন",
     websiteLabel: "ওয়েবসাইট",
 
     imagesTitle: "ছবি দেখানো",
