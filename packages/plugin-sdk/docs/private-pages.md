@@ -158,7 +158,7 @@ A page with no token, in a theme with no page paint, is drawn exactly as the sto
 | `border` | A colour | Its border (a field's, the stepper's, the fold bar's and Go back's at 3:1 on what is around it) |
 | `ring` | A colour | The focus ring of what is inside it; a field's or a button's own |
 | `placeholder`, `invalid` | A colour | A field's placeholder and error border |
-| `border-width`, `radius` | Whole pixels: 0–4, 0–32 | Those properties; `border-width: 0` draws no border, so a field or an outlined control is then found by its own fill (3:1) |
+| `border-width`, `radius` | Whole pixels: 0–4, 0–32 | Those properties; `border-width: 0` draws no border, so a field or an outlined control is then found by its own fill (3:1); 2 or more, solid, may find Place order or Confirm by its edge (see Floors) |
 | `border-style` | `solid`, `dashed`, `dotted`, `none` | `border-style`; `none` as `border-width: 0` |
 | `shadow` | `none`, `sm`, `md`, `lg` | A fixed `box-shadow` |
 | `padding`, `gap` | 0–48 px | Those, at most 4% of the screen's width on a phone; a padding is never under 4px nor under 30% of the radius, so focus rings and rounded corners stay on the box's surface |
@@ -182,7 +182,7 @@ No value is text CSS reads as code: no `var()`, no `calc()`, no `url()`, no font
 
 A target is a **box** (a surface that holds other things), a **field** (its own surface and words; its border, focus ring and error border read on the box around it), a **control** (a button, a stepper, a toggle: its focus ring reads on what is around it) or **text** (words on a surface). It stands on the row of the place it is drawn.
 
-A buyer must find each control and field where it stands (WCAG 1.4.11, 3:1 on what is around it), and the anatomy says how (`boundary=` in the [anatomy reference](#anatomy-reference)): a **filled** button (Place order, Confirm) by its fill; an **outlined** one (the stepper, the fold's bar, Go back) and every field by its border, or, where your tokens draw none (`border-width: 0`, `border-style: none`), by its own fill. A field drawn as a box around its input (the phone number with its country code) is that box. The check reads the edge the page draws, never one it does not.
+A buyer must find each control and field where it stands (WCAG 1.4.11, 3:1 on what is around it), and the anatomy says how (`boundary=` in the [anatomy reference](#anatomy-reference)): a **filled** button (Place order, Confirm) by its fill, or by a drawn edge where its fill does not read there (a brand yellow on a light card: `"border": "#111111", "border-width": 2`, solid, at 3:1, over a fill still clearly a colour of its own); an **outlined** one (the stepper, the fold's bar, Go back) and every field by its border, or, where your tokens draw none (`border-width: 0`, `border-style: none`), by its own fill. A field drawn as a box around its input (the phone number with its country code) is that box. The check reads the edge the page draws, never one it does not.
 
 | Target | What it is | Kind | Stands on |
 | --- | --- | --- | --- |
@@ -269,7 +269,7 @@ The check reads every row of every palette's table:
 | --- | --- | --- |
 | Every word (text, muted, link, error, placeholder) | 4.5:1 | its surface and every point of a gradient; a row's words also on its hover surface |
 | A field's border and error border | 3:1 | the box around the field |
-| A filled button's fill (Place order, Confirm); an outlined control's or a field's border, or its own fill where no border is drawn | 3:1 | what is around it |
+| A filled button's fill (Place order, Confirm), or its drawn edge: a solid border of at least 2px (`border-width` set, `border-style` unset or `solid`) over a fill clearly a colour of its own (CIE76 40 from every point around it: a fill near the dock with an edge is Go back's look and is refused); an outlined control's or a field's border, or its own fill where no border is drawn | 3:1 | what is around it |
 | Every focus ring | 3:1 | what is around the control or field; a box's rings on the box |
 | The total's amount | its size at least every money row's, every add-on line's, its own label's, a line price's and an app's words drawn in the summary (`ui.*` at `cart.page.summary`, or naming no target); its weight at least the rows'; its words' contrast on the summary at least the strongest of the rows' words (their own, their amounts', a discount's). Its size is drawn at least at the largest of those, so a narrow summary never shrinks it under rows the store keeps at their size | the summary |
 | The total's label | its size at least every money row's | the summary |
@@ -387,7 +387,7 @@ The controls are the light or dark switch (`data-host="scheme"`), when the theme
 | No theme markup and no theme CSS: every rule is written from typed values, and in token mode every colour comes from the one table the save checks. | Choosing tokens that read well together beyond the floors. |
 | Place order with its total is always on screen: it is the page's last box (`dock`), docked at the bottom edge while its place is not in view, at every width and under every arrangement, with no script. | Its look: the `dock`, `submit` and `legal` tokens. |
 | The terms sit in the dock beside Place order: the sentence, or the required tick box, which posts with the details form it sits outside of. | |
-| Every row of the table reads at its floor, in every scheme a buyer sees. | |
+| Every row of the table reads at its floor, in every scheme a buyer sees. Place order and Confirm are found by their fill or by a solid edge of at least 2px over a fill of their own, never drawn as plain words or as an outlined button. | Which of the two: a fill that reads, or your brand's fill with an edge. |
 | The total is never drawn smaller than another money row, and a label that names an action or an amount is one of the store's variants. | Your words for headings and empty states: say what they are. |
 | One of the cart's lead parts (the lines, the summary, the details form) starts inside the first screen. | |
 | A buyer's request never compiles; a look an older checker wrote is not served. | Re-saving after a store update if you want your look before the next maintenance run. |
@@ -504,8 +504,10 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
       "field-label": { "size": 12, "weight": "600" },
       "dock": { "background": "card", "border": "#524179", "border-width": 1 },
       "submit": {
-        "background": { "light": "#a38a00", "dark": "primary" },
+        "background": { "light": "#fed700", "dark": "primary" },
         "text": { "light": "#000000", "dark": "primary-foreground" },
+        "border": { "light": "#000000", "dark": "primary" },
+        "border-width": 2,
         "radius": 0,
         "weight": "600",
         "size": 14,
