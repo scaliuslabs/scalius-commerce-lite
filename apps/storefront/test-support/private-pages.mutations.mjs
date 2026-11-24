@@ -55,7 +55,7 @@ export const MUTATIONS = {
   },
   "B3 the dialogs read the store's palette": {
     why: "token mode does not reach the store's dialogs: their palette classes keep the palette's colours",
-    rewrites: [rewrite(TOKENS, `const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]', `, "const TOKEN_SCOPE = ['[data-private=\"cart\"]', ")],
+    rewrites: [rewrite(TOKENS, "  ...PRIVATE_SCOPES.map((scope) => `[data-private=\"${scope}\"]`),\n", "  ...PRIVATE_SCOPES.filter((scope) => scope !== \"dialog\").map((scope) => `[data-private=\"${scope}\"]`),\n")],
     cases: [B3],
     expect: /^sign-in: .*(?:is none of its row's colours \(dialog|reads [\d.]+:1 on what is behind it)/,
   },
@@ -86,7 +86,7 @@ export const MUTATIONS = {
   },
   "M8 the store's own chrome outside token mode": {
     why: "the store's header paints its row's dark surface while its words keep the palette's dark colours",
-    rewrites: [rewrite(TOKENS, `const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]', '[data-private="core-header"]', '[data-private="core-footer"]'];`, `const TOKEN_SCOPE = ['[data-private="cart"]', '[data-private="dialog"]'];`)],
+    rewrites: [rewrite(TOKENS, "  ...PRIVATE_SCOPES.map((scope) => `[data-private=\"${scope}\"]`),\n", "  ...PRIVATE_SCOPES.filter((scope) => !scope.startsWith(\"core-\")).map((scope) => `[data-private=\"${scope}\"]`),\n")],
     cases: [HEADER],
     expect: /is none of its row's colours \(chrome:/,
   },
