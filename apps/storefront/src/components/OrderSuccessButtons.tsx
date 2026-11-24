@@ -286,7 +286,7 @@ export default function OrderSuccessButtons({
         {!statusView && <a
           href={pagePath("/")}
           data-astro-prefetch="false"
-          className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
         >
           <svg
             className="w-5 h-5 me-2"

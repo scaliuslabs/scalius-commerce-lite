@@ -5,7 +5,7 @@ import {
   type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import { parseCheckoutAttributeValues } from "@/lib/buyer-ui/checkout-attributes";
-import { ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX, type AddOnTotalRow, type AddOnTotals } from "@scalius/shared/add-on-totals";
+import { ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX, readAddOnDetails, type AddOnTotalRow, type AddOnTotals } from "@scalius/shared/add-on-totals";
 import { LINE_ADD_ONS_MAX } from "@scalius/shared/line-identity";
 import { LINE_PROPERTY_INPUT_LIMITS, linePropertyInputOf, normalizeLinePurchaseOptions, type LinePropertyInput } from "@scalius/shared/line-identity";
 import { APP_SCOPED_KEY_MAX_LENGTH, isAppScopedKey } from "@scalius/shared/plugins/ids";
@@ -790,7 +790,9 @@ export function parseAddOnTotals(value: unknown, subtotalMinor: number): AddOnTo
   const rows = listed.map((row) => {
     if (!isRecord(row)) fail();
     const appId = row.appId === null ? null : requiredString(row.appId, MAX_ID_LENGTH);
-    return { appId, title: requiredString(row.title, ADD_ON_TITLE_MAX), amountMinor: nonNegativeSafeInteger(row.amountMinor) };
+    // The app's detail lines the row opens to, in order: absent is none.
+    const details = readAddOnDetails(row.details) ?? fail();
+    return { appId, title: requiredString(row.title, ADD_ON_TITLE_MAX), amountMinor: nonNegativeSafeInteger(row.amountMinor), ...(details.length > 0 ? { details } : {}) };
   });
   const rowsMinor = rows.reduce((sum, row) => sum + row.amountMinor, 0);
   if (!Number.isSafeInteger(rowsMinor) || rowsMinor > subtotalMinor) fail();

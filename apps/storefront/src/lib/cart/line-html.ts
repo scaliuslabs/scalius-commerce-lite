@@ -5,11 +5,13 @@
  * cart page's globals (`removeFromCart`, `updateCartQuantity`, `editCartLine`).
  */
 import { cartCallAttributes } from "./cart-calls";
-import { getProductImageUrl } from "@/lib/product-media";
+import { PRODUCT_IMAGE_FALLBACK, getProductImageUrl } from "@/lib/product-media";
+import { cspSourcesAllowImage } from "@scalius/shared/security-csp";
 import { longAnswerHtml, type LongAnswerWords } from "@/lib/long-answer";
+import { loadLazyScript } from "@/scripts/lazy-script";
 import type { CartLineView } from "./line-view";
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -51,16 +53,26 @@ export interface CartLineHtmlSlots {
   ruleBlock: string;
 }
 
+// Each stepper button keeps 24px (WCAG 2.5.8's least target) where a narrow column squeezes it.
 const STEPPER_BUTTON =
-  "flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent sm:w-9";
+  "flex h-full w-11 min-w-6 items-center justify-center text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent sm:w-9";
 
-function detailsHtml(view: CartLineView, slots: CartLineHtmlSlots): string {
+/** One fact of a line's details, its text escaped, as a variant draws it (here: a block of its own). */
+export type LineFact = (text: string, attribute: string, className?: string) => string;
+const blockFact: LineFact = (text, attribute, className = "block") => `<span class="${className}" ${attribute}>${text}</span>`;
+
+/**
+ * What the buyer chose, as the host draws it (each fact on its own line), in
+ * its four groups: the options, the purchase options, the answers to the
+ * store's inputs (rows their controls replace by key, in every variant) and
+ * how the line is fulfilled. A theme's other variants (theme-line.ts) draw
+ * from the same groups.
+ */
+export function lineDetails(view: CartLineView, slots: CartLineHtmlSlots, fact = blockFact): [options: string, purchaseOptions: string, properties: string, fulfilment: string] {
   const { words } = slots;
-  const options = view.options
-    .map((option) => `<span class="block" data-cart-line-option>${escapeHtml(option.name)}: ${escapeHtml(option.label)}</span>`)
-    .join("");
+  const options = view.options.map((each) => fact(`${escapeHtml(each.name)}: ${escapeHtml(each.label)}`, "data-cart-line-option")).join("");
   const purchaseOptions = view.purchaseOptions
-    .map((option) => `<span class="block font-medium text-foreground" data-cart-line-purchase-option>${escapeHtml(option.title)}</span>`)
+    .map((each) => fact(escapeHtml(each.title), "data-cart-line-purchase-option", "block font-medium text-foreground"))
     .join("");
   // An input's row names its key: the app inputs' controls replace their rows once drawn.
   const rows = [
@@ -74,11 +86,19 @@ function detailsHtml(view: CartLineView, slots: CartLineHtmlSlots): string {
     ? `<div class="mt-0.5 text-sm text-muted-foreground" data-cart-line-properties><ul${view.inputs.length > 0 ? ` id="${escapeHtml(slots.inputsId)}"` : ""}>${rows}</ul>${edit}</div>`
     : "";
   const fulfilment = view.fulfilment === "ships-free"
-    ? `<span class="block font-medium text-foreground" data-cart-line-fulfilment="ships-free">${escapeHtml(words.shipsFree)}</span>`
+    ? fact(escapeHtml(words.shipsFree), 'data-cart-line-fulfilment="ships-free"', "block font-medium text-foreground")
     : view.fulfilment
-      ? `<span class="block" data-cart-line-fulfilment="${view.fulfilment}">${escapeHtml(view.fulfilment === "digital" ? words.digital : words.service)}</span>`
+      ? fact(escapeHtml(view.fulfilment === "digital" ? words.digital : words.service), `data-cart-line-fulfilment="${view.fulfilment}"`)
       : "";
-  return options + purchaseOptions + properties + fulfilment;
+  return [options, purchaseOptions, properties, fulfilment];
+}
+
+/** The `details` sub-part around what a variant drew. */
+export const detailsPart = (inner: string): string => `<div class="mt-0.5 text-sm text-muted-foreground" data-part="line-details">${inner}</div>`;
+
+/** The `remove` sub-part: the same named control in every variant, its look and content the variant's. */
+export function lineRemove({ words, describedBy, cartKey }: CartLineHtmlSlots, look: string, content: string): string {
+  return `<button type="button" aria-label="${escapeHtml(words.remove)}"${describedBy} ${cartCallAttributes("removeFromCart", cartKey)} data-part="line-remove" class="shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring ${look}">${content}</button>`;
 }
 
 function priceHtml(view: CartLineView, words: CartLineHtmlWords): string {
@@ -89,32 +109,89 @@ function priceHtml(view: CartLineView, words: CartLineHtmlWords): string {
   const unit = view.unitPrice
     ? `<div class="text-sm tabular-nums text-muted-foreground" data-cart-line-unit-price>${escapeHtml(view.unitPrice)} ${escapeHtml(words.each)}</div>`
     : "";
-  return `<div class="text-end"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base" data-cart-line-price${view.free ? " data-cart-line-free" : ""}>${amount}</div>${unit}</div>`;
+  return `<div class="text-end" data-part="line-price"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base" data-cart-line-price${view.free ? " data-cart-line-free" : ""}>${amount}</div>${unit}</div>`;
 }
 
-export function cartLineHtml(view: CartLineView, slots: CartLineHtmlSlots): string {
+/**
+ * A line's photo. On a buyer's private page (the Layout writes its allowed
+ * image origins) a photo from any other host is the store's placeholder, as
+ * the server draws it: the page's policy would block it.
+ */
+function lineImageUrl(url: string | null | undefined): string {
+  const src = getProductImageUrl(url, 96);
+  const allowed = typeof window === "undefined" ? undefined : (window as { __PRIVATE_IMAGE_ORIGINS__?: unknown }).__PRIVATE_IMAGE_ORIGINS__;
+  return Array.isArray(allowed) && !cspSourcesAllowImage(src, allowed as string[], window.location.origin) ? PRODUCT_IMAGE_FALLBACK : src;
+}
+
+/** A line's sub-parts by their anatomy names (private-anatomy.ts) as the host draws them, each "" when the line has none. */
+export function hostLineParts(view: CartLineView, slots: CartLineHtmlSlots): Record<string, string> {
   const { words, cartKey, describedBy } = slots;
   const key = escapeHtml(view.key);
-  // The quantity and the price stay on every line, an issue or not: the issue says what is wrong under them.
-  const quantityRow = `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
-              <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9">
+  return {
+    image: `<div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20" data-part="line-image"><img src="${escapeHtml(lineImageUrl(view.image))}" alt="" width="80" height="80" loading="lazy" decoding="async" class="h-full w-full object-contain object-center" /></div>`,
+    title: `<h3 class="text-sm font-medium text-foreground sm:text-base" data-part="line-title"><a href="${escapeHtml(view.productHref)}" class="line-clamp-2 break-words hover:text-muted-foreground" data-cart-line-name>${escapeHtml(view.name)}</a></h3>`,
+    details: detailsPart(lineDetails(view, slots).join("")),
+    inputs: `<div class="mt-1.5 grid max-w-sm gap-2" data-cart-line-inputs data-line-key="${key}" data-part="line-inputs" hidden></div>`,
+    target: `<div class="mt-2 grid gap-2" data-buyer-ui-target="cart.line.after" data-buyer-ui-line="${key}" data-buyer-ui-line-name="${escapeHtml(view.lineName)}" hidden></div>`,
+    remove: lineRemove(slots, "flex h-11 w-11 sm:h-9 sm:w-9", `<svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`),
+    // The stepper never shrinks beside a large price (the row wraps), nor below its 24px buttons and count with a
+    // 4px border (88px) in a theme's narrow column (a layout node is a size container: its content never widens
+    // a `min-content` track): it never cuts "−" or "+".
+    quantity: `<div class="flex h-11 min-w-22 shrink-0 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9" data-part="line-quantity">
                 <button type="button" aria-label="${escapeHtml(words.decrease)}"${describedBy} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.decreaseTo)}>−</button>
                 <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite" data-cart-line-quantity>${escapeHtml(view.quantityText)}</span>
                 <button type="button" aria-label="${escapeHtml(words.increase)}"${describedBy} ${view.increaseBlocked ? "disabled" : ""} class="${STEPPER_BUTTON}" ${cartCallAttributes("updateCartQuantity", cartKey, view.increaseTo)}>+</button>
-              </div>
-              ${priceHtml(view, words)}
-            </div>${view.stock?.state === "at-limit" && words.stock ? `
-            <p class="mt-1 text-xs text-muted-foreground" data-cart-line-limit>${escapeHtml(words.stock)}</p>` : ""}${slots.issueBlock}`;
+              </div>`,
+    price: priceHtml(view, words),
+    limit: view.stock?.state === "at-limit" && words.stock ? `<p class="mt-1 text-xs text-muted-foreground" data-cart-line-limit data-part="line-limit">${escapeHtml(words.stock)}</p>` : "",
+    issue: slots.issueBlock,
+    rule: slots.ruleBlock,
+  };
+}
+
+/** The theme's line (theme-line.ts) once loaded; null where its file could not load (the host's line draws). */
+let themeLine: ((view: CartLineView, slots: CartLineHtmlSlots) => string) | null | undefined;
+let themeLineLoad: Promise<void> | undefined;
+
+/**
+ * The load the page's lines wait for before they draw, or undefined when
+ * they draw now. Only a page whose theme arranged the line has its
+ * `<template data-cart-line-template>` (read once found), and only it loads
+ * the theme's line (theme-line.ts): a default cart never downloads the
+ * variants or their words.
+ */
+export function cartLinePending(): Promise<void> | undefined {
+  if (themeLine !== undefined) return undefined;
+  const template = document.querySelector<HTMLTemplateElement>("template[data-cart-line-template]")?.innerHTML;
+  return template === undefined ? undefined : themeLineLoad ??= loadLazyScript(() => import("./theme-line"), { draftRestores: true }).then(
+    ({ cartLineFromTemplate }) => {
+      themeLine = (view, slots) => cartLineFromTemplate(template, view, slots);
+    },
+    () => {
+      themeLine = null;
+    },
+  );
+}
+
+export function cartLineHtml(view: CartLineView, slots: CartLineHtmlSlots): string {
+  if (themeLine) return themeLine(view, slots);
+  const parts = hostLineParts(view, slots);
+  // The quantity and the price stay on every line, an issue or not: the issue says what is wrong under them.
+  const quantityRow = `<div class="mt-2 flex min-h-11 flex-wrap items-center justify-between gap-2">
+              ${parts.quantity}
+              ${parts.price}
+            </div>${parts.limit ? `
+            ${parts.limit}` : ""}${parts.issue}`;
   return `
-      <li class="py-3 first:pt-0" data-line-key="${key}"><div class="flex gap-3">
-          <div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20"><img src="${escapeHtml(getProductImageUrl(view.image, 96))}" alt="" width="80" height="80" loading="lazy" decoding="async" class="h-full w-full object-contain object-center" /></div>
+      <li class="@container py-3 first:pt-0" data-line-key="${escapeHtml(view.key)}" data-part="line"><div class="flex gap-3">
+          ${parts.image}
           <div class="min-w-0 flex-1">
             <div class="flex justify-between gap-2">
-              <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base"><a href="${escapeHtml(view.productHref)}" class="hover:text-muted-foreground" data-cart-line-name>${escapeHtml(view.name)}</a></h3><div class="mt-0.5 text-sm text-muted-foreground">${detailsHtml(view, slots)}</div><div class="mt-1.5 grid max-w-sm gap-2" data-cart-line-inputs data-line-key="${key}" hidden></div><div class="mt-2 grid gap-2" data-buyer-ui-target="cart.line.after" data-buyer-ui-line="${key}" data-buyer-ui-line-name="${escapeHtml(view.lineName)}" hidden></div></div>
-              <button type="button" aria-label="${escapeHtml(words.remove)}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" ${cartCallAttributes("removeFromCart", cartKey)}><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="min-w-0">${parts.title}${parts.details}${parts.inputs}${parts.target}</div>
+              ${parts.remove}
             </div>
             ${quantityRow}
-            ${slots.ruleBlock}
+            ${parts.rule}
           </div>
         </div></li>`;
 }

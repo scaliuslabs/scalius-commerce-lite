@@ -212,7 +212,7 @@ export interface PhoneChange {
   confirmWith: PhoneCodeConfirmWith;
 }
 
-const primaryButton = "inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50";
+const primaryButton = "inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50";
 
 function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificationOptions, change: PhoneChange | null = null): HTMLElement {
   const words = accountCopy().phone;

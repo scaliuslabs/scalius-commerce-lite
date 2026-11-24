@@ -4,3 +4,4 @@ export * from "./categories.storefront";
 export * from "./categories.publication";
 export * from "./categories.revision";
 export * from "./categories.tree";
+export * from "./categories.image-origins";

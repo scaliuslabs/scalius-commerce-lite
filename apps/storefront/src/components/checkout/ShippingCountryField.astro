@@ -28,7 +28,7 @@ const options = countries
 {
   countries.length > 1 ? (
     <div>
-      <label for={id} class={labelClass}>{label}</label>
+      <label for={id} class={labelClass} data-part="field-label">{label}</label>
       <select id={id} name="shippingCountryCode" autocomplete="country" class={fieldClass} data-shipping-country>
         {options.map((option) => <option value={option.code} selected={option.code === selected}>{option.name}</option>)}
       </select>

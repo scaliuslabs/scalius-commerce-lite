@@ -12,6 +12,7 @@ import { formatPageNumber, formatStoreDateTime, pageLanguage } from "@/lib/store
 import { formatMoney, DEFAULT_CURRENCY } from "@/lib/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { addOnRowsOver } from "@scalius/shared/add-on-totals";
+import { addOnRowKey, appendAddOnRow, openAddOnKeys } from "@/lib/add-on-row";
 
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
@@ -776,13 +777,15 @@ export function renderOrderSummaryDetails(
 ): void {
   // The words the page carries now (an inline script sets them before any module runs).
   if (Object.keys(checkoutCopy).length === 0) readCheckoutLanguage();
+  // An add-on row the buyer opened stays open as the summary is drawn again.
+  const open = openAddOnKeys(details);
   details.replaceChildren();
   appendOrderItems(details, quote, freeDeliveryCartKeys(data.cartItems));
   // The apps' add-ons as their own rows after the items' subtotal: together they are the quote's subtotal.
   const addOns = addOnRowsOver(quote.subtotalMinor, quote.addOns);
   appendSummaryRow(details, checkoutCopy.subtotalText, currencyFmt(fromMinor(addOns.itemsSubtotalMinor, quote.decimalPlaces), quote));
   for (const row of addOns.rows) {
-    appendSummaryRow(details, row.title, currencyFmt(fromMinor(row.amountMinor, quote.decimalPlaces), quote)).dataset.summaryRow = "add-on";
+    appendAddOnRow(details, row, currencyFmt(fromMinor(row.amountMinor, quote.decimalPlaces), quote), "payment", open.has(addOnRowKey(row)));
   }
   // Delivery savings show on the delivery line ("৳80 Free (CODE)"), never as a discount line.
   const deliveryDiscounts = quote.discounts.filter(({ shippingAmount }) => shippingAmount > 0);

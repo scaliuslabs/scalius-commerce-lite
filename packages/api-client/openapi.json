@@ -1671,7 +1671,7 @@
           "version": {
             "type": "number",
             "enum": [
-              14
+              15
             ]
           },
           "template": {
@@ -1834,8 +1834,7 @@
                           "destructive",
                           "destructive-foreground",
                           "border",
-                          "input",
-                          "ring"
+                          "input"
                         ]
                       }
                     },
@@ -1881,8 +1880,7 @@
                             "destructive",
                             "destructive-foreground",
                             "border",
-                            "input",
-                            "ring"
+                            "input"
                           ]
                         },
                         "minItems": 2,
@@ -1935,8 +1933,7 @@
                             "destructive",
                             "destructive-foreground",
                             "border",
-                            "input",
-                            "ring"
+                            "input"
                           ]
                         },
                         "minItems": 2,
@@ -3412,46 +3409,6 @@
                   }
                 ]
               },
-              "cart": {
-                "type": "object",
-                "properties": {
-                  "summary": {
-                    "type": "string",
-                    "enum": [
-                      "side",
-                      "top"
-                    ]
-                  }
-                },
-                "required": [
-                  "summary"
-                ],
-                "additionalProperties": false
-              },
-              "cartDrawer": {
-                "type": "object",
-                "properties": {
-                  "width": {
-                    "type": "string",
-                    "enum": [
-                      "standard",
-                      "wide"
-                    ]
-                  },
-                  "recommendations": {
-                    "type": "string",
-                    "enum": [
-                      "shown",
-                      "hidden"
-                    ]
-                  }
-                },
-                "required": [
-                  "width",
-                  "recommendations"
-                ],
-                "additionalProperties": false
-              },
               "checkout": {
                 "type": "object",
                 "properties": {
@@ -3531,8 +3488,6 @@
               "listing",
               "product",
               "footer",
-              "cart",
-              "cartDrawer",
               "checkout",
               "receipt",
               "account"
@@ -3711,6 +3666,9 @@
               "additionalProperties": false
             },
             "maxItems": 40
+          },
+          "privatePages": {
+            "$ref": "#/components/schemas/StorefrontPrivatePages"
           }
         },
         "required": [
@@ -3719,7 +3677,8 @@
           "tokens",
           "brand",
           "blocks",
-          "pages"
+          "pages",
+          "privatePages"
         ],
         "additionalProperties": false
       },
@@ -3797,10 +3756,6 @@
           "input": {
             "type": "string",
             "pattern": "^#[0-9a-f]{6}$"
-          },
-          "ring": {
-            "type": "string",
-            "pattern": "^#[0-9a-f]{6}$"
           }
         },
         "required": [
@@ -3821,8 +3776,7 @@
           "destructive",
           "destructive-foreground",
           "border",
-          "input",
-          "ring"
+          "input"
         ],
         "additionalProperties": false
       },
@@ -6431,6 +6385,347 @@
         ],
         "additionalProperties": false
       },
+      "StorefrontPrivatePages": {
+        "type": "object",
+        "properties": {
+          "controls": {
+            "type": "string",
+            "enum": [
+              "header",
+              "footer",
+              "none"
+            ]
+          },
+          "pages": {
+            "type": "object",
+            "properties": {
+              "cart": {
+                "$ref": "#/components/schemas/StorefrontPrivateArrangement"
+              },
+              "cartDrawer": {
+                "$ref": "#/components/schemas/StorefrontPrivateArrangement"
+              }
+            },
+            "additionalProperties": false
+          },
+          "tokens": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            }
+          },
+          "labels": {
+            "type": "object",
+            "properties": {
+              "cart.heading": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "cart.intro": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "cart.summaryHeading": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "cart.continue": {
+                "type": "string",
+                "enum": [
+                  "continue-shopping",
+                  "keep-shopping",
+                  "back-to-store"
+                ]
+              },
+              "cart.empty": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "cart.emptyText": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "cart.subtotal": {
+                "type": "string",
+                "enum": [
+                  "subtotal",
+                  "items-total"
+                ]
+              },
+              "cart.showSummary": {
+                "type": "string",
+                "enum": [
+                  "show-summary",
+                  "show-cart"
+                ]
+              },
+              "cart.hideSummary": {
+                "type": "string",
+                "enum": [
+                  "hide-summary",
+                  "hide-cart"
+                ]
+              },
+              "dialog.goBack": {
+                "type": "string",
+                "enum": [
+                  "go-back",
+                  "cancel"
+                ]
+              },
+              "dialog.confirm": {
+                "type": "string",
+                "enum": [
+                  "confirm",
+                  "continue-checkout",
+                  "agree-and-continue"
+                ]
+              },
+              "drawer.title": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "drawer.checkout": {
+                "type": "string",
+                "enum": [
+                  "checkout",
+                  "proceed-to-checkout"
+                ]
+              },
+              "drawer.viewCart": {
+                "type": "string",
+                "enum": [
+                  "view-cart",
+                  "go-to-cart"
+                ]
+              },
+              "drawer.continue": {
+                "type": "string",
+                "enum": [
+                  "continue-shopping",
+                  "keep-shopping"
+                ]
+              },
+              "drawer.empty": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "drawer.startShopping": {
+                "type": "string",
+                "enum": [
+                  "start-shopping",
+                  "browse-products",
+                  "continue-shopping"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "icons": {
+            "type": "object",
+            "properties": {
+              "cart.empty": {
+                "$ref": "#/components/schemas/StorefrontPrivateAsset"
+              },
+              "drawer.empty": {
+                "$ref": "#/components/schemas/StorefrontPrivateAsset"
+              }
+            }
+          },
+          "chrome": {},
+          "search": {},
+          "css": {},
+          "assets": {},
+          "compiled": {
+            "type": "object",
+            "properties": {
+              "anatomy": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "sanitizer": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "css": {
+                "type": "string",
+                "maxLength": 65536
+              },
+              "refused": {
+                "type": "boolean"
+              },
+              "tokenMode": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "anatomy",
+              "sanitizer",
+              "css"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "pages",
+          "labels",
+          "icons",
+          "compiled"
+        ],
+        "additionalProperties": false
+      },
+      "StorefrontPrivateArrangement": {
+        "type": "object",
+        "properties": {
+          "frame": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+          },
+          "layout": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorefrontPrivateNode"
+            },
+            "maxItems": 24
+          },
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/StorefrontPrivateNode"
+              },
+              "maxItems": 24
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "StorefrontPrivateNode": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "layout"
+                ]
+              },
+              "layout": {
+                "type": "string",
+                "enum": [
+                  "stack",
+                  "columns",
+                  "grid",
+                  "group",
+                  "fold",
+                  "scroll"
+                ]
+              },
+              "hook": {
+                "type": "string",
+                "maxLength": 40
+              },
+              "children": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/StorefrontPrivateNode"
+                },
+                "maxItems": 24
+              }
+            },
+            "required": [
+              "type",
+              "layout",
+              "children"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "part"
+                ]
+              },
+              "part": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+              },
+              "variant": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+              }
+            },
+            "required": [
+              "type",
+              "part"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "target"
+                ]
+              },
+              "target": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+              }
+            },
+            "required": [
+              "type",
+              "target"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "content"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": {}
+          }
+        ]
+      },
+      "StorefrontPrivateWords": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "StorefrontPrivateAsset": {
+        "type": "object",
+        "properties": {
+          "app": {
+            "type": "string",
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$"
+          },
+          "file": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._/-]{0,200}$"
+          }
+        },
+        "required": [
+          "app",
+          "file"
+        ],
+        "additionalProperties": false
+      },
       "StorefrontBrandImage": {
         "type": "object",
         "properties": {
@@ -7922,6 +8217,16 @@
                   "sm",
                   "md",
                   "lg"
+                ]
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "neutral",
+                  "info",
+                  "success",
+                  "warning",
+                  "critical"
                 ]
               },
               "children": {
@@ -10588,6 +10893,32 @@
               "children"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "mark"
+                ]
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "neutral",
+                  "info",
+                  "success",
+                  "warning",
+                  "critical"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "tone"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -12249,6 +12580,16 @@
                             "sm",
                             "md",
                             "lg"
+                          ]
+                        },
+                        "tone": {
+                          "type": "string",
+                          "enum": [
+                            "neutral",
+                            "info",
+                            "success",
+                            "warning",
+                            "critical"
                           ]
                         },
                         "children": {
@@ -14913,6 +15254,32 @@
                         "type",
                         "summary",
                         "children"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "mark"
+                          ]
+                        },
+                        "tone": {
+                          "type": "string",
+                          "enum": [
+                            "neutral",
+                            "info",
+                            "success",
+                            "warning",
+                            "critical"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "tone"
                       ],
                       "additionalProperties": false
                     }
@@ -43412,6 +43779,9 @@
                         "cspAllowedDomains": {
                           "type": "string"
                         },
+                        "cspImageSources": {
+                          "type": "string"
+                        },
                         "policies": {
                           "type": "array",
                           "items": {
@@ -44213,6 +44583,7 @@
                         "platform",
                         "timeZone",
                         "cspAllowedDomains",
+                        "cspImageSources",
                         "policies",
                         "storefrontCopy",
                         "appScripts",
@@ -58432,6 +58803,16 @@
                                           "lg"
                                         ]
                                       },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      },
                                       "children": {
                                         "type": "array",
                                         "items": {
@@ -61094,6 +61475,32 @@
                                       "type",
                                       "summary",
                                       "children"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "mark"
+                                        ]
+                                      },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "tone"
                                     ],
                                     "additionalProperties": false
                                   }
@@ -90939,6 +91346,16 @@
                                               "lg"
                                             ]
                                           },
+                                          "tone": {
+                                            "type": "string",
+                                            "enum": [
+                                              "neutral",
+                                              "info",
+                                              "success",
+                                              "warning",
+                                              "critical"
+                                            ]
+                                          },
                                           "children": {
                                             "type": "array",
                                             "items": {
@@ -93601,6 +94018,32 @@
                                           "type",
                                           "summary",
                                           "children"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "mark"
+                                            ]
+                                          },
+                                          "tone": {
+                                            "type": "string",
+                                            "enum": [
+                                              "neutral",
+                                              "info",
+                                              "success",
+                                              "warning",
+                                              "critical"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "tone"
                                         ],
                                         "additionalProperties": false
                                       }
@@ -96604,6 +97047,16 @@
                                           "lg"
                                         ]
                                       },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      },
                                       "children": {
                                         "type": "array",
                                         "items": {
@@ -99266,6 +99719,32 @@
                                       "type",
                                       "summary",
                                       "children"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "mark"
+                                        ]
+                                      },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "tone"
                                     ],
                                     "additionalProperties": false
                                   }
@@ -101704,6 +102183,16 @@
                                           "lg"
                                         ]
                                       },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      },
                                       "children": {
                                         "type": "array",
                                         "items": {
@@ -104366,6 +104855,32 @@
                                       "type",
                                       "summary",
                                       "children"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "mark"
+                                        ]
+                                      },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "tone"
                                     ],
                                     "additionalProperties": false
                                   }
@@ -218147,6 +218662,11 @@
                           "type": "string",
                           "maxLength": 51299
                         },
+                        "imageSources": {
+                          "type": "string",
+                          "maxLength": 51299,
+                          "description": "Hosts the storefront loads images from and nothing else (img-src), on every page, private and payment pages included; comma-separated."
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -218154,6 +218674,7 @@
                       },
                       "required": [
                         "cspAllowedDomains",
+                        "imageSources",
                         "revision"
                       ]
                     }
@@ -218280,6 +218801,10 @@
                     "minimum": 0
                   },
                   "cspAllowedDomains": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "imageSources": {
                     "type": "string",
                     "maxLength": 65536
                   }
@@ -218630,6 +219155,150 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "when": "Use when checking the storefront's allowed security origins.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      }
+    },
+    "/api/v1/admin/settings/security/image-hosts": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Image hosts the catalogue uses beyond the platform's",
+        "description": "The other https hosts the catalogue's images come from (category images: every other catalogue image is one of the store's files). A buyer's private page (cart, checkout, payment, receipt, account) loads images only from the platform's origins and the image hosts saved here (and, but on a payment page, the trusted websites); an image from any other host is drawn as the store's placeholder there.",
+        "operationId": "dashboard.security.image_hosts",
+        "responses": {
+          "200": {
+            "description": "Image hosts outside the platform's origins",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "hosts": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 2048
+                          },
+                          "maxItems": 50
+                        }
+                      },
+                      "required": [
+                        "hosts"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when catalogue images show as placeholders on the cart, checkout or account pages.",
           "dryRun": "none",
           "confirmation": "none",
           "impact": "none"
@@ -343599,6 +344268,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.search.global"
+          ]
+        },
+        {
+          "operationId": "dashboard.security.image_hosts",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.security.image_hosts"
           ]
         },
         {

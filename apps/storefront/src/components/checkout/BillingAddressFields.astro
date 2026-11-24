@@ -86,7 +86,7 @@ const AUTOCOMPLETE: Record<BillingAddressField, string> = {
     {
       countries.length > 1 ? (
         <div class="sm:col-span-2">
-          <label for="billing-country" class={labelClass}>{labels.country}</label>
+          <label for="billing-country" class={labelClass} data-part="field-label">{labels.country}</label>
           <select id="billing-country" name="billingCountryCode" autocomplete="billing country" class={fieldClass} data-billing-country>
             {options.map((option) => <option value={option.code} selected={option.code === selected}>{option.name}</option>)}
           </select>
@@ -104,7 +104,7 @@ const AUTOCOMPLETE: Record<BillingAddressField, string> = {
         const error = errors[field];
         return (
           <div class={wide ? "sm:col-span-2" : undefined} data-address-rule={BILLING_FIELD_RULE[field]}>
-            <label for={id} class={labelClass}>
+            <label for={id} class={labelClass} data-part="field-label">
               {labels[field]}<span aria-hidden="true" class:list={["ms-0.5 text-destructive", !required && "hidden"]} data-required-mark>*</span>
             </label>
             <input
