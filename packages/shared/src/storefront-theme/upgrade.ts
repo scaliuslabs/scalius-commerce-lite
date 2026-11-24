@@ -221,6 +221,16 @@ function privatePageLayouts(document: Json): Json {
   return { ...document, blocks: rest, privatePages: { ...(isRecord(document.privatePages) ? document.privatePages : {}), pages } };
 }
 
+/** The bottom bar's tabs as objects (`"home"` → `{ kind: "home" }`), so a link tab sits among them. */
+function mobileTabObjects(document: Json): Json {
+  const blocks = document.blocks;
+  if (!isRecord(blocks) || !isRecord(blocks.mobileNav) || !isRecord(blocks.mobileNav.settings)) return document;
+  const { settings } = blocks.mobileNav;
+  if (!Array.isArray(settings.tabs)) return document;
+  const tabs = settings.tabs.map((tab) => typeof tab === "string" ? { kind: tab } : tab);
+  return { ...document, blocks: { ...blocks, mobileNav: { ...blocks.mobileNav, settings: { ...settings, tabs } } } };
+}
+
 /**
  * The document steps by the version they upgrade from: entry `n` turns a
  * version `n` document into version `n + 1`. compat.test.ts requires one for
@@ -249,6 +259,8 @@ function privatePageLayouts(document: Json): Json {
  *   the same pages, under the document's new `privatePages`; and the colours
  *   no longer store a focus ring (`unstoredFocusRing`): it is made from them
  *   when they are read.
+ * - 15 → 16: the bottom bar's tabs are objects (`mobileTabObjects`), the
+ *   store's destinations as `{ kind }`, so a theme's link tab sits among them.
  */
 export const STOREFRONT_THEME_DOCUMENT_UPGRADES: Readonly<Record<number, StorefrontThemeDocumentUpgrade>> = {
   10: (document) => snakeAppKeys(document) as Json,
@@ -256,6 +268,7 @@ export const STOREFRONT_THEME_DOCUMENT_UPGRADES: Readonly<Record<number, Storefr
   12: lightColorScheme,
   13: privatePageBlocks,
   14: (document) => unstoredFocusRing(privatePageLayouts(document)),
+  15: mobileTabObjects,
 };
 
 /** A chain: the versions it reads, its document steps and each section type's own. */

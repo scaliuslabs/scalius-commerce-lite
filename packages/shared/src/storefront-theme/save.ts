@@ -6,6 +6,7 @@
 
 import { storefrontThemeDocumentSchema, type StorefrontThemeDocument } from "./document";
 import { compileStorefrontPrivatePages, privatePagesContextOf } from "./private-layout";
+import { storefrontThemeAssetIssues } from "./theme-assets";
 import { storefrontThemeTranslationProblems } from "./translate";
 
 /** Largest stored theme document: bounds each D1 row and the retained history on Workers Free. */
@@ -39,7 +40,8 @@ function refused(issues: StorefrontThemeSaveIssue[], fallback: string): Storefro
  * Every check a save runs on a theme document, in order: the strict schema
  * (palette contrast for each colour set buyers can see, the muted and error
  * colours, the page paint, dark colours where a scheme shows them), the
- * translations against their places' limits, the private pages compiled
+ * translations against their places' limits, the app files it names (its own
+ * app's only), the private pages compiled
  * against the document's palettes and its own app (arrangements, tokens,
  * words, icons), and the stored size. Returns the document as it is stored
  * (private pages compiled) or the refusal.
@@ -55,6 +57,9 @@ export function checkStorefrontThemeSave(theme: unknown): StorefrontThemeSaveChe
   }
   const translations = storefrontThemeTranslationProblems(result.data);
   if (translations.length > 0) return refused(translations.map((problem) => ({ ...problem, reason: null })), "A translation does not fit.");
+  // Every app file the theme names (private page icons, tab icons) is its own app's.
+  const foreign = storefrontThemeAssetIssues(result.data);
+  if (foreign.length > 0) return refused(foreign.map((issue) => ({ path: issue.path.map(String).join("."), message: issue.message, reason: issue.reason })), "A theme names only its own app's files.");
   // What the request said was compiled is never kept: the page reads only what this wrote.
   const privatePages = compileStorefrontPrivatePages(result.data.privatePages, privatePagesContextOf(result.data));
   if (!privatePages.ok) {

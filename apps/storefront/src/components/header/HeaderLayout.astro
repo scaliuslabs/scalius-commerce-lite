@@ -91,9 +91,11 @@ const {
     }
   }
 
-  /* Bottom tabs carry the account on phones; the cart and the search never leave the header. */
+  /* Bottom tabs that carry the account or the cart take them from the header on phones; the search
+     stays. While the product page's buy bar replaces the tabs, the header shows them again. */
   @media (max-width: 63.99rem) {
-    #main-header[data-phone-drop~="account"] [data-header-account] {
+    html:not([data-sticky-buy-visible]) #main-header[data-phone-drop~="account"] [data-header-account],
+    html:not([data-sticky-buy-visible]) #main-header[data-phone-drop~="cart"] [data-header-cart] {
       display: none;
     }
   }

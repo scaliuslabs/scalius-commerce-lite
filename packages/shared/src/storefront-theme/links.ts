@@ -19,3 +19,29 @@ export const storefrontLinkSchema = z.string().max(STOREFRONT_LINK_MAX_LENGTH).r
   (value) => canonicalStorefrontLink(value) === value,
   "Use a store path such as /collections/new or an https:// link.",
 );
+
+/**
+ * The store's machinery, never a page a link opens: its API, the app proxy
+ * (`/apps/<id>/…`, any app's routes), the app file gateway (`/_x/…`) and
+ * every `_` or `~` first segment (build assets, islands, Partytown). Case folded.
+ */
+export const STOREFRONT_STORE_PATH_RESERVED = /^\/(?:api|apps|[_~][^/]*)(?:\/|$)/i;
+const STORE_PATH_SHAPE = /^\/(?!\/)[^\\\s?#]*$/;
+export const STOREFRONT_STORE_PATH_MESSAGE = "Link to a page of this store, such as /products/x: no other site, query, /api, /apps or /_ paths.";
+
+/** A page path on this store: no other origin, query, fragment, dot segments, encoded separators or store machinery. */
+export function isStorefrontStorePath(path: string): boolean {
+  return STORE_PATH_SHAPE.test(path)
+    && !path.split("/").some((part) => part === "." || part === "..")
+    && !/%(?:2f|5c|2e)/i.test(path)
+    && !STOREFRONT_STORE_PATH_RESERVED.test(path);
+}
+
+/** The one schema of a page path on this store (a buyer link an app draws, a bottom bar link tab): one refusal, with the caller's reason. */
+export function storefrontStorePathSchema(reason: string) {
+  const refusal = { message: STOREFRONT_STORE_PATH_MESSAGE, params: { reason } };
+  // One check, one issue; the shape still reads as the JSON Schema's pattern.
+  return z.string().max(STOREFRONT_LINK_MAX_LENGTH)
+    .refine(isStorefrontStorePath, refusal)
+    .meta({ pattern: STORE_PATH_SHAPE.source });
+}

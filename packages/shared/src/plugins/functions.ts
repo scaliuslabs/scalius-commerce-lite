@@ -881,13 +881,16 @@ export const PLUGIN_FUNCTION_INVALID_OUTPUT = "function_invalid_output";
 export function checkPluginFunctionOutput<P extends PluginRunPoint>(
   point: P,
   value: unknown,
-): { ok: true; value: PluginFunctionOutput<P> } | { ok: false; code: typeof PLUGIN_FUNCTION_INVALID_OUTPUT; message: string } {
+): { ok: true; value: PluginFunctionOutput<P> } | { ok: false; code: typeof PLUGIN_FUNCTION_INVALID_OUTPUT; reason: string | null; message: string } {
   const parsed = PLUGIN_RUN_SCHEMAS[point].output.safeParse(value);
   if (parsed.success) return { ok: true, value: parsed.data as PluginFunctionOutput<P> };
   const issue = parsed.error.issues[0];
+  // A refusal that names its reason (`params.reason`) carries it, machine-readable, beside the message.
+  const reason = (issue as { params?: { reason?: unknown } } | undefined)?.params?.reason;
   return {
     ok: false,
     code: PLUGIN_FUNCTION_INVALID_OUTPUT,
-    message: `Invalid ${point === PLUGIN_EXTENSION_RUN ? "extension" : point} output${issue ? ` at ${issue.path.join(".") || "(root)"}: ${issue.message}` : ""}.`,
+    reason: typeof reason === "string" ? reason : null,
+    message: `Invalid ${point === PLUGIN_EXTENSION_RUN ? "extension" : point} output${issue ? ` at ${issue.path.join(".") || "(root)"}: ${issue.message}` : ""}${typeof reason === "string" ? ` (${reason})` : ""}.`,
   };
 }

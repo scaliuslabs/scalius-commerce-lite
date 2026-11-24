@@ -45,7 +45,7 @@ import {
 import { storefrontThemeTranslationsSchema } from "./text";
 import { storefrontPrivatePagesSchema } from "./private-layout";
 
-export const STOREFRONT_THEME_DOCUMENT_VERSION = 15 as const;
+export const STOREFRONT_THEME_DOCUMENT_VERSION = 16 as const;
 
 /**
  * The five presets of one design system ("Scalius Base"), named by

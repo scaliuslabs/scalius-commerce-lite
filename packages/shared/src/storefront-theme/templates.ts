@@ -267,7 +267,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       header: ["search-first", { search: "scoped", cartTotal: true }],
       navigation: { source: "tree+menu", maxTopItems: 16 },
       desktopNav: ["sticky-category-bar", { flyouts: "cascading" }],
-      mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "offers", "account"], drawer: "drill-in" }],
+      mobileNav: ["bottom-tabs", { tabs: [{ kind: "home" }, { kind: "categories" }, { kind: "offers" }, { kind: "account" }], drawer: "drill-in" }],
       card: ["standard", { facts: "none", action: "quick-add" }],
       listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: ["thumbs-left", { phoneSideThumbnails: false }], buyBox: ["classic", { details: "below", whatsapp: true }], below: ["description", "related"], sticky: NO_STICKY },

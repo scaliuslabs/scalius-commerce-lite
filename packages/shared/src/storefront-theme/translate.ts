@@ -108,6 +108,7 @@ function translatedDocument(document: StorefrontThemeDocument, text: StorefrontT
   }) as StorefrontThemeDocument["pages"]["templates"];
   const topBar = translatePaths(blocks.topBar, STOREFRONT_BLOCK_TEXT.topBar.map((key) => `settings.${key}`), text) as typeof blocks.topBar;
   const footer = translatePaths(blocks.footer, STOREFRONT_BLOCK_TEXT.footer.map((key) => `settings.${key}`), text) as typeof blocks.footer;
+  const mobileNav = translatePaths(blocks.mobileNav, STOREFRONT_BLOCK_TEXT.mobileNav.map((key) => `settings.${key}`), text) as typeof blocks.mobileNav;
   const productApps = blocks.product.apps;
   const appBlocks = productApps?.map((block) => {
     const values = translateValues("component", block.app, block.values, text, apps);
@@ -120,11 +121,11 @@ function translatedDocument(document: StorefrontThemeDocument, text: StorefrontT
     return values === skin.values ? skin : { ...skin, values: values as typeof skin.values };
   }) : skins;
   const pagesChanged = home !== pages.home || landing !== pages.landing || templates !== pages.templates;
-  const blocksChanged = topBar !== blocks.topBar || footer !== blocks.footer || product !== blocks.product;
+  const blocksChanged = topBar !== blocks.topBar || footer !== blocks.footer || mobileNav !== blocks.mobileNav || product !== blocks.product;
   if (!pagesChanged && !blocksChanged && translatedSkins === skins) return document;
   return {
     ...document,
-    ...(blocksChanged ? { blocks: { ...blocks, topBar, footer, product } } : {}),
+    ...(blocksChanged ? { blocks: { ...blocks, topBar, footer, mobileNav, product } } : {}),
     ...(translatedSkins !== skins ? { apps: { ...document.apps, skins: translatedSkins } } : {}),
     ...(pagesChanged ? { pages: { ...pages, home, landing, templates } } : {}),
   };

@@ -61,6 +61,7 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { AD_CLICK_ID_SCRIPT, REACT_REFRESH_PREAMBLE, SIGNED_IN_HINT_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-boot-scripts";
 import WindowGlobals from "../components/WindowGlobals.astro";
+import { isPayingStorefrontPathname } from "@/lib/cache-policy";
 import { isPaymentPage, rendersStoreScripts } from "@/lib/analytics-csp";
 import { gateMarketingScript, optimizeAnalyticsScriptDelivery, scriptNeedsConsent, isGoogleTagScript } from "@/lib/analytics-script-delivery";
 import { consentRegimeFor } from "@scalius/shared/tracking-consent";
@@ -246,8 +247,9 @@ const showNavigationSidebar =
   !hideNavigationSidebar &&
   themeLayout.navigation === "sidebar" &&
   (navigationData.length > 0 || (categoryTree?.nodes.length ?? 0) > 0);
-// A private page draws no phone tab bar, the theme's chrome there included (as the store's checkout header).
-const showMobileTabs = !hideHeader && themeLayout.mobileNavigation === "tabs";
+// No phone tab bar where the buyer is paying (the one list, cache-policy.ts), the theme's chrome
+// there included; the receipt and the account pages keep it. Every header draws the bar from this.
+const showMobileTabs = !hideHeader && !isPayingStorefrontPathname(Astro.url.pathname) && themeLayout.mobileNavigation === "tabs";
 
 // The theme's brand images (the draft's under a preview): the tab icon, the
 // header logo that also stands in for a missing share image and schema logo.
