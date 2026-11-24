@@ -47,8 +47,9 @@
 //   the table does not know lies between them and the row, and every element
 //   a style target names is drawn by a row of that target); with no tokens,
 //   to a surface the anatomy names, and the page shows no paint of its own;
-// - every text at its contrast floor against the pixels behind it (the text
-//   hidden, the page photographed): its 5th-percentile pixel, 0.05 of budget;
+// - every text at its contrast floor against its worst pixel behind it, no
+//   budget (the text hidden, the page photographed); a field's value or
+//   placeholder at its 5th-percentile pixel less 0.05 (its box holds its ring);
 // - every text whole: nothing cut sideways, no glyph cut by a clip, no word
 //   broken inside itself;
 // - the summary's total drawn no smaller than any other summary row, its
@@ -518,6 +519,14 @@ const LINEAR = Array.from({ length: 256 }, (_, channel) => {
   const value = channel / 255;
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 });
+/**
+ * A text's contrast is its worst pixel behind it, with no budget (measured: three runs of a named case and a page
+ * paint case found no text under its floor at the minimum that passed at the 5th percentile). A field's value or
+ * placeholder alone is read at its 5th-percentile pixel less 0.05: its box is the field's padding box, which also
+ * holds the field's own drawing (its inset ring and edge), read at 1.0 to 2.2:1 at the minimum.
+ */
+const FIELD_QUANTILE = 0.05;
+const FIELD_BUDGET = 0.05;
 const luminance = ([r, g, b]) => 0.2126 * LINEAR[r] + 0.7152 * LINEAR[g] + 0.0722 * LINEAR[b];
 const contrast = (a, b) => {
   const [x, y] = [luminance(a), luminance(b)];
@@ -692,7 +701,7 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt, styleTargets }
     if (!shows) continue;
     const placeholder = field.tagName !== "SELECT" && !field.value;
     const color = placeholder ? getComputedStyle(field, "::placeholder").color : style.color;
-    texts.push({ id: texts.length, label: `${placeholder ? "placeholder" : "value"} of ${name(field)}`, color, large: false });
+    texts.push({ id: texts.length, label: `${placeholder ? "placeholder" : "value"} of ${name(field)}`, color, large: false, field: true });
     window.__ptTexts.push({ field, element: field });
   }
   // Every control a buyer can reach.
@@ -1126,9 +1135,9 @@ async function textContrast(page, texts) {
       }
       if (ratios.length === 0) continue;
       ratios.sort((a, b) => a - b);
-      const worst = ratios[Math.floor(ratios.length * 0.05)];
+      const worst = ratios[text.field ? Math.floor(ratios.length * FIELD_QUANTILE) : 0];
       const floor = text.large ? 3 : 4.5;
-      if (worst < floor - 0.05) {
+      if (worst < floor - (text.field ? FIELD_BUDGET : 0)) {
         problems.push(`${text.label}: ${text.color} reads ${worst.toFixed(2)}:1 on what is behind it`);
         // `PT_SHOTS=<dir>`: keep the screen a failing text was measured on (its words hidden), to look at.
         if (process.env.PT_SHOTS && !kept) {
@@ -1299,8 +1308,8 @@ async function hovers(page, controls) {
       }
       if (ratios.length === 0) continue;
       ratios.sort((a, b) => a - b);
-      const worst = ratios[Math.floor(ratios.length * 0.05)];
-      if (worst < (word.large ? 3 : 4.5) - 0.05) problems.push(`control ${control.label} hovered: "${word.text}" ${word.color} reads ${worst.toFixed(2)}:1 on what is behind it`);
+      const worst = ratios[0];
+      if (worst < (word.large ? 3 : 4.5)) problems.push(`control ${control.label} hovered: "${word.text}" ${word.color} reads ${worst.toFixed(2)}:1 on what is behind it`);
     }
     if (box.surfaced) {
       let changed = 0;
