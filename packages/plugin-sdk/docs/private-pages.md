@@ -25,7 +25,7 @@ A template sets them under `privatePages`. The merchant's theme document holds t
 | `labels` | The store's word you choose for an action or an amount (`{ "dialog.confirm": "continue-checkout" }`), your own words per language for a heading or an empty state (`{ "cart.heading": { "en": "Your Cart", "bn": "আপনার কার্ট" } }`). |
 | `icons` | Your image for a store icon: `{ "cart.empty": { "app": "acme.studio", "file": "icons/bag.svg" } }`, a file in your `public/`. `app` is the app your template comes from (`foreign_asset` otherwise). Applying a template that sets `privatePages` replaces the store's whole object; one that sets none drops any icon of another app. |
 
-The store checks all of it when the theme is saved or published, and stores the result in `compiled` (never set it yourself). A refusal names its `reason` ([below](#refusals)). A buyer's request never compiles anything. After a store update with a newer checker, a page shows the store's default look (its arrangement, words, icons, controls and colours) until the next save, or until the first maintenance run after the update compiles it again.
+The store checks all of it when the theme is saved or published, and stores the result in `compiled` (never set it yourself). A refusal names its `reason` ([below](#refusals)). A buyer's request never compiles anything. After a store update with a newer checker, a page shows the store's default look (its arrangement, words, icons, controls and colours) until the next save, or, for the published theme, until the first maintenance run after the update compiles it again (a draft waits for its save).
 
 ## Not available yet
 
@@ -363,7 +363,7 @@ An app's `cart.line_prices` add-on shows as its own money row (`data-summary-row
 
 - it is the browser's own disclosure (`<details data-part="add-on-details">`), so it opens with no script, on the server-drawn receipt too;
 - its bar (`<summary>`) holds the title, a chevron and the amount, so the amount shows once, open or closed; the bar is 44px tall on a phone;
-- under it, each line is `data-part="add-on-detail"`, in line order, as plain text (at most 50 a row);
+- under it, each line is `data-part="add-on-detail"`, in line order, as plain text (at most 50 a row on the cart page, the drawer, the payment step and quick checkout; at most 10 a row and 50 in all on the receipt and the account order, as in the emails and the invoice);
 - it starts closed. The cart page and the drawer redraw the summary as the cart changes: a row the buyer opened stays open, and a row that first appears after the buyer adds the add-on opens by itself (never on the page's first answer).
 
 A row with no details is a plain row of its title and amount. On the cart page and the payment step the bar takes the `summary-add-on` tokens and each line `summary-add-on-detail`, on the `summary-rows` row; elsewhere the row takes the look of the money rows around it.
