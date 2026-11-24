@@ -17,16 +17,7 @@ import { writeCartLineEdit } from "@/lib/cart/line-edit";
 import { purchaseOptionsField } from "@/lib/cart/purchase-option";
 import { useStore } from "@nanostores/react";
 import { atom } from "nanostores";
-import {
-  ShoppingBag,
-  Trash2,
-  X,
-  Plus,
-  Minus,
-  ArrowRight,
-  Check,
-  ChevronDown,
-} from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Minus, Plus, ShoppingBag, Trash2, X } from "@/components/icons/lucide-svg";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";

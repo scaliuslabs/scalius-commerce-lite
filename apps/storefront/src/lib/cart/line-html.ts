@@ -8,11 +8,10 @@ import { cartCallAttributes } from "./cart-calls";
 import { PRODUCT_IMAGE_FALLBACK, getProductImageUrl } from "@/lib/product-media";
 import { cspSourcesAllowImage } from "@scalius/shared/security-csp";
 import { longAnswerHtml, type LongAnswerWords } from "@/lib/long-answer";
-import { pageLanguage } from "@/lib/store-time-zone";
-import { privateVariantWord } from "@/lib/private-pages/labels";
+import { loadLazyScript } from "@/scripts/lazy-script";
 import type { CartLineView } from "./line-view";
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -58,30 +57,22 @@ export interface CartLineHtmlSlots {
 const STEPPER_BUTTON =
   "flex h-full w-11 min-w-6 items-center justify-center text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent sm:w-9";
 
-/** A line's sub-parts' variants (private-anatomy.ts), by part; a part not named draws its default. */
-export type CartLineVariants = Readonly<Record<string, string>>;
-
-const CHIP = "rounded-md bg-muted px-2 py-0.5 text-xs text-foreground";
+/** One fact of a line's details, its text escaped, as a variant draws it (here: a block of its own). */
+export type LineFact = (text: string, attribute: string, className?: string) => string;
+const blockFact: LineFact = (text, attribute, className = "block") => `<span class="${className}" ${attribute}>${text}</span>`;
 
 /**
- * What the buyer chose, as the `details` variant draws it: `lines` (each fact
- * on its own line), `values` (the option values only, " / ", on one line where
- * they fit and wrapped where not: never cut, so a phone still shows what tells
- * two lines of one product apart) or `chips`
- * (each fact a chip). The answers to the store's inputs stay rows in every
- * variant: their controls replace them by key.
+ * What the buyer chose, as the host draws it (each fact on its own line), in
+ * its four groups: the options, the purchase options, the answers to the
+ * store's inputs (rows their controls replace by key, in every variant) and
+ * how the line is fulfilled. A theme's other variants (theme-line.ts) draw
+ * from the same groups.
  */
-function detailsHtml(view: CartLineView, slots: CartLineHtmlSlots, variant: string | undefined): string {
+export function lineDetails(view: CartLineView, slots: CartLineHtmlSlots, fact = blockFact): [options: string, purchaseOptions: string, properties: string, fulfilment: string] {
   const { words } = slots;
-  const chips = variant === "chips";
-  const option = (text: string, attribute: string, className = "block") =>
-    chips ? `<li class="${CHIP}" data-part="line-chip" ${attribute}>${text}</li>` : `<span class="${className}" ${attribute}>${text}</span>`;
-  const values = view.options.map((each) => escapeHtml(each.label)).join(" / ");
-  const options = variant === "values"
-    ? values && `<span class="block break-words" data-cart-line-options>${values}</span>`
-    : view.options.map((each) => option(`${escapeHtml(each.name)}: ${escapeHtml(each.label)}`, "data-cart-line-option")).join("");
+  const options = view.options.map((each) => fact(`${escapeHtml(each.name)}: ${escapeHtml(each.label)}`, "data-cart-line-option")).join("");
   const purchaseOptions = view.purchaseOptions
-    .map((each) => option(escapeHtml(each.title), "data-cart-line-purchase-option", "block font-medium text-foreground"))
+    .map((each) => fact(escapeHtml(each.title), "data-cart-line-purchase-option", "block font-medium text-foreground"))
     .join("");
   // An input's row names its key: the app inputs' controls replace their rows once drawn.
   const rows = [
@@ -95,13 +86,19 @@ function detailsHtml(view: CartLineView, slots: CartLineHtmlSlots, variant: stri
     ? `<div class="mt-0.5 text-sm text-muted-foreground" data-cart-line-properties><ul${view.inputs.length > 0 ? ` id="${escapeHtml(slots.inputsId)}"` : ""}>${rows}</ul>${edit}</div>`
     : "";
   const fulfilment = view.fulfilment === "ships-free"
-    ? option(escapeHtml(words.shipsFree), 'data-cart-line-fulfilment="ships-free"', "block font-medium text-foreground")
+    ? fact(escapeHtml(words.shipsFree), 'data-cart-line-fulfilment="ships-free"', "block font-medium text-foreground")
     : view.fulfilment
-      ? option(escapeHtml(view.fulfilment === "digital" ? words.digital : words.service), `data-cart-line-fulfilment="${view.fulfilment}"`)
+      ? fact(escapeHtml(view.fulfilment === "digital" ? words.digital : words.service), `data-cart-line-fulfilment="${view.fulfilment}"`)
       : "";
-  if (!chips) return options + purchaseOptions + properties + fulfilment;
-  const list = options + purchaseOptions + fulfilment;
-  return (list ? `<ul class="mt-1 flex flex-wrap gap-1.5">${list}</ul>` : "") + properties;
+  return [options, purchaseOptions, properties, fulfilment];
+}
+
+/** The `details` sub-part around what a variant drew. */
+export const detailsPart = (inner: string): string => `<div class="mt-0.5 text-sm text-muted-foreground" data-part="line-details">${inner}</div>`;
+
+/** The `remove` sub-part: the same named control in every variant, its look and content the variant's. */
+export function lineRemove({ words, describedBy, cartKey }: CartLineHtmlSlots, look: string, content: string): string {
+  return `<button type="button" aria-label="${escapeHtml(words.remove)}"${describedBy} ${cartCallAttributes("removeFromCart", cartKey)} data-part="line-remove" class="shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring ${look}">${content}</button>`;
 }
 
 function priceHtml(view: CartLineView, words: CartLineHtmlWords): string {
@@ -126,21 +123,17 @@ function lineImageUrl(url: string | null | undefined): string {
   return Array.isArray(allowed) && !cspSourcesAllowImage(src, allowed as string[], window.location.origin) ? PRODUCT_IMAGE_FALLBACK : src;
 }
 
-/** A line's sub-parts by their anatomy names (private-anatomy.ts), each "" when the line has none, each in its variant. */
-export function cartLineParts(view: CartLineView, slots: CartLineHtmlSlots, variants: CartLineVariants = {}): Record<string, string> {
+/** A line's sub-parts by their anatomy names (private-anatomy.ts) as the host draws them, each "" when the line has none. */
+export function hostLineParts(view: CartLineView, slots: CartLineHtmlSlots): Record<string, string> {
   const { words, cartKey, describedBy } = slots;
   const key = escapeHtml(view.key);
-  const remove = `type="button" aria-label="${escapeHtml(words.remove)}"${describedBy} ${cartCallAttributes("removeFromCart", cartKey)} data-part="line-remove" class="shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring`;
   return {
     image: `<div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20" data-part="line-image"><img src="${escapeHtml(lineImageUrl(view.image))}" alt="" width="80" height="80" loading="lazy" decoding="async" class="h-full w-full object-contain object-center" /></div>`,
     title: `<h3 class="text-sm font-medium text-foreground sm:text-base" data-part="line-title"><a href="${escapeHtml(view.productHref)}" class="line-clamp-2 break-words hover:text-muted-foreground" data-cart-line-name>${escapeHtml(view.name)}</a></h3>`,
-    details: `<div class="mt-0.5 text-sm text-muted-foreground" data-part="line-details">${detailsHtml(view, slots, variants.details)}</div>`,
+    details: detailsPart(lineDetails(view, slots).join("")),
     inputs: `<div class="mt-1.5 grid max-w-sm gap-2" data-cart-line-inputs data-line-key="${key}" data-part="line-inputs" hidden></div>`,
     target: `<div class="mt-2 grid gap-2" data-buyer-ui-target="cart.line.after" data-buyer-ui-line="${key}" data-buyer-ui-line-name="${escapeHtml(view.lineName)}" hidden></div>`,
-    // `words`: the word on a 44px target at every width, named as the icon is (the word is in its name).
-    remove: variants.remove === "words"
-      ? `<button ${remove} inline-flex min-h-11 min-w-11 px-2 text-sm font-medium">${escapeHtml(privateVariantWord("remove", pageLanguage()))}</button>`
-      : `<button ${remove} flex h-11 w-11 sm:h-9 sm:w-9"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`,
+    remove: lineRemove(slots, "flex h-11 w-11 sm:h-9 sm:w-9", `<svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`),
     // The stepper never shrinks beside a large price (the row wraps), nor below its 24px buttons and count with a
     // 4px border (88px) in a theme's narrow column (a layout node is a size container: its content never widens
     // a `min-content` track): it never cuts "−" or "+".
@@ -156,32 +149,33 @@ export function cartLineParts(view: CartLineView, slots: CartLineHtmlSlots, vari
   };
 }
 
-/**
- * The theme's line (`<template data-cart-line-template>`, drawn by the page
- * from the theme's arrangement): its sub-parts are `<!--line:name-->` marks
- * (`<!--line:name:variant-->` for a variant the theme chose), and its root's
- * `data-line-key` is empty. Null on a page that draws the host's own line.
- * Read once found.
- */
-let lineTemplate: string | null = null;
-function themeLineTemplate(): string | null {
-  lineTemplate ??= typeof document === "undefined" ? null : document.querySelector<HTMLTemplateElement>("template[data-cart-line-template]")?.innerHTML ?? null;
-  return lineTemplate;
-}
+/** The theme's line (theme-line.ts) once loaded; null where its file could not load (the host's line draws). */
+let themeLine: ((view: CartLineView, slots: CartLineHtmlSlots) => string) | null | undefined;
+let themeLineLoad: Promise<void> | undefined;
 
-/** The theme's line filled in: each mark replaced by its sub-part, in the variant the mark names (drawn again for it). */
-export function cartLineFromTemplate(template: string, view: CartLineView, slots: CartLineHtmlSlots): string {
-  const parts = cartLineParts(view, slots);
-  // Functions, never replacement strings: a line key's `$&` or `$'` is text, not a pattern.
-  return template
-    .replace('data-line-key=""', () => `data-line-key="${escapeHtml(view.key)}"`)
-    .replace(/<!--line:([a-z-]+)(?::([a-z-]+))?-->/g, (_mark, name: string, variant?: string) => (variant ? cartLineParts(view, slots, { [name]: variant }) : parts)[name] ?? "");
+/**
+ * The load the page's lines wait for before they draw, or undefined when
+ * they draw now. Only a page whose theme arranged the line has its
+ * `<template data-cart-line-template>` (read once found), and only it loads
+ * the theme's line (theme-line.ts): a default cart never downloads the
+ * variants or their words.
+ */
+export function cartLinePending(): Promise<void> | undefined {
+  if (themeLine !== undefined) return undefined;
+  const template = document.querySelector<HTMLTemplateElement>("template[data-cart-line-template]")?.innerHTML;
+  return template === undefined ? undefined : themeLineLoad ??= loadLazyScript(() => import("./theme-line"), { draftRestores: true }).then(
+    ({ cartLineFromTemplate }) => {
+      themeLine = (view, slots) => cartLineFromTemplate(template, view, slots);
+    },
+    () => {
+      themeLine = null;
+    },
+  );
 }
 
 export function cartLineHtml(view: CartLineView, slots: CartLineHtmlSlots): string {
-  const template = themeLineTemplate();
-  if (template) return cartLineFromTemplate(template, view, slots);
-  const parts = cartLineParts(view, slots);
+  if (themeLine) return themeLine(view, slots);
+  const parts = hostLineParts(view, slots);
   // The quantity and the price stay on every line, an issue or not: the issue says what is wrong under them.
   const quantityRow = `<div class="mt-2 flex min-h-11 flex-wrap items-center justify-between gap-2">
               ${parts.quantity}

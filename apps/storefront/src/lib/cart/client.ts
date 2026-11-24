@@ -34,7 +34,8 @@ import { writeCartLineEdit } from "./line-edit";
 import { purchaseOptionsField } from "./purchase-option";
 import { cartLineInputsId } from "./line-properties-view";
 import { cartEstimate, cartHasMixedFulfilment, cartLineDiscountsOf, cartLineEntries, cartLineIssues, cartLineView, cartPreviewLines, estimableCartLines, type CartLineView } from "./line-view";
-import { cartLineHtml } from "./line-html";
+import { cartLineHtml, cartLinePending } from "./line-html";
+import { loadLazyScript } from "@/scripts/lazy-script";
 import { cartLineInputFacts, NO_LINE_INPUTS, undecidedLineInputs, type CartLineInputFacts } from "./line-inputs";
 import type {
   CartRuleError,
@@ -63,7 +64,6 @@ import { shippingCountryName } from "@/lib/checkout/shipping-country";
 import { pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
 import { applyCheckoutButtonState, storeNotDeliveringMessage } from "./checkout-button-state";
-import { renderEmptyCartState } from "./empty-state";
 import { renderCartIssueAction } from "./issue-action";
 import {
   readAndClearCartRepairState,
@@ -1747,6 +1747,12 @@ function paintCartLines(): void {
   const container = document.getElementById("cartItems");
   const { items } = cartStore.get();
   if (!container || Object.keys(items).length === 0) return;
+  // A theme's line draws once it loaded (line-html.ts): the lines paint then.
+  const pending = cartLinePending();
+  if (pending) {
+    void pending.then(paintCartLines);
+    return;
+  }
   const lineRules = groupCartRuleErrors(cartRuleErrors(), items).lines;
   paintedLineRuleErrors = JSON.stringify(lineRules);
   // A cart that ships some lines says which ones don't (the receipt groups them the same way).
@@ -1834,8 +1840,13 @@ export async function renderCartItems() {
     Object.keys(items).length > 0 ? JSON.stringify(items) : "{}";
 
   if (Object.keys(items).length === 0) {
+    // Built with the cart's first empty state: until then the page's own markup shows it. A cart
+    // filled again meanwhile is drawn by its own render; one whose file cannot load shows no lines.
+    const emptyState = await loadLazyScript(() => import("./empty-state"), { draftRestores: true }).catch(() => null);
+    if (Object.keys(cartStore.get().items).length > 0) return;
     const pendingCheckout = pendingCheckoutForThisTab();
-    renderEmptyCartState(
+    if (!emptyState) cartItemsContainer.replaceChildren();
+    else emptyState.renderEmptyCartState(
       cartItemsContainer,
       lang,
       pendingCheckout
@@ -1850,6 +1861,9 @@ export async function renderCartItems() {
   }
   renderCheckoutRecoveryNotice();
 
+  // The lines show with the summary: a theme's line loads first.
+  const pending = cartLinePending();
+  if (pending) await pending;
   paintCartLines();
   await updateTotals();
   syncCartPagePresentation(true);
