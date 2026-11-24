@@ -3804,9 +3804,6 @@
                   "collection": {
                     "$ref": "#/components/schemas/StorefrontPageTemplate"
                   },
-                  "cart": {
-                    "$ref": "#/components/schemas/StorefrontPageTemplate"
-                  },
                   "page": {
                     "$ref": "#/components/schemas/StorefrontPageTemplate"
                   }
@@ -3814,7 +3811,6 @@
                 "required": [
                   "product",
                   "collection",
-                  "cart",
                   "page"
                 ],
                 "additionalProperties": false
@@ -33613,7 +33609,6 @@
                 "enum": [
                   "product",
                   "collection",
-                  "cart",
                   "page"
                 ]
               },
@@ -42991,7 +42986,6 @@
               "enum": [
                 "product",
                 "collection",
-                "cart",
                 "page"
               ]
             },
@@ -45442,7 +45436,6 @@
                     "enum": [
                       "product",
                       "collection",
-                      "cart",
                       "page"
                     ]
                   },
@@ -214153,7 +214146,6 @@
                       "landing",
                       "product",
                       "collection",
-                      "cart",
                       "page"
                     ]
                   },
@@ -214596,7 +214588,6 @@
                             "enum": [
                               "product",
                               "collection",
-                              "cart",
                               "page"
                             ]
                           },
