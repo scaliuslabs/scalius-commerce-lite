@@ -56,6 +56,7 @@
     "gallery:storefront": "node apps/storefront/scripts/gallery-server.mjs",
     "quality:storefront": "node scripts/storefront-quality.mjs",
     "quality:admin": "node scripts/admin-quality.mjs",
+    "test:private-pages": "node apps/storefront/test-support/private-pages.properties.browser.mjs",
     "fidelity:check": "node scripts/storefront-fidelity/check.mjs",
     "check:dist-secrets": "node scripts/check-dist-secrets.mjs",
     "check:build-canaries": "node scripts/check-build-canaries.mjs",

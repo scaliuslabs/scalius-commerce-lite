@@ -15,6 +15,13 @@
 import { z } from "zod";
 import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBlocksSchema } from "./blocks";
+import {
+  compileStorefrontPrivatePages,
+  privatePagesContextOf,
+  storefrontPrivatePagesDefault,
+  storefrontPrivatePagesTemplateSchema,
+  type StorefrontPrivatePages,
+} from "./private-layout";
 import { storefrontSectionListSchema, type StorefrontSection } from "./sections";
 import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontDarkColorsMissing, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";
 import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
@@ -41,6 +48,11 @@ export const storefrontAppTemplateThemeSchema = z.object({
   apps: storefrontThemeAppsSchema.omit({ template: true, templateSkins: true }).optional(),
   /** The homepage sections. */
   sections: storefrontSectionListSchema.optional(),
+  /**
+   * The cart page and drawer: the chrome, an arrangement per page (each page
+   * it names replaces the merchant's), the stylesheet, words and icons.
+   */
+  privatePages: storefrontPrivatePagesTemplateSchema.optional(),
 }).strict().superRefine((value, context) => {
   // As every theme: dark colours whenever its scheme or switch can show them, so an applied template always saves.
   if (value.tokens && storefrontDarkColorsMissing(value.tokens)) {
@@ -203,7 +215,20 @@ function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHa
   for (let round = 0; !parsed.success && round < 16 && fillRequiredBlockFields(candidate, parsed.error.issues); round += 1) {
     parsed = storefrontAppTemplateThemeSchema.safeParse(candidate);
   }
-  return parsed.success ? { ok: true, value: parsed.data, unresolved } : { ok: false, problem: issueText(parsed.error) };
+  if (!parsed.success) return { ok: false, problem: issueText(parsed.error) };
+  // Its private pages pass the checks a save runs (arrangements, tokens against its own colours,
+  // words, icons). Its files are its own app's: the one app every icon it names comes from.
+  if (parsed.data.privatePages) {
+    const value = { ...storefrontPrivatePagesDefault(), ...parsed.data.privatePages } as StorefrontPrivatePages;
+    const apps = new Set(Object.values(value.icons).flatMap((ref) => ref ? [ref.app] : []));
+    const context = privatePagesContextOf({ tokens: parsed.data.tokens ?? DEFAULT_STOREFRONT_THEME.tokens });
+    const compiled = compileStorefrontPrivatePages(value, { ...context, themeApp: apps.size === 1 ? [...apps][0]! : null });
+    if (!compiled.ok) {
+      const issue = compiled.issues[0]!;
+      return { ok: false, problem: `${issue.path.join(".")}: ${issue.message}` };
+    }
+  }
+  return { ok: true, value: parsed.data, unresolved };
 }
 
 /**
@@ -333,6 +358,15 @@ export function applyStorefrontAppTemplateCarry(
       ...document,
       tokens: template.tokens ? storefrontTokensKeepingColorScheme(template.tokens, document.tokens) : document.tokens,
       blocks: { ...document.blocks, ...(template.blocks ?? {}) },
+      privatePages: template.privatePages
+        ? {
+          ...document.privatePages,
+          ...template.privatePages,
+          pages: { ...document.privatePages.pages, ...template.privatePages.pages },
+          labels: template.privatePages.labels ?? document.privatePages.labels,
+          icons: template.privatePages.icons ?? document.privatePages.icons,
+        }
+        : document.privatePages,
       apps: appsAfterTemplate(document, key, template),
       pages: { ...document.pages, home: carry ? carry.home : document.pages.home },
     }),

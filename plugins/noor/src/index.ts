@@ -543,7 +543,7 @@ const tokens = {
     accent: "#e8d9bf", "accent-foreground": "#3b2c16",
     destructive: "#b42318", "destructive-foreground": "#ffffff",
     // The field border shows (3:1) against the page and the card (WCAG 1.4.11).
-    border: "#e3dbce", input: "#90877b", ring: "#1f3d33",
+    border: "#e3dbce", input: "#90877b",
   },
   typography: "editorial",
   typeScale: "display",

@@ -74,6 +74,10 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  /* The hovers the theme's colours make (tokens.ts buildStorefrontColorCss): their words keep 4.5:1. */
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft-hover: var(--primary-soft-hover);
+  --color-primary-link-hover: var(--primary-link-hover);
   /* Text on a primary tint (a badge, a pill): the brand colour drawn toward the
      text colour, so it keeps AA contrast on the tinted surface whatever the brand. */
   --color-primary-ink: color-mix(in oklab, var(--primary) 75%, var(--foreground));

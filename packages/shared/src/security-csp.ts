@@ -98,3 +98,50 @@ export function normalizePlatformOrigin(input: unknown): string | null {
   const normalized = normalizeMerchantCspSource(input).value;
   return normalized?.includes("*") ? null : normalized;
 }
+
+/**
+ * True when a CSP source list allows an origin: the same origin, or a
+ * wildcard source (`https://*.example.com`) of a subdomain of its host.
+ */
+export function cspSourcesAllowOrigin(origin: string, sources: readonly string[]): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return false;
+  }
+  const target = parsed.origin.toLowerCase();
+  return sources.some((source) => {
+    const value = source.toLowerCase();
+    if (value === target) return true;
+    const wildcard = /^(https?):\/\/\*\.([^/:]+)(?::(\d+))?$/.exec(value);
+    if (!wildcard) return false;
+    const port = wildcard[3] ?? "";
+    return parsed.protocol === `${wildcard[1]}:` && parsed.hostname.toLowerCase().endsWith(`.${wildcard[2]}`) && parsed.port === port;
+  });
+}
+
+/**
+ * True when an image URL may load on a buyer's private page: one on the
+ * page's own origin (a path), a `data:` URL, or one whose origin the source
+ * list allows. Never a `blob:` URL: a blob is made in a browser, so served
+ * markup never names one, and a blob of another origin is that origin's. The URL is judged as the browser reads it: one
+ * holding a control character or edge space (which the browser strips
+ * before parsing) is refused, and the rest is resolved against the page.
+ */
+export function cspSourcesAllowImage(url: string, sources: readonly string[], self: string): boolean {
+  if ([...url].some((character) => character <= "\u001f" || character === "\u007f") || url !== url.trim()) return false;
+  let page = "https://self.invalid";
+  try {
+    if (self) page = new URL(self).origin;
+  } catch {
+    // No page origin: a path resolves against a placeholder of its own.
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(url, page);
+  } catch {
+    return false;
+  }
+  return parsed.protocol === "data:" || (parsed.protocol !== "blob:" && (parsed.origin === page || cspSourcesAllowOrigin(parsed.origin, sources)));
+}
