@@ -573,7 +573,7 @@ function tokenEntries(): GalleryEntry[] {
 /** A saved cart with two lines, so the checkout steps (and the targets apps draw at) are visible. */
 const GALLERY_CART = JSON.stringify({
   items: {
-    "line:v3:prod_0:variant:var_0:p:none": { id: "prod_0", slug: "handwoven-jamdani-saree", name: "Handwoven Dhakai Jamdani Saree", price: 6500, quantity: 1, variantId: "var_0", propertiesHash: "none", options: [{ name: "Colour", value: "Bottle green" }] },
+    "line:v3:prod_0:variant:var_0:p:none": { id: "prod_0", slug: "handwoven-jamdani-saree", name: "Handwoven Dhakai Jamdani Saree", price: 6500, quantity: 1, variantId: "var_0", propertiesHash: "none", options: [{ name: "Colour", label: "Bottle green" }] },
     "line:v3:prod_1:variant:var_1:p:none": { id: "prod_1", slug: "cotton-panjabi", name: "Cotton Panjabi", price: 1490, quantity: 2, variantId: "var_1", propertiesHash: "none" },
   },
 });
@@ -932,7 +932,7 @@ export type PrivatePagesState = (typeof PRIVATE_PAGES_STATES)[number];
 /** Long Bangla titles: a line's words at their longest in the store's second language. */
 const BANGLA_LONG_CART = JSON.stringify({
   items: {
-    "line:v3:prod_0:variant:var_0:p:none": { id: "prod_0", slug: "jamdani", name: "হাতে বোনা ঢাকাই জামদানি শাড়ি, বোতল সবুজ জমিনে সোনালি পাড় ও আনস্টিচড ব্লাউজ পিস", price: 6500, quantity: 1, variantId: "var_0", propertiesHash: "none", options: [{ name: "রং", value: "বোতল সবুজ" }] },
+    "line:v3:prod_0:variant:var_0:p:none": { id: "prod_0", slug: "jamdani", name: "হাতে বোনা ঢাকাই জামদানি শাড়ি, বোতল সবুজ জমিনে সোনালি পাড় ও আনস্টিচড ব্লাউজ পিস", price: 6500, quantity: 1, variantId: "var_0", propertiesHash: "none", options: [{ name: "রং", label: "বোতল সবুজ" }] },
     "line:v3:prod_1:variant:var_1:p:none": { id: "prod_1", slug: "panjabi", name: "সুতির পাঞ্জাবি, হাতের কাজ করা কলার ও বোতাম, ঈদের বিশেষ সংগ্রহ", price: 1490, quantity: 2, variantId: "var_1", propertiesHash: "none" },
   },
 });

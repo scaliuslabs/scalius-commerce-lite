@@ -55,7 +55,7 @@ export const GALLERY_KIT = {
   key: "line:v3:prod_7:variant:var_kit_7:p:none",
   variantId: "var_kit_7",
   price: 4800,
-  line: { id: "prod_7", slug: "eid-gift-set", name: "Eid gift set", price: 4900, quantity: 2, variantId: "var_kit_7", propertiesHash: "none", options: [{ name: "Set", value: "Saree, panjabi and gift box" }] },
+  line: { id: "prod_7", slug: "eid-gift-set", name: "Eid gift set", price: 4900, quantity: 2, variantId: "var_kit_7", propertiesHash: "none", options: [{ name: "Set", label: "Saree, panjabi and gift box" }] },
   addOn: { key: "_adjustment", label: "Gift wrap", displayValue: "Gold paper and a card", price: 100, priceMinor: 10_000, appId: "acme.wrap" },
 } as const;
 
@@ -74,11 +74,11 @@ export const GALLERY_CUSTOMER = {
   title: "GAMEGHOR Protection",
   account: {
     key: "line:v3:prod_gta5:variant:var_gta5_account:p:none", variantId: "var_gta5_account", price: 2222,
-    line: { id: "prod_gta5", slug: "gta-v-premium-edition", name: "Grand Theft Auto V: Premium Edition", price: 2222, quantity: 1, variantId: "var_gta5_account", propertiesHash: "none", options: [{ name: "Platform", value: "Rockstar Launcher" }, { name: "Type", value: "Account" }] },
+    line: { id: "prod_gta5", slug: "gta-v-premium-edition", name: "Grand Theft Auto V: Premium Edition", price: 2222, quantity: 1, variantId: "var_gta5_account", propertiesHash: "none", options: [{ name: "Platform", label: "Rockstar Launcher" }, { name: "Type", label: "Account" }] },
   },
   redeem: {
     key: "line:v3:prod_gta5:variant:var_gta5_key:p:none", variantId: "var_gta5_key", price: 1754,
-    line: { id: "prod_gta5", slug: "gta-v-premium-edition", name: "Grand Theft Auto V: Premium Edition", price: 1754, quantity: 1, variantId: "var_gta5_key", propertiesHash: "none", options: [{ name: "Type", value: "Redeem Key" }] },
+    line: { id: "prod_gta5", slug: "gta-v-premium-edition", name: "Grand Theft Auto V: Premium Edition", price: 1754, quantity: 1, variantId: "var_gta5_key", propertiesHash: "none", options: [{ name: "Type", label: "Redeem Key" }] },
   },
 } as const;
 
