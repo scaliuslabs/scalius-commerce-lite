@@ -7,9 +7,12 @@ import { recordStaffAlert } from "./staff-alerts";
 //     verified account contacts for store threads. The merchant's
 //     `conversation_reply` template, never the message text (a staff line
 //     can hold a sign-in, which stays behind the buyer's own read, as a
-//     delivery message does): a link to where the buyer reads it. Email is
-//     coalesced to one per thread per 15 minutes; SMS (off by default) to one
-//     per thread per hour.
+//     delivery message does): a link to where the buyer reads it. While the
+//     buyer has not read the thread, a burst of replies is one email per
+//     15-minute window and one SMS (off by default) per hour, per recipient:
+//     the delivery is keyed by thread, the buyer's read position and the
+//     window (`replyReceiptScope`), so the unique receipt key lets one send
+//     through even when two replies are sent at once.
 //   conversation_message (buyer → staff): push ("New message about #1234", no
 //     text) and, when enabled, the staff email recipients.
 //   A chat-channel thread (0202) replies on its channel only: the line's
@@ -26,7 +29,6 @@ import {
   conversationMessages,
   conversations,
   customers,
-  notificationDeliveryReceipts,
   orders,
 } from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
@@ -34,7 +36,7 @@ import { conversationProductSnapshots } from "@scalius/shared/conversation";
 import { formatOrderNumber, orderNumberTextIn } from "@scalius/shared/order-utils";
 import { numberLocale } from "@scalius/shared/locale-format";
 import { isReady } from "@scalius/shared/readiness";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { sendEmail, type EmailRuntimeContext } from "../../integrations/email";
 import { resolveAppProvider, type AppProviders } from "../../integrations/provider-port";
 import { messagingSendSchema, providerErrorOf, type MessagingChannel } from "@scalius/shared/plugins/providers";
@@ -61,12 +63,10 @@ import {
 import { createProviderClientReference } from "./order-notification-delivery-receipts";
 import { buyerMessageScope, buyerStorefrontLink, readStoreIdentity } from "./store-messages";
 
-/** An SMS reply alert goes out at most once per thread per hour (§15 q8). */
+/** An unread burst of replies is one SMS per hour (§15 q8). */
 export const CONVERSATION_SMS_COALESCE_SECONDS = 60 * 60;
-export const CONVERSATION_SMS_COALESCED = "conversation_sms_coalesced";
-/** A burst of staff replies is one email: at most one per thread per 15 minutes. */
+/** A burst of staff replies the buyer has not read is one email per 15-minute window. */
 export const CONVERSATION_EMAIL_COALESCE_SECONDS = 15 * 60;
-export const CONVERSATION_EMAIL_COALESCED = "conversation_email_coalesced";
 
 export interface ConversationNotificationClaim {
   outboxId: string;
@@ -93,6 +93,8 @@ interface ThreadFacts {
   subjectType: string;
   orderId: string | null;
   customerId: string | null;
+  /** The last line the buyer read (`conversations.customer_read_seq`): reading or answering moves it. */
+  customerReadSeq: number;
   seq: number;
   kind: string;
   visibility: string;
@@ -111,6 +113,7 @@ async function readThreadLine(db: Database, conversationId: string, seq: number)
       subjectType: conversations.subjectType,
       orderId: conversations.orderId,
       customerId: conversations.customerId,
+      customerReadSeq: conversations.customerReadSeq,
       seq: conversationMessages.seq,
       kind: conversationMessages.kind,
       visibility: conversationMessages.visibility,
@@ -262,21 +265,15 @@ ${action}${footer}
   return { subject, html, text };
 }
 
-/** A reply alert on `channel` for this thread was accepted within the last `windowSeconds`. */
-async function replyRecentlyAccepted(db: Database, conversationId: string, channel: "email" | "sms", windowSeconds: number): Promise<boolean> {
-  const row = await db
-    .select({ id: notificationDeliveryReceipts.id })
-    .from(notificationDeliveryReceipts)
-    .where(and(
-      eq(notificationDeliveryReceipts.subjectType, "conversation"),
-      eq(notificationDeliveryReceipts.subjectId, conversationId),
-      eq(notificationDeliveryReceipts.notificationType, "conversation_reply"),
-      eq(notificationDeliveryReceipts.channel, channel),
-      gt(notificationDeliveryReceipts.acceptedAt, Math.floor(Date.now() / 1000) - windowSeconds),
-    ))
-    .limit(1)
-    .get();
-  return Boolean(row);
+/**
+ * The receipt scope of a reply alert: one per thread, channel, buyer read
+ * position and window, so replies the buyer has not read yet share one
+ * delivery (the first sends, the rest find it taken) and the next reply after
+ * they read or answer, or in a later window, sends again. The recipient is in
+ * the receipt key, so a corrected address is never held back by the old one.
+ */
+function replyReceiptScope(thread: ThreadFacts, channel: "email" | "sms", windowSeconds: number): string {
+  return `conversation_reply:${thread.id}:r${thread.customerReadSeq}:w${Math.floor(Date.now() / 1000 / windowSeconds)}:${channel}`;
 }
 
 export async function sendConversationNotification(
@@ -355,17 +352,8 @@ async function sendReplyToBuyer(
         recipientMasked: "missing-email",
         reason: "missing_email_recipient",
       }));
-    } else if (await replyRecentlyAccepted(db, thread.id, "email", CONVERSATION_EMAIL_COALESCE_SECONDS)) {
-      outcomes.push(await recordSkippedDelivery({
-        ...base,
-        channel: "email",
-        provider: "email",
-        recipient: email,
-        recipientMasked: maskEmail(email),
-        reason: CONVERSATION_EMAIL_COALESCED,
-      }));
     } else {
-      const target = { ...base, channel: "email" as const, provider: "email", recipient: email, recipientMasked: maskEmail(email) };
+      const target = { ...base, channel: "email" as const, provider: "email", recipient: email, recipientMasked: maskEmail(email), receiptScope: replyReceiptScope(thread, "email", CONVERSATION_EMAIL_COALESCE_SECONDS) };
       const blocked = await recordProviderBlockedDeliveryIfNeeded(target);
       outcomes.push(blocked ?? await dispatchWithReceipt({
         ...target,
@@ -485,16 +473,6 @@ async function sendReplySms(
       reason: "missing_sms_recipient",
     });
   }
-  if (await replyRecentlyAccepted(db, thread.id, "sms", CONVERSATION_SMS_COALESCE_SECONDS)) {
-    return recordSkippedDelivery({
-      ...base,
-      channel: "sms",
-      provider: "sms",
-      recipient: phone,
-      recipientMasked: maskPhone(phone),
-      reason: CONVERSATION_SMS_COALESCED,
-    });
-  }
   try {
     const { getActiveSmsProvider, getSmsProviderReadiness } = await import("../../integrations/sms");
     const readiness = await getSmsProviderReadiness(db, options.encryptionKey, options.appProviders);
@@ -510,7 +488,7 @@ async function sendReplySms(
       });
     }
     const provider = await getActiveSmsProvider(db, options.encryptionKey, options.appProviders);
-    const target = { ...base, channel: "sms" as const, provider: provider?.id ?? providerName, recipient: phone, recipientMasked: maskPhone(phone) };
+    const target = { ...base, channel: "sms" as const, provider: provider?.id ?? providerName, recipient: phone, recipientMasked: maskPhone(phone), receiptScope: replyReceiptScope(thread, "sms", CONVERSATION_SMS_COALESCE_SECONDS) };
     const blocked = await recordProviderBlockedDeliveryIfNeeded(target);
     if (blocked) return blocked;
     return await dispatchWithReceipt({

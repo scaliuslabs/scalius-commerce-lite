@@ -26,6 +26,12 @@ export interface OrderNotificationDeliveryTargetInput {
   provider: string;
   recipient: string;
   recipientMasked?: string | null;
+  /**
+   * What the delivery is keyed by in place of the outbox row: deliveries of
+   * different rows that share a scope (and channel and recipient) are one
+   * receipt, taken atomically by its unique key, so only the first sends.
+   */
+  receiptScope?: string;
 }
 
 export interface OrderNotificationDeliveryTarget extends OrderNotificationDeliveryTargetInput {
@@ -80,7 +86,7 @@ export async function createOrderNotificationDeliveryTarget(
     recipientHash,
     recipientMasked: input.recipientMasked ?? maskNotificationRecipient(input.recipient),
     receiptKey: buildOrderNotificationDeliveryReceiptKey({
-      outboxId: input.outboxId,
+      outboxId: input.receiptScope ?? input.outboxId,
       channel: input.channel,
       recipientHash,
     }),
