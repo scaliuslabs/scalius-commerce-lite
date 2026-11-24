@@ -31,6 +31,7 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { addOnRowsOver, readAddOnRows, type AddOnTotalRow } from "@scalius/shared/add-on-totals";
+import type { AddOnRowsShown } from "@/lib/add-on-row";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
 import { cartLineCopy, isLongAnswer } from "@/lib/cart-line-copy";
@@ -161,6 +162,8 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   const [ruleErrors, setRuleErrors] = useState<CartRuleError[]>([]);
   /** The apps' add-on rows as the check folded them (the server's rows; the drawer never folds its own). */
   const [addOnRows, setAddOnRows] = useState<AddOnTotalRow[]>([]);
+  /** The rows the drawer's checks showed last, across its openings (lib/add-on-row.ts). */
+  const addOnRowsShown = useRef<AddOnRowsShown>({}).current;
   /** The apps' buyer UI blocks, as the check answered them (parsed where they are drawn). */
   const [buyerUi, setBuyerUi] = useState<unknown[]>(NO_BLOCKS);
   /** The apps' line inputs each line takes (the check's), drawn by line-input-controls.ts. */
@@ -209,6 +212,11 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
       })
         .then(async (response) => ({ response, json: await response.json() as { data?: CartValidationResult; details?: { itemIssues?: CartValidationIssue[] } } }))
         .then(async ({ response, json }) => {
+          const addOnRows = readAddOnRows((json?.data as { addOns?: unknown } | undefined)?.addOns);
+          // The row markup loads with the first add-on row, so the rows draw with the amounts they add up to;
+          // with none, the next row to show is one the buyer adds (it opens by itself).
+          if (addOnRows.length > 0) await addOnRowMarkup();
+          else addOnRowsShown.keys = new Set();
           if (!current) return;
           // An edited line takes the store's price from this check.
           if (json?.data?.items) adoptCheckedLinePrices(json.data.items);
@@ -219,7 +227,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
             return key ? [[key, typeof line.availableQuantity === "number" ? Math.max(0, Math.floor(line.availableQuantity)) : null]] : [];
           })));
           setRuleErrors(parseCartRuleErrors(json?.data?.ruleErrors));
-          setAddOnRows(readAddOnRows((json?.data as { addOns?: unknown } | undefined)?.addOns));
+          setAddOnRows(addOnRows);
           // A refused check keeps no blocks: they belong to a cart the store read.
           const blocks = json?.data?.buyerUi;
           setBuyerUi(Array.isArray(blocks) && blocks.length > 0 ? blocks : NO_BLOCKS);
@@ -241,8 +249,11 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   const current = useMemo(() => Object.fromEntries(Object.entries(currentIssueLists).map(([key, list]) => [key, list[0]!])), [currentIssueLists]);
   // Discounts priced for other lines than these are being priced again: shown as pending, never as final.
   const discountsPending = hasItems && pricedFor !== cartPricingKey(cart) && (discounts?.totalDiscount ?? 0) > 0;
-  return { discounts: hasItems ? discounts : null, discountsPending, lineDiscounts, issues: current, issueLists: currentIssueLists, limits, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, addOnRows: hasItems ? addOnRows : [], recheck };
+  return { discounts: hasItems ? discounts : null, discountsPending, lineDiscounts, issues: current, issueLists: currentIssueLists, limits, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, lineInputs: hasItems ? lineInputs : NO_LINE_INPUTS, addOnRows: hasItems ? addOnRows : [], addOnRowsShown, recheck };
 }
+
+/** The add-on rows' markup (lib/add-on-row.ts), loaded with the check that first names one. */
+const addOnRowMarkup = () => import("@/lib/add-on-row");
 
 /**
  * Draws the apps' line inputs into the drawer's line mounts and its bulk bar
@@ -373,7 +384,7 @@ export default function CartFlyout({ onReady }: Props) {
     item.properties && item.properties.length > 0 ? `${inputsIdBase}-inputs-${index}` : undefined;
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
-  const { discounts, discountsPending, lineDiscounts, issues, issueLists, limits, ruleErrors, buyerUi, lineInputs, addOnRows, recheck } = useDrawerCartFacts(cart, isOpen);
+  const { discounts, discountsPending, lineDiscounts, issues, issueLists, limits, ruleErrors, buyerUi, lineInputs, addOnRows, addOnRowsShown, recheck } = useDrawerCartFacts(cart, isOpen);
   // Any other issue in the catalogue's words (never the API's English), which load with the first one.
   useRefusalWords(Object.keys(issues).length > 0);
   // Some lines ship and some don't: the ones that don't say so, as on the cart page.
@@ -955,12 +966,11 @@ export default function CartFlyout({ onReady }: Props) {
             <span>{copy.subtotal}</span>
             <span className="tabular-nums" data-cart-subtotal>{formatMoney(fromMinor(addOns.itemsSubtotalMinor, moneyPlaces))}</span>
           </div>
-          {addOns.rows.map((row) => (
-            <div key={`${row.appId ?? ""}:${row.title}`} className="flex items-center justify-between gap-3 text-muted-foreground" data-summary-row="add-on">
-              <span className="min-w-0">{row.title}</span>
-              <span className="shrink-0 tabular-nums">{formatMoney(fromMinor(row.amountMinor, moneyPlaces))}</span>
-            </div>
-          ))}
+          {/* The add-on rows, drawn into their box on every render by lib/add-on-row.ts (the one row markup): a row
+              the buyer opened stays open as the drawer redraws, and one the buyer just added opens by itself. */}
+          {addOns.rows.length > 0 && <div className="space-y-1" data-add-on-rows ref={(root) => {
+            if (root) void addOnRowMarkup().then((rows) => rows.drawAddOnRows(root, addOns.rows, moneyPlaces, "drawer", addOnRowsShown, true));
+          }} />}
           {discounts?.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
             <div key={key} className="flex justify-between gap-3 text-primary" data-discount-line={key} data-summary-row="discount">
               <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>

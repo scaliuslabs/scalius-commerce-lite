@@ -75,7 +75,8 @@ export function orderReceiptView({ order, copy, languageCode, configuredCurrency
   // The apps' add-ons as their own rows: the server's, from the order's real lines (the page folds nothing).
   // (`addOns` is read untyped: the receipt's hand-written type does not name it yet.)
   const receiptAddOns = savedMoneySummary ? addOnRowsOver(savedMoneySummary.subtotalMinor, readAddOnRows((order as { addOns?: unknown }).addOns)) : null;
-  const receiptAddOnRows = (receiptAddOns?.rows ?? []).map((row) => ({ title: row.title, amount: toMajor(row.amountMinor) }));
+  // Each with the app's detail lines it opens to (lib/add-on-row.ts draws them).
+  const receiptAddOnRows = receiptAddOns?.rows ?? [];
   const receiptItemsSubtotal = receiptAddOns && receiptAddOnRows.length > 0 ? toMajor(receiptAddOns.itemsSubtotalMinor) : receiptMoney.subtotal;
   const receiptDiscounts = summarizeOrderDiscounts({
     discounts: order.discounts,
