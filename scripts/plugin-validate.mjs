@@ -140,7 +140,7 @@ export async function validatePlugin(directory) {
 
   // Templates and page presets through the store's own check (the one install, the library and an
   // apply run): each template applied to the default theme and run through the save checker.
-  for (const check of themeTemplateChecks(contract, manifest.storefront)) add(check.status, "Theme templates", check.detail);
+  for (const check of themeTemplateChecks(contract, manifest.storefront, manifest.id)) add(check.status, "Theme templates", check.detail);
 
   // Card fields a template names: a store keeps only the ones it has, so these warn, never fail.
   for (const note of contract.storefrontTemplateCardFieldNotes(manifest)) add(note.level, "Template card fields", note.message);
@@ -166,10 +166,10 @@ export async function validatePlugin(directory) {
  * value: where it sits in the manifest, what is wrong and what is allowed
  * (the store's own words), and the store's reason when it names one.
  */
-export function themeTemplateChecks(contract, storefront) {
+export function themeTemplateChecks(contract, storefront, pluginId) {
   const { templates, pagePresets } = storefront;
   if (templates.length + pagePresets.length === 0) return [];
-  const problems = contract.storefrontAppThemeProblems(storefront);
+  const problems = contract.storefrontAppThemeProblems(storefront, pluginId);
   if (problems.length === 0) {
     const shipped = [[templates.length, "template"], [pagePresets.length, "page preset"]].filter(([count]) => count > 0).map(([count, noun]) => counted(count, noun));
     return [{ status: "pass", detail: `${shipped.join(", ")} applied and saved as a store does` }];

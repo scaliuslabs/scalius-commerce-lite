@@ -15,9 +15,10 @@
 // an app can never write a theme the storefront cannot draw.
 
 import { z } from "zod";
+import { parsePluginSurfaceKey } from "../plugins/storefront";
 import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBlocksSchema } from "./blocks";
-import { storefrontPrivatePagesTemplateSchema } from "./private-layout";
+import { storefrontPrivatePagesDefault, storefrontPrivatePagesTemplateSchema, type StorefrontPrivatePages } from "./private-layout";
 import { checkStorefrontThemeSave, type StorefrontThemeSaveIssue } from "./save";
 import { storefrontSectionListSchema, type StorefrontSection } from "./sections";
 import { storefrontDarkColorsMissing, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";
@@ -213,9 +214,6 @@ export function fillRequiredBlockFields(
   return filled;
 }
 
-/** A plugin id no app has: the app a template with no files of its own is applied as. */
-const TEMPLATE_CHECK_APP = "template-check.app";
-
 /**
  * Where a refused value of the applied document sits in the template: the
  * template's own part, or the default theme's part it keeps (a template
@@ -238,13 +236,12 @@ function templatePath(path: string, template: StorefrontAppTemplateTheme): strin
  * translations, private pages (arrangements, tokens against the applied
  * palettes, words, icons from the template's own app) and size. So a template
  * an app ships, an install lists and `scalius-plugin validate` passes saves
- * when a merchant applies it to the default look. Its files are its own
- * app's: the one app every icon it names comes from.
+ * when a merchant applies it to the default look. It is applied under its
+ * real key (`<app id>/<template id>`), so its files are its own app's and an
+ * icon naming any other app is refused here, as at the merchant's save.
  */
-function templateSaveIssues(template: StorefrontAppTemplateTheme): StorefrontThemeSaveIssue[] {
-  const apps = new Set(Object.values(template.privatePages?.icons ?? {}).flatMap((ref) => ref ? [ref.app] : []));
-  const app = apps.size === 1 ? [...apps][0]! : TEMPLATE_CHECK_APP;
-  const applied = applyStorefrontAppTemplate(DEFAULT_STOREFRONT_THEME, `${app}/template`, template);
+function templateSaveIssues(template: StorefrontAppTemplateTheme, key: string): StorefrontThemeSaveIssue[] {
+  const applied = applyStorefrontAppTemplate(DEFAULT_STOREFRONT_THEME, key, template);
   // Applying remakes dark colours and drops a page paint a look leaves unreadable (the merchant's own,
   // kept across templates); a template's own palette is checked as it is written, every colour set it shows.
   const written = template.tokens ? { ...applied, tokens: storefrontTokensKeepingColorScheme(template.tokens, DEFAULT_STOREFRONT_THEME.tokens) } : applied;
@@ -252,7 +249,7 @@ function templateSaveIssues(template: StorefrontAppTemplateTheme): StorefrontThe
   return checked.ok ? [] : checked.refusal.issues.map((issue) => ({ ...issue, path: templatePath(issue.path, template) }));
 }
 
-function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHandleLookup): StorefrontAppThemeResolvedRead<StorefrontAppTemplateTheme> {
+function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHandleLookup, key: string): StorefrontAppThemeResolvedRead<StorefrontAppTemplateTheme> {
   if (!isRecord(value)) return unfit("The template's theme is not an object.");
   const { sections: declared, ...declaredRest } = value;
   const rest = resolveTemplateParts(declaredRest, lookup);
@@ -269,7 +266,7 @@ function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHa
     parsed = storefrontAppTemplateThemeSchema.safeParse(candidate);
   }
   if (!parsed.success) return schemaUnfit(parsed.error, "theme");
-  const saved = templateSaveIssues(parsed.data);
+  const saved = templateSaveIssues(parsed.data, key);
   if (saved.length > 0) return unfit(`${saved[0]!.path}: ${saved[0]!.message}`, saved);
   return { ok: true, value: parsed.data, unresolved };
 }
@@ -280,8 +277,8 @@ function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHa
  * Handles (`handles.ts`) stand in for ids here, so the shape is checked
  * without a store; `resolveStorefrontAppTemplateTheme` reads it against one.
  */
-export function checkStorefrontAppTemplateTheme(value: unknown, themeVersion: number): StorefrontAppThemeRead<StorefrontAppTemplateTheme> {
-  const read = readTemplate(value, themeVersion, placeholderLookup);
+export function checkStorefrontAppTemplateTheme(value: unknown, themeVersion: number, pluginId: string, templateId = "template"): StorefrontAppThemeRead<StorefrontAppTemplateTheme> {
+  const read = readTemplate(value, themeVersion, placeholderLookup, `${pluginId}/${templateId}`);
   return read.ok ? { ok: true, value: read.value } : read;
 }
 
@@ -294,8 +291,10 @@ export function resolveStorefrontAppTemplateTheme(
   value: unknown,
   themeVersion: number,
   lookup: StorefrontHandleLookup,
+  pluginId: string,
+  templateId = "template",
 ): StorefrontAppThemeResolvedRead<StorefrontAppTemplateTheme> {
-  return readTemplate(value, themeVersion, lookup);
+  return readTemplate(value, themeVersion, lookup, `${pluginId}/${templateId}`);
 }
 
 /**
@@ -329,8 +328,8 @@ export function withStorefrontCardFields(
 }
 
 /** The template's theme at this store's version, or null when it does not fit. */
-export function readStorefrontAppTemplateTheme(value: unknown, themeVersion: number): StorefrontAppTemplateTheme | null {
-  const read = checkStorefrontAppTemplateTheme(value, themeVersion);
+export function readStorefrontAppTemplateTheme(value: unknown, themeVersion: number, pluginId: string, templateId = "template"): StorefrontAppTemplateTheme | null {
+  const read = checkStorefrontAppTemplateTheme(value, themeVersion, pluginId, templateId);
   return read.ok ? read.value : null;
 }
 
@@ -401,19 +400,24 @@ export function applyStorefrontAppTemplateCarry(
       ...document,
       tokens: template.tokens ? storefrontTokensKeepingColorScheme(template.tokens, document.tokens) : document.tokens,
       blocks: { ...document.blocks, ...(template.blocks ?? {}) },
-      privatePages: template.privatePages
-        ? {
-          ...document.privatePages,
-          ...template.privatePages,
-          pages: { ...document.privatePages.pages, ...template.privatePages.pages },
-          labels: template.privatePages.labels ?? document.privatePages.labels,
-          icons: template.privatePages.icons ?? document.privatePages.icons,
-        }
-        : document.privatePages,
+      privatePages: privatePagesAfterTemplate(document.privatePages, key, template),
       apps: appsAfterTemplate(document, key, template),
       pages: { ...document.pages, home: carry ? carry.home : document.pages.home },
     }),
   };
+}
+
+/**
+ * The private pages after an app template: a template that sets them replaces
+ * the merchant's whole object (over the defaults), so nothing of the previous
+ * look stays; one that sets none keeps the merchant's, less any icon of
+ * another app (a private page names only the theme's own files).
+ */
+function privatePagesAfterTemplate(current: StorefrontPrivatePages, key: string, template: StorefrontAppTemplateTheme): StorefrontPrivatePages {
+  if (template.privatePages) return { ...storefrontPrivatePagesDefault(), ...template.privatePages } as StorefrontPrivatePages;
+  const app = parsePluginSurfaceKey(key)?.pluginId ?? null;
+  const icons = Object.fromEntries(Object.entries(current.icons).filter(([, ref]) => ref && ref.app === app));
+  return { ...current, icons } as StorefrontPrivatePages;
 }
 
 /**
@@ -472,10 +476,10 @@ export interface StorefrontAppThemeProblem {
  * document after the upgrade chain: the template library leaves them out,
  * and the app's page reports them.
  */
-export function storefrontAppThemeProblems(storefront: StorefrontAppThemeDeclarations): StorefrontAppThemeProblem[] {
+export function storefrontAppThemeProblems(storefront: StorefrontAppThemeDeclarations, pluginId: string): StorefrontAppThemeProblem[] {
   const problems: StorefrontAppThemeProblem[] = [];
   for (const template of storefront.templates) {
-    const read = checkStorefrontAppTemplateTheme(template.theme, template.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
+    const read = checkStorefrontAppTemplateTheme(template.theme, template.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION, pluginId, template.id);
     if (!read.ok) problems.push({ kind: "template", id: template.id, name: template.name, problem: read.problem, issues: read.issues });
   }
   for (const preset of storefront.pagePresets) {

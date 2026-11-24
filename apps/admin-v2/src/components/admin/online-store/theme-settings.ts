@@ -630,7 +630,7 @@ export interface AppTemplateEntry {
 /** The active apps' templates, as the API lists them at this document version (one that does not parse is left out). */
 export function appTemplates(apps: readonly ThemeApp[]): AppTemplateEntry[] {
   return apps.flatMap((app) => app.templates.flatMap((template) => {
-    const theme = readStorefrontAppTemplateTheme(template.theme, STOREFRONT_THEME_DOCUMENT_VERSION);
+    const theme = readStorefrontAppTemplateTheme(template.theme, STOREFRONT_THEME_DOCUMENT_VERSION, app.id);
     return theme ? [{ key: template.key, name: template.name, description: template.description, app, theme, omittedCardFields: template.omittedCardFields }] : [];
   }));
 }
