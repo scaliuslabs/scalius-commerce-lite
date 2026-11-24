@@ -67,7 +67,7 @@ const latestHref = historyUrl.pathname + historyUrl.search + historyUrl.hash;
 ---
 
 {visible && (
-  <section id="conversation" data-conversation-panel style="overflow-anchor:none" class={className} aria-labelledby="conversationHeading">
+  <section id="conversation" data-part="conversation" data-conversation-panel style="overflow-anchor:none" class={className} aria-labelledby="conversationHeading">
     <h2 id="conversationHeading" class="text-base font-semibold text-foreground">{copy.orderPanelTitle}</h2>
     <p class="mt-1 text-sm text-muted-foreground">{copy.orderPanelIntro}</p>
     {unavailable && <p class="mt-3 text-sm text-destructive" role="alert">{copy.unavailable}</p>}

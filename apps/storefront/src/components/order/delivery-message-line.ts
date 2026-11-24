@@ -37,11 +37,11 @@ export function deliveryMessageLineMarkup(line: OrderLine, context: LineExtrasCo
     .map(([name, value]) => `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}" />`)
     .join("");
   const facts = [copy.messageHint, message.hasLink ? copy.messageHasLink : ""].filter(Boolean).join(" · ");
-  return `<div class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background p-3" role="group" aria-label="${escapeHtml(copy.messageHeading)}" data-delivery-message>
+  return `<div class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background p-3" role="group" aria-label="${escapeHtml(copy.messageHeading)}" data-delivery-message data-part="delivery-message">
     <div class="min-w-0 flex-1">
       <p class="text-sm font-medium text-foreground">${escapeHtml(copy.messageHeading)}</p>
       <p class="text-sm text-muted-foreground">${escapeHtml(facts)}</p>
     </div>
-    <form method="post" action="/account/delivery-message">${hidden}<button type="submit" class="${BUTTON}">${escapeHtml(copy.showMessage)}<span class="sr-only"> (${escapeHtml(line.productName ?? copy.productFallback)})</span></button></form>
+    <form method="post" action="/account/delivery-message">${hidden}<button type="submit" class="${BUTTON}" data-part="delivery-reveal">${escapeHtml(copy.showMessage)}<span class="sr-only"> (${escapeHtml(line.productName ?? copy.productFallback)})</span></button></form>
   </div>`;
 }

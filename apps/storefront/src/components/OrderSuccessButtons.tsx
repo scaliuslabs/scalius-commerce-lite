@@ -281,7 +281,7 @@ export default function OrderSuccessButtons({
   };
 
   return (
-    <div className="no-print flex flex-col items-center space-y-6">
+    <div className="no-print flex flex-col items-center space-y-6" data-part="actions">
       <div className="mt-6 flex w-full max-w-md flex-col justify-center gap-2 sm:flex-row">
         {!statusView && <a
           href={pagePath("/")}
