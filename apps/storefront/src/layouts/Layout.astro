@@ -582,7 +582,7 @@ const pageStoreTimeZone = storeTimeZone();
 
     <ThemeHead paint={paint} preview={isThemePreview} />
     {appStylesheets.map((href) => <link rel="stylesheet" href={href} data-app-stylesheet />)}
-    {/* The free regions' seal, then the theme's private-page look: checked and scoped on save (private-css.ts), after the store's own. */}
+    {/* The theme's private-page look: host token rules compiled on save from typed values (private-tokens.ts), after the store's own. */}
     {pageStyle && <style is:inline data-private-style set:html={pageStyle} />}
 
     <slot name="head" />

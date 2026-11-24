@@ -443,7 +443,14 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
       },
       "field-label": { "size": 12, "weight": "600" },
       "dock": { "background": "card", "border": "#524179", "border-width": 1 },
-      "submit": { "background": "primary", "text": "primary-foreground", "radius": 0, "weight": "600", "size": 14, "inset": 20 },
+      "submit": {
+        "background": { "light": "#fed700", "dark": "primary" },
+        "text": { "light": "#333e48", "dark": "primary-foreground" },
+        "radius": 0,
+        "weight": "600",
+        "size": 14,
+        "inset": 20
+      },
       "cart-empty": { "text": "foreground", "muted": "muted-foreground" },
       "dialog": {
         "background": "#171124",
@@ -458,7 +465,13 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
       "dialog-text": { "background": "#110d1e", "border": "#443567", "border-width": 1, "radius": 0, "padding": 16, "text": "#d4d4d8", "muted": "#d4d4d8" },
       "dialog-agree": { "background": "#241b39", "border": "#49396d", "border-width": 1, "radius": 0, "padding": 16, "text": "#e4e4e7" },
       "dialog-back": { "background": "#211936", "text": "#e4e4e7", "border": "#49396d", "border-width": 1, "radius": 0, "weight": "700", "inset": 20 },
-      "dialog-confirm": { "background": "primary", "text": "primary-foreground", "radius": 0, "weight": "800", "inset": 20 },
+      "dialog-confirm": {
+        "background": { "light": "#fed700", "dark": "primary" },
+        "text": { "light": "#333e48", "dark": "primary-foreground" },
+        "radius": 0,
+        "weight": "800",
+        "inset": 20
+      },
       "ui.stack.warning@gameghor.protection/cart.line.after": {
         "background": { "light": "#f2ebd9", "dark": "#35282c" },
         "text": { "light": "#000000", "dark": "#fef3c6" },
@@ -476,9 +489,9 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
       "ui.text.success@gameghor.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 14, "weight": "600" },
       "ui.link@gameghor.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 12, "weight": "500" },
       "ui.button@gameghor.protection/cart.line.after": {
-        "background": "primary",
-        "text": "primary-foreground",
-        "border": "primary",
+        "background": { "light": "#fed700", "dark": "primary" },
+        "text": { "light": "#333e48", "dark": "primary-foreground" },
+        "border": { "light": "#fed700", "dark": "primary" },
         "border-width": 0,
         "radius": 0,
         "weight": "600",
@@ -554,22 +567,33 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
 
 What the save proves is checked again by drawing. `pnpm test:private-pages` (in the Scalius repository) compiles each theme with the store's compiler and draws the real cart page in headless Chromium on a fixture store that delivers (Place order is on), with an app block of every node kind and tone in the summary, below the cart, under a line and inside the details form. Each document is a legal theme, or a named break the save must refuse; a refused document is not drawn.
 
-**What it draws.** The reviews' named cases, then seeded legal themes, each in its states: the base cart; a line asking for a decision, a store kit as one line with an add-on once per kit and an app's offer row under it, and a sold-out line; an empty cart; long Bangla titles; an Arabic right-to-left presence; with field errors showing, the sign-in dialog open and the confirmation dialog open. At 320, 390 and 1280 px, light and dark. One, twenty and ninety-nine lines on a 390×700 phone, a 768×1024 tablet and a 1280×800 laptop. The cart drawer opened over the homepage.
+**What it draws.** The reviews' named cases and seeded legal themes, each in its states (the base cart; a line asking for a decision, a store kit as one line with an add-on once per kit and an app's offer row under it, and a sold-out line; an empty cart; long Bangla titles; an Arabic right-to-left presence; field errors showing; the sign-in and confirmation dialogs open), at 320, 390 and 1280 px, light and dark. Seeds carry colours per scheme, `controls`, every variant, label and style target, `leading`, `mono`, and every app node kind, the toned stack, mark, link and key-value included. Besides them:
+
+- the default look and the customer's look with one, twenty and ninety-nine lines on a 390×700 phone, a 768×1024 tablet and a 1280×800 laptop;
+- the customer's cart (the reference above), offered and protected, at 390 and 1280, light and dark, and its protected cart in the drawer with the add-on row open;
+- the store's controls in its header, in the strip at the page's end and nowhere, in a store with the light or dark switch and two markets;
+- a stored document forged past the save (a stylesheet, the theme's chrome and search, content blocks in the page and a line): it draws none of them;
+- named breaks the save must refuse, each with its reason (a stylesheet or blocks, `not_available`; words that do not read, in either scheme; a total smaller than its rows, `prominence`): a refused document is not drawn.
 
 **What fails it.**
 
 | Check | Fails when |
 | --- | --- |
-| Mandatory parts | One is missing, under 8px or outside the viewport; the page scrolls sideways. |
-| Coverage walk | In token mode, a text or a focusable control belongs to no row of the colour table (its words are none of its row's colours, its row's element paints something other than the row's paint, or a surface the table does not know lies between it and its row); with no tokens, it stands on no surface the anatomy names, or the page shows a paint of its own. |
+| Mandatory parts | One is missing, under 8px, outside the viewport or covered at its centre; the page scrolls sideways. |
+| The store's controls | The light or dark switch or a market or language form is drawn anywhere but where `controls` puts it. |
+| Nothing of the theme's | Any `[data-free]` region, or a forged document's words or CSS, reaches the page. |
+| Scheme | The page draws a colour scheme the store does not show. |
+| Coverage walk | In token mode, a text or a focusable control belongs to no row of the colour table (its words are none of its row's resolved colours, its row's element paints something other than the row's paint, a surface the table does not know lies between it and its row, or an element a style target names is drawn by another row), with every add-on row opened; with no tokens, it stands on no surface the anatomy names, or the page shows a paint of its own. |
 | Contrast | Any text, with no budget, reads under 4.5:1 (3:1 large) against the pixels behind it (every text hidden, the page photographed). |
 | Whole text | A text is cut off at the side, a glyph is cut by its box, or a word breaks inside itself. |
 | Controls | A click at a control's centre lands elsewhere; Tab does not reach it, or reaches it out of document order; its focus ring changes under three quarters of its perimeter at 3:1. |
 | Hover | Under the pointer, a control's words read under their floor, or a control the store gives a hover surface changes under a quarter of its box. |
+| Prominence | The total is drawn smaller than another summary row. |
 | Place order | At scroll 0 and at three places down the cart, Place order or its total is off screen, does not take a click there, or shows no total. |
 | First screen | At scroll 0, none of the page's lead parts starts inside the screen. |
 | Depth | What the theme adds above Place order (its place under the theme less its place under the default look, same cart, the fold open) is over 3200px and 448px a line. |
 | Touch | On a phone, swiping from the top does not reach Place order. |
+| The customer's cart | The offer row's mark, sentence, price and Add Now are not in one band at 1280 or take more than two at 390; a status box does not paint its tone's surface; the add-on row does not open to its three lines in order, or its amount shows more than once. |
 | Server | Any request answers 5xx. |
 
 **How to run it.**
@@ -579,7 +603,7 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 | The gate (named cases and the fast seed set) | `pnpm test:private-pages` |
 | A longer run | `pnpm test:private-pages --seeds 30 --from 100` (`--no-named` for seeds only, `--all-states` for every state of each) |
 | One seed or case | `--seed 7`, `--case "B4"` (a failing seed prints its document) |
-| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names |
+| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (28 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, and the switch drawn under `controls: none`) |
 
 The gate checks the cart page with the fixture store's data, not every store's data.
 
