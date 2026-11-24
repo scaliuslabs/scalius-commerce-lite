@@ -2,6 +2,7 @@
 import { presenceOfPath, stripPresencePath } from "@scalius/shared/markets";
 import { parsePluginSurfaceKey } from "@scalius/shared/plugins/storefront";
 import { STOREFRONT_SECTION_RENDERERS, storefrontSectionDefault, type StorefrontPreviewScope, type StorefrontSection, type StorefrontSectionType } from "@scalius/shared/storefront-theme";
+import { isPrivateStorefrontPathname } from "./cache-policy";
 import { normalizeThemePreviewRoutePath } from "./theme-preview-route";
 
 export function readLibrarySelection(url: URL): { section: StorefrontSection; scope: StorefrontPreviewScope; path: string; presence: string | null; nonce: string } | null {
@@ -18,10 +19,11 @@ export function readLibrarySelection(url: URL): { section: StorefrontSection; sc
   // product's reviews, the blog, search, compare, an app page) offers no library.
   const [first, second, ...rest] = path.split("/").filter(Boolean);
   let scope: StorefrontPreviewScope;
+  // A buyer's private page takes no sections: the theme only arranges its parts.
+  if (isPrivateStorefrontPathname(path)) return null;
   if (path === "/") scope = { kind: "home" };
   else if (rest.length > 0) return null;
   else if (first === "pages" && second) scope = { kind: "landing", slug: second };
-  else if (first === "cart" && !second) scope = { kind: "template", template: "cart", main: 0 };
   else if (first === "products" && second) scope = { kind: "template", template: "product", main: 0 };
   else if ((first === "categories" || first === "collections" || first === "brands") && second) scope = { kind: "template", template: "collection", main: 0 };
   else if (first && !second && /^[A-Za-z0-9_-]+$/.test(first) && !["search", "products", "categories", "collections", "blog", "compare"].includes(first)) scope = { kind: "template", template: "page", main: 0 };

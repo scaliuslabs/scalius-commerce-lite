@@ -23,12 +23,14 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { Plus, Rows3, SlidersHorizontal } from "lucide-react";
 import {
+  STOREFRONT_PAGE_TEMPLATES,
   STOREFRONT_SECTION_REGISTRY,
   STOREFRONT_SECTION_RENDERERS,
   failedFitConditions,
   isStorefrontAppSection,
   storefrontSectionBlockLists,
   storefrontSettingAt,
+  type StorefrontPageTemplate,
   type StorefrontPlatformSection,
   type StorefrontSection,
   type StorefrontThemeColorSet,
@@ -589,8 +591,8 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
     setLibraryAt(null);
     select(section.id, "other");
   };
-  // The sample checkout, receipt and account hold no sections, so Draft with AI never opens on them.
-  const aiPage: AiPage = page.kind === "category" || page.kind === "search" ? "collection" : isSamplePage(page) ? "cart" : page.kind;
+  // The cart and the sample checkout, receipt and account hold no sections (a buyer's private page takes none), so Draft with AI never opens on them.
+  const aiPage: AiPage | null = page.kind === "category" || page.kind === "search" ? "collection" : page.kind === "cart" || isSamplePage(page) ? null : page.kind;
   const onDrafted = (drafted: Section[], note: string | null, rejected: number) => {
     const added = draftedSections(drafted, sections ?? []);
     const at = libraryAt ?? items.length;
@@ -655,7 +657,7 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
     const list = rest.slice(0, rest.lastIndexOf(":"));
     const where: EditorPage = list === "home" ? { kind: "home" }
       : list.startsWith("landing:") ? { kind: "landing", slug: list.slice("landing:".length) }
-        : { kind: list.slice("template:".length) as "product" | "collection" | "cart" | "page" };
+        : { kind: list.slice("template:".length) as StorefrontPageTemplate };
     const section = pageSections(theme, where)?.find((each) => each.id === sectionId);
     if (!section) return;
     if (!samePage(where, page)) setPageState(where);
@@ -1189,7 +1191,7 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
           />
         </Suspense>
       ) : null}
-      {aiOpen ? (
+      {aiOpen && aiPage ? (
         <Suspense fallback={null}>
           <AiDraftDialog
             open={aiOpen}
@@ -1223,7 +1225,7 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
               const at = (Object.entries(theme.pages.landing).find(([, landing]) => landing.sections.some((section) => section.id === id))?.[0]);
               const where: EditorPage = theme.pages.home.some((section) => section.id === id) ? { kind: "home" }
                 : at ? { kind: "landing", slug: at }
-                  : (["product", "collection", "cart", "page"] as const).map((kind) => ({ kind })).find(({ kind }) => theme.pages.templates[kind].sections.some((section) => section.id === id)) ?? page;
+                  : STOREFRONT_PAGE_TEMPLATES.map((kind) => ({ kind })).find(({ kind }) => theme.pages.templates[kind].sections.some((section) => section.id === id)) ?? page;
               if (!samePage(where, page)) setPageState(where);
               select(id);
             }}

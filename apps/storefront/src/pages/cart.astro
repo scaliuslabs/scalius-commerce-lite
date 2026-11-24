@@ -48,11 +48,9 @@ import {
 } from "@/lib/api";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
-import TemplateSections from "@/components/homepage/TemplateSections.astro";
 import { shopCopy } from "@/lib/storefront-shop-copy";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { privateControlsPlace } from "@scalius/shared/storefront-theme";
-import { templateSectionData } from "@/lib/template-sections";
 import { markRenderUncacheable } from "@/lib/cache-policy";
 import { getRuntimePresence } from "@/lib/api/runtime";
 import { ENDED_CUSTOMER_SESSION_COOKIES, getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
@@ -366,7 +364,6 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
 // The cart page's own words: Clear cart, the phone summary bar, and the empty cart's categories and popular products.
 const cartWords = shopCopy(checkoutLanguageBaseCode(lang.code)).cart;
 const emptyCartCategories = (layoutData?.categoryTree?.nodes ?? []).filter((node) => node.parentId === null).slice(0, 8);
-const cartTemplate = cartRequestTheme.resolved.pages.templates.cart;
 // The phone summary bar's words (the theme may reword them).
 const foldWords = { show: cartPlan.labels["cart.showSummary"] ?? cartWords.showSummary, hide: cartPlan.labels["cart.hideSummary"] ?? cartWords.hideSummary };
 // The theme's look for this page: host token rules compiled when it was saved.
@@ -379,7 +376,6 @@ const linesIntro = cartPlan.labels["cart.intro"];
 const summaryHeading = cartPlan.labels["cart.summaryHeading"];
 const itemsRow = cartPlan.variants.summary === "with-items" ? privateVariantWord("items", pageLanguageCode) : null;
 const dialogLabels = Object.fromEntries(Object.entries(cartPlan.labels).filter(([key]) => key.startsWith("dialog.")));
-const templateData = await templateSectionData("cart", cartRequestTheme);
 ---
 
 <Layout
@@ -423,15 +419,6 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   >
   </div>
 
-  <TemplateSections
-    template={cartTemplate}
-    region="before"
-    data={templateData}
-    currencySymbol={layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol}
-    currencyCode={layoutData?.currency?.code ?? DEFAULT_CURRENCY.code}
-    preview={cartRequestTheme.preview !== null}
-    languageCode={layoutData?.storefrontCopy?.languageCode}
-  />
 
   <div
     id="cartPageRoot"
@@ -1184,15 +1171,6 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     </style>
   </div>
 
-  <TemplateSections
-    template={cartTemplate}
-    region="after"
-    data={templateData}
-    currencySymbol={layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol}
-    currencyCode={layoutData?.currency?.code ?? DEFAULT_CURRENCY.code}
-    preview={cartRequestTheme.preview !== null}
-    languageCode={layoutData?.storefrontCopy?.languageCode}
-  />
 </Layout>
 
 <CheckoutLoadingOverlay

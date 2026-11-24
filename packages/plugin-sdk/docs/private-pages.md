@@ -9,7 +9,7 @@ The cart, checkout, payment, receipt and account pages are a buyer's own pages: 
 
 The store writes every CSS rule from your values, checks every colour a buyer reads, and keeps what a buyer must see and do. A rendered gate ([below](#the-rendered-gate)) draws themes in a real browser and fails when anything a buyer must read or use is lost.
 
-This page covers the cart page, which is private, and the cart drawer. The drawer opens over public pages and is part of each of them: its arrangement, words and icons come from here, and its look comes from your public stylesheet through the same hooks. The checkout, the receipt and the account take the closed choices in [themes.md](themes.md#templates) until they move to this model.
+This page covers the cart page, which is private, and the cart drawer. A private page takes no sections: `pages.templates` has no cart template (one with sections is refused with reason `private_page_template`), and no section of the homepage, a landing page or another template draws there. The drawer opens over public pages and is part of each of them: its arrangement, words and icons come from here, and its look comes from your public stylesheet through the same hooks. The checkout, the receipt and the account take the closed choices in [themes.md](themes.md#templates) until they move to this model.
 
 ## What you set
 

@@ -29,7 +29,7 @@ import { apiData } from "~/lib/api";
 import { actionErrorText } from "../shared";
 import { Field } from "~/components/ui/field";
 
-export type AiPage = "home" | "landing" | "product" | "collection" | "cart" | "page";
+export type AiPage = "home" | "landing" | "product" | "collection" | "page";
 
 const EXAMPLES = ["aiExampleSale", "aiExampleStory", "aiExampleFaq"] as const;
 

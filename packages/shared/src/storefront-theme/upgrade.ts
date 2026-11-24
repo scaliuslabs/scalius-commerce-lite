@@ -353,7 +353,21 @@ export function upgradeStorefrontThemeDocument(value: unknown, chain: Storefront
   // reads through the same mapping as the 12 → 13 step; an older one already
   // took that step.
   const named = from === LAST_KEBAB_PRODUCT_MODULES_VERSION ? snakeProductModules(document) : document;
-  return upgradeSectionLists(named, chain);
+  return upgradeSectionLists(withoutPrivatePageTemplates(named), chain);
+}
+
+/**
+ * A stored document at any version without a template for a buyer's private
+ * page: the cart once took template sections (`pages.templates.cart`), drawn
+ * around the cart outside its private root. A private page takes none now
+ * (pages.ts), so a stored one is dropped when read and the rest of the
+ * document reads as it was; a save that names one is refused.
+ */
+function withoutPrivatePageTemplates(document: Json): Json {
+  const pages = document.pages;
+  if (!isRecord(pages) || !isRecord(pages.templates) || !Object.hasOwn(pages.templates, "cart")) return document;
+  const { cart: _dropped, ...templates } = pages.templates;
+  return { ...document, pages: { ...pages, templates } };
 }
 
 /** A stored document read through the chain: the current document and the version it was stored at. */

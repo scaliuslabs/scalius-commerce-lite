@@ -842,7 +842,6 @@ export type StorefrontThemeDocument = {
         templates: {
             product: StorefrontPageTemplate;
             collection: StorefrontPageTemplate;
-            cart: StorefrontPageTemplate;
             page: StorefrontPageTemplate;
         };
     };
@@ -7769,7 +7768,7 @@ export type ThemeAppPart = {
          * A landing page's handle.
          */
         slug?: string;
-        template?: 'product' | 'collection' | 'cart' | 'page';
+        template?: 'product' | 'collection' | 'page';
         /**
          * The section's or block's position, from 0.
          */
@@ -10659,7 +10658,7 @@ export type GetApiV1StorefrontLandingBySlugResponse = GetApiV1StorefrontLandingB
 export type GetApiV1StorefrontTemplateByKindData = {
     body?: never;
     path: {
-        kind: 'product' | 'collection' | 'cart' | 'page';
+        kind: 'product' | 'collection' | 'page';
     };
     query?: {
         /**
@@ -11354,7 +11353,7 @@ export type PostApiV1StorefrontThemePreviewHomepageData = {
     body?: {
         token: string;
         pageSlug?: string;
-        template?: 'product' | 'collection' | 'cart' | 'page';
+        template?: 'product' | 'collection' | 'page';
         sections?: StorefrontSectionList;
         presence?: string;
         resource?: string;
@@ -61076,7 +61075,7 @@ export type PostApiV1AdminSettingsThemeAiDraftData = {
     body: {
         providerId: string;
         prompt: string;
-        page: 'home' | 'landing' | 'product' | 'collection' | 'cart' | 'page';
+        page: 'home' | 'landing' | 'product' | 'collection' | 'page';
         locale?: string;
         limit?: number;
     };
@@ -61207,7 +61206,7 @@ export type PostApiV1AdminSettingsThemeDraftSectionsData = {
             slug: string;
         } | {
             kind: 'template';
-            template: 'product' | 'collection' | 'cart' | 'page';
+            template: 'product' | 'collection' | 'page';
             region: 'before' | 'after';
         };
         afterId?: string | null;
