@@ -299,6 +299,7 @@ export const policies = [
       "apps/storefront/src/components/apps/AppComponent.astro": "app markup written by sanitizePluginHtml (the shared HTML writer)",
       "apps/storefront/src/layouts/Layout.astro": "the merchant's own head and body scripts (Settings, custom scripts), a deliberate feature; the theme's private-page look, host token rules compiled on save from typed values (compileStorefrontPrivatePages); its other sinks are script elements",
       "apps/storefront/src/components/cart/CartPageLayout.astro": "the cart page's own parts (its rendered slots) in the theme's arrangement of host layouts (lib/private-pages/html.ts)",
+      "apps/storefront/src/components/checkout/CheckoutPageLayout.astro": "the payment step's own parts (its rendered slots) in the theme's arrangement of host layouts (lib/private-pages/html.ts)",
       "apps/storefront/src/components/apps/AppHeadTags.astro": "apps' JSON-LD, each string written by serializeSchemaJsonLd (serializeJsonLd escapes `<`) when the API read the app's head",
       "apps/storefront/src/components/icons/Icon.astro": "constant SVG glyphs",
       "apps/storefront/src/components/footer/FooterBottom.astro": "constant SVG glyphs (socialGlyphMarkup)",

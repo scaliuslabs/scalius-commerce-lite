@@ -293,7 +293,7 @@ A refusal names the theme key and the pair that set it, and the scheme: `summary
 | `contrast` | A row reads under its floor in a scheme a buyer sees. |
 | `prominence` | The total drawn smaller than a money row, an add-on line or its own label, lighter than the rows, or with fainter words than theirs; its label smaller than the rows; Place order smaller or lighter than the other filled buttons; Confirm smaller or lighter than Go back. |
 | `no_row` | The page draws a target the colour table has no row for (a store defect; it never draws unchecked). |
-| `too_large` | The compiled look is over 64 KiB. |
+| `too_large` | A page's compiled look is over 64 KiB (each page has its own bound: it serves only its own look). |
 | `label_variant` | A label that names an action or an amount set to something other than one of its variants, or a variant where your words go. |
 | `label_too_long`, `markup`, `label_figures` | Words over the label's bound, words with HTML, or a digit or currency sign in a heading, title or empty state (only `cart.intro` and `cart.emptyText` may hold one). |
 | `foreign_asset` | An icon from an app other than your theme's. |
@@ -624,6 +624,7 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 - the customer's cart (the reference above), offered and protected, at 390 and 1280, light and dark, and its protected cart in the drawer with the add-on row open;
 - the store's controls in its header, in the strip at the page's end and nowhere, in a store with the light or dark switch and two markets;
 - a stored document forged past the save (a stylesheet, the theme's chrome and search, content blocks in the page and a line): the store reads it with all of them dropped and its private pages' compile refused, so the theme stays (its light or dark switch is drawn) and its cart draws the default look with none of them;
+- the payment step, drawn as the editor's sample checkout draws it for buyers: a look in palette roles with its methods as a list, the same with a narrow frame and tiles, and a forged stylesheet, at 320, 390 and 1280 px, light and dark. It fails when Pay or the total is not drawn, is off screen when scrolled to or is covered; when Pay is smaller, lighter or fainter than the gift card's Apply, or its words read under 4.5:1 on its fill; when the total is smaller than another money row or reads under 4.5:1; or when the payment provider's surface is painted other than the store paints it. Four mutations prove these fail: Pay hidden, the total hidden, Pay weaker than Apply, token mode reaching into the provider's surface;
 - named breaks the save must refuse, each with its reason (a stylesheet or blocks, `not_available`; words that do not read, in either scheme; a total smaller, lighter or fainter than its rows, or under its label, `prominence`; Place order or Confirm with no fill that shows, or smaller and lighter than its neighbour; Go back filled; a borderless field or stepper the colour of its box): a refused document is not drawn.
 
 **What fails it.**

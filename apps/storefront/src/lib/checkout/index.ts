@@ -847,7 +847,7 @@ export function renderOrderSummaryDetails(
         checkoutText(giftCopy.giftCardLineText, { card: giftCardChipLabel(tender.last4) }),
         `-${currencyFmt(tender.applied, quote)}`,
         "flex justify-between gap-3 text-primary",
-      ).dataset.summaryRow = "gift-card";
+      ).dataset.summaryRow = "paid";
     }
     // What is left to pay ranks with the total (`due`): no theme draws it smaller than another row.
     appendSummaryRow(
@@ -870,7 +870,7 @@ export function renderOrderSummaryDetails(
       checkoutCopy.dueOnDeliveryText,
       currencyFmt(balance, quote),
       "flex justify-between px-2 text-xs text-muted-foreground",
-    ).dataset.summaryRow = "balance";
+    ).dataset.summaryRow = "due";
   }
 
   appendCheckoutReview(details, data, quote);

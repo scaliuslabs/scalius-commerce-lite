@@ -132,7 +132,8 @@ function sendJson(response, status, body) {
 
 /** The cart page's colour table per palette, as the save resolved it: each row's key, selector, kind, paint and words' colours, and the scheme. */
 function galleryTables(shared, privatePages, context, page = "cart") {
-  const arrangement = shared.privatePageArrangement(privatePages, page);
+  // The payment step with tokens and no arrangement is drawn on the arrangement its block chose (context.defaults).
+  const arrangement = shared.privatePageArrangement(privatePages, page) ?? context.defaults?.[page];
   const spec = shared.PRIVATE_PAGES[page];
   // A page in token mode with no tokens of its own (the theme's page paint put it there) has the default rows.
   const compiled = shared.compilePrivateTokens(page, privatePages.tokens[page] ?? {}, {
@@ -354,19 +355,19 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const reread = shared.readStoredStorefrontThemeDocument(JSON.stringify(stored));
         const served = reread.ok ? reread.document : shared.DEFAULT_STOREFRONT_THEME;
         // The receipt and the account (`page: "sample-receipt" | "sample-account"`): the theme editor's sample pages, drawn
-        // through the same components as the buyer's receipt and account, with the entry's theme as the draft.
-        const afterOrder = { "sample-receipt": "receipt", "sample-account": "account" }[body.page] ?? null;
-        const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, ...(body.page === "home" || afterOrder ? { page: body.page } : {}) });
-        const tablePage = afterOrder ?? "cart";
-        const tables = shared.privatePageTokenMode(served.privatePages, tablePage) ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served), tablePage) : [];
+        // through the same components as the buyer's receipt and account, with the entry's theme as the draft. The payment
+        // step: the editor's sample checkout, drawn as buyers get it.
+        const drawnPage = { "sample-receipt": "receipt", "sample-account": "account", "sample-checkout": "checkout" }[body.page] ?? "cart";
+        const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, ...(body.page === "home" || drawnPage !== "cart" ? { page: body.page } : {}) });
+        const tables = shared.privatePageTokenMode(served.privatePages, drawnPage) ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served), drawnPage) : [];
         return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: served.privatePages.compiled.refused === true });
       }
       // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens), and the
       // app node kinds that have rows (their selectors inside a block).
       if (url.pathname === `${GALLERY_PREFIX}/private-anatomy`) {
         const shared = await vite.ssrLoadModule("@scalius/shared/storefront-theme");
-        // `?page=receipt|account`: that page's style targets (the cart's by default).
-        const anatomyPage = ["receipt", "account"].includes(url.searchParams.get("page")) ? url.searchParams.get("page") : "cart";
+        // `?page=checkout|receipt|account`: that page's style targets (the cart's by default).
+        const anatomyPage = ["checkout", "receipt", "account"].includes(url.searchParams.get("page")) ? url.searchParams.get("page") : "cart";
         return sendJson(response, 200, {
           styles: shared.PRIVATE_PAGES[anatomyPage].styles,
           ui: Object.values(shared.PRIVATE_BUYER_UI_STYLES).filter((style) => style.style).map((style) => style.kind),

@@ -76,7 +76,7 @@ import {
  */
 export const PRIVATE_CHECKER_VERSION = 8;
 
-/** The most compiled token CSS a document stores, every page's together. */
+/** The most compiled token CSS a page stores (each page serves only its own). */
 export const PRIVATE_COMPILED_CSS_MAX_BYTES = 64 * 1024;
 
 /**
@@ -408,8 +408,10 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
     }
   }
   if (issues.length > 0) return { ok: false, issues };
-  if (new TextEncoder().encode(Object.values(tokenCss).join("")).byteLength > PRIVATE_COMPILED_CSS_MAX_BYTES) {
-    return { ok: false, issues: [{ path: ["privatePages", "tokens"], reason: "too_large", message: `The compiled look is over ${PRIVATE_COMPILED_CSS_MAX_BYTES / 1024} KiB; set fewer tokens.` }] };
+  // Each page serves only its own look, so each has its own bound: a large cart never costs the payment step its look.
+  const large = (Object.entries(tokenCss) as Array<[PrivatePageKey, string]>).filter(([, css]) => new TextEncoder().encode(css).byteLength > PRIVATE_COMPILED_CSS_MAX_BYTES);
+  if (large.length > 0) {
+    return { ok: false, issues: large.map(([page]) => ({ path: ["privatePages", "tokens", page], reason: "too_large" as const, message: `The ${page} page's compiled look is over ${PRIVATE_COMPILED_CSS_MAX_BYTES / 1024} KiB; set fewer tokens there.` })) };
   }
   return { ok: true, value: { ...value, pages, labels, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: tokenCss } } };
 }
