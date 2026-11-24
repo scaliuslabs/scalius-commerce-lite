@@ -348,6 +348,8 @@ const CUSTOMER_DETAILS = [
 const REFERENCE = { reference: true, toggle: true, scheme: "system" };
 
 // ─── The payment step's cases (page `checkout`) ───
+/** A yellow action with black words, framed by a 2px black edge (its fill reads 1.4:1 on white; its edge 18.9:1). */
+const EDGED_ACTION = { background: "#fed700", text: "#111111", border: "#111111", "border-width": 2, "border-style": "solid", radius: 0, weight: "700" };
 const CHECKOUT_LIST = "payment step: the reference palettes' look, methods as a list";
 const CHECKOUT_TILES = "payment step: the reference palettes' look, a narrow frame and tiles";
 const CHECKOUT_FORGED = "payment step: a stored document forged with a stylesheet";
@@ -515,6 +517,14 @@ const REGRESSIONS = {
   // A field or the stepper that draws no border and fills itself with its box's colour: nothing shows where it is.
   "a borderless field the colour of its card form": { refused: "contrast", refusedFor: /input .*its fill, with no border drawn/, privatePages: { tokens: { cart: { "details-form": { background: "card" }, input: { "border-width": 0, background: "card" } } } } },
   "a borderless stepper on its line": { refused: "contrast", refusedFor: /line-quantity: its fill, with no border drawn/, privatePages: { tokens: { cart: { "line-quantity": { "border-width": 0 } } } } },
+  // A filled action found by a drawn edge (WCAG 1.4.11 by its boundary): a yellow fill reading under 3:1 on a white dock,
+  // framed by a 2px #111111 border. Drawn as Place order, as Confirm in the dialog and as Pay on the payment step's card.
+  "Place order brand fill with a drawn edge": { request: { scheme: "light" }, states: ["base", "lines"], privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, submit: EDGED_ACTION, dialog: { background: "#ffffff" }, "dialog-confirm": EDGED_ACTION } } } },
+  "Pay brand fill with a drawn edge": { request: { ...REFERENCE, scheme: "light", page: "sample-checkout" }, states: ["base"], privatePages: { tokens: { checkout: { ...CHECKOUT_TOKENS, "payment-details": { background: "#ffffff" }, submit: EDGED_ACTION } } } },
+  // Refused: an edge around the dock's own colour (nothing inside the frame reads as a button), and a 1px edge.
+  "Place order the dock's colour behind a dark edge": { refused: "contrast", refusedFor: /submit/, request: { scheme: "light" }, privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, submit: { ...EDGED_ACTION, background: "#ffffff" } } } } },
+  "Pay brand fill with a 1px edge": { refused: "contrast", refusedFor: /submit/, request: { ...REFERENCE, scheme: "light", page: "sample-checkout" }, states: ["base"], privatePages: { tokens: { checkout: { ...CHECKOUT_TOKENS, "payment-details": { background: "#ffffff" }, submit: { ...EDGED_ACTION, "border-width": 1 } } } } },
+  "Place order brand fill with a 1px edge": { refused: "contrast", refusedFor: /submit/, request: { scheme: "light" }, privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, submit: { ...EDGED_ACTION, "border-width": 1 } } } } },
   // ─── The payment step (page `checkout`): drawn as the editor's sample checkout draws it, as buyers get it ───
   [CHECKOUT_LIST]: { request: { ...REFERENCE, page: "sample-checkout" }, privatePages: { tokens: { checkout: CHECKOUT_TOKENS } }, states: ["base"] },
   [CHECKOUT_TILES]: { request: { ...REFERENCE, page: "sample-checkout" }, privatePages: { pages: { checkout: { frame: "narrow", layout: CHECKOUT_TILES_LAYOUT } }, tokens: { checkout: CHECKOUT_TOKENS } }, states: ["base"] },
@@ -1071,6 +1081,43 @@ function prominence(scope) {
 }
 
 /**
+ * Installed in every page before its scripts: whether a filled action (Place order, Pay, Confirm) is found on what is
+ * behind it (WCAG 1.4.11), as the save's `boundary: "fill"` rows are: by its fill at 3:1, or by a drawn edge, every
+ * side solid and at least 2px (1.95 computed), the border at 3:1 on what is behind it, over a fill at least 40 away
+ * from it in CIE76 (contrast.ts `storefrontThemeColorDistance`). `window.__ptActionLost(element, behind)`: null when
+ * found, else the words of the problem.
+ */
+function installActionFound() {
+  const parse = (value) => { const found = /rgba?\(([\d.]+)[ ,]+([\d.]+)[ ,]+([\d.]+)(?:[ ,/]+([\d.]+%?))?/.exec(value ?? ""); return found ? { channels: [found[1], found[2], found[3]].map(Number), alpha: found[4] === undefined ? 1 : Number.parseFloat(found[4]) / (found[4].endsWith("%") ? 100 : 1) } : null; };
+  const linear = (channel) => { const value = channel / 255; return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4; };
+  const luminance = ([r, g, b]) => 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+  const ratio = (a, b) => { const [x, y] = [luminance(a), luminance(b)]; return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const lab = (colour) => {
+    const [r, g, b] = colour.map(linear);
+    const x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047;
+    const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+    const f = (t) => (t > 216 / 24389 ? Math.cbrt(t) : ((24389 / 27) * t + 16) / 116);
+    return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+  };
+  const distance = (a, b) => { const [p, q] = [lab(a), lab(b)]; return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); };
+  window.__ptActionLost = (element, behind) => {
+    const style = getComputedStyle(element);
+    const own = parse(style.backgroundColor);
+    const fill = own && own.alpha > 0.99 ? own.channels : behind;
+    const reads = ratio(fill, behind);
+    if (reads >= 2.95) return null;
+    const sides = ["Top", "Right", "Bottom", "Left"];
+    const thin = sides.find((side) => !(Number.parseFloat(style[`border${side}Width`]) >= 1.95 && style[`border${side}Style`] === "solid"));
+    const edges = sides.map((side) => parse(style[`border${side}Color`])?.channels ?? behind);
+    const edgeReads = Math.min(...edges.map((edge) => ratio(edge, behind)));
+    const apart = distance(fill, behind);
+    if (!thin && edgeReads >= 2.95 && apart >= 40) return null;
+    return `its fill reads ${reads.toFixed(2)}:1 on what is behind it, under 3:1, and ${thin ? `its ${thin.toLowerCase()} edge is no solid 2px border` : edgeReads < 2.95 ? `its border reads ${edgeReads.toFixed(2)}:1` : `its fill is ${apart.toFixed(1)} from what is behind it, under 40`}: a buyer does not see a button`;
+  };
+}
+
+/**
  * How a buyer finds the page's actions and fields (WCAG 1.4.11), measured under a theme's tokens (the colour
  * table's look): Place order's fill reads at 3:1 on what is behind it and it is never smaller or lighter than another
  * filled button on the page; in a dialog Go back paints no fill of its own, Confirm's fill reads at 3:1 on the
@@ -1090,9 +1137,10 @@ function boundaries(scope) {
   const shown = (element) => element.checkVisibility() && element.getBoundingClientRect().width > 0 && !element.closest(".sr-only");
   const type = (element) => { const style = getComputedStyle(element); return { size: Number.parseFloat(style.fontSize), weight: Number(style.fontWeight) }; };
   const name = (element) => element.dataset.part ?? (element.id ? `#${element.id}` : element.tagName.toLowerCase());
+  // Found by its fill, or by a drawn edge over a fill apart from what is behind it (installActionFound).
   const filled = (element, what) => {
-    const ratioOf = ratio(own(element) ?? behind(element), behind(element));
-    if (ratioOf < 2.95) problems.push(`${what}: its fill reads ${ratioOf.toFixed(2)}:1 on what is behind it, under 3:1: a buyer does not see a button`);
+    const lost = window.__ptActionLost(element, behind(element));
+    if (lost) problems.push(`${what}: ${lost}`);
   };
   const outranks = (element, other, what, whom) => {
     const [mine, theirs] = [type(element), type(other)];
@@ -1641,6 +1689,24 @@ async function settle(page) {
   }
 }
 
+/**
+ * A check that the dev server's one-time reload (Vite's optimizer, as `settle` meets it) cut short: once the same URL
+ * has loaded and settled, run again. A page that went anywhere else fails as before.
+ */
+async function reloadSafe(page, work) {
+  const at = page.url();
+  try {
+    return await work();
+  } catch (error) {
+    if (!/Execution context was destroyed|navigation/i.test(String(error?.message))) throw error;
+    await page.waitForLoadState("load");
+    if (page.url() !== at) throw new Error(`the page navigated from ${at} to ${page.url()} during a check`);
+    console.error(`(the dev server reloaded ${new URL(at).pathname} during a check; ran it again)`);
+    await settle(page);
+    return work();
+  }
+}
+
 async function settleOnce(page) {
   // No pointer rests on a control (a hover colour is not what the page draws).
   await page.mouse.move(0, 0);
@@ -1689,24 +1755,6 @@ function still(page) {
     requestAnimationFrame(tick);
   }));
 }
-/**
- * A check that the dev server's one-time reload (Vite's optimizer, as `settle` meets it) cut short: once the same URL
- * has loaded and settled, run again. A page that went anywhere else fails as before.
- */
-async function reloadSafe(page, work) {
-  const at = page.url();
-  try {
-    return await work();
-  } catch (error) {
-    if (!/Execution context was destroyed|navigation/i.test(String(error?.message))) throw error;
-    await page.waitForLoadState("load");
-    if (page.url() !== at) throw new Error(`the page navigated from ${at} to ${page.url()} during a check`);
-    console.error(`(the dev server reloaded ${new URL(at).pathname} during a check; ran it again)`);
-    await settle(page);
-    return work();
-  }
-}
-
 
 async function open(context, id, width, server5xx, height = 900) {
   const page = await context.newPage();
@@ -1927,6 +1975,9 @@ function checkoutChecks() {
   const totals = [...document.querySelectorAll('[data-private="checkout"] [data-summary-row="total"]')];
   if (!drawn(pay)) problems.push("Pay is not drawn");
   else if (!reachable(pay)) problems.push("Pay is not on screen or does not take a click at its centre");
+  // Found on its card as Place order is: by its fill, or by a drawn edge (installActionFound).
+  const lost = drawn(pay) ? window.__ptActionLost(pay, behind(pay.parentElement)) : null;
+  if (lost) problems.push(`Pay: ${lost}`);
   if (totals.length === 0 || !totals.every(drawn)) problems.push("the total is not drawn");
   else if (!totals.every(reachable)) problems.push("the total is not on screen or is covered");
   for (const [name, element] of [["the summary", document.querySelector('[data-private="checkout"] [data-part="summary"]')], ["the payment methods", document.querySelector("#paymentMethods .payment-method-card")]]) {
@@ -2153,6 +2204,7 @@ try {
           const plan = (AFTER_ORDER_PAGES[entry.request?.page] ? [{ width: 390, scheme: "light" }, { width: 390, scheme: "dark" }, { width: 1280, scheme: "light" }, { width: 1280, scheme: "dark" }] : entry.request?.page === "home" ? [{ width: 390, scheme: "light" }, { width: 1280, scheme: "dark" }] : drawsOf(state)).filter((each) => each.scheme === scheme && (each.width < 1280) === touch);
           if (plan.length === 0) continue;
           const context = await browser.newContext({ colorScheme: scheme, viewport: { width: 1280, height: 900 }, hasTouch: touch });
+          await context.addInitScript(installActionFound);
           await context.addInitScript((entries) => { for (const [key, value] of Object.entries(entries)) localStorage.setItem(key, value); }, storage);
           for (const each of plan) {
             if (bailed) { await context.close(); return; }

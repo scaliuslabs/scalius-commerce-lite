@@ -61,7 +61,7 @@ const CHECKOUT_MUTATIONS = {
   },
   "P4 token mode reaches into the gateway": {
     why: "the payment provider's surface takes the theme's token mode: its paint goes transparent",
-    rewrites: [rewrite(TOKENS, ':not(${OWN_LOOK})`;', "`;")],
+    rewrites: [rewrite(TOKENS, ':not(${OWN_LOOK})`)();', "`)();")],
     cases: [CHECKOUT_LIST],
     expect: /^payment step: gateway: the provider's surface is restyled/,
   },
@@ -331,6 +331,24 @@ export const MUTATIONS = {
     rewrites: [rewrite(TOKENS, '    if (row.boundary === "fill" || (row.boundary === "edge" && !row.bordered)) {\n', '    if (row.boundary === "edge" && !row.bordered) {\n')],
     cases: ["Place order drawn as plain words", "Confirm drawn as Go back"],
     expect: /(?:Place order|Confirm): its fill reads [\d.]+:1 on what is behind it/,
+  },
+  "F2 an edged action's fill distance unchecked": {
+    why: "the save takes an edged Place order whose fill is the dock's own colour: a black frame around nothing a buyer reads as a button",
+    rewrites: [rewrite(TOKENS, "      && surface.every((point) => around.every((back) => storefrontThemeColorDistance(point, back) >= PRIVATE_EDGE_FILL_DISTANCE));\n", ";\n")],
+    cases: ["Place order the dock's colour behind a dark edge"],
+    expect: /^base: Place order: .*its fill is [\d.]+ from what is behind it, under 40/,
+  },
+  "F4 Pay's edge accepted thin": {
+    why: "the save takes a 1px edge around a Pay whose yellow fill reads 1.4:1 on its white card",
+    rewrites: [rewrite(TOKENS, "export const PRIVATE_EDGE_MIN_WIDTH = 2;", "export const PRIVATE_EDGE_MIN_WIDTH = 1;")],
+    cases: ["Pay brand fill with a 1px edge"],
+    expect: /^payment step: Pay: .*edge is no solid 2px border/,
+  },
+  "F3 a thin edge accepted": {
+    why: "the save takes a 1px edge as what finds an action whose fill does not read",
+    rewrites: [rewrite(TOKENS, "export const PRIVATE_EDGE_MIN_WIDTH = 2;", "export const PRIVATE_EDGE_MIN_WIDTH = 1;")],
+    cases: ["Place order brand fill with a 1px edge"],
+    expect: /^base: Place order: .*edge is no solid 2px border/,
   },
   "E1 an edge read by its border whether drawn or not": {
     why: "the save reads a field's and the stepper's border even where border-width 0 draws none, and never their fill: a borderless field the colour of its form is saved",
