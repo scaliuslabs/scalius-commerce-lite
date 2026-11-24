@@ -159,13 +159,13 @@ function privatePageBlocks(document: Json): Json {
 }
 
 /**
- * The anatomy and checker the 14 → 15 step's output is this build's: the
- * arrangements it writes are this build's presets (drawn from this
- * anatomy's default layouts), and it writes no tokens, which compile to
- * nothing under any checker.
+ * The anatomy the 14 → 15 step's arrangements are checked against: this
+ * build's, since they are this build's presets (drawn from this anatomy's
+ * default layouts). Its look was never compiled (`sanitizer: 0`), so the
+ * maintenance compile compiles it: a theme with a page paint is drawn in
+ * token mode on its paint, never served an empty look marked current.
  */
 const V15_ANATOMY = PRIVATE_ANATOMY_VERSION;
-const V15_CHECKER = PRIVATE_CHECKER_VERSION;
 
 /**
  * Version 14 → 15 too: the colours and the dark colours (a document's, or an
@@ -214,7 +214,7 @@ function privatePageLayouts(document: Json): Json {
     return {
       ...document,
       blocks: rest,
-      privatePages: { pages: stored, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: V15_ANATOMY, sanitizer: V15_CHECKER, css: "" } },
+      privatePages: { pages: stored, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: V15_ANATOMY, sanitizer: 0, css: "" } },
     };
   }
   if (!("cart" in blocks) && !("cartDrawer" in blocks)) return document;
