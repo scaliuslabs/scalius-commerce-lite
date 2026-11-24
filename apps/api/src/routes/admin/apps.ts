@@ -641,7 +641,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
   ]);
   const available = runtimeAvailable(c, installation);
   const nowSeconds = Math.floor(Date.now() / 1000);
-  const themeProblems = storefrontAppThemeProblems(manifest.storefront);
+  const themeProblems = storefrontAppThemeProblems(manifest.storefront, manifest.id);
   return {
     ...summary(installation),
     ...listingDetail(installation.pluginId, manifest, installation.bundleSha256),
