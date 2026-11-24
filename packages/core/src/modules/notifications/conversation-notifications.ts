@@ -11,7 +11,7 @@ import { recordStaffAlert } from "./staff-alerts";
 //     buyer has not read the thread, a burst of replies is one email per
 //     15-minute window and one SMS (off by default) per hour, per recipient:
 //     the delivery is keyed by thread, the buyer's read position and the
-//     window (`replyReceiptScope`), so the unique receipt key lets one send
+//     window (`replyReceiptKey`), so the unique receipt key lets one send
 //     through even when two replies are sent at once.
 //   conversation_message (buyer → staff): push ("New message about #1234", no
 //     text) and, when enabled, the staff email recipients.
@@ -29,6 +29,8 @@ import {
   conversationMessages,
   conversations,
   customers,
+  notificationDeliveryReceipts,
+  notificationOutbox,
   orders,
 } from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
@@ -60,7 +62,7 @@ import {
   type OrderNotificationChannelOutcome,
   type OrderNotificationDispatchResult,
 } from "./notifications.service";
-import { createProviderClientReference } from "./order-notification-delivery-receipts";
+import { createProviderClientReference, hashNotificationRecipient } from "./order-notification-delivery-receipts";
 import { buyerMessageScope, buyerStorefrontLink, readStoreIdentity } from "./store-messages";
 
 /** An unread burst of replies is one SMS per hour (§15 q8). */
@@ -293,16 +295,35 @@ ${action}${footer}
 }
 
 /**
- * The receipt scope of a reply alert: one per thread, channel, buyer read
- * position and window, so replies the buyer has not read yet share one
+ * The receipt key of a reply alert, fixed once per outbox row: one per
+ * thread, the buyer's read position, the window the row was written in,
+ * channel and recipient, so replies the buyer has not read yet share one
  * delivery (the first sends, the rest find it taken) and the next reply after
- * they read or answer, or in a later window, sends again. The recipient is in
- * the receipt key, so a corrected address is never held back by the old one.
+ * they read or answer, or written in a later window, sends again. A row that
+ * already holds a receipt for this channel and recipient (a retry, or a row
+ * the previous release keyed by its own id) keeps that receipt's key, so a
+ * retry never takes a new slot and an accepted send is never repeated.
  */
-function replyReceiptScope(thread: ThreadFacts, channel: "email" | "sms", windowSeconds: number): string | undefined {
+async function replyReceiptKey(
+  db: Database,
+  outboxId: string,
+  thread: ThreadFacts,
+  channel: "email" | "sms",
+  recipient: string,
+  windowSeconds: number,
+): Promise<string | undefined> {
   // A claim status change is always announced: its delivery keeps its own outbox row's key.
   if (isBuyerStatusEvent(thread)) return undefined;
-  return `conversation_reply:${thread.id}:r${thread.customerReadSeq}:w${Math.floor(Date.now() / 1000 / windowSeconds)}:${channel}`;
+  const recipientHash = await hashNotificationRecipient(recipient);
+  const [own, row] = await Promise.all([
+    db.select({ key: notificationDeliveryReceipts.receiptKey }).from(notificationDeliveryReceipts)
+      .where(and(eq(notificationDeliveryReceipts.outboxId, outboxId), eq(notificationDeliveryReceipts.channel, channel), eq(notificationDeliveryReceipts.recipientHash, recipientHash)))
+      .get(),
+    db.select({ createdAt: notificationOutbox.createdAt }).from(notificationOutbox).where(eq(notificationOutbox.id, outboxId)).get(),
+  ]);
+  if (own) return own.key;
+  const writtenAt = row?.createdAt ?? Math.floor(Date.now() / 1000);
+  return `conversation_reply:${thread.id}:r${thread.customerReadSeq}:w${Math.floor(writtenAt / windowSeconds)}:${channel}:${recipientHash}`;
 }
 
 export async function sendConversationNotification(
@@ -382,7 +403,7 @@ async function sendReplyToBuyer(
         reason: "missing_email_recipient",
       }));
     } else {
-      const target = { ...base, channel: "email" as const, provider: "email", recipient: email, recipientMasked: maskEmail(email), receiptScope: replyReceiptScope(thread, "email", CONVERSATION_EMAIL_COALESCE_SECONDS) };
+      const target = { ...base, channel: "email" as const, provider: "email", recipient: email, recipientMasked: maskEmail(email), receiptKey: await replyReceiptKey(db, claim.outboxId, thread, "email", email, CONVERSATION_EMAIL_COALESCE_SECONDS) };
       const blocked = await recordProviderBlockedDeliveryIfNeeded(target);
       outcomes.push(blocked ?? await dispatchWithReceipt({
         ...target,
@@ -517,7 +538,7 @@ async function sendReplySms(
       });
     }
     const provider = await getActiveSmsProvider(db, options.encryptionKey, options.appProviders);
-    const target = { ...base, channel: "sms" as const, provider: provider?.id ?? providerName, recipient: phone, recipientMasked: maskPhone(phone), receiptScope: replyReceiptScope(thread, "sms", CONVERSATION_SMS_COALESCE_SECONDS) };
+    const target = { ...base, channel: "sms" as const, provider: provider?.id ?? providerName, recipient: phone, recipientMasked: maskPhone(phone), receiptKey: await replyReceiptKey(db, base.outboxId, thread, "sms", phone, CONVERSATION_SMS_COALESCE_SECONDS) };
     const blocked = await recordProviderBlockedDeliveryIfNeeded(target);
     if (blocked) return blocked;
     return await dispatchWithReceipt({
