@@ -983,7 +983,7 @@ function manyCart(): string {
  * store has Noor installed, so a theme from it draws its header and footer;
  * with `localization`, the store sells in two markets.
  */
-export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean; terms?: boolean; page?: "home" | "sample-checkout" } = {}): GalleryEntry {
+export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean; terms?: boolean; page?: "home" | "sample-checkout" | "sample-receipt" | "sample-account" } = {}): GalleryEntry {
   const base = galleryEntry(entryId("app", "buyer-ui"))!;
   // `decide`: the base cart, whose first line asks for a decision and every line sells, so Place order reaches the question.
   const customer = state === "customer" ? "offer" as const : state === "customer-protected" ? "protected" as const : undefined;

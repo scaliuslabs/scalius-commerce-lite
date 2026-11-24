@@ -9,7 +9,7 @@ The cart, checkout, payment, receipt and account pages are a buyer's own pages: 
 
 The store writes every CSS rule from your values, checks every colour a buyer reads, and keeps what a buyer must see and do. A rendered gate ([below](#the-rendered-gate)) draws themes in a real browser and fails when anything a buyer must read or use is lost.
 
-This page covers the cart page, the payment step and the cart drawer. A private page takes no sections: `pages.templates` has no cart template (one with sections is refused with reason `private_page_template`), and no section of the homepage, a landing page or another template draws there. The drawer opens over public pages and is part of each of them: its arrangement, words and icons come from here, and its look comes from your public stylesheet through the same hooks. Quick checkout (the page that places an order without scripts), the receipt and the account take the store's look and the closed choices in [themes.md](themes.md#templates) until they move to this model.
+This page covers the cart page, the payment step and the cart drawer, and the look of the receipt and the account. A private page takes no sections: `pages.templates` has no cart template (one with sections is refused with reason `private_page_template`), and no section of the homepage, a landing page or another template draws there. The drawer opens over public pages and is part of each of them: its arrangement, words and icons come from here, and its look comes from your public stylesheet through the same hooks. The receipt and the account take their look from tokens here too ([below](#the-receipt-and-the-account)); their parts keep the store's order, and their card order, receipt width and account menu are still the closed choices in [themes.md](themes.md#templates). Quick checkout (the page that places an order without scripts) takes the store's look and the closed choices there.
 
 Each page is compiled and served on its own: a page is in token mode only where you gave it tokens (or your theme has a page paint), and it serves only its own look.
 
@@ -332,6 +332,31 @@ A label that names an action or an amount takes one of the store's **variants**,
 
 The words a part's variant draws are the store's: "Remove" (সরান) for `remove: words`, "Items" (পণ্য) for `summary: with-items`. Icons: `cart.empty`, `drawer.empty`.
 
+## The receipt and the account
+
+The receipt (`/order-success`: the confirmation and the order's status view, and the theme editor's sample receipt) and the account's dashboard and order page take **tokens** (`tokens.receipt`, `tokens.account`), checked by the same colour table and floors as the cart: contrast per scheme, and the total never drawn smaller than another money row. They are not arranged yet: an arrangement other than the store's own for `pages.receipt` or `pages.account` is refused (`not_available`). Their parts are named in the [anatomy](#anatomy-reference) so the names stay when arranging comes.
+
+A thing that is the same thing as on the cart has the cart's name: `page`, `frame`, `action`, `input`, `field-label`, the dialogs (`dialog`, `dialog-title`, …), the money rows (`summary`, `summary-heading`, `summary-rows`, `summary-total`, `summary-total-label`, `summary-add-on`, `summary-add-on-detail`), and an order's line (`line`, `line-image`, `line-title`, `line-details`, `line-price`; the receipt's line image takes no `fit`: it is the image itself, with no box around it). Both pages draw the store's public header and footer (the store's own markup in its closed variants and the palette's colours; on a buyer's page no app's header skin, component, stylesheet or script draws there) and, on phones, the theme's tab bar where it has one. That chrome is outside the page's root and takes the palette, not these tokens, so `chrome`, `scheme` and `localization` are not theirs.
+
+| Page | Target | What it is | Kind |
+| --- | --- | --- | --- |
+| Receipt | `status`, `status-mark`, `status-title`, `status-message`, `status-steps` | The order's state: its mark, its title (the page's `h1`), its message and next steps | box, text on its own surface, text, text (muted), box |
+| Receipt | `tracking` | Where the order is (the status view) | box (`background`) |
+| Receipt | `order`, `order-facts`, `status-badge` | The order card; its facts (the order number, placed, state, payment); a state's pill | box (`background`), text, text on its own surface |
+| Receipt | `delivery`, `section-heading`, `delivery-contact` | Where it goes, its heading, the buyer's own name, address and contact | box, text, text |
+| Receipt | `lines`, `lines-heading` | What was bought, its heading; each line under it | box, text |
+| Receipt | `conversation` | The order's conversation with the store (it holds the reply form) | box (`card`) |
+| Receipt | (none) | The recommendations: public product cards on the store's own look and the palette's page, never in token mode and no row of the table | |
+| Account | `navigation`, `nav-item`, `nav-current`, `sign-out` | The menu, each page in it, the current page (its marker is its `link` colour), Sign out | box, control (muted), control, control (muted) |
+| Account | `heading-title`, `heading-intro`, `heading-back` | The page's `h1`, its intro, the way back | text, text (muted), control |
+| Account | `content` | The page's content; it holds the apps' targets `account.overview`, `account.order`, `account.profile`. It takes no tokens: most account pages draw no box around it, so what stands in it stands on the page | box (no tokens) |
+| Account | `card`, `card-title`, `status-badge` | Every account card, its heading, a state's pill | box (`card`), text, text on its own surface |
+| Account | `delivery-message`, `delivery-reveal` | A line's delivery message and the button that reveals it (with no border drawn, its fill reads 3:1 on the message, as Sign out's does) | box, control |
+
+The money summary sits in the receipt's `order` card and in an account order's `card`. An order's `line` holds the apps' `order.line.after` (drawn under a line only where an app answered for it). The apps' blocks take the same `ui.<kind>…` rows as on the cart, at these pages' targets (`order.confirmation`, `account.order`, `order.line.after` on the receipt; `account.overview`, `account.order`, `account.profile`, `order.line.after` in the account).
+
+What a theme cannot lose: the receipt's state, order card (its number, its state, every money row and the total), delivery card (the buyer's contact), lines, actions and conversation, and the account's menu with Sign out, its heading and its content are mandatory parts; no token hides anything (every word reads at its floor, sizes are at least 12px). Nothing here changes what a page reads or who may read it: a delivery message is still revealed only on the signed-in account's order page. The other account pages (profile, reviews, warranties, gift cards, downloads, inbox) carry the shell's hooks but not the look yet.
+
 ## The add-on row
 
 An app's `cart.line_prices` add-on shows as its own money row (`data-summary-row="add-on"`, one per app and title) on six surfaces: the cart page, the drawer, the payment step, quick checkout, the receipt and the account order. A row whose add-on carries `details` lines ([line add-ons](commerce-hooks.md#line-add-ons)) opens to them:
@@ -345,7 +370,7 @@ A row with no details is a plain row of its title and amount. On the cart page a
 
 ## The store's controls
 
-A private page draws only the store's chrome: its checkout header, no theme or app header or footer. The phone tab bar never draws where the buyer is paying (the cart, the checkout and quick checkout, buy now, payment recovery); the receipt and the account pages keep it. `controls` places the store's controls:
+The cart page and the payment step draw only the store's chrome: its checkout header, no theme or app header or footer. The receipt and the account draw the store's public header and footer ([below](#the-receipt-and-the-account)). The phone tab bar never draws where the buyer is paying (the cart, the checkout and quick checkout, buy now, payment recovery); the receipt and the account pages keep it. `controls` places the store's controls:
 
 | `controls` | Where |
 | --- | --- |
@@ -823,6 +848,102 @@ checkout style legal <root> [data-part="legal"] tokens=text,size,align
 checkout style chrome :is([data-private="core-header"],[data-private="core-footer"]) tokens=background,gradient,text,muted,link,border,border-width
 checkout style scheme [data-host="scheme"] button tokens=text,ring,radius
 checkout style localization [data-host="localization"] tokens=text,muted,link fields
+receipt root data-private=receipt frames=standard|wide
+receipt part progress hooks=progress
+receipt part status mandatory hooks=status,status-mark,status-title,status-message,status-steps,status-retry
+receipt part tracking mandatory hooks=tracking
+receipt part summary mandatory hooks=order,order-facts,order-number,status-badge,summary,summary-heading,summary-total-label,add-on-details,add-on-detail
+receipt part delivery mandatory hooks=delivery,section-heading,delivery-contact
+receipt part lines mandatory hooks=lines,lines-heading,line,line-image,line-title,line-details,line-price,line-extras
+receipt part actions mandatory hooks=actions
+receipt part conversation mandatory hooks=conversation
+receipt part recommendations hooks=recommendations
+receipt fields in actions,conversation
+receipt target order.confirmation
+receipt target account.order
+receipt lead status,summary
+receipt layouts stack,columns,grid,group
+receipt style page body[data-private-body] tokens=background,gradient,text,muted,link,error
+receipt style frame <root> <root> tokens=max-width
+receipt style action :is([data-private="receipt"],[data-private="dialog"]) .bg-primary:not([data-part="recommendations"] *) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+receipt style input :is([data-private="receipt"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+receipt style field-label :is([data-private="receipt"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
+receipt style status <root> [data-part="status"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+receipt style status-mark <root> [data-part="status-mark"] tokens=background,text,border,border-width,radius
+receipt style status-title <root> [data-part="status-title"] tokens=text,font,weight,size,leading,case,tracking
+receipt style status-message <root> [data-part="status-message"] tokens=text,size,weight,leading
+receipt style status-steps <root> [data-part="status-steps"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+receipt style tracking <root> [data-part="tracking"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+receipt style order <root> [data-part="order"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+receipt style order-facts <root> [data-part="order-facts"] tokens=text,muted,size
+receipt style status-badge <root> [data-part="status-badge"] tokens=background,text,border,border-width,radius
+receipt style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap
+receipt style summary-heading <root> [data-part="summary-heading"] tokens=text,font,weight,size,leading,case,tracking
+receipt style summary-rows <root> [data-summary-row]:not([data-summary-row="total"]) tokens=text,size
+receipt style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size,line-price:size
+receipt style summary-total-label <root> [data-summary-row="total"] [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size
+receipt style summary-add-on <root> [data-part="add-on-details"] > summary tokens=text,ring,radius
+receipt style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size
+receipt style delivery <root> [data-part="delivery"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+receipt style section-heading <root> [data-part="section-heading"] tokens=text,font,weight,size,leading,case,tracking
+receipt style delivery-contact <root> [data-part="delivery-contact"] tokens=text,muted,size
+receipt style lines <root> [data-part="lines"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+receipt style lines-heading <root> [data-part="lines-heading"] tokens=text,font,weight,size,leading,case,tracking
+receipt style line <root> [data-part="line"] tokens=background,border,border-width,border-style,radius,padding targets=order.line.after
+receipt style line-image <root> [data-part="line-image"] tokens=width,height,width-wide,height-wide,radius,background,border,border-width,border-style
+receipt style line-title <root> [data-part="line-title"] tokens=text,font,weight,size,leading,case,tracking
+receipt style line-details <root> [data-part="line-details"] tokens=text,size
+receipt style line-price <root> [data-part="line-price"] tokens=text,muted,font,weight,size,align
+receipt style conversation <root> [data-part="conversation"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding fields
+receipt style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow fields
+receipt style dialog-title [data-private="dialog"] [data-part="dialog-title"] tokens=text,font,weight,size,leading,case,tracking
+receipt style dialog-text [data-private="dialog"] [data-part="dialog-text"] tokens=background,text,muted,border,border-width,radius,padding
+receipt style dialog-agree [data-private="dialog"] [data-part="dialog-agree"] tokens=background,text,border,border-width,radius,padding
+receipt style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=text,border,border-width,radius,ring,inset,weight boundary=edge
+receipt style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=dialog-back:size+weight
+account root data-private=account
+account part navigation mandatory variants=tabs|sidebar hooks=navigation,nav-item,nav-badge,sign-out
+account part heading mandatory hooks=heading,heading-title,heading-intro,heading-back
+account part content mandatory hooks=content,card,card-title,status-badge,summary,summary-total-label,add-on-details,add-on-detail,line,line-image,line-title,line-details,line-price,delivery-message,delivery-reveal
+account fields in content
+account lead heading,content
+account layouts stack,columns,grid,group
+account style page body[data-private-body] tokens=background,gradient,text,muted,link,error
+account style frame <root> <root> tokens=max-width
+account style action :is([data-private="account"],[data-private="dialog"]) .bg-primary tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+account style input :is([data-private="account"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+account style field-label :is([data-private="account"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
+account style navigation <root> [data-part="navigation"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+account style nav-item <root> [data-part="nav-item"]:not([aria-current="page"]) tokens=text,size,weight,radius,ring
+account style nav-current <root> [data-part="nav-item"][aria-current="page"] tokens=text,link,size,weight,radius,ring
+account style sign-out <root> [data-part="sign-out"] tokens=background,text,border,border-width,radius,ring,inset,weight,size boundary=edge
+account style heading-title <root> [data-part="heading-title"] tokens=text,font,weight,size,leading,case,tracking
+account style heading-intro <root> [data-part="heading-intro"] tokens=text,size,weight,leading
+account style heading-back <root> [data-part="heading-back"] tokens=text,radius,ring
+account style content <root> [data-part="content"] tokens= targets=account.overview,account.order,account.profile
+account style card <root> [data-part="card"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap fields
+account style card-title <root> [data-part="card-title"] tokens=text,font,weight,size,leading,case,tracking
+account style status-badge <root> [data-part="status-badge"] tokens=background,text,border,border-width,radius
+account style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap
+account style summary-heading <root> [data-part="summary-heading"] tokens=text,font,weight,size,leading,case,tracking
+account style summary-rows <root> [data-summary-row]:not(:is([data-summary-row="total"],[data-summary-row="due"])) tokens=text,size
+account style summary-total <root> :is([data-summary-row="total"],[data-summary-row="due"]) tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size,line-price:size
+account style summary-total-label <root> :is([data-summary-row="total"],[data-summary-row="due"]) [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size
+account style summary-add-on <root> [data-part="add-on-details"] > summary tokens=text,ring,radius
+account style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size
+account style line <root> [data-part="line"] tokens=background,border,border-width,border-style,radius,padding targets=order.line.after
+account style line-image <root> [data-part="line-image"] tokens=width,height,width-wide,height-wide,radius,background,border,border-width,border-style,fit
+account style line-title <root> [data-part="line-title"] tokens=text,font,weight,size,leading,case,tracking
+account style line-details <root> [data-part="line-details"] tokens=text,size
+account style line-price <root> [data-part="line-price"] tokens=text,muted,font,weight,size,align
+account style delivery-message <root> [data-part="delivery-message"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+account style delivery-reveal <root> [data-part="delivery-reveal"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=edge
+account style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow fields
+account style dialog-title [data-private="dialog"] [data-part="dialog-title"] tokens=text,font,weight,size,leading,case,tracking
+account style dialog-text [data-private="dialog"] [data-part="dialog-text"] tokens=background,text,muted,border,border-width,radius,padding
+account style dialog-agree [data-private="dialog"] [data-part="dialog-agree"] tokens=background,text,border,border-width,radius,padding
+account style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=text,border,border-width,radius,ring,inset,weight boundary=edge
+account style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=dialog-back:size+weight
 dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-agree,dialog-actions,dialog-back,dialog-confirm,field-label
 buyer-ui attributes=data-buyer-ui-target,data-buyer-ui-app,data-ui
 chrome roots data-private=core-header|core-footer controls=header|footer|none

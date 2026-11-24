@@ -354,9 +354,11 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         // cannot read serves the default theme whole; the storefront draws what that read served.
         const reread = shared.readStoredStorefrontThemeDocument(JSON.stringify(stored));
         const served = reread.ok ? reread.document : shared.DEFAULT_STOREFRONT_THEME;
-        const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, terms: body.terms === true, ...(body.page === "home" || body.page === "sample-checkout" ? { page: body.page } : {}) });
-        // The page drawn: the cart, or the payment step (the editor's sample checkout, drawn as buyers get it).
-        const drawnPage = body.page === "sample-checkout" ? "checkout" : "cart";
+        // The receipt and the account (`page: "sample-receipt" | "sample-account"`): the theme editor's sample pages, drawn
+        // through the same components as the buyer's receipt and account, with the entry's theme as the draft. The payment
+        // step: the editor's sample checkout, drawn as buyers get it.
+        const drawnPage = { "sample-receipt": "receipt", "sample-account": "account", "sample-checkout": "checkout" }[body.page] ?? "cart";
+        const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, terms: body.terms === true, ...(body.page === "home" || drawnPage !== "cart" ? { page: body.page } : {}) });
         const tables = shared.privatePageTokenMode(served.privatePages, drawnPage) ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served), drawnPage) : [];
         return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: served.privatePages.compiled.refused === true });
       }
@@ -364,8 +366,10 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       // app node kinds that have rows (their selectors inside a block).
       if (url.pathname === `${GALLERY_PREFIX}/private-anatomy`) {
         const shared = await vite.ssrLoadModule("@scalius/shared/storefront-theme");
+        // `?page=checkout|receipt|account`: that page's style targets (the cart's by default).
+        const anatomyPage = ["checkout", "receipt", "account"].includes(url.searchParams.get("page")) ? url.searchParams.get("page") : "cart";
         return sendJson(response, 200, {
-          styles: shared.PRIVATE_PAGES.cart.styles,
+          styles: shared.PRIVATE_PAGES[anatomyPage].styles,
           ui: Object.values(shared.PRIVATE_BUYER_UI_STYLES).filter((style) => style.style).map((style) => style.kind),
         });
       }

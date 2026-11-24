@@ -506,6 +506,46 @@ const REGRESSIONS = {
   // ─── end of the payment step ───
 };
 
+// ─── The receipt and the account (w-p2-after-pages) ───────────────────────
+// Their look by tokens, their parts in the store's order, drawn on the theme
+// editor's sample receipt and sample account: the receipt's components and the account shell with its order cards.
+// The customer's palettes, its card surfaces and its emerald total in the dark, light and dark, at 390 and 1280.
+
+/** Each after-order page: its gallery page, its key, its root and what a buyer must see there. */
+const AFTER_ORDER_PAGES = {
+  "sample-receipt": {
+    page: "receipt", root: '[data-private="receipt"]',
+    mandatory: ['[data-part="status-title"]', '[data-part="order-number"]', '[data-summary-row="total"]', '[data-part="delivery-contact"]', '[data-part="lines"]'],
+  },
+  "sample-account": {
+    page: "account", root: '[data-private="account"]',
+    mandatory: ['[data-part="navigation"]', '[data-part="sign-out"]', '[data-part="heading-title"]', '[data-part="card"]'],
+  },
+};
+const CARD_LOOK = { background: "card", radius: 0, "border-width": 0, shadow: "lg" };
+const EMERALD_TOTAL = { text: "foreground", size: 20, weight: "600" };
+const RECEIPT_LOOK = {
+  order: CARD_LOOK, delivery: CARD_LOOK, lines: CARD_LOOK, "summary-total": EMERALD_TOTAL,
+  "summary-total-label": { text: "foreground", size: 16, weight: "600" }, "status-badge": { radius: 0 }, "status-title": { size: 30, weight: "600" },
+};
+const ACCOUNT_LOOK = {
+  card: CARD_LOOK, "nav-current": { text: "foreground", weight: "600" }, "sign-out": { background: "muted", radius: 0, weight: "600" },
+  "heading-title": { size: 24, weight: "600" }, "status-badge": { radius: 0 }, "summary-total": EMERALD_TOTAL,
+};
+const AFTER_ORDER_CASES = {
+  "the receipt in the customer's look": { request: { ...REFERENCE, page: "sample-receipt" }, privatePages: { tokens: { receipt: RECEIPT_LOOK } } },
+  "the account in the customer's look": { request: { ...REFERENCE, page: "sample-account" }, privatePages: { tokens: { account: ACCOUNT_LOOK } } },
+  // A receipt document forged past the save: a stylesheet hiding the total and a content block. None of it draws.
+  "the receipt forged past the save": { request: { toggle: true, scheme: "system", page: "sample-receipt", forged: {
+    pages: { receipt: { layout: [FORGED_BLOCK("forged-page")] } },
+    css: `/*${FORGED_MARK}*/[data-summary-row="total"]{display:none}body::after{content:"${FORGED_WORDS}"}`, chrome: "theme",
+  } }, privatePages: { tokens: { receipt: RECEIPT_LOOK } } },
+  // What the save must refuse: an arrangement of a page that keeps the store's order, and a total under its rows.
+  "an arrangement of the receipt": { refused: "not_available", request: { page: "sample-receipt" }, privatePages: { pages: { receipt: { layout: [{ type: "part", part: "summary" }, { type: "part", part: "status" }] } } } },
+  "a receipt total drawn smaller than its rows": { refused: "prominence", refusedFor: /summary-total/, request: { page: "sample-receipt" }, privatePages: { tokens: { receipt: { "summary-total": { size: 14 } } } } },
+};
+Object.assign(REGRESSIONS, AFTER_ORDER_CASES);
+
 // ─── PNG pixels (Chromium's 8-bit RGB or RGBA screenshots) ────────────────
 
 function decode(png) {
@@ -1642,6 +1682,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   const server5xx = [];
   if (request?.page === "home") return drawDrawer({ context, id, width, problems, server5xx, rows, state });
   if (request?.page === "sample-checkout") return drawCheckout({ context, id, width, height, request });
+  if (AFTER_ORDER_PAGES[request?.page]) return drawAfterOrder({ context, id, width, rows, request, drawn });
   const page = await timed("load", () => open(context, id, width, server5xx, height));
   // The store's own checkout header, and its controls where the theme places them.
   // A store that asks for its terms: the required box and its words, wherever the cart is not empty.
@@ -1750,6 +1791,55 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
       }
     }
   }
+  at("5xx", server5xx);
+  await page.close();
+  return problems;
+}
+
+/** Each after-order page's style targets with their whole selectors (`/__gallery/private-anatomy?page=`), read once. */
+const AFTER_ORDER_TARGETS = {};
+async function afterOrderTargets(page) {
+  if (!AFTER_ORDER_TARGETS[page]) {
+    const { styles: pageStyles } = await fetch(`${gallery.url}/__gallery/private-anatomy?page=${page}`).then((answer) => answer.json());
+    AFTER_ORDER_TARGETS[page] = Object.entries(pageStyles).map(([name, style]) => ({ name, selector: style.absolute ? style.selector : `[data-private="${page}"] ${style.selector}`.trim() }));
+  }
+  return AFTER_ORDER_TARGETS[page];
+}
+
+/**
+ * The receipt or the account (the theme editor's sample pages, drawn by the same components as a buyer's): what a
+ * buyer must see there on screen and uncovered, every add-on row opened, the coverage walk inside the page's root
+ * (its colour table in token mode, its anatomy without), every word whole and at its floor, every control taking a
+ * click, the total no smaller than its rows, the scheme the store shows, and none of a forged document.
+ */
+async function drawAfterOrder({ context, id, width, rows, request, drawn }) {
+  const problems = [];
+  const server5xx = [];
+  const spec = AFTER_ORDER_PAGES[request.page];
+  const at = (label, list) => problems.push(...list.map((problem) => `${label}: ${problem}`));
+  const page = await context.newPage();
+  page.on("response", (answer) => { if (answer.status() >= 500) server5xx.push(`${answer.status()} ${answer.request().method()} ${new URL(answer.url()).pathname}`); });
+  await page.setViewportSize({ width, height: 900 });
+  const answer = await page.goto(`${gallery.url}/__gallery/e/${id}`, { waitUntil: "load" });
+  if (answer && answer.status() >= 500) server5xx.push(`${answer.status()} the page`);
+  if (!(await page.waitForSelector(spec.root, { timeout: 20_000 }).catch(() => null))) problems.push(`${spec.page}: ${spec.root} is not drawn`);
+  await timed("settle", () => settle(page));
+  if (drawn) {
+    const shown = await page.evaluate(() => document.documentElement.dataset.colorScheme ?? "light");
+    if (shown !== drawn) problems.push(`scheme: the page draws its ${shown} colours where the store shows its ${drawn} ones`);
+  }
+  await openAddOns(page, spec.root);
+  await page.waitForTimeout(150);
+  const targets = await afterOrderTargets(spec.page);
+  const anatomy = targets.filter(({ name }) => name !== "page").concat([{ name: `the ${spec.page}`, selector: spec.root }]);
+  const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy, uiKinds: UI_KINDS, mandatory: spec.mandatory, scope: spec.root, exempt: EXEMPT, styleTargets: targets }));
+  at(spec.page, walked.problems);
+  if (request?.forged) at(spec.page, await page.evaluate(forgedAbsent, { words: FORGED_WORDS, mark: FORGED_MARK }));
+  if (rows.length > 0) at(spec.page, await page.evaluate(boundaries, spec.root));
+  at(spec.page, await timed("whole", () => page.evaluate(wholeTexts)));
+  at(spec.page, await timed("contrast", () => textContrast(page, walked.texts)));
+  at(spec.page, await timed("clicks", () => page.evaluate(clicks)));
+  at(`${spec.page} prominence`, await page.evaluate(prominence, `${spec.root} [data-part="summary"]`));
   at("5xx", server5xx);
   await page.close();
   return problems;
@@ -2018,7 +2108,7 @@ try {
         const drawn = degraded ? null : entry.request?.scheme === "light" || entry.request?.scheme === "dark" ? entry.request.scheme : scheme;
         const rows = tables.find((table) => table.scheme === drawn)?.rows ?? tables[0]?.rows ?? [];
         for (const touch of [true, false]) {
-          const plan = (entry.request?.page === "home" ? [{ width: 390, scheme: "light" }, { width: 1280, scheme: "dark" }] : drawsOf(state)).filter((each) => each.scheme === scheme && (each.width < 1280) === touch);
+          const plan = (AFTER_ORDER_PAGES[entry.request?.page] ? [{ width: 390, scheme: "light" }, { width: 390, scheme: "dark" }, { width: 1280, scheme: "light" }, { width: 1280, scheme: "dark" }] : entry.request?.page === "home" ? [{ width: 390, scheme: "light" }, { width: 1280, scheme: "dark" }] : drawsOf(state)).filter((each) => each.scheme === scheme && (each.width < 1280) === touch);
           if (plan.length === 0) continue;
           const context = await browser.newContext({ colorScheme: scheme, viewport: { width: 1280, height: 900 }, hasTouch: touch });
           await context.addInitScript((entries) => { for (const [key, value] of Object.entries(entries)) localStorage.setItem(key, value); }, storage);

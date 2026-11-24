@@ -61,7 +61,7 @@ const CHECKOUT_MUTATIONS = {
   },
   "P4 token mode reaches into the gateway": {
     why: "the payment provider's surface takes the theme's token mode: its paint goes transparent",
-    rewrites: [rewrite(TOKENS, ':not([data-part="${PRIVATE_GATEWAY_HOOK}"],[data-part="${PRIVATE_GATEWAY_HOOK}"] *)`;', "`;")],
+    rewrites: [rewrite(TOKENS, ':not(${OWN_LOOK})`;', "`;")],
     cases: [CHECKOUT_LIST],
     expect: /^payment step: gateway: the provider's surface is restyled/,
   },
@@ -346,6 +346,25 @@ export const MUTATIONS = {
     rewrites: [rewrite("apps/storefront/src/components/CheckoutHeader.astro", "{controls && <PrivateSchemeSwitch />}", "<PrivateSchemeSwitch />")],
     cases: ["no store controls on the page, under dark tokens"],
     expect: /\[data-host="scheme"\] button: drawn in the checkout header where the theme places the controls nowhere/,
+  },
+  // ─── The receipt and the account (w-p2-after-pages): what a buyer must keep there, hidden ───
+  "after-order: the receipt's total hidden": {
+    why: "the receipt's total row drawn hidden: a buyer must always read what the order costs",
+    rewrites: [rewrite("apps/storefront/src/components/order/ReceiptCard.astro", '<div class="flex justify-between gap-4 border-t border-border pt-3" data-summary-row="total">', '<div class="hidden" data-summary-row="total">')],
+    cases: ["the receipt in the customer's look"],
+    expect: /^receipt: \[data-summary-row="total"\]: not visible/,
+  },
+  "after-order: the receipt's order number hidden": {
+    why: "the order number drawn hidden: the one fact a buyer quotes to the store",
+    rewrites: [rewrite("apps/storefront/src/components/order/ReceiptCard.astro", '<span class="break-all text-end font-medium" data-part="order-number">', '<span class="hidden" data-part="order-number">')],
+    cases: ["the receipt in the customer's look"],
+    expect: /^receipt: \[data-part="order-number"\]: not visible/,
+  },
+  "after-order: the account's Sign out hidden": {
+    why: "Sign out drawn hidden: a buyer on a shared device must always be able to leave the account",
+    rewrites: [rewrite("apps/storefront/src/components/account/AccountShell.astro", 'data-part="sign-out"', 'data-part="sign-out" hidden')],
+    cases: ["the account in the customer's look"],
+    expect: /^account: \[data-part="sign-out"\]: not visible/,
   },
 };
 

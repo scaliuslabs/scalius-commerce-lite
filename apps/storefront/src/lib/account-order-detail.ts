@@ -601,17 +601,23 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
     const nameMarkup = (item: Row) => {
       const name = escapeHtml(item.productName || words.product);
       return item.productSlug
-        ? `<a href="${escapeHtml(pagePath(`/products/${encodeURIComponent(item.productSlug)}`))}" class="font-medium text-foreground hover:underline">${name}</a>`
-        : `<p class="font-medium text-foreground">${name}</p>`;
+        ? `<a href="${escapeHtml(pagePath(`/products/${encodeURIComponent(item.productSlug)}`))}" class="font-medium text-foreground hover:underline" data-part="line-title">${name}</a>`
+        : `<p class="font-medium text-foreground" data-part="line-title">${name}</p>`;
     };
-    const image = (item: Row) => `<img src="${escapeHtml(getProductImageUrl(item.productImage, 128))}" alt="" class="h-16 w-16 shrink-0 rounded-lg border border-border bg-card object-contain" loading="lazy" />`;
+    // The image in its box, as the cart draws it: a theme sizes the box and fits the image in it.
+    const image = (item: Row) => `<div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border bg-card" data-part="line-image"><img src="${escapeHtml(getProductImageUrl(item.productImage, 128))}" alt="" class="h-full w-full object-contain" loading="lazy" /></div>`;
+    // The apps' blocks for one row (`order.line.after`, keyed by the row's id as the API keys them), under it.
+    const lineTarget = (item: Row) => {
+      const name = item.productName || words.product;
+      return `<div data-buyer-ui-target="order.line.after" data-buyer-ui-line="${escapeHtml(item.id)}" data-buyer-ui-line-name="${escapeHtml(item.variantLabel ? `${name} (${item.variantLabel})` : name)}" class="mt-2 grid gap-2" hidden></div>`;
+    };
     // Files, keys, card codes, the store's message and the review form get the line's full width.
     const extrasOf = (item: Row) => lineExtrasMarkup(item, { orderId: order.id, access: "account", languageData: copy });
     const priceMarkup = (amounts: ReturnType<typeof amountsOf>, fallback: number) => {
       const total = amounts ? minor(presentedLineTotalMinor(amounts, showsLineDiscounts)) : accountMoney(fallback, order.currencyCode);
       // A free gift reads its full price struck, then zero.
       const struck = amounts && isFreeOrderLine(amounts) ? `<s class="me-1.5 text-muted-foreground">${escapeHtml(minor(amounts.grossSubtotalMinor))}</s>` : "";
-      return `<p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${struck}${escapeHtml(total)}</p>`;
+      return `<p class="shrink-0 text-sm font-medium tabular-nums text-foreground" data-part="line-price">${struck}${escapeHtml(total)}</p>`;
     };
     const lineMarkup = (item: Row) => {
       // A kit's item charged as two lines is one row here, its unit price null when its total does not divide.
@@ -625,17 +631,19 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
         ...addOnRowsOf([item]),
       ];
       const extras = extrasOf(item);
-      return `<li class="py-4 first:pt-0 last:pb-0"><div class="flex gap-3">
+      return `<li class="py-4 first:pt-0 last:pb-0" data-part="line"><div class="flex gap-3">
         ${image(item)}
         <div class="min-w-0 flex-1 text-sm">
           ${nameMarkup(item)}
-          ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
-          ${rowsMarkup(properties)}
-          <p class="text-muted-foreground">${escapeHtml(words.quantity(formatCount(item.quantity), unit))}</p>
-          ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">${escapeHtml(words.lineDiscount(minor(item.discountAmountMinor!)))}</p>` : ""}
+          <div data-part="line-details">
+            ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
+            ${rowsMarkup(properties)}
+            <p class="text-muted-foreground">${escapeHtml(words.quantity(formatCount(item.quantity), unit))}</p>
+            ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">${escapeHtml(words.lineDiscount(minor(item.discountAmountMinor!)))}</p>` : ""}
+          </div>
         </div>
         ${priceMarkup(amounts, item.lineTotal)}
-      </div>${extras ? `<div class="text-sm sm:ps-[4.75rem]">${extras}</div>` : ""}</li>`;
+      </div>${extras ? `<div class="text-sm sm:ps-[4.75rem]">${extras}</div>` : ""}${lineTarget(item)}</li>`;
     };
     /**
      * One bundle as the buyer bought it: its name, sets and price once, the
@@ -661,20 +669,24 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
           ${image(item)}
           <div class="min-w-0 flex-1 text-sm">
             ${nameMarkup(item)}
-            ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
-            ${rowsMarkup(orderLinePropertyRows(withoutBundleEntry(item.properties), (property) => minor(property.priceMinor), copy))}
-            <p class="text-muted-foreground">${escapeHtml([each, status].filter(Boolean).join(" · "))}</p>
+            <div data-part="line-details">
+              ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
+              ${rowsMarkup(orderLinePropertyRows(withoutBundleEntry(item.properties), (property) => minor(property.priceMinor), copy))}
+              <p class="text-muted-foreground">${escapeHtml([each, status].filter(Boolean).join(" · "))}</p>
+            </div>
           </div>
-        </div>${extras ? `<div class="text-sm sm:ps-[4.75rem]">${extras}</div>` : ""}</li>`;
+        </div>${extras ? `<div class="text-sm sm:ps-[4.75rem]">${extras}</div>` : ""}${lineTarget(item)}</li>`;
       };
-      return `<li class="py-4 first:pt-0 last:pb-0" data-order-bundle="${escapeHtml(entry.bundle.id)}">
+      return `<li class="py-4 first:pt-0 last:pb-0" data-order-bundle="${escapeHtml(entry.bundle.id)}" data-part="line">
         <div class="flex gap-3">
           <div class="min-w-0 flex-1 text-sm">
-            <p class="font-medium text-foreground">${escapeHtml(entry.bundle.title)}</p>
-            ${rowsMarkup(addOnRowsOf(rows))}
-            ${quantity ? `<p class="text-muted-foreground">${escapeHtml(quantity)}</p>` : ""}
+            <p class="font-medium text-foreground" data-part="line-title">${escapeHtml(entry.bundle.title)}</p>
+            <div data-part="line-details">
+              ${rowsMarkup(addOnRowsOf(rows))}
+              ${quantity ? `<p class="text-muted-foreground">${escapeHtml(quantity)}</p>` : ""}
+            </div>
           </div>
-          <p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${escapeHtml(totalMinor !== null ? minor(totalMinor) : accountMoney(total, order.currencyCode))}</p>
+          <p class="shrink-0 text-sm font-medium tabular-nums text-foreground" data-part="line-price">${escapeHtml(totalMinor !== null ? minor(totalMinor) : accountMoney(total, order.currencyCode))}</p>
         </div>
         <ul class="mt-3 divide-y divide-border border-s-2 border-border ps-3">${rows.map(itemMarkup).join("")}</ul>
       </li>`;
@@ -704,8 +716,8 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   if (summary) {
     const cell = (value: string, className = "") => `<span${className ? ` class="${className}"` : ""}>${escapeHtml(value)}</span>`;
     // Rows of label and amount, as on every money summary (an add-on row may open to its app's lines).
-    const row = (label: string, valueHtml: string, kind?: MoneySummaryRow) =>
-      `<div class="flex justify-between gap-4 ${kind === "total" ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}"${kind ? ` data-summary-row="${kind}"` : ""}><span>${escapeHtml(label)}</span><span class="text-end tabular-nums">${valueHtml}</span></div>`;
+    const row = (label: string, valueHtml: string, kind: MoneySummaryRow) =>
+      `<div class="flex justify-between gap-4 ${kind === "total" ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}" data-summary-row="${kind}"><dt${kind === "total" ? ' data-part="summary-total-label"' : ""}>${escapeHtml(label)}</dt><dd class="text-end tabular-nums">${valueHtml}</dd></div>`;
     const major = (value: number) => fromMinor(value, places);
     const money = (value: number) => accountMoney(value, order.currencyCode);
     const tax = order.taxAmountMinor ?? 0;
@@ -740,9 +752,9 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       row(words.total, cell(minor(order.totalAmountMinor ?? 0)), "total"),
       // Gift cards are payment: one row per card after the total, then what is left.
       ...giftCardTenders.map((tender) =>
-        row(receiptGiftCardTenderLabel(tender, copy), cell(`−${money(tender.amount)}`, "text-foreground"))),
+        row(receiptGiftCardTenderLabel(tender, copy), cell(`−${money(tender.amount)}`, "text-foreground"), "paid")),
       giftCardTenders.length > 0 && paymentLine.balanceDue > 0
-        ? row(paymentLine.balanceLabel, cell(money(paymentLine.balanceDue), "font-medium text-foreground"))
+        ? row(paymentLine.balanceLabel, cell(money(paymentLine.balanceDue), "font-medium text-foreground"), "due")
         : "",
     ].join("");
   }
@@ -874,6 +886,7 @@ export function renderOrderDetail(detail: AccountOrderDetail, checkoutConfig: Ch
   // A finished pickup order reads "Picked up"; a service/digital-only one "Completed", never "Delivered".
   if (status) {
     status.className = accountPill(orderStatusTone(detail.buyerView.status));
+    status.dataset.part = "status-badge";
     status.textContent = buyerOrderStatusText(detail.buyerView.status, copy);
   }
   renderReturnNotice();

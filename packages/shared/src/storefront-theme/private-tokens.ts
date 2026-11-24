@@ -1197,7 +1197,14 @@ const TOKEN_SCOPE = [
  * into it, so it keeps the store's own colours whatever a theme sets (no row of the table names it either).
  */
 export const PRIVATE_GATEWAY_HOOK = "gateway";
-const IN_SCOPE = `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope} *`)].join(",")}):not([data-part="${PRIVATE_GATEWAY_HOOK}"],[data-part="${PRIVATE_GATEWAY_HOOK}"] *)`;
+/**
+ * The parts that keep the store's own look inside a page in token mode: a payment provider's surface, and the
+ * receipt's recommendations (public product cards, drawn as on every public page). Token mode never reaches into
+ * them, no row of the table names them, and they read the palette's own words and surfaces again.
+ */
+export const PRIVATE_OWN_LOOK_HOOKS = [PRIVATE_GATEWAY_HOOK, "recommendations"] as const;
+const OWN_LOOK = PRIVATE_OWN_LOOK_HOOKS.flatMap((hook) => [`[data-part="${hook}"]`, `[data-part="${hook}"] *`]).join(",");
+const IN_SCOPE = `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope} *`)].join(",")}):not(${OWN_LOOK})`;
 
 /**
  * Every palette class the host draws on a private page, and what it reads in
@@ -1245,6 +1252,23 @@ export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [decla
   ["has-[:checked]:border-primary", ["border-color:var(--pt-l)", ":has(:checked)"]],
   ["has-[:checked]:ring-primary", ["--tw-ring-color:var(--pt-l)", ":has(:checked)"]],
   ["aria-[invalid=true]:border-destructive", ["border-color:var(--pt-i)", '[aria-invalid="true"]']],
+  // The receipt and the account: their pills' and overlays' tints paint nothing (a thumbnail's count reads on the
+  // row's hover surface), their borders are the row's, the account menu's current marker is its link colour.
+  ...["bg-warning/15", "bg-success/15", "bg-muted/10", "bg-muted/20"].map((name) => [name, ["background-color:transparent"]] as const),
+  // The conversation's file button (the reply form's attachment): the row's words, border and hover.
+  ["file:bg-background", ["background-color:transparent", "::file-selector-button"]],
+  ["file:text-foreground", ["color:var(--pt-t)", "::file-selector-button"]],
+  ["file:border-border", ["border-color:var(--pt-b)", "::file-selector-button"]],
+  ["hover:file:bg-muted", ["background-color:var(--pt-h)", "::file-selector-button"]],
+  // A thumbnail's count stands on the card's row (its own tint would be a surface no row claims).
+  ["bg-background/90", ["background-color:transparent"]],
+  ["lg:hover:bg-muted", ["background-color:var(--pt-h)", ":hover"]],
+  ...["border-muted-foreground/30", "hover:border-primary/40", "hover:border-foreground/25", "lg:border-border"].map((name) => [name, ["border-color:var(--pt-b)"]] as const),
+  ["after:bg-primary", ["background-color:var(--pt-l)", "::after"]],
+  ["ring-primary", ["--tw-ring-color:var(--pt-l)"]],
+  ["focus-visible:after:ring-ring", ["--tw-ring-color:var(--pt-r)", ":focus-visible"]],
+  ["focus:border-primary", ["border-color:var(--pt-r)", ":focus"]],
+  ["focus:ring-primary/20", ["--tw-ring-color:var(--pt-r)", ":focus"]],
 ]);
 
 const classSelector = (name: string) => `.${name.replace(/[^a-zA-Z0-9_-]/g, (character) => `\\${character}`)}`;
@@ -1296,7 +1320,12 @@ const UI_WORDS_CSS = (() => {
 export const PRIVATE_TOKEN_MODE_CSS = {
   // Words inherit their row's colour (no store rule picks a palette colour for them, a long answer's toggle
   // included); the store's one focus ring (theme-foundation.css) reads `--focus-ring-color`: the row's ring.
-  before: `${classRules(SURFACE_CLASSES)}${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}){color:inherit;--focus-ring-color:var(--pt-r)}${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}:focus-visible){outline-color:var(--pt-r)}${UI_WORDS_CSS}`,
+  before: `${classRules(SURFACE_CLASSES)}${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}){color:inherit;--focus-ring-color:var(--pt-r)}`
+    // A part on the store's own look stands on its own surface with the palette's words, never the row around it.
+    + `${PRIVATE_TOKEN_MODE} :where(${PRIVATE_OWN_LOOK_HOOKS.map((hook) => `[data-part="${hook}"]`).join(",")}){color:var(--color-foreground);--focus-ring-color:var(--color-ring)}`
+    // The recommendations paint the palette's page under them: the store's own cards on the store's own page.
+    + `${PRIVATE_TOKEN_MODE} :where([data-part="recommendations"]){background-color:var(--color-background)}`
+    + `${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}:focus-visible){outline-color:var(--pt-r)}${UI_WORDS_CSS}`,
   after: `${classRules(Object.keys(PRIVATE_TOKEN_MODE_CLASSES).filter((name) => !SURFACE_CLASSES.includes(name)))}`
     + `${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}:is(input,textarea))::placeholder{color:var(--pt-p)}`
     // A field's error border, a field box's too (`data-field`: its input inside says it is invalid).
