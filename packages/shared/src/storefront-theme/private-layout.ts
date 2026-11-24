@@ -322,14 +322,14 @@ const AMOUNT_KEYS = ["totalText", "subtotalText", "estimatedTotalText", "amountD
  * ("Total: free", "BDT ZERO", "টাকা"). Exported so every check of words drawn
  * beside the store's amounts reads one list.
  */
-export const PRIVATE_LABEL_AMOUNT_WORDS: Readonly<Record<"en" | "bn", readonly string[]>> = {
+export const PRIVATE_LABEL_AMOUNT_WORDS: Readonly<Record<"en" | "bn", readonly string[]>> = /* @__PURE__ */ (() => ({
   en: [...AMOUNT_KEYS.map((key) => STORE_ACTION_AND_AMOUNT_WORDS[key]!.en), "grand total", "total due", "taka", "tk", "bdt", "usd", "dollar", "dollars", "eur", "euro", "euros", "gbp", "pound", "pounds", "inr", "rupee", "rupees", "aed", "dirham", "dirhams"],
   bn: [...AMOUNT_KEYS.map((key) => STORE_ACTION_AND_AMOUNT_WORDS[key]!.bn), "মোট", "টাকা", "টাকার", "টাকায়", "পরিশোধযোগ্য"],
-};
+}))();
 
 /** A text's words as compared: folded (store-words.ts), split into runs of letters, marks and digits. */
 const wordsOf = (text: string) => foldStoreWords(text).match(/[\p{L}\p{M}\p{N}]+/gu) ?? [];
-const AMOUNT_PHRASES = [...new Set(Object.values(PRIVATE_LABEL_AMOUNT_WORDS).flat())].map(wordsOf);
+const AMOUNT_PHRASES = /* @__PURE__ */ (() => [...new Set(Object.values(PRIVATE_LABEL_AMOUNT_WORDS).flat())].map(wordsOf))();
 
 /** True when the text holds one of the store's amount words or a name of money, as whole words, in any of its languages. */
 export function privateWordsReadAsAmount(text: string): boolean {

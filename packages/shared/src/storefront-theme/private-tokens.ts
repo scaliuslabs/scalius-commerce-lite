@@ -54,7 +54,7 @@ export const PRIVATE_CONTRAST_FLOOR = 4.5;
 export const PRIVATE_MARK_CONTRAST_FLOOR = 3;
 
 const HEX = /^#[0-9a-f]{6}$/;
-const oneColorSchema = z.union([z.enum(STOREFRONT_THEME_COLOR_KEYS), z.string().regex(HEX)]);
+const oneColorSchema = /* @__PURE__ */ (() => z.union([z.enum(STOREFRONT_THEME_COLOR_KEYS), z.string().regex(HEX)]))();
 /**
  * A colour: a palette role or an opaque `#rrggbb`, the same in both schemes,
  * or `{ light, dark }` with one of those each (both: a half value would leave
@@ -62,21 +62,21 @@ const oneColorSchema = z.union([z.enum(STOREFRONT_THEME_COLOR_KEYS), z.string().
  * is not checked (a dark-only theme's `{ light, dark }` draws its dark one);
  * showing that scheme is a save, which checks it.
  */
-const colorSchema = z.union([oneColorSchema, z.object({ light: oneColorSchema, dark: oneColorSchema }).strict()], {
+const colorSchema = /* @__PURE__ */ (() => z.union([oneColorSchema, z.object({ light: oneColorSchema, dark: oneColorSchema }).strict()], {
   error: 'A colour is a palette role, an opaque #rrggbb in lowercase, or { "light": …, "dark": … } with one of those for each scheme.',
-});
+}))();
 type ColorValue = z.infer<typeof colorSchema>;
 /** A colour value as one palette draws it. */
 const inScheme = (value: unknown, scheme: "light" | "dark"): unknown => typeof value === "object" && value !== null ? (value as Record<string, unknown>)[scheme] : value;
-const gradientSchema = z.object({
+const gradientSchema = /* @__PURE__ */ (() => z.object({
   shape: z.enum(["linear", "radial"]),
   angle: z.number().int().min(0).max(360).optional(),
   from: colorSchema,
   to: colorSchema,
-}).strict();
+}).strict())();
 type Gradient = z.infer<typeof gradientSchema>;
-const trackSchema = z.union([z.enum(["auto", "min-content", "1fr", "2fr", "3fr", "4fr"]), z.number().int().min(24).max(480)]);
-const tracksSchema = z.array(trackSchema).min(1).max(4);
+const trackSchema = /* @__PURE__ */ (() => z.union([z.enum(["auto", "min-content", "1fr", "2fr", "3fr", "4fr"]), z.number().int().min(24).max(480)]))();
+const tracksSchema = /* @__PURE__ */ (() => z.array(trackSchema).min(1).max(4))();
 type Tracks = z.infer<typeof tracksSchema>;
 
 type TokenSpec = {
@@ -104,7 +104,7 @@ const choice = <T extends string>(values: Record<T, string>): Pick<TokenSpec, "s
 /** The colour tokens: each is a cell of the table, never a rule of its own. */
 export const PRIVATE_COLOUR_TOKENS = ["background", "gradient", "text", "muted", "link", "error", "placeholder", "ring", "invalid", "border"] as const satisfies readonly PrivateTokenName[];
 
-export const PRIVATE_TOKEN_SPECS: Record<PrivateTokenName, TokenSpec> = {
+export const PRIVATE_TOKEN_SPECS: Record<PrivateTokenName, TokenSpec> = /* @__PURE__ */ (() => ({
   background: { schema: colorSchema },
   gradient: { schema: gradientSchema },
   text: { schema: colorSchema },
@@ -160,7 +160,7 @@ export const PRIVATE_TOKEN_SPECS: Record<PrivateTokenName, TokenSpec> = {
   "height-wide": { schema: px(40, 320), write: (value: number) => `block-size:${value}px`, wide: true },
   fit: { ...choice({ contain: "object-fit:contain", cover: "object-fit:cover" }), on: [" img"] },
   "max-width": { schema: px(480, 1600), write: (value: number) => `max-inline-size:${value}px` },
-};
+}))();
 
 /** Where a phone ends (the store's `sm`). */
 export const PRIVATE_WIDE_MEDIA = "(min-width:40rem)";
@@ -933,7 +933,7 @@ function tableIssues(page: PrivatePageKey, tables: readonly PrivateTokenTable[])
 }
 
 const CELL_PROPERTIES = [["text", "--pt-t"], ["muted", "--pt-m"], ["link", "--pt-l"], ["error", "--pt-e"], ["border", "--pt-b"], ["ring", "--pt-r"], ["hover", "--pt-h"], ["placeholder", "--pt-p"], ["invalid", "--pt-i"]] as const;
-const CELL_PROPERTY = Object.fromEntries(CELL_PROPERTIES) as Record<PrivateRowColour, string>;
+const CELL_PROPERTY = /* @__PURE__ */ (() => Object.fromEntries(CELL_PROPERTIES))() as Record<PrivateRowColour, string>;
 
 /**
  * A row's cells as declarations: its paint, its own words' colour and the
@@ -1188,10 +1188,10 @@ export const PRIVATE_TOKEN_MODE = ":root[data-private-tokens]";
  * on its `<html>`), the store's dialogs over them and the store's own chrome
  * (its controls inside).
  */
-const TOKEN_SCOPE = [
+const TOKEN_SCOPE = /* @__PURE__ */ (() => [
   ...Object.values(PRIVATE_PAGES as Readonly<Record<string, PrivatePageSpec>>).filter((spec) => Object.hasOwn(spec.styles, "page")).map((spec) => `[data-private="${spec.root}"]`),
   ...PRIVATE_SCOPES.map((scope) => `[data-private="${scope}"]`),
-];
+])();
 /**
  * A payment provider's own surface (its card form, its frame: `data-part="gateway"`): token mode never reaches
  * into it, so it keeps the store's own colours whatever a theme sets (no row of the table names it either).
@@ -1203,8 +1203,8 @@ export const PRIVATE_GATEWAY_HOOK = "gateway";
  * them, no row of the table names them, and they read the palette's own words and surfaces again.
  */
 export const PRIVATE_OWN_LOOK_HOOKS = [PRIVATE_GATEWAY_HOOK, "recommendations"] as const;
-const OWN_LOOK = PRIVATE_OWN_LOOK_HOOKS.flatMap((hook) => [`[data-part="${hook}"]`, `[data-part="${hook}"] *`]).join(",");
-const IN_SCOPE = `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope} *`)].join(",")}):not(${OWN_LOOK})`;
+const OWN_LOOK = /* @__PURE__ */ (() => PRIVATE_OWN_LOOK_HOOKS.flatMap((hook) => [`[data-part="${hook}"]`, `[data-part="${hook}"] *`]).join(","))();
+const IN_SCOPE = /* @__PURE__ */ (() => `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope} *`)].join(",")}):not(${OWN_LOOK})`)();
 
 /**
  * Every palette class the host draws on a private page, and what it reads in
@@ -1216,7 +1216,7 @@ const IN_SCOPE = `:is(${[...TOKEN_SCOPE, ...TOKEN_SCOPE.map((scope) => `${scope}
  * its state (a hover only where the pointer can hover, as the store's own
  * classes). A class missing here fails the storefront's vocabulary test.
  */
-export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [declaration: string, state?: string]>> = Object.fromEntries([
+export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [declaration: string, state?: string]>> = /* @__PURE__ */ (() => Object.fromEntries([
   ...["bg-background", "bg-card", "bg-muted", "bg-muted/40", "bg-muted/50", "bg-muted/60", "bg-primary", "bg-primary/10", "bg-primary/5", "bg-destructive", "bg-destructive/10",
     "bg-success/10", "bg-warning/10", "dark:bg-card",
   ].map((name) => [name, ["background-color:transparent"]] as const),
@@ -1269,7 +1269,7 @@ export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [decla
   ["focus-visible:after:ring-ring", ["--tw-ring-color:var(--pt-r)", ":focus-visible"]],
   ["focus:border-primary", ["border-color:var(--pt-r)", ":focus"]],
   ["focus:ring-primary/20", ["--tw-ring-color:var(--pt-r)", ":focus"]],
-]);
+]))();
 
 const classSelector = (name: string) => `.${name.replace(/[^a-zA-Z0-9_-]/g, (character) => `\\${character}`)}`;
 
@@ -1289,7 +1289,7 @@ function classRules(names: readonly string[]): string {
   }).join("");
 }
 
-const SURFACE_CLASSES = Object.keys(PRIVATE_TOKEN_MODE_CLASSES).filter((name) => PRIVATE_TOKEN_MODE_CLASSES[name]![0] === "background-color:transparent");
+const SURFACE_CLASSES = /* @__PURE__ */ (() => Object.keys(PRIVATE_TOKEN_MODE_CLASSES).filter((name) => PRIVATE_TOKEN_MODE_CLASSES[name]![0] === "background-color:transparent"))();
 
 /**
  * The host's CSS around a page's table in token mode (`PRIVATE_TOKEN_MODE`):
@@ -1305,7 +1305,7 @@ const SURFACE_CLASSES = Object.keys(PRIVATE_TOKEN_MODE_CLASSES).filter((name) =>
  * cell of the row it stands on its ink names (`critical` words the error
  * colour). An app's node row writes a colour only where the theme set one.
  */
-const UI_WORDS_CSS = (() => {
+const UI_WORDS_CSS = /* @__PURE__ */ (() => {
   const byCell = new Map<string, string[]>([["text", []]]);
   for (const style of Object.values(PRIVATE_BUYER_UI_STYLES)) {
     if (!style.style) continue;
