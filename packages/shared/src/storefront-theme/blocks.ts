@@ -21,7 +21,7 @@ import {
   type FitCondition,
 } from "./fit";
 import { storefrontAppValuesSchema, storefrontProductAppBlocksSchemaOf } from "./apps";
-import { storefrontLinkSchema } from "./links";
+import { storefrontLinkSchema, storefrontStorePathSchema } from "./links";
 import { PLUGIN_ID_PATTERN } from "../plugins/ids";
 import { storefrontSettingBindingsSchema, type StorefrontSettingBindings } from "./bindings";
 import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-field-keys";
@@ -284,11 +284,14 @@ export type StorefrontMobileTab = (typeof STOREFRONT_MOBILE_TABS)[number];
 export const STOREFRONT_MOBILE_TAB_ICONS = [...STOREFRONT_MOBILE_TABS, "link", "page", "news", "support", "gift", "heart", "star", "chat", "bolt"] as const;
 
 export const STOREFRONT_MOBILE_TAB_LIMITS = { min: 3, max: 5, label: 24 } as const;
+/** A label's stored length bound, in UTF-16 units (the visible bound is `label` characters, counted as a reader sees them). */
+const MOBILE_TAB_LABEL_UNITS = STOREFRONT_MOBILE_TAB_LIMITS.label * 4;
 
 /** Why a theme's tab list is refused (`params.reason` of the issue). */
 export const STOREFRONT_MOBILE_TAB_REFUSALS = {
   repeated: "tab_repeated",
   external: "tab_link_external",
+  label: "tab_label",
 } as const;
 
 /** A tab's icon: the store's, or a file the theme's app ships in `public/` (drawn only while that app is active). */
@@ -301,12 +304,24 @@ const mobileTabIconSchema = z.discriminatedUnion("source", [
   }).strict(),
 ]);
 
-/** A link tab: the theme's words (translated like every theme word), an icon and a page of this store. */
+/** Zero-width, soft hyphen and bidi controls: they draw nothing, so they never make a label. */
+const INVISIBLE = /[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/** A label's characters as a reader counts them (a Bangla conjunct is one), invisible ones left out. */
+export function storefrontMobileTabLabelLength(label: string): number {
+  return [...graphemes.segment(label.replace(INVISIBLE, "").trim())].length;
+}
+
+/** A link tab: the theme's words (translated like every theme word, the translation held to the same bound), an icon and a page of this store. */
 const mobileLinkTabSchema = z.object({
   kind: z.literal("link"),
-  label: z.string().trim().min(1).max(STOREFRONT_MOBILE_TAB_LIMITS.label),
+  label: z.string().trim().max(MOBILE_TAB_LABEL_UNITS).refine((label) => {
+    const length = storefrontMobileTabLabelLength(label);
+    return length >= 1 && length <= STOREFRONT_MOBILE_TAB_LIMITS.label;
+  }, { message: `A tab's name is 1 to ${STOREFRONT_MOBILE_TAB_LIMITS.label} characters.`, params: { reason: STOREFRONT_MOBILE_TAB_REFUSALS.label } }),
   icon: mobileTabIconSchema,
-  href: storefrontLinkSchema,
+  href: storefrontStorePathSchema(STOREFRONT_MOBILE_TAB_REFUSALS.external),
 }).strict();
 
 const destinationTab = <Kind extends StorefrontMobileTab>(kind: Kind) => z.object({ kind: z.literal(kind) }).strict();
@@ -324,21 +339,31 @@ export const storefrontMobileTabSchema = z.discriminatedUnion("kind", [
 ]);
 export type StorefrontMobileTabValue = z.infer<typeof storefrontMobileTabSchema>;
 
-/** A link tab opens a page of this store: a path, never another site or a protocol-relative link. */
-const sameSitePath = (href: string) => href.startsWith("/") && !href.startsWith("//");
+/** Each store destination's own page, so a link tab to it repeats it. */
+const DESTINATION_PATHS: Record<StorefrontMobileTab, string> = {
+  home: "/",
+  categories: "/categories",
+  offers: "/search?hasdiscount=true",
+  search: "/search",
+  compare: "/compare",
+  cart: "/cart",
+  account: "/account",
+};
+/** The page a tab opens, as one key: case folded, no trailing slash. */
+const tabPage = (tab: StorefrontMobileTabValue): string => {
+  const path = (tab.kind === "link" ? tab.href : DESTINATION_PATHS[tab.kind]).toLowerCase();
+  return path.length > 1 ? path.replace(/\/+(?=$|\?)/, "") : path;
+};
 
 const mobileTabsSchema = z.array(storefrontMobileTabSchema).min(STOREFRONT_MOBILE_TAB_LIMITS.min).max(STOREFRONT_MOBILE_TAB_LIMITS.max)
   .superRefine((tabs, context) => {
     const seen = new Set<string>();
     tabs.forEach((tab, index) => {
-      const key = tab.kind === "link" ? `link:${tab.href}` : tab.kind;
+      const key = tabPage(tab);
       if (seen.has(key)) {
-        context.addIssue({ code: "custom", path: [index], message: "Each tab appears once.", params: { reason: STOREFRONT_MOBILE_TAB_REFUSALS.repeated } });
+        context.addIssue({ code: "custom", path: [index], message: "Each tab opens its own page: this one is already a tab.", params: { reason: STOREFRONT_MOBILE_TAB_REFUSALS.repeated } });
       }
       seen.add(key);
-      if (tab.kind === "link" && !sameSitePath(tab.href)) {
-        context.addIssue({ code: "custom", path: [index, "href"], message: "A tab opens a page of this store: use a path such as /support.", params: { reason: STOREFRONT_MOBILE_TAB_REFUSALS.external } });
-      }
     });
   });
 

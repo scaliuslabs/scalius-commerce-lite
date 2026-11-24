@@ -3890,8 +3890,7 @@
        },
        "label": {
         "type": "string",
-        "minLength": 1,
-        "maxLength": 24
+        "maxLength": 96
        },
        "icon": {
         "oneOf": [
@@ -3956,7 +3955,9 @@
         ]
        },
        "href": {
-        "$ref": "#/$defs/__schema15"
+        "type": "string",
+        "maxLength": 2048,
+        "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
        }
       },
       "required": [

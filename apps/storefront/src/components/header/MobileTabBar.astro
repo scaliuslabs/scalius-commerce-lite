@@ -11,9 +11,9 @@
 // openers (header.astro binds `[data-mobile-menu-open]` and
 // `[data-cart-open]`, HeaderLayout binds `[data-search-open]` and
 // `[data-account-link]`), and each is a real link first (the menu drawer's
-// :target, /search, /cart), so the bar works before hydration. The Cart tab's
-// count is the store's (CoreHeader's cart display, or app-components under an
-// app header). A link tab is the theme's words, its icon (the store's, or a
+// :target, /search, /cart), so the bar works before hydration. The Cart tab
+// opens the drawer like the header's cart, and its count is the store's
+// (CoreHeader's script, or app-components under an app header). A link tab is the theme's words, its icon (the store's, or a
 // file of an active app) and a path of this store. The page reserves the
 // bar's height in CSS, so nothing sits under it. On product pages the phone
 // buy bar replaces the tab bar while it shows.
@@ -74,7 +74,7 @@ const iconOf = (tab: PhoneTab): { name: Icon } | { src: string } => {
 const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : copy.tabs[tab.kind]);
 ---
 
-<nav id="mobile-tab-bar" class="mobile-tab-bar" aria-label={copy.tabs.label}>
+<nav id="mobile-tab-bar" class="mobile-tab-bar" aria-label={copy.tabs.label} data-tab-menu={menu}>
   <ul style={`--mobile-tab-count: ${shown.length}`}>
     {
       shown.map((tab) => {
@@ -226,6 +226,7 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
     justify-content: center;
     gap: 0.1875rem;
     width: 100%;
+    min-width: 0;
     height: 100%;
     min-height: 2.75rem;
     color: var(--muted-foreground);
@@ -239,6 +240,16 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
   .mobile-tab[aria-current] {
     color: var(--foreground);
     font-weight: 600;
+  }
+
+  /* One line: a long name ends in an ellipsis inside its column. */
+  .mobile-tab > span:last-child {
+    min-width: 0;
+    max-width: 100%;
+    padding-inline: 0.125rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .mobile-tab:active > :first-child {

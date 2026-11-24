@@ -498,7 +498,7 @@ export const themeSettingMessages = defineMessages({
     "b.mobileNav.tabs.kind.link": "আপনার বাছাই করা পেজ",
     "b.mobileNav.tabs.label": "নাম",
     "b.mobileNav.tabs.href": "পেজ",
-    "b.mobileNav.tabs.href.help": "আপনার স্টোরের একটি পাথ, যেমন /pages/support।",
+    "b.mobileNav.tabs.href.help": "আপনার স্টোরের একটি পাথ, যেমন /support।",
     "b.mobileNav.tabs.icon": "আইকন",
     "b.mobileNav.tabs.icon.source.store": "স্টোরের আইকন",
     "b.mobileNav.tabs.icon.source.app": "থিমের ফাইল",

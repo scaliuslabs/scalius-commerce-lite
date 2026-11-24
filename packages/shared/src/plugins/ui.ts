@@ -20,6 +20,7 @@
 // guessing. Part of the versioned plugin API.
 
 import { z } from "zod";
+import { STOREFRONT_STORE_PATH_RESERVED, storefrontStorePathSchema } from "../storefront-theme/links";
 import { PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE } from "./manifest-patterns";
 import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "./ids";
 import { ADMIN_UPLOAD_TYPES, BUYER_UPLOAD_DECLARATION_LIMITS } from "../buyer-uploads";
@@ -127,21 +128,14 @@ const httpsUrl = z.string().max(2048).url().refine((value) => {
   }
 }, "Use an https:// address.");
 /**
- * The store's machinery, never a page a buyer link opens: its API, the app
- * proxy (`/apps/<id>/…`, any app's routes; an app reaches its own with a
- * `route` action), the app file gateway (`/_x/…`; an app's files are drawn
- * through `{ app }` sources) and every `_` or `~` first segment (build
- * assets, islands, Partytown). Case folded.
+ * The store's machinery, never a page a buyer link opens (`STOREFRONT_STORE_PATH_RESERVED`): its API,
+ * the app proxy (an app reaches its own routes with a `route` action), the app file gateway (an app's
+ * files are drawn through `{ app }` sources) and every `_` or `~` first segment.
  */
-export const PLUGIN_UI_STORE_PATH_RESERVED = /^\/(?:api|apps|[_~][^/]*)(?:\/|$)/i;
+export const PLUGIN_UI_STORE_PATH_RESERVED = STOREFRONT_STORE_PATH_RESERVED;
 export const PLUGIN_UI_STORE_PATH_REASON = "store_path_reserved";
-/** A page on this store (`/products/x`): no other origin, query, dot segments, encoded separators or store machinery. */
-const storePath = z.string().max(2048).regex(/^\/(?!\/)[^\\\s?#]*$/, "Use a path on this store.")
-  .refine((path) => !path.split("/").some((part) => part === "." || part === "..") && !/%(?:2f|5c|2e)/i.test(path), "Use a path on this store.")
-  .refine((path) => !PLUGIN_UI_STORE_PATH_RESERVED.test(path), {
-    message: "Link to a page of the store: /api, /apps, /_x and other store machinery are refused (use a route action for the app's own routes).",
-    params: { reason: PLUGIN_UI_STORE_PATH_REASON },
-  });
+/** A page on this store (`/products/x`): the storefront's one store-path schema. */
+const storePath = storefrontStorePathSchema(PLUGIN_UI_STORE_PATH_REASON);
 
 type JsonPrimitive = string | number | boolean | null;
 export type PluginUiJson = JsonPrimitive | PluginUiJson[] | { [key: string]: PluginUiJson };

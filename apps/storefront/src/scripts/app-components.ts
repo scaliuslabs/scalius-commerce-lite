@@ -4,7 +4,7 @@
 //
 // - `a[data-card-quick-add]`: adds a simple product in place and opens the
 //   cart (the core card's quick add);
-// - `[data-cart-open]`: opens the cart drawer;
+// - `[data-cart-open]`: opens the cart drawer (an app's, and the store's tab bar under an app header);
 // - `[data-scalius-cart-count]`: the cart's item count, kept current;
 // - `<scalius-island data-island data-hydrate data-props>`: loads the app's
 //   island module from its release's files when its moment comes (visible,
@@ -416,7 +416,8 @@ function installCartCount(): void {
 
 function installCartOpeners(): void {
   document.addEventListener("click", (event) => {
-    const opener = event.target instanceof Element ? event.target.closest("[data-sx-app] [data-cart-open]") : null;
+    // An app's own opener, and the store's tab bar under an app header (CoreHeader binds it otherwise).
+    const opener = event.target instanceof Element ? event.target.closest("[data-sx-app] [data-cart-open], #mobile-tab-bar[data-tab-menu=\"app\"] [data-cart-open]") : null;
     if (!opener || event.defaultPrevented || (event as MouseEvent).button !== 0) return;
     event.preventDefault();
     openCart();

@@ -2651,8 +2651,7 @@
                                     },
                                     "label": {
                                       "type": "string",
-                                      "minLength": 1,
-                                      "maxLength": 24
+                                      "maxLength": 96
                                     },
                                     "icon": {
                                       "oneOf": [
@@ -2722,7 +2721,8 @@
                                     },
                                     "href": {
                                       "type": "string",
-                                      "maxLength": 2048
+                                      "maxLength": 2048,
+                                      "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
                                     }
                                   },
                                   "required": [
