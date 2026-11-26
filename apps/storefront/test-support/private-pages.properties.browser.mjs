@@ -1085,6 +1085,9 @@ function prominence(scope) {
       const [faint, strong] = [least(amount, "contrast"), most(rows, "contrast")];
       if (faint.contrast < strong.contrast - 0.05) problems.push(`the total's "${faint.text}" reads ${faint.contrast.toFixed(2)}:1, under the row "${strong.text}" at ${strong.contrast.toFixed(2)}:1`);
     }
+    // No money figure on the page outsizes the total (the save's rule, as drawn): a line's price in a wider column included.
+    const prices = words([...document.querySelectorAll('[data-private="cart"] [data-part="line-price"]')]);
+    if (amount.length > 0 && prices.length > 0 && most(prices, "size").size > least(amount, "size").size + 0.5) problems.push(`the line price "${most(prices, "size").text}" is drawn at ${most(prices, "size").size.toFixed(1)}px, over the total's "${least(amount, "size").text}" at ${least(amount, "size").size.toFixed(1)}px`);
   }
   return problems;
 }

@@ -197,11 +197,14 @@ export const MUTATIONS = {
     cases: [B4],
     expect: /\[data-part=line-title\]>a: its focus ring reads at/,
   },
-  "M11 text sizes follow the screen": {
-    why: "a 40px wide-tracked title takes 8% of the screen, not of its line: its first word overflows its column",
-    rewrites: [rewrite(TOKENS, "font-size:min(${value}px,max(12px,7cqi))", "font-size:min(${value}px,max(12px,8vw))"), rewrite("apps/storefront/src/lib/cart/line-html.ts", "line-clamp-2 break-words", "line-clamp-2")],
-    cases: [S8],
-    expect: /cut sideways|is cut off at the side/,
+  "M11 sizes follow the nearest column, the total unfloored": {
+    why: "sizes are 7% of the column a part sits in (the page fit unregistered) and the total has no floor at the sizes it outranks: a total in a 320px column draws under a line price in a wide one",
+    rewrites: [
+      rewrite(TOKENS, "  const fit = narrow.some((rule) => rule.includes(PAGE_FIT)) ? `${PAGE_FIT_RULE}:where(${root}){--pt-fit:7cqi}` : \"\";", "  const fit = \"\";"),
+      rewrite(TOKENS, "declare(false, selectors, `font-size:max(${sizeFloor(spec, tokens, target)}px,min(", "declare(false, selectors, `font-size:max(0px,min("),
+    ],
+    cases: ["a 28px line price and a 28px total, the summary in a narrow column"],
+    expect: /prominence: the line price .* over the total's/,
   },
   "M12 grid columns at their declared width": {
     why: "a layout node's columns apply whatever the box holding it measures",
