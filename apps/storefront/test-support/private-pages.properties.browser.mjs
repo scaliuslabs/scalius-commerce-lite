@@ -1792,19 +1792,25 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
     return walked;
   };
   await timed("settle", () => settle(page));
-  if (drawn) {
-    const shown = await page.evaluate(() => document.documentElement.dataset.colorScheme ?? "light");
-    if (shown !== drawn) problems.push(`scheme: the page draws its ${shown} colours where the store shows its ${drawn} ones`);
-  }
-  // The first screen and Place order, as a buyer arrives: at scroll 0, then down the cart.
-  at("first screen", await page.evaluate(firstScreen, LEAD));
-  if (state !== "empty") at("dock", await timed("dock", () => reloadSafe(page, () => dockChecks(page))));
-  // Phones: Tab order and the touch scroll run before anything is clicked.
-  if (width < 1280 && state !== "empty") at("touch", await timed("touch", () => touchScroll(page)));
-  if (focus) {
-    const { controls } = await page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: [], scope: null, exempt: EXEMPT, styleTargets: [] });
-    at("focus order", await timed("tab", () => focusOrder(page, controls)));
-  }
+  // As a buyer arrives, before anything is clicked: one unit the dev server's one-time reload runs again whole.
+  problems.push(...await reloadSafe(page, async () => {
+    const found = [];
+    const add = (label, list) => found.push(...list.map((problem) => `${label}: ${problem}`));
+    if (drawn) {
+      const shown = await page.evaluate(() => document.documentElement.dataset.colorScheme ?? "light");
+      if (shown !== drawn) found.push(`scheme: the page draws its ${shown} colours where the store shows its ${drawn} ones`);
+    }
+    // The first screen and Place order, as a buyer arrives: at scroll 0, then down the cart.
+    add("first screen", await page.evaluate(firstScreen, LEAD));
+    if (state !== "empty") add("dock", await timed("dock", () => dockChecks(page)));
+    // Phones: Tab order and the touch scroll run before anything is clicked.
+    if (width < 1280 && state !== "empty") add("touch", await timed("touch", () => touchScroll(page)));
+    if (focus) {
+      const { controls } = await page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: [], scope: null, exempt: EXEMPT, styleTargets: [] });
+      add("focus order", await timed("tab", () => focusOrder(page, controls)));
+    }
+    return found;
+  }));
   // On a phone the cart folds behind its bar: open it, as a buyer does; and open every add-on row to its lines.
   const toggle = page.locator('[data-part="fold-toggle"][aria-expanded="false"]');
   if (await toggle.isVisible().catch(() => false)) await toggle.click().catch(() => {});
