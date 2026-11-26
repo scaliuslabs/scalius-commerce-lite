@@ -296,7 +296,7 @@ A refusal names the theme key and the pair that set it, and the scheme: `summary
 | `unknown_style` | No such style target, node kind, tone or target on the page, no layout node with that hook, or any token on the drawer. |
 | `unknown_token` | The target does not take that token. |
 | `token_value` | Not a value of the token's type, outside its bounds, or a colour per scheme without both keys. |
-| `contrast` | A row reads under its floor in a scheme a buyer sees. |
+| `contrast` | A row reads under its floor in a scheme a buyer sees, or the chosen payment method's edge and dot (its card's `link`) are not clearly apart from an unchosen card's `border`. |
 | `prominence` | The total drawn smaller than a money row, an add-on line or its own label, lighter than the rows, or with fainter words than theirs; its label smaller than the rows; Place order smaller or lighter than the other filled buttons; Confirm smaller or lighter than Go back. |
 | `no_row` | The page draws a target the colour table has no row for (a store defect; it never draws unchecked). |
 | `too_large` | A page's tokens name over 160 style keys or over 4 apps, would make over 6000 rows of its colour table (refused before anything is resolved), or its compiled look is over 64 KiB (each page has its own bound: it serves only its own look). |
