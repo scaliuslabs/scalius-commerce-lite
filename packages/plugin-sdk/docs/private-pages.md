@@ -61,7 +61,7 @@ An arrangement is `{ frame?, layout?, items? }`:
 | `columns` | One column, side by side where the box it sits in is 48rem wide (never the screen's width). |
 | `grid` | A grid you shape with its hook's `columns` tokens. |
 | `group` | A box with no layout of its own. |
-| `fold` | Cart page only, once: on phones its children fold behind a bar that states the total. |
+| `fold` | Cart page only, once: on phones its children fold behind a bar that states the total. A phone opens with them hidden: a cart whose lines carry something the buyer must act on (an add-on offer under a line) keeps `lines` outside it. |
 | `scroll` | Drawer only, once: the region that scrolls between the drawer's fixed parts. |
 
 A hook is lowercase words joined by hyphens (`cart-columns`), at most 40 characters. A unit's layouts nest at most 6 deep, hold at most 24 nodes each and 80 in all.
@@ -413,11 +413,11 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
               "type": "layout",
               "layout": "stack",
               "children": [
+                { "type": "part", "part": "lines", "variant": "heading-above" },
                 {
                   "type": "layout",
                   "layout": "fold",
                   "children": [
-                    { "type": "part", "part": "lines", "variant": "heading-above" },
                     { "type": "part", "part": "summary", "variant": "with-items" },
                     { "type": "target", "target": "cart.page.summary" }
                   ]

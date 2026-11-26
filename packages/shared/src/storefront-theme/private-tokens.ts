@@ -116,6 +116,16 @@ const choice = <T extends string>(values: Record<T, string>): Pick<TokenSpec, "s
   schema: z.enum(Object.keys(values) as [T, ...T[]]),
   write: (value: T) => values[value],
 });
+/**
+ * 7% of the page's width, the bound a `size` scales down to on a narrow page. Every line and layout node is a
+ * size container, so `7cqi` at the text would be 7% of its column (an 18px price drawn at 12px in a 171px
+ * column). `--pt-fit` is a registered length set to `7cqi` on the page root, so it is computed there, against
+ * the box the page sits in (else the screen), and inherits as pixels; outside the root (a dialog) it is 7vw.
+ * A browser without `@property` substitutes `7cqi` at the text: 7% of its nearest container, as before.
+ */
+const PAGE_FIT = "var(--pt-fit,7cqi)";
+// The syntax `<length>`, its `<` escaped: a stored look holding one serves nothing (`privatePagesCss`).
+const PAGE_FIT_RULE = '@property --pt-fit{syntax:"\\3c length>";inherits:true;initial-value:7vw}';
 
 /** The colour tokens: each is a cell of the table, never a rule of its own. */
 export const PRIVATE_COLOUR_TOKENS = ["background", "gradient", "text", "muted", "link", "error", "placeholder", "ring", "invalid", "border"] as const satisfies readonly PrivateTokenName[];
@@ -150,8 +160,8 @@ export const PRIVATE_TOKEN_SPECS: Record<PrivateTokenName, TokenSpec> = /* @__PU
   font: choice({ body: "font-family:var(--theme-font-body)", heading: "font-family:var(--theme-font-heading)", mono: "font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,Liberation Mono,monospace" }),
   // On the words inside too, as a size is (the store's type classes set their own): a weight the check ranks is a weight drawn.
   weight: { ...choice({ 400: "font-weight:400", 500: "font-weight:500", 600: "font-weight:600", 700: "font-weight:700", 800: "font-weight:800" }), on: ["", " :where(.text-foreground,.text-card-foreground)"] },
-  // Bounded by the box it sits in (each line and layout node is a size container; else the screen), so a word fits its column.
-  size: { schema: px(12, 40), write: (value: number) => `font-size:min(${value}px,max(12px,7cqi))`, on: ["", " :where(.text-foreground,.text-card-foreground)"] },
+  // Scaled down on a narrow page, never in a narrow column: 7% of the page's width (`PAGE_FIT`), never under 12px.
+  size: { schema: px(12, 40), write: (value: number) => `font-size:min(${value}px,max(12px,${PAGE_FIT}))`, on: ["", " :where(.text-foreground,.text-card-foreground)"] },
   // Never under 1.25: lines never overlap. On the words inside too (the store's type classes set their own).
   leading: { ...choice({ tight: "line-height:1.25", snug: "line-height:1.375", normal: "line-height:1.5", relaxed: "line-height:1.625" }), on: ["", " :where(.text-foreground,.text-card-foreground)"] },
   case: choice({ none: "text-transform:none", uppercase: "text-transform:uppercase" }),
@@ -1180,7 +1190,7 @@ function shapeCss(page: PrivatePageKey, tokens: Record<string, Values>, unitHook
         narrow.push(`:where(${root} :has(> ${selector.slice(root.length + 1)})){container-type:inline-size}@container (min-width:${fit}px){${rule}}`);
       } else if (name === "size" && sizeFloor(spec, tokens, target) > 0) {
         // Never under what it outranks: a row the host keeps at 14px stays under a total its narrow box would shrink.
-        declare(false, selectors, `font-size:max(${sizeFloor(spec, tokens, target)}px,min(${value as number}px,max(12px,7cqi)))`);
+        declare(false, selectors, `font-size:max(${sizeFloor(spec, tokens, target)}px,min(${value as number}px,max(12px,${PAGE_FIT})))`);
       } else if (name === "padding") {
         // A box's padding leaves its children's focus rings (4px) and its own rounded corners (30% of the radius) on its surface.
         const room = Math.max(4, Math.ceil(0.3 * (typeof values.radius === "number" ? values.radius : 0)));
@@ -1191,7 +1201,8 @@ function shapeCss(page: PrivatePageKey, tokens: Record<string, Values>, unitHook
     }
     for (const rule of rules.values()) (rule.wide ? wide : narrow).push(`${rule.selectors}{${rule.declarations.join(";")}}`);
   }
-  return `${narrow.join("")}${wide.length > 0 ? `@media ${PRIVATE_WIDE_MEDIA}{${wide.join("")}}` : ""}`;
+  const fit = narrow.some((rule) => rule.includes(PAGE_FIT)) ? `${PAGE_FIT_RULE}:where(${root}){--pt-fit:7cqi}` : "";
+  return `${fit}${narrow.join("")}${wide.length > 0 ? `@media ${PRIVATE_WIDE_MEDIA}{${wide.join("")}}` : ""}`;
 }
 
 // ─── Token mode: the host's palette classes read the table ────────────────

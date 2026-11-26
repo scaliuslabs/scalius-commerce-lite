@@ -37,8 +37,9 @@ export type PrivateTokens = Partial<Record<PrivatePageKey, Record<string, Partia
  * at 3:1, Place order and Confirm outrank their neighbours, the total by
  * weight and contrast too, and no descriptive label holds a figure. Version 8:
  * the look is compiled per page, and a page is in token mode where it has one.
+ * Version 9: a `size` scales with the page's width, not its column's.
  */
-export const PRIVATE_CHECKER_VERSION = 8;
+export const PRIVATE_CHECKER_VERSION = 9;
 
 /** The most compiled token CSS a page stores (each page serves only its own). */
 export const PRIVATE_COMPILED_CSS_MAX_BYTES = 64 * 1024;

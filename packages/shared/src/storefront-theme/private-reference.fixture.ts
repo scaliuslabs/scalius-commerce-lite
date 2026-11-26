@@ -65,12 +65,14 @@ export const REFERENCE_PRIVATE_PAGES = {
   pages: {
     cart: {
       // No progress, no code entry, no merchandising. The heading above the lines card; the summary with its Items row.
+      // A phone opens on the lines (an add-on offer under a line is the buyer's to decide): only the summary folds.
       layout: [
         { type: "part", part: "notices" },
         {
           type: "layout", layout: "columns", hook: "cart-columns", children: [
             { type: "layout", layout: "stack", children: [
-              { type: "layout", layout: "fold", children: [{ type: "part", part: "lines", variant: "heading-above" }, { type: "part", part: "summary", variant: "with-items" }, { type: "target", target: "cart.page.summary" }] },
+              { type: "part", part: "lines", variant: "heading-above" },
+              { type: "layout", layout: "fold", children: [{ type: "part", part: "summary", variant: "with-items" }, { type: "target", target: "cart.page.summary" }] },
               { type: "target", target: "cart.page.below" },
             ] },
             { type: "part", part: "details" },
