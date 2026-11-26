@@ -497,7 +497,7 @@ export type MarketPresence = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 14;
+    version: 16;
     template: 'department-mall' | 'boutique' | 'marketplace' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: StorefrontThemeColors;
@@ -517,15 +517,15 @@ export type StorefrontThemeDocument = {
         container: '1200' | '1290' | '1360' | '1440' | 'full';
         pagePaint?: {
             kind: 'color';
-            color: 'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring';
+            color: 'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input';
         } | {
             kind: 'linear';
             angle: number;
-            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring'>;
+            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input'>;
         } | {
             kind: 'radial';
             at: 'top' | 'center' | 'bottom';
-            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input' | 'ring'>;
+            stops: Array<'background' | 'foreground' | 'card' | 'card-foreground' | 'popover' | 'popover-foreground' | 'primary' | 'primary-foreground' | 'secondary' | 'secondary-foreground' | 'muted' | 'muted-foreground' | 'accent' | 'accent-foreground' | 'destructive' | 'destructive-foreground' | 'border' | 'input'>;
         };
     };
     brand: {
@@ -639,7 +639,33 @@ export type StorefrontThemeDocument = {
         } | {
             variant: 'bottom-tabs';
             settings: {
-                tabs: Array<'home' | 'categories' | 'offers' | 'compare' | 'account'>;
+                tabs: Array<{
+                    kind: 'home';
+                } | {
+                    kind: 'categories';
+                } | {
+                    kind: 'offers';
+                } | {
+                    kind: 'search';
+                } | {
+                    kind: 'compare';
+                } | {
+                    kind: 'cart';
+                } | {
+                    kind: 'account';
+                } | {
+                    kind: 'link';
+                    label: string;
+                    icon: {
+                        source: 'store';
+                        name: 'home' | 'categories' | 'offers' | 'search' | 'compare' | 'cart' | 'account' | 'link' | 'page' | 'news' | 'support' | 'gift' | 'heart' | 'star' | 'chat' | 'bolt';
+                    } | {
+                        source: 'app';
+                        app: string;
+                        file: string;
+                    };
+                    href: string;
+                }>;
                 drawer: 'accordion' | 'drill-in';
             };
             bindings?: StorefrontSettingBindings;
@@ -799,13 +825,6 @@ export type StorefrontThemeDocument = {
             };
             bindings?: StorefrontSettingBindings;
         };
-        cart: {
-            summary: 'side' | 'top';
-        };
-        cartDrawer: {
-            width: 'standard' | 'wide';
-            recommendations: 'shown' | 'hidden';
-        };
         checkout: {
             summary: 'side' | 'top';
             paymentChoices: 'list' | 'tiles';
@@ -849,7 +868,6 @@ export type StorefrontThemeDocument = {
         templates: {
             product: StorefrontPageTemplate;
             collection: StorefrontPageTemplate;
-            cart: StorefrontPageTemplate;
             page: StorefrontPageTemplate;
         };
     };
@@ -860,6 +878,7 @@ export type StorefrontThemeDocument = {
             [key: string]: string;
         };
     }>;
+    privatePages: StorefrontPrivatePages;
 };
 
 export type StorefrontThemeColors = {
@@ -881,7 +900,6 @@ export type StorefrontThemeColors = {
     'destructive-foreground': string;
     border: string;
     input: string;
-    ring: string;
 };
 
 export type StorefrontSettingBindings = {
@@ -927,6 +945,7 @@ export type StorefrontSectionList = Array<{
             text?: string;
             buttonLabel?: string;
             link: string | null;
+            product?: string | null;
             hidden?: boolean;
             bindings?: {
                 [key: string]: {
@@ -1348,6 +1367,97 @@ export type StorefrontPageTemplate = {
     main: number;
 };
 
+export type StorefrontPrivatePages = {
+    controls?: 'header' | 'footer' | 'none';
+    pages: {
+        cart?: StorefrontPrivateArrangement;
+        cartDrawer?: StorefrontPrivateArrangement;
+        checkout?: StorefrontPrivateArrangement;
+        receipt?: StorefrontPrivateArrangement;
+        account?: StorefrontPrivateArrangement;
+    };
+    tokens?: {
+        [key: string]: {
+            [key: string]: {
+                [key: string]: unknown;
+            };
+        };
+    };
+    labels: {
+        'cart.heading'?: StorefrontPrivateWords;
+        'cart.intro'?: StorefrontPrivateWords;
+        'cart.summaryHeading'?: StorefrontPrivateWords;
+        'cart.continue'?: 'continue-shopping' | 'keep-shopping' | 'back-to-store';
+        'cart.empty'?: StorefrontPrivateWords;
+        'cart.emptyText'?: StorefrontPrivateWords;
+        'cart.subtotal'?: 'subtotal' | 'items-total';
+        'cart.showSummary'?: 'show-summary' | 'show-cart';
+        'cart.hideSummary'?: 'hide-summary' | 'hide-cart';
+        'dialog.goBack'?: 'go-back' | 'cancel';
+        'dialog.confirm'?: 'confirm' | 'continue-checkout' | 'agree-and-continue';
+        'drawer.title'?: StorefrontPrivateWords;
+        'drawer.checkout'?: 'checkout' | 'proceed-to-checkout';
+        'drawer.viewCart'?: 'view-cart' | 'go-to-cart';
+        'drawer.continue'?: 'continue-shopping' | 'keep-shopping';
+        'drawer.empty'?: StorefrontPrivateWords;
+        'drawer.startShopping'?: 'start-shopping' | 'browse-products' | 'continue-shopping';
+    };
+    icons: {
+        'cart.empty'?: StorefrontPrivateAsset;
+        'drawer.empty'?: StorefrontPrivateAsset;
+    };
+    chrome?: unknown;
+    search?: unknown;
+    css?: unknown;
+    assets?: unknown;
+    compiled: {
+        anatomy: number;
+        sanitizer: number;
+        css: {
+            cart?: string;
+            cartDrawer?: string;
+            checkout?: string;
+            receipt?: string;
+            account?: string;
+        };
+        refused?: boolean;
+    };
+};
+
+export type StorefrontPrivateArrangement = {
+    frame?: string;
+    layout?: Array<StorefrontPrivateNode>;
+    items?: {
+        [key: string]: Array<StorefrontPrivateNode>;
+    };
+};
+
+export type StorefrontPrivateNode = {
+    type: 'layout';
+    layout: 'stack' | 'columns' | 'grid' | 'group' | 'fold' | 'scroll';
+    hook?: string;
+    children: Array<StorefrontPrivateNode>;
+} | {
+    type: 'part';
+    part: string;
+    variant?: string;
+} | {
+    type: 'target';
+    target: string;
+} | {
+    type: 'content';
+    [key: string]: unknown;
+};
+
+export type StorefrontPrivateWords = {
+    [key: string]: string;
+};
+
+export type StorefrontPrivateAsset = {
+    app: string;
+    file: string;
+};
+
 export type StorefrontBrandImage = {
     id: string;
     url: string;
@@ -1634,6 +1744,7 @@ export type PluginUiNode = {
     type: 'stack';
     direction?: 'vertical' | 'horizontal';
     gap?: 'sm' | 'md' | 'lg';
+    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
     children: Array<PluginUiNode>;
 } | {
     type: 'columns';
@@ -2076,6 +2187,9 @@ export type PluginUiNode = {
     summary: string;
     open?: boolean;
     children: Array<PluginUiNode>;
+} | {
+    type: 'mark';
+    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
 };
 
 /**
@@ -2476,6 +2590,7 @@ export type CustomerAccountSummary = {
             type: 'stack';
             direction?: 'vertical' | 'horizontal';
             gap?: 'sm' | 'md' | 'lg';
+            tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
             children: Array<PluginUiNode>;
         } | {
             type: 'columns';
@@ -2918,6 +3033,9 @@ export type CustomerAccountSummary = {
             summary: string;
             open?: boolean;
             children: Array<PluginUiNode>;
+        } | {
+            type: 'mark';
+            tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
         };
         attributes: Array<{
             key: string;
@@ -7685,7 +7803,7 @@ export type ThemeAppPart = {
          * A landing page's handle.
          */
         slug?: string;
-        template?: 'product' | 'collection' | 'cart' | 'page';
+        template?: 'product' | 'collection' | 'page';
         /**
          * The section's or block's position, from 0.
          */
@@ -10575,7 +10693,7 @@ export type GetApiV1StorefrontLandingBySlugResponse = GetApiV1StorefrontLandingB
 export type GetApiV1StorefrontTemplateByKindData = {
     body?: never;
     path: {
-        kind: 'product' | 'collection' | 'cart' | 'page';
+        kind: 'product' | 'collection' | 'page';
     };
     query?: {
         /**
@@ -10860,6 +10978,7 @@ export type GetApiV1StorefrontLayoutResponses = {
             };
             timeZone: string;
             cspAllowedDomains: string;
+            cspImageSources: string;
             policies: Array<{
                 kind: 'refund' | 'privacy' | 'terms' | 'shipping' | 'contact';
                 title: string;
@@ -11269,7 +11388,7 @@ export type PostApiV1StorefrontThemePreviewHomepageData = {
     body?: {
         token: string;
         pageSlug?: string;
-        template?: 'product' | 'collection' | 'cart' | 'page';
+        template?: 'product' | 'collection' | 'page';
         sections?: StorefrontSectionList;
         presence?: string;
         resource?: string;
@@ -15363,6 +15482,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     type: 'stack';
                     direction?: 'vertical' | 'horizontal';
                     gap?: 'sm' | 'md' | 'lg';
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     children: Array<PluginUiNode>;
                 } | {
                     type: 'columns';
@@ -15805,6 +15925,9 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     summary: string;
                     open?: boolean;
                     children: Array<PluginUiNode>;
+                } | {
+                    type: 'mark';
+                    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                 };
                 attributes: Array<{
                     key: string;
@@ -24447,6 +24570,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         type: 'stack';
                         direction?: 'vertical' | 'horizontal';
                         gap?: 'sm' | 'md' | 'lg';
+                        tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                         children: Array<PluginUiNode>;
                     } | {
                         type: 'columns';
@@ -24889,6 +25013,9 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         summary: string;
                         open?: boolean;
                         children: Array<PluginUiNode>;
+                    } | {
+                        type: 'mark';
+                        tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     };
                     attributes: Array<{
                         key: string;
@@ -25599,6 +25726,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                     type: 'stack';
                     direction?: 'vertical' | 'horizontal';
                     gap?: 'sm' | 'md' | 'lg';
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     children: Array<PluginUiNode>;
                 } | {
                     type: 'columns';
@@ -26041,6 +26169,9 @@ export type PostApiV1OrdersCartValidationResponses = {
                     summary: string;
                     open?: boolean;
                     children: Array<PluginUiNode>;
+                } | {
+                    type: 'mark';
+                    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                 };
                 attributes: Array<{
                     key: string;
@@ -26640,6 +26771,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     type: 'stack';
                     direction?: 'vertical' | 'horizontal';
                     gap?: 'sm' | 'md' | 'lg';
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     children: Array<PluginUiNode>;
                 } | {
                     type: 'columns';
@@ -27082,6 +27214,9 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     summary: string;
                     open?: boolean;
                     children: Array<PluginUiNode>;
+                } | {
+                    type: 'mark';
+                    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                 };
                 attributes: Array<{
                     key: string;
@@ -37191,7 +37326,7 @@ export type PostApiV1AdminResourcesWarrantiesIssueData = {
              */
             key: string;
             /**
-             * What the buyer sees the cover as (`GameGhor Protection`).
+             * What the buyer sees the cover as (`Arcade Protection`).
              */
             name: string;
             /**
@@ -60975,7 +61110,7 @@ export type PostApiV1AdminSettingsThemeAiDraftData = {
     body: {
         providerId: string;
         prompt: string;
-        page: 'home' | 'landing' | 'product' | 'collection' | 'cart' | 'page';
+        page: 'home' | 'landing' | 'product' | 'collection' | 'page';
         locale?: string;
         limit?: number;
     };
@@ -61106,7 +61241,7 @@ export type PostApiV1AdminSettingsThemeDraftSectionsData = {
             slug: string;
         } | {
             kind: 'template';
-            template: 'product' | 'collection' | 'cart' | 'page';
+            template: 'product' | 'collection' | 'page';
             region: 'before' | 'after';
         };
         afterId?: string | null;
@@ -62374,6 +62509,10 @@ export type GetApiV1AdminSettingsSecurityResponses = {
         success: true;
         data: {
             cspAllowedDomains: string;
+            /**
+             * Hosts the storefront loads images from and nothing else (img-src), on every page, private and payment pages included; comma-separated.
+             */
+            imageSources: string;
             revision: number;
         };
     };
@@ -62385,6 +62524,7 @@ export type PostApiV1AdminSettingsSecurityData = {
     body: {
         expectedRevision: number;
         cspAllowedDomains?: string;
+        imageSources?: string;
     };
     path?: never;
     query?: never;
@@ -62503,6 +62643,56 @@ export type GetApiV1AdminSettingsSecurityRuntimeSourcesResponses = {
 };
 
 export type GetApiV1AdminSettingsSecurityRuntimeSourcesResponse = GetApiV1AdminSettingsSecurityRuntimeSourcesResponses[keyof GetApiV1AdminSettingsSecurityRuntimeSourcesResponses];
+
+export type GetApiV1AdminSettingsSecurityImageHostsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/security/image-hosts';
+};
+
+export type GetApiV1AdminSettingsSecurityImageHostsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsSecurityImageHostsError = GetApiV1AdminSettingsSecurityImageHostsErrors[keyof GetApiV1AdminSettingsSecurityImageHostsErrors];
+
+export type GetApiV1AdminSettingsSecurityImageHostsResponses = {
+    /**
+     * Image hosts outside the platform's origins
+     */
+    200: {
+        success: true;
+        data: {
+            hosts: Array<string>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSecurityImageHostsResponse = GetApiV1AdminSettingsSecurityImageHostsResponses[keyof GetApiV1AdminSettingsSecurityImageHostsResponses];
 
 export type GetApiV1AdminSettingsEmailData = {
     body?: never;
@@ -66413,6 +66603,10 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    conversation_reply: {
+                        subject: string;
+                        body: string;
+                    };
                 };
                 sms: {
                     order_created: {
@@ -66484,6 +66678,9 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     review_request: {
                         body: string;
                     };
+                    conversation_reply: {
+                        body: string;
+                    };
                 };
             };
             revision: number;
@@ -66517,7 +66714,7 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponse = GetApiV
 
 export type PutApiV1AdminSettingsNotificationChannelsTemplatesData = {
     body: {
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request' | 'conversation_reply';
         email?: {
             subject: string;
             body: string;
@@ -66681,6 +66878,10 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    conversation_reply: {
+                        subject: string;
+                        body: string;
+                    };
                 };
                 sms: {
                     order_created: {
@@ -66752,6 +66953,9 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     review_request: {
                         body: string;
                     };
+                    conversation_reply: {
+                        body: string;
+                    };
                 };
             };
             revision: number;
@@ -66765,7 +66969,7 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponse = PutApiV
 export type PostApiV1AdminSettingsNotificationChannelsTemplatesTestData = {
     body: {
         channel: 'email';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request' | 'conversation_reply';
         subject: string;
         body: string;
         /**
@@ -66774,7 +66978,7 @@ export type PostApiV1AdminSettingsNotificationChannelsTemplatesTestData = {
         locale?: string;
     } | {
         channel: 'sms';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request' | 'conversation_reply';
         body: string;
         phone: string;
         /**
@@ -69474,6 +69678,19 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                 };
                 attributeApps?: CheckoutAttributeApps;
                 /**
+                 * The apps' add-ons as their own rows after Subtotal (`addOnDocumentRows` prints them, as the receipt and the emails do).
+                 */
+                addOnRows?: Array<{
+                    appId: string | null;
+                    title: string;
+                    amountMinor: number;
+                    details?: Array<string>;
+                    /**
+                     * Rows folded under the neutral label: print "Add-ons" in the invoice's language.
+                     */
+                    folded?: true;
+                }>;
+                /**
                  * The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed.
                  */
                 taxExemption?: {
@@ -69502,6 +69719,13 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                         label: string;
                         displayValue: string;
                         priceMinor: number;
+                    }>;
+                    addOns?: Array<{
+                        appId: string | null;
+                        title: string;
+                        totalMinor: number;
+                        amountMinor: number | null;
+                        per: 'unit' | 'bundle';
                     }>;
                 }>;
             };
@@ -69699,6 +69923,19 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                 };
                 attributeApps?: CheckoutAttributeApps;
                 /**
+                 * The apps' add-ons as their own rows after Subtotal (`addOnDocumentRows` prints them, as the receipt and the emails do).
+                 */
+                addOnRows?: Array<{
+                    appId: string | null;
+                    title: string;
+                    amountMinor: number;
+                    details?: Array<string>;
+                    /**
+                     * Rows folded under the neutral label: print "Add-ons" in the invoice's language.
+                     */
+                    folded?: true;
+                }>;
+                /**
                  * The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed.
                  */
                 taxExemption?: {
@@ -69727,6 +69964,13 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                         label: string;
                         displayValue: string;
                         priceMinor: number;
+                    }>;
+                    addOns?: Array<{
+                        appId: string | null;
+                        title: string;
+                        totalMinor: number;
+                        amountMinor: number | null;
+                        per: 'unit' | 'bundle';
                     }>;
                 }>;
             };
@@ -75021,6 +75265,10 @@ export type GetApiV1AdminConversationsData = {
          * What the conversation is about: an order, a store question, a review or a warranty claim
          */
         subjectType?: 'order' | 'store' | 'warranty_claim' | 'review';
+        /**
+         * One of the store's topic keys (`topics` on this list): only conversations the buyer gave that topic
+         */
+        topic?: string;
         cursor?: string;
     };
     url: '/api/v1/admin/conversations';
@@ -75067,7 +75315,13 @@ export type GetApiV1AdminConversationsResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
-                topic: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                    labels: {
+                        [key: string]: string;
+                    };
+                } | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**
@@ -75089,6 +75343,13 @@ export type GetApiV1AdminConversationsResponses = {
                 channelName: string | null;
             }>;
             nextCursor: string | null;
+            topics: Array<{
+                key: string;
+                label: string;
+                labels: {
+                    [key: string]: string;
+                };
+            }>;
         };
     };
 };
@@ -75402,6 +75663,10 @@ export type PostApiV1AdminConversationsQueryData = {
         status?: 'open' | 'pending' | 'closed' | 'all';
         assignee?: string;
         subjectType?: 'order' | 'store' | 'warranty_claim' | 'review';
+        /**
+         * One of the store's topic keys (`topics` on this list): only conversations the buyer gave that topic
+         */
+        topic?: string;
         q?: string;
         cursor?: string | null;
         unread?: boolean;
@@ -75464,7 +75729,13 @@ export type PostApiV1AdminConversationsQueryResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
-                topic: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                    labels: {
+                        [key: string]: string;
+                    };
+                } | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**
@@ -75488,6 +75759,13 @@ export type PostApiV1AdminConversationsQueryResponses = {
             nextCursor: string | null;
             scanExhausted: boolean;
             scanned: number;
+            topics: Array<{
+                key: string;
+                label: string;
+                labels: {
+                    [key: string]: string;
+                };
+            }>;
         };
     };
 };
@@ -75901,7 +76179,13 @@ export type GetApiV1AdminConversationsOrderByOrderIdResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
-                topic: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                    labels: {
+                        [key: string]: string;
+                    };
+                } | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**
@@ -76062,7 +76346,13 @@ export type PostApiV1AdminConversationsOrderByOrderIdMessagesResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
-                topic: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                    labels: {
+                        [key: string]: string;
+                    };
+                } | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**
@@ -76202,7 +76492,13 @@ export type GetApiV1AdminConversationsByIdResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
-                topic: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                    labels: {
+                        [key: string]: string;
+                    };
+                } | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**
@@ -76358,7 +76654,13 @@ export type PatchApiV1AdminConversationsByIdResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
-                topic: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                    labels: {
+                        [key: string]: string;
+                    };
+                } | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**
@@ -76519,7 +76821,13 @@ export type PostApiV1AdminConversationsByIdMessagesResponses = {
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
                 subjectId: string | null;
                 subject: string | null;
-                topic: string | null;
+                topic: {
+                    key: string;
+                    label: string | null;
+                    labels: {
+                        [key: string]: string;
+                    };
+                } | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
                 /**

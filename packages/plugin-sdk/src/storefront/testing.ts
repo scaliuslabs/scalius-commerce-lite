@@ -241,6 +241,7 @@ const fixtureSectionResolver: CoreSectionResolver = {
     cards: kind === "collection" ? [fixtureProductCard()] : [],
   })),
   promotion: () => ({ endsAt: "2026-12-31T18:00:00.000Z" }),
+  product: () => fixtureProductCard(),
   deliveryFacts: () => [
     { title: "Delivery in Dhaka", detail: "1-2 days" },
     { title: "Cash on delivery", detail: "Pay when it arrives" },

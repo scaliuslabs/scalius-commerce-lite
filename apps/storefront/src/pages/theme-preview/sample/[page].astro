@@ -33,6 +33,8 @@ import { checkoutText } from "@/lib/checkout-text";
 import { formatCount } from "@/lib/store-time-zone";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { privatePagePlan, privateStyle } from "@/lib/private-pages/plan";
+import { privatePageLook } from "@/lib/private-pages/look";
 import { readThemePreviewCookie } from "@/lib/theme-preview-cookie";
 import {
   isThemePreviewSamplePage,
@@ -88,6 +90,9 @@ const currency = {
   decimalPlaces: layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces,
 };
 const blocks = requestTheme.resolved.blocks;
+// The payment step as buyers get it: the draft's arrangement and look of it (lib/private-pages/plan.ts).
+const checkoutPlan = page === "checkout" ? privatePagePlan(requestTheme.theme, "checkout", languageCode, () => null) : undefined;
+const checkoutStyle = page === "checkout" ? privateStyle(requestTheme.theme, "checkout") : undefined;
 
 // The checkout: its settings, reviewed details and quote, for lib/checkout's sample drawing.
 const checkout = page === "checkout"
@@ -118,6 +123,7 @@ const noticeClass = "mx-auto mt-3 w-fit max-w-[calc(100%-2rem)] rounded-full bor
   hideHeader={page === "checkout"}
   hideFooter={page === "checkout"}
   hideNavigationSidebar={page !== "account"}
+  {...(page === "checkout" ? { privateStyle: checkoutStyle, privateTokens: checkoutPlan?.tokens ?? false } : page === "receipt" || page === "account" ? privatePageLook(requestTheme.theme, page) : {})}
 >
   <meta slot="head" name="robots" content="noindex,nofollow" />
   {page === "checkout" && checkout && (
@@ -125,14 +131,14 @@ const noticeClass = "mx-auto mt-3 w-fit max-w-[calc(100%-2rem)] rounded-full bor
       <CheckoutHeader layoutData={layoutData} copy={copy} />
       <p class={noticeClass} role="note" data-theme-preview-sample>{words.notice}</p>
       <div data-theme-section-id={THEME_EDITOR_MARKS.checkout}>
-        <CheckoutPaymentStep copy={copy} giftCopy={giftCardCheckoutCopy(copy)} block={blocks.checkout} sample />
+        <CheckoutPaymentStep copy={copy} giftCopy={giftCardCheckoutCopy(copy)} block={blocks.checkout} plan={checkoutPlan} sample />
       </div>
       <script is:inline type="application/json" id="themePreviewSample" set:html={serializeJsonForInlineScript(checkout)} />
       <WindowGlobals values={{ __CHECKOUT_LANGUAGE__: checkoutLanguage }} />
     </>
   )}
   {page === "receipt" && receiptOrder && receiptState && receiptView && (
-    <section class={blocks.receipt.layout === "split" ? "container mx-auto max-w-5xl px-4 py-6 sm:py-8" : "container mx-auto max-w-3xl px-4 py-6 sm:py-8"} data-order-success-print="receipt" data-order-success-state={receiptState.kind} data-theme-section-id={THEME_EDITOR_MARKS.receipt}>
+    <section class={blocks.receipt.layout === "split" ? "container mx-auto max-w-5xl px-4 py-6 sm:py-8" : "container mx-auto max-w-3xl px-4 py-6 sm:py-8"} data-private="receipt" data-order-success-print="receipt" data-order-success-state={receiptState.kind} data-theme-section-id={THEME_EDITOR_MARKS.receipt}>
       <p class={`${noticeClass} mb-4`} role="note" data-theme-preview-sample>{words.notice}</p>
       <CheckoutProgress current="confirmation" paymentRequired={false} copy={copy} />
       <ReceiptStatusHeader

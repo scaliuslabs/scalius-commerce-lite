@@ -60,3 +60,29 @@ export function buyerLineAddOnRows(
     return { label: options.label, value, surcharge: null, text: `${options.label}: ${value}` };
   });
 }
+
+/** What the apps charged on a row, exactly (its `addOns`' totals). */
+export function rowAddOnsMinor(row: { addOns?: unknown }): number {
+  return readBuyerLineAddOns(row.addOns).reduce((sum, addOn) => sum + addOn.totalMinor, 0);
+}
+
+/**
+ * A row's own amounts when the summary shows the apps' add-ons as their own
+ * rows: its gross less what the apps charged on it, and the unit price of
+ * that when it is exact. Then the rows add up to the summary's Subtotal (the
+ * items alone) and the add-on rows to the rest, the same on every page and
+ * document (the receipt, the account order, the order emails, the invoice).
+ */
+export function rowItemsOnly<T extends { unitPriceMinor: number | null; grossSubtotalMinor: number }>(
+  line: T | null,
+  row: { quantity: number; addOns?: unknown },
+  addOnsInSummary: boolean,
+): T | null {
+  if (!line || !addOnsInSummary) return line;
+  const addOnsMinor = rowAddOnsMinor(row);
+  if (addOnsMinor === 0 || addOnsMinor > line.grossSubtotalMinor) return line;
+  const grossSubtotalMinor = line.grossSubtotalMinor - addOnsMinor;
+  const unitPriceMinor = row.quantity > 0 && grossSubtotalMinor % row.quantity === 0 ? grossSubtotalMinor / row.quantity : null;
+  const total = (line as { totalMinor?: unknown }).totalMinor;
+  return { ...line, grossSubtotalMinor, unitPriceMinor, ...(typeof total === "number" ? { totalMinor: total - addOnsMinor } : {}) };
+}

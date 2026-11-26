@@ -39,13 +39,14 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `checkout-3-commit-signed-in` | 14 | 70 | 46 | 60 | 16 | - |
 | `order-refund-signed-in` | 24 | 44 | 20 | 26 | 3 | - |
 | `order-refund-signed-in-300` | 24 | 44 | 20 | 26 | 3 | - |
-| `page-home-miss` | 11 | 25 | 0 | 41 | 11 | - |
+| `page-home-miss` | 11 | 25 | 0 | 43 | 11 | - |
 | `page-home-hit` | 1 | 1 | 0 | 1 | 0 | - |
-| `page-product-miss` | 19 | 36 | 0 | 49 | 10 | - |
+| `page-home-miss-hero-products` | 11 | 29 | 0 | 52 | 13 | - |
+| `page-product-miss` | 19 | 36 | 0 | 50 | 10 | - |
 | `page-product-hit` | 1 | 1 | 0 | 1 | 0 | - |
-| `page-category-miss` | 6 | 19 | 0 | 51 | 5 | - |
+| `page-category-miss` | 6 | 19 | 0 | 52 | 5 | - |
 | `page-category-hit` | 1 | 1 | 0 | 1 | 0 | - |
-| `page-search-miss` | 6 | 16 | 0 | 632 | 16 | - |
+| `page-search-miss` | 6 | 16 | 0 | 633 | 16 | - |
 | `page-search-hit` | 1 | 1 | 0 | 1 | 0 | - |
 | `checkout-20-quote` | 10 | 17 | 0 | 48 | 3 | - |
 | `checkout-20-commit` | 14 | 123 | 173 | 193 | 36 | - |
@@ -65,7 +66,7 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `order-refund` | 24 | 44 | 19 | 26 | 3 | - |
 | `order-refund-gift-card` | 23 | 57 | 20 | 39 | 2 | - |
 | `sku-stock-change` | 9 | 17 | 6 | 14 | 2 | - |
-| `cron-idle` | 10 | 14 | 92 | 7,020 | 7 | 0 / 1.57 |
+| `cron-idle` | 10 | 14 | 92 | 7,020 | 7 | 0 / 1.6 |
 | `cron-nightly` | 26 | 61 | 194 | 20,323 | 61 | - |
 | `drain-busy` | 8 | 18 | 13 | 629 | 14 | - |
 | `order-3-line-commit` | 14 | 68 | 54 | 57 | 16 | - |

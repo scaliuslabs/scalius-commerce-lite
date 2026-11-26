@@ -1,4 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { ADD_ON_DETAILS_MAX, ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX } from "@scalius/shared/add-on-totals";
+import { LINE_ADD_ONS_MAX } from "@scalius/shared/line-identity";
 import { adminRouter } from "./admin-router";
 import {
   recordOrderEvent,
@@ -53,7 +55,24 @@ const invoiceItemSchema = orderItemSchema.extend({
     /** Surcharge per unit in minor units; 0 when free. */
     priceMinor: z.number().int(),
   }))).optional(),
+  /** What the apps charged on the line (snapshot version 7): its one place; absent on older invoices. */
+  addOns: z.array(z.object({
+    appId: z.string().nullable(),
+    title: z.string(),
+    totalMinor: z.number().int(),
+    amountMinor: z.number().int().nullable(),
+    per: z.enum(["unit", "bundle"]),
+  })).max(2 * LINE_ADD_ONS_MAX).optional(),
 });
+
+/** The apps' add-ons as summary rows, frozen on issue (snapshot version 8); absent: none, or an older invoice. */
+const invoiceAddOnRowsSchema = z.array(z.object({
+  appId: z.string().nullable(),
+  title: z.string(),
+  amountMinor: z.number().int(),
+  details: z.array(z.string().max(ADD_ON_TITLE_MAX)).max(ADD_ON_DETAILS_MAX).optional(),
+  folded: z.literal(true).optional().openapi({ description: "Rows folded under the neutral label: print \"Add-ons\" in the invoice's language." }),
+})).max(ADD_ON_ROWS_MAX).openapi({ description: "The apps' add-ons as their own rows after Subtotal (`addOnDocumentRows` prints them, as the receipt and the emails do)." });
 
 const invoiceOrderSchema = z.object({
   id: z.string(),
@@ -132,6 +151,7 @@ const invoiceOrderSchema = z.object({
   /** The apps' checkout answers the buyer gave and their words; absent before snapshot version 6. */
   appAnswers: z.record(z.string(), z.string()).optional(),
   attributeApps: checkoutAttributeAppsSchema.optional(),
+  addOnRows: invoiceAddOnRowsSchema.optional(),
   taxExemption: z.object({ exemptionId: z.string().nullable() }).nullable().optional()
     .openapi({ description: "The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed." }),
   createdAt: z.union([z.string(), z.number()]),

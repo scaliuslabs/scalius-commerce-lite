@@ -74,7 +74,6 @@ export function pageTemplate(page: EditorPage): StorefrontPageTemplate | null {
     case "product": return "product";
     case "collection":
     case "category": return "collection";
-    case "cart": return "cart";
     case "page": return "page";
     default: return null;
   }

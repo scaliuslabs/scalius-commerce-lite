@@ -90,13 +90,31 @@ export const buyerConversationThreadSchema = buyerConversationSummarySchema.exte
   cartShare: cartShareSchema.nullable().optional(),
 });
 
+/**
+ * A thread's topic for staff: its key, the merchant's default name (null once
+ * the topic is removed) and its names in the store's other languages by
+ * two-letter code, so the dashboard names it in its own language.
+ */
+export const staffConversationTopicSchema = z.object({
+  key: z.string(),
+  label: z.string().nullable(),
+  labels: z.record(z.string(), z.string()),
+});
+
+/** One of the merchant's topics with every name it has: the inbox's topic filter. */
+export const staffTopicOptionSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  labels: z.record(z.string(), z.string()),
+});
+
 export const staffConversationSummarySchema = z.object({
   id: z.string(),
   subjectType: subjectTypeSchema,
   subjectId: z.string().nullable(),
   subject: buyerText(z.string().nullable()),
-  /** The merchant topic the buyer chose (its key; the inbox settings name it), or null. */
-  topic: z.string().nullable(),
+  /** The merchant topic the buyer chose, named in every language it has, or null. */
+  topic: staffConversationTopicSchema.nullable(),
   status: conversationStatusSchema,
   orderId: z.string().nullable(),
   orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }),

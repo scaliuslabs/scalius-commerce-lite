@@ -74,6 +74,10 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  /* The hovers the theme's colours make (tokens.ts buildStorefrontColorCss): their words keep 4.5:1. */
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft-hover: var(--primary-soft-hover);
+  --color-primary-link-hover: var(--primary-link-hover);
   /* Text on a primary tint (a badge, a pill): the brand colour drawn toward the
      text colour, so it keeps AA contrast on the tinted surface whatever the brand. */
   --color-primary-ink: color-mix(in oklab, var(--primary) 75%, var(--foreground));
@@ -455,8 +459,9 @@ html {
 /* ── Craft (Theme -> Style) ─────────────────────────────────────────────
    One motion language (tokens.ts STOREFRONT_MOTION_MS): 150ms for hovers
    and presses, 250ms for panels and fades, ease-out, and none under reduced
-   motion. Buttons take the Style's shape; surfaces use a border OR a
-   shadow, never both on the same element. */
+   motion. Buttons take the Style's shape (one class's weight: a private
+   page's tokens outrank it); surfaces use a border OR a shadow, never both
+   on the same element. */
 .site-root {
   --theme-ease: cubic-bezier(0.2, 0, 0, 1);
   --theme-duration: var(--theme-duration-fast, 150ms);
@@ -472,7 +477,7 @@ html {
   }
 }
 
-.site-root :where(button, a, input[type="submit"]):where(.bg-primary):not(.rounded-full),
+.site-root :where(button, a, input[type="submit"]):where(.bg-primary):where(:not(.rounded-full)),
 .site-root [data-theme-component="button"]:not([data-theme-size="icon"]) {
   border-radius: var(--theme-button-radius, var(--radius));
   transition:

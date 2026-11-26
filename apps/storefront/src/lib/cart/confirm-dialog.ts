@@ -24,6 +24,16 @@ export interface ConfirmChoiceWords {
 
 let sequence = 0;
 
+/** The theme's words for one of the dialog's labels on this page (`#privateLabels`, the cart page's), if it set them. */
+function themeLabel(doc: Document, key: "dialog.goBack" | "dialog.confirm"): string | undefined {
+  try {
+    const words = (JSON.parse(doc.getElementById("privateLabels")?.textContent || "{}") as Record<string, unknown>)[key];
+    return typeof words === "string" ? words : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Asks for an app choice's confirmation in the page's language (the host's words where the app gave none). */
 export function confirmCartChoice(confirm: { text: string; title?: string; agree?: string }, opener?: HTMLElement): Promise<boolean> {
   const copy = cartLineInputCopy();
@@ -36,7 +46,7 @@ export function confirmCartChoice(confirm: { text: string; title?: string; agree
   }, document, opener);
 }
 
-/** Asks the buyer; resolves true only when they ticked the box and confirmed. */
+/** Asks the buyer; resolves true only when they ticked the box and confirmed. The page's theme words its two actions, every dialog alike. */
 export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = document, from?: HTMLElement): Promise<boolean> {
   // Focus returns to the control that asked (a select the buyer changed), else to what had it.
   const opener = from ?? (doc.activeElement instanceof HTMLElement ? doc.activeElement : null);
@@ -45,6 +55,8 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
   dialog.setAttribute("aria-labelledby", `${id}-title`);
   dialog.setAttribute("aria-describedby", `${id}-text`);
   dialog.dataset.cartLineConfirm = "";
+  // The private pages' anatomy: a theme's tokens reach the dialog by these hooks (never a stylesheet).
+  dialog.dataset.private = "dialog";
   dialog.className = "m-auto w-[min(32rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-0 text-card-foreground shadow-xl backdrop:bg-black/50";
 
   const form = doc.createElement("form");
@@ -54,14 +66,17 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
   title.id = `${id}-title`;
   title.className = "text-lg font-semibold text-foreground";
   title.textContent = words.title;
+  title.dataset.part = "dialog-title";
   const text = doc.createElement("p");
   text.id = `${id}-text`;
   text.className = "whitespace-pre-line text-sm text-muted-foreground";
   text.textContent = words.text;
+  text.dataset.part = "dialog-text";
   const label = words.agree === undefined ? null : doc.createElement("label");
   const box = label ? doc.createElement("input") : null;
   if (label && box) {
     label.className = "flex min-h-11 cursor-pointer items-start gap-3 text-sm font-medium text-foreground";
+    label.dataset.part = "dialog-agree";
     box.type = "checkbox";
     box.className = "mt-0.5 size-5 shrink-0 accent-primary";
     const agree = doc.createElement("span");
@@ -85,15 +100,18 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
   }
   const actions = doc.createElement("div");
   actions.className = "flex flex-wrap justify-end gap-2";
+  actions.dataset.part = "dialog-actions";
   const back = doc.createElement("button");
   back.type = "button";
   back.className = "min-h-11 rounded-md border border-border px-4 text-sm font-medium text-foreground hover:bg-muted";
-  back.textContent = words.goBack;
+  back.textContent = themeLabel(doc, "dialog.goBack") ?? words.goBack;
+  back.dataset.part = "dialog-back";
   const confirm = doc.createElement("button");
   confirm.type = "submit";
   confirm.disabled = box !== null;
   confirm.className = "min-h-11 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50";
-  confirm.textContent = words.confirm;
+  confirm.textContent = themeLabel(doc, "dialog.confirm") ?? words.confirm;
+  confirm.dataset.part = "dialog-confirm";
   actions.append(back, confirm);
   form.append(title, text);
   if (items) form.append(items);

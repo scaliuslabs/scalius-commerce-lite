@@ -1,27 +1,34 @@
 ---
 // The `bottom-tabs` phone navigation: a bottom tab bar below `lg` with the
-// tabs the theme chose (4-5 of Home, Categories, Offers, Search, Compare,
-// Account; Star Tech 61px, Apple Gadgets 60px, Fabrilife 56px). Compare
-// shows only where comparing is possible (`compare`: the product page lists
-// the compare-similar module): elsewhere nothing fills the comparison, so
-// the tab is left out rather than opening an empty page. A bar left with
-// fewer than three tabs takes the standard ones. The tab links to /compare;
-// the compare script points it at the buyer's list. The tabs reuse the header's openers
-// (header.astro binds `[data-mobile-menu-open]` and `[data-cart-open]`,
-// HeaderLayout binds `[data-search-open]` and `[data-account-link]`), and
-// each is a real link first (the menu drawer's :target, /search, /cart), so
-// the bar works before hydration. The header always has the cart and the search, so the bar never repeats them.
-// The page reserves the bar's height in CSS, so nothing sits under it. On
-// product pages the phone buy bar replaces the tab bar while it shows.
+// tabs the theme chose (3 to 5: the store's destinations Home, Categories,
+// Offers, Search, Compare, Cart and Account, and the theme's link tabs;
+// Star Tech 61px, Apple Gadgets 60px, Fabrilife 56px). Compare shows only
+// where comparing is possible (`compare`: the product page lists the
+// compare-similar module): elsewhere nothing fills the comparison, so the tab
+// is left out rather than opening an empty page. A bar left with fewer than
+// three tabs takes the standard ones. The Compare tab links to /compare; the
+// compare script points it at the buyer's list. The tabs reuse the header's
+// openers (header.astro binds `[data-mobile-menu-open]` and
+// `[data-cart-open]`, HeaderLayout binds `[data-search-open]` and
+// `[data-account-link]`), and each is a real link first (the menu drawer's
+// :target, /search, /cart), so the bar works before hydration. The Cart tab
+// opens the drawer like the header's cart, and its count is the store's
+// (CoreHeader's script, or app-components under an app header). A link tab is the theme's words, its icon (the store's, or a
+// file of an active app) and a path of this store. The page reserves the
+// bar's height in CSS, so nothing sits under it. On product pages the phone
+// buy bar replaces the tab bar while it shows.
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
-import { STOREFRONT_MOBILE_TABS } from "@scalius/shared/storefront-theme";
-
-type Tab = (typeof STOREFRONT_MOBILE_TABS)[number];
+import { getLayoutData } from "@/lib/api";
+import { privateAssetUrls } from "@/lib/private-pages/html";
+import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
+import type { STOREFRONT_MOBILE_TAB_ICONS } from "@scalius/shared/storefront-theme";
+import { PHONE_OFFERS_HREF, phoneTabCurrent, shownPhoneTabs, type PhoneTab } from "./phone-navigation";
+import TabIcon from "./TabIcon.astro";
 
 interface Props {
-  tabs?: readonly Tab[];
+  tabs?: readonly PhoneTab[];
   /** Comparing is possible (the product page offers compare-similar): show the Compare tab when the merchant chose it. */
   compare?: boolean;
   /**
@@ -32,96 +39,83 @@ interface Props {
   menu?: "core" | "app";
 }
 
-const DEFAULT_TABS: readonly Tab[] = ["home", "categories", "offers", "account"];
-/** Tabs with a page to go to today. */
-const AVAILABLE = new Set<Tab>(["home", "categories", "offers", "account"]);
-const OFFERS_HREF = "/search?hasDiscount=true";
+type Icon = (typeof STOREFRONT_MOBILE_TAB_ICONS)[number];
 
-const { tabs = DEFAULT_TABS, compare = false, menu = "core" } = Astro.props;
+const { tabs, compare = false, menu = "core" } = Astro.props;
 const { language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).chrome;
-const chosen = tabs.filter((tab) => AVAILABLE.has(tab) || (tab === "compare" && compare));
-const shown = chosen.length >= 3 ? chosen : [...chosen, ...DEFAULT_TABS.filter((tab) => !chosen.includes(tab))].slice(0, 3);
-const path = Astro.url.pathname;
-const offers = path === "/search" && Astro.url.searchParams.get("hasDiscount") === "true";
-const active = {
-  home: path === "/",
-  categories: /^\/(categories|collections)\//.test(path),
-  offers,
-  compare: path === "/compare",
-  account: path === "/account" || path.startsWith("/account/"),
+const shown = shownPhoneTabs(tabs, compare);
+// A link tab's own image: a file of the theme's app while that app is active, else the store's link icon.
+const asset = shown.some((tab) => tab.kind === "link" && tab.icon.source === "app")
+  ? privateAssetUrls(readStorefrontExtensions((await getLayoutData())?.appExtensions))
+  : null;
+const current = (tab: PhoneTab): boolean => phoneTabCurrent(tab, Astro.url);
+const iconOf = (tab: PhoneTab): { name: Icon } | { src: string } => {
+  if (tab.kind !== "link") return { name: tab.kind };
+  if (tab.icon.source === "store") return { name: tab.icon.name };
+  const src = asset?.({ app: tab.icon.app, file: tab.icon.file }) ?? null;
+  return src ? { src } : { name: "link" };
 };
+const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : copy.tabs[tab.kind]);
 ---
 
-<nav id="mobile-tab-bar" class="mobile-tab-bar" aria-label={copy.tabs.label}>
+<nav id="mobile-tab-bar" class="mobile-tab-bar" aria-label={copy.tabs.label} data-tab-menu={menu}>
   <ul style={`--mobile-tab-count: ${shown.length}`}>
     {
-      shown.map((tab) => (
-        <li>
-          {tab === "home" && (
-            <a href="/" class="mobile-tab" aria-current={active.home ? "page" : undefined}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
-                <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              </svg>
-              <span>{copy.tabs.home}</span>
-            </a>
-          )}
-          {tab === "categories" && (
-            <a
-              href={menu === "app" ? "/categories" : "#mobile-menu-panel"}
-              role="button"
-              class="mobile-tab"
-              aria-current={active.categories ? "true" : undefined}
-              aria-haspopup="dialog"
-              aria-controls={menu === "app" ? undefined : "mobile-menu-panel"}
-              aria-expanded="false"
-              data-mobile-menu-open={menu === "app" ? undefined : ""}
-              data-app-menu-open={menu === "app" ? "" : undefined}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <rect width="7" height="7" x="3" y="3" rx="1.5" />
-                <rect width="7" height="7" x="14" y="3" rx="1.5" />
-                <rect width="7" height="7" x="14" y="14" rx="1.5" />
-                <rect width="7" height="7" x="3" y="14" rx="1.5" />
-              </svg>
-              <span>{copy.tabs.categories}</span>
-            </a>
-          )}
-          {tab === "offers" && (
-            <a href={OFFERS_HREF} class="mobile-tab" aria-current={active.offers ? "page" : undefined} data-astro-prefetch="false">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z" />
-                <circle cx="7.5" cy="7.5" r="1.5" />
-              </svg>
-              <span>{copy.tabs.offers}</span>
-            </a>
-          )}
-          {tab === "compare" && (
-            <a href="/compare" rel="nofollow" class="mobile-tab" aria-current={active.compare ? "page" : undefined} data-compare-tab data-astro-prefetch="false">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 6h10M4 12h16M4 18h10M18 4v4M16 6h4" />
-              </svg>
-              <span>{copy.tabs.compare}</span>
-            </a>
-          )}
-          {tab === "account" && (
-            <a
-              href="/account"
-              class="mobile-tab"
-              aria-current={active.account ? "page" : undefined}
-              data-account-link
-              data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M20 21a8 8 0 0 0-16 0" />
-              </svg>
-              <span>{copy.tabs.account}</span>
-            </a>
-          )}
-        </li>
-      ))
+      shown.map((tab) => {
+        const icon = iconOf(tab);
+        const page = current(tab) ? "page" : undefined;
+        const glyph = "name" in icon
+          ? <TabIcon name={icon.name} />
+          : <img src={icon.src} alt="" width="22" height="22" loading="lazy" decoding="async" />;
+        return (
+          <li>
+            {tab.kind === "home" && (
+              <a href="/" class="mobile-tab" aria-current={page}>{glyph}<span>{labelOf(tab)}</span></a>
+            )}
+            {tab.kind === "categories" && (
+              <a
+                href={menu === "app" ? "/categories" : "#mobile-menu-panel"}
+                role="button"
+                class="mobile-tab"
+                aria-current={current(tab) ? "true" : undefined}
+                aria-haspopup="dialog"
+                aria-controls={menu === "app" ? undefined : "mobile-menu-panel"}
+                aria-expanded="false"
+                data-mobile-menu-open={menu === "app" ? undefined : ""}
+                data-app-menu-open={menu === "app" ? "" : undefined}
+              >{glyph}<span>{labelOf(tab)}</span></a>
+            )}
+            {tab.kind === "offers" && (
+              <a href={PHONE_OFFERS_HREF} class="mobile-tab" aria-current={page} data-astro-prefetch="false">{glyph}<span>{labelOf(tab)}</span></a>
+            )}
+            {tab.kind === "search" && (
+              <a href="/search" class="mobile-tab" aria-current={page} data-search-open data-astro-prefetch="false">{glyph}<span>{labelOf(tab)}</span></a>
+            )}
+            {tab.kind === "compare" && (
+              <a href="/compare" rel="nofollow" class="mobile-tab" aria-current={page} data-compare-tab data-astro-prefetch="false">{glyph}<span>{labelOf(tab)}</span></a>
+            )}
+            {tab.kind === "cart" && (
+              <a href="/cart" class="mobile-tab" aria-current={page} aria-haspopup="dialog" data-cart-open data-astro-prefetch="false">
+                <span class="mobile-tab-icon">{glyph}<span class="mobile-tab-badge" data-tab-cart-count data-scalius-cart-count aria-hidden="true"></span></span>
+                <span>{labelOf(tab)}</span>
+              </a>
+            )}
+            {tab.kind === "account" && (
+              <a
+                href="/account"
+                class="mobile-tab"
+                aria-current={page}
+                data-account-link
+                data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)}
+              >{glyph}<span>{labelOf(tab)}</span></a>
+            )}
+            {tab.kind === "link" && (
+              <a href={tab.href} class="mobile-tab" aria-current={page} data-astro-prefetch={getStorefrontPrefetchAttribute(tab.href, Astro.url)}>{glyph}<span>{labelOf(tab)}</span></a>
+            )}
+          </li>
+        );
+      })
     }
   </ul>
 </nav>
@@ -217,6 +211,7 @@ const active = {
     justify-content: center;
     gap: 0.1875rem;
     width: 100%;
+    min-width: 0;
     height: 100%;
     min-height: 2.75rem;
     color: var(--muted-foreground);
@@ -230,6 +225,16 @@ const active = {
   .mobile-tab[aria-current] {
     color: var(--foreground);
     font-weight: 600;
+  }
+
+  /* One line: a long name ends in an ellipsis inside its column. */
+  .mobile-tab > span:last-child {
+    min-width: 0;
+    max-width: 100%;
+    padding-inline: 0.125rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .mobile-tab:active > :first-child {
@@ -247,7 +252,13 @@ const active = {
     display: inline-flex;
   }
 
-  svg {
+  img {
+    width: 1.375rem;
+    height: 1.375rem;
+    object-fit: contain;
+  }
+
+  .mobile-tab :global(svg) {
     width: 1.375rem;
     height: 1.375rem;
     fill: none;
@@ -258,8 +269,12 @@ const active = {
     transition: transform 120ms ease;
   }
 
-  .mobile-tab[aria-current] svg {
+  .mobile-tab[aria-current] :global(svg) {
     stroke-width: 2;
+  }
+
+  .mobile-tab-badge:empty {
+    display: none;
   }
 
   .mobile-tab-badge {
@@ -287,7 +302,7 @@ const active = {
 
   @media (prefers-reduced-motion: reduce) {
     .mobile-tab-bar,
-    svg,
+    .mobile-tab :global(svg),
     .mobile-tab-badge {
       transition: none;
     }

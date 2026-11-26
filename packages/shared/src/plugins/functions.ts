@@ -34,6 +34,7 @@ import { ORDER_CHANNELS } from "../order-channel";
 import { LINE_ADD_ONS_MAX } from "../line-identity";
 import { ADD_ON_DETAILS_MAX } from "../add-on-totals";
 import { appTextSchema } from "./app-text";
+import { isStoreActionOrAmountWord, STORE_WORDS_REASON } from "../store-words";
 import { ONLINE_STORE_CHANNEL_ID, SALES_CHANNEL_ID_MAX_LENGTH, SALES_CHANNEL_ID_PATTERN } from "../sales-channels";
 
 const id = z.string().min(1).max(128);
@@ -51,7 +52,18 @@ const storeLabel = z.string().trim().min(1).max(80);
  * ADD_ON_DETAILS_MAX. They ride the add-on to the order line, and the money
  * summary's row for the add-on opens to them (every line's, in order).
  */
-const addOnDetails = z.array(label).max(ADD_ON_DETAILS_MAX).optional();
+/**
+ * An add-on's title or detail line: app text drawn among the store's money
+ * rows, so it never reads as one of the store's action or amount words
+ * ("Total", "সর্বমোট", "Place order"; store-words.ts), refused with reason
+ * `store_words`.
+ */
+const addOnLabel = label.superRefine((text, context) => {
+  if (isStoreActionOrAmountWord(text)) {
+    context.addIssue({ code: "custom", message: `"${text}" is the store's own word for an action or an amount: name what the add-on is.`, params: { reason: STORE_WORDS_REASON } });
+  }
+});
+const addOnDetails = z.array(addOnLabel).max(ADD_ON_DETAILS_MAX).optional();
 
 /** Add-ons one line carries: the one bound the cart, the page and checkout share (`LINE_ADD_ONS_MAX`). */
 const LINE_ADJUSTMENTS_ON_LINE_MAX = LINE_ADD_ONS_MAX;
@@ -580,14 +592,14 @@ export const cartLinePricesOutputSchema = z.object({
       amountMinor: minor.nonnegative().max(LINE_ADJUSTMENT_MAX_MINOR),
       currency: amountCurrency,
       /** What the buyer sees on the line ("Engraving, 6 letters"). */
-      title: label,
+      title: addOnLabel,
       details: addOnDetails,
     }).strict(),
     z.object({
       lineId: id,
       /** Added to each unit: this share of the unit price checkout charges for the item. */
       percent: percentOfUnit,
-      title: label,
+      title: addOnLabel,
       details: addOnDetails,
     }).strict(),
   ])).max(250).default([]),
@@ -598,8 +610,8 @@ export const cartLinePricesOutputSchema = z.object({
    * offer prices; never charged. An offer left out shows no price.
    */
   offers: z.array(z.union([
-    z.object({ offerId: id, amountMinor: minor.nonnegative().max(LINE_ADJUSTMENT_MAX_MINOR), currency: amountCurrency, title: label }).strict(),
-    z.object({ offerId: id, percent: percentOfUnit, title: label }).strict(),
+    z.object({ offerId: id, amountMinor: minor.nonnegative().max(LINE_ADJUSTMENT_MAX_MINOR), currency: amountCurrency, title: addOnLabel }).strict(),
+    z.object({ offerId: id, percent: percentOfUnit, title: addOnLabel }).strict(),
   ])).max(LINE_OFFERS_MAX).optional(),
 }).strict();
 
@@ -881,13 +893,16 @@ export const PLUGIN_FUNCTION_INVALID_OUTPUT = "function_invalid_output";
 export function checkPluginFunctionOutput<P extends PluginRunPoint>(
   point: P,
   value: unknown,
-): { ok: true; value: PluginFunctionOutput<P> } | { ok: false; code: typeof PLUGIN_FUNCTION_INVALID_OUTPUT; message: string } {
+): { ok: true; value: PluginFunctionOutput<P> } | { ok: false; code: typeof PLUGIN_FUNCTION_INVALID_OUTPUT; reason: string | null; message: string } {
   const parsed = PLUGIN_RUN_SCHEMAS[point].output.safeParse(value);
   if (parsed.success) return { ok: true, value: parsed.data as PluginFunctionOutput<P> };
   const issue = parsed.error.issues[0];
+  // A refusal that names its reason (`params.reason`) carries it, machine-readable, beside the message.
+  const reason = (issue as { params?: { reason?: unknown } } | undefined)?.params?.reason;
   return {
     ok: false,
     code: PLUGIN_FUNCTION_INVALID_OUTPUT,
-    message: `Invalid ${point === PLUGIN_EXTENSION_RUN ? "extension" : point} output${issue ? ` at ${issue.path.join(".") || "(root)"}: ${issue.message}` : ""}.`,
+    reason: typeof reason === "string" ? reason : null,
+    message: `Invalid ${point === PLUGIN_EXTENSION_RUN ? "extension" : point} output${issue ? ` at ${issue.path.join(".") || "(root)"}: ${issue.message}` : ""}${typeof reason === "string" ? ` (${reason})` : ""}.`,
   };
 }

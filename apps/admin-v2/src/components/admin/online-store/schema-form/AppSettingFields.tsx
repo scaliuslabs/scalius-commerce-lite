@@ -14,9 +14,7 @@ import { bindingSettingType, type SettingBindings } from "@scalius/shared/storef
 import { DynamicSourcePicker } from "./DynamicSourcePicker";
 import { SettingBindingScope, useSettingBindings } from "./binding-context";
 import { createContext, useContext, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, ChevronDown, ImageIcon, Plus, Trash2 } from "lucide-react";
-import { mediaImageUrl } from "@scalius/shared/media-variants";
+import { ArrowDown, ArrowUp, ChevronDown, Plus, Trash2 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -32,7 +30,6 @@ import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import { themeSettingMessages } from "~/i18n/theme-settings";
 import type { ThemeAppSettingField } from "~/lib/api-query-options/online-store";
-import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
 import {
   appFieldValue,
   appListItemDefaults,
@@ -46,7 +43,7 @@ import {
   type AppSettingValue,
   type AppSettingValues,
 } from "./app-settings";
-import { CategorySelect, CollectionSelect, LinkField, MediaField, ProductSelect, type MediaPreviews } from "./resource-fields";
+import { CategorySelect, CollectionSelect, LinkField, MediaField, ProductPick, type MediaPreviews } from "./resource-fields";
 import { moveAt, removeAt, replaceAt } from "./media-previews";
 import { Field } from "~/components/ui/field";
 
@@ -165,32 +162,9 @@ function ProductControl({ id, field, value, error, onChange }: {
   error?: string;
   onChange: (value: string | null) => void;
 }) {
-  const t = useMessages(themeEditorFull);
-  const lookup = useQuery({ ...productsByIdsQueryOptions(value ? [value] : []), enabled: Boolean(value) });
-  const product = lookup.data?.products.find((each) => each.id === value);
-  const gone = Boolean(value) && lookup.isSuccess && !lookup.isPlaceholderData && !product;
   return (
     <Labelled id={id} field={field} error={error}>
-      <div className="flex items-center gap-2">
-        {/* The photo's box is there before a product is, so choosing one never moves the select. */}
-        <span className="grid size-11 shrink-0 place-items-center overflow-clip rounded-lg border bg-muted sm:pointer-fine:size-9">
-          {product?.primaryImage ? (
-            <img src={mediaImageUrl(product.primaryImage, 96)} alt="" className="size-full object-cover" />
-          ) : (
-            <ImageIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-          )}
-        </span>
-        <div className="min-w-0 flex-1">
-          <ProductSelect
-            id={id}
-            value={value}
-            name={product?.name ?? (gone ? t("appProductUnavailable") : undefined)}
-            clearable={!field.required}
-            invalid={Boolean(error)}
-            onChange={(next) => onChange(next === "" ? null : next)}
-          />
-        </div>
-      </div>
+      <ProductPick id={id} value={value} clearable={!field.required} invalid={Boolean(error)} onChange={onChange} />
     </Labelled>
   );
 }

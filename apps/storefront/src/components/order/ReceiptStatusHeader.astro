@@ -20,16 +20,16 @@ interface Props {
 const { merchantReceiptName, statusView, paymentNeedsBuyer, showsSuccessHero, orderSuccessView, statusTitle, nextSteps, copy } = Astro.props;
 ---
 
-<div class="order-success-print-header text-center mb-8 animate-fade-in">
+<div class="order-success-print-header text-center mb-8 animate-fade-in" data-part="status">
   {merchantReceiptName && <p class="order-success-print-merchant hidden font-semibold">{merchantReceiptName}</p>}
   {statusView && !paymentNeedsBuyer ? null : showsSuccessHero ? (
-    <div class="success-checkmark" aria-hidden="true">
+    <div class="success-checkmark" aria-hidden="true" data-part="status-mark">
       <svg class="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <path d="m5 12 4 4L19 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
       </svg>
     </div>
   ) : (
-    <div class={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${orderSuccessView.kind === "payment_issue" ? "bg-destructive text-destructive-foreground" : orderSuccessView.kind === "payment_pending" ? "bg-warning/15 text-foreground" : "bg-muted text-foreground"}`}>
+    <div data-part="status-mark" class={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${orderSuccessView.kind === "payment_issue" ? "bg-destructive text-destructive-foreground" : orderSuccessView.kind === "payment_pending" ? "bg-warning/15 text-foreground" : "bg-muted text-foreground"}`}>
       <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={orderSuccessView.kind === "payment_issue" ? "M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" : orderSuccessView.kind === "payment_pending" ? "M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z" : "M12 16h.01M12 8v4m9 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"}></path>
       </svg>
@@ -37,15 +37,15 @@ const { merchantReceiptName, statusView, paymentNeedsBuyer, showsSuccessHero, or
   )}
   {statusView ? (
     <>
-      <h1 class="mb-1 text-2xl font-bold">{statusTitle}</h1>
+      <h1 class="mb-1 text-2xl font-bold" data-part="status-title">{statusTitle}</h1>
       <p class="mb-2 text-lg font-semibold text-foreground">{orderSuccessView.title}</p>
     </>
   ) : (
-    <h1 class="mb-2 text-2xl font-bold">{orderSuccessView.title}</h1>
+    <h1 class="mb-2 text-2xl font-bold" data-part="status-title">{orderSuccessView.title}</h1>
   )}
-  <p class="text-muted-foreground">{orderSuccessView.message}</p>
+  <p class="text-muted-foreground" data-part="status-message">{orderSuccessView.message}</p>
   {nextSteps.length > 0 && (
-    <div class="no-print mx-auto mt-5 max-w-xl rounded-xl border border-border p-4 text-start">
+    <div class="no-print mx-auto mt-5 max-w-xl rounded-xl border border-border p-4 text-start" data-part="status-steps">
       <h2 class="text-sm font-semibold text-foreground">{copy.orderReceiptNextStepsTitleText}</h2>
       {nextSteps.map((step) => <p class="mt-1 text-sm text-muted-foreground">{step}</p>)}
     </div>

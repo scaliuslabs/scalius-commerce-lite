@@ -72,7 +72,7 @@ function appendRadioMark(control: HTMLElement, className: string): void {
   check.className = className;
   check.setAttribute("aria-hidden", "true");
   const dot = document.createElement("span");
-  dot.className = "check-dot hidden h-2.5 w-2.5 rounded-full bg-primary";
+  dot.className = "check-dot hidden h-2.5 w-2.5 rounded-full bg-current text-primary";
   check.appendChild(dot);
   control.appendChild(check);
 }
@@ -128,6 +128,7 @@ export function buildPaymentChoice(input: {
     ? "payment-method-card relative overflow-hidden rounded-xl border border-border bg-card transition-colors"
     : "payment-method-card overflow-hidden rounded-xl border border-border bg-card transition-colors";
   card.dataset.method = id;
+  card.dataset.part = "payment-method";
 
   const control = single ? document.createElement("div") : document.createElement("button");
   control.className = single
@@ -149,6 +150,7 @@ export function buildPaymentChoice(input: {
 
   const details = document.createElement("div");
   details.id = `payment-details-${id}`;
+  details.dataset.part = "payment-details";
   details.className = tiles
     ? "payment-method-details hidden space-y-3 rounded-xl border border-border bg-card px-4 py-4"
     : "payment-method-details hidden space-y-3 border-t border-border px-4 py-4";
@@ -157,8 +159,10 @@ export function buildPaymentChoice(input: {
 }
 
 /** A method's parts into the page: its details in its card (list), or under the tiles. */
-export function placePaymentChoice(container: HTMLElement, parts: PaymentChoiceParts, style: StorefrontPaymentChoiceStyle): void {
-  const host = style === "tiles" ? document.getElementById(PAYMENT_CHOICE_DETAILS_ID) : null;
+export function placePaymentChoice(container: HTMLElement, parts: PaymentChoiceParts, _style: StorefrontPaymentChoiceStyle): void {
+  // Under the grid whenever the page asks for tiles, one method's too: the theme's colour table stands the
+  // details there (private-anatomy.ts `payment-details`, outside its card under `tiles`).
+  const host = container.dataset.paymentChoices === "tiles" ? document.getElementById(PAYMENT_CHOICE_DETAILS_ID) : null;
   if (host) host.appendChild(parts.details);
   else parts.card.appendChild(parts.details);
   container.appendChild(parts.card);
@@ -189,6 +193,8 @@ export function applySelectedPaymentChoice(methodId: string | null): void {
     el.classList.toggle("border-primary", isSelected);
     el.classList.toggle("border-border", !isSelected);
     el.classList.toggle("shadow-sm", isSelected);
+    // The chosen method's own look on a private page (`payment-chosen`).
+    el.toggleAttribute("data-chosen", isSelected);
     el.querySelector(".check-dot")?.classList.toggle("hidden", !isSelected);
     details?.classList.toggle("hidden", !isSelected);
   });

@@ -8,6 +8,7 @@ import ReceiptCards from "@/components/order/ReceiptCards.astro";
 import ReceiptStatusHeader from "@/components/order/ReceiptStatusHeader.astro";
 import { orderReceiptView } from "@/lib/order-receipt-view";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { privatePageLook } from "@/lib/private-pages/look";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
@@ -214,7 +215,10 @@ const receiptView = order
 const visibleBalanceDue = receiptView?.visibleBalanceDue ?? 0;
 const receiptCurrencyCode = receiptView?.receiptCurrencyCode ?? configuredCurrencyCode;
 // The theme's receipt block (the request's one theme resolution: no read of its own).
-const receiptBlock = (await resolveRequestTheme(Astro, layoutData)).resolved.blocks.receipt;
+const receiptTheme = await resolveRequestTheme(Astro, layoutData);
+const receiptBlock = receiptTheme.resolved.blocks.receipt;
+// The theme's look for the receipt (its compiled token rules), in token mode only: else the page is drawn as without a theme.
+const receiptLook = privatePageLook(receiptTheme.theme, "receipt");
 const shouldClearCheckoutCart = order ? shouldClearCheckoutCartForOrder(order) : false;
 const showsPositiveOrderState = orderSuccessView?.kind === "order_placed"
   || orderSuccessView?.kind === "order_updated";
@@ -333,10 +337,12 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
   layoutData={layoutData}
   hideNavigationSidebar
   documentLanguage={checkoutLanguageBaseCode(checkoutLanguage.code)}
+  {...receiptLook}
 >
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <section
     class={receiptBlock.layout === "split" ? "container mx-auto max-w-5xl px-4 py-6 sm:py-8" : "container mx-auto max-w-3xl px-4 py-6 sm:py-8"}
+    data-private="receipt"
     data-order-success-print={order ? "receipt" : undefined}
     data-fb-order-details={purchaseTrackingPayload ? JSON.stringify(purchaseTrackingPayload) : undefined}
     data-order-success-state={orderSuccessView?.kind ?? "recovery"}
@@ -439,7 +445,7 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
               <button
                 id="payButton"
                 type="button"
-                class="mt-4 w-full rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                class="mt-4 w-full rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
                 disabled
               >
                 <span id="payButtonText">{copy.paySecurelyByCardText}</span>
@@ -458,7 +464,7 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
     </ReceiptStatusHeader>
 
     {tracking && (
-      <section class="no-print mb-6 rounded-xl border border-border bg-background p-4 sm:p-6" aria-label={copy.orderReceiptStatusText}>
+      <section class="no-print mb-6 rounded-xl border border-border bg-background p-4 sm:p-6" aria-label={copy.orderReceiptStatusText} data-part="tracking">
         {tracking.progress && <div set:html={orderProgressMarkup(tracking.progress, trackingText)} />}
         {trackingShipments && <div class="mt-4 space-y-3" set:html={trackingShipments} />}
         {tracking.timeline.length > 0 && (
@@ -505,7 +511,7 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
     {/* The order's conversation with the store, through this browser's receipt proof. */}
     <OrderConversationPanel orderId={orderId} access="receipt" class="mt-6 rounded-xl border border-border bg-card p-5 print:hidden" />
     {orderRecommendations && orderRecommendations.products.length > 0 && (
-      <section aria-labelledby="order-recommendations" class="mt-10 print:hidden">
+      <section aria-labelledby="order-recommendations" class="mt-10 print:hidden" data-part="recommendations">
         <h2 id="order-recommendations" class="mb-4 text-lg font-semibold text-foreground">
           {recommendationTitle(orderRecommendations.reason)}
         </h2>
@@ -530,7 +536,7 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
         <p class="mb-6 text-muted-foreground">{recoveryState?.message}</p>
         {recoveryState && (
           <div class="flex flex-col justify-center gap-3 sm:flex-row">
-            <a href={recoveryState.action.href} data-astro-prefetch={getStorefrontPrefetchAttribute(recoveryState.action.href, Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">{recoveryState.action.label}</a>
+            <a href={recoveryState.action.href} data-astro-prefetch={getStorefrontPrefetchAttribute(recoveryState.action.href, Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover">{recoveryState.action.label}</a>
             <a href="/" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">{copy.continueShoppingText}</a>
           </div>
         )}

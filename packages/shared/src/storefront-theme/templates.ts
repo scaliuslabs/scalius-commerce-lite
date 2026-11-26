@@ -16,6 +16,7 @@ import {
 } from "./blocks";
 import { DEFAULT_STOREFRONT_THEME_BRAND } from "./brand";
 import { storefrontPrivatePageDefaults } from "./private-pages";
+import { storefrontPrivatePagesDefault } from "./private-schema";
 import { emptyStorefrontPageTemplates } from "./pages";
 import {
   STOREFRONT_THEME_DOCUMENT_VERSION,
@@ -266,7 +267,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       header: ["search-first", { search: "scoped", cartTotal: true }],
       navigation: { source: "tree+menu", maxTopItems: 16 },
       desktopNav: ["sticky-category-bar", { flyouts: "cascading" }],
-      mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "offers", "account"], drawer: "drill-in" }],
+      mobileNav: ["bottom-tabs", { tabs: [{ kind: "home" }, { kind: "categories" }, { kind: "offers" }, { kind: "account" }], drawer: "drill-in" }],
       card: ["standard", { facts: "none", action: "quick-add" }],
       listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: ["thumbs-left", { phoneSideThumbnails: false }], buyBox: ["classic", { details: "below", whatsapp: true }], below: ["description", "related"], sticky: NO_STICKY },
@@ -349,6 +350,8 @@ export function storefrontTemplateTheme(
     brand: { ...DEFAULT_STOREFRONT_THEME_BRAND },
     blocks: structuredClone(template.blocks) as StorefrontThemeBlocks,
     pages: { home: structuredClone(template.home) as StorefrontSection[], homeMode: { kind: "sections" }, landing: {}, templates: emptyStorefrontPageTemplates() },
+    // Every template draws the cart page and the drawer as the host does.
+    privatePages: storefrontPrivatePagesDefault(),
   };
 }
 

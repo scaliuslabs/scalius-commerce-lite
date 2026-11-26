@@ -641,7 +641,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
   ]);
   const available = runtimeAvailable(c, installation);
   const nowSeconds = Math.floor(Date.now() / 1000);
-  const themeProblems = storefrontAppThemeProblems(manifest.storefront);
+  const themeProblems = storefrontAppThemeProblems(manifest.storefront, manifest.id);
   return {
     ...summary(installation),
     ...listingDetail(installation.pluginId, manifest, installation.bundleSha256),
@@ -721,7 +721,8 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
         .filter((template) => !themeProblems.some((problem) => problem.kind === "template" && problem.id === template.id))
         .map((template) => ({ id: template.id, name: template.name, description: template.description ?? null })),
       scripts: manifest.storefront.scripts.map((script) => ({ src: script.src, placement: script.placement, pages: [...script.pages] })),
-      themeProblems,
+      // The first reason each; the app's developer sees every refused value in `scalius-plugin validate`.
+      themeProblems: themeProblems.map(({ kind, id, name, problem }) => ({ kind, id, name, problem })),
     },
     admin: {
       pages: manifest.admin.pages.map(pageEntry),

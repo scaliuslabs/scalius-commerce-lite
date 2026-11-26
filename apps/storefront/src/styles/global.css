@@ -13,13 +13,9 @@
 /* Rich text (Typography's `.prose`) is its own sheet, linked only by pages
    that render it: rich-text.css and components/RichTextStyles.astro. */
 
-/* 7. Global utility classes. */
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
+/* Tailwind's utilities stay in its layer (line-clamp-2 is its own): an
+   unlayered copy here would outrank a private page's token rules, which are
+   unlayered at zero specificity (a theme's `clamp` on the line title). */
 
 /* A long buyer answer (lib/long-answer.ts): three lines, then "Show more"
    opens the rest, with no script. A screen reader reads the whole answer. */
@@ -344,3 +340,18 @@
     line-height: 1.25 !important;
   }
 }
+
+/* An app's words never leave their row: everything in an app's buyer UI block, and an add-on row's title and detail
+   lines, breaks a long word anywhere and shrinks below its content, in any flex or grid mount and on every surface
+   that draws them (cart, drawer, payment step, quick checkout, receipt, account order, the editor's preview). */
+:where([data-buyer-ui-app], [data-buyer-ui-app] *, [data-summary-row="add-on"] > span:first-child, [data-summary-row="add-on"] > summary > span:first-child, [data-part="add-on-detail"]) { overflow-wrap: anywhere; min-inline-size: 0; }
+
+/* The store's controls on a private page drawn from parts, where the theme places them (privatePages.controls): the
+   light or dark switch and the market and language forms. Zero specificity, so the `scheme` and `localization`
+   tokens, written after, set their look. */
+:where([data-host="scheme"]) { display: flex; justify-content: flex-end; color: var(--color-foreground); }
+:where([data-host="scheme"] button) { display: inline-flex; inline-size: 2.75rem; block-size: 2.75rem; align-items: center; justify-content: center; border: 0; border-radius: 9999px; background: transparent; color: inherit; }
+:where([data-host="localization"]) { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; padding-block: 0.5rem; font-size: 0.875rem; color: var(--color-foreground); }
+:where([data-host="localization"] form) { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-inline-size: 0; }
+:where([data-host="localization"] select) { min-block-size: 2.75rem; min-inline-size: 0; max-inline-size: 100%; padding-inline: 0.75rem; border: 1px solid var(--color-input); border-radius: 0.5rem; background: var(--color-background); color: var(--color-foreground); font: inherit; }
+:where([data-host="localization"] button) { min-block-size: 2.75rem; padding-inline: 0.75rem; border: 1px solid var(--color-input); border-radius: 0.5rem; background: transparent; color: inherit; font: inherit; }

@@ -26,6 +26,12 @@ export interface OrderNotificationDeliveryTargetInput {
   provider: string;
   recipient: string;
   recipientMasked?: string | null;
+  /**
+   * The receipt key in place of the outbox row's own: deliveries of different
+   * rows that share a key are one receipt, taken atomically by its unique
+   * index, so only the first sends.
+   */
+  receiptKey?: string;
 }
 
 export interface OrderNotificationDeliveryTarget extends OrderNotificationDeliveryTargetInput {
@@ -79,7 +85,7 @@ export async function createOrderNotificationDeliveryTarget(
     ...input,
     recipientHash,
     recipientMasked: input.recipientMasked ?? maskNotificationRecipient(input.recipient),
-    receiptKey: buildOrderNotificationDeliveryReceiptKey({
+    receiptKey: input.receiptKey ?? buildOrderNotificationDeliveryReceiptKey({
       outboxId: input.outboxId,
       channel: input.channel,
       recipientHash,
@@ -359,7 +365,7 @@ async function selectDeliveryReceiptByKey(
     .get();
 }
 
-async function hashNotificationRecipient(recipient: string): Promise<string> {
+export async function hashNotificationRecipient(recipient: string): Promise<string> {
   return sha256Hex(recipient.trim().toLowerCase());
 }
 

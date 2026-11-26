@@ -18,6 +18,8 @@ import { formatCount } from "@/lib/store-time-zone";
 import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
 import { accountUi as ui } from "@/lib/account-ui";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { privatePageLook } from "@/lib/private-pages/look";
 
 export const prerender = false;
 
@@ -45,9 +47,11 @@ const stats = accountSummaryStats(summary, { storeCurrency: layoutData?.currency
 const countText = page && !stats ? words.count(formatCount(page.totalOrders), page.totalOrders === 1) : null;
 
 const cards = accountOrderCards(orders, copy, checkoutCopy);
+// The theme's look for the account, only when it set tokens for it: else the page draws as without a theme.
+const look = privatePageLook((await resolveRequestTheme(Astro, layoutData)).theme, "account");
 ---
 
-<Layout title={words.title} layoutData={layoutData}>
+<Layout title={words.title} layoutData={layoutData} {...look}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <AccountShell
     current="orders"
@@ -61,7 +65,7 @@ const cards = accountOrderCards(orders, copy, checkoutCopy);
     {phoneVerified && <p role="status" class={`${ui.notice} mb-6`}>{words.phoneVerified}</p>}
     {page?.phoneVerification && (
       <div class="mb-6">
-        <div id="phoneVerification" data-phone={page.phoneVerification.phone} class={`${ui.card} ${ui.cardBody}`}></div>
+        <div id="phoneVerification" data-phone={page.phoneVerification.phone} data-part="card" class={`${ui.card} ${ui.cardBody}`}></div>
         <StoreContact layoutData={layoutData} id="phoneVerificationContact" hidden class="mt-2 text-sm text-muted-foreground" />
       </div>
     )}
@@ -69,7 +73,7 @@ const cards = accountOrderCards(orders, copy, checkoutCopy);
     {stats && (
       <section aria-label={words.summary} class="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:grid-cols-3 sm:gap-4" data-account-summary>
         {stats.map((stat) => (
-          <a href={stat.href} data-astro-prefetch="false" data-account-stat={stat.key} class:list={[ui.card, "block p-4 transition-colors hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", stat.key === "spent" && "col-span-2 sm:col-span-1"]}>
+          <a href={stat.href} data-astro-prefetch="false" data-account-stat={stat.key} data-part="card" class:list={[ui.card, "block p-4 transition-colors hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", stat.key === "spent" && "col-span-2 sm:col-span-1"]}>
             <span class="block text-sm text-muted-foreground">{stat.label}</span>
             {stat.values.map((value) => <span class="mt-1 block break-words text-xl font-semibold tabular-nums text-foreground">{value}</span>)}
             {stat.note && <span class="mt-1 block text-sm font-medium text-primary">{stat.note}</span>}

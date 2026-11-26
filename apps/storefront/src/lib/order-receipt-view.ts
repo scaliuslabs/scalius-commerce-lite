@@ -25,8 +25,9 @@ import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-form
 import { presentCheckoutAttributes } from "@scalius/shared/plugins/checkout-attribute-text";
 import { storeRegion } from "@/lib/store-time-zone";
 import { fromMinor } from "@scalius/shared/money";
-import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
-import { addOnRowsOver, readAddOnRows } from "@scalius/shared/add-on-totals";
+import { resolveSavedOrderLineMoney, resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
+import { readAddOnRows } from "@scalius/shared/add-on-totals";
+import { addOnDocumentRows } from "@scalius/shared/add-on-document";
 
 /** An order as the receipt read returns it. */
 export type ReceiptOrder = NonNullable<Awaited<ReturnType<typeof getOrderReceipt>>>;
@@ -74,8 +75,15 @@ export function orderReceiptView({ order, copy, languageCode, configuredCurrency
       };
   // The apps' add-ons as their own rows: the server's, from the order's real lines (the page folds nothing).
   // (`addOns` is read untyped: the receipt's hand-written type does not name it yet.)
-  const receiptAddOns = savedMoneySummary ? addOnRowsOver(savedMoneySummary.subtotalMinor, readAddOnRows((order as { addOns?: unknown }).addOns)) : null;
-  const receiptAddOnRows = (receiptAddOns?.rows ?? []).map((row) => ({ title: row.title, amount: toMajor(row.amountMinor) }));
+  // The same rows and words as the account order, the order emails and the invoice (`addOnDocumentRows`),
+  // each with the app's detail lines it opens to (lib/add-on-row.ts draws them).
+  const receiptAddOns = savedMoneySummary ? addOnDocumentRows(savedMoneySummary.subtotalMinor, readAddOnRows((order as { addOns?: unknown }).addOns), {
+    money: formatReceiptMinor,
+    language: languageCode,
+    // The amounts the receipt prints for its rows (ReceiptCard's `resolveSavedOrderLineMoney`).
+    lines: (order.items || []).map((item) => ({ grossSubtotalMinor: resolveSavedOrderLineMoney(item, savedMoneySummary)?.grossSubtotalMinor ?? null, addOns: (item as { addOns?: unknown }).addOns })),
+  }) : null;
+  const receiptAddOnRows = receiptAddOns?.rows ?? [];
   const receiptItemsSubtotal = receiptAddOns && receiptAddOnRows.length > 0 ? toMajor(receiptAddOns.itemsSubtotalMinor) : receiptMoney.subtotal;
   const receiptDiscounts = summarizeOrderDiscounts({
     discounts: order.discounts,

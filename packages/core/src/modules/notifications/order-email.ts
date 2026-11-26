@@ -9,7 +9,9 @@ import { fromMinor } from "@scalius/shared/money";
 import { cashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { dateLocale, formatDateTime, formatNumber, localeDigits, numberLocale } from "@scalius/shared/locale-format";
 import { presentLineEntry, type LineEntryWords } from "@scalius/shared/line-entry-words";
-import { buyerLineAddOnRows } from "@scalius/shared/buyer-line-add-on-text";
+import { buyerLineAddOnRows, rowItemsOnly } from "@scalius/shared/buyer-line-add-on-text";
+import { addOnDocumentRows } from "@scalius/shared/add-on-document";
+import { buyerOrderAddOnTotals } from "@scalius/shared/add-on-folding";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
 import { formatOrderNumberIn } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
@@ -197,10 +199,13 @@ type OrderFactRows = {
 function resolveOrderFacts([orderRows, discountRows, appRows]: OrderFactRows) {
   const order = orderRows[0]?.order;
   if (!order) return null;
+  const lines = orderRows.flatMap((row) => row.item ? [row.item] : []);
   return {
     order,
+    // The order's real lines: its add-on summary rows come from them (`buyerOrderAddOnTotals`), as the receipt's do.
+    lines,
     // The buyer's rows: a kit's item split into two lines is one (`foldBuyerOrderLines`).
-    items: foldBuyerOrderLines(orderRows.flatMap((row) => row.item ? [row.item] : []), { sum: ["lineSubtotalMinor", "fulfilledQuantity"] }),
+    items: foldBuyerOrderLines(lines, { sum: ["lineSubtotalMinor", "fulfilledQuantity"] }),
     discounts: [
       ...discountRows.map((row) => ({ ...row, appId: null as string | null, amountMinor: Number(row.amountMinor) || 0 })),
       ...resolveOrderAppFacts(appRows as OrderAppFactRow[]).discounts.flatMap((fact, position) => {
@@ -375,7 +380,7 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
   rememberSettingsDocuments(db, MESSAGE_DOCUMENTS, results[documentsAt] as SettingsDocumentRow[]);
   const shipmentRows = results[documentsAt + 1] as Awaited<ReturnType<typeof shipmentStatement>> | undefined;
   const shipment = shipmentRows ? resolveShipment(shipmentRows, queuedTrackingId) : null;
-  const { order, items } = facts;
+  const { order, items, lines } = facts;
   // The apps' answers, worded from the installations read with the order (no statement more).
   const appAnswerValues = readCheckoutAttributes(order.attributes);
   const attributeApps = checkoutAttributeAppsFromJson(order.attributeApps);
@@ -428,6 +433,11 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
       };
     } else payment = { state: order.paymentStatus === "partial" ? "partially_paid" : "not_completed" };
 
+    // The apps' add-ons as their own summary rows, the receipt's rows and words: Subtotal is then the items alone, and so is each row.
+    const addOns = money ? addOnDocumentRows(order.subtotalAmountMinor, buyerOrderAddOnTotals(lines, order.subtotalAmountMinor, lang).rows, {
+      money, language: lang, lines: items.map((item) => ({ grossSubtotalMinor: item.lineSubtotalMinor, addOns: item.addOns })),
+    }) : null;
+    const addOnsInSummary = (addOns?.rows.length ?? 0) > 0;
     const { request, status } = requestCopy(MESSAGE_COPY[lang], input.data?.supportRequestType, input.data?.supportRequestStatus);
     const codDue = payment.state === "cod" ? payment.due : null;
     return {
@@ -449,24 +459,29 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
       },
       facts: {
         store: { name: store.name, logoUrl: store.logoUrl },
-        items: items.map((item) => ({
+        items: items.map((item) => {
+          // The row's own amounts: what the apps charged on it is a summary row, never part of its price (`rowItemsOnly`).
+          const own = rowItemsOnly({ unitPriceMinor: item.unitPriceMinor, grossSubtotalMinor: item.lineSubtotalMinor }, item, addOnsInSummary)!;
+          return {
           name: item.productName?.trim() || null,
           variant: item.variantLabel?.trim() || null,
           quantity: item.quantity,
           // A folded row with no whole unit price shows its quantity and line total.
-          unitPrice: money && item.unitPriceMinor !== null ? money(item.unitPriceMinor) : null,
-          subtotal: money ? money(item.lineSubtotalMinor) : null,
+          unitPrice: money && own.unitPriceMinor !== null ? money(own.unitPriceMinor) : null,
+          subtotal: money ? money(own.grossSubtotalMinor) : null,
           properties: [
             ...linePropertiesText(item.properties, money, messageLineWords(order, lang), (value) => formatNumber(value, lang === "bn" ? "bn-BD" : "en-US")),
             // What the apps charged on the row: its `addOns`, the one place a row says it.
             ...(money ? buyerLineAddOnRows(item.addOns, { label: messageLineWords(order, lang).lineAddOnText, money, language: lang }).map((row) => row.text) : []),
           ],
-        })),
+          };
+        }),
         appAnswers: presentCheckoutAttributes(appAnswerValues, attributeApps, {
           locale: lang, defaultLocale: store.language, words: messageLineWords(order, lang),
         }).map((group) => ({ appName: group.appName, lines: checkoutAttributeLines([group]) })),
         amounts: money ? {
-          subtotal: money(order.subtotalAmountMinor),
+          subtotal: money(addOns?.itemsSubtotalMinor ?? order.subtotalAmountMinor),
+          addOns: (addOns?.rows ?? []).map(({ title, amount, details }) => ({ title, amount, details })),
           ...discountAndDelivery(facts, money),
           tax: order.taxAmountMinor > 0
             ? { label: order.taxLabel, amount: money(order.taxAmountMinor), included: Boolean(order.pricesIncludeTax) }

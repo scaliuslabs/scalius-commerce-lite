@@ -22985,7 +22985,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 80,
-            "description": "What the buyer sees the cover as (`GameGhor Protection`)."
+            "description": "What the buyer sees the cover as (`Arcade Protection`)."
            },
            "durationUnit": {
             "type": "string",

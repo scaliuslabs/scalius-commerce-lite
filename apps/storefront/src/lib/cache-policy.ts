@@ -27,6 +27,27 @@ export const PRIVATE_STOREFRONT_ROOTS = [
   "warranty-claims",
 ] as const;
 
+/**
+ * The pages where the buyer is paying: the cart, the checkout and quick
+ * checkout (`/checkout/...`), buy now (`/buy/...`, which lands on a payment
+ * step) and payment recovery. They draw no phone tab bar, the theme's chrome
+ * there included; the receipt and the account pages keep it.
+ */
+export const PAYING_STOREFRONT_ROOTS = ["buy", "cart", "checkout", "payment-recovery"] as const satisfies ReadonlyArray<(typeof PRIVATE_STOREFRONT_ROOTS)[number]>;
+
+const PAYING_STOREFRONT_PATHNAME_RE = new RegExp(`^/(?:${PAYING_STOREFRONT_ROOTS.join("|")})(?:/|$)`, "i");
+
+/** Whether the buyer is paying on this page (decoded like `isPrivateStorefrontPathname`; undecodable reads as paying). */
+export function isPayingStorefrontPathname(pathname: string): boolean {
+  if (PAYING_STOREFRONT_PATHNAME_RE.test(pathname)) return true;
+  if (!pathname.includes("%")) return false;
+  try {
+    return PAYING_STOREFRONT_PATHNAME_RE.test(decodeURIComponent(pathname));
+  } catch {
+    return true;
+  }
+}
+
 const PRIVATE_STOREFRONT_PATHNAME_RE = new RegExp(`^/(?:${PRIVATE_STOREFRONT_ROOTS.join("|")})(?:/|$)`);
 
 /**

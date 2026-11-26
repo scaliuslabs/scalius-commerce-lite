@@ -65,10 +65,10 @@ const sideTab = "lg:min-h-11 lg:rounded-lg lg:after:inset-x-auto lg:after:inset-
 const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespace-nowrap px-3 text-sm font-medium transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full";
 ---
 
-<div class={workspace ? "mx-auto flex w-full max-w-5xl flex-col px-4 pb-4 pt-3 sm:px-6" : ACCOUNT_CONTAINER} data-account-shell data-account-state={state} data-account-workspace={workspace ? "true" : undefined} data-account-navigation={sidebar ? "sidebar" : undefined}>
+<div class={workspace ? "mx-auto flex w-full max-w-5xl flex-col px-4 pb-4 pt-3 sm:px-6" : ACCOUNT_CONTAINER} data-account-shell data-private="account" data-account-state={state} data-account-workspace={workspace ? "true" : undefined} data-account-navigation={sidebar ? "sidebar" : undefined}>
   <ConditionalWrap when={sidebar} class={workspace ? "flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-x-8" : "lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start lg:gap-x-8"}>
   {state !== "signed_out" && (
-    <nav aria-label={words.nav} class={sidebar
+    <nav aria-label={words.nav} data-part="navigation" class={sidebar
       ? (workspace ? "mb-3 shrink-0 border-b border-border lg:mb-0 lg:border-b-0" : "mb-6 border-b border-border sm:mb-8 lg:mb-0 lg:border-b-0")
       : (workspace ? "mb-3 shrink-0 border-b border-border" : "mb-6 border-b border-border sm:mb-8")}>
       <div class={sidebar
@@ -79,16 +79,17 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
             href={item.href}
             aria-current={item.key === current ? "page" : undefined}
             data-astro-prefetch="false"
+            data-part="nav-item"
             class:list={[tab, sidebar && sideTab, item.key === current ? "text-foreground after:bg-primary" : "text-muted-foreground after:bg-transparent hover:text-foreground"]}
           >
             {item.label}
             {item.badge && (
-              <span class="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold tabular-nums text-primary-foreground">{item.badge}<span class="sr-only"> {item.badgeLabel}</span></span>
+              <span data-part="nav-badge" class="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold tabular-nums text-primary-foreground">{item.badge}<span class="sr-only"> {item.badgeLabel}</span></span>
             )}
           </a>
         ))}
         <form method="post" action="/api/auth/logout" class={sidebar ? "ms-auto shrink-0 ps-2 lg:ms-0 lg:mt-2 lg:border-t lg:border-border lg:ps-0 lg:pt-2" : "ms-auto shrink-0 ps-2"} data-account-sign-out>
-          <button type="submit" class="inline-flex min-h-12 items-center gap-2 whitespace-nowrap px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+          <button type="submit" data-part="sign-out" class="inline-flex min-h-12 items-center gap-2 whitespace-nowrap px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
             <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
             {words.signOut}
           </button>
@@ -130,21 +131,22 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
   {state === "ok" && (
     <>
       {(title || back) && (
-        <header class={workspace ? "mb-3 flex shrink-0 flex-wrap items-center gap-x-3" : "mb-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-3"}>
+        <header data-part="heading" class={workspace ? "mb-3 flex shrink-0 flex-wrap items-center gap-x-3" : "mb-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-3"}>
           <div class={workspace ? "flex min-w-0 items-center gap-2" : "min-w-0"}>
             {back && (
-              <a href={back.href} data-astro-prefetch="false" aria-label={workspace ? back.label : undefined} class={workspace ? "-ms-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" : "-ms-1 mb-1 inline-flex min-h-11 items-center gap-1 px-1 text-sm font-medium text-muted-foreground hover:text-foreground"}>
+              <a href={back.href} data-astro-prefetch="false" data-part="heading-back" aria-label={workspace ? back.label : undefined} class={workspace ? "-ms-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" : "-ms-1 mb-1 inline-flex min-h-11 items-center gap-1 px-1 text-sm font-medium text-muted-foreground hover:text-foreground"}>
                 <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
                 {!workspace && back.label}
               </a>
             )}
-            {title && <h1 id="accountHeading" tabindex="-1" class={workspace ? "line-clamp-2 break-words text-xl font-semibold text-foreground focus:outline-none sm:text-2xl" : "break-words text-2xl font-semibold text-foreground focus:outline-none sm:text-3xl"}>{title}</h1>}
-            {intro && <p class="mt-1 text-sm text-muted-foreground">{intro}</p>}
+            {title && <h1 id="accountHeading" tabindex="-1" data-part="heading-title" class={workspace ? "line-clamp-2 break-words text-xl font-semibold text-foreground focus:outline-none sm:text-2xl" : "break-words text-2xl font-semibold text-foreground focus:outline-none sm:text-3xl"}>{title}</h1>}
+            {intro && <p data-part="heading-intro" class="mt-1 text-sm text-muted-foreground">{intro}</p>}
           </div>
           <slot name="actions" />
         </header>
       )}
-      {workspace ? <div class="flex min-h-0 flex-1 flex-col"><slot /></div> : <slot />}
+      {/* The page's content (`content`) is marked where an element holds it, a workspace; a page draws it bare (its golden). */}
+      {workspace ? <div class="flex min-h-0 flex-1 flex-col" data-part="content"><slot /></div> : <slot />}
     </>
   )}
   </ConditionalWrap>

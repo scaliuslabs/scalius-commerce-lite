@@ -1,5 +1,5 @@
 // Only non-sensitive inbox filters belong in route URLs; query text stays in memory.
-import { CONVERSATION_SUBJECT_TYPES, type ConversationSubjectType } from "@scalius/shared/conversation";
+import { CONVERSATION_SUBJECT_TYPES, isConversationTopicKey, type ConversationSubjectType } from "@scalius/shared/conversation";
 
 export type InboxSubject = ConversationSubjectType;
 
@@ -12,6 +12,8 @@ export interface InboxSearch {
   unread?: true;
   sort?: "waiting_longest";
   subject?: InboxSubject;
+  /** One of the merchant's topic keys (merchant words, not buyer data). */
+  topic?: string;
 }
 
 function isInboxSubject(value: unknown): value is InboxSubject {
@@ -25,5 +27,6 @@ export function validateInboxSearch(input: Record<string, unknown>): InboxSearch
   if (input.unread === true) search.unread = true;
   if (input.sort === "waiting_longest") search.sort = input.sort;
   if (isInboxSubject(input.subject)) search.subject = input.subject;
+  if (isConversationTopicKey(input.topic)) search.topic = input.topic;
   return search;
 }

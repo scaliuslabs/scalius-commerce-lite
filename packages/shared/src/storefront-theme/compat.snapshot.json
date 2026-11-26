@@ -1,5 +1,5 @@
 {
- "version": 14,
+ "version": 16,
  "oldestReadable": 10,
  "sections": {
   "hero": {
@@ -96,6 +96,16 @@
          {
           "type": "string",
           "maxLength": 2048
+         },
+         {
+          "type": "null"
+         }
+        ]
+       },
+       "product": {
+        "anyOf": [
+         {
+          "$ref": "#/$defs/__schema1"
          },
          {
           "type": "null"
@@ -1969,6 +1979,9 @@
     "tagline",
     "about",
     "copyright"
+   ],
+   "mobileNav": [
+    "tabs.*.label"
    ]
   },
   "landing": [
@@ -2003,6 +2016,9 @@
    },
    "translations": {
     "$ref": "#/$defs/__schema76"
+   },
+   "privatePages": {
+    "$ref": "#/$defs/__schema80"
    }
   },
   "required": [
@@ -2011,13 +2027,14 @@
    "tokens",
    "brand",
    "blocks",
-   "pages"
+   "pages",
+   "privatePages"
   ],
   "additionalProperties": false,
   "$defs": {
    "__schema0": {
     "type": "number",
-    "const": 14
+    "const": 16
    },
    "__schema1": {
     "type": "string",
@@ -2296,9 +2313,6 @@
      },
      "input": {
       "$ref": "#/$defs/__schema4"
-     },
-     "ring": {
-      "$ref": "#/$defs/__schema4"
      }
     },
     "required": [
@@ -2319,8 +2333,7 @@
      "destructive",
      "destructive-foreground",
      "border",
-     "input",
-     "ring"
+     "input"
     ],
     "additionalProperties": false
    },
@@ -2348,8 +2361,7 @@
      "destructive",
      "destructive-foreground",
      "border",
-     "input",
-     "ring"
+     "input"
     ]
    },
    "__schema6": {
@@ -3658,46 +3670,6 @@
        }
       ]
      },
-     "cart": {
-      "type": "object",
-      "properties": {
-       "summary": {
-        "type": "string",
-        "enum": [
-         "side",
-         "top"
-        ]
-       }
-      },
-      "required": [
-       "summary"
-      ],
-      "additionalProperties": false
-     },
-     "cartDrawer": {
-      "type": "object",
-      "properties": {
-       "width": {
-        "type": "string",
-        "enum": [
-         "standard",
-         "wide"
-        ]
-       },
-       "recommendations": {
-        "type": "string",
-        "enum": [
-         "shown",
-         "hidden"
-        ]
-       }
-      },
-      "required": [
-       "width",
-       "recommendations"
-      ],
-      "additionalProperties": false
-     },
      "checkout": {
       "type": "object",
       "properties": {
@@ -3774,8 +3746,6 @@
      "listing",
      "product",
      "footer",
-     "cart",
-     "cartDrawer",
      "checkout",
      "receipt",
      "account"
@@ -3829,13 +3799,185 @@
     "type": "boolean"
    },
    "__schema17": {
-    "type": "string",
-    "enum": [
-     "home",
-     "categories",
-     "offers",
-     "compare",
-     "account"
+    "oneOf": [
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "home"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "categories"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "offers"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "search"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "compare"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "cart"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "account"
+       }
+      },
+      "required": [
+       "kind"
+      ],
+      "additionalProperties": false
+     },
+     {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "const": "link"
+       },
+       "label": {
+        "type": "string",
+        "maxLength": 96
+       },
+       "icon": {
+        "oneOf": [
+         {
+          "type": "object",
+          "properties": {
+           "source": {
+            "type": "string",
+            "const": "store"
+           },
+           "name": {
+            "type": "string",
+            "enum": [
+             "home",
+             "categories",
+             "offers",
+             "search",
+             "compare",
+             "cart",
+             "account",
+             "link",
+             "page",
+             "news",
+             "support",
+             "gift",
+             "heart",
+             "star",
+             "chat",
+             "bolt"
+            ]
+           }
+          },
+          "required": [
+           "source",
+           "name"
+          ],
+          "additionalProperties": false
+         },
+         {
+          "type": "object",
+          "properties": {
+           "source": {
+            "type": "string",
+            "const": "app"
+           },
+           "app": {
+            "type": "string",
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$"
+           },
+           "file": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._/-]{0,200}$"
+           }
+          },
+          "required": [
+           "source",
+           "app",
+           "file"
+          ],
+          "additionalProperties": false
+         }
+        ]
+       },
+       "href": {
+        "type": "string",
+        "maxLength": 2048,
+        "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+       }
+      },
+      "required": [
+       "kind",
+       "label",
+       "icon",
+       "href"
+      ],
+      "additionalProperties": false
+     }
     ]
    },
    "__schema18": {
@@ -4193,9 +4335,6 @@
        "collection": {
         "$ref": "#/$defs/__schema74"
        },
-       "cart": {
-        "$ref": "#/$defs/__schema74"
-       },
        "page": {
         "$ref": "#/$defs/__schema74"
        }
@@ -4203,7 +4342,6 @@
       "required": [
        "product",
        "collection",
-       "cart",
        "page"
       ],
       "additionalProperties": false
@@ -5877,6 +6015,16 @@
        }
       ]
      },
+     "product": {
+      "anyOf": [
+       {
+        "$ref": "#/$defs/__schema53"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "hidden": {
       "type": "boolean"
      },
@@ -6401,7 +6549,8 @@
    "__schema79": {
     "type": "string",
     "maxLength": 8000
-   }
+   },
+   "__schema80": {}
   }
  }
 }

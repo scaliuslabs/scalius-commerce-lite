@@ -2,6 +2,7 @@
 // page lists the published ones before it is turned off, and a refused
 // publish (`theme_apps_unavailable`) lists the draft's parts per app. Both
 // read them in the same plain words.
+import type { StorefrontPageTemplate } from "@scalius/shared/storefront-theme";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import type { themeAppPartsMessages } from "~/i18n/theme-app-parts";
 
@@ -14,7 +15,7 @@ export interface ThemeAppPart {
   place: {
     page: "home" | "landing" | "template" | "theme";
     slug?: string;
-    template?: "product" | "collection" | "cart" | "page";
+    template?: StorefrontPageTemplate;
     index?: number;
   };
   /** The app's name for the part; absent when it no longer declares it. */

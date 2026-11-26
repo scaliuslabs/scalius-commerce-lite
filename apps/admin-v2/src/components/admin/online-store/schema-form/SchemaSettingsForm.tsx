@@ -42,6 +42,7 @@ import {
   CollectionSelect,
   LinkField,
   MediaField,
+  ProductPick,
   PromotionSelect,
   moveAt,
   removeAt,
@@ -171,6 +172,12 @@ const KEY_WIDGETS: Readonly<Record<string, SettingWidget>> = {
     />
   ),
   typeId: ObjectTypeWidget,
+  // A slide's product: the theme editor's product picker.
+  product: ({ id, label, help, value, onChange, error }) => (
+    <Field id={id} label={label} help={help} error={error()} noteId={`${id}-note`}>
+      <ProductPick id={id} value={String(value ?? "")} clearable invalid={Boolean(error())} onChange={onChange} />
+    </Field>
+  ),
   promotionId: ({ id, label, help, value, onChange, error }) => (
     <Field id={id} label={label} help={help} error={error()} noteId={`${id}-note`}>
       <PromotionSelect id={id} value={(value as string | null | undefined) ?? null} onChange={onChange} />

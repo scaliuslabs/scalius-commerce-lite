@@ -16,7 +16,7 @@ const { cards, words } = Astro.props;
 <ul class="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3" aria-label={words.title}>
   {cards.map((card) => (
     <li class="min-w-0">
-      <article class={`${ui.card} group relative flex h-full gap-3 p-3 transition-colors hover:border-foreground/25 sm:flex-col sm:p-4`}>
+      <article data-part="card" class={`${ui.card} group relative flex h-full gap-3 p-3 transition-colors hover:border-foreground/25 sm:flex-col sm:p-4`}>
         <div class="flex shrink-0 gap-2 sm:order-2" aria-hidden="true">
           {card.thumbs.map((thumb, index) => (
             <span class:list={["relative block h-16 w-16 overflow-hidden rounded-lg border border-border bg-muted sm:h-14 sm:w-14", index > 0 && "hidden sm:block"]}>
@@ -31,14 +31,14 @@ const { cards, words } = Astro.props;
 
         <div class="flex min-w-0 flex-1 flex-col sm:order-1 sm:flex-none">
           <div class="flex flex-wrap items-center gap-1.5">
-            <span class={accountPill(card.tone)}>{card.status}</span>
-            {card.request && <span class={accountPill("warning")}>{card.request}</span>}
+            <span data-part="status-badge" class={accountPill(card.tone)}>{card.status}</span>
+            {card.request && <span data-part="status-badge" class={accountPill("warning")}>{card.request}</span>}
           </div>
-          <h2 class="mt-1.5 text-sm font-semibold text-foreground sm:text-base">
+          <h2 data-part="card-title" class="mt-1.5 text-sm font-semibold text-foreground sm:text-base">
             <a href={card.href} data-astro-prefetch="false" class="after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring">{words.order(card.number)}</a>
           </h2>
           <p class="text-xs text-muted-foreground sm:text-sm">{card.date} · {card.items}</p>
-          <p class:list={["mt-1 truncate text-xs sm:text-sm", card.detail.warn ? "font-medium text-destructive" : "text-muted-foreground"]}>{card.detail.text}</p>
+          <p class:list={["mt-1 text-xs [overflow-wrap:anywhere] sm:text-sm", card.detail.warn ? "font-medium text-destructive" : "text-muted-foreground"]}>{card.detail.text}</p>
         </div>
 
         <div class="flex shrink-0 flex-col items-end justify-between gap-2 sm:order-3 sm:mt-auto sm:flex-row sm:items-center sm:border-t sm:border-border sm:pt-3">

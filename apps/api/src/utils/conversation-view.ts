@@ -56,7 +56,7 @@ export async function getBuyerConversationView(db: Database, thread: ThreadRow, 
  * by the name its manifest gives it (one installation read per app on the
  * page), else its key; a built-in channel is named by the dashboard (null).
  */
-export async function withChannelNames<T extends Pick<StaffConversationSummary, "channel">>(db: Database, items: readonly T[]): Promise<Array<T & { channelName: string | null }>> {
+async function withChannelNames<T extends Pick<StaffConversationSummary, "channel">>(db: Database, items: readonly T[]): Promise<Array<T & { channelName: string | null }>> {
   const apps = [...new Set(items.map((item) => item.channel && parseCustomChannelId(item.channel)?.appId).filter((appId): appId is string => Boolean(appId)))];
   const names = new Map<string, string>();
   for (const appId of apps) {
@@ -74,9 +74,31 @@ export async function withChannelNames<T extends Pick<StaffConversationSummary, 
   });
 }
 
+/** The merchant's topics with every name they have: the inbox's topic filter. */
+export async function staffConversationTopics(db: Database): Promise<Array<{ key: string; label: string; labels: Record<string, string> }>> {
+  return (await readConversationTopics(db)).map((topic) => ({ key: topic.key, label: topic.label, labels: topic.labels ?? {} }));
+}
+
+/**
+ * Staff threads as the dashboard reads them: an app channel named, and the
+ * topic with every name it has (the dashboard picks its own language; a
+ * removed topic keeps its key with no name). One read of the topic list.
+ */
+export async function presentStaffSummaries<T extends Pick<StaffConversationSummary, "channel" | "topic">>(
+  db: Database,
+  items: readonly T[],
+  topics?: ReadonlyArray<{ key: string; label: string; labels: Record<string, string> }>,
+) {
+  const list = topics ?? (items.some((item) => item.topic) ? await staffConversationTopics(db) : []);
+  return (await withChannelNames(db, items)).map((item) => {
+    const topic = item.topic ? list.find((entry) => entry.key === item.topic) : undefined;
+    return { ...item, topic: item.topic ? { key: item.topic, label: topic?.label ?? null, labels: topic?.labels ?? {} } : null };
+  });
+}
+
 export async function presentStaffConversation(db: Database, staffUserId: string, thread: StaffConversationThread) {
   const permission = await db.select({ ordersAllowed: sql<boolean>`${staffPermissionSql(user.id, "orders.view")}` })
     .from(user).where(eq(user.id, staffUserId)).get();
-  const [named] = await withChannelNames(db, [thread]);
+  const [named] = await presentStaffSummaries(db, [thread]);
   return hydrateConversationProducts(db, permission?.ordersAllowed ? named! : { ...named!, order: null, cases: [] });
 }

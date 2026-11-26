@@ -151,7 +151,7 @@ const linePage = (counted: string) => successEnvelope(z.object({
 
 const PlanInput = z.object({
   key: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/).openapi({ description: "Your plan's key (`gold`, `lifetime`). A plan is one warranty policy of the app's: new terms under a key make its next revision; records keep the revision they were issued with." }),
-  name: z.string().trim().min(1).max(WARRANTY_LIMITS.nameLength).openapi({ description: "What the buyer sees the cover as (`GameGhor Protection`)." }),
+  name: z.string().trim().min(1).max(WARRANTY_LIMITS.nameLength).openapi({ description: "What the buyer sees the cover as (`Arcade Protection`)." }),
   durationUnit: z.enum(WARRANTY_DURATION_KINDS).openapi({ description: "days, months or years; lifetime: no end date, never expires." }),
   durationValue: z.number().int().min(WARRANTY_LIMITS.durationValue.min).max(WARRANTY_LIMITS.durationValue.max).nullable().optional()
     .openapi({ description: "1 to 120 days, months or years; leave it out (or null) for lifetime." }),

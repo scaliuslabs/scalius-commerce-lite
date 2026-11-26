@@ -30,6 +30,14 @@ import type { StoreScriptSources } from "@/lib/analytics-csp";
  * Security) and the hosts of approved app scripts all arrive in the
  * request's layout payload, so building the header costs no extra read.
  *
+ * A buyer's private page (cart, checkout, the receipt, the account, …) loads
+ * images only from the store's own origins and the hosts named for it (the
+ * store's saved scripts, the merchant's sources), never any `https:` host. No
+ * theme or app stylesheet is drawn there (a theme sets typed tokens the store
+ * compiles, private-tokens.ts), so this narrows the store's own images only.
+ * The page draws an image from any other host as the store's placeholder,
+ * decided from the same list (`privateImageOrigins`), so nothing breaks.
+ *
  * Hosted payment pages (SSLCommerz, bKash, Nagad: app providers) need no
  * source here: checkout sends the buyer there with a top-level navigation,
  * which CSP does not govern, and nothing on the storefront loads, frames or
@@ -117,10 +125,32 @@ function appConnectSources(hosts: readonly string[]): string[] {
   )))];
 }
 
+/**
+ * The origins a buyer's private page loads images from besides its own, one
+ * list per page kind, which the page's policy (`img-src`) and its
+ * placeholder decision (Layout.astro, `resolveMediaUrl`, the cart script)
+ * both read: the platform's and the merchant's image hosts (Settings →
+ * Security) everywhere, and on a page that is not a payment page the
+ * merchant's trusted websites too. An image from anywhere else is drawn as
+ * the store's placeholder.
+ */
+export function privateImageOrigins(
+  origins: CspPlatformOrigins,
+  sources: { merchantSources?: string; imageSources?: string; paymentPage?: boolean },
+): string[] {
+  return [...new Set([
+    ...platformOrigins(origins),
+    ...(sources.imageSources ? parseMerchantCspSources(sources.imageSources) : []),
+    ...(!sources.paymentPage && sources.merchantSources ? parseMerchantCspSources(sources.merchantSources) : []),
+  ])];
+}
+
 export interface PageCspInput {
   origins?: CspPlatformOrigins;
   /** Merchant-managed additional sources (Settings → Security), comma or line separated. */
   merchantSources?: string;
+  /** Merchant image hosts (Settings → Security): `img-src` only, on every page. */
+  imageSources?: string;
   /**
    * Origins besides the storefront that may frame the page (the dashboard, under a theme preview only);
    * `null` for a buyer's own page, which nothing frames, the storefront included.
@@ -136,6 +166,8 @@ export interface PageCspInput {
   storeScripts?: StoreScriptSources | null;
   /** A payment page: the tight variant. */
   paymentPage?: boolean;
+  /** A buyer's private page: images from named origins only (a payment page always is one). */
+  privatePage?: boolean;
 }
 
 /** The page policy for one response. */
@@ -153,7 +185,7 @@ export function pageContentSecurityPolicy(input: PageCspInput = {}): string {
       common("default-src", ["'self'"]),
       common("script-src", ["'self'", ...hashes, ...PAYMENT_PROVIDER_CSP_SOURCES.script]),
       common("style-src", ["'self'", "'unsafe-inline'"]),
-      common("img-src", ["'self'", "data:", "blob:", "https:", ...platform]),
+      common("img-src", ["'self'", "data:", "blob:", ...privateImageOrigins(origins, { imageSources: input.imageSources, paymentPage: true })]),
       common("font-src", ["'self'", "data:"]),
       common("connect-src", ["'self'", ...(apiOrigin ? [apiOrigin] : []), ...platform, ...PAYMENT_PROVIDER_CSP_SOURCES.connect]),
       common("frame-src", ["'self'", ...PAYMENT_PROVIDER_CSP_SOURCES.frame]),
@@ -174,7 +206,7 @@ export function pageContentSecurityPolicy(input: PageCspInput = {}): string {
     common("default-src", ["'self'"]),
     common("script-src", ["'self'", ...hashes, ...store.scriptHashes, ...store.script, ...apps, ...merchant]),
     common("style-src", ["'self'", "'unsafe-inline'", ...merchant]),
-    common("img-src", ["'self'", "data:", "blob:", "https:", ...platform, ...store.img, ...appConnect, ...merchant]),
+    common("img-src", ["'self'", "data:", "blob:", ...(input.privatePage ? [] : ["https:"]), ...privateImageOrigins(origins, { merchantSources: input.merchantSources, imageSources: input.imageSources }), ...store.img, ...appConnect]),
     common("font-src", ["'self'", "data:", ...merchant]),
     common("media-src", ["'self'", "blob:", ...platform, ...merchant]),
     common("connect-src", ["'self'", ...(apiOrigin ? [apiOrigin] : []), ...platform, ...store.connect, ...apps, ...appConnect, ...merchant]),

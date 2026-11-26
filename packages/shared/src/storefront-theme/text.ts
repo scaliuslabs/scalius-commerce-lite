@@ -40,10 +40,11 @@ export const STOREFRONT_SECTION_TEXT = {
   newsletter: ["heading", "text", "buttonLabel"],
 } as const satisfies Record<StorefrontSectionType, readonly string[]>;
 
-/** The announcement's and the footer's words (`blocks.<slot>.settings.<key>`). */
+/** The announcement's, the footer's and the bottom bar's link tab words (`blocks.<slot>.settings.<key>`). */
 export const STOREFRONT_BLOCK_TEXT = {
   topBar: ["text"],
   footer: ["tagline", "about", "copyright"],
+  mobileNav: ["tabs.*.label"],
 } as const;
 
 /** A landing page's words (`pages.landing.<slug>.<key>`). */

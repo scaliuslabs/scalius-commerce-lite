@@ -39,6 +39,15 @@ export interface HeroSlide {
   /** The slide's link; empty: not a link. */
   link: string;
   focalPoint: HeroSlideFocalPoint;
+  /** The price of the product the slide names (its words in the page's money), while that product is public. */
+  price?: HeroSlidePrice;
+}
+
+/** A slide product's price as the hero draws it: the current price, the struck regular one, and "Sold out". */
+export interface HeroSlidePrice {
+  current: string;
+  regular: string | null;
+  soldOut: string | null;
 }
 
 /** CSS `object-position` that keeps the merchant focal point in an object-fit: cover crop. */

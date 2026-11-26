@@ -8,15 +8,20 @@
 // reporting the rest on the app's page. A block a template names may leave
 // required nested fields out: they take the default theme's, and the block is
 // then validated as any other; an optional field it leaves out stays out (the
-// style's own value). The applied document is checked whole
-// (contrast included) when it is saved, so an app can never write a theme the
-// storefront cannot draw.
+// style's own value). A template is checked applied to the default theme by
+// the store's one save checker (save.ts), so an install, the library, an
+// apply and `scalius-plugin validate` refuse the same templates for the same
+// reasons; the applied document is checked whole again when it is saved, so
+// an app can never write a theme the storefront cannot draw.
 
 import { z } from "zod";
+import { parsePluginSurfaceKey } from "../plugins/storefront";
 import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBlocksSchema } from "./blocks";
+import { storefrontPrivatePagesDefault, storefrontPrivatePagesTemplateSchema, type StorefrontPrivatePages } from "./private-schema";
+import { checkStorefrontThemeSave, type StorefrontThemeSaveIssue } from "./save";
 import { storefrontSectionListSchema, type StorefrontSection } from "./sections";
-import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontDarkColorsMissing, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";
+import { storefrontDarkColorsMissing, storefrontThemeShowsDarkColors, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";
 import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { StorefrontThemeUpgradeError, upgradeStorefrontThemeDocument } from "./upgrade";
 import { DEFAULT_STOREFRONT_THEME } from "./templates";
@@ -41,6 +46,12 @@ export const storefrontAppTemplateThemeSchema = z.object({
   apps: storefrontThemeAppsSchema.omit({ template: true, templateSkins: true }).optional(),
   /** The homepage sections. */
   sections: storefrontSectionListSchema.optional(),
+  /**
+   * The cart page and drawer: an arrangement per page, typed tokens, words
+   * and icons (never markup or CSS); applied, it replaces the merchant's whole
+   * object.
+   */
+  privatePages: storefrontPrivatePagesTemplateSchema.optional(),
 }).strict().superRefine((value, context) => {
   // As every theme: dark colours whenever its scheme or switch can show them, so an applied template always saves.
   if (value.tokens && storefrontDarkColorsMissing(value.tokens)) {
@@ -49,8 +60,12 @@ export const storefrontAppTemplateThemeSchema = z.object({
 });
 export type StorefrontAppTemplateTheme = z.infer<typeof storefrontAppTemplateThemeSchema>;
 
-/** A declaration read at this store's version: its value, or the first reason it does not fit. */
-export type StorefrontAppThemeRead<Value> = { ok: true; value: Value } | { ok: false; problem: string };
+/**
+ * A declaration read at this store's version: its value, or why it does not
+ * fit: the first reason (`problem`) and every refused value (`issues`, paths
+ * in the declaration: `theme.tokens.colors.destructive`, `sections.0.settings`).
+ */
+export type StorefrontAppThemeRead<Value> = { ok: true; value: Value } | { ok: false; problem: string; issues: StorefrontThemeSaveIssue[] };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -61,13 +76,26 @@ function issueText(error: z.ZodError): string {
   return `${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}`;
 }
 
+/** A declaration that does not fit: the first reason as text, and every issue at `prefix` + its path. */
+function unfit(problem: string, issues: StorefrontThemeSaveIssue[] = []): { ok: false; problem: string; issues: StorefrontThemeSaveIssue[] } {
+  return { ok: false, problem, issues: issues.length > 0 ? issues : [{ path: "", message: problem, reason: null }] };
+}
+
+function schemaUnfit(error: z.ZodError, prefix: string) {
+  return unfit(issueText(error), error.issues.map((issue) => ({
+    path: [prefix, ...issue.path.map(String)].filter(Boolean).join("."),
+    message: issue.message,
+    reason: issue.code === "custom" && typeof issue.params?.reason === "string" ? issue.params.reason : null,
+  })));
+}
+
 /** Parts of a document at `version`, upgraded to the current version (`pages.home` carries sections). */
 function upgradeParts(parts: Record<string, unknown>, version: number): StorefrontAppThemeRead<Record<string, unknown>> {
   try {
     const { version: _version, ...upgraded } = upgradeStorefrontThemeDocument({ ...parts, version });
     return { ok: true, value: upgraded };
   } catch (error) {
-    return { ok: false, problem: error instanceof StorefrontThemeUpgradeError ? error.message : "It did not upgrade." };
+    return unfit(error instanceof StorefrontThemeUpgradeError ? error.message : "It did not upgrade.");
   }
 }
 
@@ -79,7 +107,7 @@ export interface StorefrontUnresolvedHandle extends StorefrontHandleRef {
 /** A declaration read against a store: its value, and the sections left out for a handle the store does not have. */
 export type StorefrontAppThemeResolvedRead<Value> =
   | { ok: true; value: Value; unresolved: StorefrontUnresolvedHandle[] }
-  | { ok: false; problem: string };
+  | { ok: false; problem: string; issues: StorefrontThemeSaveIssue[] };
 
 const placeholderLookup: StorefrontHandleLookup = (ref) => storefrontHandlePlaceholder(ref);
 
@@ -111,7 +139,7 @@ function resolveSectionHandles(sections: unknown, lookup: StorefrontHandleLookup
 function resolveTemplateParts(parts: Record<string, unknown>, lookup: StorefrontHandleLookup): StorefrontAppThemeRead<Record<string, unknown>> {
   const { value, unresolved } = resolveStorefrontHandles(parts, lookup);
   const first = unresolved[0];
-  return first ? { ok: false, problem: `No ${first.kind} has the handle ${first.handle}.` } : { ok: true, value: value as Record<string, unknown> };
+  return first ? unfit(`No ${first.kind} has the handle ${first.handle}.`) : { ok: true, value: value as Record<string, unknown> };
 }
 
 /** The value at `path` inside `root`; undefined where the path leaves the objects. */
@@ -187,8 +215,74 @@ export function fillRequiredBlockFields(
   return filled;
 }
 
-function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHandleLookup): StorefrontAppThemeResolvedRead<StorefrontAppTemplateTheme> {
-  if (!isRecord(value)) return { ok: false, problem: "The template's theme is not an object." };
+/**
+ * Where a refused value of the applied document sits in the template: the
+ * template's own part, or the default theme's part it keeps (a template
+ * that sets blocks but no tokens is checked against the default colours).
+ */
+function templatePath(path: string, template: StorefrontAppTemplateTheme): string {
+  const [root, slot] = path.split(".");
+  if (root === "pages" && slot === "home") return `theme.sections${path.slice("pages.home".length)}`;
+  // Dark colours are the template's only when it shows them; otherwise the default theme's stay.
+  const owns = root === "blocks" ? template.blocks?.[slot as keyof NonNullable<StorefrontAppTemplateTheme["blocks"]>] !== undefined
+    : root === "tokens" && slot === "darkColors" ? template.tokens !== undefined && storefrontThemeShowsDarkColors(template.tokens)
+      : root === "tokens" || root === "privatePages" || root === "apps" ? template[root] !== undefined
+        : false;
+  return owns ? `theme.${path}` : `theme (the default theme's ${path || "document"}, which this template keeps)`;
+}
+
+/**
+ * The template applied to the default theme, as the template library applies
+ * it, through the store's one save checker (`checkStorefrontThemeSave`):
+ * palette contrast per colour set the template shows (its dark colours and
+ * page paint as written, never the remade ones), the muted and error colours,
+ * translations, private pages (arrangements, tokens against the applied
+ * palettes, words, icons from the template's own app) and size. So a template
+ * an app ships, an install lists and `scalius-plugin validate` passes saves
+ * when a merchant applies it to the default look. It is applied under its
+ * real key (`<app id>/<template id>`), so its files are its own app's and an
+ * icon naming any other app is refused here, as at the merchant's save.
+ */
+function templateSaveIssues(template: StorefrontAppTemplateTheme, key: string): StorefrontThemeSaveIssue[] {
+  // The verdict depends only on the key and the template, so an isolate checks each once:
+  // the editor, the app page, the library and an apply read the same templates again and again.
+  const json = JSON.stringify(template);
+  const cacheKey = `${key}|${json.length}|${fingerprint(json)}`;
+  const known = TEMPLATE_VERDICTS.get(cacheKey);
+  if (known) return known;
+  const issues = uncachedTemplateSaveIssues(template, key);
+  if (TEMPLATE_VERDICTS.size >= TEMPLATE_VERDICTS_MAX) TEMPLATE_VERDICTS.delete(TEMPLATE_VERDICTS.keys().next().value!);
+  TEMPLATE_VERDICTS.set(cacheKey, issues);
+  return issues;
+}
+
+/** Templates' verdicts this isolate has reached, oldest first (bounded: five templates an app, a few apps a store). */
+const TEMPLATE_VERDICTS = new Map<string, StorefrontThemeSaveIssue[]>();
+const TEMPLATE_VERDICTS_MAX = 64;
+
+/** A 53-bit FNV-1a-style fingerprint of `text` (two 32-bit lanes): a cache key, not a security boundary. */
+function fingerprint(text: string): string {
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    a = Math.imul(a ^ code, 0x01000193);
+    b = Math.imul(b ^ code, 0x5bd1e995);
+  }
+  return `${(a >>> 0).toString(36)}${(b >>> 0).toString(36)}`;
+}
+
+function uncachedTemplateSaveIssues(template: StorefrontAppTemplateTheme, key: string): StorefrontThemeSaveIssue[] {
+  const applied = applyStorefrontAppTemplate(DEFAULT_STOREFRONT_THEME, key, template);
+  // Applying remakes dark colours and drops a page paint a look leaves unreadable (the merchant's own,
+  // kept across templates); a template's own palette is checked as it is written, every colour set it shows.
+  const written = template.tokens ? { ...applied, tokens: storefrontTokensKeepingColorScheme(template.tokens, DEFAULT_STOREFRONT_THEME.tokens) } : applied;
+  const checked = checkStorefrontThemeSave(written);
+  return checked.ok ? [] : checked.refusal.issues.map((issue) => ({ ...issue, path: templatePath(issue.path, template) }));
+}
+
+function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHandleLookup, key: string): StorefrontAppThemeResolvedRead<StorefrontAppTemplateTheme> {
+  if (!isRecord(value)) return unfit("The template's theme is not an object.");
   const { sections: declared, ...declaredRest } = value;
   const rest = resolveTemplateParts(declaredRest, lookup);
   if (!rest.ok) return rest;
@@ -203,7 +297,10 @@ function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHa
   for (let round = 0; !parsed.success && round < 16 && fillRequiredBlockFields(candidate, parsed.error.issues); round += 1) {
     parsed = storefrontAppTemplateThemeSchema.safeParse(candidate);
   }
-  return parsed.success ? { ok: true, value: parsed.data, unresolved } : { ok: false, problem: issueText(parsed.error) };
+  if (!parsed.success) return schemaUnfit(parsed.error, "theme");
+  const saved = templateSaveIssues(parsed.data, key);
+  if (saved.length > 0) return unfit(`${saved[0]!.path}: ${saved[0]!.message}`, saved);
+  return { ok: true, value: parsed.data, unresolved };
 }
 
 /**
@@ -212,8 +309,8 @@ function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHa
  * Handles (`handles.ts`) stand in for ids here, so the shape is checked
  * without a store; `resolveStorefrontAppTemplateTheme` reads it against one.
  */
-export function checkStorefrontAppTemplateTheme(value: unknown, themeVersion: number): StorefrontAppThemeRead<StorefrontAppTemplateTheme> {
-  const read = readTemplate(value, themeVersion, placeholderLookup);
+export function checkStorefrontAppTemplateTheme(value: unknown, themeVersion: number, pluginId: string, templateId = "template"): StorefrontAppThemeRead<StorefrontAppTemplateTheme> {
+  const read = readTemplate(value, themeVersion, placeholderLookup, `${pluginId}/${templateId}`);
   return read.ok ? { ok: true, value: read.value } : read;
 }
 
@@ -226,8 +323,10 @@ export function resolveStorefrontAppTemplateTheme(
   value: unknown,
   themeVersion: number,
   lookup: StorefrontHandleLookup,
+  pluginId: string,
+  templateId = "template",
 ): StorefrontAppThemeResolvedRead<StorefrontAppTemplateTheme> {
-  return readTemplate(value, themeVersion, lookup);
+  return readTemplate(value, themeVersion, lookup, `${pluginId}/${templateId}`);
 }
 
 /**
@@ -261,8 +360,8 @@ export function withStorefrontCardFields(
 }
 
 /** The template's theme at this store's version, or null when it does not fit. */
-export function readStorefrontAppTemplateTheme(value: unknown, themeVersion: number): StorefrontAppTemplateTheme | null {
-  const read = checkStorefrontAppTemplateTheme(value, themeVersion);
+export function readStorefrontAppTemplateTheme(value: unknown, themeVersion: number, pluginId: string, templateId = "template"): StorefrontAppTemplateTheme | null {
+  const read = checkStorefrontAppTemplateTheme(value, themeVersion, pluginId, templateId);
   return read.ok ? read.value : null;
 }
 
@@ -333,10 +432,24 @@ export function applyStorefrontAppTemplateCarry(
       ...document,
       tokens: template.tokens ? storefrontTokensKeepingColorScheme(template.tokens, document.tokens) : document.tokens,
       blocks: { ...document.blocks, ...(template.blocks ?? {}) },
+      privatePages: privatePagesAfterTemplate(document.privatePages, key, template),
       apps: appsAfterTemplate(document, key, template),
       pages: { ...document.pages, home: carry ? carry.home : document.pages.home },
     }),
   };
+}
+
+/**
+ * The private pages after an app template: a template that sets them replaces
+ * the merchant's whole object (over the defaults), so nothing of the previous
+ * look stays; one that sets none keeps the merchant's, less any icon of
+ * another app (a private page names only the theme's own files).
+ */
+function privatePagesAfterTemplate(current: StorefrontPrivatePages, key: string, template: StorefrontAppTemplateTheme): StorefrontPrivatePages {
+  if (template.privatePages) return { ...storefrontPrivatePagesDefault(), ...template.privatePages } as StorefrontPrivatePages;
+  const app = parsePluginSurfaceKey(key)?.pluginId ?? null;
+  const icons = Object.fromEntries(Object.entries(current.icons).filter(([, ref]) => ref && ref.app === app));
+  return { ...current, icons } as StorefrontPrivatePages;
 }
 
 /**
@@ -364,8 +477,8 @@ function readPreset(value: unknown, themeVersion: number, lookup: StorefrontHand
   if (!upgraded.ok) return upgraded;
   const pages = upgraded.value.pages;
   const parsed = storefrontSectionListSchema.safeParse(isRecord(pages) ? pages.home : undefined);
-  if (!parsed.success) return { ok: false, problem: issueText(parsed.error) };
-  return parsed.data.length > 0 ? { ok: true, value: parsed.data, unresolved } : { ok: false, problem: "The preset has no sections." };
+  if (!parsed.success) return schemaUnfit(parsed.error, "sections");
+  return parsed.data.length > 0 ? { ok: true, value: parsed.data, unresolved } : unfit("The preset has no sections.");
 }
 
 /** A page preset's sections at this store's version, or null when they do not fit. */
@@ -386,6 +499,8 @@ export interface StorefrontAppThemeProblem {
   id: string;
   name: string;
   problem: string;
+  /** Every refused value, its path in the declaration (`theme.…` for a template, `sections.…` for a preset). */
+  issues: StorefrontThemeSaveIssue[];
 }
 
 /**
@@ -393,15 +508,15 @@ export interface StorefrontAppThemeProblem {
  * document after the upgrade chain: the template library leaves them out,
  * and the app's page reports them.
  */
-export function storefrontAppThemeProblems(storefront: StorefrontAppThemeDeclarations): StorefrontAppThemeProblem[] {
+export function storefrontAppThemeProblems(storefront: StorefrontAppThemeDeclarations, pluginId: string): StorefrontAppThemeProblem[] {
   const problems: StorefrontAppThemeProblem[] = [];
   for (const template of storefront.templates) {
-    const read = checkStorefrontAppTemplateTheme(template.theme, template.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
-    if (!read.ok) problems.push({ kind: "template", id: template.id, name: template.name, problem: read.problem });
+    const read = checkStorefrontAppTemplateTheme(template.theme, template.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION, pluginId, template.id);
+    if (!read.ok) problems.push({ kind: "template", id: template.id, name: template.name, problem: read.problem, issues: read.issues });
   }
   for (const preset of storefront.pagePresets) {
     const read = checkStorefrontPagePresetSections(preset.sections, preset.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
-    if (!read.ok) problems.push({ kind: "page-preset", id: preset.id, name: preset.name, problem: read.problem });
+    if (!read.ok) problems.push({ kind: "page-preset", id: preset.id, name: preset.name, problem: read.problem, issues: read.issues });
   }
   return problems;
 }

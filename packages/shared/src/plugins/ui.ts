@@ -20,10 +20,12 @@
 // guessing. Part of the versioned plugin API.
 
 import { z } from "zod";
+import { STOREFRONT_STORE_PATH_RESERVED, storefrontStorePathSchema } from "../storefront-theme/links";
 import { PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE } from "./manifest-patterns";
 import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "./ids";
 import { ADMIN_UPLOAD_TYPES, BUYER_UPLOAD_DECLARATION_LIMITS } from "../buyer-uploads";
 import { LINE_INPUT_CHANGE_KEY_PATTERN, LINE_INPUT_CHANGE_LIMITS } from "./line-input-change";
+import { isStoreActionOrAmountWord, STORE_WORDS_REASON } from "../store-words";
 
 export const PLUGIN_UI_VERSION = 1 as const;
 
@@ -59,23 +61,23 @@ export const PLUGIN_UI_INPUT_TYPES = ["text-field", "textarea", "number-field", 
 
 const NODE_TYPES = [
   "page", "section", "card", "stack", "columns", "heading", "text", "badge", "banner", "key-value", "stat", "table",
-  "empty-state", "image", "link", "divider", "button", "form", ...PLUGIN_UI_INPUT_TYPES, "field", "progress", "disclosure",
+  "empty-state", "image", "link", "divider", "button", "form", ...PLUGIN_UI_INPUT_TYPES, "field", "progress", "disclosure", "mark",
 ] as const;
 export type PluginUiNodeType = (typeof NODE_TYPES)[number];
 
 /**
- * What each surface allows. `admin`: every node but `field` and
- * `disclosure` (`progress` only here), route and
- * navigate actions, links to app pages, resources and https sites, https
- * images. `buyer`: content nodes, buttons, checkout `field`s and
- * `disclosure`s (no pages, forms or tables), route, cart and navigate
- * actions, links to store paths,
+ * What each surface allows. `admin`: every node but `field`,
+ * `disclosure` and `mark` (`progress` only here), and no toned `stack`;
+ * route and navigate actions, links to app pages, resources and https
+ * sites, https images. `buyer`: content nodes, buttons, checkout `field`s,
+ * `disclosure`s, `mark`s and toned stacks (no pages, forms or tables),
+ * route, cart and navigate actions, links to store paths,
  * images from the store's media or the app's public files. A tree is also
  * held to its surface's node count, depth and size.
  */
 export const PLUGIN_UI_SURFACES = {
   admin: {
-    nodes: NODE_TYPES.filter((type) => type !== "field" && type !== "disclosure"),
+    nodes: NODE_TYPES.filter((type) => type !== "field" && type !== "disclosure" && type !== "mark"),
     actions: ["route", "navigate"],
     targets: ["app-page", "resource", "external"],
     images: "url",
@@ -84,7 +86,7 @@ export const PLUGIN_UI_SURFACES = {
     maxBytes: 256 * 1024,
   },
   buyer: {
-    nodes: ["stack", "columns", "heading", "text", "badge", "banner", "key-value", "image", "link", "divider", "button", "field", "disclosure"],
+    nodes: ["stack", "columns", "heading", "text", "badge", "banner", "key-value", "image", "link", "divider", "button", "field", "disclosure", "mark"],
     actions: ["route", "cart", "navigate"],
     targets: ["store"],
     images: "asset",
@@ -126,9 +128,15 @@ const httpsUrl = z.string().max(2048).url().refine((value) => {
     return false;
   }
 }, "Use an https:// address.");
-/** A path on this store (`/products/x`): no other origin, query, dot segments or encoded separators. */
-const storePath = z.string().max(2048).regex(/^\/(?!\/)[^\\\s?#]*$/, "Use a path on this store.")
-  .refine((path) => !path.split("/").some((part) => part === "." || part === "..") && !/%(?:2f|5c|2e)/i.test(path), "Use a path on this store.");
+/**
+ * The store's machinery, never a page a buyer link opens (`STOREFRONT_STORE_PATH_RESERVED`): its API,
+ * the app proxy (an app reaches its own routes with a `route` action), the app file gateway (an app's
+ * files are drawn through `{ app }` sources) and every `_` or `~` first segment.
+ */
+export const PLUGIN_UI_STORE_PATH_RESERVED = STOREFRONT_STORE_PATH_RESERVED;
+export const PLUGIN_UI_STORE_PATH_REASON = "store_path_reserved";
+/** A page on this store (`/products/x`): the storefront's one store-path schema. */
+const storePath = storefrontStorePathSchema(PLUGIN_UI_STORE_PATH_REASON);
 
 type JsonPrimitive = string | number | boolean | null;
 export type PluginUiJson = JsonPrimitive | PluginUiJson[] | { [key: string]: PluginUiJson };
@@ -295,9 +303,19 @@ export type PluginUiNode =
   | { type: "page"; title?: string; description?: string; actions?: PluginUiButton[]; children: PluginUiNode[] }
   | { type: "section"; title?: string; description?: string; children: PluginUiNode[] }
   | { type: "card"; title?: string; description?: string; actions?: PluginUiButton[]; children: PluginUiNode[] }
-  | { type: "stack"; direction?: "vertical" | "horizontal"; gap?: "sm" | "md" | "lg"; children: PluginUiNode[] }
+  /**
+   * Children in a column, or in a row (`horizontal`): a row lays its pieces
+   * side by side where its box is wide enough and wraps them where it is
+   * not; a vertical stack in it (a column of words) takes the room left and
+   * goes to a line of its own before it gets too narrow to read. `tone`
+   * (buyer) draws it on a toned surface (an offer row, a status box) whose
+   * pieces a theme styles on that surface; a toned row keeps its last
+   * piece (its action) at the row's end when it wraps.
+   */
+  | { type: "stack"; direction?: "vertical" | "horizontal"; gap?: "sm" | "md" | "lg"; tone?: PluginUiTone; children: PluginUiNode[] }
   | { type: "columns"; children: PluginUiNode[] }
   | { type: "heading"; text: string; level?: 2 | 3 | 4 }
+  /** `tone` colours the words (a price, a warning); `mono` sets them in the monospace face (an ID, a code). */
   | { type: "text"; text: string; tone?: PluginUiTone; size?: "sm" | "md"; emphasis?: "strong" | "mono" }
   | { type: "badge"; text: string; tone?: PluginUiTone }
   | { type: "banner"; tone: PluginUiTone; title?: string; text?: string; actions?: PluginUiButton[] }
@@ -326,7 +344,13 @@ export type PluginUiNode =
    * Space and without scripts. `open` draws it open at first. Its nodes count
    * toward the tree's limit like any other.
    */
-  | { type: "disclosure"; summary: string; open?: boolean; children: PluginUiNode[] };
+  | { type: "disclosure"; summary: string; open?: boolean; children: PluginUiNode[] }
+  /**
+   * A small glyph of a tone in a circle (buyer): "!" warning, a tick
+   * success, "i" info, "×" critical, a dot neutral. Decoration beside the
+   * words that say the same, so assistive technology skips it.
+   */
+  | { type: "mark"; tone: PluginUiTone };
 
 const buttonSchema = z.object({
   type: z.literal("button"),
@@ -440,6 +464,7 @@ const nodeUnion = z.discriminatedUnion("type", [
     type: z.literal("stack"),
     direction: z.enum(["vertical", "horizontal"]).optional(),
     gap: z.enum(["sm", "md", "lg"]).optional(),
+    tone: tone.optional(),
     children,
   }).strict(),
   z.object({ type: z.literal("columns"), children: z.array(z.lazy(() => pluginUiNodeSchema)).min(1).max(4) }).strict(),
@@ -504,6 +529,7 @@ const nodeUnion = z.discriminatedUnion("type", [
   }).strict(),
   fileFieldSchema,
   z.object({ type: z.literal("disclosure"), summary: label, open: z.boolean().optional(), children }).strict(),
+  z.object({ type: z.literal("mark"), tone }).strict(),
 ]);
 
 /**
@@ -596,10 +622,22 @@ export function pluginUiNodes(root: PluginUiNode): PluginUiNode[] {
 
 const inputTypes = new Set<string>(PLUGIN_UI_INPUT_TYPES);
 
+/** The words a buyer node draws as a label or a button: what may never be the store's (`isStoreActionOrAmountWord`). */
+function buyerLabels(node: PluginUiNode): Array<{ text: string; at: (string | number)[] }> {
+  switch (node.type) {
+    case "button": return [{ text: node.label, at: ["label"] }];
+    case "heading": case "badge": return [{ text: node.text, at: ["text"] }];
+    case "banner": return node.title ? [{ text: node.title, at: ["title"] }] : [];
+    case "key-value": return node.items.map((item, index) => ({ text: item.label, at: ["items", index, "label"] }));
+    default: return [];
+  }
+}
+
 /**
  * Structural rules zod cannot say: the surface's nodes, actions, link
  * targets and image sources, its size and depth, pages only at the root,
- * inputs only in forms, unique input names.
+ * inputs only in forms, unique input names, and on a buyer page no label or
+ * button that reads as the store's own action or amount word.
  */
 function checkTree(root: PluginUiNode, surface: PluginUiSurface, context: z.RefinementCtx): void {
   const rules = PLUGIN_UI_SURFACES[surface];
@@ -622,6 +660,20 @@ function checkTree(root: PluginUiNode, surface: PluginUiSurface, context: z.Refi
     if (node.type === "image" && (typeof node.src === "string") !== (rules.images === "url")) {
       return report([...path, "src"], surface === "admin" ? "Use an https:// image address." : "Use { media } or { app } for an image."), false;
     }
+    // On a buyer page an app's labels and buttons never read as the store's action or amount words (store-words.ts).
+    if (surface === "buyer") {
+      const word = buyerLabels(node).find((entry) => isStoreActionOrAmountWord(entry.text));
+      if (word) {
+        if (!reported) context.addIssue({
+          code: "custom",
+          path: [...path, ...word.at],
+          message: `"${word.text}" is the store's own word for an action or an amount: say what your block does.`,
+          params: { reason: STORE_WORDS_REASON },
+        });
+        reported = true;
+        return false;
+      }
+    }
     return true;
   };
   const visit = (node: PluginUiNode, depth: number, path: (string | number)[], inForm: Set<string> | null) => {
@@ -631,6 +683,7 @@ function checkTree(root: PluginUiNode, surface: PluginUiSurface, context: z.Refi
     if (!allowed(node, path)) return;
     if (attachedButtons(node).some((button, index) => !allowed(button, [...path, "actions", index]))) return;
     if (node.type === "page" && depth !== 1) return report(path, "A page is only ever the root.");
+    if (node.type === "stack" && node.tone && surface !== "buyer") return report([...path, "tone"], `A toned stack is not shown on the ${surface} surface.`);
     if (node.type === "field" && node.choices && new Set(node.choices.map((choice) => choice.value)).size !== node.choices.length) {
       return report([...path, "choices"], "Choice values must be unique.");
     }

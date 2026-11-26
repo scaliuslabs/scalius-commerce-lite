@@ -98,7 +98,6 @@ export { describeNotificationProviderBlock } from "./notification-provider-healt
 export { getNotificationTemplates, getNotificationTemplatesInLanguage, saveNotificationTemplate, type NotificationTemplatesInLanguage } from "./notification-templates.service";
 export {
   CONVERSATION_SMS_COALESCE_SECONDS,
-  CONVERSATION_SMS_COALESCED,
   renderConversationEmail,
   sendConversationNotification,
 } from "./conversation-notifications";

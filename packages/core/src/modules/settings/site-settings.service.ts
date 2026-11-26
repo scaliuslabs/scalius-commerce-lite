@@ -41,9 +41,15 @@ import {
   DEFAULT_STOREFRONT_THEME,
   THEME_VERSION_CHANGES_MAX,
   compareThemeDocuments,
+  checkStorefrontThemeSave,
+  compileStorefrontPrivatePages,
+  privatePagesCompiledCurrent,
+  privatePagesContextOf,
+  privateTokenApps,
+  filledPrivatePages,
+  refusedPrivatePages,
   parseStoredStorefrontThemeDocument,
-  storefrontThemeDocumentSchema,
-  storefrontThemeTranslationProblems,
+  STOREFRONT_THEME_DOCUMENT_MAX_BYTES,
   storefrontThemeAppIssues,
   storefrontThemeAppProblems,
   storefrontThemeAppReferences,
@@ -178,7 +184,7 @@ export const THEME_VERSION_HISTORY_LIMIT = 20;
 /** Most versions one history page lists: metadata only, and five worst-case entries stay under the 64 KiB agent result ceiling. */
 export const THEME_VERSION_PAGE_LIMIT = 5;
 /** Largest stored theme document: bounds each D1 row and the retained history on Workers Free. */
-export const THEME_DOCUMENT_MAX_BYTES = 512 * 1024;
+export const THEME_DOCUMENT_MAX_BYTES = STOREFRONT_THEME_DOCUMENT_MAX_BYTES;
 /** A publication note's length. */
 export const THEME_PUBLISH_NOTE_MAX = 500;
 
@@ -301,30 +307,22 @@ function assertNonnegativeRevision(value: number, label: string): void {
   }
 }
 
+/**
+ * The document as it is stored, through the one shared save checker
+ * (`checkStorefrontThemeSave`: schema and contrast, translations, private
+ * pages, size), the same one `scalius-plugin validate` runs on an app's templates.
+ */
 function serializeThemeSettings(theme: StorefrontThemeDocument): {
   theme: StorefrontThemeDocument;
   serialized: string;
 } {
-  const result = storefrontThemeDocumentSchema.safeParse(theme);
-  if (!result.success) {
-    throw new ValidationError(
-      result.error.issues[0]?.message ?? "The storefront style is not a valid theme document.",
-      result.error.issues.map((issue) => ({
-        path: issue.path.map(String).join("."),
-        message: issue.message,
-      })),
-    );
+  const checked = checkStorefrontThemeSave(theme);
+  if (!checked.ok) {
+    const { message, reason, issues } = checked.refusal;
+    // A refusal that names its reason says it once, machine-readable.
+    throw new ValidationError(message, reason ? { reason, issues: issues.slice(0, 20) } : issues);
   }
-  // A translation must fit every place its words appear, so a read never falls back to the source words.
-  const translationProblems = storefrontThemeTranslationProblems(result.data);
-  if (translationProblems.length > 0) {
-    throw new ValidationError(translationProblems[0]!.message, translationProblems);
-  }
-  const serialized = JSON.stringify(result.data);
-  if (new TextEncoder().encode(serialized).byteLength > THEME_DOCUMENT_MAX_BYTES) {
-    throw new ValidationError("Storefront style is too large. Shorten page content or remove unused landing pages.");
-  }
-  return { theme: result.data, serialized };
+  return { theme: checked.theme, serialized: checked.serialized };
 }
 
 const THEME_REVISION_CONFLICT_SENTINEL = "theme_revision_conflict";
@@ -410,6 +408,34 @@ export async function getThemeSettings(db: Database): Promise<ThemeSettingsDocum
     : unpublishedThemeSettings();
 }
 
+/**
+ * The published theme's private pages compiled by this build when an older
+ * checker wrote them (the first maintenance run after a deploy; a buyer's
+ * request never compiles, and serves the default look meanwhile). One read,
+ * and one write only then, at the same revision (it is the same document):
+ * the row's cache dependency moves with the write. A theme this checker no
+ * longer passes keeps its source and serves no compiled look until the
+ * merchant saves it again.
+ */
+export async function recompilePublishedPrivatePages(db: Database): Promise<"none" | "current" | "recompiled" | "refused" | "unreadable" | "raced"> {
+  const row = (await selectThemeSettingsRows(db))[0];
+  if (!row) return "none";
+  // A document this build cannot read is left as it is (the merchant re-saves it); nothing to compile.
+  const theme = parseStoredStorefrontThemeDocument(row.colors);
+  if (!theme) return "unreadable";
+  if (privatePagesCompiledCurrent(theme.privatePages)) return "current";
+  // Every path stores arrangements filled for this anatomy: a newly mandatory part is never missing.
+  const result = compileStorefrontPrivatePages(filledPrivatePages(theme.privatePages), privatePagesContextOf(theme));
+  const privatePages = result.ok ? result.value : refusedPrivatePages(theme.privatePages);
+  const written = await db.update(themeSettings)
+    .set({ colors: JSON.stringify({ ...theme, privatePages }), updatedAt: sql`unixepoch()` })
+    .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)))
+    .returning({ id: themeSettings.id });
+  // A publish moved the revision in between: nothing was written, so the version is not settled (tried again next run).
+  if (written.length === 0) return "raced";
+  return result.ok ? "recompiled" : "refused";
+}
+
 /** The live document, the shared draft (the live one until a draft is saved) and who published last. */
 export async function getThemeWorkspace(db: Database): Promise<ThemeWorkspaceDocument> {
   const [publishedRows, draftRows, latestRows] = await safeBatch(db, [
@@ -470,8 +496,10 @@ async function assertThemeReferences(db: Database, theme: StorefrontThemeDocumen
   const references = storefrontThemeMediaReferences(theme);
   const mediaIds = [...new Set(references.map((reference) => reference.mediaId))];
   const productId = theme.pages.homeMode.kind === "product" ? theme.pages.homeMode.productId : null;
-  if (mediaIds.length === 0 && productId === null) return;
-  const [mediaRows, productRows] = await safeBatch(db, [
+  // The apps a private page's tokens style by id (`ui.<kind>@<app>`): only installed ones (read only when named).
+  const apps = privateTokenApps(Object.fromEntries(Object.values(theme.privatePages.tokens).flatMap((page) => Object.keys(page ?? {}).map((key) => [key, true]))));
+  if (mediaIds.length === 0 && productId === null && apps.length === 0) return;
+  const [mediaRows, productRows, appRows] = await safeBatch(db, [
     db.select({ id: media.id, kind: media.kind }).from(media).where(and(
       sql`${media.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(mediaIds)}))`,
       notInArray(media.status, ["deleting", "deleted"]),
@@ -479,7 +507,14 @@ async function assertThemeReferences(db: Database, theme: StorefrontThemeDocumen
     db.select({ id: products.id }).from(products)
       .where(and(eq(products.id, productId ?? ""), isNull(products.deletedAt)))
       .limit(1),
+    db.select({ id: pluginInstallations.pluginId }).from(pluginInstallations)
+      .where(sql`${pluginInstallations.pluginId} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(apps)}))`),
   ]);
+  const installed = new Set((appRows as Array<{ id: string }>).map((row) => row.id));
+  const missing = apps.filter((app) => !installed.has(app));
+  if (missing.length > 0) {
+    throw new ValidationError(`${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} not installed: a private page styles only installed apps' blocks. Remove the ui.*@${missing[0]} tokens or install the app.`, { reason: "unknown_app", apps: missing });
+  }
   const images = new Set((mediaRows as Array<{ id: string; kind: string }>)
     .filter((row) => row.kind === "image")
     .map((row) => row.id));

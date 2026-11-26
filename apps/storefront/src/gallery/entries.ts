@@ -10,6 +10,8 @@
  * Nothing here renders: the real pages do, with the fixture API (`api.ts`).
  */
 import {
+  PRIVATE_CART_PRESETS,
+  privateCartPresetArrangement,
   STOREFRONT_ACCOUNT_NAVIGATION_STYLES,
   STOREFRONT_BLOCK_REGISTRY,
   STOREFRONT_PAYMENT_CHOICE_STYLES,
@@ -40,9 +42,10 @@ import {
   type StorefrontTemplateId,
   type StorefrontSkinRef,
   type StorefrontThemeDocument,
+  STOREFRONT_PAGE_TEMPLATES,
 } from "@scalius/shared/storefront-theme";
 import { ARABIC_TEXT, BANGLA_LONG, cardProduct, type ProductScenario } from "./fixtures";
-import type { GalleryCartSeed } from "./cart-seed";
+import { fixtureProductSoldOut, GALLERY_KIT, galleryCartSeed, galleryCustomerCart, type GalleryCartSeed } from "./cart-seed";
 import { SECTION_CONTENT } from "./section-content";
 import { settingVariants, settingChoices, settingWith, type SettingsSchema } from "./variants";
 import { noorLandingSections, noorTheme } from "./noor";
@@ -93,6 +96,21 @@ export interface GalleryScenario {
   logo?: boolean;
   /** The cart page opens with these lines in the browser's cart (none: an empty cart). */
   cart?: GalleryCartSeed;
+  /** The store delivers in Bangladesh (a zone for every address, a city with its thanas): Place order is on. */
+  delivering?: boolean;
+  /** With `checkoutBuyerUi`: an app draws every node kind and tone in the summary, below the cart and under a line. */
+  buyerUiKinds?: boolean;
+  /** An app block on a line and in the summary, and an add-on row, whose words run 120 letters (English and Bangla). */
+  longWords?: boolean;
+  /** The store asks the buyer to tick its terms before placing the order. */
+  requireTerms?: boolean;
+  /** The cart check asks for a protection decision on the first line (declining needs agreement) and prices an add-on into the second. */
+  lineStates?: boolean;
+  /**
+   * The customer's cart and its protection app (`arcade.protection`, cart-seed.ts `GALLERY_CUSTOMER`):
+   * the account line offered protection (`offer`), or two accounts protected (`protected`). Its blocks replace the other apps'.
+   */
+  customer?: "offer" | "protected";
 }
 
 /** Required state setup: a closed drawer is not evidence of an open drawer. */
@@ -560,7 +578,7 @@ function tokenEntries(): GalleryEntry[] {
 /** A saved cart with two lines, so the checkout steps (and the targets apps draw at) are visible. */
 const GALLERY_CART = JSON.stringify({
   items: {
-    "line:v3:prod_0:variant:var_0:p:none": { id: "prod_0", slug: "handwoven-jamdani-saree", name: "Handwoven Dhakai Jamdani Saree", price: 6500, quantity: 1, variantId: "var_0", propertiesHash: "none", options: [{ name: "Colour", value: "Bottle green" }] },
+    "line:v3:prod_0:variant:var_0:p:none": { id: "prod_0", slug: "handwoven-jamdani-saree", name: "Handwoven Dhakai Jamdani Saree", price: 6500, quantity: 1, variantId: "var_0", propertiesHash: "none", options: [{ name: "Colour", label: "Bottle green" }] },
     "line:v3:prod_1:variant:var_1:p:none": { id: "prod_1", slug: "cotton-panjabi", name: "Cotton Panjabi", price: 1490, quantity: 2, variantId: "var_1", propertiesHash: "none" },
   },
 });
@@ -589,7 +607,7 @@ function pageEntries(): GalleryEntry[] {
   const base = baseTheme();
   const templated = clone(base);
   const around = (id: string, heading: string): StorefrontSection => contentSection("editorial", id, { layout: "rich-text", heading, body: "Free delivery inside Dhaka on orders over ৳3,000. Cash on delivery everywhere." });
-  for (const kind of ["product", "collection", "cart", "page"] as const) {
+  for (const kind of STOREFRONT_PAGE_TEMPLATES) {
     templated.pages.templates[kind] = { sections: [around(`${kind}-above`, "Before the page"), contentSection("product_rail", `${kind}-rail`, { title: "You may also like" })], main: 1 };
   }
   const landing = clone(base);
@@ -617,7 +635,7 @@ function pageEntries(): GalleryEntry[] {
     { id: entryId("page", "cms"), family: "page:cms", title: "CMS page", page: "page", theme: clone(base), focus: MAIN, scenario: {} },
     { id: entryId("page", "landing"), family: "page:landing", title: "Landing page with sections", page: "landing", theme: landing, focus: MAIN, scenario: {} },
     { id: entryId("page", "logo"), family: "page:home", title: "Home with the merchant's logo", page: "home", theme: productHome, focus: CHROME, scenario: { logo: true } },
-    ...(["product", "category", "cart", "page"] as const).map((page) => ({
+    ...(["product", "category", "page"] as const).map((page) => ({
       id: entryId("page", "template-sections", page),
       family: "page:template-sections",
       title: `Template sections around the ${page} page`,
@@ -641,15 +659,21 @@ function privatePageEntries(): GalleryEntry[] {
     theme.blocks = { ...theme.blocks, ...blocks } as StorefrontThemeDocument["blocks"];
     return theme;
   };
-  const entries: GalleryEntry[] = STOREFRONT_PRIVATE_SUMMARY_PLACEMENTS.map((summary) => ({
-    id: entryId("private", "cart", `summary=${summary}`),
-    family: "private:cart",
-    title: `Cart page, the cart ${summary === "side" ? "beside" : "above"} the form`,
-    page: "cart" as const,
-    theme: withBlocks({ cart: { summary } }),
-    focus: MAIN,
-    scenario: { cart: "three" as const },
-  }));
+  // The cart page in each of the dashboard's ready-made arrangements (privatePages).
+  const entries: GalleryEntry[] = PRIVATE_CART_PRESETS.map((preset) => {
+    const theme = clone(base);
+    const arrangement = privateCartPresetArrangement(preset);
+    if (arrangement) theme.privatePages = { ...theme.privatePages, pages: { ...theme.privatePages.pages, cart: arrangement } };
+    return {
+      id: entryId("private", "cart", `summary=${preset}`),
+      family: "private:cart",
+      title: `Cart page, the cart ${preset === "side" ? "beside" : "above"} the form`,
+      page: "cart" as const,
+      theme,
+      focus: MAIN,
+      scenario: { cart: "three" as const },
+    };
+  });
   for (const summary of STOREFRONT_PRIVATE_SUMMARY_PLACEMENTS) {
     for (const paymentChoices of STOREFRONT_PAYMENT_CHOICE_STYLES) {
       entries.push({
@@ -899,7 +923,85 @@ export function galleryEntries(): GalleryEntry[] {
   return entries;
 }
 
+/** Entries a test registers while the gallery runs (the private pages' rendered property tests), by id. */
+const registered = new Map<string, GalleryEntry>();
+
 export function galleryEntry(id: string): GalleryEntry | null {
-  return galleryEntries().find((entry) => entry.id === id) ?? null;
+  return registered.get(id) ?? galleryEntries().find((entry) => entry.id === id) ?? null;
 }
 
+/** The states the private pages' rendered tests draw a theme in (each a cart the buyer can hold). */
+export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many", "one", "max", "customer", "customer-protected", "long-words"] as const;
+export type PrivatePagesState = (typeof PRIVATE_PAGES_STATES)[number];
+
+/** Long Bangla titles: a line's words at their longest in the store's second language. */
+const BANGLA_LONG_CART = JSON.stringify({
+  items: {
+    "line:v3:prod_0:variant:var_0:p:none": { id: "prod_0", slug: "jamdani", name: "হাতে বোনা ঢাকাই জামদানি শাড়ি, বোতল সবুজ জমিনে সোনালি পাড় ও আনস্টিচড ব্লাউজ পিস", price: 6500, quantity: 1, variantId: "var_0", propertiesHash: "none", options: [{ name: "রং", label: "বোতল সবুজ" }] },
+    "line:v3:prod_1:variant:var_1:p:none": { id: "prod_1", slug: "panjabi", name: "সুতির পাঞ্জাবি, হাতের কাজ করা কলার ও বোতাম, ঈদের বিশেষ সংগ্রহ", price: 1490, quantity: 2, variantId: "var_1", propertiesHash: "none" },
+  },
+});
+
+/** A cart with a line that asks for a decision, a store kit with an add-on and an app's offer row, and a sold-out line. */
+function linesCart(): string {
+  const soldOut = galleryCartSeed("sold-out").items;
+  const extra = Object.values(soldOut).find((item) => fixtureProductSoldOut((item as { id: string }).id)) as { id: string; slug: string; name: string; price: number } | undefined;
+  const cart = JSON.parse(GALLERY_CART) as { items: Record<string, unknown> };
+  cart.items[GALLERY_KIT.key] = GALLERY_KIT.line;
+  if (extra) cart.items[`line:v3:${extra.id}:variant:var_${extra.id}:p:none`] = { id: extra.id, slug: extra.slug, name: extra.name, price: extra.price, quantity: 1, variantId: `var_${extra.id}`, propertiesHash: "none" };
+  return JSON.stringify(cart);
+}
+
+/** Twenty lines the store sells (a theme's blocks under every line repeat twenty times). */
+/** The base cart's first line alone (`one`), or as `count` lines of their own (`max`: the most a buyer is likely to hold). */
+function repeatedCart(count: number): string {
+  const [line] = Object.values(JSON.parse(GALLERY_CART).items as Record<string, Record<string, unknown>>);
+  return JSON.stringify({ items: Object.fromEntries(Array.from({ length: count }, (_, index) => [
+    `line:v3:prod_${index}:variant:var_prod_${index}:p:none`,
+    { ...line, id: `prod_${index}`, slug: undefined, variantId: `var_prod_${index}` },
+  ])) });
+}
+
+function manyCart(): string {
+  const products = Array.from({ length: 60 }, (_, index) => cardProduct(index)).filter((product) => product.availableForSale).slice(0, 20);
+  return JSON.stringify({ items: Object.fromEntries(products.map((product) => [
+    `line:v3:${product.id}:variant:var_${product.id}:p:none`,
+    { id: product.id, slug: product.slug, name: product.name, price: product.discountedPrice, quantity: 1, variantId: `var_${product.id}`, propertiesHash: "none" },
+  ])) });
+}
+
+/**
+ * Registers a cart page drawn with a theme's private pages (a test's
+ * generated document, compiled by the caller with the store's compiler) in
+ * one state: the buyer UI cart entry of a store that delivers, its lines and
+ * every kind of app block (`base`); a line asking for a decision, a store kit
+ * with an add-on once per kit and an app's offer row, and a sold-out line (`lines`); the base cart with a
+ * line asking for a decision and nothing sold out (`decide`); no cart (`empty`); long Bangla
+ * titles (`bn`); an Arabic, right-to-left presence (`ar`); twenty lines (`many`); one line (`one`) and
+ * 99 (`max`); the customer's game cart with its protection offered (`customer`) or taken on two
+ * accounts (`customer-protected`). `page: "home"` draws the homepage instead, where the cart drawer opens. With `noor`, the
+ * store has Noor installed, so a theme from it draws its header and footer;
+ * with `localization`, the store sells in two markets.
+ */
+export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean; terms?: boolean; page?: "home" | "sample-checkout" | "sample-receipt" | "sample-account" } = {}): GalleryEntry {
+  const base = galleryEntry(entryId("app", "buyer-ui"))!;
+  // `decide`: the base cart, whose first line asks for a decision and every line sells, so Place order reaches the question.
+  const customer = state === "customer" ? "offer" as const : state === "customer-protected" ? "protected" as const : undefined;
+  const cart: Record<string, string> = state === "empty" ? {} : { "cart:v3": customer ? galleryCustomerCart(customer === "protected") : state === "bn" ? BANGLA_LONG_CART : state === "lines" ? linesCart() : state === "many" ? manyCart() : state === "one" ? repeatedCart(1) : state === "max" ? repeatedCart(99) : GALLERY_CART };
+  const scenario: GalleryScenario = {
+    ...base.scenario, delivering: true, buyerUiKinds: true, storage: cart,
+    // Noor installed and active: its header and footer skins draw the theme's chrome.
+    ...(options.noor ? { noor: "active" as const, menu: "compact" as const } : {}),
+    // Two markets, the first in two languages: a public footer offers a country and a language.
+    ...(options.localization ? { localization: true } : {}),
+    ...(options.terms ? { requireTerms: true } : {}),
+    ...(state === "lines" || state === "decide" ? { lineStates: true } : {}),
+    ...(state === "long-words" ? { longWords: true } : {}),
+    // The customer's cart: its protection app's blocks alone.
+    ...(customer ? { customer, buyerUiKinds: false } : {}),
+    ...(state === "bn" ? { locale: "bn" as const, product: "bangla" as const } : state === "ar" ? { locale: "ar" as const } : {}),
+  };
+  const entry: GalleryEntry = { ...base, id, family: "private-pages:property", title: `Private pages property ${id} (${state})`, theme, scenario, ...(options.page ? { page: options.page } : {}) };
+  registered.set(id, entry);
+  return entry;
+}

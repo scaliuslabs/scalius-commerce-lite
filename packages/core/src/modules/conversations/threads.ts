@@ -264,8 +264,26 @@ function statusMoveOf(line: ConversationLine): ConversationStatusMove | null {
   return null;
 }
 
-function notificationFor(threadId: string, planned: PlannedLine): NotificationInput | null {
+/**
+ * A claim status change the buyer sees: the buyer hears of it whether or not
+ * staff wrote a message with it (the message then sends nothing of its own).
+ */
+function isBuyerStatusEvent(line: ConversationLine): boolean {
+  return line.kind === "event" && line.eventKind === "warranty_claim_status" && line.visibility === "public" && line.authorType === "system";
+}
+
+function notificationFor(threadId: string, planned: PlannedLine, statusInAppend: boolean): NotificationInput | null {
   const { line, seq } = planned;
+  const reply = (): NotificationInput => ({
+    subjectType: "conversation",
+    subjectId: threadId,
+    audience: "customer",
+    notificationType: "conversation_reply",
+    dedupeKey: `conversation:${threadId}:reply:${seq}`,
+    source: "conversation-post",
+    data: { seq },
+  });
+  if (isBuyerStatusEvent(line)) return reply();
   if ((line.kind !== "message" && line.eventKind !== "product_reply") || line.visibility !== "public") return null;
   if (line.authorType === "customer" || line.authorType === "guest_receipt") {
     return {
@@ -278,17 +296,7 @@ function notificationFor(threadId: string, planned: PlannedLine): NotificationIn
       data: { seq },
     };
   }
-  if (line.authorType === "staff") {
-    return {
-      subjectType: "conversation",
-      subjectId: threadId,
-      audience: "customer",
-      notificationType: "conversation_reply",
-      dedupeKey: `conversation:${threadId}:reply:${seq}`,
-      source: "conversation-post",
-      data: { seq },
-    };
-  }
+  if (line.authorType === "staff") return statusInAppend ? null : reply();
   return null;
 }
 
@@ -306,6 +314,7 @@ export function planConversationAppend(
   const planned: PlannedLine[] = [];
   const outboxIds: string[] = [];
   const now = nowSeconds();
+  const statusInAppend = lines.some(isBuyerStatusEvent);
 
   lines.forEach((line, index) => {
     const seq = thread.lastSeq + index + 1;
@@ -368,7 +377,7 @@ export function planConversationAppend(
 
     const entry = { id, seq, line };
     planned.push(entry);
-    const notification = options.notify ? notificationFor(thread.id, entry) : null;
+    const notification = options.notify ? notificationFor(thread.id, entry, statusInAppend) : null;
     if (notification) {
       const insert = buildNotificationOutboxInsert(db, notification);
       statements.push(insert.statement);
@@ -1071,6 +1080,8 @@ export interface StaffInboxFilters {
   status?: ConversationStatus | "all";
   assignee?: "me" | "none" | string;
   subjectType?: ConversationSubjectType;
+  /** One of the merchant's topic keys: only threads the buyer gave that topic. */
+  topic?: string;
   q?: string;
   cursor?: string | null;
   unread?: boolean;
@@ -1157,6 +1168,7 @@ export async function listStaffInbox(
   else if (filters.assignee === "none") conditions.push(isNull(conversations.assigneeUserId));
   else if (filters.assignee) conditions.push(eq(conversations.assigneeUserId, filters.assignee));
   if (filters.subjectType) conditions.push(eq(conversations.subjectType, filters.subjectType));
+  if (filters.topic) conditions.push(eq(conversations.topic, filters.topic));
   const q = filters.q?.trim().slice(0, 100);
   if (q) {
     const number = parseOrderNumberSearch(q);
@@ -1202,6 +1214,7 @@ export async function queryStaffInbox(db: Database, userId: string, filters: Sta
   else if (filters.assignee === "none") conditions.push(isNull(conversations.assigneeUserId));
   else if (filters.assignee) conditions.push(eq(conversations.assigneeUserId, filters.assignee));
   if (filters.subjectType) conditions.push(eq(conversations.subjectType, filters.subjectType));
+  if (filters.topic) conditions.push(eq(conversations.topic, filters.topic));
   const q = filters.q?.normalize("NFC").trim();
   if (q && [...q].length > 100) throw new ValidationError("Search with up to 100 characters.");
   const number = q ? parseOrderNumberSearch(q) : null;

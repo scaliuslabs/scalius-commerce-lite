@@ -1,0 +1,84 @@
+---
+// The payment step's parts in the theme's arrangement (private-anatomy.ts,
+// page `checkout`). The step hands its parts in as slots; this draws them
+// either as the store always has (no arrangement and no tokens: the summary
+// beside or above the payment, as the theme's `checkout` block says) or in the
+// theme's layout tree, where reading order is the arrangement's at every
+// width. `payment` is one part: the methods, the chosen method's details (the
+// gateway's own surface, Pay and the terms inside) and the parking they move
+// from stay together in the store's order. Every part is mandatory but
+// `progress`, which is drawn only when the arrangement names it.
+import { renderPrivateNodes } from "@/lib/private-pages/html";
+import type { PrivateNode } from "@scalius/shared/storefront-theme";
+
+interface Props {
+  /** The theme's layout (null: the store's own page). */
+  layout: PrivateNode[] | null;
+  /** The legacy page's grid classes (`summary: side | top`). */
+  gridClass: string;
+  sectionClass: string;
+}
+
+const { layout, gridClass, sectionClass } = Astro.props;
+const slot = async (name: string) => (Astro.slots.has(name) ? await Astro.slots.render(name) : "");
+
+let html = "";
+if (layout) {
+  const names = new Set<string>();
+  const collect = (nodes: readonly PrivateNode[]) => {
+    for (const node of nodes) {
+      if (node.type === "part") names.add(node.part);
+      else if (node.type === "layout") collect(node.children);
+    }
+  };
+  collect(layout);
+  // Every part but the empty state shows only while there is a checkout to pay for (as the store's grid does).
+  const checkout = (inner: string, part = "") => `<div class="min-w-0 group-data-[checkout-state=missing]:hidden"${part ? ` data-part="${part}"` : ""}>${inner}</div>`;
+  const parts: Record<string, () => Promise<string>> = {
+    progress: async () => checkout(await slot("progress"), "progress"),
+    empty: () => slot("empty"),
+    summary: async () => checkout(await slot("summary")),
+    heading: async () => checkout(await slot("heading")),
+    notices: async () => checkout(await slot("notices")),
+    "gift-card": async () => checkout(await slot("giftCard")),
+    payment: async () => checkout(`${await slot("payment")}${await slot("parking")}`),
+  };
+  const targets: Record<string, string> = {
+    "checkout.payment.after": checkout(`<div data-buyer-ui-target="checkout.payment.after"></div>`),
+    "checkout.actions.before": checkout(`<div data-buyer-ui-target="checkout.actions.before"></div>`),
+  };
+  const rendered = new Map<string, string>();
+  for (const name of names) if (parts[name]) rendered.set(name, await parts[name]!());
+  html = renderPrivateNodes(layout, {
+    part: (name) => rendered.get(name) ?? "",
+    target: (name) => targets[name] ?? "",
+  });
+}
+---
+
+{layout ? (
+  <Fragment>
+    <slot name="boot" />
+    <div class="@container grid content-start gap-5 group-data-[checkout-state=redirect]:hidden" data-layout="page"><Fragment set:html={html} /></div>
+  </Fragment>
+) : (
+  <Fragment>
+    <slot name="boot" />
+    <div class="group-data-[checkout-state=missing]:hidden group-data-[checkout-state=redirect]:hidden" data-part="progress">
+      <slot name="progress" />
+    </div>
+    <slot name="empty" />
+    <div class={gridClass}>
+      <slot name="summary" />
+      <section class={sectionClass} aria-labelledby="paymentHeading">
+        <slot name="heading" />
+        <slot name="notices" />
+        <slot name="giftCard" />
+        <slot name="payment" />
+        <div data-buyer-ui-target="checkout.payment.after" class="mt-4"></div>
+        <div data-buyer-ui-target="checkout.actions.before" class="mt-4"></div>
+        <slot name="parking" />
+      </section>
+    </div>
+  </Fragment>
+)}

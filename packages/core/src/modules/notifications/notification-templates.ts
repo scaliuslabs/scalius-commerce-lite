@@ -50,6 +50,8 @@ export const NOTIFICATION_VARIABLES = [
   "gift_card_sender",
   "gift_card_link",
   "gift_card_recipient",
+  // Where the buyer reads a staff reply (their account inbox, or the order's tracking page).
+  "conversation_link",
 ] as const;
 
 export type NotificationVariable = (typeof NOTIFICATION_VARIABLES)[number];
@@ -70,6 +72,8 @@ export function variablesForEvent(event: TemplatedNotificationType): readonly No
   if (event === "order_digital_delivered") {
     return ["customer_name", "order_number", "store_name", "download_names", "licence_keys", "sms_licence_keys", "access_link"];
   }
+  // Never the reply's text: a staff line can hold a sign-in, which stays behind the buyer's own read.
+  if (event === "conversation_reply") return ["customer_name", "order_number", "store_name", "conversation_link"];
   if (event === "review_request") return ["customer_name", "order_number", "store_name", "review_products", "review_link"];
   if (event === "gift_card_issued") {
     return [
@@ -330,7 +334,14 @@ export interface OrderEmailFacts {
   appAnswers?: ReadonlyArray<{ appName: string; lines: readonly string[] }>;
   /** Null when the saved currency can't be shown truthfully. */
   amounts: {
+    /** The items alone when `addOns` has rows (Subtotal plus the rows is the saved subtotal). */
     subtotal: string;
+    /**
+     * The apps' add-ons as their own summary rows, after Subtotal: the
+     * receipt's rows and words (`addOnDocumentRows`), each with its detail
+     * lines (plain text, bounded). Absent or empty: none.
+     */
+    addOns?: ReadonlyArray<{ title: string; amount: string; details: readonly string[] }>;
     /** Each applied discount; `name` null is a discount without a saved promotion. */
     /** `appId`: a store app's discount (it keeps its own title); the store's own code discounts show their code. */
     discounts: Array<{ name: string | null; code: string | null; appId?: string | null; amount: string }>;
@@ -410,9 +421,12 @@ export function renderOrderEmail(input: {
 
   // Each discount by name and code; free or discounted delivery is the delivery
   // line itself, with the fee it replaced struck through.
-  const summary: Array<{ label: string; value: string; was?: string | null }> = [];
+  const summary: Array<{ label: string; value: string; was?: string | null; details?: readonly string[] }> = [];
   if (amounts) {
     summary.push({ label: copy.subtotal, value: amounts.subtotal });
+    for (const addOn of amounts.addOns ?? []) {
+      summary.push({ label: addOn.title, value: addOn.amount, details: addOn.details.map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean) });
+    }
     for (const discount of amounts.discounts) {
       summary.push({ label: formatDiscountLineLabel(copy.discount, { title: discount.name, code: discount.code, appId: discount.appId }), value: `−${discount.amount}` });
     }
@@ -446,7 +460,7 @@ export function renderOrderEmail(input: {
     cta ? `${cta.label}: ${cta.href}` : "",
     lines.length || summary.length ? copy.orderSummary : "",
     ...lines.map((item) => `${item.name}${item.variant ? ` (${item.variant})` : ""}${item.properties.map((line) => `\n${line}`).join("")}\n${item.quantity}${item.subtotal ? ` — ${item.subtotal}` : ""}`),
-    summary.map(({ label, value, was }) => `${label}: ${value}${was ? ` ${copy.was(was)}` : ""}`).join("\n"),
+    summary.map(({ label, value, was, details }) => `${label}: ${value}${was ? ` ${copy.was(was)}` : ""}${(details ?? []).map((line) => `\n  ${line}`).join("")}`).join("\n"),
     amounts ? "" : copy.amountsUnavailable,
     `${copy.payment}: ${payment}`,
     facts.address.length ? `${copy.deliveryAddress}\n${facts.address.join("\n")}` : "",
@@ -465,10 +479,11 @@ ${storeHeaderHtml(facts.store)}
 ${cta ? `<p style="margin:0 0 12px;"><a href="${escapeHtml(cta.href)}" style="${BUTTON}">${escapeHtml(cta.label)}</a></p>` : ""}${origin ? `<p style="margin:0 0 24px;"><a href="${escapeHtml(`${origin}/`)}" style="${LINK}">${escapeHtml(copy.visitStore)}</a></p>` : ""}
 <h2 style="${SECTION}">${escapeHtml(copy.orderSummary)}</h2>
 ${lines.length ? `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><thead><tr><th scope="col" style="text-align:left;padding:0 8px 8px 0;${RULE}">${escapeHtml(copy.items)}</th><th scope="col" style="width:34%;text-align:right;padding:0 0 8px;${RULE}">${amounts ? escapeHtml(copy.subtotal) : ""}</th></tr></thead><tbody>${lines.map((item) => `<tr><td style="padding:12px 8px 12px 0;vertical-align:top;${RULE}"><strong>${escapeHtml(item.name)}</strong>${item.variant ? `<div style="${MUTED}">${escapeHtml(item.variant)}</div>` : ""}${item.properties.map((line) => `<div style="font-size:14px;${MUTED}">${escapeHtml(line)}</div>`).join("")}<div style="font-size:14px;${MUTED}">${escapeHtml(item.quantity)}</div></td><td style="padding:12px 0;vertical-align:top;text-align:right;${RULE}">${escapeHtml(item.subtotal)}</td></tr>`).join("")}</tbody></table>` : ""}
-${summary.length ? `<table aria-label="${escapeHtml(copy.orderSummary)}" style="width:100%;border-collapse:collapse;margin:16px 0;">${summary.map(({ label, value, was }, index) => {
+${summary.length ? `<table aria-label="${escapeHtml(copy.orderSummary)}" style="width:100%;border-collapse:collapse;margin:16px 0;">${summary.map(({ label, value, was, details }, index) => {
     const weight = index === summary.length - 1 ? "700" : "400";
     const before = was ? `<s style="${MUTED}">${escapeHtml(was)}</s> ` : "";
-    return `<tr><th scope="row" style="padding:4px 12px 4px 0;text-align:left;font-weight:${weight};">${escapeHtml(label)}</th><td style="padding:4px 0;text-align:right;font-weight:${weight};">${before}${escapeHtml(value)}</td></tr>`;
+    const detailLines = (details ?? []).map((line) => `<div style="font-size:14px;font-weight:400;${MUTED}">${escapeHtml(line)}</div>`).join("");
+    return `<tr><th scope="row" style="padding:4px 12px 4px 0;text-align:left;vertical-align:top;font-weight:${weight};">${escapeHtml(label)}${detailLines}</th><td style="padding:4px 0;text-align:right;vertical-align:top;font-weight:${weight};">${before}${escapeHtml(value)}</td></tr>`;
   }).join("")}</table>` : `<p style="${MUTED}">${escapeHtml(copy.amountsUnavailable)}</p>`}
 <p style="margin:16px 0 0;"><strong>${escapeHtml(copy.payment)}:</strong> ${escapeHtml(payment)}</p>
 ${facts.address.length ? `<h2 style="${SECTION}">${escapeHtml(copy.deliveryAddress)}</h2><p style="margin:0;">${facts.address.map((line) => escapeHtml(line)).join("<br>")}</p>` : ""}
@@ -544,6 +559,7 @@ export function sampleVariables(storeName: string, language: MessageLanguage): N
     gift_card_message: "Happy Eid!",
     gift_card_sender: "Karim",
     gift_card_link: "https://example.com/",
+    conversation_link: "https://example.com/account/inbox",
   };
 }
 
@@ -564,7 +580,7 @@ export function sampleOrderEmail(options: {
   const origin = trimTrailingCharacter(options.origin ?? "", "/") || null;
   const values = sampleVariables(options.store.name ?? "", options.language);
   const money = (amount: number) => formatMoney(amount, { code: "BDT", language: options.language });
-  if (isResolvedNotificationType(options.event)) {
+  if (isResolvedNotificationType(options.event) || options.event === "conversation_reply") {
     return renderMessageEmail({
       language: options.language,
       store: options.store,

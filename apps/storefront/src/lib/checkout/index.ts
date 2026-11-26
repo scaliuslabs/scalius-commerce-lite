@@ -12,6 +12,7 @@ import { formatPageNumber, formatStoreDateTime, pageLanguage } from "@/lib/store
 import { formatMoney, DEFAULT_CURRENCY } from "@/lib/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { addOnRowsOver } from "@scalius/shared/add-on-totals";
+import { addOnRowKey, appendAddOnRow, openAddOnKeys } from "@/lib/add-on-row";
 
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
@@ -776,13 +777,16 @@ export function renderOrderSummaryDetails(
 ): void {
   // The words the page carries now (an inline script sets them before any module runs).
   if (Object.keys(checkoutCopy).length === 0) readCheckoutLanguage();
+  // An add-on row the buyer opened stays open as the summary is drawn again.
+  const open = openAddOnKeys(details);
   details.replaceChildren();
   appendOrderItems(details, quote, freeDeliveryCartKeys(data.cartItems));
   // The apps' add-ons as their own rows after the items' subtotal: together they are the quote's subtotal.
   const addOns = addOnRowsOver(quote.subtotalMinor, quote.addOns);
-  appendSummaryRow(details, checkoutCopy.subtotalText, currencyFmt(fromMinor(addOns.itemsSubtotalMinor, quote.decimalPlaces), quote));
+  // Each money row names itself (`data-summary-row`), as on every surface: the private pages' style targets read them.
+  appendSummaryRow(details, checkoutCopy.subtotalText, currencyFmt(fromMinor(addOns.itemsSubtotalMinor, quote.decimalPlaces), quote)).dataset.summaryRow = "subtotal";
   for (const row of addOns.rows) {
-    appendSummaryRow(details, row.title, currencyFmt(fromMinor(row.amountMinor, quote.decimalPlaces), quote)).dataset.summaryRow = "add-on";
+    appendAddOnRow(details, row, currencyFmt(fromMinor(row.amountMinor, quote.decimalPlaces), quote), "payment", open.has(addOnRowKey(row)));
   }
   // Delivery savings show on the delivery line ("৳80 Free (CODE)"), never as a discount line.
   const deliveryDiscounts = quote.discounts.filter(({ shippingAmount }) => shippingAmount > 0);
@@ -793,7 +797,7 @@ export function renderOrderSummaryDetails(
   // Nothing physical: no delivery line at all.
   if (quote.shippingMethod) {
     const deliveryFee = quote.shippingMethod.baseAmountMinor / 10 ** quote.decimalPlaces;
-    appendSummaryRow(
+    const delivery = appendSummaryRow(
       details,
       // A pickup order has no shipping: the row names the pickup.
       quoteDeliveryMode(quote) === "pickup" ? checkoutCopy.deliveryModePickupText : checkoutCopy.shippingText,
@@ -804,6 +808,7 @@ export function renderOrderSummaryDetails(
       undefined,
       deliveryCharged < deliveryFee ? currencyFmt(deliveryFee, quote) : undefined,
     );
+    delivery.dataset.summaryRow = "delivery";
   }
   // One line per discount on the items, named as the buyer knows it (a store
   // app's discount too: it has no promotion, so its key is the app and position).
@@ -816,20 +821,23 @@ export function renderOrderSummaryDetails(
       "flex justify-between gap-3 text-primary",
     );
     row.dataset.discountLine = discountLineKey(discount, position);
+    row.dataset.summaryRow = "discount";
   });
   if (quote.taxMinor > 0) {
     appendSummaryRow(
       details,
       `${quote.displayLabel}${quote.pricesIncludeTax ? ` (${checkoutCopy.includedText})` : ""}`,
       currencyFmt(quote.taxAmount, quote),
-    );
+    ).dataset.summaryRow = "tax";
   }
-  appendSummaryRow(
+  const total = appendSummaryRow(
     details,
     checkoutCopy.totalText,
     currencyFmt(quote.totalAmount, quote),
     "flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2 mb-2",
   );
+  total.dataset.summaryRow = "total";
+  (total.firstElementChild as HTMLElement).dataset.part = "summary-total-label";
 
   // Gift cards are payment, not a discount: they follow the total, then what is left.
   if (hasGiftCardTender(quote)) {
@@ -839,14 +847,15 @@ export function renderOrderSummaryDetails(
         checkoutText(giftCopy.giftCardLineText, { card: giftCardChipLabel(tender.last4) }),
         `-${currencyFmt(tender.applied, quote)}`,
         "flex justify-between gap-3 text-primary",
-      );
+      ).dataset.summaryRow = "paid";
     }
+    // What is left to pay ranks with the total (`due`): no theme draws it smaller than another row.
     appendSummaryRow(
       details,
       giftCopy.amountDueText,
       currencyFmt(quoteAmountDue(quote).amountDue, quote),
       "flex justify-between rounded-lg border border-primary/20 bg-primary/10 p-2 font-semibold text-primary-ink",
-    );
+    ).dataset.summaryRow = "due";
   } else if (isDepositPaymentRequired(config, quote.totalAmount, quoteLineTypes(quote))) {
     const advance = config.partialPaymentAmount;
     const balance = quote.totalAmount - advance;
@@ -855,13 +864,13 @@ export function renderOrderSummaryDetails(
       checkoutCopy.dueNowText,
       currencyFmt(advance, quote),
       "flex justify-between rounded-lg border border-primary/20 bg-primary/10 p-2 font-semibold text-primary-ink",
-    );
+    ).dataset.summaryRow = "due";
     appendSummaryRow(
       details,
       checkoutCopy.dueOnDeliveryText,
       currencyFmt(balance, quote),
       "flex justify-between px-2 text-xs text-muted-foreground",
-    );
+    ).dataset.summaryRow = "due";
   }
 
   appendCheckoutReview(details, data, quote);

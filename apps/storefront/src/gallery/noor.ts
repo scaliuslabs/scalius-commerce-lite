@@ -30,7 +30,7 @@ export const NOOR_EXTENSION: StorefrontExtension = {
 
 /** Apply the actual plugin template through the same shared operation as the merchant builder. */
 export function noorTheme(base: StorefrontThemeDocument): StorefrontThemeDocument {
-  const template = readStorefrontAppTemplateTheme(storefront.templates[0]?.theme, storefront.templates[0]?.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
+  const template = readStorefrontAppTemplateTheme(storefront.templates[0]?.theme, storefront.templates[0]?.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION, "scalius.noor");
   if (!template) throw new Error("The Noor template no longer fits the theme document.");
   const theme = applyStorefrontAppTemplate(base, "scalius.noor/noor", template);
   theme.pages.home = theme.pages.home.map((section) => {

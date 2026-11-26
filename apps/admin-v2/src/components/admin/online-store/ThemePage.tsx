@@ -153,7 +153,8 @@ function ThemeOverview({ workspace, refetch }: {
   const [appsProblem, setAppsProblem] = useState<{ apps: ThemeAppsProblem[]; moreParts: number } | null>(null);
   const option = (key: string) => t(key as MessageKey);
   // Each app template as this draft would look with it applied.
-  const fromApps = useMemo(() => appTemplates(workspace.apps).map((template) => ({ template, theme: applyAppTemplate(template, draft) })), [workspace.apps, draft]);
+  const offered = useMemo(() => appTemplates(workspace.apps), [workspace.apps]);
+  const fromApps = useMemo(() => offered.map((template) => ({ template, theme: applyAppTemplate(template, draft) })), [offered, draft]);
   // An applied app template is the current one while the draft names it; otherwise the built-in one its look matches.
   const appTemplate = draft.apps?.template ? fromApps.find((each) => each.template.key === draft.apps?.template)?.template : undefined;
   const builtIn = draft.apps?.template ? null : selectedTemplate(draft);

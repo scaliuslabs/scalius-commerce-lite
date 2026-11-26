@@ -19,6 +19,7 @@ import {
   type StorefrontDeliveryFacts,
   type StorefrontImage,
   type StorefrontObjectFieldView,
+  type StorefrontProductCard,
   type StorefrontProductList,
   type StorefrontPromotionEnd,
   type StorefrontSectionSkinSettings,
@@ -94,7 +95,8 @@ export type CoreSectionProjection<Value> =
             : Key extends TileKey ? StorefrontTile[]
               : Key extends "promotionId" ? StorefrontPromotionEnd | null
                 : Key extends "objectField" ? StorefrontObjectFieldView[]
-                  : CoreSectionProjection<Value[Key]>
+                  : Key extends "product" ? StorefrontProductCard | null
+                    : CoreSectionProjection<Value[Key]>
         }
           : Value;
 
@@ -107,6 +109,8 @@ export interface CoreSectionResolver {
   promotion(promotionId: string): StorefrontPromotionEnd | null;
   deliveryFacts(): StorefrontDeliveryFacts["items"];
   objectField?(qualifiedKey: string): StorefrontObjectFieldView[];
+  /** A product a block names by id (a hero slide's), as its card; null when it is not public. */
+  product?(productId: string): StorefrontProductCard | null;
 }
 
 function projectEntry(key: string, value: unknown, resolver: CoreSectionResolver): [string, unknown] {
@@ -119,6 +123,7 @@ function projectEntry(key: string, value: unknown, resolver: CoreSectionResolver
     return [name, resolver.tiles(kind, ids)];
   }
   if (key === "promotionId") return ["promotion", typeof value === "string" && value ? resolver.promotion(value) : null];
+  if (key === "product") return ["product", typeof value === "string" && value ? resolver.product?.(value) ?? null : null];
   if (key === "objectField") return ["objectFields", typeof value === "string" && value ? resolver.objectField?.(value) ?? [] : []];
   if (key === "source" && storefrontProductSourceSchema.safeParse(value).success) return ["products", project(value, resolver)];
   return [key, project(value, resolver)];
@@ -145,7 +150,7 @@ const CORE_SKIN_ADAPTERS = {} satisfies {
  * a media id (`image`, `phoneImage`, `mediaId` as `image`) as an image or
  * null, a product source as its list (`source` as `products`),
  * `categoryIds` and `collectionIds` as tiles (`categories`, `collections`;
- * missing ones left out), a `promotionId` as its end (`promotion`), an object
+ * missing ones left out), a named `product` as its card (or null), a `promotionId` as its end (`promotion`), an object
  * field as its views (`objectFields`), a delivery-facts source as the store's
  * facts; `hidden` and `bindings` dropped. Pass the section through
  * `storefrontVisibleSection` first, so hidden blocks stay out.

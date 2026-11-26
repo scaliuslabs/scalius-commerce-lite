@@ -21,13 +21,12 @@ import {
   type FitCondition,
 } from "./fit";
 import { storefrontAppValuesSchema, storefrontProductAppBlocksSchemaOf } from "./apps";
-import { storefrontLinkSchema } from "./links";
+import { storefrontLinkSchema, storefrontStorePathSchema } from "./links";
+import { PLUGIN_ID_PATTERN } from "../plugins/ids";
 import { storefrontSettingBindingsSchema, type StorefrontSettingBindings } from "./bindings";
 import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-field-keys";
 import {
   storefrontAccountBlockSchema,
-  storefrontCartDrawerBlockSchema,
-  storefrontCartPageBlockSchema,
   storefrontCheckoutBlockSchema,
   storefrontReceiptBlockSchema,
 } from "./private-pages";
@@ -274,23 +273,114 @@ export const STOREFRONT_DESKTOP_NAV_VARIANTS = {
 };
 
 /**
- * The bottom bar's shortcuts. The header always carries the cart and the
- * search on phones, so the bar never repeats them: no Cart and no Search tab.
+ * The bottom bar's store destinations: each a page the store knows and keeps
+ * (the cart tab's live count included). A theme picks 3 to 5 tabs from these
+ * and its own link tabs, in order.
  */
-export const STOREFRONT_MOBILE_TABS = ["home", "categories", "offers", "compare", "account"] as const;
+export const STOREFRONT_MOBILE_TABS = ["home", "categories", "offers", "search", "compare", "cart", "account"] as const;
+export type StorefrontMobileTab = (typeof STOREFRONT_MOBILE_TABS)[number];
+
+/** The store's tab icons: one per destination, and a few for link tabs. */
+export const STOREFRONT_MOBILE_TAB_ICONS = [...STOREFRONT_MOBILE_TABS, "link", "page", "news", "support", "gift", "heart", "star", "chat", "bolt"] as const;
+
+export const STOREFRONT_MOBILE_TAB_LIMITS = { min: 3, max: 5, label: 24 } as const;
+/** A label's stored length bound, in UTF-16 units (the visible bound is `label` characters, counted as a reader sees them). */
+const MOBILE_TAB_LABEL_UNITS = STOREFRONT_MOBILE_TAB_LIMITS.label * 4;
+
+/** Why a theme's tab list is refused (`params.reason` of the issue). */
+export const STOREFRONT_MOBILE_TAB_REFUSALS = {
+  repeated: "tab_repeated",
+  external: "tab_link_external",
+  label: "tab_label",
+} as const;
+
+/** A tab's icon: the store's, or a file the theme's app ships in `public/` (drawn only while that app is active). */
+const mobileTabIconSchema = z.discriminatedUnion("source", [
+  z.object({ source: z.literal("store"), name: z.enum(STOREFRONT_MOBILE_TAB_ICONS) }).strict(),
+  z.object({
+    source: z.literal("app"),
+    app: z.string().regex(PLUGIN_ID_PATTERN),
+    file: z.string().regex(/^[A-Za-z0-9_-][A-Za-z0-9._/-]{0,200}$/).refine((file) => !file.split("/").includes(".."), "A file inside public/."),
+  }).strict(),
+]);
+
+/** Zero-width, soft hyphen and bidi controls: they draw nothing, so they never make a label. */
+const INVISIBLE = /[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/** A label's characters as a reader counts them (a Bangla conjunct is one), invisible ones left out. */
+export function storefrontMobileTabLabelLength(label: string): number {
+  return [...graphemes.segment(label.replace(INVISIBLE, "").trim())].length;
+}
+
+/** A link tab: the theme's words (translated like every theme word, the translation held to the same bound), an icon and a page of this store. */
+const mobileLinkTabSchema = z.object({
+  kind: z.literal("link"),
+  label: z.string().trim().max(MOBILE_TAB_LABEL_UNITS).refine((label) => {
+    const length = storefrontMobileTabLabelLength(label);
+    return length >= 1 && length <= STOREFRONT_MOBILE_TAB_LIMITS.label;
+  }, { message: `A tab's name is 1 to ${STOREFRONT_MOBILE_TAB_LIMITS.label} characters.`, params: { reason: STOREFRONT_MOBILE_TAB_REFUSALS.label } }),
+  icon: mobileTabIconSchema,
+  href: storefrontStorePathSchema(STOREFRONT_MOBILE_TAB_REFUSALS.external),
+}).strict();
+
+const destinationTab = <Kind extends StorefrontMobileTab>(kind: Kind) => z.object({ kind: z.literal(kind) }).strict();
+
+/** One tab: a store destination (its page, words and icon are the store's), or a link tab. */
+export const storefrontMobileTabSchema = z.discriminatedUnion("kind", [
+  destinationTab("home"),
+  destinationTab("categories"),
+  destinationTab("offers"),
+  destinationTab("search"),
+  destinationTab("compare"),
+  destinationTab("cart"),
+  destinationTab("account"),
+  mobileLinkTabSchema,
+]);
+export type StorefrontMobileTabValue = z.infer<typeof storefrontMobileTabSchema>;
+
+/** Each store destination's own page, so a link tab to it repeats it. */
+const DESTINATION_PATHS: Record<StorefrontMobileTab, string> = {
+  home: "/",
+  categories: "/categories",
+  offers: "/search?hasdiscount=true",
+  search: "/search",
+  compare: "/compare",
+  cart: "/cart",
+  account: "/account",
+};
+/** The page a tab opens, as one key: case folded, no trailing slash. */
+const tabPage = (tab: StorefrontMobileTabValue): string => {
+  const path = (tab.kind === "link" ? tab.href : DESTINATION_PATHS[tab.kind]).toLowerCase();
+  return path.length > 1 ? path.replace(/\/+(?=$|\?)/, "") : path;
+};
+
+const mobileTabsSchema = z.array(storefrontMobileTabSchema).min(STOREFRONT_MOBILE_TAB_LIMITS.min).max(STOREFRONT_MOBILE_TAB_LIMITS.max)
+  .superRefine((tabs, context) => {
+    const seen = new Set<string>();
+    tabs.forEach((tab, index) => {
+      const key = tabPage(tab);
+      if (seen.has(key)) {
+        context.addIssue({ code: "custom", path: [index], message: "Each tab opens its own page: this one is already a tab.", params: { reason: STOREFRONT_MOBILE_TAB_REFUSALS.repeated } });
+      }
+      seen.add(key);
+    });
+  });
+
+/** Today's bar: Home, Categories, Offers and Account. */
+export const STOREFRONT_MOBILE_DEFAULT_TABS: readonly StorefrontMobileTabValue[] = [{ kind: "home" }, { kind: "categories" }, { kind: "offers" }, { kind: "account" }];
 
 export const STOREFRONT_MOBILE_NAV_VARIANTS = {
   "accordion-drawer": variant({ renders: "drawer" }),
   // One level at a time.
   "drill-in-drawer": variant({ renders: "drawer" }),
-  // 56-61px, 3-5 items; the account moves from the header to the tabs. The cart and the search stay in the header.
+  // 56-61px, 3-5 items; the account moves from the header to the tabs. The header keeps its cart and search.
   "bottom-tabs": variant({
     settings: {
-      tabs: z.array(z.enum(STOREFRONT_MOBILE_TABS)).min(3).max(5)
-        .refine((tabs) => new Set(tabs).size === tabs.length, "Each tab appears once."),
+      tabs: mobileTabsSchema,
       drawer: z.enum(["accordion", "drill-in"]),
     },
-    defaults: { tabs: ["home", "categories", "offers", "account"], drawer: "accordion" },
+    defaults: { tabs: STOREFRONT_MOBILE_DEFAULT_TABS.map((tab) => ({ ...tab })), drawer: "accordion" },
     renders: "tabs",
   }),
 };
@@ -818,11 +908,10 @@ export const storefrontThemeBlocksSchemaOf = (
   }).strict(),
   footer: blockSchema(STOREFRONT_FOOTER_VARIANTS, bindings),
   /**
-   * The buyer's private pages (private-pages.ts): closed choices core draws
-   * with, never a part an app draws. What a buyer must see and do there stays.
+   * The buyer's private pages not yet drawn from named parts (private-pages.ts):
+   * closed choices core draws with, never a part an app draws. What a buyer
+   * must see and do there stays. The cart page and drawer: `privatePages`.
    */
-  cart: storefrontCartPageBlockSchema,
-  cartDrawer: storefrontCartDrawerBlockSchema,
   checkout: storefrontCheckoutBlockSchema,
   receipt: storefrontReceiptBlockSchema,
   account: storefrontAccountBlockSchema,

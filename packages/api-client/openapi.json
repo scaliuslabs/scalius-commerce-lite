@@ -1671,7 +1671,7 @@
           "version": {
             "type": "number",
             "enum": [
-              14
+              16
             ]
           },
           "template": {
@@ -1834,8 +1834,7 @@
                           "destructive",
                           "destructive-foreground",
                           "border",
-                          "input",
-                          "ring"
+                          "input"
                         ]
                       }
                     },
@@ -1881,8 +1880,7 @@
                             "destructive",
                             "destructive-foreground",
                             "border",
-                            "input",
-                            "ring"
+                            "input"
                           ]
                         },
                         "minItems": 2,
@@ -1935,8 +1933,7 @@
                             "destructive",
                             "destructive-foreground",
                             "border",
-                            "input",
-                            "ring"
+                            "input"
                           ]
                         },
                         "minItems": 2,
@@ -2537,13 +2534,205 @@
                           "tabs": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "enum": [
-                                "home",
-                                "categories",
-                                "offers",
-                                "compare",
-                                "account"
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "home"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "categories"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "offers"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "search"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "compare"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "cart"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "account"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "link"
+                                      ]
+                                    },
+                                    "label": {
+                                      "type": "string",
+                                      "maxLength": 96
+                                    },
+                                    "icon": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "source": {
+                                              "type": "string",
+                                              "enum": [
+                                                "store"
+                                              ]
+                                            },
+                                            "name": {
+                                              "type": "string",
+                                              "enum": [
+                                                "home",
+                                                "categories",
+                                                "offers",
+                                                "search",
+                                                "compare",
+                                                "cart",
+                                                "account",
+                                                "link",
+                                                "page",
+                                                "news",
+                                                "support",
+                                                "gift",
+                                                "heart",
+                                                "star",
+                                                "chat",
+                                                "bolt"
+                                              ]
+                                            }
+                                          },
+                                          "required": [
+                                            "source",
+                                            "name"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "source": {
+                                              "type": "string",
+                                              "enum": [
+                                                "app"
+                                              ]
+                                            },
+                                            "app": {
+                                              "type": "string",
+                                              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$"
+                                            },
+                                            "file": {
+                                              "type": "string",
+                                              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._/-]{0,200}$"
+                                            }
+                                          },
+                                          "required": [
+                                            "source",
+                                            "app",
+                                            "file"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      ]
+                                    },
+                                    "href": {
+                                      "type": "string",
+                                      "maxLength": 2048,
+                                      "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "label",
+                                    "icon",
+                                    "href"
+                                  ],
+                                  "additionalProperties": false
+                                }
                               ]
                             },
                             "minItems": 3,
@@ -3412,46 +3601,6 @@
                   }
                 ]
               },
-              "cart": {
-                "type": "object",
-                "properties": {
-                  "summary": {
-                    "type": "string",
-                    "enum": [
-                      "side",
-                      "top"
-                    ]
-                  }
-                },
-                "required": [
-                  "summary"
-                ],
-                "additionalProperties": false
-              },
-              "cartDrawer": {
-                "type": "object",
-                "properties": {
-                  "width": {
-                    "type": "string",
-                    "enum": [
-                      "standard",
-                      "wide"
-                    ]
-                  },
-                  "recommendations": {
-                    "type": "string",
-                    "enum": [
-                      "shown",
-                      "hidden"
-                    ]
-                  }
-                },
-                "required": [
-                  "width",
-                  "recommendations"
-                ],
-                "additionalProperties": false
-              },
               "checkout": {
                 "type": "object",
                 "properties": {
@@ -3531,8 +3680,6 @@
               "listing",
               "product",
               "footer",
-              "cart",
-              "cartDrawer",
               "checkout",
               "receipt",
               "account"
@@ -3657,9 +3804,6 @@
                   "collection": {
                     "$ref": "#/components/schemas/StorefrontPageTemplate"
                   },
-                  "cart": {
-                    "$ref": "#/components/schemas/StorefrontPageTemplate"
-                  },
                   "page": {
                     "$ref": "#/components/schemas/StorefrontPageTemplate"
                   }
@@ -3667,7 +3811,6 @@
                 "required": [
                   "product",
                   "collection",
-                  "cart",
                   "page"
                 ],
                 "additionalProperties": false
@@ -3711,6 +3854,9 @@
               "additionalProperties": false
             },
             "maxItems": 40
+          },
+          "privatePages": {
+            "$ref": "#/components/schemas/StorefrontPrivatePages"
           }
         },
         "required": [
@@ -3719,7 +3865,8 @@
           "tokens",
           "brand",
           "blocks",
-          "pages"
+          "pages",
+          "privatePages"
         ],
         "additionalProperties": false
       },
@@ -3797,10 +3944,6 @@
           "input": {
             "type": "string",
             "pattern": "^#[0-9a-f]{6}$"
-          },
-          "ring": {
-            "type": "string",
-            "pattern": "^#[0-9a-f]{6}$"
           }
         },
         "required": [
@@ -3821,8 +3964,7 @@
           "destructive",
           "destructive-foreground",
           "border",
-          "input",
-          "ring"
+          "input"
         ],
         "additionalProperties": false
       },
@@ -4042,6 +4184,12 @@
                             "type": "string",
                             "nullable": true,
                             "maxLength": 2048
+                          },
+                          "product": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1,
+                            "maxLength": 64
                           },
                           "hidden": {
                             "type": "boolean"
@@ -6431,6 +6579,374 @@
         ],
         "additionalProperties": false
       },
+      "StorefrontPrivatePages": {
+        "type": "object",
+        "properties": {
+          "controls": {
+            "type": "string",
+            "enum": [
+              "header",
+              "footer",
+              "none"
+            ]
+          },
+          "pages": {
+            "type": "object",
+            "properties": {
+              "cart": {
+                "$ref": "#/components/schemas/StorefrontPrivateArrangement"
+              },
+              "cartDrawer": {
+                "$ref": "#/components/schemas/StorefrontPrivateArrangement"
+              },
+              "checkout": {
+                "$ref": "#/components/schemas/StorefrontPrivateArrangement"
+              },
+              "receipt": {
+                "$ref": "#/components/schemas/StorefrontPrivateArrangement"
+              },
+              "account": {
+                "$ref": "#/components/schemas/StorefrontPrivateArrangement"
+              }
+            },
+            "additionalProperties": false
+          },
+          "tokens": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            }
+          },
+          "labels": {
+            "type": "object",
+            "properties": {
+              "cart.heading": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "cart.intro": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "cart.summaryHeading": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "cart.continue": {
+                "type": "string",
+                "enum": [
+                  "continue-shopping",
+                  "keep-shopping",
+                  "back-to-store"
+                ]
+              },
+              "cart.empty": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "cart.emptyText": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "cart.subtotal": {
+                "type": "string",
+                "enum": [
+                  "subtotal",
+                  "items-total"
+                ]
+              },
+              "cart.showSummary": {
+                "type": "string",
+                "enum": [
+                  "show-summary",
+                  "show-cart"
+                ]
+              },
+              "cart.hideSummary": {
+                "type": "string",
+                "enum": [
+                  "hide-summary",
+                  "hide-cart"
+                ]
+              },
+              "dialog.goBack": {
+                "type": "string",
+                "enum": [
+                  "go-back",
+                  "cancel"
+                ]
+              },
+              "dialog.confirm": {
+                "type": "string",
+                "enum": [
+                  "confirm",
+                  "continue-checkout",
+                  "agree-and-continue"
+                ]
+              },
+              "drawer.title": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "drawer.checkout": {
+                "type": "string",
+                "enum": [
+                  "checkout",
+                  "proceed-to-checkout"
+                ]
+              },
+              "drawer.viewCart": {
+                "type": "string",
+                "enum": [
+                  "view-cart",
+                  "go-to-cart"
+                ]
+              },
+              "drawer.continue": {
+                "type": "string",
+                "enum": [
+                  "continue-shopping",
+                  "keep-shopping"
+                ]
+              },
+              "drawer.empty": {
+                "$ref": "#/components/schemas/StorefrontPrivateWords"
+              },
+              "drawer.startShopping": {
+                "type": "string",
+                "enum": [
+                  "start-shopping",
+                  "browse-products",
+                  "continue-shopping"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "icons": {
+            "type": "object",
+            "properties": {
+              "cart.empty": {
+                "$ref": "#/components/schemas/StorefrontPrivateAsset"
+              },
+              "drawer.empty": {
+                "$ref": "#/components/schemas/StorefrontPrivateAsset"
+              }
+            }
+          },
+          "chrome": {},
+          "search": {},
+          "css": {},
+          "assets": {},
+          "compiled": {
+            "type": "object",
+            "properties": {
+              "anatomy": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "sanitizer": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "css": {
+                "type": "object",
+                "properties": {
+                  "cart": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "cartDrawer": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "checkout": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "receipt": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "account": {
+                    "type": "string",
+                    "maxLength": 65536
+                  }
+                }
+              },
+              "refused": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "anatomy",
+              "sanitizer",
+              "css"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "pages",
+          "labels",
+          "icons",
+          "compiled"
+        ],
+        "additionalProperties": false
+      },
+      "StorefrontPrivateArrangement": {
+        "type": "object",
+        "properties": {
+          "frame": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+          },
+          "layout": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorefrontPrivateNode"
+            },
+            "maxItems": 24
+          },
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/StorefrontPrivateNode"
+              },
+              "maxItems": 24
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "StorefrontPrivateNode": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "layout"
+                ]
+              },
+              "layout": {
+                "type": "string",
+                "enum": [
+                  "stack",
+                  "columns",
+                  "grid",
+                  "group",
+                  "fold",
+                  "scroll"
+                ]
+              },
+              "hook": {
+                "type": "string",
+                "maxLength": 40
+              },
+              "children": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/StorefrontPrivateNode"
+                },
+                "maxItems": 24
+              }
+            },
+            "required": [
+              "type",
+              "layout",
+              "children"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "part"
+                ]
+              },
+              "part": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+              },
+              "variant": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+              }
+            },
+            "required": [
+              "type",
+              "part"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "target"
+                ]
+              },
+              "target": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+              }
+            },
+            "required": [
+              "type",
+              "target"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "content"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": {}
+          }
+        ]
+      },
+      "StorefrontPrivateWords": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "StorefrontPrivateAsset": {
+        "type": "object",
+        "properties": {
+          "app": {
+            "type": "string",
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$"
+          },
+          "file": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._/-]{0,200}$"
+          }
+        },
+        "required": [
+          "app",
+          "file"
+        ],
+        "additionalProperties": false
+      },
       "StorefrontBrandImage": {
         "type": "object",
         "properties": {
@@ -7922,6 +8438,16 @@
                   "sm",
                   "md",
                   "lg"
+                ]
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "neutral",
+                  "info",
+                  "success",
+                  "warning",
+                  "critical"
                 ]
               },
               "children": {
@@ -10588,6 +11114,32 @@
               "children"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "mark"
+                ]
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "neutral",
+                  "info",
+                  "success",
+                  "warning",
+                  "critical"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "tone"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -12249,6 +12801,16 @@
                             "sm",
                             "md",
                             "lg"
+                          ]
+                        },
+                        "tone": {
+                          "type": "string",
+                          "enum": [
+                            "neutral",
+                            "info",
+                            "success",
+                            "warning",
+                            "critical"
                           ]
                         },
                         "children": {
@@ -14913,6 +15475,32 @@
                         "type",
                         "summary",
                         "children"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "mark"
+                          ]
+                        },
+                        "tone": {
+                          "type": "string",
+                          "enum": [
+                            "neutral",
+                            "info",
+                            "success",
+                            "warning",
+                            "critical"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "tone"
                       ],
                       "additionalProperties": false
                     }
@@ -33041,7 +33629,6 @@
                 "enum": [
                   "product",
                   "collection",
-                  "cart",
                   "page"
                 ]
               },
@@ -42419,7 +43006,6 @@
               "enum": [
                 "product",
                 "collection",
-                "cart",
                 "page"
               ]
             },
@@ -43412,6 +43998,9 @@
                         "cspAllowedDomains": {
                           "type": "string"
                         },
+                        "cspImageSources": {
+                          "type": "string"
+                        },
                         "policies": {
                           "type": "array",
                           "items": {
@@ -44213,6 +44802,7 @@
                         "platform",
                         "timeZone",
                         "cspAllowedDomains",
+                        "cspImageSources",
                         "policies",
                         "storefrontCopy",
                         "appScripts",
@@ -44866,7 +45456,6 @@
                     "enum": [
                       "product",
                       "collection",
-                      "cart",
                       "page"
                     ]
                   },
@@ -58432,6 +59021,16 @@
                                           "lg"
                                         ]
                                       },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      },
                                       "children": {
                                         "type": "array",
                                         "items": {
@@ -61094,6 +61693,32 @@
                                       "type",
                                       "summary",
                                       "children"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "mark"
+                                        ]
+                                      },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "tone"
                                     ],
                                     "additionalProperties": false
                                   }
@@ -90939,6 +91564,16 @@
                                               "lg"
                                             ]
                                           },
+                                          "tone": {
+                                            "type": "string",
+                                            "enum": [
+                                              "neutral",
+                                              "info",
+                                              "success",
+                                              "warning",
+                                              "critical"
+                                            ]
+                                          },
                                           "children": {
                                             "type": "array",
                                             "items": {
@@ -93601,6 +94236,32 @@
                                           "type",
                                           "summary",
                                           "children"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "mark"
+                                            ]
+                                          },
+                                          "tone": {
+                                            "type": "string",
+                                            "enum": [
+                                              "neutral",
+                                              "info",
+                                              "success",
+                                              "warning",
+                                              "critical"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "tone"
                                         ],
                                         "additionalProperties": false
                                       }
@@ -96604,6 +97265,16 @@
                                           "lg"
                                         ]
                                       },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      },
                                       "children": {
                                         "type": "array",
                                         "items": {
@@ -99266,6 +99937,32 @@
                                       "type",
                                       "summary",
                                       "children"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "mark"
+                                        ]
+                                      },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "tone"
                                     ],
                                     "additionalProperties": false
                                   }
@@ -101704,6 +102401,16 @@
                                           "lg"
                                         ]
                                       },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      },
                                       "children": {
                                         "type": "array",
                                         "items": {
@@ -104366,6 +105073,32 @@
                                       "type",
                                       "summary",
                                       "children"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "mark"
+                                        ]
+                                      },
+                                      "tone": {
+                                        "type": "string",
+                                        "enum": [
+                                          "neutral",
+                                          "info",
+                                          "success",
+                                          "warning",
+                                          "critical"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "tone"
                                     ],
                                     "additionalProperties": false
                                   }
@@ -135271,7 +136004,7 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 80,
-                        "description": "What the buyer sees the cover as (`GameGhor Protection`)."
+                        "description": "What the buyer sees the cover as (`Arcade Protection`)."
                       },
                       "durationUnit": {
                         "type": "string",
@@ -213433,7 +214166,6 @@
                       "landing",
                       "product",
                       "collection",
-                      "cart",
                       "page"
                     ]
                   },
@@ -213876,7 +214608,6 @@
                             "enum": [
                               "product",
                               "collection",
-                              "cart",
                               "page"
                             ]
                           },
@@ -218147,6 +218878,11 @@
                           "type": "string",
                           "maxLength": 51299
                         },
+                        "imageSources": {
+                          "type": "string",
+                          "maxLength": 51299,
+                          "description": "Hosts the storefront loads images from and nothing else (img-src), on every page, private and payment pages included; comma-separated."
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -218154,6 +218890,7 @@
                       },
                       "required": [
                         "cspAllowedDomains",
+                        "imageSources",
                         "revision"
                       ]
                     }
@@ -218280,6 +219017,10 @@
                     "minimum": 0
                   },
                   "cspAllowedDomains": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "imageSources": {
                     "type": "string",
                     "maxLength": 65536
                   }
@@ -218630,6 +219371,150 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "when": "Use when checking the storefront's allowed security origins.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      }
+    },
+    "/api/v1/admin/settings/security/image-hosts": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Image hosts the catalogue uses beyond the platform's",
+        "description": "The other https hosts the catalogue's images come from (category images: every other catalogue image is one of the store's files). A buyer's private page (cart, checkout, payment, receipt, account) loads images only from the platform's origins and the image hosts saved here (and, but on a payment page, the trusted websites); an image from any other host is drawn as the store's placeholder there.",
+        "operationId": "dashboard.security.image_hosts",
+        "responses": {
+          "200": {
+            "description": "Image hosts outside the platform's origins",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "hosts": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 2048
+                          },
+                          "maxItems": 50
+                        }
+                      },
+                      "required": [
+                        "hosts"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when catalogue images show as placeholders on the cart, checkout or account pages.",
           "dryRun": "none",
           "confirmation": "none",
           "impact": "none"
@@ -231360,6 +232245,23 @@
                                     "subject",
                                     "body"
                                   ]
+                                },
+                                "conversation_reply": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
                                 }
                               },
                               "required": [
@@ -231385,7 +232287,8 @@
                                 "order_digital_delivered",
                                 "gift_card_issued",
                                 "gift_card_sent",
-                                "review_request"
+                                "review_request",
+                                "conversation_reply"
                               ]
                             },
                             "sms": {
@@ -231666,6 +232569,18 @@
                                   "required": [
                                     "body"
                                   ]
+                                },
+                                "conversation_reply": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
                                 }
                               },
                               "required": [
@@ -231691,7 +232606,8 @@
                                 "order_digital_delivered",
                                 "gift_card_issued",
                                 "gift_card_sent",
-                                "review_request"
+                                "review_request",
+                                "conversation_reply"
                               ]
                             }
                           },
@@ -231924,7 +232840,8 @@
                       "order_digital_delivered",
                       "gift_card_issued",
                       "gift_card_sent",
-                      "review_request"
+                      "review_request",
+                      "conversation_reply"
                     ]
                   },
                   "email": {
@@ -232388,6 +233305,23 @@
                                     "subject",
                                     "body"
                                   ]
+                                },
+                                "conversation_reply": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
                                 }
                               },
                               "required": [
@@ -232413,7 +233347,8 @@
                                 "order_digital_delivered",
                                 "gift_card_issued",
                                 "gift_card_sent",
-                                "review_request"
+                                "review_request",
+                                "conversation_reply"
                               ]
                             },
                             "sms": {
@@ -232694,6 +233629,18 @@
                                   "required": [
                                     "body"
                                   ]
+                                },
+                                "conversation_reply": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
                                 }
                               },
                               "required": [
@@ -232719,7 +233666,8 @@
                                 "order_digital_delivered",
                                 "gift_card_issued",
                                 "gift_card_sent",
-                                "review_request"
+                                "review_request",
+                                "conversation_reply"
                               ]
                             }
                           },
@@ -232947,7 +233895,8 @@
                           "order_digital_delivered",
                           "gift_card_issued",
                           "gift_card_sent",
-                          "review_request"
+                          "review_request",
+                          "conversation_reply"
                         ]
                       },
                       "subject": {
@@ -233006,7 +233955,8 @@
                           "order_digital_delivered",
                           "gift_card_issued",
                           "gift_card_sent",
-                          "review_request"
+                          "review_request",
+                          "conversation_reply"
                         ]
                       },
                       "body": {
@@ -242387,6 +243337,46 @@
                             "attributeApps": {
                               "$ref": "#/components/schemas/CheckoutAttributeApps"
                             },
+                            "addOnRows": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "appId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "amountMinor": {
+                                    "type": "integer"
+                                  },
+                                  "details": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "maxLength": 80
+                                    },
+                                    "maxItems": 10
+                                  },
+                                  "folded": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      true
+                                    ],
+                                    "description": "Rows folded under the neutral label: print \"Add-ons\" in the invoice's language."
+                                  }
+                                },
+                                "required": [
+                                  "appId",
+                                  "title",
+                                  "amountMinor"
+                                ]
+                              },
+                              "maxItems": 50,
+                              "description": "The apps' add-ons as their own rows after Subtotal (`addOnDocumentRows` prints them, as the receipt and the emails do)."
+                            },
                             "taxExemption": {
                               "type": "object",
                               "nullable": true,
@@ -242507,6 +243497,43 @@
                                       ]
                                     },
                                     "x-scalius-app-owned": "items"
+                                  },
+                                  "addOns": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "appId": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "title": {
+                                          "type": "string"
+                                        },
+                                        "totalMinor": {
+                                          "type": "integer"
+                                        },
+                                        "amountMinor": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        },
+                                        "per": {
+                                          "type": "string",
+                                          "enum": [
+                                            "unit",
+                                            "bundle"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "appId",
+                                        "title",
+                                        "totalMinor",
+                                        "amountMinor",
+                                        "per"
+                                      ]
+                                    },
+                                    "maxItems": 10
                                   }
                                 },
                                 "required": [
@@ -243193,6 +244220,46 @@
                             "attributeApps": {
                               "$ref": "#/components/schemas/CheckoutAttributeApps"
                             },
+                            "addOnRows": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "appId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "amountMinor": {
+                                    "type": "integer"
+                                  },
+                                  "details": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "maxLength": 80
+                                    },
+                                    "maxItems": 10
+                                  },
+                                  "folded": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      true
+                                    ],
+                                    "description": "Rows folded under the neutral label: print \"Add-ons\" in the invoice's language."
+                                  }
+                                },
+                                "required": [
+                                  "appId",
+                                  "title",
+                                  "amountMinor"
+                                ]
+                              },
+                              "maxItems": 50,
+                              "description": "The apps' add-ons as their own rows after Subtotal (`addOnDocumentRows` prints them, as the receipt and the emails do)."
+                            },
                             "taxExemption": {
                               "type": "object",
                               "nullable": true,
@@ -243313,6 +244380,43 @@
                                       ]
                                     },
                                     "x-scalius-app-owned": "items"
+                                  },
+                                  "addOns": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "appId": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "title": {
+                                          "type": "string"
+                                        },
+                                        "totalMinor": {
+                                          "type": "integer"
+                                        },
+                                        "amountMinor": {
+                                          "type": "integer",
+                                          "nullable": true
+                                        },
+                                        "per": {
+                                          "type": "string",
+                                          "enum": [
+                                            "unit",
+                                            "bundle"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "appId",
+                                        "title",
+                                        "totalMinor",
+                                        "amountMinor",
+                                        "per"
+                                      ]
+                                    },
+                                    "maxItems": 10
                                   }
                                 },
                                 "required": [
@@ -262050,6 +263154,17 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 40,
+              "description": "One of the store's topic keys (`topics` on this list): only conversations the buyer gave that topic"
+            },
+            "required": false,
+            "description": "One of the store's topic keys (`topics` on this list): only conversations the buyer gave that topic",
+            "name": "topic",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "maxLength": 100
             },
             "required": false,
@@ -262101,8 +263216,28 @@
                                 "x-scalius-buyer-text": true
                               },
                               "topic": {
-                                "type": "string",
-                                "nullable": true
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "labels": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label",
+                                  "labels"
+                                ]
                               },
                               "status": {
                                 "type": "string",
@@ -262212,11 +263347,37 @@
                         "nextCursor": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "topics": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "labels": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "label",
+                              "labels"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "items",
-                        "nextCursor"
+                        "nextCursor",
+                        "topics"
                       ]
                     }
                   },
@@ -263342,6 +264503,11 @@
                       "review"
                     ]
                   },
+                  "topic": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "description": "One of the store's topic keys (`topics` on this list): only conversations the buyer gave that topic"
+                  },
                   "q": {
                     "type": "string",
                     "maxLength": 100
@@ -263411,8 +264577,28 @@
                                 "x-scalius-buyer-text": true
                               },
                               "topic": {
-                                "type": "string",
-                                "nullable": true
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "labels": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label",
+                                  "labels"
+                                ]
                               },
                               "status": {
                                 "type": "string",
@@ -263528,13 +264714,39 @@
                         },
                         "scanned": {
                           "type": "integer"
+                        },
+                        "topics": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "labels": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "label",
+                              "labels"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "items",
                         "nextCursor",
                         "scanExhausted",
-                        "scanned"
+                        "scanned",
+                        "topics"
                       ]
                     }
                   },
@@ -264914,8 +266126,28 @@
                               "x-scalius-buyer-text": true
                             },
                             "topic": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "labels": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "labels"
+                              ]
                             },
                             "status": {
                               "type": "string",
@@ -265530,8 +266762,28 @@
                               "x-scalius-buyer-text": true
                             },
                             "topic": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "labels": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "labels"
+                              ]
                             },
                             "status": {
                               "type": "string",
@@ -266149,8 +267401,28 @@
                               "x-scalius-buyer-text": true
                             },
                             "topic": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "labels": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "labels"
+                              ]
                             },
                             "status": {
                               "type": "string",
@@ -266733,8 +268005,28 @@
                               "x-scalius-buyer-text": true
                             },
                             "topic": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "labels": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "labels"
+                              ]
                             },
                             "status": {
                               "type": "string",
@@ -267396,8 +268688,28 @@
                               "x-scalius-buyer-text": true
                             },
                             "topic": {
-                              "type": "string",
-                              "nullable": true
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "labels": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "labels"
+                              ]
                             },
                             "status": {
                               "type": "string",
@@ -343599,6 +344911,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.search.global"
+          ]
+        },
+        {
+          "operationId": "dashboard.security.image_hosts",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.security.image_hosts"
           ]
         },
         {

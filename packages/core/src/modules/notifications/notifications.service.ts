@@ -1497,6 +1497,8 @@ export async function dispatchWithReceipt(options: DeliveryReceiptSubject & {
     provider: string;
     recipient: string;
     recipientMasked?: string | null;
+    /** Shares one receipt across outbox rows (`OrderNotificationDeliveryTargetInput.receiptKey`). */
+    receiptKey?: string;
     send: (target: OrderNotificationDeliveryTarget) => Promise<DeliverySendResult>;
     /**
      * Values the message carries that must never be recorded (gift-card codes,

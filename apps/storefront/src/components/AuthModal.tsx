@@ -415,9 +415,11 @@ export default function AuthModal() {
         aria-modal="true"
         aria-labelledby="customer-auth-title"
         className="flex max-h-[calc(100dvh-1rem)] w-full max-w-md flex-col overflow-hidden rounded-t-xl border border-border bg-background shadow-xl focus:outline-none sm:rounded-xl"
+        data-private="dialog"
+        data-part="sign-in"
       >
         <div className="flex shrink-0 items-center justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-6">
-          <h2 id="customer-auth-title" className="text-xl font-semibold">{title}</h2>
+          <h2 id="customer-auth-title" className="text-xl font-semibold" data-part="dialog-title">{title}</h2>
           <button
             type="button"
             onClick={close}
@@ -452,7 +454,7 @@ export default function AuthModal() {
 
             {step === "contact" && (
               <>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground" data-part="dialog-text">
                   {isEmail ? copy.intro.email : copy.intro.phone}
                 </p>
                 {ui.showMethodSwitcher && (
@@ -478,7 +480,7 @@ export default function AuthModal() {
                   </div>
                 )}
                 <div className="space-y-1.5">
-                  <label htmlFor="auth-contact" className="text-sm font-medium">{destinationLabel}</label>
+                  <label htmlFor="auth-contact" className="text-sm font-medium" data-part="field-label">{destinationLabel}</label>
                   <input
                     id="auth-contact"
                     data-autofocus
@@ -538,11 +540,11 @@ export default function AuthModal() {
 
             {step === "code" && (
               <>
-                <p className="break-words text-sm text-muted-foreground">
+                <p className="break-words text-sm text-muted-foreground" data-part="dialog-text">
                   {copy.codeSentTo(isEmail ? sentTo : pagePhone(sentTo))}
                 </p>
                 <div className="space-y-1.5">
-                  <label htmlFor="customer-otp" className="text-sm font-medium">{copy.code}</label>
+                  <label htmlFor="customer-otp" className="text-sm font-medium" data-part="field-label">{copy.code}</label>
                   <input
                     id="customer-otp"
                     data-autofocus
@@ -578,11 +580,11 @@ export default function AuthModal() {
 
             {step === "details" && (
               <>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground" data-part="dialog-text">
                   {isEmail ? copy.confirmed.email : copy.confirmed.phone}
                 </p>
                 <div className="space-y-1.5">
-                  <label htmlFor="auth-name" className="text-sm font-medium">{copy.fullName}</label>
+                  <label htmlFor="auth-name" className="text-sm font-medium" data-part="field-label">{copy.fullName}</label>
                   <input
                     id="auth-name"
                     data-autofocus
@@ -599,7 +601,7 @@ export default function AuthModal() {
                 </div>
                 {ui.newAccount.phone !== "hidden" && (
                   <div className="space-y-1.5">
-                    <label htmlFor="auth-phone" className="text-sm font-medium">
+                    <label htmlFor="auth-phone" className="text-sm font-medium" data-part="field-label">
                       {ui.newAccount.phone === "optional" ? copy.optional(copy.phone) : copy.phone}
                     </label>
                     <input
@@ -621,7 +623,7 @@ export default function AuthModal() {
                 )}
                 {ui.newAccount.email !== "hidden" && (
                   <div className="space-y-1.5">
-                    <label htmlFor="auth-email" className="text-sm font-medium">
+                    <label htmlFor="auth-email" className="text-sm font-medium" data-part="field-label">
                       {ui.newAccount.email === "optional" ? copy.optional(copy.email) : copy.email}
                     </label>
                     <input
@@ -670,7 +672,8 @@ export default function AuthModal() {
                   <a
                     href={pagePath("/account")}
                     data-astro-prefetch="false"
-                    className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    data-part="dialog-confirm"
+                    className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {copy.viewAccount}
                   </a>
@@ -678,6 +681,7 @@ export default function AuthModal() {
                     type="button"
                     onClick={() => void signOut()}
                     disabled={loading}
+                    data-part="dialog-back"
                     className="min-h-11 rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {copy.signOut}
@@ -691,7 +695,8 @@ export default function AuthModal() {
                     || (step === "contact" && (!contact.trim() || sendWait > 0))
                     || (step === "code" && (code.length !== 6 || locked))
                   }
-                  className="min-h-11 flex-1 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  data-part="dialog-confirm"
+                  className="min-h-11 flex-1 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 >
                   {loading
                     ? step === "contact" ? copy.submit.sending : step === "code" ? copy.submit.verifying : copy.submit.creating

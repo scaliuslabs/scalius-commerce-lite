@@ -5,6 +5,7 @@ import { applyTransportSecurityHeaders, withPageCsp } from "@/lib/middleware-hel
 import {
   getRuntimeApiBaseUrl,
   getRuntimeCspAllowedDomains,
+  getRuntimeCspImageSources,
   getRuntimeDashboardUrl,
   getRuntimeMediaUrl,
   getRuntimePresence,
@@ -154,6 +155,7 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
         cdnBaseUrl: getCdnBase(),
       },
       merchantSources: getRuntimeCspAllowedDomains(),
+      imageSources: getRuntimeCspImageSources(),
       // A buyer's own page is framed by nothing (the shells, the editor's canvas and a theme preview render excepted).
       frameAncestors: buyerPageForbidsFraming(url.pathname) && frameAncestors.length === 0 ? null : frameAncestors,
       // The same choice Layout.astro makes: the scripts of this page kind.
@@ -163,6 +165,8 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
       inlineScriptHashes,
       storeScripts,
       paymentPage,
+      // A buyer's own page loads images from named origins only (no theme or app stylesheet is drawn there).
+      privatePage: storefrontAppPage(url.pathname) === "private",
     }),
   });
 });

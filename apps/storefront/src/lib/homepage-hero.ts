@@ -1,6 +1,7 @@
 import {
   HERO_SLIDE_PRESENTATION,
   type HeroSlide,
+  type HeroSlidePrice,
   type HeroSlideViewport,
 } from "@scalius/shared/hero-slider";
 import type { StorefrontHeroSlide, StorefrontSectionOf } from "@scalius/shared/storefront-theme";
@@ -99,9 +100,18 @@ export interface ResolvedHomepageHero {
  * around the phone focal point, else the slide's own). A slide whose image
  * did not resolve (deleted, not ready) is left out on both.
  */
+/** A slide's product as the hero draws it: its name and page for the slide's own blanks, and its price. */
+export interface HeroSlideProduct {
+  name: string;
+  href: string;
+  price: HeroSlidePrice;
+}
+
 export function resolveHomepageHero(
   slides: readonly StorefrontHeroSlide[],
   media: (id: string) => HomepageMediaAsset | null,
+  /** A named product, while it is public (else the slide draws without it). */
+  product: (id: string) => HeroSlideProduct | null = () => null,
 ): ResolvedHomepageHero {
   const desktop: HeroSlide[] = [];
   const mobile: HeroSlide[] = [];
@@ -109,12 +119,15 @@ export function resolveHomepageHero(
     const image = media(slide.image);
     if (!image) return;
     const phoneImage = slide.phoneImage ? media(slide.phoneImage) : null;
+    // A named product fills the slide's blank heading and link, and adds its price.
+    const named = slide.product ? product(slide.product) : null;
     const shared = {
       title: slide.alt,
-      heading: slide.heading ?? "",
+      heading: slide.heading || named?.name || "",
       supportingText: slide.text ?? "",
       buttonLabel: slide.buttonLabel ?? "",
-      link: slide.link ?? "",
+      link: slide.link || named?.href || "",
+      ...(named ? { price: named.price } : {}),
     };
     desktop.push({ id: `${index}-${image.id}`, url: image.url, ...shared, focalPoint: slide.focalPoint });
     mobile.push({

@@ -46,6 +46,11 @@ const toneClasses = {
   success: "border-success/40 bg-success/10 text-foreground", warning: "border-warning/50 bg-warning/10 text-foreground",
   critical: "border-destructive/30 bg-destructive/10 text-destructive",
 } as const;
+/** A tone's mark: its glyph, and the circle's border in the tone's colour. */
+const marks = {
+  neutral: ["\u2022", "border-border"], info: ["i", "border-border"], success: ["\u2713", "border-success/40"],
+  warning: ["!", "border-warning/50"], critical: ["\u00D7", "border-destructive/30 text-destructive"],
+} as const;
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -140,17 +145,23 @@ function storeHref(to: PluginUiTarget): string | null {
 
 function buttonNode(node: PluginUiButton, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement | null {
   const action = node.action;
+  // Its own tone on the element a theme's `ui.button.<tone>` row addresses (an untoned button is secondary).
+  const tone = node.tone ?? "secondary";
   if (action.kind === "cart" && !isCartSlot(block.target)) return null;
-  const buttonClass = "rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50";
+  // At least 44px tall on a phone (a tap target); its words decide its height from `sm`.
+  const buttonClass = "inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 sm:min-h-0";
   if (action.kind === "navigate") {
     const href = storeHref(action.to);
     if (!href) return null;
-    const link = element("a", `inline-flex w-fit ${buttonClass}`, node.label);
-    link.href = href; return link;
+    const link = element("a", `w-fit ${buttonClass}`, node.label);
+    link.href = href; link.dataset.ui = "button"; link.dataset.tone = tone; return link;
   }
   const wrap = element("div", "space-y-1");
+  // A banner's own buttons are drawn here too: the hook is the button's, wherever it stands.
+  wrap.dataset.ui = "button";
   const button = element("button", buttonClass, node.label);
   button.type = "button";
+  button.dataset.tone = tone;
   button.disabled = node.disabled === true;
   const status = element("p", "text-sm text-muted-foreground"); status.setAttribute("role", "status");
   button.addEventListener("click", async () => {
@@ -187,28 +198,60 @@ function keyValueText(value: string | number | boolean | null): string {
   return value ?? "—";
 }
 
+/**
+ * One node, its kind on `data-ui` (`banner`, `text`, `button`, …) and its tone on
+ * `data-tone`, inside the block's wrapper (`data-buyer-ui-app`) in its mount's
+ * `data-buyer-ui-target`: the hooks a theme's tokens address an app's nodes by
+ * (private-anatomy.ts `PRIVATE_BUYER_UI_STYLES`). No theme selector reaches them.
+ */
 function renderNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement | null {
+  const rendered = drawNode(node, block, options);
+  if (rendered) {
+    rendered.dataset.ui = node.type;
+    if ("tone" in node && typeof node.tone === "string") rendered.dataset.tone = node.tone;
+  }
+  return rendered;
+}
+
+function drawNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement | null {
   switch (node.type) {
     case "stack": case "columns": {
       const horizontal = node.type === "stack" && node.direction === "horizontal";
-      const container = element("div", node.type === "columns" ? "grid gap-3 sm:grid-cols-2" : horizontal ? "flex flex-wrap items-center gap-3" : "flex flex-col gap-3");
-      for (const child of node.children) { const rendered = renderNode(child, block, options); if (rendered) container.append(rendered); }
+      const tone = node.type === "stack" ? node.tone : undefined;
+      const container = element("div", node.type === "columns" ? "grid gap-3 sm:grid-cols-2" : horizontal ? `flex flex-wrap items-center gap-3${tone ? ` ${TONED_ROW}` : ""}` : "flex flex-col gap-3");
+      // A toned stack is a surface of its own (an offer row, a status box): its height is its padding, gap and pieces.
+      if (tone) container.className += ` rounded-md border p-3 text-sm ${toneClasses[tone]}`;
+      for (const child of node.children) {
+        const rendered = renderNode(child, block, options);
+        if (!rendered) continue;
+        // In a row, a column of words takes the room left, and a line of its own before it is too narrow to read.
+        if (horizontal && child.type === "stack" && child.direction !== "horizontal") rendered.className += ` ${ROW_FILL}`;
+        container.append(rendered);
+      }
       return container;
     }
     case "heading": return element("h3", "text-base font-semibold text-foreground", node.text);
-    case "text": return element("p", `whitespace-pre-wrap break-words ${node.size === "md" ? "text-base" : "text-sm"}${node.emphasis === "strong" ? " font-semibold" : ""}`, node.text);
-    case "badge": return element("span", `w-fit rounded-full border px-2 py-1 text-xs ${toneClasses[node.tone ?? "neutral"]}`, node.text);
+    case "text": return element("p", `whitespace-pre-wrap ${node.size === "md" ? "text-base" : "text-sm"}${node.emphasis === "strong" ? " font-semibold" : node.emphasis === "mono" ? " font-mono" : ""}${node.tone === "critical" ? " text-destructive" : ""}`, node.text);
+    case "mark": {
+      const [glyph, ring] = marks[node.tone];
+      // Twice its words' size, so a theme's `size` scales the circle with the glyph.
+      const mark = element("span", `inline-flex size-[2em] shrink-0 items-center justify-center rounded-full border text-xs font-semibold leading-none ${ring}`, glyph);
+      mark.setAttribute("aria-hidden", "true");
+      return mark;
+    }
+    // One box (inline-block): a badge that wraps keeps its words inside its border, never cut through by it.
+    case "badge": return element("span", `inline-block w-fit max-w-full rounded-full border px-2 py-1 text-xs ${toneClasses[node.tone ?? "neutral"]}`, node.text);
     case "banner": {
       const container = element("div", `rounded-md border p-3 text-sm ${toneClasses[node.tone]}`);
       if (node.title) container.append(element("p", "font-medium", node.title));
-      if (node.text) container.append(element("p", "whitespace-pre-wrap break-words", node.text));
+      if (node.text) container.append(element("p", "whitespace-pre-wrap", node.text));
       for (const action of node.actions ?? []) { const rendered = buttonNode(action, block, options); if (rendered) container.append(rendered); }
       return container;
     }
     case "divider": return element("hr", "border-border");
     case "key-value": {
       const list = element("dl", "grid grid-cols-2 gap-x-3 gap-y-1 text-sm");
-      for (const item of node.items) list.append(element("dt", "text-muted-foreground", item.label), element("dd", "break-words text-end", keyValueText(item.value)));
+      for (const item of node.items) list.append(element("dt", "text-muted-foreground", item.label), element("dd", "text-end", keyValueText(item.value)));
       return list;
     }
     case "image": {
@@ -236,7 +279,7 @@ function renderNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOpt
       // A named group: the marker turns with its own disclosure, never an open ancestor's.
       const details = element("details", "group/disclosure rounded-md border border-border");
       details.open = node.open === true;
-      const summary = element("summary", "flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-9 [&::-webkit-details-marker]:hidden");
+      const summary = element("summary", "flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:min-h-9 [&::-webkit-details-marker]:hidden");
       const marker = element("span", "shrink-0 transition-transform group-open/disclosure:rotate-180", "\u25BE");
       marker.setAttribute("aria-hidden", "true");
       summary.append(element("span", "min-w-0", node.summary), marker);
@@ -251,6 +294,10 @@ function renderNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOpt
 }
 
 const SCOPE = "[data-buyer-ui-scope]";
+/** A column of words in a row: it grows into the room left and wraps below the pieces before it under 16rem (less a mark's room on a phone). */
+const ROW_FILL = "min-w-0 grow basis-[min(16rem,100%_-_3rem)]";
+/** A toned row's last piece (its action) keeps to the row's end when it wraps to a line of its own. */
+const TONED_ROW = "[&>:last-child]:ms-auto";
 
 /**
  * The mounts one render owns: those under `root` (and `root` itself, when it
@@ -278,7 +325,12 @@ export function renderBuyerUi(value: unknown, options: BuyerUiOptions = {}): voi
       // A per-line block is drawn under its own line only (the mount's `data-buyer-ui-line`).
       if (block.target !== mount.dataset.buyerUiTarget || (block.lineKey ?? null) !== (mount.dataset.buyerUiLine ?? null)) continue;
       const node = renderNode(block.ui, block, options);
-      if (node) { node.dataset.buyerUiApp = block.appId; nodes.push(node); }
+      if (!node) continue;
+      // Each block in a wrapper naming its app: a host part a theme styles by tokens (`ui.<kind>@<app>`).
+      const wrapper = element("div", "");
+      wrapper.dataset.buyerUiApp = block.appId;
+      wrapper.append(node);
+      nodes.push(wrapper);
     }
     // A line's blocks name their line to assistive technology: each button is described by the line's name.
     const lineName = mount.dataset.buyerUiLineName;

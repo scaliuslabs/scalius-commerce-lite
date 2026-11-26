@@ -1,4 +1,4 @@
-import { presentStaffConversation, withChannelNames } from "../../utils/conversation-view";
+import { presentStaffConversation, presentStaffSummaries, staffConversationTopics } from "../../utils/conversation-view";
 // Dashboard inbox routes, mounted at /admin/conversations (Wave A §6.2).
 // Reads need conversations.view; replies, notes, uploads, status and
 // assignment need conversations.reply (route-permissions/conversations.ts).
@@ -27,7 +27,7 @@ import {
   updateStaffThread,
   type ConversationActor,
 } from "@scalius/core/modules/conversations";
-import { CONVERSATION_LIMITS, CONVERSATION_SUBJECT_TYPES } from "@scalius/shared/conversation";
+import { CONVERSATION_LIMITS, CONVERSATION_SUBJECT_TYPES, CONVERSATION_TOPIC_LIMITS, isConversationTopicKey } from "@scalius/shared/conversation";
 import { created, ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import { protectedField as pii } from "../../schemas/protected";
@@ -42,6 +42,7 @@ import {
   conversationIdSchema,
   readBodySchema,
   staffConversationSummarySchema,
+  staffTopicOptionSchema,
   staffConversationThreadSchema,
 } from "../../schemas/conversations";
 import {
@@ -69,6 +70,9 @@ function noStore(c: Context) {
 }
 
 const conversationParam = z.object({ id: conversationIdSchema });
+/** A topic key filter (`topics` on the list names them); any key that is not a thread's topic lists nothing. */
+const inboxTopicSchema = z.string().max(CONVERSATION_TOPIC_LIMITS.keyLength).refine(isConversationTopicKey, "Use one of the store's topic keys.").optional()
+  .openapi({ description: "One of the store's topic keys (`topics` on this list): only conversations the buyer gave that topic" });
 const orderParam = z.object({ orderId: z.string().trim().min(1).max(128) });
 const threadEnvelope = successEnvelope(z.object({ conversation: staffConversationThreadSchema }));
 const writeResponses = { ...errorResponses, 409: conflictResponse };
@@ -93,13 +97,14 @@ app.openapi(createRoute({
       status: z.enum(["open", "pending", "closed", "all"]).optional(),
       assignee: z.string().max(128).optional().openapi({ description: "`me`, `none` or a staff user id" }),
       subjectType: z.enum(CONVERSATION_SUBJECT_TYPES).optional().openapi({ description: "What the conversation is about: an order, a store question, a review or a warranty claim" }),
+      topic: inboxTopicSchema,
       cursor: z.string().max(100).optional(),
     }),
   },
   responses: {
     200: {
       description: "Inbox page",
-      content: { "application/json": { schema: successEnvelope(z.object({ items: z.array(staffConversationSummarySchema), nextCursor: z.string().nullable() })) } },
+      content: { "application/json": { schema: successEnvelope(z.object({ items: z.array(staffConversationSummarySchema), nextCursor: z.string().nullable(), topics: z.array(staffTopicOptionSchema) })) } },
     },
     ...errorResponses,
   },
@@ -107,8 +112,8 @@ app.openapi(createRoute({
   noStore(c);
   const actor = staffActor(c);
   const db = c.get("db");
-  const page = await listStaffInbox(db, actor.userId, c.req.valid("query"));
-  return ok(c, { ...page, items: await withChannelNames(db, page.items) });
+  const [page, topics] = await Promise.all([listStaffInbox(db, actor.userId, c.req.valid("query")), staffConversationTopics(db)]);
+  return ok(c, { ...page, items: await presentStaffSummaries(db, page.items, topics), topics });
 });
 
 app.route("/", adminConversationSavedReplyRoutes);
@@ -116,6 +121,7 @@ app.route("/", adminConversationSavedReplyRoutes);
 const inboxQuerySchema = z.object({
   status: z.enum(["open", "pending", "closed", "all"]).optional(),
   assignee: z.string().max(128).optional(), subjectType: z.enum(CONVERSATION_SUBJECT_TYPES).optional(),
+  topic: inboxTopicSchema,
   q: z.string().max(100).optional(), cursor: z.string().max(100).nullable().optional(),
   unread: z.boolean().optional(), sort: z.enum(["latest", "waiting_longest"]).optional(),
 }).strict();
@@ -125,13 +131,13 @@ app.openapi(createRoute({
   request: { body: { required: true, content: { "application/json": { schema: inboxQuerySchema } } } },
   responses: { 200: { description: "Search window", content: { "application/json": { schema: successEnvelope(z.object({
     items: z.array(staffConversationSummarySchema), nextCursor: z.string().nullable(), scanExhausted: z.boolean(),
-    scanned: z.number().int(),
+    scanned: z.number().int(), topics: z.array(staffTopicOptionSchema),
   })) } } }, ...errorResponses },
 }), async (c) => {
   noStore(c);
   const db = c.get("db");
-  const page = await queryStaffInbox(db, staffActor(c).userId, c.req.valid("json"));
-  return ok(c, { ...page, items: await withChannelNames(db, page.items) });
+  const [page, topics] = await Promise.all([queryStaffInbox(db, staffActor(c).userId, c.req.valid("json")), staffConversationTopics(db)]);
+  return ok(c, { ...page, items: await presentStaffSummaries(db, page.items, topics), topics });
 });
 
 app.openapi(createRoute({

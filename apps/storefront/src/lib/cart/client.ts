@@ -34,7 +34,8 @@ import { writeCartLineEdit } from "./line-edit";
 import { purchaseOptionsField } from "./purchase-option";
 import { cartLineInputsId } from "./line-properties-view";
 import { cartEstimate, cartHasMixedFulfilment, cartLineDiscountsOf, cartLineEntries, cartLineIssues, cartLineView, cartPreviewLines, estimableCartLines, type CartLineView } from "./line-view";
-import { cartLineHtml } from "./line-html";
+import { cartLineHtml, cartLinePending } from "./line-html";
+import { loadLazyScript } from "@/scripts/lazy-script";
 import { cartLineInputFacts, NO_LINE_INPUTS, undecidedLineInputs, type CartLineInputFacts } from "./line-inputs";
 import type {
   CartRuleError,
@@ -51,6 +52,7 @@ import {
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { addOnRowsOver, readAddOnRows, type AddOnTotalRow, type AddOnTotals } from "@scalius/shared/add-on-totals";
+import type { AddOnRowsShown } from "@/lib/add-on-row";
 
 import { numberLocale } from "@scalius/shared/locale-format";
 import { formatList } from "@scalius/shared/locale-words";
@@ -62,7 +64,6 @@ import { shippingCountryName } from "@/lib/checkout/shipping-country";
 import { pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
 import { applyCheckoutButtonState, storeNotDeliveringMessage } from "./checkout-button-state";
-import { renderEmptyCartState } from "./empty-state";
 import { renderCartIssueAction } from "./issue-action";
 import {
   readAndClearCartRepairState,
@@ -235,8 +236,12 @@ let latestAllowedPaymentMethods: string[] | null = null;
 let latestLineInputs: CartLineInputFacts = NO_LINE_INPUTS;
 /** The apps' blocks from the last cart check: its per-line blocks are drawn again whenever the lines are. */
 let latestCartBuyerUi: unknown[] = [];
-/** The apps' add-on rows as the last cart check folded them (the page never folds its own). */
-let latestAddOnRows: AddOnTotalRow[] = [];
+/** The apps' add-on rows as the last cart check folded them (the page never folds its own); before a check, none known. */
+let latestAddOnRows: AddOnTotalRow[] | undefined;
+const addOnRowsShown: AddOnRowsShown = {};
+let addOnRowsModule: typeof import("@/lib/add-on-row") | undefined;
+/** The add-on rows' latest draw: one waiting for the row markup is dropped when a later one came. */
+let addOnRowsDraw = 0;
 const LINE_SLOTS = storefrontUiSlotsOn("cart");
 /** The quote answers checkout's slots only: the lines keep the cart check's blocks. */
 const QUOTE_SLOTS = storefrontUiSlotsOn("checkout");
@@ -793,26 +798,25 @@ function renderFreeDeliveryProgress(
  * The apps' add-ons as their own summary rows ("Protection ৳350") after the
  * subtotal, which then counts the items alone: together they are the
  * subtotal the total is built from. Amounts are the store's (the quote's, or
- * each line's add-ons as the last check priced them).
+ * each line's add-ons as the last check priced them). `checked`: the rows
+ * are the server's (a row new to them opens to its details by itself). The
+ * row markup (lib/add-on-row.ts) loads once a row shows; the subtotal waits
+ * with it, so the rows always add up.
  */
-function renderAddOnRows(subtotal: HTMLElement, addOns: AddOnTotals, decimalPlaces: number): void {
-  subtotal.textContent = formatMoney(fromMinor(addOns.itemsSubtotalMinor, decimalPlaces));
+function renderAddOnRows(subtotal: HTMLElement, addOns: AddOnTotals, decimalPlaces: number, checked: boolean): void {
+  const draw = ++addOnRowsDraw;
   const container = document.getElementById("addOnRows");
-  if (!container) return;
-  container.replaceChildren(...addOns.rows.map((row) => {
-    const line = document.createElement("div");
-    line.className = "flex justify-between gap-3 text-sm text-muted-foreground";
-    line.dataset.summaryRow = "add-on";
-    const label = document.createElement("span");
-    label.className = "min-w-0";
-    label.textContent = row.title;
-    const amount = document.createElement("span");
-    amount.className = "shrink-0 font-medium tabular-nums text-foreground";
-    amount.textContent = formatMoney(fromMinor(row.amountMinor, decimalPlaces));
-    line.append(label, amount);
-    return line;
-  }));
-  container.hidden = addOns.rows.length === 0;
+  const show = (rows?: typeof import("@/lib/add-on-row")) => {
+    if (draw !== addOnRowsDraw) return;
+    subtotal.textContent = formatMoney(fromMinor(addOns.itemsSubtotalMinor, decimalPlaces));
+    if (!container) return;
+    if (rows) {
+      rows.drawAddOnRows(container, addOns.rows, decimalPlaces, "cart", addOnRowsShown, checked);
+    } else if (checked) addOnRowsShown.keys = new Set();
+    container.hidden = addOns.rows.length === 0;
+  };
+  if (addOnRowsModule || addOns.rows.length === 0) show(addOnRowsModule);
+  else void import("@/lib/add-on-row").then((rows) => show(addOnRowsModule = rows));
 }
 
 function renderAuthoritativeCartQuote(
@@ -820,7 +824,7 @@ function renderAuthoritativeCartQuote(
   elements: TotalsElements,
 ): void {
   elements.taxRow?.classList.toggle("hidden", quote.taxMinor === 0);
-  renderAddOnRows(elements.subtotal, addOnRowsOver(quote.subtotalMinor, quote.addOns), quote.decimalPlaces);
+  renderAddOnRows(elements.subtotal, addOnRowsOver(quote.subtotalMinor, quote.addOns), quote.decimalPlaces, true);
   latestAllowedPaymentMethods = quote.allowedPaymentMethods;
   latestQuotedTotal = { amountMinor: quote.totalMinor, currency: quote.currencyCode };
   // The cart page drops the payment step when these leave cash alone (lib/checkout/payment-step.ts).
@@ -1345,9 +1349,9 @@ async function runCartCheck(renderUnchanged: boolean, { attributes, pricedCodes,
       });
     }
 
-    // What the lines show: a check that changes none of it re-renders (and
-    // re-prices) nothing, so choosing a delivery option quotes once.
-    const shown = () => JSON.stringify([cartStore.get().items, cartValidationIssues, cartRuleErrors(), cartValidationGlobalError, cartQuantityLimits, latestAllowedPaymentMethods]);
+    // What the lines and the summary show: a check that changes none of it re-renders (and
+    // re-prices) nothing, so choosing a delivery option quotes once; new add-on rows draw at once.
+    const shown = () => JSON.stringify([cartStore.get().items, cartValidationIssues, cartRuleErrors(), cartValidationGlobalError, cartQuantityLimits, latestAllowedPaymentMethods, latestAddOnRows]);
     const shownBefore = shown();
     const rawIssues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
     let issues = Array.isArray(rawIssues) ? rawIssues : [];
@@ -1485,7 +1489,7 @@ function renderCartItemIssues(cartKey: string, describedBy: string, view: CartLi
   if (!issue) return "";
   const stock = view.stock && view.stock.state !== "at-limit" ? cartLineStockText(view) : null;
   const message = stock ?? [...new Set(issues.map((entry) => entry.message))].join(" ");
-  return `<div class="mt-1 flex flex-wrap items-center justify-between gap-x-3" role="alert" data-cart-line-issue>
+  return `<div class="mt-1 flex flex-wrap items-center justify-between gap-x-3" role="alert" data-cart-line-issue data-part="line-issue">
         <p class="min-w-0 flex-1 basis-40 break-words text-xs font-medium text-destructive"${stock ? ` data-cart-line-stock="${view.stock!.state}"` : ""}>${escapeHtml(message)}</p>
         <div class="shrink-0">${renderIssueAction(cartKey, issue, describedBy)}</div>
       </div>`;
@@ -1565,7 +1569,7 @@ async function refreshTotals() {
   };
 
   const places = getDecimalPlaces(getCurrencyCode());
-  renderAddOnRows(subtotalEl, addOnRowsOver(toMinor(totalAmount, places), latestAddOnRows), places);
+  renderAddOnRows(subtotalEl, addOnRowsOver(toMinor(totalAmount, places), latestAddOnRows), places, latestAddOnRows !== undefined);
   renderEstimateNote(estimable.leftOut);
   // Before a delivery option applies to the address, shipping isn't known yet.
   const estimateShipping = (discounts: CheckoutDiscountFacts["discounts"]) =>
@@ -1743,6 +1747,12 @@ function paintCartLines(): void {
   const container = document.getElementById("cartItems");
   const { items } = cartStore.get();
   if (!container || Object.keys(items).length === 0) return;
+  // A theme's line draws once it loaded (line-html.ts): the lines paint then.
+  const pending = cartLinePending();
+  if (pending) {
+    void pending.then(paintCartLines);
+    return;
+  }
   const lineRules = groupCartRuleErrors(cartRuleErrors(), items).lines;
   paintedLineRuleErrors = JSON.stringify(lineRules);
   // A cart that ships some lines says which ones don't (the receipt groups them the same way).
@@ -1830,22 +1840,25 @@ export async function renderCartItems() {
     Object.keys(items).length > 0 ? JSON.stringify(items) : "{}";
 
   if (Object.keys(items).length === 0) {
-    const pendingCheckout = pendingCheckoutForThisTab();
-    renderEmptyCartState(
-      cartItemsContainer,
-      lang,
-      pendingCheckout
-        ? {
-            href: pendingCheckout.href,
-          }
-        : null,
-    );
+    // The empty state is the page's own markup, shown by the cart state; the lazy file only adds
+    // (or takes back) a payment recovery link, so a file that cannot load still leaves the state.
+    cartItemsContainer.replaceChildren();
     renderDiscountFacts(null);
     syncCartPagePresentation(true);
+    const pendingCheckout = pendingCheckoutForThisTab();
+    if (pendingCheckout || document.querySelector("[data-cart-empty-recovery]")) {
+      await loadLazyScript(() => import("./empty-state"), { draftRestores: true }).then(
+        ({ renderEmptyCartState }) => renderEmptyCartState(lang, pendingCheckout),
+        () => undefined,
+      );
+    }
     return;
   }
   renderCheckoutRecoveryNotice();
 
+  // The lines show with the summary: a theme's line loads first.
+  const pending = cartLinePending();
+  if (pending) await pending;
   paintCartLines();
   await updateTotals();
   syncCartPagePresentation(true);
@@ -2093,6 +2106,9 @@ function removeLineWithUndo(cartKey: string): void {
 export async function initCartFunctionality() {
   const runtimeSignal = resetCartRuntimeListeners();
   quoteRefusalRecheckedLines = null;
+  // A page start knows no add-on rows yet: the first check's are the page's, never one the buyer just added.
+  latestAddOnRows = undefined;
+  addOnRowsShown.keys = undefined;
   hydrateCartFromStorage();
   hostedPaymentRecoverySession = readHostedPaymentRecoverySession();
   const expiredCheckoutId = document.getElementById("cartPageRoot")?.dataset.expiredCheckoutId;

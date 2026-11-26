@@ -6,6 +6,10 @@ import { DEFAULT_STORE_REGION, textDirection } from "@scalius/shared/locale-form
 import "../styles/global.css";
 import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
+import CheckoutHeader from "../components/CheckoutHeader.astro";
+import PrivateControlsStrip from "../components/footer/PrivateControlsStrip.astro";
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import type { PrivateControlPlace } from "@scalius/shared/storefront-theme";
 import SidebarNav from "../components/header/SidebarNav.astro";
 import ThemeFonts from "../components/ThemeFonts.astro";
 import ThemeHead from "../components/ThemeHead.astro";
@@ -15,12 +19,21 @@ import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 import { themePaint } from "@/lib/theme-paint";
+import { privateImageOrigins } from "@/lib/middleware-helper/csp-handler";
+import { cartDrawerPlan } from "@/lib/private-pages/drawer";
+import { privateAssetUrls } from "@/lib/private-pages/html";
+import { CART_DRAWER_PLAN_ID } from "@/lib/cart/drawer-plan";
 import type { AnalyticsConfig } from "@/lib/api";
-import { getCdnOrigin, getSameOriginMediaSource, mediaImageUrl } from "@/lib/media-url";
+import { getCdnBase, getCdnOrigin, getSameOriginMediaSource, mediaImageUrl } from "@/lib/media-url";
 import {
   getRuntimeApiUrl,
   getRuntimeDashboardUrl,
   getRuntimeMediaUrl,
+  getRuntimeApiBaseUrl,
+  getRuntimeCspAllowedDomains,
+  getRuntimeCspImageSources,
+  getRuntimeStorefrontUrl,
+  setRuntimePrivateImageOrigins,
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime";
 import {
@@ -48,7 +61,8 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { AD_CLICK_ID_SCRIPT, REACT_REFRESH_PREAMBLE, SIGNED_IN_HINT_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-boot-scripts";
 import WindowGlobals from "../components/WindowGlobals.astro";
-import { rendersStoreScripts } from "@/lib/analytics-csp";
+import { isPayingStorefrontPathname } from "@/lib/cache-policy";
+import { isPaymentPage, rendersStoreScripts } from "@/lib/analytics-csp";
 import { gateMarketingScript, optimizeAnalyticsScriptDelivery, scriptNeedsConsent, isGoogleTagScript } from "@/lib/analytics-script-delivery";
 import { consentRegimeFor } from "@scalius/shared/tracking-consent";
 import ConsentBanner from "../components/consent/ConsentBanner.astro";
@@ -111,6 +125,25 @@ interface Props {
   analytics?: boolean;
   /** A private section-library document: no buyer chrome or actions. */
   libraryPreview?: boolean;
+  /**
+   * A buyer's private page drawn from parts (lib/private-pages): the theme's
+   * look for it (host token rules), compiled when the theme was saved. Empty:
+   * the default look.
+   */
+  privateStyle?: string;
+  /**
+   * The private page is in token mode (the theme set tokens for it): every
+   * colour there comes from its compiled colour table (`data-private-tokens`
+   * on `<html>`, private-tokens.ts `PRIVATE_TOKEN_MODE`).
+   */
+  privateTokens?: boolean;
+  /**
+   * A private page drawn from parts: the store's checkout header in the
+   * header's place, its words (`copy`), and where the store's controls sit
+   * (`privatePages.controls`: in that header, in a strip at the page's end,
+   * or none).
+   */
+  privateHeader?: { copy: CheckoutLanguageData; controls: PrivateControlPlace };
 }
 
 const {
@@ -132,6 +165,9 @@ const {
   localizedPaths = null,
   analytics = true,
   libraryPreview = false,
+  privateStyle,
+  privateTokens = false,
+  privateHeader,
 } = Astro.props;
 
 // Use provided layout data when pages load it in parallel; otherwise fetch here.
@@ -139,6 +175,15 @@ const layoutData = providedLayoutData ?? (await getLayoutData());
 // A page in the store's own words is in its language (a Bangla store's catalog is `bn`).
 const documentLanguage = requestedDocumentLanguage ?? checkoutLanguageBaseCode(layoutData?.storefrontCopy?.languageCode);
 setRuntimeImageCdnPolicy(layoutData?.media);
+// A buyer's private page loads images only from these origins (its policy says the same):
+// any other image is drawn as the store's placeholder, on the server and by the cart script.
+const privateImages = storefrontAppPage(Astro.url.pathname) === "private"
+  ? privateImageOrigins(
+    { apiBaseUrl: getRuntimeApiBaseUrl(), storefrontUrl: getRuntimeStorefrontUrl(), mediaUrl: getRuntimeMediaUrl(), cdnBaseUrl: getCdnBase() },
+    { merchantSources: getRuntimeCspAllowedDomains(), imageSources: getRuntimeCspImageSources(), paymentPage: isPaymentPage(Astro.locals) },
+  )
+  : null;
+if (privateImages) setRuntimePrivateImageOrigins(privateImages);
 
 const {
   theme: storefrontTheme,
@@ -202,7 +247,9 @@ const showNavigationSidebar =
   !hideNavigationSidebar &&
   themeLayout.navigation === "sidebar" &&
   (navigationData.length > 0 || (categoryTree?.nodes.length ?? 0) > 0);
-const showMobileTabs = !hideHeader && themeLayout.mobileNavigation === "tabs";
+// No phone tab bar where the buyer is paying (the one list, cache-policy.ts), the theme's chrome
+// there included; the receipt and the account pages keep it. Every header draws the bar from this.
+const showMobileTabs = !hideHeader && !isPayingStorefrontPathname(Astro.url.pathname) && themeLayout.mobileNavigation === "tabs";
 
 // The theme's brand images (the draft's under a preview): the tab icon, the
 // header logo that also stands in for a missing share image and schema logo.
@@ -339,7 +386,15 @@ const currencyPriceIncrement = resolvePriceIncrementMinor(currencyCode, layoutDa
 // The colour scheme is the theme's, on <html>, for every buyer and every page
 // (private ones too); the head script settles `system` and the buyer's own
 // choice before the first paint, so the HTML and its caches never vary.
-const paint = themePaint(storefrontTheme, resolvedTheme);
+// A private page drawn from parts shows the theme's page paint only in token mode, where its colour table
+// checks what stands on it: the default look (a compile this build has not made yet, or refused) stands on
+// the page colour, as the save checked it.
+const { pagePaint: _privatePaint, ...unpaintedTokens } = storefrontTheme.tokens;
+const paint = themePaint(privateStyle !== undefined && !privateTokens ? { ...storefrontTheme, tokens: unpaintedTokens } : storefrontTheme, resolvedTheme);
+// The cart drawer's arrangement, words and icons where the theme set them (lib/cart/drawer-plan.ts):
+// the drawer mounts in the browser, so it reads them from the page. The default writes nothing.
+const drawerPlan = libraryPreview ? null : cartDrawerPlan(storefrontTheme, documentLanguage, privateAssetUrls(readStorefrontExtensions(layoutData?.appExtensions)));
+const pageStyle = privateStyle ?? "";
 const storefrontRouteKind = Astro.url.pathname.startsWith("/products/")
   ? "product"
   : "standard";
@@ -409,6 +464,7 @@ const runtimeGlobals: Record<string, unknown> = {
   __IMAGE_CDN_BASE_URL__: cdnDomainUrl || "",
   __IMAGE_CDN_CANONICAL_HOST_ALIASES__: imageCdnAliases,
   ...(sameOriginMediaSource ? { __MEDIA_SOURCE_URL__: sameOriginMediaSource } : {}),
+  ...(privateImages ? { __PRIVATE_IMAGE_ORIGINS__: privateImages } : {}),
   __CURRENCY_SYMBOL__: currencySymbol,
   __CURRENCY_CODE__: currencyCode,
   __CURRENCY_DECIMAL_PLACES__: currencyDecimalPlaces,
@@ -429,6 +485,7 @@ const pageStoreTimeZone = storeTimeZone();
 <!doctype html>
 <html
   data-library-preview={libraryPreview ? "" : undefined}
+  data-private-tokens={privateStyle && privateTokens ? "" : undefined}
   data-color-scheme={paint.colorScheme?.scheme}
   lang={pageLanguage}
   dir={textDirection(pageLanguage) === "rtl" ? "rtl" : undefined}
@@ -527,6 +584,8 @@ const pageStoreTimeZone = storeTimeZone();
 
     <ThemeHead paint={paint} preview={isThemePreview} />
     {appStylesheets.map((href) => <link rel="stylesheet" href={href} data-app-stylesheet />)}
+    {/* The theme's private-page look: host token rules compiled on save from typed values (private-tokens.ts), after the store's own. */}
+    {pageStyle && <style is:inline data-private-style set:html={pageStyle} />}
 
     <slot name="head" />
   </head>
@@ -534,6 +593,7 @@ const pageStoreTimeZone = storeTimeZone();
     class="flex flex-col min-h-screen site-root"
     {...paint.attributes}
     data-storefront-route={storefrontRouteKind}
+    data-private-body={privateStyle !== undefined && pageStyle ? "" : undefined}
   >
     {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
 
@@ -563,6 +623,7 @@ const pageStoreTimeZone = storeTimeZone();
           />
         )
       }
+      {privateHeader && <CheckoutHeader layoutData={layoutData} copy={privateHeader.copy} controls={privateHeader.controls === "header" ? { localization: footerLocalization } : undefined} />}
       {/* With the sidebar, <main> is the content column: full-bleed sections
           span the column, never the sidebar. */}
       <div class="site-shell" data-site-shell={showNavigationSidebar ? "sidebar" : undefined}>
@@ -590,6 +651,7 @@ const pageStoreTimeZone = storeTimeZone();
         </div>
       )
     }
+    {privateHeader?.controls === "footer" && <PrivateControlsStrip localization={footerLocalization} />}
 
     {/* Google accepts JSON-LD in body. Keep it in initial SSR HTML while
         placing machine-only bytes after buyer-visible content. */}
@@ -611,6 +673,7 @@ const pageStoreTimeZone = storeTimeZone();
 
     {/* Stale-asset recovery, installed before deferred module execution. */}
     <script is:inline set:html={STALE_ASSET_RECOVERY_SCRIPT} />
+    {drawerPlan && <script is:inline type="application/json" id={CART_DRAWER_PLAN_ID} set:html={serializeJsonForInlineScript(drawerPlan)} />}
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
     {consentNeeded && <ConsentBanner regime={consentRegime} language={themeLanguage} />}

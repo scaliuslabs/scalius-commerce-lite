@@ -12,7 +12,7 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import type { GalleryEntry } from "./entries";
-import { fixtureProductSoldOut } from "./cart-seed";
+import { fixtureProductSoldOut, GALLERY_CUSTOMER, GALLERY_KIT } from "./cart-seed";
 import {
   BANGLA_STORE_NAME,
   FIXTURE_POLICIES,
@@ -252,7 +252,32 @@ function listing(entry: GalleryEntry, search: URLSearchParams) {
 /** Buyer UI travels with the private cart answer, just as it does in production. */
 function checkoutApps(entry: GalleryEntry) {
   if (!entry.scenario.checkoutBuyerUi) return [];
+  if (entry.scenario.customer) return customerBlocks(entry.scenario.customer === "protected");
+  const kinds = entry.scenario.buyerUiKinds
+    ? [
+      everyKindBlock("acme.kinds", "cart.page.summary"), everyKindBlock("acme.kinds", "cart.page.below"), everyKindBlock("acme.kinds", "cart.line.after", "line:v3:prod_1:variant:var_1:p:none"),
+      // Inside the details form: every kind after the contact fields, a toned banner and a button after delivery.
+      everyKindBlock("acme.kinds", "checkout.contact.after"),
+      { appId: "acme.kinds", releaseId: "gallery", target: "checkout.delivery.after", attributes: [], values: {}, ui: { type: "stack", children: [
+        { type: "banner", tone: "warning", title: "Delivery takes 3 days after Eid", text: "Order today to have it before the weekend." },
+        { type: "button", label: "See delivery areas", action: { kind: "navigate", to: { kind: "store", path: "/pages/delivery" } } },
+      ] } },
+    ]
+    : [];
+  // 120-letter words, English and Bangla: an app's block on the first line and in the summary (`longWords`).
+  const long = entry.scenario.longWords
+    ? ["cart.line.after", "cart.page.summary"].map((target) => ({
+      appId: "acme.long", releaseId: "gallery", target, ...(target === "cart.line.after" ? { lineKey: "line:v3:prod_1:variant:var_1:p:none" } : {}), attributes: [], values: {},
+      ui: { type: "stack", children: [
+        { type: "banner", tone: "info", title: LONG_WORD_EN, text: LONG_WORD_BN },
+        { type: "text", text: `${LONG_WORD_EN} ${LONG_WORD_BN}` },
+        { type: "button", label: LONG_WORD_EN, action: { kind: "navigate", to: { kind: "store", path: "/pages/delivery" } } },
+      ] },
+    }))
+    : [];
   return [
+    ...kinds,
+    ...long,
     {
       appId: "acme.notes", releaseId: "gallery", target: "checkout.contact.after",
       attributes: [{ key: "gift_note", type: "multiline", label: "Gift message", maxLength: 500 }], values: {},
@@ -262,8 +287,160 @@ function checkoutApps(entry: GalleryEntry) {
       appId: "acme.loyalty", releaseId: "gallery", target: "cart.page.summary", attributes: [], values: {},
       ui: { type: "banner", tone: "info", text: "You will earn 120 Nakshi points with this order." },
     },
+    // An app's offer row under the kit's line: words beside a button (the lines state's cart holds the kit).
+    {
+      appId: "acme.offers", releaseId: "gallery", target: "cart.line.after", attributes: [], values: {}, lineKey: GALLERY_KIT.key,
+      ui: { type: "columns", children: [
+        { type: "stack", children: [{ type: "text", emphasis: "strong", text: "Add a matching blouse piece" }, { type: "text", text: "৳900 with this set, ৳150 off." }] },
+        { type: "button", label: "Add to this order", action: { kind: "navigate", to: { kind: "store", path: "/products/blouse-piece" } } },
+      ] },
+    },
+    // A per-line block under the first line: an app's toned badges (the fourth review drew them on a dark line).
+    {
+      appId: "acme.protection", releaseId: "gallery", target: "cart.line.after", attributes: [], values: {}, lineKey: "line:v3:prod_0:variant:var_0:p:none",
+      ui: { type: "stack", direction: "horizontal", children: [{ type: "badge", tone: "warning", text: "Protection eligible" }, { type: "badge", tone: "success", text: "Ships today" }] },
+    },
   ];
 }
+
+const CUSTOMER_LEARN_MORE = { type: "link", text: "Learn more", to: { kind: "store", path: "/pages/game-protection" } } as const;
+const customerBlock = (target: string, ui: unknown, lineKey?: string) => ({
+  appId: GALLERY_CUSTOMER.appId, releaseId: "gallery", target, attributes: [], values: {}, ...(lineKey ? { lineKey } : {}), ui,
+});
+
+/**
+ * The customer's protection app (private-look.md S1 and S4), drawn with the
+ * general pieces any app has: under the eligible line not yet protected, an
+ * amber row (its mark, the offer with Learn more, the price, Add Now); in the
+ * summary, an amber "recommended" box, or once protected a green one with
+ * Remove, and a success badge under the protected line. The redeem key
+ * takes nothing.
+ */
+export function customerBlocks(protectedAccount: boolean) {
+  const { account, inputKey } = GALLERY_CUSTOMER;
+  if (protectedAccount) {
+    return [
+      customerBlock("cart.line.after", { type: "badge", tone: "success", text: `\u2713 ${GALLERY_CUSTOMER.title} added` }, account.key),
+      customerBlock("cart.page.summary", { type: "stack", direction: "horizontal", tone: "success", children: [
+        { type: "mark", tone: "success" },
+        { type: "text", text: "Your account is protected", emphasis: "strong" },
+        { type: "button", label: "Remove", tone: "secondary", action: { kind: "cart", op: "set_line_input", key: inputKey, value: null } },
+      ] }),
+    ];
+  }
+  return [
+    customerBlock("cart.line.after", { type: "stack", direction: "horizontal", tone: "warning", children: [
+      { type: "mark", tone: "warning" },
+      { type: "stack", gap: "sm", children: [{ type: "text", text: "Add Arcade Protection to get lifetime warranty and support." }, CUSTOMER_LEARN_MORE] },
+      { type: "text", text: "\u09F3350", tone: "success", emphasis: "strong" },
+      { type: "button", label: "Add Now", tone: "primary", action: { kind: "cart", op: "set_line_input", key: inputKey, value: "lifetime", lineKeys: [account.key] } },
+    ] }, account.key),
+    customerBlock("cart.page.summary", { type: "stack", direction: "horizontal", tone: "warning", children: [
+      { type: "mark", tone: "warning" },
+      { type: "stack", gap: "sm", children: [{ type: "text", text: `${GALLERY_CUSTOMER.title} recommended`, emphasis: "strong" }, CUSTOMER_LEARN_MORE] },
+    ] }),
+  ];
+}
+
+/**
+ * The customer app's line input on the account line: its own blocks draw it
+ * (`surfaces: []`); before it is answered checkout needs a decision, and
+ * declining asks for the buyer's agreement (the prototype's words).
+ */
+function customerInputs(protectedAccount: boolean) {
+  return {
+    appId: GALLERY_CUSTOMER.appId,
+    inputs: [{
+      key: GALLERY_CUSTOMER.inputKey, label: GALLERY_CUSTOMER.title, type: "select", surfaces: [],
+      options: [
+        { value: "lifetime", label: GALLERY_CUSTOMER.title },
+        { value: "declined", label: "No protection", confirm: {
+          title: "Continue without Arcade Protection?",
+          text: "I agree that I do not need Arcade Protection. If this account is hacked or hijacked from my computer, device, account security issue, or personal security issue, I will be responsible.",
+          agree: "I agree and want to continue checkout.",
+        } },
+      ],
+      textRevision: "fedcba9876543210",
+      ...(protectedAccount ? {} : { decision: { proceedWith: "declined" } }),
+    }],
+  };
+}
+
+/** One word of 120 letters in English and one in Bangla: an app's words and an add-on's title that cannot wrap. */
+export const LONG_WORD_EN = "Supercalifragilistic".repeat(6);
+export const LONG_WORD_BN = "\u09B8\u09C1\u09B0\u0995\u09cd\u09B7\u09BE".repeat(18).slice(0, 120);
+
+/** An add-on row whose title is one 120-letter word, then a Bangla one (`longWords`). */
+function longWordAddOns() {
+  return [{ appId: "acme.long", title: `${LONG_WORD_EN} ${LONG_WORD_BN}`, amountMinor: 35_000, details: [LONG_WORD_EN, LONG_WORD_BN] }];
+}
+
+/** The customer's protected account line: each unit with the app's add-on (৳350), the summary row opening to one entry a unit. */
+export function customerAddOns(units: number) {
+  const name = GALLERY_CUSTOMER.account.line.name;
+  return [{
+    appId: GALLERY_CUSTOMER.appId, title: GALLERY_CUSTOMER.title, amountMinor: GALLERY_CUSTOMER.protectionMinor * units,
+    details: ["Protection ID will be given after order completion.", ...Array.from({ length: units }, (_, index) => `${name} #${index + 1} \u00B7 \u09F3350 \u00B7 Protection ID XXX-XXX-XXX`)],
+  }];
+}
+
+/** A customer line's unit price as the store checks it (with its add-on once protected), or null for another line. */
+function customerUnitPrice(entry: GalleryEntry, variantId: string): number | null {
+  const { account, redeem, protectionMinor } = GALLERY_CUSTOMER;
+  if (!entry.scenario.customer) return null;
+  if (variantId === account.variantId) return account.price + (entry.scenario.customer === "protected" ? protectionMinor / 100 : 0);
+  return variantId === redeem.variantId ? redeem.price : null;
+}
+
+/** A store that delivers in Bangladesh: two delivery rates whose zone serves every address there. */
+function deliveringMethods() {
+  return fixtureShippingMethods().map((method) => ({ ...method, kind: "delivery" as const, countries: [{ code: "BD", entire: true }] }));
+}
+
+const TONES = ["neutral", "info", "success", "warning", "critical"] as const;
+
+/**
+ * Every buyer UI node kind and tone an app may draw, as one block per target
+ * (`buyerUiKinds`): the rendered tests check each against the colour table.
+ */
+function everyKindBlock(appId: string, target: string, lineKey?: string) {
+  return {
+    appId, releaseId: "gallery", target, attributes: [], values: {}, ...(lineKey ? { lineKey } : {}),
+    ui: {
+      type: "stack", children: [
+        { type: "heading", text: "Protection for this order" },
+        { type: "text", text: "Covers accidental damage for a year." },
+        { type: "stack", direction: "horizontal", children: TONES.map((tone) => ({ type: "badge", tone, text: `${tone} badge` })) },
+        ...TONES.map((tone) => ({ type: "banner", tone, title: `A ${tone} banner`, text: "Read this before you place the order." })),
+        // A toned row of each tone: its mark, toned words and (the warning one) an action on its surface.
+        ...TONES.map((tone) => ({ type: "stack", direction: "horizontal", tone, children: [
+          { type: "mark", tone }, { type: "text", tone, text: `A ${tone} row` },
+          ...(tone === "warning" ? [{ type: "button", label: "Add now", action: { kind: "navigate", to: { kind: "store", path: "/pages/protection" } } }] : []),
+        ] })),
+        { type: "text", emphasis: "mono", text: "XXX-XXX-XXX" },
+        { type: "key-value", items: [{ label: "Plan", value: "One year" }, { label: "Price", value: 350 }] },
+        { type: "link", text: "Read the terms", to: { kind: "store", path: "/pages/terms" } },
+        { type: "button", label: "Add protection", action: { kind: "navigate", to: { kind: "store", path: "/pages/protection" } } },
+        { type: "disclosure", summary: "What is covered", children: [{ type: "text", text: "Screens, water and drops." }] },
+        { type: "divider" },
+      ],
+    },
+  };
+}
+
+/** A protection app's line input: checkout needs a decision, and declining asks for the buyer's agreement (`lineStates`). */
+const PROTECTION_INPUTS = {
+  appId: "acme.protect",
+  inputs: [{
+    key: "plan", label: "Protection plan", type: "select",
+    options: [
+      { value: "one_year", label: "1 year" },
+      { value: "declined", label: "No protection", confirm: { title: "Continue without protection?", text: "I accept the risk of damage in transit.", agree: "I agree and continue" } },
+    ],
+    textRevision: "0123456789abcdef",
+    decision: { proceedWith: "declined" },
+  }],
+};
 
 /** Recorded reads nothing answered (gallery index "missing reads"). */
 export const unansweredReads = new Map<string, Set<string>>();
@@ -281,8 +458,14 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
     const kind = template[1] as keyof StorefrontThemeDocument["pages"]["templates"];
     return { sections: sectionData(entry, theme.pages.templates[kind]?.sections ?? []) };
   }
-  if (path === "/api/v1/shipping-methods") return { shippingMethods: fixtureShippingMethods() };
-  if (path === "/api/v1/checkout/config") return { gateways: entry.scenario.checkout === "no-cod" ? [] : [{ id: "cod", name: "Cash on delivery", countries: ["BD"] }] };
+  if (path === "/api/v1/shipping-methods") return { shippingMethods: entry.scenario.delivering ? deliveringMethods() : fixtureShippingMethods() };
+  if (path === "/api/v1/checkout/config") {
+    const gateways = entry.scenario.checkout === "no-cod" ? [] : [{ id: "cod", name: "Cash on delivery", countries: ["BD"] }];
+    // A store that delivers: a Bangladesh zone serves every address and a city has its thanas, so Place order is on.
+    // A store that asks for its terms to be accepted (`requireTerms`): the required box, not the sentence.
+    const terms = entry.scenario.requireTerms ? { requireTermsAcceptance: true } : {};
+    return entry.scenario.delivering ? { gateways, ...terms, checkoutReadiness: { status: "ready", issues: [], hasActiveShippingMethod: true, hasActiveDeliveryHierarchy: true } } : { gateways, ...terms };
+  }
   if (path === "/api/v1/products/recommendations") {
     const limit = Math.min(positiveInteger(search.get("limit"), 8), 20);
     const sources = new Set((search.get("productIds") ?? "").split(",").filter(Boolean));
@@ -352,6 +535,8 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
   if (path === "/api/v1/products/search/suggestions" || path === "/api/v1/search/suggestions") return { suggestions: [], categories: [] };
   const page = /^\/api\/v1\/(?:storefront\/)?pages\/(?:slug\/)?([^/]+)$/.exec(path);
   if (page) return { page: fixturePage(decodeURIComponent(page[1]!), entry.scenario.locale === "bn") };
+  if (path === "/api/v1/locations/zones") return [{ id: "dhanmondi", name: "Dhanmondi" }, { id: "gulshan", name: "Gulshan" }];
+  if (path === "/api/v1/locations/areas") return [];
   if (path === "/api/v1/locations/cities") return [{ id: "dhaka", name: "Dhaka" }, { id: "chattogram", name: "Chattogram" }, { id: "sylhet", name: "Sylhet" }];
   if (path === "/api/v1/checkout-languages/active") return { language: null };
   if (path === "/api/v1/navigation/categories") return fixtureCategoryTree();
@@ -376,18 +561,30 @@ function record(entry: GalleryEntry, path: string) {
 }
 
 /** The cart check for a seeded cart: every line is priced as sent and in stock, except the fixture's sold-out products. */
-async function cartValidation(request: Request) {
+async function cartValidation(entry: GalleryEntry, request: Request) {
   const body = (await request.clone().json().catch(() => null)) as { discountCodes?: string[]; items?: Array<{ cartKey?: string | null; productId: string; variantId: string; quantity: number; price: number; productName?: string | null; variantLabel?: string | null }> } | null;
   const items = body?.items ?? [];
   const issues = items.flatMap((item, index) => fixtureProductSoldOut(item.productId)
     ? [{ index, cartKey: item.cartKey ?? null, productId: item.productId, variantId: item.variantId, code: "OUT_OF_STOCK", message: `${item.productName ?? "This item"} is sold out.`, requestedQuantity: item.quantity, availableQuantity: 0 }]
     : []);
+  const lineStates = entry.scenario.lineStates === true;
+  const customer = entry.scenario.customer;
+  const account = (item: { variantId: string }) => customer !== undefined && item.variantId === GALLERY_CUSTOMER.account.variantId;
+  const protectedUnits = customer === "protected" ? items.filter(account).reduce((sum, item) => sum + item.quantity, 0) : 0;
   return {
     valid: issues.length === 0,
     issues,
+    ...(lineStates ? { lineInputs: [PROTECTION_INPUTS] } : customer ? { lineInputs: [customerInputs(customer === "protected")] } : {}),
+    // The customer's protected accounts: one summary row for the app's add-on, opening to an entry a unit.
+    ...(protectedUnits > 0 ? { addOns: { rows: customerAddOns(protectedUnits) } } : entry.scenario.longWords ? { addOns: { rows: longWordAddOns() } } : {}),
     items: items.map((item, index) => ({
+      ...(lineStates && item.productId === "prod_0" ? { lineInputs: ["acme.protect.plan"] } : {}),
+      ...(account(item) ? { lineInputs: [`${GALLERY_CUSTOMER.appId}.${GALLERY_CUSTOMER.inputKey}`] } : {}),
+      // A store kit, one line: an app's add-on priced once per kit (never per item), in its unit price.
+      ...(item.variantId === GALLERY_KIT.variantId ? { adjustments: [GALLERY_KIT.addOn] } : {}),
+      ...(account(item) && customer === "protected" ? { adjustments: [{ key: "_adjustment", label: GALLERY_CUSTOMER.title, displayValue: "Lifetime warranty and support", price: GALLERY_CUSTOMER.protectionMinor / 100, priceMinor: GALLERY_CUSTOMER.protectionMinor, appId: GALLERY_CUSTOMER.appId }] } : {}),
       index, cartKey: item.cartKey ?? null, productId: item.productId, variantId: item.variantId, quantity: item.quantity,
-      unitPrice: item.price, productName: item.productName ?? "", variantLabel: item.variantLabel ?? null, freeDelivery: false,
+      unitPrice: customerUnitPrice(entry, item.variantId) ?? (item.variantId === GALLERY_KIT.variantId ? GALLERY_KIT.price + GALLERY_KIT.addOn.price : item.price), productName: item.productName ?? "", variantLabel: item.variantLabel ?? null, freeDelivery: false,
       availableQuantity: fixtureProductSoldOut(item.productId) ? 0 : 12, productImageMediaId: null, productImage: null, fulfillmentKind: "physical", fulfillmentType: null,
     })),
     subtotal: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
@@ -417,7 +614,7 @@ async function taxQuote(entry: GalleryEntry, request: Request) {
     const product = Number.isSafeInteger(productIndex) ? cardProduct(productIndex, { bangla }) : null;
     return {
       cartKey: item.cartKey ?? `line-${index}`, productId: item.productId, variantId: item.variantId, quantity: item.quantity,
-      unitPrice: product?.discountedPrice ?? 0, productName: item.productName ?? product?.name ?? item.productId, variantLabel: item.variantLabel ?? null,
+      unitPrice: customerUnitPrice(entry, item.variantId) ?? (item.variantId === GALLERY_KIT.variantId ? GALLERY_KIT.price + GALLERY_KIT.addOn.price : product?.discountedPrice ?? 0), productName: item.productName ?? product?.name ?? item.productId, variantLabel: item.variantLabel ?? null,
       fulfillmentType: null, properties: [], propertiesPriceMinor: 0, propertiesHash: "none",
     };
   });
@@ -435,6 +632,8 @@ async function taxQuote(entry: GalleryEntry, request: Request) {
     deliveryMethodKind: method ? "delivery" : null, requiresShipping: method !== null, pickup: null,
     allowedPaymentMethods: entry.scenario.checkout === "no-cod" ? [] : ["cod"],
     items,
+    // The customer's protected accounts: the add-on's summary row, as the cart check answers it.
+    ...(entry.scenario.customer === "protected" ? { addOns: customerAddOns(items.filter((item) => item.variantId === GALLERY_CUSTOMER.account.variantId).reduce((sum, item) => sum + item.quantity, 0)) } : entry.scenario.longWords ? { addOns: longWordAddOns() } : {}),
     // The quote carries the apps' buyer UI, as the API's does.
     buyerUi: checkoutApps(entry),
   };
@@ -446,7 +645,7 @@ export async function answerFixtureApi(entry: GalleryEntry, request: Request): P
   url.pathname = apiPath(url.pathname);
   const json = { "Content-Type": "application/json" };
   if (url.pathname === "/api/v1/orders/cart-validation" && request.method === "POST") {
-    return new Response(envelope({ ...await cartValidation(request), buyerUi: checkoutApps(entry) }), { headers: json });
+    return new Response(envelope({ ...await cartValidation(entry, request), buyerUi: checkoutApps(entry) }), { headers: json });
   }
   if (url.pathname === "/api/v1/orders/tax-quote" && request.method === "POST") {
     return new Response(envelope(await taxQuote(entry, request)), { headers: json });

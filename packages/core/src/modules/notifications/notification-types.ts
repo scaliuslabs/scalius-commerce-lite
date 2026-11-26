@@ -89,10 +89,11 @@ export const NOTIFICATION_TYPES = /* @__PURE__ */ (() => [
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
-/** Buyer messages rendered from a merchant-editable template (email + SMS copy). */
+/** Buyer messages rendered from a merchant-editable template (email + SMS copy), a staff reply included. */
 export const TEMPLATED_NOTIFICATION_TYPES = /* @__PURE__ */ (() => [
     ...ORDER_NOTIFICATION_TYPES,
     ...RESOLVED_NOTIFICATION_TYPES,
+    "conversation_reply",
 ] as const)();
 
 export type TemplatedNotificationType = (typeof TEMPLATED_NOTIFICATION_TYPES)[number];
