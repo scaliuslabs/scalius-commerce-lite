@@ -459,8 +459,9 @@ html {
 /* ── Craft (Theme -> Style) ─────────────────────────────────────────────
    One motion language (tokens.ts STOREFRONT_MOTION_MS): 150ms for hovers
    and presses, 250ms for panels and fades, ease-out, and none under reduced
-   motion. Buttons take the Style's shape; surfaces use a border OR a
-   shadow, never both on the same element. */
+   motion. Buttons take the Style's shape (one class's weight: a private
+   page's tokens outrank it); surfaces use a border OR a shadow, never both
+   on the same element. */
 .site-root {
   --theme-ease: cubic-bezier(0.2, 0, 0, 1);
   --theme-duration: var(--theme-duration-fast, 150ms);
@@ -476,7 +477,7 @@ html {
   }
 }
 
-.site-root :where(button, a, input[type="submit"]):where(.bg-primary):not(.rounded-full),
+.site-root :where(button, a, input[type="submit"]):where(.bg-primary):where(:not(.rounded-full)),
 .site-root [data-theme-component="button"]:not([data-theme-size="icon"]) {
   border-radius: var(--theme-button-radius, var(--radius));
   transition:
