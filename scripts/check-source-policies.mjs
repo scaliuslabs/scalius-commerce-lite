@@ -322,7 +322,6 @@ export const policies = [
       "apps/storefront/src/components/product/reviews/review-cta.ts": "code-built markup: every value it interpolates goes through escapeHtml",
       "apps/storefront/src/lib/account-order-detail.ts": "code-built markup: every value it interpolates goes through escapeHtml",
       "apps/storefront/src/lib/cart/client.ts": "code-built markup: every value it interpolates goes through escapeHtml",
-      "apps/storefront/src/lib/cart/empty-state.ts": "code-built markup: every value it interpolates goes through escapeHtml",
       "apps/storefront/src/pages/account/downloads.astro": "code-built markup: every value it interpolates goes through escapeHtml",
       "apps/storefront/src/pages/account/inbox/[id].astro": "code-built markup: every value it interpolates goes through escapeHtml",
       "apps/storefront/src/pages/account/inbox/index.astro": "code-built markup: every value it interpolates goes through escapeHtml",

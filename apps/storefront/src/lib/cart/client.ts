@@ -1840,23 +1840,18 @@ export async function renderCartItems() {
     Object.keys(items).length > 0 ? JSON.stringify(items) : "{}";
 
   if (Object.keys(items).length === 0) {
-    // Built with the cart's first empty state: until then the page's own markup shows it. A cart
-    // filled again meanwhile is drawn by its own render; one whose file cannot load shows no lines.
-    const emptyState = await loadLazyScript(() => import("./empty-state"), { draftRestores: true }).catch(() => null);
-    if (Object.keys(cartStore.get().items).length > 0) return;
-    const pendingCheckout = pendingCheckoutForThisTab();
-    if (!emptyState) cartItemsContainer.replaceChildren();
-    else emptyState.renderEmptyCartState(
-      cartItemsContainer,
-      lang,
-      pendingCheckout
-        ? {
-            href: pendingCheckout.href,
-          }
-        : null,
-    );
+    // The empty state is the page's own markup, shown by the cart state; the lazy file only adds
+    // (or takes back) a payment recovery link, so a file that cannot load still leaves the state.
+    cartItemsContainer.replaceChildren();
     renderDiscountFacts(null);
     syncCartPagePresentation(true);
+    const pendingCheckout = pendingCheckoutForThisTab();
+    if (pendingCheckout || document.querySelector("[data-cart-empty-recovery]")) {
+      await loadLazyScript(() => import("./empty-state"), { draftRestores: true }).then(
+        ({ renderEmptyCartState }) => renderEmptyCartState(lang, pendingCheckout),
+        () => undefined,
+      );
+    }
     return;
   }
   renderCheckoutRecoveryNotice();
