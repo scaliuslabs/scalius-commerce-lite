@@ -1,80 +1,43 @@
 import type { CheckoutLanguageData } from "../api/types";
-import { pagePath } from "@/lib/presence-url";
 
 export interface EmptyCartRecoveryAction {
   href: string;
-  onClick?: () => void;
 }
 
-function createStaticSvg(markup: string): SVGElement {
-  const template = document.createElement("template");
-  template.innerHTML = markup.trim();
-  return template.content.firstElementChild as SVGElement;
-}
+const PRIMARY = "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary-hover";
+const SECONDARY = "inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-foreground bg-background hover:bg-muted";
 
-/** The empty cart's icon as the page drew it (the theme's, when it set one), kept for every later empty state. */
-let pageIcon: Element | null | undefined;
-
+/**
+ * Sets the page's empty state (`[data-cart-empty]` in cart.astro, drawn by
+ * the server and shown by the cart state) for a payment that may already
+ * have been made: its message and a link to the payment's status before the
+ * link back to the shop. Without one it is the page's plain state again. It
+ * only enhances: the message and the link back to the shop are the page's
+ * markup, so a file that cannot load leaves them shown.
+ */
 export function renderEmptyCartState(
-  container: HTMLElement,
   lang: CheckoutLanguageData,
   recoveryAction?: EmptyCartRecoveryAction | null,
 ): void {
-  pageIcon ??= document.querySelector('[data-part="cart-empty-icon"]')?.cloneNode(true) as Element | null;
-  const wrapper = document.createElement("div");
-  wrapper.className = "text-center py-8 px-4";
-  wrapper.dataset.part = "cart-empty";
-
-  const cartIcon = pageIcon?.cloneNode(true) as Element | undefined ?? createStaticSvg(`
-    <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-    </svg>
-  `);
-
-  const title = document.createElement("h2");
-  title.className = "mt-2 text-lg font-medium text-foreground";
-  title.textContent = lang.languageData.emptyCartText;
-
-  const message = document.createElement("p");
-  message.className = "mt-1 text-sm text-muted-foreground";
-  message.textContent = recoveryAction
-    ? lang.languageData.paymentRecoveryMessageText
-    : lang.languageData.emptyCartDescriptionText;
-
-  const actionWrapper = document.createElement("div");
-  actionWrapper.className = "mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row";
-
-  const continueLink = document.createElement("a");
-  continueLink.href = pagePath("/");
-  continueLink.className =
-    "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary-hover";
-
-  const backIcon = createStaticSvg(`
-    <svg class="-ms-1 me-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-      <path fill-rule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-    </svg>
-  `);
-  continueLink.append(
-    backIcon,
-    document.createTextNode(lang.languageData.continueShoppingText),
-  );
+  const empty = document.querySelector("[data-cart-empty]");
+  if (!empty) return;
+  const message = empty.querySelector("[data-cart-empty-message]");
+  const actions = empty.querySelector("[data-cart-empty-actions]");
+  const continueLink = empty.querySelector("[data-cart-empty-continue]");
+  empty.querySelector("[data-cart-empty-recovery]")?.remove();
+  if (message) {
+    message.textContent = recoveryAction
+      ? lang.languageData.paymentRecoveryMessageText
+      : lang.languageData.emptyCartDescriptionText;
+  }
+  if (continueLink) continueLink.className = recoveryAction ? SECONDARY : PRIMARY;
   if (recoveryAction) {
     const recoveryLink = document.createElement("a");
     recoveryLink.href = recoveryAction.href;
     recoveryLink.dataset.astroPrefetch = "false";
-    recoveryLink.className =
-      "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary-hover";
+    recoveryLink.dataset.cartEmptyRecovery = "";
+    recoveryLink.className = PRIMARY;
     recoveryLink.textContent = lang.languageData.viewPaymentStatusText;
-    if (recoveryAction.onClick) {
-      recoveryLink.addEventListener("click", recoveryAction.onClick);
-    }
-    continueLink.className =
-      "inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-foreground bg-background hover:bg-muted";
-    actionWrapper.append(recoveryLink, continueLink);
-  } else {
-    actionWrapper.append(continueLink);
+    actions?.prepend(recoveryLink);
   }
-
-  wrapper.append(cartIcon, title, message, actionWrapper);
-  container.replaceChildren(wrapper);
 }
