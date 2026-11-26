@@ -72,7 +72,7 @@ function appendRadioMark(control: HTMLElement, className: string): void {
   check.className = className;
   check.setAttribute("aria-hidden", "true");
   const dot = document.createElement("span");
-  dot.className = "check-dot hidden h-2.5 w-2.5 rounded-full bg-primary";
+  dot.className = "check-dot hidden h-2.5 w-2.5 rounded-full bg-current text-primary";
   check.appendChild(dot);
   control.appendChild(check);
 }

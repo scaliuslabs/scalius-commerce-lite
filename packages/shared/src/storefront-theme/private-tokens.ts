@@ -351,7 +351,7 @@ export function compilePrivateTokens(page: PrivatePageKey, tokens: PrivateTokens
   if (issues.length > 0) return { issues, css: "", tables: [] };
   const built = privateTokenTables(page, valid, context);
   if (built.issues.length > 0) return { issues: built.issues, css: "", tables: built.tables };
-  const contrast = [...tableIssues(page, built.tables), ...prominenceContrastIssues(page, built.tables)];
+  const contrast = [...tableIssues(page, built.tables), ...prominenceContrastIssues(page, built.tables), ...chosenIssues(page, built.tables)];
   if (contrast.length > 0) return { issues: contrast, css: "", tables: built.tables };
   const unitHooks = new Set<string>();
   for (const nodes of Object.values(context.items)) layoutHooks(nodes, unitHooks);
@@ -421,6 +421,26 @@ function prominenceIssues(page: PrivatePageKey, tokens: Record<string, Values>):
     }
   }
   return issues;
+}
+
+/**
+ * The chosen payment method is told from the others by its edge and its dot, both drawn in its card's link colour
+ * (`has-[:checked]:border-primary`, the dot `text-primary`), where an unchosen card draws its border colour: per
+ * palette the two are clearly apart: 3:1 (a mark's floor) or `PRIVATE_EDGE_FILL_DISTANCE` (a filled button's fill from what is around it).
+ */
+function chosenIssues(page: PrivatePageKey, tables: readonly PrivateTokenTable[]): PrivateTokenIssue[] {
+  if (!Object.hasOwn(PRIVATE_PAGES[page].styles, "payment-method")) return [];
+  for (const table of tables) {
+    const card = ["payment-method", "payment", "page"].map((key) => table.rows.find((row) => row.key === key)).find(Boolean);
+    if (!card) continue;
+    const chosen = table.rows.find((row) => row.key === "payment-chosen") ?? card;
+    const apart = storefrontThemeColorDistance(chosen.link, card.border);
+    const ratio = storefrontThemeContrast(chosen.link, card.border);
+    if (apart < PRIVATE_EDGE_FILL_DISTANCE && ratio < PRIVATE_MARK_CONTRAST_FLOOR) {
+      return [{ path: ["privatePages", "tokens", page, card.key], reason: "contrast", message: `The chosen payment method's edge and dot (${chosen.link}, its link colour) read ${ratio.toFixed(2)}:1 and ${apart.toFixed(1)} apart from an unchosen one's border (${card.border}) in the ${table.palette.scheme} colours: a buyer tells which is chosen at ${PRIVATE_MARK_CONTRAST_FLOOR}:1 or ${PRIVATE_EDGE_FILL_DISTANCE} apart. Set link and border clearly apart.` }];
+    }
+  }
+  return [];
 }
 
 /**
@@ -1206,7 +1226,7 @@ function shapeCss(page: PrivatePageKey, tokens: Record<string, Values>, unitHook
     const width = values["border-width"];
     const edge = style && "kind" in style ? (style as PrivateStyleSpec) : null;
     if (edge && (edge.boundary || edge.kind === "field") && typeof width === "number" && width > 0 && values["border-style"] === undefined) {
-      declare(false, `:where(${selector})`, "border-style:solid");
+      declare(false, `${PRIVATE_TOKEN_MODE} :where(${selector})`, "border-style:solid");
     }
     for (const rule of rules.values()) (rule.wide ? wide : narrow).push(`${rule.selectors}{${rule.declarations.join(";")}}`);
   }
