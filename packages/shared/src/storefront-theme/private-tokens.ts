@@ -1199,6 +1199,13 @@ function shapeCss(page: PrivatePageKey, tokens: Record<string, Values>, unitHook
         declare(token.wide === true, selectors, token.write!(value as never));
       }
     }
+    // A control or field the check may find by its edge draws that edge solid itself: no other rule's
+    // `border-style` (a host class, another row) takes away the border the check read.
+    const width = values["border-width"];
+    const edge = style && "kind" in style ? (style as PrivateStyleSpec) : null;
+    if (edge && (edge.boundary || edge.kind === "field") && typeof width === "number" && width > 0 && values["border-style"] === undefined) {
+      declare(false, `:where(${selector})`, "border-style:solid");
+    }
     for (const rule of rules.values()) (rule.wide ? wide : narrow).push(`${rule.selectors}{${rule.declarations.join(";")}}`);
   }
   const fit = narrow.some((rule) => rule.includes(PAGE_FIT)) ? `${PAGE_FIT_RULE}:where(${root}){--pt-fit:7cqi}` : "";
