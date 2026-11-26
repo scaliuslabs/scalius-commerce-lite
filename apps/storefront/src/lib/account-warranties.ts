@@ -130,7 +130,7 @@ export function warrantySummaryText(terms: WarrantyTerms, copy: WarrantyCopy): s
 /**
  * A record's first line: the store's own warranty by its summary ("1 year
  * brand warranty"); an app's coverage by its plan's name and length
- * ("GameGhor Protection · Lifetime").
+ * ("Arcade Protection · Lifetime").
  */
 export function warrantyHeadline(record: WarrantyTerms & { code: string | null; policyName: string }, copy: WarrantyCopy): string {
   return record.code

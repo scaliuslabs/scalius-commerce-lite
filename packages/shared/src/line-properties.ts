@@ -91,7 +91,7 @@ export const LINE_INPUT_CONFIRM_LIMITS = {
  * may write as legal copy (a decline agreement) through a setting: a field
  * label stays short, but a checkbox's label (what the buyer agrees to) and
  * any input's help take up to 1,000 characters. 1,000 holds a consent clause
- * (GameGhor's decline is about 230; a store's terms paragraph 300 to 800),
+ * (one store's decline is about 230; a store's terms paragraph 300 to 800),
  * is the longest answer a buyer may give (`LINE_PROPERTY_INPUT_LIMITS.valueLength`),
  * and keeps a line inside its frozen bound: a frozen entry carries its label,
  * and 40 of them with 1,000-character labels stay under

@@ -183,7 +183,7 @@ const LONG = "Supercalifragilisticexpialidocious".repeat(8);
 const PALETTES = ["retail", "marketplace", "boutique", "fresh", "beauty", "heritage", "midnight"];
 const TONES = ["neutral", "info", "success", "warning", "critical"];
 const UI_TARGETS = ["cart.page.summary", "cart.page.below", "cart.line.after", "checkout.contact.after", "checkout.delivery.after"];
-const APPS = ["acme.kinds", "acme.protection", "acme.loyalty", "gameghor.protection"];
+const APPS = ["acme.kinds", "acme.protection", "acme.loyalty", "arcade.protection"];
 /** A colour per scheme (`{ light, dark }`): what each palette's row resolves on its own. */
 const SCHEMED = (light, dark) => ({ light, dark });
 /**
@@ -1221,7 +1221,7 @@ function customerChecks({ state, rows, details }) {
       const texts = [...row.querySelectorAll('[data-ui="text"]')];
       const pieces = {
         mark: row.querySelector('[data-ui="mark"]'),
-        sentence: texts.find((element) => element.textContent.includes("Add GAMEGHOR Protection")),
+        sentence: texts.find((element) => element.textContent.includes("Add Arcade Protection")),
         price: texts.find((element) => element.textContent.trim() === "৳350"),
         "Add Now": [...row.querySelectorAll("a,button")].find((element) => element.textContent.trim() === "Add Now"),
       };
@@ -1247,7 +1247,7 @@ function customerChecks({ state, rows, details }) {
   }
   const tone = state === "customer" ? "warning" : "success";
   const box = root?.querySelector(`[data-buyer-ui-target="cart.page.summary"] [data-ui="stack"][data-tone="${tone}"]`);
-  const own = rows.find((row) => row.key === `ui.stack.${tone}@gameghor.protection/cart.page.summary`);
+  const own = rows.find((row) => row.key === `ui.stack.${tone}@arcade.protection/cart.page.summary`);
   const summary = rows.find((row) => row.key === "summary");
   if (!box) problems.push(`the ${tone} status box is not drawn in the summary`);
   else if (!own?.paint || own.paint === summary?.paint) problems.push(`the ${tone} status box has no surface of its own in the table (${own?.paint ?? "no row"})`);

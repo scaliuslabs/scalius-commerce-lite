@@ -93,7 +93,7 @@
        "label": "Support",
        "icon": {
         "source": "app",
-        "app": "gameghor.theme",
+        "app": "arcade.theme",
         "file": "icons/support.svg"
        },
        "href": "/support"

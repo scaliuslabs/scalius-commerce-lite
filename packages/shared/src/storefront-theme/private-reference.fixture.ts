@@ -1,4 +1,4 @@
-// The customer's prototype cart (GameGhor, a dark purple store with a light
+// The reference cart (a dark purple game store with a light
 // scheme; its values resolved in private-look.md sections 2.1, 2.2 and 3)
 // expressed with the private-page model alone: an arrangement, typed tokens
 // for the host parts and the protection app's blocks, and labels. Each colour
@@ -46,7 +46,7 @@ export const REFERENCE_LIGHT_PALETTE: StorefrontThemeColors = {
 };
 
 /** The protection app whose offer row, badge and status boxes the theme styles. */
-const APP = "gameghor.protection";
+const APP = "arcade.protection";
 
 /** Amber, emerald and the words on them, per scheme. */
 const AMBER = { light: "#f2ebd9", dark: "#35282c" } as const;
@@ -152,7 +152,7 @@ export const REFERENCE_PRIVATE_PAGES = {
       [`ui.text.success@${APP}/cart.line.after`]: { text: EMERALD, size: 14, weight: "600" },
       [`ui.link@${APP}/cart.line.after`]: { text: EMERALD, size: 12, weight: "500" },
       [`ui.button@${APP}/cart.line.after`]: { background: ACTION, text: ON_ACTION, border: ACTION, "border-width": 0, radius: 0, weight: "600", size: 12, inset: 16 },
-      // On a protected line: "✓ GAMEGHOR Protection added".
+      // On a protected line: "✓ Arcade Protection added".
       [`ui.badge.success@${APP}/cart.line.after`]: { background: "card", text: EMERALD, border: "card", radius: 0, padding: 0, weight: "600", size: 12 },
       // The status box in the summary: amber "recommended", green (light: yellow) "protected", its Remove.
       [`ui.stack.warning@${APP}/cart.page.summary`]: { background: AMBER, text: WHITE, "border-width": 0, radius: 0, padding: 12, gap: 12 },

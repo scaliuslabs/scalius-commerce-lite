@@ -107,7 +107,7 @@ export interface GalleryScenario {
   /** The cart check asks for a protection decision on the first line (declining needs agreement) and prices an add-on into the second. */
   lineStates?: boolean;
   /**
-   * The customer's cart and its protection app (`gameghor.protection`, cart-seed.ts `GALLERY_CUSTOMER`):
+   * The customer's cart and its protection app (`arcade.protection`, cart-seed.ts `GALLERY_CUSTOMER`):
    * the account line offered protection (`offer`), or two accounts protected (`protected`). Its blocks replace the other apps'.
    */
   customer?: "offer" | "protected";

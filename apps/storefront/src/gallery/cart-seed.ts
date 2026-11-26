@@ -60,18 +60,18 @@ export const GALLERY_KIT = {
 } as const;
 
 /**
- * The customer's cart (GameGhor, private-look.md): two lines of one game,
+ * The reference cart (a game store): two lines of one game,
  * an account that takes the store's app's lifetime protection and a redeem
- * key that does not. The app (`gameghor.protection`) lives here only: its
+ * key that does not. The app (`arcade.protection`) lives here only: its
  * line input, its add-on of ৳350 a unit and its blocks (api.ts). `customer`:
  * the account is not protected yet; `customer-protected`: two accounts, each
  * protected, the summary's add-on row opening to the app's lines.
  */
 export const GALLERY_CUSTOMER = {
-  appId: "gameghor.protection",
+  appId: "arcade.protection",
   inputKey: "plan",
   protectionMinor: 35_000,
-  title: "GAMEGHOR Protection",
+  title: "Arcade Protection",
   account: {
     key: "line:v3:prod_gta5:variant:var_gta5_account:p:none", variantId: "var_gta5_account", price: 2222,
     line: { id: "prod_gta5", slug: "gta-v-premium-edition", name: "Grand Theft Auto V: Premium Edition", price: 2222, quantity: 1, variantId: "var_gta5_account", propertiesHash: "none", options: [{ name: "Platform", label: "Rockstar Launcher" }, { name: "Type", label: "Account" }] },

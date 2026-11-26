@@ -331,7 +331,7 @@ export function customerBlocks(protectedAccount: boolean) {
   return [
     customerBlock("cart.line.after", { type: "stack", direction: "horizontal", tone: "warning", children: [
       { type: "mark", tone: "warning" },
-      { type: "stack", gap: "sm", children: [{ type: "text", text: "Add GAMEGHOR Protection to get lifetime warranty and support." }, CUSTOMER_LEARN_MORE] },
+      { type: "stack", gap: "sm", children: [{ type: "text", text: "Add Arcade Protection to get lifetime warranty and support." }, CUSTOMER_LEARN_MORE] },
       { type: "text", text: "\u09F3350", tone: "success", emphasis: "strong" },
       { type: "button", label: "Add Now", tone: "primary", action: { kind: "cart", op: "set_line_input", key: inputKey, value: "lifetime", lineKeys: [account.key] } },
     ] }, account.key),
@@ -355,8 +355,8 @@ function customerInputs(protectedAccount: boolean) {
       options: [
         { value: "lifetime", label: GALLERY_CUSTOMER.title },
         { value: "declined", label: "No protection", confirm: {
-          title: "Continue without GAMEGHOR Protection?",
-          text: "I agree that I do not need GAMEGHOR Protection. If this account is hacked or hijacked from my computer, device, account security issue, or personal security issue, I will be responsible.",
+          title: "Continue without Arcade Protection?",
+          text: "I agree that I do not need Arcade Protection. If this account is hacked or hijacked from my computer, device, account security issue, or personal security issue, I will be responsible.",
           agree: "I agree and want to continue checkout.",
         } },
       ],

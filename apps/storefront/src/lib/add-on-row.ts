@@ -1,4 +1,4 @@
-// One add-on row of a money summary ("GAMEGHOR Protection ৳700"), as every
+// One add-on row of a money summary ("Arcade Protection ৳700"), as every
 // surface draws it: the cart page, the drawer, the payment step, the quick
 // checkout, the receipt and the account order. A row with the app's detail
 // lines opens to them: a native <details> (no script, so the server-drawn

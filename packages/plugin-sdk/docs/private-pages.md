@@ -534,7 +534,7 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         "weight": "800",
         "inset": 20
       },
-      "ui.stack.warning@gameghor.protection/cart.line.after": {
+      "ui.stack.warning@arcade.protection/cart.line.after": {
         "background": { "light": "#f2ebd9", "dark": "#35282c" },
         "text": { "light": "#000000", "dark": "#fef3c6" },
         "border-width": 0,
@@ -542,15 +542,15 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         "padding": 8,
         "gap": 8
       },
-      "ui.mark.warning@gameghor.protection/cart.line.after": {
+      "ui.mark.warning@arcade.protection/cart.line.after": {
         "text": { "light": "#000000", "dark": "#fee685" },
         "border": { "light": "#f7e195", "dark": "#866c2e" },
         "size": 12
       },
-      "ui.text@gameghor.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#fef3c6" }, "size": 14, "weight": "500" },
-      "ui.text.success@gameghor.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 14, "weight": "600" },
-      "ui.link@gameghor.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 12, "weight": "500" },
-      "ui.button@gameghor.protection/cart.line.after": {
+      "ui.text@arcade.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#fef3c6" }, "size": 14, "weight": "500" },
+      "ui.text.success@arcade.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 14, "weight": "600" },
+      "ui.link@arcade.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 12, "weight": "500" },
+      "ui.button@arcade.protection/cart.line.after": {
         "background": { "light": "#fed700", "dark": "primary" },
         "text": { "light": "#333e48", "dark": "primary-foreground" },
         "border": { "light": "#fed700", "dark": "primary" },
@@ -560,7 +560,7 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         "size": 12,
         "inset": 16
       },
-      "ui.badge.success@gameghor.protection/cart.line.after": {
+      "ui.badge.success@arcade.protection/cart.line.after": {
         "background": "card",
         "text": { "light": "#000000", "dark": "#5ee9b5" },
         "border": "card",
@@ -569,7 +569,7 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         "weight": "600",
         "size": 12
       },
-      "ui.stack.warning@gameghor.protection/cart.page.summary": {
+      "ui.stack.warning@arcade.protection/cart.page.summary": {
         "background": { "light": "#f2ebd9", "dark": "#35282c" },
         "text": { "light": "#000000", "dark": "#ffffff" },
         "border-width": 0,
@@ -577,7 +577,7 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         "padding": 12,
         "gap": 12
       },
-      "ui.stack.success@gameghor.protection/cart.page.summary": {
+      "ui.stack.success@arcade.protection/cart.page.summary": {
         "background": { "light": "#fed700", "dark": "#1b2839" },
         "text": { "light": "#000000", "dark": "#ffffff" },
         "border-width": 0,
@@ -585,19 +585,19 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         "padding": 12,
         "gap": 12
       },
-      "ui.mark.warning@gameghor.protection/cart.page.summary": {
+      "ui.mark.warning@arcade.protection/cart.page.summary": {
         "text": { "light": "#000000", "dark": "#fee685" },
         "border": { "light": "#f7e195", "dark": "#786231" },
         "size": 14
       },
-      "ui.mark.success@gameghor.protection/cart.page.summary": {
+      "ui.mark.success@arcade.protection/cart.page.summary": {
         "text": { "light": "#000000", "dark": "#a4f4cf" },
         "border": { "light": "#bede48", "dark": "#36756b" },
         "size": 12
       },
-      "ui.text@gameghor.protection/cart.page.summary": { "text": { "light": "#000000", "dark": "#ffffff" }, "size": 14, "weight": "600" },
-      "ui.link@gameghor.protection/cart.page.summary": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 12, "weight": "500" },
-      "ui.button@gameghor.protection/cart.page.summary": {
+      "ui.text@arcade.protection/cart.page.summary": { "text": { "light": "#000000", "dark": "#ffffff" }, "size": 14, "weight": "600" },
+      "ui.link@arcade.protection/cart.page.summary": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 12, "weight": "500" },
+      "ui.button@arcade.protection/cart.page.summary": {
         "background": { "light": "#fed700", "dark": "muted" },
         "text": { "light": "#000000", "dark": "#a4f4cf" },
         "border-width": 0,

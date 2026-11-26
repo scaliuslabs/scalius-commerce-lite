@@ -37326,7 +37326,7 @@ export type PostApiV1AdminResourcesWarrantiesIssueData = {
              */
             key: string;
             /**
-             * What the buyer sees the cover as (`GameGhor Protection`).
+             * What the buyer sees the cover as (`Arcade Protection`).
              */
             name: string;
             /**
