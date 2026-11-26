@@ -336,7 +336,7 @@ function validTokens(page: PrivatePageKey, tokens: NonNullable<PrivateTokens[Pri
  * A page's tokens compiled: checked by name, type and bounds, its colour
  * table resolved per palette and every pair of it checked, then the CSS: the
  * table's rows, then each target's other tokens (sizes, spacing, type,
- * columns) as rules at zero specificity.
+ * columns), every rule at token mode's specificity.
  */
 export function compilePrivateTokens(page: PrivatePageKey, tokens: PrivateTokens[PrivatePageKey], context: PrivateTokenContext): { issues: PrivateTokenIssue[]; css: string; tables: PrivateTokenTable[] } {
   if (!tokens) return { issues: [], css: "", tables: [] };
@@ -1146,8 +1146,9 @@ function tracksFit(value: Tracks, gap: number, floor: number): number {
 
 /**
  * Each target's tokens that are not colours (sizes, spacing, type, columns)
- * as rules at zero specificity under the page root (or as the anatomy places
- * it), in the anatomy's order, its wide values in the wide media query and a
+ * as rules under the page root (or as the anatomy places it) at token mode's
+ * specificity (`PRIVATE_TOKEN_MODE`, above every host rule but a theme's
+ * region rules: a token the save accepts is drawn), in the anatomy's order, its wide values in the wide media query and a
  * grid's columns only where they fit. Values were checked by type: nothing
  * here is a theme's text.
  */
@@ -1181,7 +1182,8 @@ function shapeCss(page: PrivatePageKey, tokens: Record<string, Values>, unitHook
       const columns = name === "columns" || name === "columns-wide";
       if (!token.write && !columns) continue;
       // An app's node has its own type: no word inside it draws its own size (each piece is a node of its own).
-      const selectors = (target.startsWith("ui.") && token.on?.[0] === "" ? [""] : token.on ?? [""]).map((suffix) => `:where(${selector})${suffix}`).join(",");
+      // Token mode's specificity, as the colour table's: above the host's own rules (its filled buttons' radius).
+      const selectors = (target.startsWith("ui.") && token.on?.[0] === "" ? [""] : token.on ?? [""]).map((suffix) => `${PRIVATE_TOKEN_MODE} :where(${selector})${suffix}`).join(",");
       const floor = unitHooks.has(target.slice(1)) ? UNIT_TRACK_FLOOR : PAGE_TRACK_FLOOR;
       if (columns) {
         // Measured on the box that holds the grid (a size container), never the viewport alone.

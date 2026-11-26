@@ -41,12 +41,12 @@ export function confirmCartChoice(confirm: { text: string; title?: string; agree
     title: confirm.title ?? copy.confirmTitle,
     text: confirm.text,
     agree: confirm.agree ?? copy.agree,
-    goBack: themeLabel(document, "dialog.goBack") ?? copy.goBack,
-    confirm: themeLabel(document, "dialog.confirm") ?? copy.confirm,
+    goBack: copy.goBack,
+    confirm: copy.confirm,
   }, document, opener);
 }
 
-/** Asks the buyer; resolves true only when they ticked the box and confirmed. */
+/** Asks the buyer; resolves true only when they ticked the box and confirmed. The page's theme words its two actions, every dialog alike. */
 export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = document, from?: HTMLElement): Promise<boolean> {
   // Focus returns to the control that asked (a select the buyer changed), else to what had it.
   const opener = from ?? (doc.activeElement instanceof HTMLElement ? doc.activeElement : null);
@@ -104,13 +104,13 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
   const back = doc.createElement("button");
   back.type = "button";
   back.className = "min-h-11 rounded-md border border-border px-4 text-sm font-medium text-foreground hover:bg-muted";
-  back.textContent = words.goBack;
+  back.textContent = themeLabel(doc, "dialog.goBack") ?? words.goBack;
   back.dataset.part = "dialog-back";
   const confirm = doc.createElement("button");
   confirm.type = "submit";
   confirm.disabled = box !== null;
   confirm.className = "min-h-11 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50";
-  confirm.textContent = words.confirm;
+  confirm.textContent = themeLabel(doc, "dialog.confirm") ?? words.confirm;
   confirm.dataset.part = "dialog-confirm";
   actions.append(back, confirm);
   form.append(title, text);
