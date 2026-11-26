@@ -517,6 +517,15 @@ const REGRESSIONS = {
   // A field or the stepper that draws no border and fills itself with its box's colour: nothing shows where it is.
   "a borderless field the colour of its card form": { refused: "contrast", refusedFor: /input .*its fill, with no border drawn/, privatePages: { tokens: { cart: { "details-form": { background: "card" }, input: { "border-width": 0, background: "card" } } } } },
   "a borderless stepper on its line": { refused: "contrast", refusedFor: /line-quantity: its fill, with no border drawn/, privatePages: { tokens: { cart: { "line-quantity": { "border-width": 0 } } } } },
+  // Sizes follow the page, never the column a part sits in: a 28px line price in a wide column and a 28px total in a
+  // narrow one draw at one size, so no money figure outsizes the total.
+  "a 28px line price and a 28px total, the summary in a narrow column": { privatePages: { pages: { cart: { layout: [{ type: "part", part: "notices" }, { type: "layout", layout: "columns", hook: "split", children: [
+    { type: "layout", layout: "stack", children: [{ type: "part", part: "lines" }, { type: "target", target: "cart.page.below" }] },
+    { type: "layout", layout: "stack", children: [{ type: "part", part: "summary" }, { type: "target", target: "cart.page.summary" }, { type: "part", part: "details" }] },
+  ] }] } }, tokens: { cart: { "@split": { columns: ["1fr", 320] }, "line-price": { size: 28 }, "summary-total": { size: 28, weight: "800" } } } } },
+  // The review's probe 3: the chosen payment method's mark in the card's link colour, which is the unchosen card's
+  // blue border: the chosen card does not look chosen. Refused per scheme (`contrast` on `payment-method`).
+  "payment step: the chosen method marked in the unchosen card's border colour": { refused: "contrast", refusedFor: /chosen payment method.*#1d4ed8/, request: { ...REFERENCE, page: "sample-checkout" }, states: ["base"], privatePages: { tokens: { checkout: { "payment-method": { background: "#ffffff", border: "#1d4ed8", link: "#1d4ed8", "border-width": 2, shadow: "none" }, action: { background: "#ffffff", text: "#111111" } } } } },
   // A filled action found by a drawn edge (WCAG 1.4.11 by its boundary): a yellow fill reading under 3:1 on a white dock,
   // framed by a 2px #111111 border. Drawn as Place order, as Confirm in the dialog and as Pay on the payment step's card.
   "Place order brand fill with a drawn edge": { request: { scheme: "light" }, states: ["base", "lines"], privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, submit: EDGED_ACTION, dialog: { background: "#ffffff" }, "dialog-confirm": EDGED_ACTION } } } },
@@ -1076,6 +1085,9 @@ function prominence(scope) {
       const [faint, strong] = [least(amount, "contrast"), most(rows, "contrast")];
       if (faint.contrast < strong.contrast - 0.05) problems.push(`the total's "${faint.text}" reads ${faint.contrast.toFixed(2)}:1, under the row "${strong.text}" at ${strong.contrast.toFixed(2)}:1`);
     }
+    // No money figure on the page outsizes the total (the save's rule, as drawn): a line's price in a wider column included.
+    const prices = words([...document.querySelectorAll('[data-private="cart"] [data-part="line-price"]')]);
+    if (amount.length > 0 && prices.length > 0 && most(prices, "size").size > least(amount, "size").size + 0.5) problems.push(`the line price "${most(prices, "size").text}" is drawn at ${most(prices, "size").size.toFixed(1)}px, over the total's "${least(amount, "size").text}" at ${least(amount, "size").size.toFixed(1)}px`);
   }
   return problems;
 }
