@@ -24,7 +24,7 @@ import { getLayoutData } from "@/lib/api";
 import { privateAssetUrls } from "@/lib/private-pages/html";
 import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
 import type { STOREFRONT_MOBILE_TAB_ICONS } from "@scalius/shared/storefront-theme";
-import { shownPhoneTabs, type PhoneTab } from "./phone-navigation";
+import { PHONE_OFFERS_HREF, phoneTabCurrent, shownPhoneTabs, type PhoneTab } from "./phone-navigation";
 import TabIcon from "./TabIcon.astro";
 
 interface Props {
@@ -41,8 +41,6 @@ interface Props {
 
 type Icon = (typeof STOREFRONT_MOBILE_TAB_ICONS)[number];
 
-const OFFERS_HREF = "/search?hasDiscount=true";
-
 const { tabs, compare = false, menu = "core" } = Astro.props;
 const { language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).chrome;
@@ -51,20 +49,7 @@ const shown = shownPhoneTabs(tabs, compare);
 const asset = shown.some((tab) => tab.kind === "link" && tab.icon.source === "app")
   ? privateAssetUrls(readStorefrontExtensions((await getLayoutData())?.appExtensions))
   : null;
-const path = Astro.url.pathname;
-const offers = path === "/search" && Astro.url.searchParams.get("hasDiscount") === "true";
-const current = (tab: PhoneTab): boolean => {
-  switch (tab.kind) {
-    case "home": return path === "/";
-    case "categories": return /^\/(categories|collections)\//.test(path);
-    case "offers": return offers;
-    case "search": return path === "/search" && !offers;
-    case "compare": return path === "/compare";
-    case "cart": return path === "/cart";
-    case "account": return path === "/account" || path.startsWith("/account/");
-    case "link": return path === tab.href.split(/[?#]/)[0];
-  }
-};
+const current = (tab: PhoneTab): boolean => phoneTabCurrent(tab, Astro.url);
 const iconOf = (tab: PhoneTab): { name: Icon } | { src: string } => {
   if (tab.kind !== "link") return { name: tab.kind };
   if (tab.icon.source === "store") return { name: tab.icon.name };
@@ -102,7 +87,7 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
               >{glyph}<span>{labelOf(tab)}</span></a>
             )}
             {tab.kind === "offers" && (
-              <a href={OFFERS_HREF} class="mobile-tab" aria-current={page} data-astro-prefetch="false">{glyph}<span>{labelOf(tab)}</span></a>
+              <a href={PHONE_OFFERS_HREF} class="mobile-tab" aria-current={page} data-astro-prefetch="false">{glyph}<span>{labelOf(tab)}</span></a>
             )}
             {tab.kind === "search" && (
               <a href="/search" class="mobile-tab" aria-current={page} data-search-open data-astro-prefetch="false">{glyph}<span>{labelOf(tab)}</span></a>

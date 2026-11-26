@@ -43,3 +43,44 @@ export function phoneDrops(tabs: readonly PhoneTab[] | null): string {
   if (!tabs) return "";
   return (["account", "cart"] as const).filter((kind) => tabs.some((tab) => tab.kind === kind)).join(" ");
 }
+
+/** Where the Offers tab leads. */
+export const PHONE_OFFERS_HREF = "/search?hasDiscount=true";
+
+/** The pages a tab leads to: the tab is current on each of them and on the pages under them. */
+function phoneTabDestinations(tab: PhoneTab): readonly string[] {
+  switch (tab.kind) {
+    case "home": return ["/"];
+    case "categories": return ["/categories", "/collections"];
+    case "offers": return [PHONE_OFFERS_HREF];
+    case "search": return ["/search"];
+    case "compare": return ["/compare"];
+    case "cart": return ["/cart"];
+    case "account": return ["/account"];
+    case "link": return [tab.href];
+  }
+}
+
+/**
+ * The tab is current on its own page and on pages under it (`/categories` and
+ * `/categories/shoes`, `/blog` and `/blog/post`), for store destinations and
+ * link tabs alike. Home is current only on `/`, every page being under it; a
+ * destination with a query (Offers) needs that query, and Search yields to it.
+ */
+export function phoneTabCurrent(tab: PhoneTab, page: URL): boolean {
+  const here = page.pathname.length > 1 ? page.pathname.replace(/\/+$/, "") : page.pathname;
+  const offers = here === "/search" && page.searchParams.get("hasDiscount") === "true";
+  if (tab.kind === "search" && offers) return false;
+  return phoneTabDestinations(tab).some((href) => {
+    let to: URL;
+    try {
+      to = new URL(href, page);
+    } catch {
+      return false;
+    }
+    if (to.origin !== page.origin) return false;
+    for (const [key, value] of to.searchParams) if (page.searchParams.get(key) !== value) return false;
+    const path = to.pathname.length > 1 ? to.pathname.replace(/\/+$/, "") : to.pathname;
+    return path === "/" ? here === "/" : here === path || here.startsWith(`${path}/`);
+  });
+}
