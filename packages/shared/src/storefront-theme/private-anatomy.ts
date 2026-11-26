@@ -384,6 +384,19 @@ export function privateSummaryStyles(options: {
   };
 }
 
+/**
+ * A page's styles with `action` (every filled button the host draws without a target of its own) never reaching a
+ * filled action that has its own row (`boundary: "fill"`: Place order, Confirm, Pay): two rows on one element would
+ * draw over what the check reads. Built from those rows' selectors, so a page that adds one is kept apart too.
+ */
+function actionApart(root: string, styles: Record<string, PrivateStyleSpec>): Record<string, PrivateStyleSpec> {
+  const action = styles.action;
+  if (!action) return styles;
+  const own = Object.entries(styles).filter(([key, style]) => key !== "action" && style.boundary === "fill")
+    .map(([, style]) => style.absolute ? style.selector : `[data-private="${root}"] ${style.selector}`);
+  return own.length === 0 ? styles : { ...styles, action: { ...action, selector: `${action.selector}:not(${own.join(",")})` } };
+}
+
 const CART_PAGE_STYLES = privatePageStyles("cart", { dialogs: true });
 
 /** The cart page's style targets (and the store's dialogs over it), outer before inner. */
@@ -445,7 +458,7 @@ const CART_PAGE: PrivatePageSpec = {
   lead: ["lines", "summary", "details"],
   order: [["notices", "details"]],
   layouts: ["stack", "columns", "grid", "group", "fold"],
-  styles: CART_STYLES,
+  styles: actionApart("cart", CART_STYLES),
   layout: [
     p("progress"),
     p("notices"),
@@ -585,7 +598,7 @@ const CHECKOUT_PAGE: PrivatePageSpec = {
   order: [["notices", "payment"]],
   lead: ["summary", "payment"],
   layouts: ["stack", "columns", "grid", "group"],
-  styles: { ...CHECKOUT_STYLES, summary: { ...CHECKOUT_STYLES.summary!, targets: ["checkout.summary.after"] } },
+  styles: actionApart("checkout", { ...CHECKOUT_STYLES, summary: { ...CHECKOUT_STYLES.summary!, targets: ["checkout.summary.after"] } }),
   layout: [
     p("progress"),
     p("empty"),
@@ -689,7 +702,7 @@ const RECEIPT_PAGE: PrivatePageSpec = {
   targets: ["order.confirmation", "account.order"],
   lead: ["status", "summary"],
   layouts: ["stack", "columns", "grid", "group"],
-  styles: RECEIPT_STYLES,
+  styles: actionApart("receipt", RECEIPT_STYLES),
   layout: [
     p("progress"),
     p("status"),
@@ -750,7 +763,7 @@ const ACCOUNT_PAGE: PrivatePageSpec = {
   targets: [],
   lead: ["heading", "content"],
   layouts: ["stack", "columns", "grid", "group"],
-  styles: ACCOUNT_STYLES,
+  styles: actionApart("account", ACCOUNT_STYLES),
   layout: [p("navigation"), p("heading"), p("content")],
   items: {},
   ...PRIVATE_PAGE_WORDS.account,
