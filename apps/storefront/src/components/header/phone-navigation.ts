@@ -1,4 +1,5 @@
 import { STOREFRONT_MOBILE_DEFAULT_TABS, type StorefrontMobileTabValue } from "@scalius/shared/storefront-theme";
+import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 
 export type PhoneTab = StorefrontMobileTabValue;
 
@@ -68,7 +69,7 @@ function phoneTabDestinations(tab: PhoneTab): readonly string[] {
  * destination with a query (Offers) needs that query, and Search yields to it.
  */
 export function phoneTabCurrent(tab: PhoneTab, page: URL): boolean {
-  const here = page.pathname.length > 1 ? page.pathname.replace(/\/+$/, "") : page.pathname;
+  const here = page.pathname.length > 1 ? trimTrailingCharacter(page.pathname, "/") : page.pathname;
   const offers = here === "/search" && page.searchParams.get("hasDiscount") === "true";
   if (tab.kind === "search" && offers) return false;
   return phoneTabDestinations(tab).some((href) => {
@@ -80,7 +81,7 @@ export function phoneTabCurrent(tab: PhoneTab, page: URL): boolean {
     }
     if (to.origin !== page.origin) return false;
     for (const [key, value] of to.searchParams) if (page.searchParams.get(key) !== value) return false;
-    const path = to.pathname.length > 1 ? to.pathname.replace(/\/+$/, "") : to.pathname;
+    const path = to.pathname.length > 1 ? trimTrailingCharacter(to.pathname, "/") : to.pathname;
     return path === "/" ? here === "/" : here === path || here.startsWith(`${path}/`);
   });
 }
