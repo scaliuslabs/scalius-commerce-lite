@@ -24,6 +24,10 @@ export const STORE_ACTION_AND_AMOUNT_WORDS: Readonly<Record<string, Readonly<{ e
   dueAtPickupText: { en: "Due at pickup", bn: "সংগ্রহের সময় পরিশোধযোগ্য" },
   amountDueText: { en: "Amount due", bn: "পরিশোধযোগ্য টাকা" },
   onlinePaymentText: { en: "Pay online", bn: "অনলাইনে পেমেন্ট করুন" },
+  // The Pay button's own words: a `{placeholder}` stands for any amount or provider, or none.
+  payAmountText: { en: "Pay {amount}", bn: "{amount} পরিশোধ করুন" },
+  payAmountNowText: { en: "Pay {amount} now", bn: "এখন {amount} পরিশোধ করুন" },
+  continueToProviderText: { en: "Continue to {provider}", bn: "{provider}-এ এগিয়ে যান" },
   addToCartText: { en: "Add to cart", bn: "কার্টে যোগ করুন" },
   buyNowText: { en: "Buy now", bn: "এখনই কিনুন" },
   orderReceiptPaidText: { en: "Paid", bn: "পরিশোধিত" },
@@ -39,15 +43,43 @@ export const STORE_ACTION_AND_AMOUNT_WORDS: Readonly<Record<string, Readonly<{ e
 /** The machine-readable reason an app's words that read as the store's are refused with. */
 export const STORE_WORDS_REASON = "store_words";
 
-/** Words as compared: NFKC, lower case, one space between words, no punctuation or symbols at either end. */
+/** Zero-width, soft-hyphen and bidi control characters: invisible, so "Pl\u200Bace order" reads as "Place order". */
+const INVISIBLE = /[\u00AD\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF]/gu;
+
+/** Words as compared: invisible characters dropped, NFKC, lower case, one space between words, no punctuation or symbols at either end. */
 export function foldStoreWords(text: string): string {
-  return text.normalize("NFKC").toLowerCase().replace(/\s+/gu, " ")
+  return text.replace(INVISIBLE, "").normalize("NFKC").replace(INVISIBLE, "").toLowerCase().replace(/\s+/gu, " ")
     .replace(/^[\s\p{P}\p{S}]+|[\s\p{P}\p{S}]+$/gu, "");
 }
 
-const FOLDED = new Set(Object.values(STORE_ACTION_AND_AMOUNT_WORDS).flatMap((words) => [foldStoreWords(words.en), foldStoreWords(words.bn)]));
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** True when `text` reads as one of the store's action or amount words (exactly, once folded). */
+/**
+ * One word of the list as a whole-label pattern over folded text. A
+ * `{placeholder}` stands for anything or nothing: "Pay {amount} now" is
+ * "Pay ৳1,200 now" and "Pay now"; "Pay {amount}" is "Pay" too. Where the
+ * copy puts a space beside the placeholder, the words around it stay whole
+ * ("Pay {amount}" is not "Payback").
+ */
+function wordPattern(word: string): string {
+  const parts = foldStoreWords(word.replace(/\{[^{}]*\}/g, "\uE000")).split(/(\s?\uE000\s?)/u);
+  return parts.map((part, index) => {
+    if (index % 2 === 0) return escapeRegExp(part);
+    const before = parts[index - 1] !== "";
+    const after = parts[index + 1] !== "";
+    const left = part.startsWith(" ");
+    const right = part.endsWith(" ");
+    if (before && after) return left && right ? " (?:.* )?" : left ? " .*" : right ? ".* " : ".*";
+    if (before) return left ? "(?: .*)?" : ".*";
+    if (after) return right ? "(?:.* )?" : ".*";
+    return ".*";
+  }).join("");
+}
+
+const PATTERN = new RegExp(`^(?:${Object.values(STORE_ACTION_AND_AMOUNT_WORDS)
+  .flatMap((words) => [wordPattern(words.en), wordPattern(words.bn)]).join("|")})$`, "u");
+
+/** True when `text` reads as one of the store's action or amount words: the whole label once folded, any amount or provider where the copy names one. */
 export function isStoreActionOrAmountWord(text: string): boolean {
-  return FOLDED.has(foldStoreWords(text));
+  return PATTERN.test(foldStoreWords(text));
 }
