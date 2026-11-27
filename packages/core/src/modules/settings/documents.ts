@@ -22,6 +22,7 @@ import {
   type SeoReturnPolicySettings,
 } from "@scalius/shared/seo-return-policy";
 import { emiSettingsSchema, type EmiSettings } from "@scalius/shared/emi";
+import { DEFAULT_LISTING_SORT, STOREFRONT_DEFAULT_LISTING_SORTS, type StorefrontDefaultListingSort } from "@scalius/shared/listing-sorts";
 import { DEFAULT_NET_TERMS_SETTINGS, readNetTermsSettings, type NetTermsSettings } from "@scalius/shared/payment-terms";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import {
@@ -550,6 +551,30 @@ export const seoDocument = defineSettingsDocument<SeoSettings>({
     discovery: normalizeSeoDiscoverySettings(undefined),
     returnPolicy: normalizeSeoReturnPolicySettings(undefined),
   },
+});
+
+// ─────────────────────────────────────────
+// Catalogue: how the storefront's listings behave (Online store ->
+// Preferences). Its own document, so an SEO edit never re-reads a cached
+// listing.
+// ─────────────────────────────────────────
+
+export interface CatalogSettings {
+  /**
+   * The order category, collection, brand and search listings open in when
+   * their address names none (`STOREFRONT_DEFAULT_LISTING_SORTS`: orders
+   * that page by cursor; a collection with picked products keeps its own
+   * order, and a search with words opens best match first).
+   */
+  defaultListingSort: StorefrontDefaultListingSort;
+}
+
+export const catalogDocument = defineSettingsDocument<CatalogSettings>({
+  key: "catalog",
+  schema: z.object({
+    defaultListingSort: z.enum(STOREFRONT_DEFAULT_LISTING_SORTS).catch(DEFAULT_LISTING_SORT),
+  }),
+  defaults: { defaultListingSort: DEFAULT_LISTING_SORT },
 });
 
 // ─────────────────────────────────────────

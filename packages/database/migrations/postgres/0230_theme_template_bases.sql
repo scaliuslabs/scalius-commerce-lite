@@ -1,5 +1,5 @@
 -- A theme app's update reaches stores already on its template: see
--- ../0228_theme_template_bases.sql. Each template key's base release.
+-- ../0230_theme_template_bases.sql. Each template key's base release.
 CREATE TABLE "theme_template_bases" (
 	"template" text PRIMARY KEY NOT NULL,
 	"plugin_id" text NOT NULL,
@@ -14,4 +14,4 @@ CREATE TABLE "theme_template_bases" (
 	CONSTRAINT "theme_template_bases_version_shape" CHECK(length("theme_template_bases"."app_version") BETWEEN 1 AND 80 AND "theme_template_bases"."theme_version" >= 1)
 );
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (228, '0228_theme_template_bases', '0a3b0a7c40dced0ef06e86ad6409935a7e687bc0978a9039fd4337ac3a7ea027');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (230, '0230_theme_template_bases', '39d369848574fe15aafbda081ec9432ce16d20075b9038ce7d051e44ee29e0db');

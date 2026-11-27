@@ -4,6 +4,9 @@ import { getLayoutData } from "@/lib/api";
 import { getBaseUrl, xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
+import { menuLabelFor } from "@/lib/menu-label";
+import { pagesCopy } from "@/lib/pages-copy";
+import { pageLanguage } from "@/lib/store-time-zone";
 
 export const prerender = false;
 
@@ -35,6 +38,8 @@ export const GET: APIRoute = async () => {
       layoutData.business?.companyName?.trim() ||
       layoutData.business?.legalName?.trim() ||
       "Store";
+    // The store's own name for the blog (its menu link's words), as the page shows it.
+    const blogName = menuLabelFor(layoutData, "/blog") ?? pagesCopy(pageLanguage()).blog.title;
     const items = result.data
       .map((article) => {
         const path =
@@ -66,7 +71,7 @@ export const GET: APIRoute = async () => {
       '<?xml version="1.0" encoding="UTF-8"?>',
       '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
       "  <channel>",
-      `    <title>${escapeXml(`${storeName} Blog`)}</title>`,
+      `    <title>${escapeXml(`${storeName} ${blogName}`)}</title>`,
       `    <link>${escapeXml(`${baseUrl}/blog`)}</link>`,
       `    <description>${escapeXml(`Stories, guides, and updates from ${storeName}.`)}</description>`,
       `    <atom:link href="${escapeXml(`${baseUrl}/blog/feed.xml`)}" rel="self" type="application/rss+xml" />`,

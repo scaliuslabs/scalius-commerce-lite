@@ -11,13 +11,13 @@ import {
   listPublicBrands,
 } from "@scalius/core/modules/brands";
 import { brandSlugSchema } from "@scalius/core/modules/brands/browser";
-import { getStorefrontBrandProducts, resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
+import { getStorefrontBrandProducts, resolvePublicAttributeFilters, storefrontListingSort } from "@scalius/core/modules/catalog";
 import { marketPresenceQueryField } from "../schemas/markets";
 import { publicMarketPricing, publicTranslation } from "../utils/public-market";
 import { localizedHandleFields } from "../schemas/translations";
 import { appliedFacetFilterSchema, appliedFacetFilters, productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError } from "../utils/api-error";
-import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, listingSortSchema, LISTING_SORT_DESCRIPTION, errorResponses } from "../schemas/responses";
+import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, listingSortSchema, listingReadSortField, LISTING_SORT_DESCRIPTION, errorResponses } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import {
   normalizePublicFtsSearchQuery,
@@ -50,7 +50,7 @@ const brandProductFilterSchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
   ...listingCursorQuerySchema,
-  sort: listingSortSchema.optional().default("newest").openapi({ description: LISTING_SORT_DESCRIPTION }),
+  sort: listingSortSchema.optional().openapi({ description: LISTING_SORT_DESCRIPTION }),
   minRating: minRatingQuerySchema,
   search: z.string().trim().max(100).optional().openapi({ description: "Search within the brand" }),
   minPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
@@ -127,7 +127,6 @@ const brandProductSchema = z.object({
 
 const appliedFiltersSchema = z.object({
   attributes: z.array(appliedFacetFilterSchema),
-  sort: listingSortSchema,
   minRating: z.number().int().min(1).max(4).optional(),
   search: z.string().optional(),
   minPrice: majorMoney(z.number().min(0)).optional(),
@@ -243,6 +242,7 @@ const getBrandProductsRoute = createRoute({
         facets: z.array(productFacetSchema),
         ratingFacet: ratingFacetSchema,
         appliedFilters: appliedFiltersSchema,
+        ...listingReadSortField,
       })) } },
     },
     400: errorResponses[400],
@@ -255,20 +255,23 @@ app.openapi(getBrandProductsRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
   const params = c.req.valid("query");
-  const [brand, attributeFilters] = await Promise.all([
+  const [brand, attributeFilters, sort] = await Promise.all([
     getPublicBrandBySlug(db, slug, publicTranslation(c)),
     // The brand page is its own brand filter: no `brand` key.
     resolvePublicAttributeFilters(db, readRepeatedPublicQueryValues(c.req.url), Object.keys(params), { brand: false }),
+    // The order (the store's default when none is asked for), beside the brand: no round trip of its own.
+    storefrontListingSort(db, params, { searchRanks: false }),
   ]);
   if (!brand) throw new NotFoundError("Brand not found");
 
   const { presence: _presence, ...filters } = params;
   const result = await getStorefrontBrandProducts(db, brand, {
     ...filters,
+    sort,
     search: normalizePublicListingSearchParam(params.search),
     attributeFilters,
   }, publicMarketPricing(c));
-  const appliedFilters: z.infer<typeof appliedFiltersSchema> = { attributes: appliedFacetFilters(attributeFilters), sort: params.sort };
+  const appliedFilters: z.infer<typeof appliedFiltersSchema> = { attributes: appliedFacetFilters(attributeFilters) };
   const normalizedSearch = normalizePublicFtsSearchQuery(params.search);
   if (normalizedSearch) appliedFilters.search = normalizedSearch;
   if (params.minRating !== undefined) appliedFilters.minRating = params.minRating;
@@ -288,6 +291,7 @@ app.openapi(getBrandProductsRoute, async (c) => {
     facets: result.facets,
     ratingFacet: result.ratingFacet,
     appliedFilters,
+    sort: result.sort,
   };
   return ok(c, response);
 });

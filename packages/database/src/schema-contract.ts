@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 227,
-  name: "0227_dead_record_states",
+  version: 229,
+  name: "0229_kit_item_product_queue",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -916,6 +916,16 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 227,
     name: "0227_dead_record_states",
     sourceSha256: "e00ce04538716737d5dc8126406a7f12d8f6a350780a8028bce0fa1b068bb3d6",
+  },
+  {
+    version: 228,
+    name: "0228_gift_card_liveness",
+    sourceSha256: "2cde3162b5fb28753306c6492e12cbac94a6bf3df85e10a8a355b827832a5324",
+  },
+  {
+    version: 229,
+    name: "0229_kit_item_product_queue",
+    sourceSha256: "81248dd4d5544992cc618159062f4c10de1875ae960095ee202b8247ed329025",
   },
 ] as const;
 

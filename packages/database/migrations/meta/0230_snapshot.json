@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d0d3becb-5c58-4f8e-bc55-a3e64e76ed48",
+  "id": "a5591b45-8631-4a3a-90eb-04edca590843",
   "prevId": "7c69bb6d-dbed-4815-90d1-65c3592fdd43",
   "tables": {
     "account": {
@@ -30094,6 +30094,15 @@
             "id"
           ],
           "isUnique": false
+        },
+        "gift_cards_live_idx": {
+          "name": "gift_cards_live_idx",
+          "columns": [
+            "currency_code",
+            "expires_at"
+          ],
+          "isUnique": false,
+          "where": "\"gift_cards\".\"status\" = 'active' AND \"gift_cards\".\"balance_minor\" > 0"
         },
         "gift_cards_last4_idx": {
           "name": "gift_cards_last4_idx",

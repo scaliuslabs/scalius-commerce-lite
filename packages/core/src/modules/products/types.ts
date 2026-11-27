@@ -177,7 +177,9 @@ export interface StorefrontProductFilterInput {
      */
     cursor?: string;
     /**
-     * Defaults to "relevance" when `search` is set, otherwise "newest".
+     * Omitted: a `cursor`'s own order, "relevance" for a search where the
+     * listing ranks by it, a collection's own order (picked products), else
+     * the store's default listing order (`storefrontListingSort`).
      * `rating`: the Bayesian review rank (`product_review_stats.rating_rank_milli`), unreviewed products last.
      * `popular`: units sold in 30 days (`product_sales_stats`) from MIN_POPULAR_UNITS, then newest.
      */

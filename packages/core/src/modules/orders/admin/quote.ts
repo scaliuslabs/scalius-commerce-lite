@@ -8,11 +8,13 @@ import { and, sql, eq, inArray, isNull } from "drizzle-orm";
 import {
     isAutoFulfillmentType,
     isFulfillmentKind,
+    paymentMethodFits,
     resolveCheckoutFulfilment,
     type DeliveryMethodKind,
     type FulfillmentKind,
     type FulfillmentType,
 } from "@scalius/shared/fulfilment";
+import { orderPaymentKind } from "@scalius/shared/order-payment-methods";
 import {
     linePurchaseOptionProperty,
     normalizeLinePurchaseOptions,
@@ -539,7 +541,8 @@ export async function prepareManualOrderQuote(
     // as it is placed, gets paid before that; cash on delivery is
     // collected at a door they never reach: the one line rule
     // (`allowsCashOnDelivery`) refuses cash, and names each such line.
-    const cashRefused = (data.paymentMethod ?? "cod") === COD_PAYMENT_METHOD && !plan.allowsCashOnDelivery;
+    // Staff orders take the platform's own methods (cash, invoice, recorded payment): their kind is their id's.
+    const cashRefused = !paymentMethodFits(orderPaymentKind(data.paymentMethod ?? COD_PAYMENT_METHOD), plan.allowsCashOnDelivery);
     const unavailable: AdminOrderSkuIssue[] = [];
     plan.lineTypes.forEach((type, index) => {
         if (cashRefused && isAutoFulfillmentType(type)) {

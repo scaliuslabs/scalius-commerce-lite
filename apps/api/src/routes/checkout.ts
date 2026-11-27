@@ -12,6 +12,8 @@ import { ok } from "../utils/api-response";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { publicMarketPresence } from "../utils/public-market";
 import { NotFoundError } from "../utils/api-error";
+import { ORDER_PAYMENT_KINDS } from "@scalius/shared/order-payment-methods";
+
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 /** One buyer-selectable payment method: a registered gateway or cash on delivery. */
@@ -25,6 +27,12 @@ const checkoutGatewaySchema = z.object({
    * quote (`allowedPaymentMethods`) says whether it does.
    */
   flow: z.enum(["card", "hosted", "cod", "deferred"]),
+  /**
+   * How its money reaches the store: `cash_on_delivery` (cash where the goods
+   * change hands, never for a key, a download or a gift card), `invoice`,
+   * `paid_to_store` or `online`.
+   */
+  paymentKind: z.enum(ORDER_PAYMENT_KINDS),
   /** A deferred method's terms: the order is due this many days after it is placed. */
   dueInDays: z.number().int().min(1).max(365).optional(),
   currencies: z.array(z.string()).max(4),
@@ -102,6 +110,9 @@ const checkoutConfigSchema = z.object({
     enabled: z.boolean(),
     channels: z.array(z.enum(["email", "sms", "whatsapp"])).max(3),
     label: z.object({ en: z.string().max(200), bn: z.string().max(200) }),
+  }),
+  giftCardsLive: z.boolean().openapi({
+    description: "The store holds a live gift card (active, unexpired, with a balance, in a currency this page sells in). Where no method but cash is listed, a key, a download or a gift card can be bought only with one: without any, the storefront stops it early. Read only when every enabled method is cash on delivery; false on any other store.",
   }),
 });
 
