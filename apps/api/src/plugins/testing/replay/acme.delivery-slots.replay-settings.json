@@ -1,0 +1,11 @@
+{
+  "$comment": "The SDK's delivery-slots example with the merchant's slots set up and the buyer's choice made: three windows the day after the replay's clock (2027-01-15 09:30 UTC), morning chosen, room left. Frozen with the bundles that name it: a change is a new file.",
+  "attributes": { "day": "2027-01-16", "window": "am" },
+  "objects": {
+    "slots": {
+      "2027-01-16:am": { "label": "Morning", "starts_at": "2027-01-16T03:00:00Z", "capacity": 20, "taken": 3 },
+      "2027-01-16:pm": { "label": "Afternoon", "starts_at": "2027-01-16T08:00:00Z", "capacity": 20, "taken": 20 },
+      "2027-01-16:eve": { "label": "Evening", "starts_at": "2027-01-16T12:00:00Z", "capacity": 20, "taken": 0 }
+    }
+  }
+}

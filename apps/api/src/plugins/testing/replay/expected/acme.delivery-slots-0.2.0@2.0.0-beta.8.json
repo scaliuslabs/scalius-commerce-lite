@@ -2,7 +2,30 @@
   "bundle": "2.0.0-beta.8/acme.delivery-slots-0.2.0.zip",
   "builtAgainst": "2.0.0-beta.8",
   "install": "accepted (signed)",
-  "buyerUi": {
-    "checkout.contact.after": "valid buyer.ui answer (a buyer UI document)"
+  "load": "loads",
+  "requests": {
+    "cart-validation · plain lines, guest, en": "answered (valid, buyer UI blocks: 1)",
+    "tax-quote · plain lines, guest, en": "answered (valid, buyer UI blocks: 1)",
+    "cart-validation · a kit, signed in, code, en": "answered (valid, buyer UI blocks: 1)",
+    "tax-quote · a kit, signed in, code, en": "answered (valid, buyer UI blocks: 1)",
+    "cart-validation · plain lines, guest, bn": "answered (valid, buyer UI blocks: 1)",
+    "tax-quote · plain lines, guest, bn": "answered (valid, buyer UI blocks: 1)",
+    "cart-validation · plain lines, guest, USD": "answered (valid, buyer UI blocks: 1)"
+  },
+  "functions": {
+    "cart-validation · plain lines, guest, en · cart.validate": "ran (commit: 1)",
+    "cart-validation · plain lines, guest, en · buyer.ui checkout.contact.after": "ran (ui)",
+    "tax-quote · plain lines, guest, en · cart.validate": "ran (commit: 1)",
+    "tax-quote · plain lines, guest, en · buyer.ui checkout.contact.after": "ran (ui)",
+    "cart-validation · a kit, signed in, code, en · cart.validate": "ran (commit: 1)",
+    "cart-validation · a kit, signed in, code, en · buyer.ui checkout.contact.after": "ran (ui)",
+    "tax-quote · a kit, signed in, code, en · cart.validate": "ran (commit: 1)",
+    "tax-quote · a kit, signed in, code, en · buyer.ui checkout.contact.after": "ran (ui)",
+    "cart-validation · plain lines, guest, bn · cart.validate": "ran (commit: 1)",
+    "cart-validation · plain lines, guest, bn · buyer.ui checkout.contact.after": "ran (ui)",
+    "tax-quote · plain lines, guest, bn · cart.validate": "ran (commit: 1)",
+    "tax-quote · plain lines, guest, bn · buyer.ui checkout.contact.after": "ran (ui)",
+    "cart-validation · plain lines, guest, USD · cart.validate": "ran (commit: 1)",
+    "cart-validation · plain lines, guest, USD · buyer.ui checkout.contact.after": "ran (ui)"
   }
 }
