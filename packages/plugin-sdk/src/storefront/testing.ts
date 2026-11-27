@@ -42,7 +42,7 @@ import {
 import { splitStorefrontEmbeds } from "@scalius/shared/plugins/storefront-embeds";
 import { isSearchableQuery } from "@scalius/shared/search-query";
 import { storefrontThemeRoutes } from "@scalius/shared/storefront-routes";
-import { storefrontSectionDefault, storefrontVisibleSection } from "@scalius/shared/storefront-theme/sections";
+import { storefrontSectionDefault, storefrontVisibleSection, type StorefrontSectionOf } from "@scalius/shared/storefront-theme/sections";
 import { coreSectionSkinSettings, type CoreSectionResolver } from "@scalius/shared/storefront-theme/skins";
 import { checkStorefrontHeaderHtml, type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
 import { sanitizePluginHtml } from "@scalius/shared/plugins/html";
@@ -253,14 +253,80 @@ const fixtureSectionResolver: CoreSectionResolver = {
 type SectionSkinSettingsOf<Type extends StorefrontSkinnableSection> = StorefrontSectionSkinSettings[Type];
 
 /**
+ * What a merchant filled into each core section a skin can draw, in core's
+ * own stored shape: slides, tiles, categories, collections, cards, questions,
+ * rows and words, each naming fixture media, products and categories by id.
+ * The sample and other stores project these (the empty store keeps a new
+ * section's defaults), so every `section:<type>` skin has something to draw.
+ */
+const SAMPLE_SECTION_SETTINGS: { [Type in StorefrontSkinnableSection]: StorefrontSectionOf<Type>["settings"] } = {
+  hero: {
+    layout: "full-bleed",
+    slides: [
+      { image: "media_hero_1", focalPoint: { x: 50, y: 40 }, alt: "Linen shirts on a rail", heading: "Summer linen", text: "Light shirts for hot days.", buttonLabel: "Shop now", link: "/collections/new", product: "prod_1" },
+      { image: "media_hero_2", focalPoint: { x: 50, y: 50 }, alt: "A folded cotton scarf", heading: "Scarves in season", text: "Hand-dyed cotton.", buttonLabel: "See scarves", link: "/categories/scarves" },
+    ],
+  },
+  "usp_strip": { style: "icons", source: { kind: "delivery-facts" } },
+  "category_tiles": { style: "photo", title: "Shop by category", categoryIds: ["cat_shirts", "cat_trousers", "cat_scarves", "cat_shoes"] },
+  collections: { carousel: "large", collectionIds: ["col_new", "col_sale", "col_linen"], title: "Collections" },
+  "product_rail": { title: "New arrivals", source: { kind: "newest" }, limit: 12 },
+  "product_grid": { title: "Best sellers", source: { kind: "popular" }, columns: 4, rows: 2 },
+  "deal_block": { title: "Weekend deal", source: { kind: "on-sale" }, promotionId: "promo_weekend", mediaId: "media_deal" },
+  "product_tabs": {
+    title: "Shop the season",
+    tabs: [{ label: "New", source: { kind: "newest" } }, { label: "On sale", source: { kind: "on-sale" } }, { label: "Popular", source: { kind: "popular" } }],
+    limit: 8,
+  },
+  lookbook: { title: "The linen edit", mediaId: "media_lookbook", source: { kind: "newest" }, photo: "tall" },
+  banner: { layout: "full", heading: "Free delivery over ৳2,000", text: "In Dhaka, within two days.", mediaId: "media_banner", cta: { label: "Shop now", href: "/collections/new" } },
+  "shop_by": {
+    title: "Shop by occasion",
+    cards: [
+      { mediaId: "media_office", title: "Office", subtitle: "Shirts and trousers", href: "/collections/office" },
+      { mediaId: "media_wedding", title: "Weddings", href: "/collections/weddings" },
+      { mediaId: "media_travel", title: "Travel", subtitle: "Light and packable", href: "/collections/travel" },
+    ],
+  },
+  "banner_mosaic": {
+    tiles: [
+      { mediaId: "media_mosaic_1", alt: "The summer sale", href: "/collections/sale" },
+      { mediaId: "media_mosaic_2", alt: "New linen", href: "/collections/new" },
+      { mediaId: "media_mosaic_3", alt: "Scarves", href: "/categories/scarves" },
+    ],
+  },
+  "brand_wall": { title: "Our brands", style: "rail" },
+  editorial: { layout: "rich-text", heading: "About Acme", body: "Clothes made to last, cut and sewn in Dhaka." },
+  faq: {
+    heading: "Questions",
+    items: [
+      { question: "How long does delivery take?", answer: "One to two days in Dhaka, three to five elsewhere." },
+      { question: "Can I return an item?", answer: "Yes, within seven days with the receipt." },
+    ],
+  },
+  specifications: { heading: "Specifications", rows: [{ label: "Fabric", value: "Linen" }, { label: "Fit", value: "Regular" }, { label: "Care", value: "Machine wash cold" }] },
+  "utility_cards": {
+    cards: [
+      { title: "Track an order", text: "See where your parcel is.", href: "/account/orders" },
+      { title: "Size guide", text: "Find your fit.", href: "/pages/size-guide" },
+      { title: "Contact us", text: "We answer within a day.", href: "/pages/contact" },
+    ],
+  },
+  "seo_text": { heading: "Linen shirts in Bangladesh", body: "Acme cuts its linen shirts in Dhaka from European flax: breathable, durable and soft after every wash." },
+  newsletter: { heading: "Join our list", text: "New arrivals and sales, once a week.", email: "optional", whatsapp: false },
+};
+
+/**
  * A core section's projection as the store hands it to a `section:<type>`
- * skin, at the projection's version: the settings of a new section of that
- * type (core's own defaults) mapped by the host's own mapper
- * (`coreSectionSkinSettings`), so every field the sealed type
- * `StorefrontSectionSkinSettings[type]` declares is present. References
- * resolve to fixture data (a product source to two cards, a delivery-facts
- * source to two facts). `settings` replaces top-level fields of the
- * projection; pass the values your test is about.
+ * skin, at the projection's version: a section filled in as a merchant
+ * fills it (slides, tiles, categories, cards, questions and words) mapped by
+ * the host's own mapper (`coreSectionSkinSettings`), so every field the
+ * sealed type `StorefrontSectionSkinSettings[type]` declares is present and
+ * the skin has content to draw. References resolve to fixture data (a
+ * product source to two cards, a media id to the fixture photo, category
+ * and collection ids to tiles, a delivery-facts source to two facts).
+ * `settings` replaces top-level fields of the projection; pass the values
+ * your test is about (an empty list, to test a skin with nothing to show).
  */
 export function fixtureSectionSkinData<Type extends StorefrontSkinnableSection>(
   type: Type,
@@ -269,14 +335,17 @@ export function fixtureSectionSkinData<Type extends StorefrontSkinnableSection>(
   return sectionSkinData(type, settings, fixtureSectionResolver, [{ id: "brand_1", title: "Acme", url: "/brands/acme", image: fixtureProductCard().image, cards: [] }]);
 }
 
+/** `content`: the merchant's filled-in section (`SAMPLE_SECTION_SETTINGS`); without it, a new section's defaults (the empty store). */
 function sectionSkinData<Type extends StorefrontSkinnableSection>(
   type: Type,
   settings: Partial<SectionSkinSettingsOf<Type>>,
   resolver: CoreSectionResolver,
   brands: StorefrontTile[],
+  content = true,
 ): StorefrontSectionSkinData<SectionSkinSettingsOf<Type>> {
   if (!Object.hasOwn(STOREFRONT_SECTION_SKIN_PROJECTIONS, type)) throw new Error(`${type} is not a core section a skin can draw.`);
-  const section = storefrontVisibleSection(storefrontSectionDefault(type, type));
+  const created = storefrontSectionDefault(type, type);
+  const section = storefrontVisibleSection(content ? { ...created, settings: structuredClone(SAMPLE_SECTION_SETTINGS[type]) } as typeof created : created);
   const projection = coreSectionSkinSettings(section, resolver);
   return {
     type,
@@ -459,7 +528,8 @@ const EMPTY_STORE: FixtureStore = {
       case "product_main": return EMPTY_STORE.productPage();
       // A new store's listing shows no filters (nothing to narrow): no placement.
       case "listing_main": return (({ filters: _none, ...page }) => page)(fixtureListingPage({ title: "All products", descriptionHtml: null, cards: [], total: 0, children: [] }));
-      default: return sectionSkinData(target.slice("section:".length) as StorefrontSkinnableSection, {}, emptySectionResolver, []) as StorefrontSectionSkinData;
+      // A new store's sections are as a merchant adds them: nothing filled in yet.
+      default: return sectionSkinData(target.slice("section:".length) as StorefrontSkinnableSection, {}, emptySectionResolver, [], false) as StorefrontSectionSkinData;
     }
   },
 };
