@@ -69,6 +69,18 @@ export const PRIVATE_EDGE_MIN_WIDTH = 2;
  */
 export const PRIVATE_EDGE_FILL_DISTANCE = STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE;
 
+/**
+ * How far a hover surface stands from the surface it replaces (CIE76) to be one a buyer sees: nearer, it is no hover,
+ * and the row's surface is its hover (its hovered controls are underlined instead, `--pt-hd`).
+ */
+export const PRIVATE_HOVER_DISTANCE = 3;
+
+/** A row's hover surface: the store's, where it is visibly apart from every point of the surface, else the surface itself. */
+function visibleHover(surface: readonly string[], words: readonly string[]): string {
+  const hover = storefrontThemeHoverSurface(surface, words);
+  return surface.every((point) => storefrontThemeColorDistance(point, hover) >= PRIVATE_HOVER_DISTANCE) ? hover : surface[0]!;
+}
+
 const HEX = /^#[0-9a-f]{6}$/;
 const oneColorSchema = /* @__PURE__ */ (() => z.union([z.enum(STOREFRONT_THEME_COLOR_KEYS), z.string().regex(HEX)]))();
 /**
@@ -541,6 +553,8 @@ export interface PrivateTokenRow {
   edgeOn?: string[];
   /** Its words are a graphic's marks (a rating's stars): its text and muted colours read at 3:1, not 4.5:1. */
   graphic?: true;
+  /** It always paints its surface (private-anatomy.ts `opaque`: it may stand in the top layer). */
+  opaque?: true;
   /** The theme key that set each cell, for a refusal's path. */
   from: Partial<Record<PrivateRowColour | "surface", string>>;
   /**
@@ -630,6 +644,8 @@ interface Place {
   graphic?: true;
   /** private-anatomy.ts `chosen`: a choice is drawn on it, its link and border apart. */
   chosen?: true;
+  /** private-anatomy.ts `opaque`: it always paints its surface (it may stand in the top layer). */
+  opaque?: true;
 }
 
 /** Every row of the page as the arrangement places it, in the order the CSS writes them (an inner row after the rows it can share an element with). */
@@ -641,7 +657,7 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
   const place = (key: string, style: PrivateStyleSpec, parent: Place["parent"]) => {
     // A box that holds fields (a card, a conversation with its reply form) is a box a field row stands in.
     if (style.fields) holders.add(key);
-    places.push({ key, selector: selectorOf(style), kind: style.kind, surface: style.surface, ink: style.ink, parent, nested: parent !== "boxes" && parent !== null && !style.absolute, base: null, sources: [key], ...(style.boundary ? { boundary: style.boundary } : {}), ...(style.bare ? { bare: true as const } : {}), ...(style.chosen ? { chosen: true as const } : {}) });
+    places.push({ key, selector: selectorOf(style), kind: style.kind, surface: style.surface, ink: style.ink, parent, nested: parent !== "boxes" && parent !== null && !style.absolute, base: null, sources: [key], ...(style.boundary ? { boundary: style.boundary } : {}), ...(style.bare ? { bare: true as const } : {}), ...(style.chosen ? { chosen: true as const } : {}), ...(style.opaque ? { opaque: true as const } : {}) });
   };
   // The rows that hold fields: a part that draws them (on its box, else on what it sits on), a dialog, an app's target.
   const holders = new Set<string>();
@@ -942,9 +958,9 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     const cells = { text, muted, link, error };
     const row: PrivateTokenRow = {
       key: place.key, sources: place.sources, selector: place.selector, kind: place.kind, parents: parents.map((each) => each.key), nested: place.nested, base: place.base,
-      paint, gradient, surface, ink: cells[cell], inkCell: cell, text, muted, link, error, border, ring, hover: storefrontThemeHoverSurface(paint !== null && !gradient ? [paint] : surface, [text, cells[cell], ...(place.kind === "box" && !place.writes ? [muted, link] : [])]), placeholder, invalid,
+      paint, gradient, surface, ink: cells[cell], inkCell: cell, text, muted, link, error, border, ring, hover: visibleHover(paint !== null && !gradient ? [paint] : surface, [text, cells[cell], ...(place.kind === "box" && !place.writes ? [muted, link] : [])]), placeholder, invalid,
       boundary, bordered: values["border-width"] !== 0 && values["border-style"] !== "none", ...(boundary === "fill" && edgeOn.length > 0 ? { edgeOn } : {}), from,
-      writes: null, ...(place.share ? { share: place.share } : {}), ...(place.graphic ? { graphic: true as const } : {}),
+      writes: null, ...(place.share ? { share: place.share } : {}), ...(place.graphic ? { graphic: true as const } : {}), ...(place.opaque ? { opaque: true as const } : {}),
     };
     return place.writes ? readsBeneath(row, place.writes, cell, parent, Boolean(fill || values.background)) : row;
   };
@@ -1067,7 +1083,7 @@ const CELL_PROPERTY = /* @__PURE__ */ (() => Object.fromEntries(CELL_PROPERTIES)
 export function privateRowDeclarations(row: PrivateTokenRow, parent: PrivateTokenRow | null, also: ReadonlySet<string> = NONE): string {
   if (row.writes) return writtenDeclarations(row, row.writes);
   const inherited = row.nested && (row.kind === "box" || row.kind === "text") && !row.key.startsWith("ui.") ? parent : null;
-  const paints = row.paint !== null && (also.has("background-color") || !(inherited && inherited.surface.length === 1 && inherited.paint === row.paint && !row.gradient));
+  const paints = row.paint !== null && (row.opaque || also.has("background-color") || !(inherited && inherited.surface.length === 1 && inherited.paint === row.paint && !row.gradient));
   // Where no hover surface keeps every word readable (the hover is the surface), a hovered control is underlined instead.
   const hoverMark = (each: PrivateTokenRow) => (each.surface.includes(each.hover) ? "underline" : "none");
   const hoverDeclaration = hoverMark(row) !== (inherited ? hoverMark(inherited) : "none") || also.has("--pt-hd") ? `--pt-hd:${hoverMark(row)}` : "";

@@ -195,6 +195,11 @@ export interface PrivateStyleSpec {
    */
   readonly chosen?: true;
   /**
+   * It may stand over the page in the top layer (an edit dialog is a card shown as a popover): it always paints its own
+   * surface, even where the box it sits in paints the same, since what is beneath it there is the dialog's backdrop.
+   */
+  readonly opaque?: true;
+  /**
    * Its words' size (px) and weight with no token of their own (the least
    * any of its elements draws as the side that must outrank, the most as the
    * side outranked), and the target whose `size` and `weight` also reach its
@@ -822,7 +827,7 @@ const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
   // The page's content, with the apps' account targets in it. It takes no tokens: most account pages draw no box of
   // their own around it (only the workspace layout does), so it never paints; what stands in it stands on the page.
   content: { selector: '[data-part="content"]', tokens: [], kind: "box", surface: "under", ink: "foreground", part: "content", targets: ["account.overview", "account.order", "account.profile"] },
-  card: { selector: '[data-part="card"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", on: "content", fields: true },
+  card: { selector: '[data-part="card"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", on: "content", fields: true, opaque: true },
   // An order's payment methods to choose between (its payment card): the chosen one's edge in the row's link colour, the
   // others' in its border colour, clearly apart; never by colour alone: the chosen one also shows a dot in its round mark,
   // as on the payment step.
@@ -923,7 +928,7 @@ export function privatePageAnatomy(): string[] {
     unit(page, spec);
     for (const [kind, hooks] of Object.entries(spec.layoutHooks ?? {})) lines.push(`${page} layout ${kind} hooks=${hooks.join(",")}`);
     for (const [kind, names] of Object.entries(spec.layoutContents ?? {})) lines.push(`${page} layout ${kind} holds=${names.join(",")}`);
-    for (const [name, style] of Object.entries(spec.styles)) lines.push(`${page} style ${name} ${style.absolute ? "" : "<root> "}${style.selector || "<root>"} tokens=${style.tokens.join(",")}${style.fields ? " fields" : ""}${style.targets ? ` targets=${style.targets.join(",")}` : ""}${style.outside ? ` outside-when=${style.outside.join("|")}` : ""}${style.boundary ? ` boundary=${style.boundary}` : ""}${style.bare ? " bare" : ""}${style.within ? ` within=${style.within.join("|")}` : ""}${style.graphic ? " graphic" : ""}${style.chosen ? " chosen" : ""}${style.outranks ? ` outranks=${[...Object.entries(style.outranks.over).map(([other, by]) => `${other}:${by.join("+")}`), ...(style.outranks.apps ?? []).map((target) => `ui/${target}:size`)].join(",")}` : ""}`);
+    for (const [name, style] of Object.entries(spec.styles)) lines.push(`${page} style ${name} ${style.absolute ? "" : "<root> "}${style.selector || "<root>"} tokens=${style.tokens.join(",")}${style.fields ? " fields" : ""}${style.targets ? ` targets=${style.targets.join(",")}` : ""}${style.outside ? ` outside-when=${style.outside.join("|")}` : ""}${style.boundary ? ` boundary=${style.boundary}` : ""}${style.bare ? " bare" : ""}${style.within ? ` within=${style.within.join("|")}` : ""}${style.graphic ? " graphic" : ""}${style.chosen ? " chosen" : ""}${style.opaque ? " opaque" : ""}${style.outranks ? ` outranks=${[...Object.entries(style.outranks.over).map(([other, by]) => `${other}:${by.join("+")}`), ...(style.outranks.apps ?? []).map((target) => `ui/${target}:size`)].join(",")}` : ""}`);
     for (const [name, item] of Object.entries(spec.items)) {
       lines.push(`${page}.${name} root ${PRIVATE_PART_ATTRIBUTE}=${PRIVATE_LINE_HOOK}`);
       unit(`${page}.${name}`, item);

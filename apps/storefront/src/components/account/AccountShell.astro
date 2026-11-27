@@ -62,7 +62,8 @@ const signInError = state === "signed_out" ? signInErrorMessage(Astro.url.search
 // Beside the page (wide screens): a list of the same links, the current one marked at its start edge.
 const sidebar = requestTheme?.resolved.blocks.account.navigation === "sidebar" && state !== "signed_out";
 const sideTab = "lg:min-h-11 lg:rounded-lg lg:after:inset-x-auto lg:after:inset-y-2 lg:after:start-0 lg:after:h-auto lg:after:w-0.5 lg:hover:bg-muted";
-const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespace-nowrap px-3 text-sm font-medium transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full";
+// The strip scrolls sideways and clips what is drawn outside it: a tab's focus ring is drawn inside its edge.
+const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespace-nowrap px-3 text-sm font-medium outline-none transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
 ---
 
 <div class={workspace ? "mx-auto flex w-full max-w-5xl flex-col px-4 pb-4 pt-3 sm:px-6" : ACCOUNT_CONTAINER} data-account-shell data-private="account" data-account-state={state} data-account-workspace={workspace ? "true" : undefined} data-account-navigation={sidebar ? "sidebar" : undefined}>

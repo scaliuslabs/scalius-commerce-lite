@@ -890,10 +890,12 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt, styleTargets }
     if (control.disabled || control.closest("[inert],fieldset:disabled") || control.closest(exempt)) continue;
     let target = control;
     const box = control.getBoundingClientRect();
-    if (box.width < 4 || box.height < 4 || !control.checkVisibility({ opacityProperty: true, visibilityProperty: true })) {
-      // A visually hidden box or radio drawn by its label: the label takes the click.
-      const label = control.labels?.[0];
-      if (!control.matches("input[type=checkbox],input[type=radio]") || !label || !label.checkVisibility()) continue;
+    const clipped = /^rect\(0(px)?[, ]+0(px)?[, ]+0(px)?[, ]+0(px)?\)$/.test(getComputedStyle(control).clip);
+    if (box.width < 4 || box.height < 4 || clipped || !control.checkVisibility({ opacityProperty: true, visibilityProperty: true })) {
+      // A visually hidden box, radio or file input drawn by its label (the reply form's attach button): the label
+      // takes the click, and draws the focus ring in the words' own colour.
+      const label = [...(control.labels ?? [])].find((each) => each.checkVisibility() && !each.matches(".sr-only"));
+      if (!control.matches("input[type=checkbox],input[type=radio],input[type=file]") || !label) continue;
       target = label;
     }
     if (!claim(control, "control")) continue;

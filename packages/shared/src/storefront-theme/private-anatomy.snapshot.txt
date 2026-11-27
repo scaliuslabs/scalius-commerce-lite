@@ -233,7 +233,7 @@ account style heading-title <root> [data-part="heading-title"] tokens=text,font,
 account style heading-intro <root> [data-part="heading-intro"] tokens=text,size,weight,leading
 account style heading-back <root> [data-part="heading-back"] tokens=text,radius,ring
 account style content <root> [data-part="content"] tokens= targets=account.overview,account.order,account.profile
-account style card <root> [data-part="card"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap fields
+account style card <root> [data-part="card"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap fields opaque
 account style payment-choices <root> [data-part="payment-choices"] tokens=link,border chosen
 account style submit <root> [data-part="pay"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
 account style card-title <root> [data-part="card-title"] tokens=text,font,weight,size,leading,case,tracking

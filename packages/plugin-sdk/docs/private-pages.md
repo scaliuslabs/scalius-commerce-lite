@@ -276,7 +276,7 @@ The check reads every row of every palette's table:
 | Place order | its size and weight at least the store's other filled buttons' (`action`) | the page |
 | Confirm | its size and weight at least Go back's | the dialog |
 
-**Every state a buyer reads.** A box's words (its own, muted and link) read on its hover surface too, where it has one (a card that is a link); a control's words read on its hover surface. Where no hover surface keeps every word readable, the box has none, and a hovered control in it is underlined instead. A segmented control's chosen option (the sign-in dialog's Email or Phone) carries a 2px ring in its row's `link` colour, so it differs from the others by more than colour and reads at 3:1.
+**Every state a buyer reads.** A box's words (its own, muted and link) read on its hover surface too, where it has one (a card that is a link); a control's words read on its hover surface. Where no hover surface keeps every word readable, or the one that does is too near the surface to be seen (under 3 apart, CIE76), the box has none, and a hovered control in it is underlined instead. A segmented control's chosen option (the sign-in dialog's Email or Phone) is marked by its weight and a tick, so it differs from the others by more than colour and its focus ring stays its own. An edit dialog is a card shown over the page: it always paints its card's surface, even where the page beneath paints the same.
 
 **What the check never reads, for good.** Ordinary buttons and app buttons are found by their words; only the main action's box is checked against its surroundings. A button's words read 4.5:1 on its fill (a saturated yellow button on a white card shows plainly, whatever its luminance), so its fill, and an outlined button's border (the store's Cancel or Show code, an app's), are its look, never checked against what is around it. A control dimmed while it is off (`disabled`) is not checked: it is dimmed to say it does nothing. These hold in every release: a later check of them would be a new refusal.
 
@@ -960,7 +960,7 @@ account style heading-title <root> [data-part="heading-title"] tokens=text,font,
 account style heading-intro <root> [data-part="heading-intro"] tokens=text,size,weight,leading
 account style heading-back <root> [data-part="heading-back"] tokens=text,radius,ring
 account style content <root> [data-part="content"] tokens= targets=account.overview,account.order,account.profile
-account style card <root> [data-part="card"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap fields
+account style card <root> [data-part="card"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap fields opaque
 account style payment-choices <root> [data-part="payment-choices"] tokens=link,border chosen
 account style submit <root> [data-part="pay"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
 account style card-title <root> [data-part="card-title"] tokens=text,font,weight,size,leading,case,tracking
