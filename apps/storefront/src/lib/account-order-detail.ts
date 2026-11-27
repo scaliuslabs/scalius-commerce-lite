@@ -886,8 +886,8 @@ export function renderOrderDetail(detail: AccountOrderDetail, checkoutConfig: Ch
   const status = byId("orderStatus");
   // A finished pickup order reads "Picked up"; a service/digital-only one "Completed", never "Delivered".
   if (status) {
+    // Beside the heading, on the page: it reads the page's row (the account's pill row is its cards').
     status.className = accountPill(orderStatusTone(detail.buyerView.status));
-    status.dataset.part = "status-badge";
     status.textContent = buyerOrderStatusText(detail.buyerView.status, copy);
   }
   renderReturnNotice();

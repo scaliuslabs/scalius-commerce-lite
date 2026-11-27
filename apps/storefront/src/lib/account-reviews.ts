@@ -415,18 +415,20 @@ const CLASS = {
   submit: "inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary-hover disabled:cursor-wait disabled:opacity-60",
   withdraw: "inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:cursor-wait disabled:opacity-60",
   notice: "mb-3 rounded-lg border p-3 text-sm font-medium leading-relaxed",
-  starsRow: "flex w-max flex-row-reverse justify-end gap-1",
+  starsRow: "sc-rating flex w-max flex-row-reverse justify-end gap-1",
   // Radios in reverse order: a checked or hovered star colours itself and
   // every star before it on screen (the siblings after it in the markup).
   starInput: "peer sr-only",
-  starLabel: "peer inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground/40 transition-colors hover:text-amber-500 peer-hover:text-amber-500 peer-checked:text-amber-500 [input:focus-visible+&]:ring-2 [input:focus-visible+&]:ring-primary",
+  // Its colours are the rating's (rating-stars.css `.sc-rating`, a private page's `rating` row), each 3:1 on the surface;
+  // a chosen star differs by more than colour: it is filled, an unchosen one only outlined.
+  starLabel: "peer inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-[var(--sc-star-off)] transition-colors hover:text-[var(--sc-star-on)] hover:[&>svg]:fill-current peer-hover:text-[var(--sc-star-on)] peer-hover:[&>svg]:fill-current peer-checked:text-[var(--sc-star-on)] peer-checked:[&>svg]:fill-current [input:focus-visible+&]:ring-2 [input:focus-visible+&]:ring-primary",
   badge: "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
 } as const;
 
 /** Five stars filled to `rating` (decorative). */
 export function reviewStarsMarkup(rating: number, size = "1rem"): string {
   const fill = Math.round(Math.min(Math.max(rating, 0), 5) * 2) * 10;
-  return `<span class="sc-stars" style="--sc-fill:${fill}%;--sc-star:${escapeHtml(size)}" aria-hidden="true"></span>`;
+  return `<span data-part="rating" class="sc-stars sc-rating" style="--sc-fill:${fill}%;--sc-star:${escapeHtml(size)}" aria-hidden="true"></span>`;
 }
 
 function statusText(status: BuyerReviewStatus, copy: ReviewFormCopy): string {
@@ -446,7 +448,7 @@ const STATUS_TONE: Record<BuyerReviewStatus, string> = {
 };
 
 export function reviewStatusBadgeMarkup(status: BuyerReviewStatus, copy: ReviewFormCopy): string {
-  return `<span data-part="status-badge" class="${CLASS.badge} ${STATUS_TONE[status]}" data-review-status="${status}">${escapeHtml(statusText(status, copy))}</span>`;
+  return `<span class="${CLASS.badge} ${STATUS_TONE[status]}" data-review-status="${status}">${escapeHtml(statusText(status, copy))}</span>`;
 }
 
 function field(name: string, value: string): string {
@@ -485,7 +487,7 @@ export function reviewFormMarkup(options: ReviewFormOptions): string {
     const inputId = id(`star-${stars}`);
     const label = checkoutText(copy.reviewStarOptionText, { stars });
     return `<input type="radio" id="${inputId}" name="rating" value="${stars}" required${review?.rating === stars ? " checked" : ""} class="${CLASS.starInput}">`
-      + `<label for="${inputId}" class="${CLASS.starLabel}" title="${escapeHtml(label)}"><svg viewBox="-1 -1 26 26" class="h-8 w-8 fill-current" aria-hidden="true"><path d="${STAR_PATH}"/></svg><span class="sr-only">${escapeHtml(label)}</span></label>`;
+      + `<label for="${inputId}" class="${CLASS.starLabel}" title="${escapeHtml(label)}"><svg viewBox="-1 -1 26 26" class="h-8 w-8 fill-transparent stroke-current [stroke-width:1.75]" aria-hidden="true"><path d="${STAR_PATH}"/></svg><span class="sr-only">${escapeHtml(label)}</span></label>`;
   }).join("");
   const hidden = [
     field("intent", review ? "edit" : "submit"),
@@ -497,7 +499,7 @@ export function reviewFormMarkup(options: ReviewFormOptions): string {
   return `<form method="post" action="${REVIEW_FORM_ACTION}" class="${CLASS.form}" data-review-form>`
     + hidden
     + `<fieldset><legend class="${CLASS.label}">${escapeHtml(copy.reviewRatingLabelText)}</legend>`
-    + `<div class="${CLASS.starsRow}">${stars}</div></fieldset>`
+    + `<div data-part="rating" class="${CLASS.starsRow}">${stars}</div></fieldset>`
     + `<div><label for="${id("title")}" class="${CLASS.label}">${escapeHtml(copy.reviewTitleLabelText)}</label>`
     + `<input id="${id("title")}" name="title" type="text" maxlength="${REVIEW_LIMITS.titleLength}" value="${escapeHtml(review?.title ?? "")}" class="${CLASS.input}" autocomplete="off"></div>`
     + `<div><label for="${id("body")}" class="${CLASS.label}">${escapeHtml(copy.reviewBodyLabelText)}</label>`
@@ -550,7 +552,8 @@ export function buyerReviewSummaryMarkup(
   copy: ReviewFormCopy,
 ): string {
   const rated = checkoutText(copy.reviewsRatedText, { average: review.rating });
-  return `<p class="flex flex-wrap items-center gap-2">${reviewStarsMarkup(review.rating)}<span class="sr-only">${escapeHtml(rated)}</span>${reviewStatusBadgeMarkup(review.status, copy)}</p>`
+  // The rating in words beside the stars (a buyer reads the number, the stars repeat it), then its state.
+  return `<p class="flex flex-wrap items-center gap-2">${reviewStarsMarkup(review.rating)}<span class="text-sm text-muted-foreground">${escapeHtml(rated)}</span>${reviewStatusBadgeMarkup(review.status, copy)}</p>`
     + (review.title ? `<p class="mt-1.5 font-semibold text-foreground [overflow-wrap:anywhere]">${escapeHtml(review.title)}</p>` : "")
     + (review.body ? `<p class="mt-1 whitespace-pre-line leading-relaxed text-foreground [overflow-wrap:anywhere]">${escapeHtml(review.body)}</p>` : "");
 }

@@ -8,7 +8,9 @@
  */
 import { resolveStorefrontTheme } from "@scalius/shared/storefront-theme";
 import { answerFixtureApi, entryTheme, galleryApiBase, galleryStoreShape, GALLERY_API_PREFIX, unansweredReads } from "./api";
-import { galleryEntries, galleryEntry, type GalleryEntry, type GalleryPage } from "./entries";
+import { galleryEntries, galleryEntry, GALLERY_ACCOUNT_PAGES, type GalleryEntry, type GalleryPage } from "./entries";
+import { GALLERY_ACCOUNT_SESSION, GALLERY_CLAIM, GALLERY_THREAD_ID } from "./account";
+import { getOrderReceiptCookieName } from "../lib/order-receipt-cookie";
 import { galleryCartSeed } from "./cart-seed";
 import { installGalleryListingApp } from "./listing-app-extension";
 
@@ -45,7 +47,20 @@ const PAGES: Record<GalleryPage, { module: string; path: (entry: GalleryEntry) =
   "sample-checkout": { module: SAMPLE_PAGE, path: () => "/theme-preview/sample/checkout", params: () => ({ page: "checkout" }) },
   "sample-receipt": { module: SAMPLE_PAGE, path: () => "/theme-preview/sample/receipt", params: () => ({ page: "receipt" }) },
   "sample-account": { module: SAMPLE_PAGE, path: () => "/theme-preview/sample/account", params: () => ({ page: "account" }) },
+  "account-thread": { module: "/src/pages/account/inbox/[id].astro", path: () => `/account/inbox/${GALLERY_THREAD_ID}`, params: () => ({ id: GALLERY_THREAD_ID }) },
+  "account-profile": { module: "/src/pages/account/profile.astro", path: () => "/account/profile", params: () => ({}) },
+  "account-profile-dialog": { module: "/src/pages/account/profile.astro", path: () => "/account/profile", params: () => ({}) },
+  "account-reviews": { module: "/src/pages/account/reviews.astro", path: () => "/account/reviews", params: () => ({}) },
+  "account-gift-cards": { module: "/src/pages/account/gift-cards.astro", path: () => "/account/gift-cards", params: () => ({}) },
+  "account-downloads": { module: "/src/pages/account/downloads.astro", path: () => "/account/downloads", params: () => ({}) },
+  "account-warranties": { module: "/src/pages/account/warranties.astro", path: () => "/account/warranties", params: () => ({}) },
+  "warranty-claim": { module: "/src/pages/warranty-claims/[orderId]/[claimId].astro", path: () => `/warranty-claims/${GALLERY_CLAIM.orderId}/${GALLERY_CLAIM.claimId}`, params: () => ({ ...GALLERY_CLAIM }) },
 };
+
+/** What a signed-in buyer's request carries (a guest's claim thread: the order's receipt proof). */
+const accountHeaders = (page: GalleryPage): Record<string, string> => page === "warranty-claim"
+  ? { cookie: `${getOrderReceiptCookieName(GALLERY_CLAIM.orderId)}=chk_gallery_receipt_proof` }
+  : { cookie: GALLERY_ACCOUNT_SESSION };
 
 /** The theme editor's sample pages answer only under a live preview: the fixture API resolves this one to the entry's theme. */
 export const GALLERY_PREVIEW_COOKIE = `stp_theme_preview=tpv_${"g".repeat(48)}.9999999999.${"0".repeat(64)}`;
@@ -71,7 +86,7 @@ export function galleryRenderPlan(id: string, origin: string): GalleryRenderPlan
     entry,
     page: page.module,
     url: `${origin}${presence ? `/${presence}${path === "/" ? "" : path}` : path}`,
-    headers: entry.page.startsWith("sample-") ? { cookie: GALLERY_PREVIEW_COOKIE } : {},
+    headers: entry.page.startsWith("sample-") ? { cookie: GALLERY_PREVIEW_COOKIE } : (GALLERY_ACCOUNT_PAGES as readonly string[]).includes(entry.page) ? accountHeaders(entry.page) : {},
     params: page.params(entry),
     runtime: {
       PUBLIC_API_URL: `${galleryApiBase(origin, entry.id)}/api/v1`,

@@ -357,7 +357,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         // The receipt and the account (`page: "sample-receipt" | "sample-account"`): the theme editor's sample pages, drawn
         // through the same components as the buyer's receipt and account, with the entry's theme as the draft. The payment
         // step: the editor's sample checkout, drawn as buyers get it.
-        const drawnPage = { "sample-receipt": "receipt", "sample-account": "account", "sample-checkout": "checkout" }[body.page] ?? "cart";
+        // The account's own pages (`account-thread`, `account-profile`, …, `warranty-claim`): drawn as a signed-in buyer gets them.
+        const drawnPage = { "sample-receipt": "receipt", "sample-account": "account", "sample-checkout": "checkout" }[body.page] ?? (/^account-|^warranty-claim$/.test(String(body.page)) ? "account" : "cart");
         const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, terms: body.terms === true, ...(body.page === "home" || drawnPage !== "cart" ? { page: body.page } : {}) });
         const tables = shared.privatePageTokenMode(served.privatePages, drawnPage) ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served), drawnPage) : [];
         return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: served.privatePages.compiled.refused === true });

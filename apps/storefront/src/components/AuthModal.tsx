@@ -472,7 +472,7 @@ export default function AuthModal() {
                           const prefill = prefillRef.current;
                           setContact(option.method === "email" ? prefill.email ?? "" : prefill.phone ? fieldPhone(prefill.phone) : "");
                         }}
-                        className={`min-h-11 flex-1 rounded-md px-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${channel === option.channel ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                        className={`min-h-11 flex-1 rounded-md px-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${channel === option.channel ? "bg-background text-foreground shadow-sm ring-2 ring-primary" : "text-muted-foreground hover:text-foreground"}`}
                       >
                         {option.method === "email" ? copy.method.email : option.channel === "whatsapp" ? "WhatsApp" : copy.method.phone}
                       </button>

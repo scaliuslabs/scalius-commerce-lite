@@ -564,6 +564,30 @@ const AFTER_ORDER_PAGES = {
     page: "account", root: '[data-private="account"]',
     mandatory: ['[data-part="navigation"]', '[data-part="sign-out"]', '[data-part="heading-title"]', '[data-part="card"]'],
   },
+  // The account's own pages as a signed-in buyer gets them (src/gallery/account.ts), each under the account's look.
+  "account-thread": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="conversation"]', '[data-part="message-own"]', '[data-part="message"]', '[data-part="heading-title"]'] },
+  "account-profile": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="card-title"]', '[data-part="sign-out"]'] },
+  // The profile with its edit dialog open (a card over the page, which its backdrop dims): the dialog is walked.
+  "account-profile-dialog": { page: "account", root: '[data-private="account"]', scope: "#editDetails", open: "#editDetails", mandatory: ['#editDetails [data-part="card-title"]', "#fieldName"] },
+  "account-reviews": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="rating"]'] },
+  "account-gift-cards": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="status-badge"]'] },
+  "account-downloads": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="card-title"]'] },
+  "account-warranties": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="status-badge"]'] },
+  "warranty-claim": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="conversation"]', '[data-part="message-own"]', '[data-part="heading-title"]'] },
+};
+/**
+ * A hostile look that saves: every surface the account's pages draw painted per scheme, a brand yellow action found
+ * by its edge in light, a pale critical button, a blue buyer's message, the stars' own colour, square corners.
+ */
+const ACCOUNT_HOSTILE = {
+  page: { background: { light: "#f4f1ea", dark: "#0f0b1c" }, text: { light: "#1a1a1a", dark: "#f5f5f5" }, muted: { light: "#4a4a4a", dark: "#c9c4d6" }, link: { light: "#0b5cad", dark: "#7cc4ff" } },
+  card: { background: { light: "#ffffff", dark: "#1e1831" }, text: { light: "#1a1a1a", dark: "#fafafa" }, muted: { light: "#4a4a4a", dark: "#c9c4d6" }, link: { light: "#0b5cad", dark: "#5ee9b5" }, border: { light: "#8a8a8a", dark: "#6b5f8a" }, radius: 0 },
+  conversation: { background: { light: "#fffdf5", dark: "#171225" }, text: { light: "#1a1a1a", dark: "#fafafa" }, muted: { light: "#4a4a4a", dark: "#c9c4d6" }, link: { light: "#0b5cad", dark: "#7cc4ff" } },
+  "message-own": { background: { light: "#dbeafe", dark: "#14532d" }, text: { light: "#0b1b3a", dark: "#ecfdf5" }, muted: { light: "#1e3a5f", dark: "#bbf7d0" }, link: { light: "#0b3d91", dark: "#d9f99d" } },
+  action: { background: { light: "#fed700", dark: "#00bc7d" }, text: { light: "#111111", dark: "#04110b" }, border: { light: "#111111", dark: "#00bc7d" }, "border-width": 2, radius: 0 },
+  "action-critical": { background: { light: "#fde047", dark: "#7f1d1d" }, text: { light: "#111111", dark: "#ffffff" }, border: { light: "#111111", dark: "#fca5a5" }, "border-width": 2, radius: 0 },
+  rating: { text: { light: "#9a3412", dark: "#fbbf24" } },
+  input: { background: { light: "#ffffff", dark: "#0f0b1c" }, text: { light: "#1a1a1a", dark: "#f5f5f5" }, border: { light: "#6b6b6b", dark: "#8575ae" }, radius: 0 },
 };
 const CARD_LOOK = { background: "card", radius: 0, "border-width": 0, shadow: "lg" };
 const EMERALD_TOTAL = { text: "foreground", size: 20, weight: "600" };
@@ -591,6 +615,15 @@ const AFTER_ORDER_CASES = {
     card: { background: "#1d4ed8", text: "#ffffff", muted: "#ffffff", link: "#ffffff", error: "#ffffff" }, action: { background: "#1d4ed8", text: "#ffffff" },
   } } } },
 };
+// The review's probe: the buyer's message given only its surface and words, beside a dark filled action. Its muted
+// words (a photo that does not load) are its own row's, never the action's.
+AFTER_ORDER_CASES["the account's buyer message in its own colours beside a dark action"] = { request: { toggle: true, scheme: "system", page: "account-thread" }, privatePages: { tokens: { account: {
+  "message-own": { background: { light: "#eef2ff", dark: "#1e3a8a" }, text: { light: "#111111", dark: "#ffffff" } }, action: { background: { light: "#111111", dark: "#f5f5f5" }, text: { light: "#ffffff", dark: "#111111" } },
+} } } };
+// Every page of the account the routes table names, drawn under the hostile look in light and dark (review 3).
+for (const page of ["account-thread", "account-profile", "account-profile-dialog", "account-reviews", "account-gift-cards", "account-downloads", "account-warranties", "warranty-claim"]) {
+  AFTER_ORDER_CASES[`the account's ${page} in a hostile look`] = { request: { toggle: true, scheme: "system", page }, privatePages: { tokens: { account: ACCOUNT_HOSTILE } } };
+}
 Object.assign(REGRESSIONS, AFTER_ORDER_CASES);
 
 // ─── PNG pixels (Chromium's 8-bit RGB or RGBA screenshots) ────────────────
@@ -928,6 +961,9 @@ function wholeTexts() {
 function clicks() {
   const problems = [];
   for (const control of document.querySelectorAll("[data-pt-control]")) {
+    // Visually hidden (a file input clipped to 1px behind the control that opens it): that control is the one clicked.
+    const hiddenBox = control.getBoundingClientRect();
+    if (hiddenBox.width < 4 || hiddenBox.height < 4 || /rect\(0(px)?,? 0(px)?,? 0(px)?,? 0(px)?\)/.test(getComputedStyle(control).clip)) continue;
     const target = document.querySelector(`[data-pt-control-label="${control.dataset.ptControl}"]`) ?? control;
     target.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
     // A link that wraps is clicked on its longest line's words.
@@ -1159,7 +1195,8 @@ function boundaries(scope) {
   const ratio = (a, b) => { const [x, y] = [luminance(a), luminance(b)]; return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
   const own = (element) => { const back = rgb(getComputedStyle(element).backgroundColor); return back && back.alpha > 0.99 ? back.channels : null; };
   const behind = (element) => { for (let at = element.parentElement; at; at = at.parentElement) { const back = own(at); if (back) return back; } return [255, 255, 255]; };
-  const shown = (element) => element.checkVisibility() && element.getBoundingClientRect().width > 0 && !element.closest(".sr-only");
+  // Visually hidden (a file input clipped to 1px behind the label that opens it) is not where a buyer finds it.
+  const shown = (element) => element.checkVisibility() && element.getBoundingClientRect().width >= 4 && element.getBoundingClientRect().height >= 4 && !element.closest(".sr-only");
   const type = (element) => { const style = getComputedStyle(element); return { size: Number.parseFloat(style.fontSize), weight: Number(style.fontWeight) }; };
   const name = (element) => element.dataset.part ?? (element.id ? `#${element.id}` : element.tagName.toLowerCase());
   // Found by its fill, or by a drawn edge over a fill apart from what is behind it (installActionFound).
@@ -1196,7 +1233,7 @@ function boundaries(scope) {
     if (back && confirm) outranks(confirm, back, "Confirm", "Go back");
   }
   // A field drawn as a box around its input (`data-field`) is that box.
-  const edged = [...root.querySelectorAll('input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field],[data-part="line-quantity"],[data-part="fold-toggle"],[data-part="dialog-back"]')];
+  const edged = [...root.querySelectorAll('input:not([type="checkbox"],[type="radio"],[type="hidden"],[type="file"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field],[data-part="line-quantity"],[data-part="fold-toggle"],[data-part="dialog-back"]')];
   for (const element of edged) {
     if (!shown(element)) continue;
     const style = getComputedStyle(element);
@@ -1959,13 +1996,15 @@ async function drawAfterOrder({ context, id, width, rows, request, drawn }) {
     if (shown !== drawn) problems.push(`scheme: the page draws its ${shown} colours where the store shows its ${drawn} ones`);
   }
   await openAddOns(page, spec.root);
+  // A page drawn with a dialog open (the profile's edit dialog: a popover over the page).
+  if (spec.open) await page.evaluate((selector) => document.querySelector(selector)?.showPopover?.(), spec.open);
   await page.waitForTimeout(150);
   const targets = await afterOrderTargets(spec.page);
   const anatomy = targets.filter(({ name }) => name !== "page").concat([{ name: `the ${spec.page}`, selector: spec.root }]);
-  const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy, uiKinds: UI_KINDS, mandatory: spec.mandatory, scope: spec.root, exempt: EXEMPT, styleTargets: targets }));
+  const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy, uiKinds: UI_KINDS, mandatory: spec.mandatory, scope: spec.scope ?? spec.root, exempt: EXEMPT, styleTargets: targets }));
   at(spec.page, walked.problems);
   if (request?.forged) at(spec.page, await page.evaluate(forgedAbsent, { words: FORGED_WORDS, mark: FORGED_MARK }));
-  if (rows.length > 0) at(spec.page, await page.evaluate(boundaries, spec.root));
+  if (rows.length > 0) at(spec.page, await page.evaluate(boundaries, spec.scope ?? spec.root));
   at(spec.page, await timed("whole", () => page.evaluate(wholeTexts)));
   at(spec.page, await timed("contrast", () => textContrast(page, walked.texts)));
   at(spec.page, await timed("clicks", () => page.evaluate(clicks)));

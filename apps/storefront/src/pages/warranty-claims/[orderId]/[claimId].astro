@@ -62,7 +62,7 @@ const earlierHref = thread?.hasMore ? `${pageHref}?conversationBefore=${earliest
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <div class={ACCOUNT_CONTAINER} data-private="account">
     <header data-part="heading">
-      <a href={receiptHref} data-astro-prefetch="false" data-part="heading-back" class={ui.textButton}>
+      <a href={receiptHref} data-astro-prefetch="false" data-part="heading-back" class="-ms-1 inline-flex min-h-11 items-center gap-1 px-1 text-sm font-medium text-muted-foreground hover:text-foreground">
         <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
         {conversationCopy().viewOrder}
       </a>

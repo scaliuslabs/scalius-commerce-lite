@@ -188,8 +188,8 @@ A buyer must find each control and field where it stands (WCAG 1.4.11, 3:1 on wh
 | --- | --- | --- | --- |
 | `page` | The page itself | box (`background`) | the page paint, when it paints nothing |
 | `frame` | The page frame (its width) | box | `page` |
-| `action` | Every filled button the store draws without a target of its own (its fill, or its edge, reads 3:1 on every box it may stand on) | filled control (`primary`) | every box of the store's it may stand on: never an app's box (apps draw their own buttons there) nor a box of words only (`bare`: a message, an add-on's lines, what a buyer agrees to) |
-| `input` | Every field on the page and in its dialogs | field (`background`) | each box that holds fields: the discount part, the details form, a line's inputs, a dialog, the market and language forms, an app's target |
+| `action` | Every button or link the store fills with its action colour and gives no target of its own (its fill, or its edge, reads 3:1 on every box it may stand on). A mark the store fills that is no button and no part of its own (an unread dot, a progress bar's done steps) is drawn in its row's `link` colour instead | filled control (`primary`) | every box of the store's it may stand on: never an app's box (apps draw their own buttons there) nor a box of words only (`bare`: a message, an add-on's lines, what a buyer agrees to) |
+| `input` | Every field on the page and in its dialogs (a file input is drawn by its button, an outlined button: no field) | field (`background`) | each box that holds fields: the discount part, the details form, a line's inputs, a dialog, the market and language forms, an app's target |
 | `field-label` | Every field's label, and a group of fields' legend | text | each box that holds fields |
 | `notice` | Each notice | box | where `notices` sits |
 | `lines` | The lines card | box (`card`) | where `lines` sits |
@@ -267,7 +267,7 @@ The check reads every row of every palette's table:
 
 | What | Must read at | On |
 | --- | --- | --- |
-| Every word (text, muted, link, error, placeholder) | 4.5:1 | its surface and every point of a gradient; a row's words also on its hover surface |
+| Every word (text, muted, link, error, placeholder) | 4.5:1 | its surface and every point of a gradient; a row's words (a box's muted and link words too) also on its hover surface |
 | A field's border and error border | 3:1 | the box around the field |
 | A filled button's fill (Place order, Confirm, Pay, every other: `action` on every box), or its drawn edge: a solid border of at least 2px (`border-width` set, `border-style` unset or `solid`) over a fill clearly a colour of its own (CIE76 40 from every point around it: a fill near the dock with an edge is Go back's look and is refused); an outlined control's or a field's border, or its own fill where no border is drawn | 3:1 | what is around it |
 | Every focus ring | 3:1 | what is around the control or field; a box's rings on the box |
@@ -275,6 +275,10 @@ The check reads every row of every palette's table:
 | The total's label | its size at least every money row's | the summary |
 | Place order | its size and weight at least the store's other filled buttons' (`action`) | the page |
 | Confirm | its size and weight at least Go back's | the dialog |
+
+**Every state a buyer reads.** A box's words (its own, muted and link) read on its hover surface too, where it has one (a card that is a link); a control's words read on its hover surface. A segmented control's chosen option (the sign-in dialog's Email or Phone) carries a 2px ring in its row's `link` colour, so it differs from the others by more than colour and reads at 3:1.
+
+**What the check never reads, for good.** An outlined button, the store's (Cancel, Show code) or an app's left unfilled, is found by its words, which read at 4.5:1; its border is decoration and is not checked (WCAG 1.4.11 asks for a button's text, not its outline). A control dimmed while it is off (`disabled`) is not checked: it is dimmed to say it does nothing. These hold in every release: a later check of them would be a new refusal.
 
 A refusal names the theme key and the pair that set it, and the scheme: `summary-rows: text #eeeeee on #ffffff is 1.16:1 in the light colours, under the 4.5:1 a buyer needs.` A theme key's bad pair is refused once, however many rows read it.
 
@@ -342,18 +346,19 @@ A thing that is the same thing as on the cart has the cart's name: `page`, `fram
 | --- | --- | --- | --- |
 | Receipt | `status`, `status-mark`, `status-title`, `status-message`, `status-steps` | The order's state: its mark, its title (the page's `h1`), its message and next steps | box, text on its own surface, text, text (muted), box |
 | Receipt | `tracking` | Where the order is (the status view) | box (`background`) |
-| Receipt | `order`, `order-facts`, `status-badge` | The order card; its facts (the order number, placed, state, payment); a state's pill, wherever the page draws one (the order's and payment's states, a review's under its line): its words read on its own surface | box (`background`), text, text on its own surface (`muted`) |
+| Receipt | `order`, `order-facts`, `status-badge` | The order card; its facts (the order number, placed, state, payment); a state's pill among them | box (`background`), text, text on its own surface |
 | Receipt | `delivery`, `section-heading`, `delivery-contact` | Where it goes, its heading, the buyer's own name, address and contact | box, text, text |
 | Receipt | `lines`, `lines-heading` | What was bought, its heading; each line under it | box, text |
-| Receipt | `conversation`, `message`, `message-own` | The order's conversation with the store (it holds the reply form); each of the store's messages, and each of the buyer's own | box (`card`), box (`muted`), box (`primary`) |
+| Receipt | `conversation`, `message`, `message-own` | The order's conversation with the store (it holds the reply form); each of the store's messages, and each of the buyer's own. Unset, a message's surface comes from the conversation's row: the store's a step from it (its hover surface), the buyer's its `link` colour | box (`card`), box, box |
+| Receipt | `rating` | A review's stars under a line: the filled stars its `text`, the empty ones its `muted`, each read at 3:1 on the line (WCAG 1.4.11; unset, the store's amber, taken toward the page's words until it reads). The rating is in words beside the stars; in the review form a chosen star is filled, an unchosen one outlined | text (graphic, 3:1) |
 | Receipt | (none) | The recommendations: public product cards on the store's own look and the palette's page, never in token mode and no row of the table | |
 | Account | `navigation`, `nav-item`, `nav-current`, `sign-out` | The menu, each page in it, the current page (its marker is its `link` colour), Sign out | box, control (muted), control, control (muted) |
 | Account | `heading-title`, `heading-intro`, `heading-back` | The page's `h1`, its intro, the way back | text, text (muted), control |
 | Account | `content` | The page's content; it holds the apps' targets `account.overview`, `account.order`, `account.profile`. It takes no tokens: most account pages draw no box around it, so what stands in it stands on the page | box (no tokens) |
-| Account | `card`, `card-title` | Every account card (an order, a warranty, a review, a gift card, a download, an inbox row, a profile section; an edit dialog is a card over the page), its heading | box (`card`), text |
-| Account | `status-badge` | A state's pill wherever the account draws one (in a card, beside an order's heading, on a saved address, a review's): its words read on its own surface, so it reads wherever it stands | text on its own surface (`muted`) |
+| Account | `card`, `card-title`, `status-badge` | Every account card (an order, a warranty, a review, a gift card, a download, an inbox row, a profile section; an edit dialog is a card over the page), its heading, a state's pill in it. A choice drawn on a card (an order's payment methods) marks the chosen one with the card's `link` colour against the others' `border`: the two read 3:1 apart or are clearly apart (CIE76 40), as on the payment step | box (`card`), text, text on its own surface |
 | Account | `action-critical` | Every filled button that removes something (Remove an address, Remove a saved card): found by its fill or a drawn edge, as `action` is | filled control (`destructive`) |
-| Account | `conversation`, `message`, `message-own` | An order's conversation, an inbox thread and a guest's claim thread (each holds its reply form); the store's messages and the buyer's own, as on the receipt | box (`card`), box (`muted`), box (`primary`) |
+| Account | `conversation`, `message`, `message-own` | An order's conversation, an inbox thread and a guest's claim thread (each holds its reply form); the store's messages and the buyer's own, as on the receipt | box (`card`), box, box |
+| Account | `rating` | A review's stars, in the reviews' cards and under an order's line, as on the receipt | text (graphic, 3:1) |
 | Account | `delivery-message`, `delivery-reveal` | A line's delivery message and the button that reveals it (with no border drawn, its fill reads 3:1 on the message, as Sign out's does) | box, control |
 
 The money summary sits in the receipt's `order` card and in an account order's `card`. An order's `line` holds the apps' `order.line.after` (drawn under a line only where an app answered for it). The apps' blocks take the same `ui.<kind>…` rows as on the cart, at these pages' targets (`order.confirmation`, `account.order`, `order.line.after` on the receipt; `account.overview`, `account.order`, `account.profile`, `order.line.after` in the account).
@@ -370,7 +375,7 @@ cartDrawer (over public pages: no route of its own)
 checkout /checkout
 receipt /order-success
 account /account /account/orders/[id] /account/profile /account/inbox /account/inbox/[id] /account/warranties /account/reviews /account/gift-cards /account/downloads /warranty-claims/[orderId]/[claimId]
-store-look /track-order /checkout/quick /checkout/continue/[continuationId] /cart/recover/[token] /payment-recovery /gift-card-balance /newsletter /newsletter/confirm /newsletter/unsubscribe
+store-look /track-order /checkout/quick /checkout/continue/[continuationId] /agent/continue/[continuationId] /cart/recover/[token] /payment-recovery /gift-card-balance /newsletter /newsletter/confirm /newsletter/unsubscribe
 no-theme /account/licence-key /account/delivery-message
 ```
 
@@ -734,8 +739,8 @@ cart layout fold hooks=fold-toggle,fold-body
 cart layout fold holds=lines,summary,discount,cart.page.summary
 cart style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 cart style frame <root> <root> tokens=max-width
-cart style action :is([data-private="cart"],[data-private="dialog"]) .bg-primary:not([data-private="cart"] [data-part="details-submit"],[data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
-cart style input :is([data-private="cart"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+cart style action :is([data-private="cart"],[data-private="dialog"]) .bg-primary:is(button,a,[role="button"]):not([data-private="cart"] [data-part="details-submit"],[data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
+cart style input :is([data-private="cart"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"],[type="file"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 cart style field-label :is([data-private="cart"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
 cart style notice <root> [data-part="notice"] tokens=background,text,muted,link,error,border,border-width,radius
 cart style lines <root> [data-part="lines"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
@@ -848,8 +853,8 @@ checkout lead summary,payment
 checkout layouts stack,columns,grid,group
 checkout style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 checkout style frame <root> <root> tokens=max-width
-checkout style action [data-private="checkout"] .bg-primary:not([data-private="checkout"] [data-part="pay"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
-checkout style input [data-private="checkout"] :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+checkout style action [data-private="checkout"] .bg-primary:is(button,a,[role="button"]):not([data-private="checkout"] [data-part="pay"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
+checkout style input [data-private="checkout"] :is(input:not([type="checkbox"],[type="radio"],[type="hidden"],[type="file"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 checkout style field-label [data-private="checkout"] [data-part="field-label"] tokens=text,size,weight,case,tracking
 checkout style notice <root> [data-part="notice"] tokens=background,text,muted,link,error,border,border-width,radius
 checkout style checkout-empty <root> [data-part="checkout-empty"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
@@ -877,7 +882,7 @@ receipt part status mandatory hooks=status,status-mark,status-title,status-messa
 receipt part tracking mandatory hooks=tracking
 receipt part summary mandatory hooks=order,order-facts,order-number,status-badge,summary,summary-heading,summary-total-label,add-on-details,add-on-detail
 receipt part delivery mandatory hooks=delivery,section-heading,delivery-contact
-receipt part lines mandatory hooks=lines,lines-heading,line,line-image,line-title,line-details,line-price,line-extras
+receipt part lines mandatory hooks=lines,lines-heading,line,line-image,line-title,line-details,line-price,line-extras,rating
 receipt part actions mandatory hooks=actions
 receipt part conversation mandatory hooks=conversation,message,message-own
 receipt part recommendations hooks=recommendations
@@ -888,8 +893,8 @@ receipt lead status,summary
 receipt layouts stack,columns,grid,group
 receipt style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 receipt style frame <root> <root> tokens=max-width
-receipt style action :is([data-private="receipt"],[data-private="dialog"]) .bg-primary:not([data-part="recommendations"] *):not([data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
-receipt style input :is([data-private="receipt"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+receipt style action :is([data-private="receipt"],[data-private="dialog"]) .bg-primary:is(button,a,[role="button"]):not([data-part="recommendations"] *):not([data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
+receipt style input :is([data-private="receipt"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"],[type="file"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 receipt style field-label :is([data-private="receipt"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
 receipt style status <root> [data-part="status"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 receipt style status-mark <root> [data-part="status-mark"] tokens=background,text,border,border-width,radius
@@ -917,6 +922,7 @@ receipt style line-image <root> [data-part="line-image"] tokens=width,height,wid
 receipt style line-title <root> [data-part="line-title"] tokens=text,font,weight,size,leading,case,tracking
 receipt style line-details <root> [data-part="line-details"] tokens=text,size
 receipt style line-price <root> [data-part="line-price"] tokens=text,muted,font,weight,size,align
+receipt style rating <root> [data-part="rating"] tokens=text,muted,size within=line graphic
 receipt style conversation <root> [data-part="conversation"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding fields
 receipt style message <root> [data-part="message"] tokens=background,text,muted,link,error,border,border-width,radius,padding bare
 receipt style message-own <root> [data-part="message-own"] tokens=background,text,muted,link,error,border,border-width,radius,padding bare
@@ -929,16 +935,16 @@ receipt style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"
 account root data-private=account
 account part navigation mandatory variants=tabs|sidebar hooks=navigation,nav-item,nav-badge,sign-out
 account part heading mandatory hooks=heading,heading-title,heading-intro,heading-back
-account part content mandatory hooks=content,card,card-title,status-badge,summary,summary-total-label,add-on-details,add-on-detail,line,line-image,line-title,line-details,line-price,delivery-message,delivery-reveal,conversation,message,message-own
+account part content mandatory hooks=content,card,card-title,status-badge,summary,summary-total-label,add-on-details,add-on-detail,line,line-image,line-title,line-details,line-price,delivery-message,delivery-reveal,conversation,message,message-own,rating
 account fields in content
 account lead heading,content
 account layouts stack,columns,grid,group
 account style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 account style frame <root> <root> tokens=max-width
-account style action :is([data-private="account"],[data-private="dialog"]) .bg-primary:not(:is([data-private="account"],[data-private="dialog"]) .bg-destructive,[data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
-account style input :is([data-private="account"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+account style action :is([data-private="account"],[data-private="dialog"]) .bg-primary:is(button,a,[role="button"]):not(:is([data-private="account"],[data-private="dialog"]) .bg-destructive:is(button,a,[role="button"]),[data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
+account style input :is([data-private="account"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"],[type="file"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 account style field-label :is([data-private="account"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
-account style action-critical :is([data-private="account"],[data-private="dialog"]) .bg-destructive tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
+account style action-critical :is([data-private="account"],[data-private="dialog"]) .bg-destructive:is(button,a,[role="button"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
 account style navigation <root> [data-part="navigation"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 account style nav-item <root> [data-part="nav-item"]:not([aria-current="page"]) tokens=text,size,weight,radius,ring
 account style nav-current <root> [data-part="nav-item"][aria-current="page"] tokens=text,link,size,weight,radius,ring
@@ -947,7 +953,7 @@ account style heading-title <root> [data-part="heading-title"] tokens=text,font,
 account style heading-intro <root> [data-part="heading-intro"] tokens=text,size,weight,leading
 account style heading-back <root> [data-part="heading-back"] tokens=text,radius,ring
 account style content <root> [data-part="content"] tokens= targets=account.overview,account.order,account.profile
-account style card <root> [data-part="card"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap fields
+account style card <root> [data-part="card"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap fields chosen
 account style card-title <root> [data-part="card-title"] tokens=text,font,weight,size,leading,case,tracking
 account style status-badge <root> [data-part="status-badge"] tokens=background,text,border,border-width,radius
 account style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap
@@ -962,6 +968,7 @@ account style line-image <root> [data-part="line-image"] tokens=width,height,wid
 account style line-title <root> [data-part="line-title"] tokens=text,font,weight,size,leading,case,tracking
 account style line-details <root> [data-part="line-details"] tokens=text,size
 account style line-price <root> [data-part="line-price"] tokens=text,muted,font,weight,size,align
+account style rating <root> [data-part="rating"] tokens=text,muted,size within=card|line graphic
 account style delivery-message <root> [data-part="delivery-message"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 account style delivery-reveal <root> [data-part="delivery-reveal"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=edge
 account style conversation <root> [data-part="conversation"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding fields

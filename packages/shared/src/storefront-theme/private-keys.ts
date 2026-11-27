@@ -85,7 +85,7 @@ export const PRIVATE_PAGE_ROUTES = {
  * conversation or actions the receipt's key promises.
  */
 export const PRIVATE_STORE_LOOK_ROUTES = [
-  "/track-order", "/checkout/quick", "/checkout/continue/[continuationId]", "/cart/recover/[token]",
+  "/track-order", "/checkout/quick", "/checkout/continue/[continuationId]", "/agent/continue/[continuationId]", "/cart/recover/[token]",
   "/payment-recovery", "/gift-card-balance", "/newsletter", "/newsletter/confirm", "/newsletter/unsubscribe",
 ] as const;
 
@@ -100,6 +100,21 @@ export const PRIVATE_UNTHEMED_ROUTES = ["/account/licence-key", "/account/delive
 /** The page key whose look a route takes (`PRIVATE_PAGE_ROUTES`), or null: the store's look, or no theme at all. */
 export function privatePageOfRoute(route: string): PrivatePageKey | null {
   for (const page of PRIVATE_PAGE_KEYS) if ((PRIVATE_PAGE_ROUTES[page] as readonly string[]).includes(route)) return page;
+  return null;
+}
+
+/**
+ * The page key a path is served under (a route pattern's `[param]` segments take any one segment): for a renderer
+ * that knows the path and not the pattern. The same table, so the same keys.
+ */
+export function privatePageOfPath(pathname: string): PrivatePageKey | null {
+  const segments = pathname.replace(/\/+$/, "").split("/");
+  for (const page of PRIVATE_PAGE_KEYS) {
+    for (const route of PRIVATE_PAGE_ROUTES[page] as readonly string[]) {
+      const pattern = route.split("/");
+      if (pattern.length === segments.length && pattern.every((part, index) => (part.startsWith("[") && part.endsWith("]") && segments[index] !== "") || part === segments[index])) return page;
+    }
+  }
   return null;
 }
 

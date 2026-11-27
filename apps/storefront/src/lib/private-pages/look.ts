@@ -1,4 +1,4 @@
-import { privatePageOfRoute, privatePageTokenMode, type PrivatePageKey, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
+import { privatePageOfPath, privatePageOfRoute, privatePageTokenMode, type PrivatePageKey, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import { privateStyle } from "./plan";
 
 /**
@@ -17,7 +17,8 @@ export function privatePageLook(theme: StorefrontThemeDocument, page: PrivatePag
  * theme authors' reference and the storefront's route test read): a page never names its key, so a key reaches
  * exactly the routes the table gives it. A route the table gives no key draws the store's look.
  */
-export function privateRouteLook(route: { routePattern: string }, theme: StorefrontThemeDocument): { privateStyle?: string; privateTokens?: boolean } {
-  const page = privatePageOfRoute(route.routePattern);
+export function privateRouteLook(route: { routePattern: string; url: URL }, theme: StorefrontThemeDocument): { privateStyle?: string; privateTokens?: boolean } {
+  // By its pattern; a renderer that serves a page at its path (a test's container) names the path as its pattern.
+  const page = privatePageOfRoute(route.routePattern) ?? privatePageOfPath(route.url.pathname);
   return page ? privatePageLook(theme, page) : {};
 }
