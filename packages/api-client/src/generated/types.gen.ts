@@ -1420,7 +1420,13 @@ export type StorefrontPrivatePages = {
             receipt?: string;
             account?: string;
         };
-        refused?: boolean;
+        refused?: {
+            cart?: Array<StorefrontPrivatePageRefusal>;
+            cartDrawer?: Array<StorefrontPrivatePageRefusal>;
+            checkout?: Array<StorefrontPrivatePageRefusal>;
+            receipt?: Array<StorefrontPrivatePageRefusal>;
+            account?: Array<StorefrontPrivatePageRefusal>;
+        };
     };
 };
 
@@ -1456,6 +1462,12 @@ export type StorefrontPrivateWords = {
 export type StorefrontPrivateAsset = {
     app: string;
     file: string;
+};
+
+export type StorefrontPrivatePageRefusal = {
+    path: string;
+    reason: string;
+    message: string;
 };
 
 export type StorefrontBrandImage = {

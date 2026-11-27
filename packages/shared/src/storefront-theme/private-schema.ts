@@ -62,7 +62,7 @@ const privatePageRefusalSchema = z.object({
   path: z.string().max(240),
   reason: z.string().regex(/^[a-z][a-z0-9_]{0,47}$/),
   message: z.string().max(600),
-}).strict();
+}).strict().meta({ id: "StorefrontPrivatePageRefusal" });
 
 /** Bounds of the theme's words on private pages. */
 export const PRIVATE_WORDS_LIMITS = { languages: 8, text: 500 } as const;
