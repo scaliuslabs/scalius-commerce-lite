@@ -78,8 +78,7 @@ export function RecordPaymentDialog({
   function send(anyway: boolean) {
     mutation.mutate({
       orderId,
-      // Recording anyway settles the whole balance: the closed page can then take nothing that counts.
-      amountMinor: typedMinor(anyway ? balanceDue : amount!, currencyCode),
+      amountMinor: typedMinor(amount!, currencyCode),
       via,
       ...(reference.trim() ? { reference: reference.trim() } : {}),
       ...(note.trim() ? { note: note.trim() } : {}),
@@ -117,10 +116,10 @@ export function RecordPaymentDialog({
             <Alert variant="destructive">
               <AlertDescription>
                 <div className="flex flex-col items-start gap-2">
-                  <p>{t("netTerms.pageOpen", { amount: money(balanceDue) })}</p>
+                  <p>{t("netTerms.pageOpen", { amount: money(amount ?? 0) })}</p>
                   <p>{t("netTerms.recordAnywayHelp")}</p>
                   <Button type="button" variant="outline" size="sm" onClick={() => send(true)} loading={mutation.isPending}>
-                    {t("netTerms.recordAnyway", { amount: money(balanceDue) })}
+                    {t("netTerms.recordAnyway", { amount: money(amount ?? 0) })}
                   </Button>
                 </div>
               </AlertDescription>

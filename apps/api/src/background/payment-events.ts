@@ -127,7 +127,7 @@ export async function drainPaymentEvents(db: Database, env: Env, ctx: ExecutionC
   const events = await drainDuePaymentEvents(db, env, ctx);
   const commands = await reconcileDuePaymentCommands(db, env, ctx);
   // A placed order's payment page the buyer left idle is closed like a replaced one.
-  await expireIdleSessions(db);
+  await expireIdleSessions(db, planLimits().background.paymentEventsPerDrain);
   const sessions = await cancelDueSessions(db, paymentCommandDeps(db, env, ctx), planLimits().background.paymentEventsPerDrain);
   return {
     scanned: events.scanned + commands.scanned + sessions.scanned,

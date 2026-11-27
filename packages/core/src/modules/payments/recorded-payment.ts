@@ -191,11 +191,6 @@ export async function recordOrderPayment(
   }
   const openAttempt = await readOpenPaymentAttempt(db, input.orderId);
   if (openAttempt && (openAttempt.running || !input.allowOpenAttempt)) throw openAttemptRefusal(openAttempt);
-  // Recording anyway settles the whole order: a settlement the closed page still brings is then
-  // money the order cannot take, refunded whole (late-payment.ts), never matched against a remainder.
-  if (input.allowOpenAttempt && input.amountMinor !== order.balanceDueMinor) {
-    throw new ValidationError("Recording a payment anyway takes the whole balance due.");
-  }
   if (order.paymentTermsDays === null && order.paymentMethod !== RECORDED_PAYMENT_METHOD) {
     throw new ValidationError("Payments are recorded here only for invoice (net terms) orders and orders paid as they were placed. Record cash on delivery with Collect cash.");
   }

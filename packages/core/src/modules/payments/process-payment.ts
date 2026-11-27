@@ -266,10 +266,12 @@ async function validateDepositPaymentState(
  * other money succeeded.
  */
 async function giftCardOnlyPaidMinor(db: Database, orderId: string): Promise<number | null> {
+  // Tender the store took itself: gift cards, and payments staff or an app recorded by hand.
+  const storeTender = sql`${orderPayments.paymentMethod} IN (${GIFT_CARD_TENDER_METHOD}, ${RECORDED_PAYMENT_METHOD})`;
   const row = await db
     .select({
-      giftCardMinor: sql<number>`coalesce(sum(CASE WHEN ${orderPayments.paymentMethod} = ${GIFT_CARD_TENDER_METHOD} THEN ${orderPayments.amountMinor} ELSE 0 END), 0)`,
-      otherRows: sql<number>`coalesce(sum(CASE WHEN ${orderPayments.paymentMethod} = ${GIFT_CARD_TENDER_METHOD} THEN 0 ELSE 1 END), 0)`,
+      giftCardMinor: sql<number>`coalesce(sum(CASE WHEN ${storeTender} THEN ${orderPayments.amountMinor} ELSE 0 END), 0)`,
+      otherRows: sql<number>`coalesce(sum(CASE WHEN ${storeTender} THEN 0 ELSE 1 END), 0)`,
     })
     .from(orderPayments)
     .where(and(
@@ -281,9 +283,11 @@ async function giftCardOnlyPaidMinor(db: Database, orderId: string): Promise<num
 }
 
 /**
- * A plan-less balance is the gateway remainder of an order gift cards partly
- * paid: partial, paid > 0 all in gift-card tender, and the charge is exactly
- * the balance due (total − paid). Every other plan-less balance is refused.
+ * A plan-less balance is the gateway remainder of an order the store's own
+ * tender partly paid (gift cards, or payments recorded by hand: part of an
+ * invoice paid in cash, the rest on its payment page): partial, paid > 0 all
+ * in that tender, and the charge is exactly the balance due (total − paid).
+ * Every other plan-less balance is refused, for staff to reconcile.
  */
 async function validatePlanlessGiftCardBalanceState(
   db: Database,
@@ -450,13 +454,6 @@ async function providerPaymentRefusal(
     .limit(1)
     .get();
   return opened ? null : `${label} ${provider} payment names no payment this store opened with that provider for the order`;
-}
-
-/** Money recorded by hand on the order (`recordOrderPayment`): what makes a provider's settlement for the old amount unappliable. */
-async function hasRecordedPayment(db: Database, orderId: string): Promise<boolean> {
-  return Boolean(await db.select({ id: orderPayments.id }).from(orderPayments)
-    .where(and(eq(orderPayments.orderId, orderId), eq(orderPayments.paymentMethod, RECORDED_PAYMENT_METHOD), eq(orderPayments.status, PaymentRecordStatus.SUCCEEDED)))
-    .limit(1).get());
 }
 
 /** The order is the provider's, or the store opened a payment with that provider for it. */
@@ -725,6 +722,11 @@ export async function processPaymentConfirmed(
     if (!Number.isSafeInteger(incomingAmountMinor) || incomingAmountMinor < 0) {
       return { success: false, retryable: false, error: "Provider payment amount is invalid" };
     }
+    // The provider's reference is the payment's one identity (UNIQUE(provider, provider_ref)): a
+    // settlement without one could be recorded once per delivery, so it records nothing.
+    if (typeof params.providerRef !== "string" || params.providerRef.trim() === "") {
+      return { success: false, retryable: false, error: "Confirmed payment names no provider reference" };
+    }
 
     // ── 0. Claim or resume the provider payment record ──
     // UNIQUE(provider, provider_ref) is the primary idempotency guarantee. We
@@ -817,30 +819,24 @@ export async function processPaymentConfirmed(
         reason: initialUnpayableReason,
       });
     }
-    // A provider the order's payment method does not take changes nothing (provider authority).
     const initialProviderRefusal = await providerPaymentRefusal(db, initialOrder, params.provider, "Confirmed");
     if (initialProviderRefusal) {
       return { success: false, retryable: false, error: initialProviderRefusal };
     }
 
     const paymentType = params.paymentType ?? await inferPaymentType(db, initialOrder, incomingAmountMinor);
-    const initialPaymentStateError = paymentType
-      ? await validateIncomingPaymentState(db, initialOrder, paymentType, incomingAmountMinor)
-      : "Confirmed payment amount does not match any payable amount on the order";
-    if (initialPaymentStateError || !paymentType) {
-      // Money the order's own provider took that the order cannot apply because a payment recorded
-      // by hand changed what is due (a page that settled for the old amount): recorded as received,
-      // marked late and refunded (late-payment.ts), never dropped and never applied to the wrong
-      // amount. Any other mismatch is refused as before, for reconciliation.
-      if (incomingAmountMinor > 0 && await storeOpenedPaymentWith(db, initialOrder, params.provider) && await hasRecordedPayment(db, params.orderId)) {
-        return await landLatePayment(db, params, {
-          paymentId,
-          currency: currency.code,
-          settlement: paymentSettlement({ amountMinor: incomingAmountMinor, currency: currency.code, settlement: params.settlement, order: initialOrder }),
-          reason: initialPaymentStateError!,
-        });
-      }
-      return { success: false, error: initialPaymentStateError!, retryable: false };
+    if (!paymentType) {
+      return { success: false, retryable: false, error: "Confirmed payment amount does not match any payable amount on the order" };
+    }
+
+    const initialPaymentStateError = await validateIncomingPaymentState(
+      db,
+      initialOrder,
+      paymentType,
+      incomingAmountMinor,
+    );
+    if (initialPaymentStateError) {
+      return { success: false, error: initialPaymentStateError, retryable: false };
     }
     let inventoryShortfall = false;
     // A balance with no plan is a gift-card remainder (validated above): it
@@ -934,12 +930,13 @@ export async function processPaymentConfirmed(
         if (providerRefusal) {
           return { success: false, retryable: false, error: providerRefusal };
         }
-        const paymentStateError = await validateIncomingPaymentState(db, order, paymentType, incomingAmountMinor);
+        const paymentStateError = await validateIncomingPaymentState(
+          db,
+          order,
+          paymentType,
+          incomingAmountMinor,
+        );
         if (paymentStateError) {
-          // The order moved under this payment so it no longer applies: recorded and refunded, as above.
-          if (incomingAmountMinor > 0 && await storeOpenedPaymentWith(db, { id: params.orderId, paymentMethod: order.paymentMethod }, params.provider) && await hasRecordedPayment(db, params.orderId)) {
-            return await landLatePayment(db, params, { paymentId, currency: currency.code, settlement, reason: paymentStateError });
-          }
           return { success: false, error: paymentStateError, retryable: false };
         }
       }
@@ -977,7 +974,7 @@ export async function processPaymentConfirmed(
                 SELECT 1 FROM order_payments
                 WHERE order_id = ${params.orderId}
                   AND status = ${PaymentRecordStatus.SUCCEEDED}
-                  AND payment_method <> ${GIFT_CARD_TENDER_METHOD}
+                  AND payment_method NOT IN (${GIFT_CARD_TENDER_METHOD}, ${RECORDED_PAYMENT_METHOD})
               )`
             : sql`1 = 1`;
 
