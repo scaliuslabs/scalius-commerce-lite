@@ -22,8 +22,9 @@
 // close button the store's own CSS below), in a frame and shadow root of its
 // own. The theme's button for it opens the store's panel (`data-buyer-panel-open`,
 // scripts/buyer-chrome.ts); without the store's script it opens nothing, so
-// with scripts off the store draws its own "Menu" button after the frame for
-// each drawer panel (inside <noscript>: with scripts on it is never parsed),
+// with scripts off the store draws its own "Menu" button before the frame (the
+// first thing on the page, above the theme's own button, which then opens
+// nothing) for each drawer panel (inside <noscript>: with scripts on it is never parsed),
 // a light-DOM `popovertarget` the browser opens with no script. A dropdown
 // (`menu` panel) has no such button: with scripts off it stays closed. No
 // app runtime, island or file base: nothing of the app runs here.
@@ -53,7 +54,6 @@ const drawers = chrome.panels.flatMap((panel, index) => (panel.kind === "drawer"
 const signedIn = getCustomerSessionTokenFromCookie(Astro.request.headers.get("cookie")) !== null ? "" : undefined;
 ---
 
-<div data-buyer-chrome-frame={target} style={BUYER_CHROME_FRAME_STYLE[target]}><scalius-chrome data-chrome={target} data-color-scheme={colorScheme ?? undefined} data-scalius-signed-in={signedIn}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome><script is:inline set:html={BUYER_CHROME_STATE_SCRIPT}></script></div>
 {drawers.length > 0 && (
   <noscript>
     <div class="buyer-chrome-noscript-bar">
@@ -66,6 +66,7 @@ const signedIn = getCustomerSessionTokenFromCookie(Astro.request.headers.get("co
     </div>
   </noscript>
 )}
+<div data-buyer-chrome-frame={target} style={BUYER_CHROME_FRAME_STYLE[target]}><scalius-chrome data-chrome={target} data-color-scheme={colorScheme ?? undefined} data-scalius-signed-in={signedIn}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome><script is:inline set:html={BUYER_CHROME_STATE_SCRIPT}></script></div>
 {chrome.panels.map((panel, index) => (
   <div
     id={`buyer-panel-${target}-${index}`}

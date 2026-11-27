@@ -1673,7 +1673,8 @@ function drawerLinesShown() {
  * cut at its side or below, at most two lines, inside the bar) at 10px or more and reading 4.5:1 on the bar (its colour
  * over the page's, at its lightest and darkest through a blurred bar); every icon inside the bar, its glyph at least
  * 14px inside its chip; the current tab apart
- * from the others by its weight, a ring or its words' lightness; the page's reserve as tall as the bar.
+ * from the others by its weight, a ring or its words' lightness; every label starting on one line and every icon
+ * centred on one line across the tabs; the page's reserve as tall as the bar.
  */
 function tabBarShown({ looked }) {
   const problems = [];
@@ -1727,6 +1728,13 @@ function tabBarShown({ looked }) {
     const glyph = rect.width - ["paddingLeft", "paddingRight", "borderLeftWidth", "borderRightWidth"].reduce((sum, side) => sum + Number.parseFloat(style[side]), 0);
     if (glyph < 14) problems.push(`a tab's icon is drawn ${glyph.toFixed(1)}px wide inside its chip`);
   }
+  // Every tab's label starts on one line and every chip is centred on one line, whatever chip is larger (the current
+  // tab's, with its ring) or label wraps to a second line.
+  const tops = [...bar.querySelectorAll('[data-part="tab-label"]')].map((label) => ({ name: words(label), top: label.getBoundingClientRect().top }));
+  const [high, low] = [Math.min(...tops.map((each) => each.top)), Math.max(...tops.map((each) => each.top))];
+  if (tops.length > 1 && low - high > 1) problems.push(`the tabs' labels start on different lines: "${tops.find((each) => each.top === low).name}" ${(low - high).toFixed(1)}px below "${tops.find((each) => each.top === high).name}"`);
+  const middles = [...bar.querySelectorAll('[data-part="tab-icon"]')].map((icon) => { const rect = icon.getBoundingClientRect(); return rect.top + rect.height / 2; });
+  if (middles.length > 1 && Math.max(...middles) - Math.min(...middles) > 1) problems.push(`the tabs' icons are not centred on one line (${(Math.max(...middles) - Math.min(...middles)).toFixed(1)}px apart)`);
   // The current tab is told apart by more than its hue: words 3:1 from the others', a ring 2px or wider reading 3:1 on
   // the bar, a weight 200 heavier, or a chip 4px larger (both drawn).
   const current = bar.querySelector('[data-part="tab"][aria-current]');

@@ -231,7 +231,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
       // One kind for the product: every live SKU now has it (a later conflict compares against this).
       variants: values.fulfillmentKind === "mixed"
         ? current.variants
-        : current.variants.map((variant) => (variant.deletedAt ? variant : { ...variant, fulfillmentKind: values.fulfillmentKind as "physical" | "service" })),
+        : current.variants.map((variant) => (variant.deletedAt ? variant : { ...variant, fulfillmentKind: values.fulfillmentKind as Exclude<typeof values.fulfillmentKind, "mixed"> })),
       aggregateRevision: revision,
     }));
     setAggregateRevision(revision);
