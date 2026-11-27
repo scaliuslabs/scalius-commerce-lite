@@ -159,7 +159,7 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
   }
   const connect = request.storefrontConnect ?? [];
   const extensions = request.extensions ?? [];
-  if (request.storefrontSurfaces || extensions.length > 0 || request.publicRoutes || request.storefrontScripts.length > 0 || request.storefrontCode || request.storefrontPixel || request.buyerFiles || connect.length > 0) {
+  if (request.storefrontSurfaces || extensions.length > 0 || request.publicRoutes || request.storefrontScripts.length > 0 || request.storefrontCode || request.storefrontPixel || request.storefrontBuyerPages || request.buyerFiles || connect.length > 0) {
     sections.push(
       <Section key="storefront" title={t("access_storefront")}>
         {request.storefrontSurfaces ? row("surfaces", t("storefrontSurfaces", { parts: storefrontAdds(app, t) }), added?.storefrontSurfaces === true) : null}
@@ -169,6 +169,7 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
           : row(`extension-reads:${read.as}`, t("extensionReadsFields", { fields: read.customFields.join(", ") }), false)))}
         {request.storefrontCode ? row("code", t("storefrontCode", { parts: storefrontParts(app, t) }), added?.storefrontCode === true, "actsAs") : null}
         {request.storefrontPixel ? row("pixel", t("storefrontPixel"), added?.storefrontPixel === true, "read") : null}
+        {request.storefrontBuyerPages ? row("buyer-pages", t("storefrontBuyerPages"), added?.storefrontBuyerPages === true) : null}
         {request.buyerFiles ? row("files", t("buyerFiles"), added?.buyerFiles === true, "read") : null}
         {request.publicRoutes ? row("public", t("publicRoutes"), added?.publicRoutes === true) : null}
         {request.storefrontScripts.map((host) => {

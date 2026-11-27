@@ -1,6 +1,7 @@
 ---
 import { canonicalRedirect } from "@/lib/canonical-redirect";
 import { markPaymentPage } from "@/lib/analytics-csp";
+import { markBuyerPaymentStep, receiptHoldsPaymentStep } from "@/lib/private-pages/payment-step";
 import WindowGlobals from "@/components/WindowGlobals.astro";
 import { checkoutText } from "@/lib/checkout-text";
 import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
@@ -165,6 +166,8 @@ if (!orderId || !receiptToken) {
       })()
     : undefined;
   recoveryState = receiptLinkRecoveryState({ requestedOrderId, recoveryUrl }, copy);
+  // A receipt with no order that offers a way to finish paying holds a payment step too (second review, rc.1).
+  if (recoveryUrl) markBuyerPaymentStep(Astro.locals);
 } else {
   try {
     order = await getOrderReceipt(orderId, receiptToken);
@@ -330,6 +333,14 @@ const orderRecommendations = order && showsSuccessHero && !statusView
   : null;
 // A receipt that offers a card retry is a payment page: only the payment provider's scripts run (lib/analytics-csp.ts).
 if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
+// A receipt with a payment step of any gateway (a card, a hosted or an app gateway's button) or a payment it waits on
+// draws the store's own header and footer, never a theme's (lib/private-pages/payment-step.ts).
+if (order && receiptHoldsPaymentStep({
+  stateKind: orderSuccessView?.kind,
+  retryOptions: retryPaymentOptions.length,
+  paymentAction: order.buyerView?.paymentAction,
+  recoveryEligible: order.paymentRecovery?.eligible,
+})) markBuyerPaymentStep(Astro.locals);
 ---
 
 <Layout

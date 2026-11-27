@@ -22634,7 +22634,8 @@
   "STOREFRONT_PACKAGE_DIR": "storefront",
   "STOREFRONT_MODULE_FILE": "storefront.js",
   "STOREFRONT_STYLESHEET_FILE": "styles.css",
-  "STOREFRONT_FILE_PATH": "^(?:storefront\\.js|styles\\.css|pixel\\.js|islands\\/[a-z][a-z0-9_-]{0,47}\\.js|public\\/(?:[a-z0-9][a-z0-9_-]{0,63}\\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$",
+  "STOREFRONT_BUYER_CHROME_FILE": "buyer-chrome.css",
+  "STOREFRONT_FILE_PATH": "^(?:storefront\\.js|styles\\.css|buyer-chrome\\.css|pixel\\.js|islands\\/[a-z][a-z0-9_-]{0,47}\\.js|public\\/(?:[a-z0-9][a-z0-9_-]{0,63}\\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$",
   "STOREFRONT_SEAL_PREFIX": "//# scalius-storefront ",
   "STOREFRONT_CARD_FACT_KINDS": [
    "pack_size",

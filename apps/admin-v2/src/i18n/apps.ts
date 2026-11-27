@@ -171,6 +171,7 @@ export const installedAppsMessages = defineMessages({
     access_messages: "Email and text messages",
     messageRecipientsIn: "Can email or text any address it stores in its {field} records (the app writes those records itself)",
     buyerFiles: "Asks buyers to upload files at checkout (photos, documents) and receives them with their orders",
+    storefrontBuyerPages: "Draws its header and footer design on your buyers' account, receipt and order pages too, so they match the rest of your store. There it runs no code: it shows only words, pictures and links, and cannot read those pages or take anything buyers type",
 
     functionsTitle: "Checkout functions",
     functionsDescription: "Where this app takes part in checkout. At each step, the app with the lowest priority number runs first.",
@@ -478,6 +479,7 @@ export const installedAppsMessages = defineMessages({
     access_messages: "ইমেইল ও টেক্সট মেসেজ",
     messageRecipientsIn: "এর {field} রেকর্ডে নিজে রাখা যেকোনো ঠিকানায় ইমেইল বা টেক্সট পাঠাতে পারে (রেকর্ডগুলো অ্যাপ নিজেই লেখে)",
     buyerFiles: "চেকআউটে ক্রেতাদের ফাইল আপলোড করতে বলে (ছবি, ডকুমেন্ট) এবং অর্ডারের সাথে সেগুলো পায়",
+    storefrontBuyerPages: "আপনার ক্রেতাদের অ্যাকাউন্ট, রসিদ ও অর্ডারের পেজেও এর হেডার ও ফুটার ডিজাইন দেখায়, যাতে সেগুলো আপনার স্টোরের বাকি অংশের সাথে মেলে। সেখানে এটি কোনো কোড চালায় না: কেবল লেখা, ছবি ও লিংক দেখায়, ওই পেজ পড়তে বা ক্রেতা যা লেখেন তা নিতে পারে না",
 
     functionsTitle: "চেকআউট ফাংশন",
     functionsDescription: "চেকআউটের যে ধাপগুলোতে এই অ্যাপ কাজ করে। প্রতিটি ধাপে যে অ্যাপের প্রায়োরিটি নম্বর সবচেয়ে কম, সেটি আগে চলে।",

@@ -158,6 +158,7 @@ const grantSchema = z.object({
   storefrontCode: z.boolean().openapi({ description: "Draws on the storefront with its own code: components, client islands or a stylesheet." }),
   storefrontConnect: z.array(z.string()).openapi({ description: "Hosts the app's storefront islands and pixel reach from the buyer's browser." }),
   storefrontPixel: z.boolean().openapi({ description: "Runs a pixel that hears buyer events on every page, checkout included, in a sandboxed frame, once the buyer's consent allows it." }),
+  storefrontBuyerPages: z.boolean().openapi({ description: "Draws its header or footer on the buyer's account, receipt and order pages, rebuilt inert inside a shadow root: no app code runs there and nothing it draws takes input." }),
   buyerFiles: z.boolean().openapi({ description: "Asks buyers to upload files (a checkout attribute or line input of type file): it receives their files." }),
   features: z.array(z.string()).openapi({ description: "The app's features that are on (empty for apps that declare none)." }),
   messageRecipients: z.array(z.string()).openapi({ description: "Fields of the app's own records (<object>.<field>) whose email addresses or phone numbers it may message." }),
