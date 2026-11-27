@@ -5,7 +5,9 @@
 // parts), the page sections and the page templates' sections, and how the
 // cart page and drawer are arranged, worded and styled (`privatePages`). The dashboard
 // and a future builder write it; the storefront renders it. Contract:
-// ../storefront-theme.md. `storefrontThemeDocumentSchema` is the only way in.
+// ../storefront-theme.md. `storefrontThemeDocumentSchema` is the only way in:
+// its structure on every read, and the write policy
+// (`storefrontThemeDocumentPolicyIssues`) on every write (save.ts).
 import { z } from "zod";
 import {
   STOREFRONT_THEME_TEXT_PAIRS,
@@ -44,8 +46,9 @@ import {
 } from "./tokens";
 import { storefrontThemeTranslationsSchema } from "./text";
 import { storefrontPrivatePagesSchema } from "./private-schema";
+import { STOREFRONT_THEME_DOCUMENT_VERSION } from "./version";
 
-export const STOREFRONT_THEME_DOCUMENT_VERSION = 16 as const;
+export { STOREFRONT_THEME_DOCUMENT_VERSION };
 
 /**
  * The five presets of one design system ("Scalius Base"), named by
@@ -201,45 +204,74 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
      * or CSS), and the CSS the store compiled from the tokens on save.
      */
     privatePages: name("StorefrontPrivatePages", storefrontPrivatePagesSchema),
-  }).strict().superRefine((value, context) => {
-    // The dark colours meet the same rules as the colours while buyers can see them.
-    const sets: StorefrontThemeColorSet[] = storefrontThemeShowsDarkColors(value.tokens) ? ["colors", "darkColors"] : ["colors"];
-    if (storefrontDarkColorsMissing(value.tokens)) {
-      context.addIssue({ code: "custom", path: ["tokens", "darkColors"], message: "A dark or device colour scheme, or the buyer's switch, needs the dark colours." });
-    }
-    for (const set of sets) {
-      const colors = value.tokens[set];
-      if (!colors) continue;
-      for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(value, set)) {
-        context.addIssue({
-          code: "custom",
-          path: ["tokens", set, storefrontContrastRoleToken(text, value.tokens, set)],
-          message: `${text} on ${surface} has contrast ${ratio.toFixed(2)}:1; it needs at least 4.5:1.`,
-        });
-      }
-      for (const problem of listStorefrontThemeSemanticColorProblems(colors)) {
-        context.addIssue({ code: "custom", path: ["tokens", set, "muted-foreground"], message: problem });
-      }
-      // The page's paint is the surface of the store's page text: it reads on every colour the paint shows.
-      for (const { text, surface, ratio } of listStorefrontPagePaintContrastProblems(value.tokens.pagePaint, colors)) {
-        context.addIssue({
-          code: "custom",
-          path: ["tokens", "pagePaint"],
-          message: `${text} on the page paint (${set === "darkColors" ? "dark colours, " : ""}${surface}) has contrast ${ratio.toFixed(2)}:1; it needs at least 4.5:1.`,
-        });
-      }
-    }
-  });
+  }).strict();
   return { document, sections, landingPage, pageTemplate };
 }
 
-/** The complete, strict theme document schema. Writes and reads both use it. */
+/**
+ * The complete, strict theme document schema: its structure (shapes, closed
+ * lists, the bounds the renderer relies on). Reads use it alone, so a stored
+ * theme never stops reading because a later build checks more; a write also
+ * runs `storefrontThemeDocumentPolicyIssues` (save.ts), which may grow.
+ */
 export const storefrontThemeDocumentSchema = buildStorefrontThemeDocumentSchemas().document;
 
 export type StorefrontThemeDocument = z.infer<typeof storefrontThemeDocumentSchema>;
 export type StorefrontThemePages = StorefrontThemeDocument["pages"];
 
-/** JSON Schema of the document (structure only; contrast lives in the Zod schema). */
+/** Why a write refuses a well-formed document: a policy the store holds every theme to when it is written. */
+export const STOREFRONT_THEME_POLICY_REASONS = ["dark_colors_missing", "contrast", "semantic_color"] as const;
+export type StorefrontThemePolicyReason = (typeof STOREFRONT_THEME_POLICY_REASONS)[number];
+
+export interface StorefrontThemePolicyIssue {
+  path: Array<string | number>;
+  message: string;
+  reason: StorefrontThemePolicyReason;
+}
+
+/**
+ * What a write refuses in a well-formed document: dark colours wherever a
+ * scheme or the switch shows them, readable text (AA) in each colour set
+ * buyers see for the blocks chosen and every variant they fall back to, a
+ * neutral helper text apart from the error colour, and the store's page
+ * text on every colour the page paint shows. Never run on a read: a stored
+ * document a later, stricter policy refuses still reads and draws as it
+ * was saved, and is refused only when it is saved again.
+ */
+export function storefrontThemeDocumentPolicyIssues(document: Pick<StorefrontThemeDocument, "tokens" | "blocks">): StorefrontThemePolicyIssue[] {
+  const issues: StorefrontThemePolicyIssue[] = [];
+  const { tokens } = document;
+  if (storefrontDarkColorsMissing(tokens)) {
+    issues.push({ path: ["tokens", "darkColors"], reason: "dark_colors_missing", message: "A dark or device colour scheme, or the buyer's switch, needs the dark colours." });
+  }
+  // The dark colours meet the same rules as the colours while buyers can see them.
+  const sets: StorefrontThemeColorSet[] = storefrontThemeShowsDarkColors(tokens) ? ["colors", "darkColors"] : ["colors"];
+  for (const set of sets) {
+    const colors = tokens[set];
+    if (!colors) continue;
+    for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(document, set)) {
+      issues.push({
+        path: ["tokens", set, storefrontContrastRoleToken(text, tokens, set)],
+        reason: "contrast",
+        message: `${text} on ${surface} has contrast ${ratio.toFixed(2)}:1; it needs at least 4.5:1.`,
+      });
+    }
+    for (const problem of listStorefrontThemeSemanticColorProblems(colors)) {
+      issues.push({ path: ["tokens", set, "muted-foreground"], reason: "semantic_color", message: problem });
+    }
+    // The page's paint is the surface of the store's page text: it reads on every colour the paint shows.
+    for (const { text, surface, ratio } of listStorefrontPagePaintContrastProblems(tokens.pagePaint, colors)) {
+      issues.push({
+        path: ["tokens", "pagePaint"],
+        reason: "contrast",
+        message: `${text} on the page paint (${set === "darkColors" ? "dark colours, " : ""}${surface}) has contrast ${ratio.toFixed(2)}:1; it needs at least 4.5:1.`,
+      });
+    }
+  }
+  return issues;
+}
+
+/** JSON Schema of the document (structure only; the write policy is `storefrontThemeDocumentPolicyIssues`). */
 export function storefrontThemeDocumentJsonSchema(): Record<string, unknown> {
   return z.toJSONSchema(storefrontThemeDocumentSchema, { unrepresentable: "any" }) as Record<string, unknown>;
 }

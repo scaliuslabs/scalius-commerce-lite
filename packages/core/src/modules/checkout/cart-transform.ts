@@ -136,7 +136,7 @@ export function createCartTransformer(
         let cart: FunctionCart;
         try {
             cart = buildAppFunctionCart({
-                currency: { code: preliminary.money.currencyCode, decimalPlaces: preliminary.money.decimalPlaces },
+                currency: { code: preliminary.money.currencyCode, decimalPlaces: preliminary.money.decimalPlaces, priceIncrementMinor: preliminary.money.incrementMinor },
                 storeCurrency: functionStoreCurrency(preliminary.money),
                 channel: context.channel,
                 segmentIds: preliminary.pricingSegmentIds,

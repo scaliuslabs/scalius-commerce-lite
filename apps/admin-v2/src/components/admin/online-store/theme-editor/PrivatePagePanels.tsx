@@ -33,6 +33,7 @@ import { useMessages } from "~/i18n";
 import { themeEditorPrivatePageMessages } from "~/i18n/theme-editor-private-pages";
 import type { SetTheme, Theme } from "../theme-fields";
 import { Sketch, VisualChoice, type SketchPalette } from "../ThemeChoices";
+import { PrivatePageRefusalNote } from "../PrivatePagesFallbackAlert";
 
 const paletteOf = (theme: Theme): SketchPalette => {
   const { colors } = theme.tokens;
@@ -140,6 +141,8 @@ export function CartPresentationSettings({ theme, setDraft }: { theme: Theme; se
   const drawer = privateDrawerChoices(theme.privatePages.pages.cartDrawer);
   return (
     <div className="space-y-5" data-private-page-settings="cart">
+      <PrivatePageRefusalNote theme={theme} page="cart" />
+      <PrivatePageRefusalNote theme={theme} page="cartDrawer" />
       <WideScreensNote />
       <VisualChoice
         label={t("cartLayout")}
@@ -194,6 +197,7 @@ export function CheckoutPresentationSettings({ theme, setDraft }: { theme: Theme
   const setCheckout = useBlock("checkout", setDraft);
   return (
     <div className="space-y-5" data-private-page-settings="checkout">
+      <PrivatePageRefusalNote theme={theme} page="checkout" />
       <WideScreensNote />
       <VisualChoice
         label={t("checkoutSummary")}
@@ -257,6 +261,7 @@ export function ReceiptPresentationSettings({ theme, setDraft }: { theme: Theme;
   };
   return (
     <div className="space-y-5" data-private-page-settings="receipt">
+      <PrivatePageRefusalNote theme={theme} page="receipt" />
       <WideScreensNote />
       <VisualChoice
         label={t("receiptLayout")}
@@ -303,6 +308,7 @@ export function AccountPresentationSettings({ theme, setDraft }: { theme: Theme;
   const setAccount = useBlock("account", setDraft);
   return (
     <div className="space-y-5" data-private-page-settings="account">
+      <PrivatePageRefusalNote theme={theme} page="account" />
       <WideScreensNote />
       <VisualChoice
         label={t("accountNavigation")}

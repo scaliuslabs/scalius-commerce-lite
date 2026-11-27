@@ -34,7 +34,7 @@ import {
 } from "@scalius/core/modules/checkout";
 import { ValidationError } from "@scalius/core/errors";
 import { PLUGIN_EXTENSION_RUN, PLUGIN_FUNCTION_POINTS, type PluginFunctionInput, type PluginFunctionPoint, type PluginRunPoint } from "@scalius/shared/plugins";
-import type { PluginHost, PluginHostOptions } from "./host";
+import { writePluginNotices, type PluginHost, type PluginHostOptions } from "./host";
 import { prepareBuyerUiBlocks } from "./buyer-ui";
 import { BUYER_UI_BLOCKS_MAX, BUYER_UI_LINE_BLOCKS_MAX, BUYER_UI_RESPONSE_MAX_BYTES, type BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
 import { isStorefrontUiLineSlot, STOREFRONT_UI_SLOT_PAGES } from "@scalius/shared/plugins/storefront-protocol";
@@ -371,9 +371,14 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
       return pending;
     },
     report(pluginId, point, message) {
-      const write = writePluginLogs(options.db, pluginId, [{ level: "warn", source: `function:${point}`, message: message.slice(0, 500) }])
-        .catch(() => console.warn(`[plugins] ${pluginId} log write failed`));
-      if (options.ctx) options.ctx.waitUntil(write);
+      // Through the host's one notice limit: a line repeats on every cart check while its cause stays.
+      writePluginNotices({
+        db: options.db,
+        pluginId,
+        lines: [{ level: "warn", source: `function:${point}`, message }],
+        waitUntil: (work) => ctx.waitUntil(work),
+        write: (lines) => writePluginLogs(options.db, pluginId, lines).then(() => undefined),
+      });
     },
   };
   return runtime;

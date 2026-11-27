@@ -638,23 +638,17 @@ export class PluginHost {
    * storefront's incidents are), keeping its real incidents in its log.
    */
   notice(installation: PluginInstallation, source: string, messages: readonly string[], now = Date.now()): void {
-    const lines = messages.map((message) => ({ level: "warn" as const, source: "host", message: `${source}: ${message}`.slice(0, 500) }))
-      .filter((line) => {
-        const key = `${installation.pluginId}\n${line.message}`;
-        const last = recentNotices.get(key);
-        if (last !== undefined && now - last < PLUGIN_NOTICE_REPEAT_MS) return false;
-        if (recentNotices.size >= PLUGIN_NOTICES_REMEMBERED) recentNotices.clear();
-        recentNotices.set(key, now);
-        return true;
-      });
-    if (lines.length === 0) return;
-    this.ctx.waitUntil((async () => {
-      const fresh: PluginLogInput[] = [];
-      for (const line of lines) if (!(await hasRecentPluginLogLine(this.db, installation.pluginId, line, now - PLUGIN_NOTICE_REPEAT_MS))) fresh.push(line);
-      if (fresh.length === 0) return;
-      const { secrets } = await this.seed(installation, false);
-      await this.writeLogs(installation, fresh, secrets);
-    })().catch(() => console.warn(`[plugins] ${installation.pluginId} notice write failed`)));
+    writePluginNotices({
+      db: this.db,
+      pluginId: installation.pluginId,
+      lines: messages.map((message) => ({ level: "warn" as const, source: "host", message: `${source}: ${message}` })),
+      waitUntil: (work) => this.ctx.waitUntil(work),
+      write: async (fresh) => {
+        const { secrets } = await this.seed(installation, false);
+        await this.writeLogs(installation, fresh, secrets);
+      },
+      now,
+    });
   }
 
   private async writeLogs(installation: PluginInstallation, lines: PluginLogInput[], secrets: string[]): Promise<void> {
@@ -672,6 +666,41 @@ export const PLUGIN_NOTICE_REPEAT_MS = 60 * 60 * 1000;
 /** How many notice lines an isolate remembers before it starts over (its log check still holds across). */
 const PLUGIN_NOTICES_REMEMBERED = 1_000;
 const recentNotices = new Map<string, number>();
+
+/**
+ * The one way the host tells an app's log something a run did not fail on
+ * (a label drawn in the store's word, an add-on charged other than answered):
+ * each line (app, its source, its words) at most once per
+ * `PLUGIN_NOTICE_REPEAT_MS`, once per isolate by memory and across isolates
+ * by the app's log itself (`hasRecentPluginLogLine`), written after the
+ * request (`waitUntil`), never awaited by a checkout. A notice repeats on
+ * every run while its cause stays; without this limit it would write a row
+ * on every cart check and push the app's real incidents out of its log.
+ */
+export function writePluginNotices(input: {
+  db: Database;
+  pluginId: string;
+  lines: readonly PluginLogInput[];
+  waitUntil: (work: Promise<unknown>) => void;
+  write: (lines: PluginLogInput[]) => Promise<void>;
+  now?: number;
+}): void {
+  const now = input.now ?? Date.now();
+  const lines = input.lines.map((line) => ({ ...line, message: line.message.slice(0, 500) })).filter((line) => {
+    const key = `${input.pluginId}\n${line.source}\n${line.message}`;
+    const last = recentNotices.get(key);
+    if (last !== undefined && now - last < PLUGIN_NOTICE_REPEAT_MS) return false;
+    if (recentNotices.size >= PLUGIN_NOTICES_REMEMBERED) recentNotices.clear();
+    recentNotices.set(key, now);
+    return true;
+  });
+  if (lines.length === 0) return;
+  input.waitUntil((async () => {
+    const fresh: PluginLogInput[] = [];
+    for (const line of lines) if (!(await hasRecentPluginLogLine(input.db, input.pluginId, line, now - PLUGIN_NOTICE_REPEAT_MS))) fresh.push(line);
+    if (fresh.length > 0) await input.write(fresh);
+  })().catch(() => console.warn(`[plugins] ${input.pluginId} notice write failed`)));
+}
 
 /** Additional authority for provider operations and staff-invoked routes. */
 type BridgeMode = Pick<PluginBridgeProps, "provider" | "operator">;

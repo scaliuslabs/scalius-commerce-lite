@@ -58,7 +58,8 @@ import {
 } from "@scalius/shared/events";
 import { allProtectedData } from "@scalius/shared/plugins/protected-data";
 import { readDiscountRepresentations } from "./discount-representations";
-import { isLineInputEntry, LINE_ADJUSTMENT_PROPERTY_KEY, readLinePurchaseOptions, readOrderLineBundle, readOrderLineProperties } from "@scalius/shared/line-properties";
+import { isLineInputEntry, readLinePurchaseOptions, readOrderLineBundle, readOrderLineProperties } from "@scalius/shared/line-properties";
+import { buyerLineAddOns } from "@scalius/shared/add-on-folding";
 import { appScopedKeyAppId } from "@scalius/shared/plugins/ids";
 import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
 import { resolveOrderAppFacts, type OrderAppFactRow } from "@scalius/core/modules/order-kernel";
@@ -302,6 +303,7 @@ function orderDiscountApplications(orderId: string, allocationsJson: string | nu
 /** A line's frozen entries as the representation lists them: what the buyer entered, the apps' add-ons, its purchase options, its bundle. */
 function orderLineEntries(properties: string | null, quantity: number) {
   const entries = readOrderLineProperties(properties);
+  const bundle = readOrderLineBundle(properties, quantity);
   return {
     properties: entries.filter((entry) => isLineInputEntry(entry.key)).map((entry) => ({
       key: entry.key,
@@ -315,13 +317,10 @@ function orderLineEntries(properties: string | null, quantity: number) {
       // A choice the buyer agreed to: the agreement as shown and the revision agreed to.
       confirmation: entry.confirmation ? { text: entry.confirmation.text, revision: entry.revision ?? null } : null,
     })),
-    adjustments: entries.filter((entry) => entry.key === LINE_ADJUSTMENT_PROPERTY_KEY).map((entry) => ({
-      appId: entry.appId ?? null,
-      title: entry.displayValue,
-      amountMinor: entry.priceMinor,
-    })),
+    // The one add-on shape: exact totals, the amount per unit or per bundle unit when exact.
+    addOns: buyerLineAddOns([{ entries, quantity, bundle }], bundle).map(({ details: _details, ...addOn }) => addOn),
     purchaseOptions: readLinePurchaseOptions(entries),
-    bundle: readOrderLineBundle(properties, quantity),
+    bundle,
   };
 }
 

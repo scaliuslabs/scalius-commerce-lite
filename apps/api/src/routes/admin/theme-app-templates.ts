@@ -4,7 +4,6 @@
 // show left out. The dashboard's template switch and the app API's
 // `theme.apply_template` read it here, so both apply exactly the same theme.
 import {
-  STOREFRONT_DECLARATION_THEME_VERSION,
   resolveStorefrontAppTemplateTheme,
   storefrontAppTemplateCardFields,
   withStorefrontCardFields,
@@ -43,7 +42,7 @@ export async function readOfferedAppTemplate(db: Database, key: string, installa
     readThemeHandleLookup(db, [declared.theme]),
     readStorefrontCardFields(db, storefrontAppTemplateCardFields(declared.theme)),
   ]);
-  const read = resolveStorefrontAppTemplateTheme(declared.theme, declared.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION, lookup, parts.pluginId, parts.templateId);
+  const read = resolveStorefrontAppTemplateTheme(declared.theme, declared.themeVersion, lookup, parts.pluginId, parts.templateId);
   if (!read.ok) return { ok: false, reason: "unfit", problem: read.problem };
   // A card field the store has no storefront-visible product field for is left out.
   const { theme } = withStorefrontCardFields(read.value, (field) => cardFields.has(field));

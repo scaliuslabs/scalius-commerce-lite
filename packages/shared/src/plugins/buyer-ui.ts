@@ -118,7 +118,7 @@ export const lineInputDecisionSchema = z.object({
  * drawn by the buy form beside the merchant's inputs, edited from the cart,
  * part of the line's identity, seen by the app's functions and frozen on the
  * order line. Core prices nothing for it: the app adds to the line with
- * `cart.line_prices` adjustments. `products` shows it only on products whose
+ * `cart.line_prices` `addOns`. `products` shows it only on products whose
  * app custom field (a storefront-visible boolean product field the app
  * declares) is true; `variants` only on SKUs whose app field (a
  * storefront-visible boolean variant field) is true, a SKU's own value

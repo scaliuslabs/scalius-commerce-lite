@@ -1420,7 +1420,15 @@ export type StorefrontPrivatePages = {
             receipt?: string;
             account?: string;
         };
-        refused?: boolean;
+        refused?: {
+            cart?: Array<StorefrontPrivatePageRefusal>;
+            cartDrawer?: Array<StorefrontPrivatePageRefusal>;
+            checkout?: Array<StorefrontPrivatePageRefusal>;
+            receipt?: Array<StorefrontPrivatePageRefusal>;
+            account?: Array<StorefrontPrivatePageRefusal>;
+        };
+        policy?: number;
+        digest?: string;
     };
 };
 
@@ -1456,6 +1464,12 @@ export type StorefrontPrivateWords = {
 export type StorefrontPrivateAsset = {
     app: string;
     file: string;
+};
+
+export type StorefrontPrivatePageRefusal = {
+    path: string;
+    reason: string;
+    message: string;
 };
 
 export type StorefrontBrandImage = {
@@ -2400,6 +2414,10 @@ export type BuyerLineAddOn = {
      * From what the line froze: `bundle` for a kit's or an expanded bundle's add-on (on its anchor item's row), else `unit`.
      */
     per: 'unit' | 'bundle';
+    /**
+     * How many units (`per: unit`) or bundle units (`per: bundle`) the row holds; null when no longer known. `totalMinor = amountMinor × units` whenever `amountMinor` is a number.
+     */
+    units: number | null;
     details?: Array<string>;
 };
 
@@ -3875,10 +3893,13 @@ export type OrderResource = {
                 revision: string | null;
             } | null;
         }>;
-        adjustments: Array<{
+        addOns: Array<{
             appId: string | null;
             title: string;
-            amountMinor: number;
+            totalMinor: number;
+            amountMinor: number | null;
+            per: 'unit' | 'bundle';
+            units: number | null;
         }>;
         bundle?: {
             id: string;
@@ -26458,6 +26479,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                  * A kit line's items, in the kit's order: each one's name and option values in the page's language, its units in one kit and its picture. Null on any other line.
                  */
                 kitItems: Array<KitItem> | null;
+                /**
+                 * A kit or an app's bundle sold as one line: its quantity is bundle units and its `adjustments` are each once per bundle unit.
+                 */
+                bundle: boolean;
             }>;
             subtotal: number;
             /**
@@ -59501,6 +59526,11 @@ export type GetApiV1AdminSettingsThemeEditorResponses = {
             published: {
                 theme: StorefrontThemeDocument;
                 revision: number;
+                unreadable: string | null;
+                repairs: Array<{
+                    path: string;
+                    reason: string;
+                }>;
             };
             draft: {
                 revision: number;

@@ -234,6 +234,9 @@ const cartValidationRoute = createRoute({
               kitItems: z.array(kitItemSchema).max(KIT_ITEMS_MAX).nullable().openapi({
                 description: "A kit line's items, in the kit's order: each one's name and option values in the page's language, its units in one kit and its picture. Null on any other line.",
               }),
+              bundle: z.boolean().openapi({
+                description: "A kit or an app's bundle sold as one line: its quantity is bundle units and its `adjustments` are each once per bundle unit.",
+              }),
             })),
             subtotal: z.number(),
             addOns: addOnTotalsSchema,

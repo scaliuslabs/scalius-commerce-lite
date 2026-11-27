@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { storefrontAppKeySchema, storefrontAppValuesSchema, storefrontSkinRefSchema } from "./apps";
 import { atLeast, type FitCondition } from "./fit";
-import { storefrontLinkSchema } from "./links";
+import { STOREFRONT_INVALID_LINK, isStorefrontThemeLinkPath, storefrontLinkSchema } from "./links";
 import { storefrontSettingBindingsSchema } from "./bindings";
 import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-field-keys";
 import { parseNavigationHref } from "../navigation-href";
@@ -44,9 +44,14 @@ const heading = z.string().trim().max(120);
 const recordId = z.string().trim().min(1).max(64);
 const mediaId = recordId.nullable();
 /** A same-store path or an https URL. */
+const HREF_SHAPE = /^(\/(?!\/)\S*|https:\/\/\S+)$/;
 const href = z.string().trim().max(300)
-  .regex(/^(\/(?!\/)\S*|https:\/\/\S+)$/, "Use a store path or an https:// link.")
-  .refine((value) => parseNavigationHref(value).ok, "Use a store path or an https:// link without credentials or backslashes.");
+  // One check with its reason (a read of a stored one reads it as no link); the shape still reads as the JSON Schema's pattern.
+  .refine((value) => HREF_SHAPE.test(value) && parseNavigationHref(value).ok && (!value.startsWith("/") || isStorefrontThemeLinkPath(value.split(/[?#]/)[0]!)), {
+    message: "Use a page of this store, an app's page (/apps/…) or an https:// link, without credentials or backslashes: never /api or /_ paths.",
+    params: { reason: STOREFRONT_INVALID_LINK },
+  })
+  .meta({ pattern: HREF_SHAPE.source });
 /** Ids a section names (categories, collections): unique, in the merchant's order. */
 const idList = (max: number, what: string) =>
   z.array(recordId).max(max).refine((ids) => new Set(ids).size === ids.length, `Each ${what} appears once.`);

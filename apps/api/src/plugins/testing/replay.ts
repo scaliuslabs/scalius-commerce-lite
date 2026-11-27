@@ -29,7 +29,6 @@ import {
   checkStorefrontAppTemplateTheme,
   checkStorefrontPagePresetSections,
   DEFAULT_STOREFRONT_THEME,
-  STOREFRONT_DECLARATION_THEME_VERSION,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { checkStorefrontThemeSave, type StorefrontThemeSaveIssue } from "@scalius/shared/storefront-theme/save";
@@ -88,7 +87,7 @@ export function replayTheme(manifest: PluginManifest): ReplayTheme {
   const templates: Record<string, ReplayVerdict> = {};
   let applied: StorefrontThemeDocument | null = null;
   for (const template of manifest.storefront.templates) {
-    const read = checkStorefrontAppTemplateTheme(template.theme, template.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION, manifest.id, template.id);
+    const read = checkStorefrontAppTemplateTheme(template.theme, template.themeVersion, manifest.id, template.id);
     if (!read.ok) {
       templates[template.id] = [`does not fit: ${read.problem}`, ...issueLines(read.issues)];
       continue;
@@ -104,7 +103,7 @@ export function replayTheme(manifest: PluginManifest): ReplayTheme {
   }
   const pagePresets: Record<string, ReplayVerdict> = {};
   for (const preset of manifest.storefront.pagePresets) {
-    const read = checkStorefrontPagePresetSections(preset.sections, preset.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
+    const read = checkStorefrontPagePresetSections(preset.sections, preset.themeVersion);
     pagePresets[preset.id] = read.ok ? `fits (${read.value.length} sections)` : [`does not fit: ${read.problem}`, ...issueLines(read.issues)];
   }
   return { templates, pagePresets, applied: applied ?? DEFAULT_STOREFRONT_THEME };

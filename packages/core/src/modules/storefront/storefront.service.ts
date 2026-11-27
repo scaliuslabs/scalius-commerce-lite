@@ -57,6 +57,7 @@ import {
   HOME_MAX_MEDIA,
   homeSectionRequests,
   parseStoredStorefrontThemeDocument,
+  storefrontRenderPrivatePages,
   productComponentRequests,
   storefrontThemeTextOf,
   translateStorefrontTheme,
@@ -822,7 +823,9 @@ export async function getLayoutData(
   if (themeRow && !publishedTheme) {
     console.warn("[Storefront] Published theme is unreadable; rendering the default theme.");
   }
-  const storefrontTheme = publishedTheme ?? DEFAULT_STOREFRONT_THEME;
+  // The storefront is sent the pages it serves (`storefrontRenderPrivatePages`): a storefront one release older reads it too.
+  const readTheme = publishedTheme ?? DEFAULT_STOREFRONT_THEME;
+  const storefrontTheme = { ...readTheme, privatePages: storefrontRenderPrivatePages(readTheme.privatePages) };
   const { brand, skinMedia } = brandMedia.resolve(brandMediaRows, themeRow?.value, storefrontTheme.brand);
   // Apps with storefront components (sections, slots, islands, stylesheet).
   // The apps' buyer words in the page's language, falling back to the store's (`translationChain()`).

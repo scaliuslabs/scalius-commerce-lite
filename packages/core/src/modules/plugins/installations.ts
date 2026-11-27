@@ -215,9 +215,32 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
  *    `storefront.extensions` entry per target, with the function's reads.
  * 3. Before admin nesting: top-level `timeline` and `settingsGroups` move to
  *    `admin.timeline` and `admin.settingsGroups`.
+ * 4. Before `themeVersion` was required: a template or page preset that does
+ *    not state it was written for theme document version 10, as it was read
+ *    when it was installed.
  */
 export function upgradeStoredPluginManifest(manifest: Record<string, unknown>): Record<string, unknown> {
-  return nestAdminParts(buyerUiAsExtensions(permissionsAsScopes(manifest)));
+  return statedThemeVersions(nestAdminParts(buyerUiAsExtensions(permissionsAsScopes(manifest))));
+}
+
+/** The theme document version a stored template or preset without one was read at (`themeVersion` was optional then). */
+const STORED_DECLARATION_THEME_VERSION = 10;
+
+function statedThemeVersions(manifest: Record<string, unknown>): Record<string, unknown> {
+  const storefront = manifest.storefront;
+  if (!isObject(storefront)) return manifest;
+  const stated = (list: unknown) => Array.isArray(list)
+    ? list.map((entry) => isObject(entry) && entry.themeVersion === undefined ? { ...entry, themeVersion: STORED_DECLARATION_THEME_VERSION } : entry)
+    : list;
+  if (!Array.isArray(storefront.templates) && !Array.isArray(storefront.pagePresets)) return manifest;
+  return {
+    ...manifest,
+    storefront: {
+      ...storefront,
+      ...(Array.isArray(storefront.templates) ? { templates: stated(storefront.templates) } : {}),
+      ...(Array.isArray(storefront.pagePresets) ? { pagePresets: stated(storefront.pagePresets) } : {}),
+    },
+  };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
