@@ -349,7 +349,10 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         if (!compiled.ok) return sendJson(response, 422, { issues: compiled.issues.slice(0, 5) });
         // A look an older checker compiled (`stale`: between a deploy and the maintenance compile): the page serves the default look.
         if (body.stale === true) compiled.value.compiled = { ...compiled.value.compiled, sanitizer: 0 };
-        const stored = { ...theme, privatePages: body.forged ? { ...compiled.value, ...structuredClone(body.forged) } : compiled.value };
+        // Stamped with the compile's fingerprint as the save stamps it (save.ts), then, for a forged row, edited by hand past
+        // it: the read serves no look whose fingerprint no longer matches what it was made from.
+        const signed = shared.withPrivatePagesDigest({ ...theme, privatePages: compiled.value });
+        const stored = body.forged ? { ...signed, privatePages: { ...signed.privatePages, ...structuredClone(body.forged) } } : signed;
         // The stored document as the store reads it (storefront.service.ts, `readStoredStorefrontThemeDocument`): one it
         // cannot read serves the default theme whole; the storefront draws what that read served.
         const reread = shared.readStoredStorefrontThemeDocument(JSON.stringify(stored));
@@ -360,7 +363,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const drawnPage = { "sample-receipt": "receipt", "sample-account": "account", "sample-checkout": "checkout" }[body.page] ?? "cart";
         const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, terms: body.terms === true, ...(body.page === "home" || drawnPage !== "cart" ? { page: body.page } : {}) });
         const tables = shared.privatePageTokenMode(served.privatePages, drawnPage) ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served), drawnPage) : [];
-        return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: Boolean(served.privatePages.compiled.refused?.[drawnPage]) });
+        return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: Boolean(served.privatePages.compiled.refused?.[drawnPage]) || (shared.privatePagesCompiledCurrent(compiled.value) && !shared.privatePagesCompiledCurrent(served.privatePages)) });
       }
       // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens), and the
       // app node kinds that have rows (their selectors inside a block).

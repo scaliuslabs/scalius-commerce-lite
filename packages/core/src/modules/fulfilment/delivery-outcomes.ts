@@ -42,6 +42,7 @@ import {
   type StatusUpdateResult,
 } from "../orders";
 import { buildOrderNotificationOutboxInsert } from "../notifications";
+import { shipmentMove } from "../delivery";
 
 /**
  * Records a cash on delivery outcome. Collected and returned write their
@@ -242,7 +243,9 @@ const COURIER_RETURN_REASON = "Returned by the courier";
  * Own-courier parcels follow what the merchant records for the order, so the
  * list, the detail page and the export agree: a failed attempt fails every
  * parcel still out, and a return to sender returns every parcel not delivered
- * (R2-ORD-05). Courier-booked parcels keep the courier's own status.
+ * (R2-ORD-05). Staff are those parcels' courier, so each is a courier report
+ * of the shipment machine: a settled parcel keeps its state. Courier-booked
+ * parcels keep the courier's own status.
  */
 async function setOpenOwnCourierParcels(
     db: Database,
@@ -257,19 +260,16 @@ function openOwnCourierParcelsUpdate(
     orderId: string,
     status: typeof ShipmentStatus.DELIVERY_FAILED | typeof ShipmentStatus.RETURNED,
 ) {
-    const settled = status === ShipmentStatus.RETURNED
-        ? [ShipmentStatus.DELIVERED, ShipmentStatus.RETURNED, ShipmentStatus.CANCELLED, ShipmentStatus.FAILED]
-        : [ShipmentStatus.DELIVERED, ShipmentStatus.RETURNED, ShipmentStatus.CANCELLED, ShipmentStatus.FAILED, ShipmentStatus.DELIVERY_FAILED];
-    return db.update(deliveryShipments).set({
-        status,
-        rawStatus: status,
-        updatedAt: sql`unixepoch()`,
-    }).where(and(
+    return shipmentMove(db, status, "courier", and(
         eq(deliveryShipments.orderId, orderId),
         eq(deliveryShipments.providerType, "manual"),
         sql`${deliveryShipments.providerId} IS NULL`,
-        notInArray(deliveryShipments.status, settled),
-    ));
+        // A parcel already there is not written again, and a delivered one is
+        // not returned with the rest (a correction is a courier's, not this
+        // order-wide record). Own-courier parcels are never partly delivered:
+        // nothing writes that for them.
+        notInArray(deliveryShipments.status, [status, ShipmentStatus.DELIVERED]),
+    ), { rawStatus: status });
 }
 
 /**

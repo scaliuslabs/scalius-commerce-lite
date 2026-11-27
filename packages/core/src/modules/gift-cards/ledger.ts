@@ -10,6 +10,7 @@
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { paymentMove } from "../order-kernel";
 import { chunkForD1, type Database } from "@scalius/database/client";
 import { giftCards, giftCardTransactions, orderPayments } from "@scalius/database/schema";
 import { paymentSettlement, presentedSettlement } from "@scalius/shared/money-chain";
@@ -250,12 +251,7 @@ export function buildGiftCardReleaseStatements(
             orderPaymentId: tender.orderPaymentId,
             reason: input.reason ?? null,
         }));
-        statements.push(db.update(orderPayments)
-            .set({ status: "refunded", updatedAt: sql`unixepoch()` })
-            .where(and(
-                eq(orderPayments.id, tender.orderPaymentId),
-                eq(orderPayments.status, "succeeded"),
-            )) as unknown as Statement);
+        statements.push(paymentMove(db, "released", eq(orderPayments.id, tender.orderPaymentId)) as unknown as Statement);
         releasedMinor += tender.amountMinor;
     }
     return { statements, releasedMinor };

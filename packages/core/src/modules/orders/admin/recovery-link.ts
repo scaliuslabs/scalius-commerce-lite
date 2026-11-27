@@ -12,6 +12,7 @@ import {
 } from "@scalius/database/schema";
 import { type PaymentProviders, paymentProvidersFor, type PaymentProvidersSource } from "../../payments";
 import { eq } from "drizzle-orm";
+import { PAYMENT_HOLDING_STATUSES } from "@scalius/shared/payment-record-state";
 import { fromMinor } from "@scalius/shared/money";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import type { OrderPaymentRecoverySummary } from "../types";
@@ -159,11 +160,7 @@ async function resolveOrderPaymentRecoveryPreview(
         throw new ValidationError("Order has no recoverable hosted payment issue.");
     }
 
-    const hasUnsafePaymentEvidence = paymentRows.some((payment) =>
-        payment.status === PaymentRecordStatus.PENDING ||
-        payment.status === PaymentRecordStatus.CONFIRMED || payment.status === PaymentRecordStatus.AUTHORIZED ||
-        payment.status === PaymentRecordStatus.SUCCEEDED
-    );
+    const hasUnsafePaymentEvidence = paymentRows.some((payment) => (PAYMENT_HOLDING_STATUSES as readonly string[]).includes(payment.status));
     if (hasUnsafePaymentEvidence) {
         throw new ValidationError("Order has payment activity that must be reconciled before issuing a recovery link.");
     }

@@ -7032,7 +7032,7 @@
          "expectedStockVersion": {
           "type": "integer",
           "minimum": 0,
-          "description": "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to apply whatever happened since."
+          "description": "The SKU's stockVersion you read. Any stock change since is refused with 409 `stock_version_conflict` and nothing changes. Omit it to act on the stock as it is."
          }
         },
         "required": [
@@ -7158,7 +7158,7 @@
          "expectedStockVersion": {
           "type": "integer",
           "minimum": 0,
-          "description": "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to set the count whatever happened since."
+          "description": "The SKU's stockVersion you read. Any stock change since is refused with 409 `stock_version_conflict` and nothing changes. Omit it to act on the stock as it is."
          }
         },
         "required": [
@@ -8453,7 +8453,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+          "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
          }
         },
         "additionalProperties": false
@@ -8554,7 +8554,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409. Omit to mark it whatever happened since."
+          "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
          }
         },
         "additionalProperties": false
@@ -8635,7 +8635,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+          "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
          }
         },
         "additionalProperties": false
@@ -8789,7 +8789,8 @@
             "late_payment",
             "payment_dispute",
             "delivery_message",
-            "terms_accepted"
+            "terms_accepted",
+            "courier_report"
            ]
           },
           "body": {
@@ -8916,7 +8917,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
+          "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
          }
         },
         "required": [
@@ -15466,7 +15467,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision."
+          "description": "The order `revision` you read; a change since is refused with 409 `order_revision_conflict` and the hold stays. Releasing a released hold answers it again whatever the revision."
          }
         },
         "required": [
@@ -15962,7 +15963,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order `revision` you read; a different one is refused with 409 before the provider is called."
+          "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
          }
         },
         "required": [
@@ -16128,7 +16129,11 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order `revision` you read; a different one is refused with 409."
+          "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
+         },
+         "allowOpenAttempt": {
+          "type": "boolean",
+          "description": "Record it, for the amount given, even though the buyer has a payment page open for the order that could still be paid: the order's open payment pages are cancelled at their provider in the same write, whether or not one was open when you read the order. If the buyer still pays on one, that payment is applied to what the order then owes when it is exactly that; on an order already paid in full it is refunded automatically (a late payment, with a timeline line; the order shows it as received until the refund lands); any other amount is left on the order for staff to reconcile, never counted. Without it, an open page (one the buyer touched within the last 24 hours, or a provider still processing a payment on one), or a payment being set up or charged right now, refuses the payment with 409 `payment_in_progress` (`details.paymentAttemptId`, `details.status`); one being set up or charged is refused either way."
          }
         },
         "required": [
@@ -21114,15 +21119,28 @@
          "options": {
           "type": "object",
           "properties": {
-           "deliveryType": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 1000000
-           },
-           "itemType": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 1000000
+           "bookingOptions": {
+            "type": "object",
+            "additionalProperties": {
+             "anyOf": [
+              {
+               "type": "string",
+               "maxLength": 200
+              },
+              {
+               "type": "number"
+              },
+              {
+               "type": "boolean"
+              }
+             ]
+            },
+            "maxProperties": 10,
+            "propertyNames": {
+             "type": "string",
+             "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+            },
+            "description": "The courier's own booking choices, by the keys its manifest declares (`bookingOptions`): at most 10, each a string, number or boolean within the declaration. A key it does not declare, or a value outside it, refuses the booking before anything is written."
            },
            "itemWeight": {
             "type": "number",
@@ -23803,8 +23821,6 @@
             "object.created",
             "object.updated",
             "object.deleted",
-            "customer.redact_requested",
-            "customer.data_requested",
             "customer.erased",
             "conversation.message_received",
             "payout.created",
@@ -23816,7 +23832,7 @@
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 66
+          "maxItems": 100
          },
          "description": {
           "type": "string",
@@ -24156,8 +24172,6 @@
             "object.created",
             "object.updated",
             "object.deleted",
-            "customer.redact_requested",
-            "customer.data_requested",
             "customer.erased",
             "conversation.message_received",
             "payout.created",
@@ -24169,7 +24183,7 @@
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 66
+          "maxItems": 100
          },
          "description": {
           "type": "string",
@@ -26080,7 +26094,7 @@
        },
        "code": {
         "type": "string",
-        "description": "price_changed, price_not_positive, stock_changed, below_reserved, not_found, retired, digital_stock, not_physical, revision_changed or needs_price."
+        "description": "price_changed, price_not_positive, stock_version_conflict, below_reserved, not_found, retired, digital_stock, not_physical, product_revision_conflict or needs_price: a stale read has the name the single writes answer with."
        }
       },
       "required": [
@@ -31038,7 +31052,6 @@
      "type": "string",
      "enum": [
       "pending",
-      "confirmed",
       "succeeded",
       "failed",
       "refunded",
@@ -32366,7 +32379,6 @@
       "returned",
       "unknown",
       "creating",
-      "processing",
       "reconcile_required"
      ]
     },

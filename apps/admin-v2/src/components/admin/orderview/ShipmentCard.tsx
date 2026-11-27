@@ -20,7 +20,6 @@ import { useHydrated } from "~/hooks/use-hydrated";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { formatNumber, useMessages } from "~/i18n";
 import { orderDetailLabel, orderDetailMessages, shipmentRecoveryCopy } from "~/i18n/order-detail";
-import { resourceMessages } from "~/i18n/resource";
 import {
   orderErrorMessage,
   useCreateOrderShipment,
@@ -35,6 +34,7 @@ import { formatSavedMajorAmount } from "~/lib/order-money-format";
 import { queryKeys } from "~/lib/query-keys";
 import { cn } from "@scalius/shared/utils";
 import { getOrderItemName } from "./order-returns/shared";
+import { CourierReportApply } from "./CourierReportApply";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { formatCurrencyAmount, formatOrderDate } from "./formatters";
 import type { Order, OrderFulfillment, OrderItem, OrderShipment } from "./types";
@@ -133,6 +133,44 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
           ) : null}
         </div>
       ) : null}
+      {canManage && blocking && recovery.reason === "courier_report" && recovery.courierReport ? (
+        <CourierReportDecision
+          report={recovery.courierReport}
+          pending={repairMutation.isPending}
+          decide={(courierReport) => repairMutation.mutate({
+            orderId: order.id,
+            shipmentId,
+            courierReport,
+            report: { status: recovery.courierReport!.reportedStatus, rawStatus: recovery.courierReport!.rawStatus },
+          })}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A courier's report the shipment is held for: staff apply it (after a
+ * confirmation that names what it does to the order and its stock) or keep
+ * the shipment as it was.
+ */
+function CourierReportDecision({ report, pending, decide }: {
+  report: { previousStatus: string; reportedStatus: string; rawStatus: string };
+  pending: boolean;
+  decide: (courierReport: "apply" | "keep") => void;
+}) {
+  const t = useMessages(orderDetailMessages);
+  const reported = orderDetailLabel(t, "courierReport.state.", report.reportedStatus);
+  const previous = orderDetailLabel(t, "courierReport.state.", report.previousStatus);
+  return (
+    <div className="space-y-2">
+      <p className="text-muted-foreground">{t("courierReport.saw", { reported, previous, words: report.rawStatus })}</p>
+      <div className="flex flex-wrap gap-2">
+        <CourierReportApply reportedStatus={report.reportedStatus} pending={pending} apply={() => decide("apply")} />
+        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => decide("keep")}>
+          {t("courierReport.keep", { previous })}
+        </Button>
+      </div>
     </div>
   );
 }

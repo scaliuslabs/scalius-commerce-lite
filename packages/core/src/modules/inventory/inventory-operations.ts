@@ -6,9 +6,11 @@ import {
   productVariants,
 } from "@scalius/database/schema";
 import {
+  AppError,
   ConflictError,
   NotFoundError,
   ServiceUnavailableError,
+  StockVersionConflictError,
   ValidationError,
 } from "@scalius/core/errors";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -200,7 +202,7 @@ export async function executeInventoryOperation(
     const { variant } = state;
     if (!variant) throw new NotFoundError("Variant not found");
     if (input.expectedStockVersion !== undefined && variant.stockVersion !== input.expectedStockVersion) {
-      throw new ConflictError("This SKU's stock changed since you read it. Read it again, then retry.");
+      throw new StockVersionConflictError();
     }
     const locationPreviousStock = located?.onHand;
 
@@ -543,9 +545,7 @@ function replayInventoryOperation(
   requestHash: string,
 ): InventoryOperationResult {
   if (row.requestHash !== requestHash) {
-    throw new ConflictError(
-      "This inventory operation key was already used for a different request",
-    );
+    throw new AppError(422, "idempotency_key_reused", "This request key was already used for a different request. Use a new key.");
   }
 
   try {

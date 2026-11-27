@@ -30,6 +30,7 @@ import {
   warrantyPolicyRevisions,
 } from "@scalius/database/schema";
 import {
+  WARRANTY_CLAIM_MACHINE,
   WARRANTY_CLAIM_RESOLUTIONS,
   isWarrantyClaimResolution,
   isWarrantyClaimStatus,
@@ -43,7 +44,7 @@ import {
 import { CONVERSATION_LIMITS, normalizeConversationBody } from "@scalius/shared/conversation";
 import { and, desc, eq, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { ConflictError, NotFoundError, ValidationError } from "../../errors";
+import { ConflictError, NotFoundError, StateConflictError, ValidationError } from "../../errors";
 import {
   sendConversationNotifications,
   planConversationAppend,
@@ -486,6 +487,12 @@ export async function updateWarrantyClaim(
   const closing = input.status === "resolved" || input.status === "rejected";
   const now = nowSeconds();
   const changed = claim.status !== input.status || (claim.resolution ?? null) !== resolution;
+  // A new status is a move of the claim machine (staff may move a claim from any state to any other);
+  // the same status with another resolution or a reply is no move.
+  const move = claim.status === input.status ? null : WARRANTY_CLAIM_MACHINE.moves[input.status];
+  if (move && !WARRANTY_CLAIM_MACHINE.can(claim.status, input.status)) {
+    throw new StateConflictError(WARRANTY_CLAIM_MACHINE, claim.status, input.status);
+  }
 
   for (let attempt = 1; attempt <= APPEND_ATTEMPTS; attempt += 1) {
     const thread = await readThread(db, claim.conversationId);
@@ -523,7 +530,11 @@ export async function updateWarrantyClaim(
           closedAt: closing ? (claim.closedAt ?? now) : null,
           version: sql`${warrantyClaims.version} + 1`,
           updatedAt: now,
-        }).where(and(eq(warrantyClaims.id, claimId), eq(warrantyClaims.version, input.version))),
+        }).where(and(
+          eq(warrantyClaims.id, claimId),
+          eq(warrantyClaims.version, input.version),
+          move ? inArray(warrantyClaims.status, [...move.from]) : eq(warrantyClaims.status, input.status),
+        )),
         ...plan.statements,
       ] as unknown as readonly BatchStatement[]);
       await sendConversationNotifications(options.send, plan.outboxIds);

@@ -40,8 +40,10 @@ import {
   validateTransition,
   shipmentClaimShipmentStatusSql,
 } from "../../order-kernel";
-import { sql, eq, and, inArray, type SQL } from "drizzle-orm";
-import { AppError, NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
+import { sql, eq, and, inArray, ne, type SQL } from "drizzle-orm";
+import { shipmentMove } from "../../delivery";
+import { PAYMENT_HOLDING_STATUSES } from "@scalius/shared/payment-record-state";
+import { AppError, NotFoundError, ValidationError, ConflictError, OrderRevisionConflictError } from "@scalius/core/errors";
 import {
     canProcessOrderCodAction,
     normalizeOrderStatus,
@@ -143,11 +145,7 @@ function giftCardOnlyCancellationPaymentCondition(orderId: string, paidAmountMin
             SELECT 1 FROM ${orderPayments}
             WHERE ${orderPayments.orderId} = ${orderId}
               AND ${orderPayments.paymentMethod} <> ${GIFT_CARD_PAYMENT_METHOD}
-              AND ${orderPayments.status} IN (
-                  ${PaymentRecordStatus.PENDING},
-                  ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED},
-                  ${PaymentRecordStatus.SUCCEEDED}
-              )
+              AND ${inArray(orderPayments.status, [...PAYMENT_HOLDING_STATUSES])}
         )
         AND ${paidAmountMinor} = (
             SELECT coalesce(sum(${orderPayments.amountMinor}), 0) FROM ${orderPayments}
@@ -256,22 +254,15 @@ export async function markManualDeliveryEvidence(
 
 /** `markManualDeliveryEvidence` as a statement for the delivered status's own batch. */
 export function manualDeliveryEvidenceUpdate(db: Database, orderId: string): SQLiteBatchItem {
-    return db.update(deliveryShipments).set({
-        status: ShipmentStatus.DELIVERED,
-        rawStatus: ShipmentStatus.DELIVERED,
-        updatedAt: sql`unixepoch()`,
-    }).where(and(
+    // Staff are the parcel's courier: a courier report of the shipment machine,
+    // so a parcel that failed once and was delivered on the next try is
+    // delivered, and a settled one keeps its state.
+    return shipmentMove(db, ShipmentStatus.DELIVERED, "courier", and(
         eq(deliveryShipments.orderId, orderId),
         eq(deliveryShipments.providerType, "manual"),
         sql`${deliveryShipments.providerId} IS NULL`,
-        // A parcel that failed once and was delivered on the next try is delivered.
-        sql`${deliveryShipments.status} NOT IN (
-            ${ShipmentStatus.DELIVERED},
-            ${ShipmentStatus.RETURNED},
-            ${ShipmentStatus.CANCELLED},
-            ${ShipmentStatus.FAILED}
-        )`,
-    )) as SQLiteBatchItem;
+        ne(deliveryShipments.status, ShipmentStatus.DELIVERED),
+    ), { rawStatus: ShipmentStatus.DELIVERED }) as SQLiteBatchItem;
 }
 
 export async function getRecordedCodCollection(
@@ -510,7 +501,7 @@ async function attemptOrderStatusChange(
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
     if (data?.expectedVersion !== undefined && existingOrder.version !== data.expectedVersion) {
-        throw new ConflictError(ORDER_CHANGED_MESSAGE);
+        throw new OrderRevisionConflictError(ORDER_CHANGED_MESSAGE);
     }
     const currentStatus = normalizeOrderStatus(existingOrder.status);
     if (!currentStatus) {
@@ -697,10 +688,11 @@ async function attemptOrderStatusChange(
             db.select({ id: orders.id }).from(orders).where(casCondition),
         ] as const);
         if (!now[0]) throw new NotFoundError("Order not found");
-        if (before ? now[0].version !== existingOrder.version : changed && casHolds.length === 0) {
-            throw new ConflictError(ORDER_CHANGED_MESSAGE);
-        }
+        // A caller that named the revision it read hears that it is stale, whichever write moved it.
         if (data?.expectedVersion !== undefined && now[0].version !== data.expectedVersion) {
+            throw new OrderRevisionConflictError(ORDER_CHANGED_MESSAGE);
+        }
+        if (before ? now[0].version !== existingOrder.version : changed && casHolds.length === 0) {
             throw new ConflictError(ORDER_CHANGED_MESSAGE);
         }
         throw new StockMovedDuringStatusChange();

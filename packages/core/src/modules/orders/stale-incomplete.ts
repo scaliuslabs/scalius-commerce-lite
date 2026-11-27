@@ -1,4 +1,5 @@
 import { and, asc, eq, getTableColumns, gt, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { PAYMENT_HOLDING_STATUSES } from "@scalius/shared/payment-record-state";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
     abandonedCheckouts,
@@ -55,7 +56,7 @@ const STALE_INCOMPLETE_PAYMENT_STATUSES: RecoverableStalePaymentStatus[] = [
 const noActivePaymentClaimCondition = sql`NOT EXISTS (
     SELECT 1 FROM ${orderPayments}
     WHERE ${orderPayments.orderId} = ${orders.id}
-      AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.AUTHORIZED}, ${PaymentRecordStatus.SUCCEEDED})
+      AND ${inArray(orderPayments.status, [...PAYMENT_HOLDING_STATUSES])}
       AND ${orderPayments.paymentMethod} <> ${GIFT_CARD_PAYMENT_METHOD}
 )`;
 

@@ -13,6 +13,13 @@ import { APP_ERROR_CODES } from "./app-errors";
 import * as protocol from "./storefront-protocol";
 import { PLUGIN_UI_SURFACES, pluginUiDocumentSchema } from "./ui";
 import { contractTables } from "./contract-tables";
+import type { AnyMachine } from "../machine";
+import { COD_MACHINE, ORDER_MACHINE } from "../order-state";
+import { REVIEW_MACHINE } from "../reviews";
+import { SHIPMENT_MACHINE } from "../shipment-state";
+import { PAYMENT_MACHINE, REFUND_RECORD_MACHINE } from "../payment-record-state";
+import { WARRANTY_CLAIM_MACHINE } from "../warranty";
+import { OBJECT_RECORD_MACHINE } from "./object-status";
 
 const schema = (value: z.ZodType, io: "input" | "output" = "input") => z.toJSONSchema(value, { io });
 const port = (value: { input: z.ZodType; output: z.ZodType }) => ({ input: schema(value.input), output: schema(value.output, "output") });
@@ -24,6 +31,35 @@ function portsOfTier(tier: "stable" | "beta") {
     .map(([name, operations]) => [name,
       Object.fromEntries(Object.entries(operations).map(([operation, value]) => [operation, port(value)])),
     ]));
+}
+
+/**
+ * The machines of every state an app sees or moves, as the SDK exports them:
+ * their states and moves only grow (abi-compat `machineBreaks`), so an app's
+ * copy never refuses a move the platform makes, and the platform never
+ * refuses one an app relied on.
+ */
+const APP_MACHINES: Readonly<Record<string, AnyMachine>> = {
+  order: ORDER_MACHINE,
+  cod: COD_MACHINE,
+  shipment: SHIPMENT_MACHINE,
+  payment: PAYMENT_MACHINE,
+  refund_record: REFUND_RECORD_MACHINE,
+  warranty_claim: WARRANTY_CLAIM_MACHINE,
+  object_record: OBJECT_RECORD_MACHINE,
+  review: REVIEW_MACHINE,
+};
+
+/** A machine as data: its states and each move's sources, target and actors. */
+function machineSeal(machine: AnyMachine) {
+  return {
+    states: [...machine.states],
+    initial: [...machine.initial],
+    final: [...machine.final],
+    moves: Object.fromEntries(Object.entries(machine.moves).flatMap(([name, move]) => move
+      ? [[name, { from: [...move.from], to: move.to, ...(move.by ? { by: [...move.by] } : {}) }]]
+      : [])),
+  };
 }
 
 /** The strict manifest JSON Schema. */
@@ -52,6 +88,7 @@ export function protocolSeal() {
       .map(([name, value]) => [name, value instanceof RegExp ? value.source : value])),
     // Host CSS variables and hooks, the skin HTML allow-list, app limits, store words, delivery (contract-tables.ts).
     tables: contractTables(),
+    machines: Object.fromEntries(Object.entries(APP_MACHINES).map(([name, machine]) => [name, machineSeal(machine)])),
   };
 }
 

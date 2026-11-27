@@ -17,6 +17,7 @@ import {
   isRefundChangeWaitingForRefundError,
   listObservedRefunds,
   cancelDueSessions,
+  expireIdleSessions,
   isDisputeWaitingForRefundError,
   listDuePaymentCommands,
   markSessionProcessing,
@@ -125,6 +126,8 @@ export async function applyClaimedPaymentEvent(
 export async function drainPaymentEvents(db: Database, env: Env, ctx: ExecutionContext): Promise<{ scanned: number; processed: number }> {
   const events = await drainDuePaymentEvents(db, env, ctx);
   const commands = await reconcileDuePaymentCommands(db, env, ctx);
+  // A placed order's payment page the buyer left idle is closed like a replaced one.
+  await expireIdleSessions(db, planLimits().background.paymentEventsPerDrain);
   const sessions = await cancelDueSessions(db, paymentCommandDeps(db, env, ctx), planLimits().background.paymentEventsPerDrain);
   return {
     scanned: events.scanned + commands.scanned + sessions.scanned,

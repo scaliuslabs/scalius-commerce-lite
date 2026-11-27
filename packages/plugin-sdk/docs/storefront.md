@@ -181,7 +181,7 @@ Sections, components and skins use the app settings types (`text`, `textarea`, `
 | `image` | a media id | `StorefrontImage` (`url`, `width`, `height`, `alt`, `srcset`) or `null` |
 | `products` (`limit` up to 36) | a source: `newest`, `on-sale`, `popular`, `collection:<id>` or `category:<id>` | up to `limit` `StorefrontProductCard`s, priced in the buyer's market |
 | `product` | a product id | one card or `null` |
-| `link` | a store path or an `https://` URL | the string |
+| `link` | a page of this store (`/collections/new`, `/apps/<id>/…`; never `/api`, a `/_` or `/~` path or a backslash) or an `https://` URL | the string; a value or default an older release took that this rule refuses reads as none (a list item keeps its other fields) |
 | `list` (`fields` up to 12, `max` up to 24, `itemLabel`) | items of the fields above (no products, no lists) | items with their images resolved |
 
 - Values resolve against the schema as it is now: a removed setting drops, a new one takes its default, a deleted image or product resolves to `null`.
@@ -559,6 +559,42 @@ Every hook on this page that holds is in the store's sealed list `STOREFRONT_HOS
 - It posts to the store's cash-on-delivery pipeline: stock, prices, the delivery quote, checkout functions and the order commit are the store's.
 - It renders only for products a form can order (active, in stock, no customization, not a gift card). When the store cannot take the order there, buyers get a link to the product page and the editor's preview says why.
 - Restyle it through `.scalius-order-form` and its parts; `--of-radius`, `--of-line` and `--of-focus` change the basics.
+
+## Value lists you read
+
+Every list of values a skin or a component reads may gain members in any release ([the rule](commerce-hooks.md#value-lists-you-read-are-open)): draw a value you do not know by its list's fallback, never fail on it. The lists you write or declare (slots, skin units, embeds, buy form parts, hydration) are closed: the platform refuses a value outside them, and they only widen.
+
+| List | What it is | A value you do not know |
+| --- | --- | --- |
+| `STOREFRONT_CARD_FACT_KINDS` | A card's typed facts | skip a fact of a kind you do not know |
+| `STOREFRONT_WARRANTY_PROVIDERS` | Who honours a warranty | treat one you do not know as the store's |
+| `STOREFRONT_WARRANTY_DURATION_UNITS` | A warranty duration's unit | show `summary` for one you do not know |
+| `STOREFRONT_PRODUCT_MEDIA_KINDS` | A gallery item's kind | treat one you do not know as a photo |
+| `STOREFRONT_KIT_DELIVERY_KINDS` | How a kit's item reaches the buyer | say nothing for a kind you do not know |
+| `STOREFRONT_PRODUCT_ERRORS` | Why the buy form refused an add | treat a code you do not know as `failed` |
+| `StorefrontAvailability` | A buyer's availability band | treat an unknown value as `untracked`: show no stock word |
+| `StorefrontHeaderData.phoneNavigation.menu` | The phone menu drawer | treat an unknown value as `accordion` |
+| `StorefrontHeaderData.page.lead.kind` | The homepage's lead unit | treat a lead of a kind you do not know as none (`null`) |
+| `StorefrontBuyerInput.type` | A buyer input's control | leave an input of a type you do not know to the buy form's `inputs` part |
+| `StorefrontListingPage.kind` | What a listing lists | treat an unknown value as `collection` |
+| `StorefrontListingPage.filters.placement` | Where a listing's filters sit | treat an unknown value as `sidebar` |
+| `StorefrontHeroSkinSettings.layout` | The hero's layout | treat an unknown value as `full-bleed` |
+| `StorefrontHeroSkinSettings.phoneHeight` | The hero's phone height | treat an unknown value as `screen` |
+| `StorefrontUspStripSkinSettings.style` | The strip's style | treat an unknown value as `icons` |
+| `StorefrontCategoryTilesSkinSettings.style` | The tiles' style | treat an unknown value as `photo` |
+| `StorefrontCollectionsSkinSettings.carousel` | The collections' carousel | treat an unknown value as `large` |
+| `StorefrontLookbookSkinSettings.photo` | The lookbook's photo | treat an unknown value as `tall` |
+| `StorefrontBannerSkinSettings.layout` | The banner's layout | treat an unknown value as `full` |
+| `StorefrontBrandWallSkinSettings.style` | The brand wall's style | treat an unknown value as `rail` |
+| `StorefrontEditorialSkinSettings.layout` | The editorial section's layout | draw an unknown layout as `rich-text` from its `heading` and `body`, or nothing without them |
+| `StorefrontEditorialSkinSettings.imageSide` | Where its image sits | treat an unknown value as `start` |
+| `StorefrontNewsletterSkinSettings.email` | Whether it asks for an email | treat an unknown value as `optional` |
+| `StorefrontObjectFieldView.parts.kind` | A shown object field's part | skip a part of a kind you do not know |
+| `StorefrontRenderContext.page.kind` | The page around a render | treat an unknown value as `other` |
+| `StorefrontSkinJob.target` | What a skin call draws | draw nothing for a target you do not know |
+| `StorefrontLineInputResult.reason` | Why `setLineInput` changed nothing | treat an unknown reason as `failed` |
+| `StorefrontDecideResult.reason` | Why `decide` changed nothing | treat an unknown reason as `failed` |
+| `StorefrontCartLine.addOns.per` | What an add-on is counted in | show `total` for a `per` you do not know |
 
 ## Build, test, preview
 

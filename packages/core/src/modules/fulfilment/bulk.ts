@@ -12,7 +12,9 @@ import {
   createShipment,
   getDeliveryProviderActionReadiness,
   markShipmentReconciliationRequired,
+  refusedBookingOptions,
   PROVIDER_OUTCOME_UNKNOWN,
+  shipmentMove,
 } from "../delivery";
 import {
   assertNoActivePaymentSessionAttempt,
@@ -120,16 +122,14 @@ export async function resolveExpiredShipmentClaim(
                 detectedAt: new Date().toISOString(),
             },
         };
-        statements.push(db.update(deliveryShipments).set({
-            status: ShipmentStatus.RECONCILE_REQUIRED,
-            rawStatus: reason,
-            metadata: JSON.stringify(metadata),
-            updatedAt: sql`unixepoch()`,
-        }).where(and(
+        statements.push(shipmentMove(db, ShipmentStatus.RECONCILE_REQUIRED, "store", and(
             eq(deliveryShipments.id, claimId),
             eq(deliveryShipments.status, shipment.status),
             stillClaimed,
-        )).returning({ id: deliveryShipments.id }) as BatchItem<"sqlite">);
+        ), {
+            rawStatus: reason,
+            metadata: JSON.stringify(metadata),
+        }).returning({ id: deliveryShipments.id }) as BatchItem<"sqlite">);
     }
     statements.push(db.update(orders).set({
         shipmentClaimExpiresAt: null,
@@ -187,6 +187,13 @@ export async function bulkShipOrders(
             success: false,
             error: providerReadiness.message,
         }));
+    }
+    // Options the courier does not take refuse every order before any is claimed (a claim moves the order's revision).
+    const refusedOptions = validatedOptions.bookingOptions
+        ? refusedBookingOptions(providerReadiness.courier, validatedOptions.bookingOptions)
+        : null;
+    if (refusedOptions) {
+        return validatedOrderIds.map((orderId) => ({ orderId, success: false, error: refusedOptions }));
     }
 
     for (const orderId of validatedOrderIds) {

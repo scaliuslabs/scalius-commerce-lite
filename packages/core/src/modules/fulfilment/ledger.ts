@@ -21,7 +21,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, desc, eq, ne, notInArray, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { isFulfillmentType, type FulfillmentType } from "@scalius/shared/fulfilment";
-import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, OrderRevisionConflictError, ValidationError } from "@scalius/core/errors";
 import {
     recordCODCollection,
     resolveOrderCurrencySnapshot,
@@ -37,6 +37,7 @@ import {
   noActiveShipmentClaimCondition,
   validateTransition,
   shipmentClaimShipmentStatusSql,
+  orderWriteConflict,
 } from "../order-kernel";
 import {
   applyOrderStatusChange,
@@ -47,12 +48,14 @@ import {
   type StatusUpdateResult,
 } from "../orders";
 import { assertOrderStockCoverable, defaultInventoryLocationIdSql } from "../inventory";
+import { shipmentMove, shipmentMoveSources } from "../delivery";
 
 type Statement = BatchItem<"sqlite">;
 
 /** Bound values per fulfilment line row (id, fulfilment, order, line, quantity); created_at is SQL. */
 export const FULFILMENT_LINE_INSERT_PARAMETERS_PER_ROW = 5;
 const FULFILMENT_CLAIM_GUARD = "order_fulfilment_conflict";
+const PARCEL_SETTLED_GUARD = "order_fulfilment_parcel_settled";
 
 export type ManualFulfilmentKind = "ship" | "pickup" | "service";
 
@@ -697,7 +700,7 @@ export async function voidOrderFulfilment(
     }
     const order = await readOrderForFulfilment(db, orderId);
     if (options.expectedVersion !== undefined && order.version !== options.expectedVersion) {
-        throw new ConflictError("This order changed. Reload to see the latest.");
+        throw new OrderRevisionConflictError();
     }
     // The same rule the dashboard shows as `canVoid`.
     switch (fulfilmentVoidBlockedReason({
@@ -743,18 +746,29 @@ export async function voidOrderFulfilment(
         )) as Statement,
     ];
     if (fulfilment.shipmentId) {
-        statements.push(db.update(deliveryShipments).set({
-            status: ShipmentStatus.RETURNED,
+        // Staff are an own-courier parcel's courier: taking it back reports it
+        // returned. A parcel the machine takes no such report from (settled
+        // otherwise) refuses the whole void, so staff hear it instead of a
+        // parcel left as it was.
+        // (A guard refuses the whole batch wherever it sits; the claim's update stays second, where its badge is read.)
+        statements.push(buildBatchGuard(db, sql`NOT EXISTS (
+            SELECT 1 FROM ${deliveryShipments}
+            WHERE ${deliveryShipments.id} = ${fulfilment.shipmentId}
+              AND ${notInArray(deliveryShipments.status, [...shipmentMoveSources(ShipmentStatus.RETURNED, "courier")])}
+        )`, PARCEL_SETTLED_GUARD));
+        statements.push(shipmentMove(db, ShipmentStatus.RETURNED, "courier", eq(deliveryShipments.id, fulfilment.shipmentId), {
             rawStatus: ShipmentStatus.RETURNED,
-            updatedAt: sql`unixepoch()`,
-        }).where(eq(deliveryShipments.id, fulfilment.shipmentId)) as Statement);
+        }) as Statement);
     }
     let fulfillmentStatus: string;
     try {
         fulfillmentStatus = projectedFulfilmentStatus(await safeBatch(db, statements));
     } catch (error) {
         if (isBatchGuardError(error, FULFILMENT_CLAIM_GUARD)) {
-            throw new ConflictError("This order changed. Reload to see the latest.");
+            throw await orderWriteConflict(db, orderId, options.expectedVersion);
+        }
+        if (isBatchGuardError(error, PARCEL_SETTLED_GUARD)) {
+            throw new ConflictError("This parcel's delivery is already settled, so it can't be taken back. Record a return instead.");
         }
         throw error;
     }

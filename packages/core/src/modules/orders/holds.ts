@@ -15,7 +15,8 @@ import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@s
 import { orderHolds, orderItems, orders } from "@scalius/database/schema";
 import { AUTO_FULFILLMENT_TYPES } from "@scalius/shared/fulfilment";
 import { sha256Hex } from "@scalius/shared/hash";
-import { ConflictError, NotFoundError, ValidationError } from "../../errors";
+import { ConflictError, NotFoundError, OrderRevisionConflictError, ValidationError } from "../../errors";
+import { orderWriteConflict } from "../order-kernel";
 
 export interface OrderHoldView {
   id: string;
@@ -187,7 +188,7 @@ export async function releaseAppOrderHold(
     return { hold, replayed };
   };
   if (placed.releasedAt !== null && placed.releasedAt !== undefined) return current(true);
-  if (order.version !== input.expectedVersion) throw new ConflictError("This order changed. Read it again before releasing the hold.");
+  if (order.version !== input.expectedVersion) throw new OrderRevisionConflictError("This order changed. Read it again before releasing the hold.");
 
   const claimedVersion = order.version + 1;
   const releaseCondition = and(
@@ -213,7 +214,7 @@ export async function releaseAppOrderHold(
     if (isBatchGuardError(error, APP_RELEASE_GUARD)) {
       const again = await db.select({ releasedAt: orderHolds.releasedAt }).from(orderHolds).where(eq(orderHolds.id, id)).get();
       if (again?.releasedAt !== null && again?.releasedAt !== undefined) return current(true);
-      throw new ConflictError("This order changed. Read it again before releasing the hold.");
+      throw await orderWriteConflict(db, input.orderId, input.expectedVersion, "This order changed. Read it again before releasing the hold.");
     }
     throw error;
   }

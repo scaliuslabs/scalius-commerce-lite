@@ -10,6 +10,7 @@ import {
   orders,
 } from "@scalius/database/schema";
 import {
+  AppError,
   ConflictError,
   NotFoundError,
   ServiceUnavailableError,
@@ -90,9 +91,7 @@ async function resolveCommandReplay(
   const command = await readCommand(db, operationKey);
   if (!command) return null;
   if (command.requestHash !== expectedHash) {
-    throw new ConflictError(
-      "Invoice operation key was already used for a different request.",
-    );
+    throw new AppError(422, "idempotency_key_reused", "This invoice request key was already used for a different request. Use a new key.");
   }
   const issued = await readIssuedById(db, command.invoiceId);
   if (!issued) {

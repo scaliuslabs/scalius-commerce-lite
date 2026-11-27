@@ -30,7 +30,7 @@ Within a supported contract version, a release only adds to these. Each names, i
 - **The private-page model**: page keys, part and target names, variants, style targets, tokens and their types, label keys and refusal reasons ([Design the buyer's private pages](private-pages.md)) (`private-anatomy.snapshot.txt` under its own rule, with each token's type; `save-reasons.snapshot.json`, with the checker and policy versions).
 - **Released apps and themes keep working**: every bundle built against this release or later replays with the outcome it had when it was frozen (`tests/replay`, whose frozen expectations the lock records).
 
-"Only adds" means a new optional field, operation, event, function point, slot, token, error code or list value. A list the reference marks open may gain values, so handle a value you do not know as that list says. Removing, renaming or retyping something, making an output nullable, adding a required input, changing a default, or refusing at save, install or run something that passes today is a break.
+"Only adds" means a new optional field, operation, event, function point, slot, token, error code or list value. Every list you read is open and may gain values, so handle a value you do not know as that list says ([commerce hooks](commerce-hooks.md#value-lists-you-read-are-open), [storefront](storefront.md#value-lists-you-read)); a list you send is closed. Removing, renaming or retyping something, making an output nullable, adding a required input, changing a default, or refusing at save, install or run something that passes today is a break.
 
 ## What is not covered
 

@@ -3,6 +3,7 @@
  * the storefront share the vocabulary and bounds, and `warrantyExpiresAt` is
  * the same date arithmetic the `order_item_warranties` trigger runs in SQLite.
  */
+import { defineMachine, movesByTarget } from "./machine";
 
 /**
  * Stored as the SQLite date modifier word, so the trigger builds
@@ -103,6 +104,27 @@ export const WARRANTY_CLAIM_STATUSES = ["open", "in_progress", "resolved", "reje
 export type WarrantyClaimStatus = (typeof WARRANTY_CLAIM_STATUSES)[number];
 /** Statuses that hold the one-open-claim-per-warranty slot. */
 export const OPEN_WARRANTY_CLAIM_STATUSES = ["open", "in_progress"] as const satisfies readonly WarrantyClaimStatus[];
+
+/**
+ * A warranty claim, moved by staff only. By design staff may move a claim
+ * from any state to any other (start work, resolve, decline, reopen a closed
+ * one), always at the version they loaded; nothing else is refused by the
+ * state. Reopening (to `open` or `in_progress`) also needs the warranty's
+ * open-claim slot to be free. Every claim opens `open`, whoever opens it.
+ * Apps read a claim's status (the warranty representation's `claim`) and
+ * never move it.
+ */
+export const WARRANTY_CLAIM_MACHINE = defineMachine({
+  name: "warranty claim",
+  states: WARRANTY_CLAIM_STATUSES,
+  initial: ["open"],
+  // A closed claim can be reopened, so no state is final.
+  final: [],
+  moves: movesByTarget(Object.fromEntries(WARRANTY_CLAIM_STATUSES.map((from) => [
+    from,
+    WARRANTY_CLAIM_STATUSES.filter((to) => to !== from),
+  ])) as Record<WarrantyClaimStatus, WarrantyClaimStatus[]>),
+});
 
 export const WARRANTY_CLAIM_RESOLUTIONS = ["repair", "replacement", "refund", "other"] as const;
 export type WarrantyClaimResolution = (typeof WARRANTY_CLAIM_RESOLUTIONS)[number];
