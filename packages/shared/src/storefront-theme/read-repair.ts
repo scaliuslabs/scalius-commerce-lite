@@ -16,7 +16,9 @@
 //   (`label_variant`, `label_too_long`) reads as the store's own words.
 // - A member of a closed list this build does not know
 //   (`STOREFRONT_READ_UNKNOWN_MEMBER`): the store's default for it, or it is
-//   left out (a section, a tab, a page's tokens or arrangement).
+//   left out (a section, a tab, a page's tokens or arrangement); and a key
+//   this build does not know in any stored object (a later release's field):
+//   left out. `strict()` holds only for a save.
 //
 // Anything else (a wrong type, a missing field, a bound the renderer relies
 // on) is not repaired: the document does not read.
@@ -86,6 +88,21 @@ function sectionEntry(path: readonly PropertyKey[]): { list: readonly PropertyKe
 const SAVE_REASON_TAB = /^tab_/;
 
 /**
+ * The issues as a repair reads them: a union (dark colours or none, an app's
+ * value) refused only for a key a branch does not know is that branch's
+ * unknown keys, at their place, so a later release's key there is left out too.
+ */
+function unionKeyIssues(issues: readonly StorefrontThemeReadIssue[]): StorefrontThemeReadIssue[] {
+  return issues.flatMap((issue) => {
+    const branches = (issue as { errors?: unknown }).errors;
+    if (issue.code !== "invalid_union" || !Array.isArray(branches)) return [issue];
+    const keysOnly = branches.find((branch): branch is StorefrontThemeReadIssue[] => Array.isArray(branch) && branch.length > 0
+      && branch.every((nested) => (nested as StorefrontThemeReadIssue).code === "unrecognized_keys"));
+    return keysOnly ? keysOnly.map((nested) => ({ ...nested, path: [...issue.path, ...nested.path] })) : [issue];
+  });
+}
+
+/**
  * The document with every refused value repaired, and what was repaired; null
  * when an issue is not one a read repairs. Pure: the document is not changed.
  */
@@ -121,7 +138,7 @@ export function repairStoredStorefrontTheme(
     return true;
   };
 
-  for (const issue of issues) {
+  for (const issue of unionKeyIssues(issues)) {
     const path = issue.path;
     const reason = typeof issue.params?.reason === "string" ? issue.params.reason : null;
     const record = (why: string) => repairs.push({ path: path.map(String).join("."), reason: why });
@@ -147,8 +164,9 @@ export function repairStoredStorefrontTheme(
     } else if (!reason && path[0] === "privatePages" && path[1] === "labels" && path.length >= 3) {
       // A label a save refuses (`label_variant`, `label_too_long`): the store's own words there.
       done = remove(path.slice(0, 3));
-    } else if (issue.code === "unrecognized_keys" && path.length === 2 && path[0] === "privatePages" && (path[1] === "labels" || path[1] === "icons")) {
-      // A label or icon key this build does not know: the store's own.
+    } else if (issue.code === "unrecognized_keys") {
+      // A key this build does not know, in any stored object (a field a later release added, a label or icon key,
+      // a key of the compile): left out, so a build never fails a row a newer build wrote. Only a save is strict.
       unknown = true;
       done = (issue.keys ?? []).every((key) => remove([...path, key]));
     } else if (path[0] === "privatePages" && path[1] === "icons" && path.length >= 3) {

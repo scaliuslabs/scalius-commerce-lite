@@ -33,7 +33,7 @@ import {
     type PaymentProvidersSource,
 } from "./gateways/registry";
 import { canOperateExistingPayments } from "./gateways/port";
-import { REFUND_ATTEMPT_MACHINE, REFUND_TAKEN_STATUS, refundAttemptMove } from "../order-kernel";
+import { REFUND_ATTEMPT_MACHINE, REFUND_TAKEN_STATUS, refundAttemptMove, refundRecordMove } from "../order-kernel";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { applyInventoryForStatusChangeWithImpact, isOrderInventoryConflictError, prepareInventoryForStatusChange } from "../inventory";
@@ -388,21 +388,26 @@ async function findRefundRequestReplay(
         sql`substr(${refundAttempts.attemptKey}, 1, ${prefix.length}) = ${prefix}`,
     )).all();
     if (rows.length === 0) return null;
+    // Another request under the key: once money moved or may move under it, the key is used
+    // (422 idempotency_key_reused); a key whose every attempt failed moved nothing.
+    const keyReused = (message: string) => rows.some((row) => row.status !== "failed")
+        ? new AppError(422, "idempotency_key_reused", message)
+        : new ConflictError(message);
     const amountMinor = rows.reduce((sum, row) => sum + row.amountMinor, 0);
     const requestedMinor = params.amountMinor;
     if (requestedMinor !== undefined && requestedMinor !== amountMinor) {
-        throw new ConflictError("This refund request was already used for a different amount. Reload and try again.");
+        throw keyReused("This refund request key was already used for a different amount. Use a new key.");
     }
     const settlement: RefundSettlement = rows.some((row) =>
         parseRefundMetadata(row.metadata).settlementMode === "store_credit") ? "store_credit" : "original";
     if ((params.settlement ?? "original") !== settlement) {
-        throw new ConflictError("This refund request was already used for a different refund. Reload and try again.");
+        throw keyReused("This refund request key was already used for a different refund. Use a new key.");
     }
     const orderRefundId = rows[0]!.refundGroupId;
     const recordedLines = await db.select({ orderItemId: orderRefundLines.orderItemId, quantity: orderRefundLines.quantity })
         .from(orderRefundLines).where(eq(orderRefundLines.refundId, orderRefundId)).all();
     if (!sameRefundLines(normalizeRefundLines(params.lines), normalizeRefundLines(recordedLines))) {
-        throw new ConflictError("This refund request was already used for different order lines. Reload and try again.");
+        throw keyReused("This refund request key was already used for different order lines. Use a new key.");
     }
     // A replay answers what the request did: while any money moved or may still move
     // under this key it repeats that answer, never a refusal (which invites a second refund).
@@ -998,13 +1003,7 @@ export async function finalizeAcceptedRefundAttemptIds(
                 await db.batch([
                     buildBatchGuard(db, guard, REFUND_FINALIZE_CONFLICT),
                     // A refund row still pending (an internal settlement's was written refunded with its claim).
-                    db.update(orderPayments).set({
-                        status: PaymentRecordStatus.REFUNDED,
-                        updatedAt: sql`unixepoch()`,
-                    }).where(and(
-                        inJsonArray(orderPayments.id, orderAttempts.map((attempt) => attempt.refundPaymentId)),
-                        eq(orderPayments.status, PaymentRecordStatus.PENDING),
-                    )),
+                    refundRecordMove(db, "refunded", inJsonArray(orderPayments.id, orderAttempts.map((attempt) => attempt.refundPaymentId))),
                     db.update(orders).set({
                         paidAmountMinor: paymentState.paidAmountMinor,
                         balanceDueMinor: paymentState.balanceDueMinor,
@@ -1546,8 +1545,10 @@ async function markRefundAllocationsFailed(
             buildBatchGuard(db, params.settlement.guard, REFUND_FINALIZE_CONFLICT),
         ] : []),
         ...params.allocations.flatMap((allocation) => [
-        db.update(orderPayments).set({
-            status: PaymentRecordStatus.FAILED,
+        refundRecordMove(db, "failed", and(
+            eq(orderPayments.id, allocation.id),
+            refundAttemptHeldCondition(getRefundAttemptId(allocation), params.groupId, REQUEST_HELD_STATUSES),
+        ), {
             metadata: buildRefundMetadata({
                 request: params.request,
                 allocation,
@@ -1557,12 +1558,7 @@ async function markRefundAllocationsFailed(
                 status: "failed",
                 ...(sent(allocation) ? { error: params.error } : { providerOutcome: "not_dispatched" as const, error: NOT_SENT_MESSAGE }),
             }),
-            updatedAt: sql`unixepoch()`,
-        }).where(and(
-            eq(orderPayments.id, allocation.id),
-            eq(orderPayments.status, PaymentRecordStatus.PENDING),
-            refundAttemptHeldCondition(getRefundAttemptId(allocation), params.groupId, REQUEST_HELD_STATUSES),
-        )),
+        }),
         refundAttemptMove(db, "failed", heldByRequest(getRefundAttemptId(allocation), params.groupId), {
             providerStatus: sent(allocation) ? "rejected" : "not_dispatched",
             claimId: null,
@@ -1628,8 +1624,8 @@ async function markRefundAllocationsProviderUnknown(
         ...params.allocations.flatMap((allocation) => {
         const taken = params.inFlight?.get(allocation.id);
         return [
+        // The refund record stays pending (no move): only its facts are written.
         db.update(orderPayments).set({
-            status: PaymentRecordStatus.PENDING,
             metadata: buildRefundMetadata({
                 request: params.request,
                 allocation,

@@ -17,7 +17,8 @@ import {
     PaymentRecordStatus,
     PaymentStatus,
 } from "@scalius/database/schema";
-import { eq, sql, type SQL } from "drizzle-orm";
+import { eq, inArray, sql, type SQL } from "drizzle-orm";
+import { PAYMENT_HOLDING_STATUSES, PAYMENT_IN_FLIGHT_STATUSES } from "@scalius/shared/payment-record-state";
 import { GIFT_CARD_PAYMENT_METHOD, listHeldGiftCardTenders, type HeldGiftCardTender } from "../../gift-cards";
 import { paymentLedgerTotalsSql } from "../../payments";
 import {
@@ -42,10 +43,7 @@ export function cancellationPaymentRecordsSafeCondition(orderId: string | SQL): 
         NOT EXISTS (
             SELECT 1 FROM ${orderPayments}
             WHERE ${orderPayments.orderId} = ${orderId}
-              AND ${orderPayments.status} IN (
-                  ${PaymentRecordStatus.PENDING},
-                  ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED}
-              )
+              AND ${inArray(orderPayments.status, [...PAYMENT_IN_FLIGHT_STATUSES])}
         )
         AND (SELECT coalesce(sum(CASE
             WHEN ${orderPayments.paymentType} <> 'refund' AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED}
@@ -81,11 +79,7 @@ export async function giftCardOnlyTenders(
                 THEN ${orderPayments.amountMinor} ELSE 0 END), 0)`,
             otherRows: sql<number>`coalesce(sum(CASE
                 WHEN ${orderPayments.paymentMethod} <> ${GIFT_CARD_PAYMENT_METHOD}
-                 AND ${orderPayments.status} IN (
-                     ${PaymentRecordStatus.PENDING},
-                     ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED},
-                     ${PaymentRecordStatus.SUCCEEDED}
-                 )
+                 AND ${inArray(orderPayments.status, [...PAYMENT_HOLDING_STATUSES])}
                 THEN 1 ELSE 0 END), 0)`,
         })
         .from(orderPayments)
@@ -123,8 +117,7 @@ export function orderActionFactsSelection() {
     const giftCardMinor = paid(sql`CASE WHEN ${orderPayments.paymentMethod} = ${GIFT_CARD_PAYMENT_METHOD}
         AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED} THEN ${orderPayments.amountMinor} ELSE 0 END`);
     const otherMoneyRows = paid(sql`CASE WHEN ${orderPayments.paymentMethod} <> ${GIFT_CARD_PAYMENT_METHOD}
-        AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.CONFIRMED},
-            ${PaymentRecordStatus.AUTHORIZED}, ${PaymentRecordStatus.SUCCEEDED}) THEN 1 ELSE 0 END`);
+        AND ${inArray(orderPayments.status, [...PAYMENT_HOLDING_STATUSES])} THEN 1 ELSE 0 END`);
     const heldTenderMinor = sql<number>`(SELECT coalesce(sum(${q(orderPayments.amountMinor)}), 0)
         FROM ${orderPayments} INNER JOIN ${giftCardTransactions}
           ON ${q(giftCardTransactions.id)} = ${q(orderPayments.providerRef)} AND ${q(giftCardTransactions.kind)} = 'redeem'

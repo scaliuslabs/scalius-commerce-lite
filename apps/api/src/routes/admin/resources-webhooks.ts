@@ -21,7 +21,7 @@ import {
   type WebhookOwner,
   type WebhookSubscriptionView,
 } from "@scalius/core/modules/events";
-import { EVENT_TOPIC_FILTERS } from "@scalius/shared/events";
+import { EVENT_TOPIC_FILTERS, WEBHOOK_TOPICS_MAX } from "@scalius/shared/events";
 import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bounded-page";
 import { OUTBOUND_URL_MAX_LENGTH } from "@scalius/shared/outbound-url";
 import { PROTECTED_CUSTOMER_DATA } from "@scalius/shared/plugins/protected-data";
@@ -103,7 +103,7 @@ async function appOwner(c: Context): Promise<WebhookOwner> {
 const url = z.string().trim().min(1).max(OUTBOUND_URL_MAX_LENGTH).openapi({
   description: "HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.",
 });
-const topics = z.array(topicFilter).min(1).max(EVENT_TOPIC_FILTERS.length);
+const topics = z.array(topicFilter).min(1).max(WEBHOOK_TOPICS_MAX);
 const description = z.string().max(WEBHOOK_DESCRIPTION_MAX_LENGTH).nullable();
 const subscriptionId = z.object({ id: z.string().min(1).max(64) });
 const expectedRevision = z.number().int().positive().openapi({ description: "The subscription's `revision` you read; a stale one is refused with 409." });

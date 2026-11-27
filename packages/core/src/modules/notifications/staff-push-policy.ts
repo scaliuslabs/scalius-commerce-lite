@@ -12,9 +12,13 @@ const STAFF_PUSH_PERMISSIONS = new Map<string, StaffPermissionRequirement>([
   ["conversation_message", PERMISSIONS.CONVERSATIONS_VIEW],
   ["webhook_disabled", PERMISSIONS.WEBHOOKS_VIEW],
   ["plugin_stopped", PERMISSIONS.APPS_VIEW],
+  ["plugin_function_circuit", PERMISSIONS.APPS_VIEW],
+  ["plugin_function_failing", PERMISSIONS.APPS_VIEW],
+  ["agent_refresh_token_reused", PERMISSIONS.AGENT_ACCESS_VIEW],
   // App-authored text/links may describe any resource, not just the Apps page.
   ["plugin_notice", "super_admin"],
 ]);
+
 
 export function staffPushPermission(type: string | undefined): StaffPermissionRequirement | undefined {
   return type === undefined ? undefined : STAFF_PUSH_PERMISSIONS.get(type);

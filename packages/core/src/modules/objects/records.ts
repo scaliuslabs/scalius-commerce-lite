@@ -21,6 +21,7 @@ import { and, asc, desc, eq, gt, gte, lt, or, sql, type SQL } from "drizzle-orm"
 import type { AppObjectCommit } from "@scalius/shared/checkout-app-facts";
 import { ObjectError } from "./errors";
 import { objectTypeId, prepareObjectData, objectDataWire, OBJECT_HANDLE_PATTERN, type ObjectTypeDeclaration, type ObjectStatus, type ObjectField } from "@scalius/shared/plugins/objects";
+import { objectRecordStatuses } from "@scalius/shared/plugins/object-status";
 import { customFieldMoney, isCustomFieldMoney, type CustomFieldCodecContext, type CustomFieldMoney } from "@scalius/shared/custom-fields";
 import { readStoreCurrency } from "../markets";
 import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
@@ -265,11 +266,13 @@ function planRecordWrites(
       return;
     }
     const raw = requireRecord(operation.record);
-    const checked = prepareObjectData(declaration, raw.data, context, operation.status ?? (declaration.storefront ? "draft" : "active"));
+    // A record takes the statuses its type does (OBJECT_RECORD_MACHINE); a new one starts at the first.
+    const statuses = objectRecordStatuses(declaration.storefront);
+    const status = operation.status ?? statuses[0]!;
+    const checked = prepareObjectData(declaration, raw.data, context, status);
     if (!checked.ok) throw new ObjectError("object_invalid", "Check the object fields.", checked.issues);
     const { data, json } = requireRecord(checked.data);
-    const status = operation.status ?? (declaration.storefront ? "draft" : "active");
-    if (!declaration.storefront && status !== "active" || declaration.storefront && status === "active") throw new ObjectError("object_invalid", "Only storefront objects have draft or published status.");
+    if (!statuses.includes(status)) throw new ObjectError("object_invalid", "Only storefront objects have draft or published status.");
     if (operation.handle !== undefined && (!declaration.handle || (operation.handle !== null && !OBJECT_HANDLE_PATTERN.test(operation.handle)))) throw new ObjectError("object_invalid", "This object does not accept that handle.");
     // A write advances the record's revision and (cdep trigger, 0110) the
     // object's storefront key.
@@ -777,6 +780,7 @@ export async function reindexObjectType(
       writes.push(db.with(changed).update(objectRecords).set({ k1: value("k1"), k2: value("k2"), k3: value("k3"), k4: value("k4"), u1: value("u1"), u2: value("u2") })
         .where(and(eq(objectRecords.typeId, typeId), sql`${objectRecords.id} IN (SELECT id FROM changed)`)));
     }
+    // The type's storefront visibility moves every record at once (OBJECT_RECORD_MACHINE's storefront_on / storefront_off).
     writes.push(db.update(objectRecords).set({
       status: declaration.storefront ? sql`CASE WHEN ${objectRecords.status} = 'active' THEN 'draft' ELSE ${objectRecords.status} END` : "active",
       pub: sql`${declaration.storefront ? 1 : 0} = 1 AND ${objectRecords.status} = 'published'`, ev: declaration.events,

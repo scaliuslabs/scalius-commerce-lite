@@ -9,16 +9,18 @@
 // which the payment webhook sweep excludes) and applied through the same
 // shipment, fulfilment ledger and order sync as every courier. Only the
 // port's validated answer is applied: a status from the port's set, short
-// audit details, never the raw body. The courier's expected answer (status,
+// audit details, never the raw body; and only by the shipment machine
+// (`applyCourierReport`): a report a settled shipment takes no move for holds
+// it for staff with the report, never dropped. The courier's expected answer (status,
 // headers, body: Pathao's integration secret header) comes from the app.
 
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { apiNotFoundResponse } from "../../runtime/not-found";
 import type { Context } from "hono";
-import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { deliveryProviders, deliveryShipments, ShipmentStatus } from "@scalius/database/schema";
-import { courierFor, updateOrderStatusFromShipment } from "@scalius/core/modules/delivery";
+import { applyCourierReport, courierFor, updateOrderStatusFromShipment } from "@scalius/core/modules/delivery";
 import { settleShipmentClaimForCourierPush, syncCourierFulfilmentFromShipment } from "@scalius/core/modules/fulfilment";
 import {
   isQualifiedProviderId,
@@ -257,24 +259,34 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
   const held = { id: claim.id, claimId: claim.claimId };
 
   try {
-    const written = await db.update(deliveryShipments).set({
+    // The report is applied by the shipment machine, never dropped.
+    const applied = await applyCourierReport(db, shipment.id, {
       status: tracking.status,
       rawStatus: tracking.rawStatus,
-      lastChecked: new Date(),
-      updatedAt: new Date(),
-      metadata: JSON.stringify({
-        ...parseMetadata(shipment.metadata),
-        ...(tracking.details ?? {}),
-        lastWebhookAt: new Date().toISOString(),
-      }),
-    }).where(and(
-      eq(deliveryShipments.id, shipment.id),
-      // A shipment that became a reconciliation meanwhile waits for staff.
-      ne(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED),
-    )).returning({ id: deliveryShipments.id });
-    if (written.length === 0) {
+      details: { ...(tracking.details ?? {}), lastWebhookAt: new Date().toISOString() },
+      set: { lastChecked: new Date(), updatedAt: new Date() },
+    });
+    if (applied.outcome === "waiting") {
+      // A shipment that became a reconciliation meanwhile waits for staff: the courier comes back.
       await markWebhookEventFailed(db, held, { error: "courier_webhook_shipment_held" });
       return retryLater(c);
+    }
+    if (applied.outcome === "stored") {
+      // Held for a courier's report: this one is stored with the hold (staff decide on the latest), so it is acknowledged.
+      await markWebhookEventProcessed(db, held, { externalId, status: ShipmentStatus.RECONCILE_REQUIRED, rawStatus: tracking.rawStatus, storedWithHold: true });
+      return accepted(c, reply, { received: true, status: ShipmentStatus.RECONCILE_REQUIRED });
+    }
+    if (applied.outcome === "recorded") {
+      // A late or vague report over a settled shipment: its words are kept, nothing moved, nothing waits.
+      await markWebhookEventProcessed(db, held, { externalId, status: applied.status, rawStatus: tracking.rawStatus, recorded: true });
+      return accepted(c, reply, { received: true, status: applied.status });
+    }
+    if (applied.outcome === "held") {
+      // A settled shipment takes no move to this report: it now waits for
+      // staff with it (the order shows it, its timeline says what the courier
+      // reported). The push is acknowledged: staff own it now.
+      await markWebhookEventProcessed(db, held, { externalId, status: ShipmentStatus.RECONCILE_REQUIRED, rawStatus: tracking.rawStatus, heldFrom: applied.previous });
+      return accepted(c, reply, { received: true, status: ShipmentStatus.RECONCILE_REQUIRED });
     }
 
     // The ledger follows the parcel (F11): before the order moves for units

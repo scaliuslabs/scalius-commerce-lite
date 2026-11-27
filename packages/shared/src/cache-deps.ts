@@ -813,7 +813,7 @@ const CACHE_DEP_TABLE_RULES = {
       "source_order_item_id", "source_unit_index", "source_refund_attempt_id", "customer_id", "recipient_name",
       "recipient_email", "recipient_phone", "message", "note", "issued_by_user_id", "version", "created_at", "updated_at",
     ],
-    note: "Private rows: a public read sees only whether one live card exists (checkout configuration's giftCardsLive, 0227). A partial redemption changes nothing it shows.",
+    note: "Private rows: a public read sees only whether one live card exists (checkout configuration's giftCardsLive, 0228). A partial redemption changes nothing it shows.",
     rules: [
       { name: "ins", event: "insert", image: "new", keys: [{ dep: "gc" }] },
       { name: "del", event: "delete", image: "old", keys: [{ dep: "gc" }] },

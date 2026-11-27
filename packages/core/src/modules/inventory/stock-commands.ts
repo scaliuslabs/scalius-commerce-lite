@@ -85,7 +85,7 @@ export interface StockCommandLine {
   /**
    * The SKU's `stockVersion` the caller's count was made against (a counted
    * quantity from an editor): any stock change since refuses the command
-   * (409 `stock_changed`) instead of booking over it. The edge's CAS keeps it
+   * (409 `stock_version_conflict`) instead of booking over it. The edge's CAS keeps it
    * exact up to the commit.
    */
   expectedStockVersion?: number;
@@ -279,7 +279,7 @@ async function readCommand(db: Database, operationKey: string): Promise<StoredCo
 
 function replay<R>(row: StoredCommand, commandType: string, subjectId: string, requestHash: string): R {
   if (row.commandType !== commandType || row.subjectId !== subjectId || row.requestHash !== requestHash) {
-    throw new ConflictError("This operation key was already used for a different inventory request.");
+    throw new AppError(422, "idempotency_key_reused", "This request key was already used for a different stock command. Use a new key.");
   }
   try {
     return JSON.parse(row.resultPayload) as R;
@@ -359,7 +359,7 @@ function assertLinesMovable(lines: readonly StockCommandLine[], skus: Map<string
     const sku = skus.get(line.variantId);
     if (!sku) throw new NotFoundError("A SKU on this document no longer exists.");
     if (line.expectedStockVersion !== undefined && sku.stockVersion !== line.expectedStockVersion) {
-      throw new AppError(409, "stock_changed", `SKU ${sku.sku}'s stock changed since it was counted. Reload it and count again.`, { variantId: sku.id });
+      throw new AppError(409, "stock_version_conflict", `SKU ${sku.sku}'s stock changed since it was counted. Reload it and count again.`, { variantId: sku.id });
     }
     if (sku.deletedAt && !line.allowRetired) {
       throw new AppError(409, "variant_retired", `SKU ${sku.sku} was removed from its product. Restore it, or leave it out.`);

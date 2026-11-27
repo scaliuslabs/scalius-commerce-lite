@@ -17,14 +17,26 @@ import {
   orderPayments,
   OrderStatus,
   PaymentRecordStatus,
+  paymentSessionAttempts,
 } from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, OrderRevisionConflictError, ValidationError } from "@scalius/core/errors";
 import { sha256Hex } from "@scalius/shared/hash";
 import { presentedSettlement } from "@scalius/shared/money-chain";
+import { chargeKind } from "@scalius/shared/payment-record-state";
 import { RECORDED_PAYMENT_METHOD, RECORDED_PAYMENT_VIAS, type RecordedPaymentVia } from "@scalius/shared/payment-terms";
 import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotalsSql, withReceived } from "./payment-state";
 import { resolveOrderCurrencySnapshot } from "./order-currency";
+import { orderWriteConflict } from "../order-kernel";
+import { openPaymentAttemptCondition, readOpenPaymentAttempt, requestSessionCancelStatement } from "./session-lifecycle";
+
+/** 409 `payment_in_progress`, naming the attempt a recorded payment would overlap. */
+function openAttemptRefusal(attempt: { id: string; status: string; running: boolean }): AppError {
+  return new AppError(409, "payment_in_progress", attempt.running
+    ? "A payment for this order is being set up or charged right now. Try again shortly."
+    : "The buyer has a payment page open for this order that could still be paid. Wait for it, or record the payment anyway: the page is closed, and money it still takes is refunded.",
+  { paymentAttemptId: attempt.id, status: attempt.status });
+}
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -44,6 +56,15 @@ export interface RecordOrderPaymentInput {
   requestKey: string;
   /** The order version the caller saw; a different one is refused (409) and nothing is recorded. */
   expectedVersion?: number;
+  /**
+   * Record it even though a hosted payment session the buyer could still pay
+   * is open: that session is cancelled at its provider in the same write, and
+   * money it still takes is refunded as a late payment. Without it, an open
+   * session (or any payment being set up or charged right now) refuses the
+   * payment with 409 `payment_in_progress`. A claim still running is refused
+   * either way: retry shortly.
+   */
+  allowOpenAttempt?: boolean;
   /**
    * The order timeline's line for this payment, written in the payment's own
    * batch (the orders module builds it: `buildOrderEventInsert`, keyed by the
@@ -155,7 +176,7 @@ export async function recordOrderPayment(
   if (existing) {
     const recorded = readMetadata(existing.metadata);
     if (existing.amountMinor !== input.amountMinor || recorded.via !== input.via) {
-      throw new ConflictError("This retry key already recorded a different payment.");
+      throw new AppError(422, "idempotency_key_reused", "This retry key already recorded a different payment. Use a new key.");
     }
     return {
       paymentId,
@@ -167,8 +188,10 @@ export async function recordOrderPayment(
   }
 
   if (input.expectedVersion !== undefined && input.expectedVersion !== order.version) {
-    throw new ConflictError("This order changed. Reload it and record the payment again.");
+    throw new OrderRevisionConflictError("This order changed. Reload it and record the payment again.");
   }
+  const openAttempt = await readOpenPaymentAttempt(db, input.orderId);
+  if (openAttempt && (openAttempt.running || !input.allowOpenAttempt)) throw openAttemptRefusal(openAttempt);
   if (order.paymentTermsDays === null && order.paymentMethod !== RECORDED_PAYMENT_METHOD) {
     throw new ValidationError("Payments are recorded here only for invoice (net terms) orders and orders paid as they were placed. Record cash on delivery with Collect cash.");
   }
@@ -215,6 +238,11 @@ export async function recordOrderPayment(
     eq(orders.paidAmountMinor, order.paidAmountMinor),
     eq(orders.balanceDueMinor, order.balanceDueMinor),
     sql`${orders.deletedAt} IS NULL`,
+    // No payment attempt opened since the read (or, recording anyway, none being set up now).
+    input.allowOpenAttempt
+      ? sql`NOT EXISTS (SELECT 1 FROM ${paymentSessionAttempts} WHERE ${paymentSessionAttempts.orderId} = ${order.id}
+          AND ${paymentSessionAttempts.status} = 'processing' AND ${paymentSessionAttempts.claimExpiresAt} > unixepoch())`
+      : sql`NOT ${openPaymentAttemptCondition(sql`${order.id}`)}`,
   );
   const statements: SQLiteBatchItem[] = [
     // The payment row first, and only while the order is still the one read:
@@ -232,7 +260,7 @@ export async function recordOrderPayment(
       settlementRate: sql<string>`${settlement.settlementRate}`.as("settlement_rate"),
       exchangeAdjustmentMinor: sql<number>`${settlement.exchangeAdjustmentMinor}`.as("exchange_adjustment_minor"),
       paymentMethod: sql<string>`${RECORDED_PAYMENT_METHOD}`.as("payment_method"),
-      paymentType: sql<string>`${paymentType}`.as("payment_type"),
+      paymentType: sql<string>`${chargeKind(paymentType)}`.as("payment_type"),
       status: sql<string>`${PaymentRecordStatus.SUCCEEDED}`.as("status"),
       providerRef: sql<null>`NULL`.as("provider_ref"),
       providerSecondaryRef: sql<null>`NULL`.as("provider_secondary_ref"),
@@ -258,6 +286,9 @@ export async function recordOrderPayment(
     )) as unknown as SQLiteBatchItem,
     ...(timelineLine ? [timelineLine as SQLiteBatchItem] : []),
     ...(reviewHold ? [reviewHold as SQLiteBatchItem] : []),
+    // Recording anyway: the buyer's open sessions become cancel commands the drain closes at their provider.
+    // Always, not only for a page seen at the read: one handed out since is closed too.
+    ...(input.allowOpenAttempt ? [requestSessionCancelStatement(db, order.id, landed) as unknown as SQLiteBatchItem] : []),
     buildBatchGuard(db, landed, RECORDED_PAYMENT_BATCH_GUARD) as SQLiteBatchItem,
   ];
 
@@ -269,7 +300,9 @@ export async function recordOrderPayment(
       const replay = await db.select({ amountMinor: orderPayments.amountMinor })
         .from(orderPayments).where(eq(orderPayments.id, paymentId)).get();
       if (replay) return recordOrderPayment(db, input);
-      throw new ConflictError("The order's payment changed while this payment was being recorded. Reload and try again.");
+      const opened = await readOpenPaymentAttempt(db, input.orderId);
+      if (opened && (opened.running || !input.allowOpenAttempt)) throw openAttemptRefusal(opened);
+      throw await orderWriteConflict(db, input.orderId, input.expectedVersion, "The order's payment changed while this payment was being recorded. Reload and try again.");
     }
     throw error;
   }

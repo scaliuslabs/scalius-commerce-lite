@@ -68,8 +68,6 @@ export const EVENT_TOPICS = [
   "object.created",
   "object.updated",
   "object.deleted",
-  "customer.redact_requested",
-  "customer.data_requested",
   "customer.erased",
   "conversation.message_received",
   "payout.created",
@@ -143,8 +141,6 @@ export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType
   "object.created": "object",
   "object.updated": "object",
   "object.deleted": "object",
-  "customer.redact_requested": "customer",
-  "customer.data_requested": "customer",
   "customer.erased": "customer",
   "conversation.message_received": "conversation",
   "payout.created": "payout",
@@ -159,11 +155,10 @@ const state = z.string().min(1).max(64);
 const nullableState = state.nullable();
 const nullableId = id.nullable();
 /**
- * A status fact: typed as its resource's closed list (resource-states.ts, what
- * an app compiles against) and read as stored. A value outside the list (a
- * state a newer platform adds, or one a column the database does not
- * constrain holds) is delivered as it is, never dropped: a consumer treats a
- * state it does not know as unknown.
+ * A status fact: typed as its resource's list (resource-states.ts, what an
+ * app compiles against) and read as stored. The list is open: a value outside
+ * it (a state a newer platform adds) is delivered as it is, never dropped,
+ * and a consumer handles it by the list's fallback.
  */
 function statusOf<const S extends readonly [string, ...string[]]>(states: S): z.ZodType<S[number]> {
   return z.union([z.enum(states), state]) as unknown as z.ZodType<S[number]>;
@@ -442,13 +437,6 @@ export const EVENT_FACT_SCHEMAS = {
     revision: z.number().int().positive(),
     status: statusOf(["deleted"]),
   }),
-  // Reserved until the core provides an erasure/data-request flow.
-  "customer.redact_requested": z.object({
-    customerId: id,
-  }),
-  "customer.data_requested": z.object({
-    customerId: id,
-  }),
   /**
    * Staff erased the customer's personal data (0179): contact, addresses,
    * sign-in identities, saved methods and consents, and their words on
@@ -551,6 +539,13 @@ export function parseEventFacts<T extends EventTopic>(topic: T, raw: unknown): E
 }
 
 // ── Subscription topic filters ────────────────────────────────────────────
+
+/**
+ * The most topic filters one webhook subscription lists: a fixed number, so
+ * the catalogue growing (or a topic leaving it) never moves a subscription
+ * schema's bound.
+ */
+export const WEBHOOK_TOPICS_MAX = 100;
 
 /**
  * A subscription filter is an exact topic, a resource prefix (`order.*`) or

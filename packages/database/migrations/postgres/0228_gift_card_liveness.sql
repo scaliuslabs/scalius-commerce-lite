@@ -77,4 +77,4 @@ FOR EACH ROW
 WHEN ((OLD."balance_minor" IS DISTINCT FROM NEW."balance_minor") AND OLD."balance_minor" = 0)
 EXECUTE FUNCTION scalius_compat."cdep_gift_cards_upd_balance_old_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (227, '0227_gift_card_liveness', 'd4c30be806d29f912681fc7d50b9ead18d408ad6de8af6a4a173513f170660ea');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (228, '0228_gift_card_liveness', 'd4c30be806d29f912681fc7d50b9ead18d408ad6de8af6a4a173513f170660ea');

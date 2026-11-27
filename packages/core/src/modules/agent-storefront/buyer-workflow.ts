@@ -48,6 +48,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
+  AppError,
   ConflictError,
   ForbiddenError,
   NotFoundError,
@@ -234,9 +235,7 @@ export function assertAgentStorefrontCheckoutReplayHash(
   // normalized ingress meaning. Every versioned agent checkout is strict.
   if (!VERSIONED_AGENT_CHECKOUT_REQUEST_HASH_PATTERN.test(storedHash)) return;
   if (storedHash !== submittedHash) {
-    throw new ConflictError(
-      "This idempotency key was already used for different checkout details. Use a new key for a changed checkout.",
-    );
+    throw new AppError(422, "idempotency_key_reused", "This idempotency key was already used for different checkout details. Use a new key for a changed checkout.");
   }
 }
 

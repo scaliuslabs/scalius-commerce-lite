@@ -161,6 +161,8 @@ export interface ShipmentRecovery {
   canRetryCreate: boolean;
   canRepair: boolean;
   unknownOutcome?: boolean;
+  /** Reason `courier_report`: the report staff apply or set aside. */
+  courierReport?: { previousStatus: string; reportedStatus: string; rawStatus: string } | null;
   updatedAt: OrderTimestamp | null;
 }
 

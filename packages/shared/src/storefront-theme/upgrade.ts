@@ -1,6 +1,7 @@
 // The upgrade chain (../storefront-theme.md, "Compatibility"): a stored theme
 // document of an older version is upgraded when it is read, one version at a
-// time, and then parsed strictly as the current version. The next save
+// time, and then parsed for the current version's structure (a key it does
+// not know is left out, read-repair.ts; only a save is strict). The next save
 // stores the current version; nothing is written on read.
 //
 // A step is pure JSON in, JSON out (no I/O, no clock) and changes only the
@@ -404,7 +405,7 @@ export type StoredStorefrontThemeRead =
 
 /**
  * Reads a stored document (JSON text or a parsed value): upgraded, then
- * parsed strictly for its structure. A read never runs the write policy
+ * parsed for its structure (a key this build does not know is left out). A read never runs the write policy
  * (`storefrontThemeDocumentPolicyIssues`): a document a later build's policy
  * refuses still reads and draws as it was saved, and is refused only when it
  * is saved again. Nor does it fail on a value a check with a save reason

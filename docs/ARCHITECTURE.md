@@ -151,9 +151,9 @@ L5   catalog · delivery · digital · payments · product-admin
 L4   brands · categories · customer-marketing · inventory · pages · plugins · price-lists · promotions · reviews · sales-channels
 L3   custom-fields · notifications · objects · onboarding · products · tax
 L2   customers · markets · media · platform
-L1   settings
+L1   gift-cards · settings
 L0   agent-access · attributes · buyer-uploads · collections · events · fraud-checker
-     gift-cards · media-references · order-kernel · payouts · translations
+     media-references · order-kernel · payouts · translations
 ```
 
 Rules that keep it acyclic:
