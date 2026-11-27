@@ -882,9 +882,9 @@ export const PLUGIN_FUNCTION_INVALID_OUTPUT = "function_invalid_output";
 
 /**
  * A function's answer checked the way the host checks it: the parsed output,
- * or `function_invalid_output` with the first issue's path. A label drawn as or
- * beside a money row that reads as the store's word is replaced by the store's
- * neutral word for that row and named in `notices` (the app's log), the rest
+ * or `function_invalid_output` with the first issue's path. A label that passes
+ * for the store's word gives way alone (a row's title to the store's neutral
+ * word, a rename skipped) and is named in `notices` (the app's log), the rest
  * of the answer standing (`adjustFunctionWords`). The host and the SDK test
  * harness both use this, so a test sees what production does.
  */

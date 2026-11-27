@@ -55,27 +55,35 @@ export const STORE_ACTION_AND_AMOUNT_WORDS: Readonly<Record<string, Readonly<{ e
  * Which of the store's words each kind of an app's label is held to:
  * `action` (every action word, its amount or provider slots included),
  * `amount` (every amount word), `fixed` (the label, whole, is one of the
- * store's fixed words of either class: no slot). `own` names the words that
- * are a row's truthful name for itself (a discount row titled "Discount").
- * A label of an `action` or `amount` kind is also refused when one of its
- * words mixes Latin letters with Cyrillic or Greek ones ("Раy now").
+ * store's fixed words of either class: no slot, and a Pay word with its
+ * amount left out, "Pay" and "Pay now"). Every action and amount kind is
+ * held to the fixed words too, so no label is checked less strictly than a
+ * sentence ("Place order" is refused as a heading as it is as a text).
+ * `own` names the words that are a row's truthful name for itself (a
+ * discount titled "Discount", a shipping rate named "Shipping"). A label of
+ * an `action` or `amount` kind is also refused when one of its words mixes
+ * Latin letters with Cyrillic or Greek ones ("Раy now").
  */
 export const STORE_WORD_LABEL_KINDS = {
   // What a buyer presses or follows.
-  button: { reach: ["action"] },
-  link: { reach: ["action"] },
-  "bulk-action": { reach: ["action"] },
+  button: { reach: ["action", "fixed"] },
+  link: { reach: ["action", "fixed"] },
+  "bulk-action": { reach: ["action", "fixed"] },
   // A way to buy, drawn beside Add to cart.
-  "purchase-option": { reach: ["action"] },
+  "purchase-option": { reach: ["action", "fixed"] },
+  // A name in the list of ways to pay or deliver the buyer picks from (a function's rename): never the store's action.
+  "payment-method": { reach: ["action", "fixed"] },
+  // A delivery rate's name is drawn only inside the store's own words ("Delivery · {method}"), so "Shipping" is its own name.
+  "shipping-rate": { reach: ["action", "fixed"], own: ["shippingText"] },
   // Drawn as or beside a money row.
-  "add-on": { reach: ["amount"] },
-  "add-on-detail": { reach: ["amount"] },
-  discount: { reach: ["amount"], own: ["discountText"] },
-  bundle: { reach: ["amount"] },
-  "key-value": { reach: ["amount"] },
-  badge: { reach: ["amount"] },
-  heading: { reach: ["amount"] },
-  "banner-title": { reach: ["amount"] },
+  "add-on": { reach: ["amount", "fixed"] },
+  "add-on-detail": { reach: ["amount", "fixed"] },
+  discount: { reach: ["amount", "fixed"], own: ["discountText"] },
+  bundle: { reach: ["amount", "fixed"] },
+  "key-value": { reach: ["amount", "fixed"] },
+  badge: { reach: ["amount", "fixed"] },
+  heading: { reach: ["amount", "fixed"] },
+  "banner-title": { reach: ["amount", "fixed"] },
   // A summary line in the summary that the buyer presses to open.
   disclosure: { reach: ["action", "amount"] },
   // Sentences and other words: only a whole fixed store word.
@@ -120,7 +128,14 @@ export function foldStoreWords(text: string): string {
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** An amount in a slot, as folded: a token holding a digit or a currency sign, with a currency code beside it at most. */
-const AMOUNT = "(?:(?:bdt|usd|eur|gbp|inr|tk|taka) )?[^\\s]*[\\p{Nd}\\p{Sc}][^\\s]*(?: (?:bdt|usd|eur|gbp|inr|tk|taka|টাকা))?";
+/**
+ * A short currency word beside an amount ("Tk.", "BDT", "টাকা": up to four
+ * letters, a dot after them at most; the store's own symbol is merchant-set),
+ * never a word that joins a phrase ("in", "of": "Pay in 3" is an app's).
+ */
+const CURRENCY_WORD = "(?!(?:in|on|at|by|for|to|of|per|with|from|or|and)\\.?(?: |$))[\\p{L}\\p{M}]{1,4}\\.?";
+/** An amount in a slot, as folded: a number (with its separators and currency signs, "৳1,200", "$10.99", "500/-"), with a currency word beside it at most. */
+const AMOUNT = `(?:${CURRENCY_WORD} )?\\p{Sc}*\\p{Nd}[\\p{Nd},.]*(?:/-)?\\p{Sc}*(?: ${CURRENCY_WORD})?`;
 /** A provider in a slot: one word. */
 const PROVIDER = "[^\\s]+";
 
@@ -142,16 +157,25 @@ function wordPattern(word: string): string {
   }).join("");
 }
 
+/** A word as a fixed word: itself without a slot, a Pay word with its amount left out ("Pay now"), none with a provider. */
+function fixedForm(word: string): string[] {
+  if (/\{(?!amount\})[^{}]*\}/.test(word)) return [];
+  return [word.replace(/\s*\{amount\}\s*/g, " ").trim()];
+}
+
 const patterns = new Map<StoreWordLabelKind, RegExp | null>();
 
 /** The whole-label pattern of one label kind's words (null: no word applies to it). */
 function kindPattern(kind: StoreWordLabelKind): RegExp | null {
   if (patterns.has(kind)) return patterns.get(kind)!;
   const scope: { reach: ReadonlyArray<StoreWordClass | "fixed">; own?: readonly string[] } = STORE_WORD_LABEL_KINDS[kind];
-  const words = Object.entries(STORE_ACTION_AND_AMOUNT_WORDS).filter(([key, entry]) => !scope.own?.includes(key)
-    && scope.reach.some((reach) => reach === entry.class || (reach === "fixed" && !/\{/.test(entry.en))));
-  const pattern = words.length === 0 ? null
-    : new RegExp(`^(?:${words.flatMap(([, entry]) => [wordPattern(entry.en), wordPattern(entry.bn)]).join("|")})$`, "u");
+  const sources: string[] = [];
+  for (const [key, entry] of Object.entries(STORE_ACTION_AND_AMOUNT_WORDS)) {
+    if (scope.own?.includes(key)) continue;
+    if (scope.reach.includes(entry.class)) sources.push(wordPattern(entry.en), wordPattern(entry.bn));
+    else if (scope.reach.includes("fixed")) sources.push(...[entry.en, entry.bn].flatMap((word) => fixedForm(word)).map(wordPattern));
+  }
+  const pattern = sources.length === 0 ? null : new RegExp(`^(?:${sources.join("|")})$`, "u");
   patterns.set(kind, pattern);
   return pattern;
 }
