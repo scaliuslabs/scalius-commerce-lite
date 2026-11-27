@@ -542,6 +542,13 @@ export function parseEventFacts<T extends EventTopic>(topic: T, raw: unknown): E
 // ── Subscription topic filters ────────────────────────────────────────────
 
 /**
+ * The most topic filters one webhook subscription lists: a fixed number, so
+ * the catalogue growing (or a topic leaving it) never moves a subscription
+ * schema's bound.
+ */
+export const WEBHOOK_TOPICS_MAX = 100;
+
+/**
  * A subscription filter is an exact topic, a resource prefix (`order.*`) or
  * `*` (every topic). Prefixes are limited to the catalog's resource prefixes
  * so a typo never subscribes to nothing silently.

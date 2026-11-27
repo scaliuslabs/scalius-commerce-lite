@@ -20713,7 +20713,7 @@
                 },
                 "code": {
                   "type": "string",
-                  "description": "price_changed, price_not_positive, stock_changed, below_reserved, not_found, retired, digital_stock, not_physical, revision_changed or needs_price."
+                  "description": "price_changed, price_not_positive, stock_version_conflict, below_reserved, not_found, retired, digital_stock, not_physical, product_revision_conflict or needs_price: a stale read has the name the single writes answer with."
                 }
               },
               "required": [
@@ -115561,7 +115561,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision."
+                    "description": "The order `revision` you read; a change since is refused with 409 `order_revision_conflict` and the hold stays. Releasing a released hold answers it again whatever the revision."
                   }
                 },
                 "required": [
@@ -115831,6 +115831,10 @@
                     "type": "integer",
                     "minimum": 1,
                     "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
+                  },
+                  "allowOpenAttempt": {
+                    "type": "boolean",
+                    "description": "Record it even though the buyer has a payment page open for the order that could still be paid: that page is closed at its provider in the same write, and money it still takes is refunded automatically (a late payment). Without it, an open page, or a payment being set up or charged right now, refuses the payment with 409 `payment_in_progress` (`details.paymentAttemptId`). One being set up or charged is refused either way."
                   }
                 },
                 "required": [
@@ -116947,7 +116951,13 @@
                               "type": "boolean"
                             }
                           ]
-                        }
+                        },
+                        "maxProperties": 10,
+                        "propertyNames": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+                        },
+                        "description": "The courier's own booking choices, by the keys its manifest declares (`bookingOptions`): at most 10, each a string, number or boolean within the declaration. A key it does not declare, or a value outside it, refuses the booking before anything is written."
                       },
                       "itemWeight": {
                         "type": "number",
@@ -130316,7 +130326,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
                     },
                     "minItems": 1,
-                    "maxItems": 64
+                    "maxItems": 100
                   },
                   "description": {
                     "type": "string",
@@ -130654,7 +130664,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
                     },
                     "minItems": 1,
-                    "maxItems": 64
+                    "maxItems": 100
                   },
                   "description": {
                     "type": "string",
@@ -240703,7 +240713,13 @@
                               "type": "boolean"
                             }
                           ]
-                        }
+                        },
+                        "maxProperties": 10,
+                        "propertyNames": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+                        },
+                        "description": "The courier's own booking choices, by the keys its manifest declares (`bookingOptions`): at most 10, each a string, number or boolean within the declaration. A key it does not declare, or a value outside it, refuses the booking before anything is written."
                       },
                       "itemWeight": {
                         "type": "number",
@@ -253770,7 +253786,13 @@
                               "type": "boolean"
                             }
                           ]
-                        }
+                        },
+                        "maxProperties": 10,
+                        "propertyNames": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+                        },
+                        "description": "The courier's own booking choices, by the keys its manifest declares (`bookingOptions`): at most 10, each a string, number or boolean within the declaration. A key it does not declare, or a value outside it, refuses the booking before anything is written."
                       },
                       "itemWeight": {
                         "type": "number",
@@ -272535,7 +272557,7 @@
           "Admin - Products"
         ],
         "summary": "Save the bulk editor's changed products in one request",
-        "description": "The changed rows of dashboard.products.bulk_edit_read (at most 50): status, price and discount, shipping profile, SKU weight and counted on hand at the default location. Every row commits in one batch, each under its own expectedAggregateRevision, so a row that fails (a stale revision, a refused value, a write that landed since the read) is reported in `results`, left whole, and the others stay saved. Counted quantities go through the stock ledger. The Idempotency-Key is required: a retry with the same key and body answers the first response, another body under it is refused. Each count names the stockVersion it was made against; a sale since fails that row (stock_changed). Rows past what one request may spend on this plan (only counted SKUs cost: their low-stock refresh) come back in `remaining`, unsaved: send them again.",
+        "description": "The changed rows of dashboard.products.bulk_edit_read (at most 50): status, price and discount, shipping profile, SKU weight and counted on hand at the default location. Every row commits in one batch, each under its own expectedAggregateRevision, so a row that fails (a stale revision, a refused value, a write that landed since the read) is reported in `results`, left whole, and the others stay saved. Counted quantities go through the stock ledger. The Idempotency-Key is required: a retry with the same key and body answers the first response, another body under it is refused. Each count names the stockVersion it was made against; a sale since fails that row (stock_version_conflict). Rows past what one request may spend on this plan (only counted SKUs cost: their low-stock refresh) come back in `remaining`, unsaved: send them again.",
         "parameters": [
           {
             "schema": {
@@ -272648,7 +272670,7 @@
                               "expectedStockVersion": {
                                 "type": "integer",
                                 "minimum": 0,
-                                "description": "Required with onHand: the SKU's stockVersion from dashboard.products.bulk_edit_read. Any stock change since (a sale) fails the row with stock_changed instead of booking the count over it."
+                                "description": "Required with onHand: the SKU's stockVersion from dashboard.products.bulk_edit_read. Any stock change since (a sale) fails the row with stock_version_conflict instead of booking the count over it."
                               }
                             },
                             "required": [
@@ -303157,7 +303179,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 64
+                    "maxItems": 100
                   },
                   "description": {
                     "type": "string",
@@ -303588,7 +303610,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 64
+                    "maxItems": 100
                   },
                   "description": {
                     "type": "string",

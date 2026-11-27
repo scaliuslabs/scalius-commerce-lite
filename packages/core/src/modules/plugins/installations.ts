@@ -24,6 +24,7 @@ import {
   type PluginInstallationSource,
   type PluginInstallationStatus,
 } from "@scalius/database/schema";
+import { isEventTopicFilter } from "@scalius/shared/events";
 import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placeholder-credentials";
 import { currentProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import { pluginObjectPatternIssues } from "@scalius/shared/plugins/object-patterns";
@@ -214,9 +215,29 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
  *    `storefront.extensions` entry per target, with the function's reads.
  * 3. Before admin nesting: top-level `timeline` and `settingsGroups` move to
  *    `admin.timeline` and `admin.settingsGroups`.
+ * 4. A topic the platform removed from the event catalogue (the reserved
+ *    privacy-request names, rc.1) leaves `events` and each feature's
+ *    `events`: an installed app keeps running and loses only a topic nothing
+ *    ever sent. An install or update naming one is still refused.
  */
 export function upgradeStoredPluginManifest(manifest: Record<string, unknown>): Record<string, unknown> {
-  return nestAdminParts(buyerUiAsExtensions(permissionsAsScopes(manifest)));
+  return withoutRemovedEventTopics(nestAdminParts(buyerUiAsExtensions(permissionsAsScopes(manifest))));
+}
+
+function withoutRemovedEventTopics(manifest: Record<string, unknown>): Record<string, unknown> {
+  let changed = false;
+  const prune = (list: unknown[]) => {
+    const kept = list.filter((topic) => typeof topic !== "string" || isEventTopicFilter(topic));
+    if (kept.length !== list.length) changed = true;
+    return kept;
+  };
+  const upgraded: Record<string, unknown> = { ...manifest };
+  if (Array.isArray(manifest.events)) upgraded.events = prune(manifest.events);
+  if (Array.isArray(manifest.features)) {
+    upgraded.features = manifest.features.map((feature) =>
+      (isObject(feature) && Array.isArray(feature.events) ? { ...feature, events: prune(feature.events) } : feature));
+  }
+  return changed ? upgraded : manifest;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

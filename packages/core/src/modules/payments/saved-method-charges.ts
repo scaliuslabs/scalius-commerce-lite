@@ -55,7 +55,7 @@ import { getUnpayableOrderReason } from "./payable-order";
 import { acceptsProviderPayment, inferPaymentType, releaseAuthorization, validateIncomingPaymentState } from "./process-payment";
 import { readCustomerPaymentMethod, savedMethodVisibleTo, type SavedMethodActor } from "./saved-payment-methods";
 import { resolveOrderCurrencySnapshot } from "./order-currency";
-import { hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE, shipmentClaimShipmentStatusSql } from "../order-kernel";
+import { hasActiveShipmentClaim, orderWriteConflict, SHIPMENT_CLAIM_CONFLICT_MESSAGE, shipmentClaimShipmentStatusSql } from "../order-kernel";
 import {
   closeCommandAttempt,
   commandAttemptKeyCondition,
@@ -250,6 +250,8 @@ function isConstraintError(error: unknown): boolean {
 async function claimAttempt(
   db: Database,
   input: {
+    /** The order revision the caller named: a lost guard on a moved order is then `order_revision_conflict`. */
+    expectedVersion?: number;
     attemptKey: string;
     requestHash: string;
     orderId: string;
@@ -312,7 +314,10 @@ async function claimAttempt(
       rows = reclaimed[1];
     }
   } catch (error) {
-    if (isBatchGuardError(error, CLAIM_GUARD)) throw new AppError(409, "payment_not_possible", input.guardMessage);
+    if (isBatchGuardError(error, CLAIM_GUARD)) {
+      const stale = await orderWriteConflict(db, input.orderId, input.expectedVersion, input.guardMessage);
+      throw stale instanceof OrderRevisionConflictError ? stale : new AppError(409, "payment_not_possible", input.guardMessage);
+    }
     // The order's single-flight index: another payment is being set up.
     if (isConstraintError(error)) throw inProgress();
     throw error;
@@ -507,6 +512,7 @@ export async function chargeSavedPaymentMethod(
   const correlationId = buildPaymentCorrelationId(input.orderId, paymentType, attemptKey.slice(-8));
 
   const attempt = await claimAttempt(db, {
+    expectedVersion: resuming ? undefined : input.expectedVersion,
     attemptKey,
     requestHash,
     orderId: input.orderId,

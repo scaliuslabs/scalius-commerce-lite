@@ -5914,7 +5914,7 @@ export declare const APP_ERROR_CODES: {
     };
     readonly idempotency_key_reused: {
         readonly status: 422;
-        readonly meaning: "The key was used for a different request, whether the platform's key layer or the command's own record answers (a payout names it in details.payoutId, a reversal in details.reversalId); use a new key.";
+        readonly meaning: "The key was used for a different request; use a new key. The platform's key layer (within 24 hours) and the command's own record (after) answer it alike; only a payout's or reversal's own record also names the first one (details.payoutId, details.reversalId).";
     };
     readonly idempotency_in_progress: {
         readonly status: 409;
@@ -5930,7 +5930,7 @@ export declare const APP_ERROR_CODES: {
     };
     readonly product_revision_conflict: {
         readonly status: 409;
-        readonly meaning: "The product changed since its revision was read.";
+        readonly meaning: "The product changed since its revision was read (a bulk run lists the product in its failures with this code).";
     };
     readonly product_state_conflict: {
         readonly status: 409;
@@ -6002,11 +6002,11 @@ export declare const APP_ERROR_CODES: {
     };
     readonly order_revision_conflict: {
         readonly status: 409;
-        readonly meaning: "The order changed since the revision the write named (`expectedRevision`) was read.";
+        readonly meaning: "The order changed since the revision the write named (`expectedRevision`) was read, or before the write committed.";
     };
     readonly stock_version_conflict: {
         readonly status: 409;
-        readonly meaning: "The SKU's stock changed since the stockVersion the write named (`expectedStockVersion`) was read.";
+        readonly meaning: "The SKU's stock changed since the stockVersion the write named (`expectedStockVersion`) was read (a stock write, a counted line of a stock command); a bulk run lists the SKU in its failures with this code.";
     };
     readonly admin_order_create_request_mismatch: {
         readonly status: 409;
@@ -6122,7 +6122,7 @@ export declare const APP_ERROR_CODES: {
     };
     readonly payment_in_progress: {
         readonly status: 409;
-        readonly meaning: "Another charge of the order is still running.";
+        readonly meaning: "Another payment of the order is still open: a charge or a payment page being set up right now (retry shortly), or a payment page the buyer could still pay (payments.create names it in details.paymentAttemptId and records anyway with allowOpenAttempt).";
     };
     readonly payment_not_possible: {
         readonly status: 409;

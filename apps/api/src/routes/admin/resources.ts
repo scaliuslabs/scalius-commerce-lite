@@ -543,7 +543,7 @@ app.openapi(createRoute({
 
 const releaseHoldBody = z.object({
   expectedRevision: z.number().int().min(1).openapi({
-    description: "The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision.",
+    description: "The order `revision` you read; a change since is refused with 409 `order_revision_conflict` and the hold stays. Releasing a released hold answers it again whatever the revision.",
   }),
 }).strict();
 
@@ -598,6 +598,9 @@ const recordPaymentBody = z.object({
   reference: z.string().trim().max(120).nullable().optional().openapi({ description: "The bank, cheque or transfer reference." }),
   note: z.string().trim().max(500).nullable().optional(),
   expectedRevision: optionalOrderRevisionSchema,
+  allowOpenAttempt: z.boolean().optional().openapi({
+    description: "Record it even though the buyer has a payment page open for the order that could still be paid: that page is closed at its provider in the same write, and money it still takes is refunded automatically (a late payment). Without it, an open page, or a payment being set up or charged right now, refuses the payment with 409 `payment_in_progress` (`details.paymentAttemptId`). One being set up or charged is refused either way.",
+  }),
 }).strict();
 
 app.openapi(createRoute({
@@ -633,6 +636,7 @@ app.openapi(createRoute({
     recordedBy,
     requestKey: await scopedRequestKey(c, "dashboard.resources.payments.create", c.req.valid("header")["idempotency-key"]),
     ...(body.expectedRevision !== undefined ? { expectedVersion: body.expectedRevision } : {}),
+    ...(body.allowOpenAttempt ? { allowOpenAttempt: true } : {}),
     // The timeline line commits with the payment, once per payment: in the
     // order's currency (the dashboard words it, like a cash collection).
     timelineLine: async ({ paymentId, currency, landed }) => ({ statement: buildOrderEventInsert(db, {

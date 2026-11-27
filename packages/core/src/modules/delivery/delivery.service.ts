@@ -512,6 +512,21 @@ export async function readCourierItems(db: Database, orderId: string): Promise<{
   };
 }
 
+/**
+ * Why a booking's options cannot go to this courier, or null: a key it does
+ * not declare (`bookingOptions`), or a value outside its declaration. Checked
+ * before anything about the order is written (the bulk ship's claim included).
+ */
+export function refusedBookingOptions(
+  courier: Pick<Courier, "label" | "bookingOptions">,
+  chosen: ShipmentOptions["bookingOptions"] | undefined,
+): string | null {
+  const kept = declaredCourierBookingOptions(courier.bookingOptions, chosen);
+  const refused = Object.keys(chosen ?? {}).filter((key) => !(key in kept));
+  return refused.length === 0 ? null
+    : `${courier.label} does not take ${refused.map((key) => `"${key}"`).join(", ")} as given. Choose only the booking options it offers.`;
+}
+
 export async function createShipment(
   db: Database,
   orderId: string,
@@ -547,12 +562,9 @@ export async function createShipment(
   if (!providerServesCountry(courier.countries, recipient.countryCode)) {
     return { success: false, message: courierCountryMessage(courier.label, recipient.countryCode) };
   }
-  // Only the booking options the courier declares, each within its declaration.
+  const refusedOptions = refusedBookingOptions(courier, options?.bookingOptions);
+  if (refusedOptions) return { success: false, message: refusedOptions };
   const bookingOptions = declaredCourierBookingOptions(courier.bookingOptions, options?.bookingOptions);
-  const refusedOptions = Object.keys(options?.bookingOptions ?? {}).filter((key) => !(key in bookingOptions));
-  if (refusedOptions.length > 0) {
-    return { success: false, message: `${courier.label} does not take ${refusedOptions.map((key) => `"${key}"`).join(", ")} as given. Choose only the booking options it offers.` };
-  }
   const preflightFailure = await courier.preflight?.(recipient, db);
   if (preflightFailure) return { success: false, message: preflightFailure };
 

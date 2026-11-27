@@ -2026,5 +2026,11 @@
   "from": "4a8ad1a20fde46f0",
   "change": "events.facts.customer.data_requested: the facts schema was removed.",
   "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics leave the event catalogue because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "a2b949aa2d4f8cee",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 review of the contract decisions, Nov 27, 2026): meanings only, no code or status changes. `payment_in_progress` also names a hosted payment page the buyer could still pay (payments.create refuses beside one, `details.paymentAttemptId`, unless `allowOpenAttempt`); `stock_version_conflict`, `product_revision_conflict` and `order_revision_conflict` name the bulk failures and lost races that now use them; `idempotency_key_reused` no longer promises details the key layer does not send."
  }
 ]

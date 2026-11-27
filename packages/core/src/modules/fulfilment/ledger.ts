@@ -37,6 +37,7 @@ import {
   noActiveShipmentClaimCondition,
   validateTransition,
   shipmentClaimShipmentStatusSql,
+  orderWriteConflict,
 } from "../order-kernel";
 import {
   applyOrderStatusChange,
@@ -754,7 +755,7 @@ export async function voidOrderFulfilment(
         fulfillmentStatus = projectedFulfilmentStatus(await safeBatch(db, statements));
     } catch (error) {
         if (isBatchGuardError(error, FULFILMENT_CLAIM_GUARD)) {
-            throw new ConflictError("This order changed. Reload to see the latest.");
+            throw await orderWriteConflict(db, orderId, options.expectedVersion);
         }
         throw error;
     }

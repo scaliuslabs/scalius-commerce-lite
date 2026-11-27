@@ -697,11 +697,12 @@ async function attemptOrderStatusChange(
             db.select({ id: orders.id }).from(orders).where(casCondition),
         ] as const);
         if (!now[0]) throw new NotFoundError("Order not found");
-        if (before ? now[0].version !== existingOrder.version : changed && casHolds.length === 0) {
-            throw new ConflictError(ORDER_CHANGED_MESSAGE);
-        }
+        // A caller that named the revision it read hears that it is stale, whichever write moved it.
         if (data?.expectedVersion !== undefined && now[0].version !== data.expectedVersion) {
             throw new OrderRevisionConflictError(ORDER_CHANGED_MESSAGE);
+        }
+        if (before ? now[0].version !== existingOrder.version : changed && casHolds.length === 0) {
+            throw new ConflictError(ORDER_CHANGED_MESSAGE);
         }
         throw new StockMovedDuringStatusChange();
     }

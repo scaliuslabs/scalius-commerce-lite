@@ -469,6 +469,21 @@ export class PluginHost {
     return outcome.ok ? { ok: true, value: null, error: null } : failed(outcome);
   }
 
+  /**
+   * A run past a limit: a breach (repeated breaches stop the app), except a
+   * function the merchant approved as blocking. Stopping that app would drop
+   * a check the merchant asked to run on every order; its run fails (the
+   * checkout is refused) and the app's log says why, and it never counts.
+   */
+  private async overLimit(installation: PluginInstallation, invocation: PluginInvocation, kind: PluginBreachKind, detail: string, lines: PluginLogInput[]): Promise<void> {
+    const blocking = invocation.kind === "function" && (installation.grant?.blockingFunctions ?? []).some((point) => point === invocation.point);
+    if (blocking) {
+      lines.push({ level: "warn", source: "host", message: `${detail} (a blocking function: not counted as a breach).` });
+      return;
+    }
+    await this.breach(installation, kind, detail);
+  }
+
   /** Records a limit breach; repeated breaches stop the app (safety.ts) and tell the staff. */
   private async breach(installation: PluginInstallation, kind: PluginBreachKind, detail: string): Promise<void> {
     try {
@@ -566,7 +581,7 @@ export class PluginHost {
       } else if (thrown instanceof PluginTimeoutError) {
         error = `${source} exceeded its ${wallMs} ms wall-time limit.`;
         failure = "timeout";
-        await this.breach(installation, "wall_time", `${source} ran longer than ${wallMs} ms`);
+        await this.overLimit(installation, invocation, "wall_time", `${source} ran longer than ${wallMs} ms`, lines);
       } else if (thrown instanceof PluginLoadError && thrown.outdated) {
         // The deployment carries a newer build: bring the installation in
         // step (bundled-sync.ts); the next call runs the new version, or
@@ -588,7 +603,7 @@ export class PluginHost {
         const limit = isolateLimitOf(thrown);
         if (limit) {
           error = `${source} went over its ${limit === "cpu" ? "CPU time" : "calls per run"} limit.`;
-          await this.breach(installation, limit, `${source} ran out of ${limit === "cpu" ? "CPU time" : "calls"}`);
+          await this.overLimit(installation, invocation, limit, `${source} ran out of ${limit === "cpu" ? "CPU time" : "calls"}`, lines);
         }
       }
     } finally {

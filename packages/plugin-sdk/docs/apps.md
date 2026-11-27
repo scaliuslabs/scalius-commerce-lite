@@ -285,7 +285,7 @@ The plan sets each app's ceilings. Your manifest's `limits` apply inside them.
 | Job steps per drain | 3 | 12 |
 | Held events while not running | 7 days, 2,000 | 30 days, 50,000 |
 
-- A run over a limit fails and the app's log records a breach.
+- A run over a limit fails and the app's log records a breach. A function the merchant approved as blocking (`onError: "block"`) is the exception: its run over a limit, like its throw, refuses that checkout and is logged, but never counts as a breach, so a failing blocking app is never stopped for it.
 - Storage is measured once a day. Above the limit, writes that add data fail with `quota_storage`; deletes still work.
 - Checkout functions, provider operations and storefront output are paced by the platform and do not count against runs per minute.
 - `ctx.api.call` allows 60 calls a minute. `ctx.http.fetch` allows 60 requests a minute; a provider operation's calls to its own provider do not count.

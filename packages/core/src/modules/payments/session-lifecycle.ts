@@ -248,6 +248,43 @@ export function openProviderSessionCondition(orderId: SQL): SQL {
 }
 
 /**
+ * A payment attempt of the order that may still take money or is being set
+ * up right now: a claim under a live lease (a hosted session being opened, an
+ * off-session charge running), or a hosted session the buyer could still pay
+ * (`SESSION_HOLD[status].payable`, with a provider session). A payment
+ * recorded by hand beside one could be counted twice.
+ */
+export function openPaymentAttemptCondition(orderId: SQL): SQL {
+    return sql`EXISTS (
+        SELECT 1 FROM ${paymentSessionAttempts}
+        WHERE ${paymentSessionAttempts.orderId} = ${orderId}
+          AND (
+            (${paymentSessionAttempts.status} = 'processing'
+              AND ${paymentSessionAttempts.claimExpiresAt} IS NOT NULL
+              AND ${paymentSessionAttempts.claimExpiresAt} > unixepoch())
+            OR (${hostedSession}
+              AND ${paymentSessionAttempts.status} IN (${statusList(PAYABLE_STATUSES)})
+              AND ${paymentSessionAttempts.providerSessionId} IS NOT NULL)
+          )
+    )`;
+}
+
+/** The order's open payment attempt (`openPaymentAttemptCondition`), a running claim first; null when none. */
+export async function readOpenPaymentAttempt(db: Database, orderId: string): Promise<{ id: string; status: string; running: boolean } | null> {
+    const running = sql<number>`CASE WHEN ${paymentSessionAttempts.status} = 'processing' THEN 1 ELSE 0 END`.mapWith(Number);
+    const row = await db.select({ id: paymentSessionAttempts.id, status: paymentSessionAttempts.status, running })
+        .from(paymentSessionAttempts)
+        .where(and(eq(paymentSessionAttempts.orderId, orderId), or(
+            and(eq(paymentSessionAttempts.status, "processing"), sql`${paymentSessionAttempts.claimExpiresAt} > unixepoch()`),
+            and(hostedSession, inArray(paymentSessionAttempts.status, [...PAYABLE_STATUSES]), isNotNull(paymentSessionAttempts.providerSessionId)),
+        )))
+        .orderBy(sql`${running} DESC`, sql`${paymentSessionAttempts.createdAt} DESC`)
+        .limit(1)
+        .get();
+    return row ? { id: row.id, status: row.status, running: row.running === 1 } : null;
+}
+
+/**
  * The statement that turns the order's payable sessions into durable cancel
  * commands (`hold_ended`, or `replaced` with `except` the new session), for
  * the caller's own batch, only while `authority` holds in that batch.

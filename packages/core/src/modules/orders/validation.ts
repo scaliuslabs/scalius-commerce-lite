@@ -444,6 +444,11 @@ const shipmentResourceIdSchema = z.string().trim().min(1).max(180);
 export const shipmentCreationOptionsSchema = z.object({
     bookingOptions: z.record(courierBookingOptionKeySchema, courierBookingOptionValueSchema)
         .refine((options) => Object.keys(options).length <= 10, "At most 10 booking options.")
+        .meta({
+            maxProperties: 10,
+            propertyNames: { type: "string", pattern: "^[a-z][a-zA-Z0-9]{0,31}$" },
+            description: "The courier's own booking choices, by the keys its manifest declares (`bookingOptions`): at most 10, each a string, number or boolean within the declaration. A key it does not declare, or a value outside it, refuses the booking before anything is written.",
+        })
         .optional(),
     itemWeight: z.number().finite().positive().max(10_000).optional(),
     note: z.string().trim().max(500).optional(),

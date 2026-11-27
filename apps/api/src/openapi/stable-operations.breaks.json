@@ -3286,5 +3286,17 @@
   "from": "5c884e0ad30524dc",
   "change": "webhook_subscriptions.update input body.topics[]: no longer accepts \"customer.redact_requested\", \"customer.data_requested\".",
   "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue because nothing emits them; a subscription could never have received one. The topics list's cap is the catalogue's filter count, so it falls by the same two."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "1459f0b1f5d28c46",
+  "change": "shipments.create input body.options.bookingOptions: maxProperties tightened to 10.",
+  "reason": "Pre-release (rc.1 review of the contract decisions, Nov 27, 2026): the bounds the server already enforced on `options.bookingOptions` (at most 10 keys, each camelCase: the courier port's own key format) are now in the schema an SDK or agent reads, so a client sees them before a refusal. Nothing the server accepted before is refused now."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "1459f0b1f5d28c46",
+  "change": "shipments.create input body.options.bookingOptions{key}: pattern changed.",
+  "reason": "Pre-release (rc.1 review of the contract decisions, Nov 27, 2026): the bounds the server already enforced on `options.bookingOptions` (at most 10 keys, each camelCase: the courier port's own key format) are now in the schema an SDK or agent reads, so a client sees them before a refusal. Nothing the server accepted before is refused now."
  }
 ]

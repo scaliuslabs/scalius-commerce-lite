@@ -16,7 +16,7 @@ import {
   buildOrderReadyForPickupNotificationDedupeKey,
   createOrderNotificationOutboxInsertValues,
 } from "../notifications";
-import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition, shipmentClaimShipmentStatusSql } from "../order-kernel";
+import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition, orderWriteConflict, shipmentClaimShipmentStatusSql } from "../order-kernel";
 
 const PICKUP_READY_GUARD = "order_pickup_ready_conflict";
 const OPEN_PICKUP_STATUSES = [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CONFIRMED] as const;
@@ -118,7 +118,7 @@ export async function markOrderReadyForPickup(
             if (current?.pickupReadyAt) {
                 return { orderId, pickupReadyAt: epochIso(current.pickupReadyAt), replayed: true, notificationOutboxId: null };
             }
-            throw new ConflictError("This order changed. Reload to see the latest.");
+            throw await orderWriteConflict(db, orderId, options.expectedVersion);
         }
         throw error;
     }

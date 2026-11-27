@@ -4241,7 +4241,7 @@ export type BulkRun = {
     failures: Array<{
         id: string;
         /**
-         * price_changed, price_not_positive, stock_changed, below_reserved, not_found, retired, digital_stock, not_physical, revision_changed or needs_price.
+         * price_changed, price_not_positive, stock_version_conflict, below_reserved, not_found, retired, digital_stock, not_physical, product_revision_conflict or needs_price: a stale read has the name the single writes answer with.
          */
         code: string;
     }>;
@@ -30395,7 +30395,7 @@ export type PostApiV1AdminResourcesOrdersQuoteResponse = PostApiV1AdminResources
 export type PostApiV1AdminResourcesOrdersByIdReleaseHoldData = {
     body: {
         /**
-         * The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision.
+         * The order `revision` you read; a change since is refused with 409 `order_revision_conflict` and the hold stays. Releasing a released hold answers it again whatever the revision.
          */
         expectedRevision: number;
     };
@@ -30555,6 +30555,10 @@ export type PostApiV1AdminResourcesOrdersByIdPaymentsData = {
          * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is.
          */
         expectedRevision?: number;
+        /**
+         * Record it even though the buyer has a payment page open for the order that could still be paid: that page is closed at its provider in the same write, and money it still takes is refunded automatically (a late payment). Without it, an open page, or a payment being set up or charged right now, refuses the payment with 409 `payment_in_progress` (`details.paymentAttemptId`). One being set up or charged is refused either way.
+         */
+        allowOpenAttempt?: boolean;
     };
     headers?: {
         /**
@@ -30868,6 +30872,9 @@ export type PostApiV1AdminResourcesOrdersByIdShipmentsData = {
     body: {
         providerId: string;
         options?: {
+            /**
+             * The courier's own booking choices, by the keys its manifest declares (`bookingOptions`): at most 10, each a string, number or boolean within the declaration. A key it does not declare, or a value outside it, refuses the booking before anything is written.
+             */
             bookingOptions?: {
                 [key: string]: string | number | boolean;
             };
@@ -68867,6 +68874,9 @@ export type PostApiV1AdminOrdersByIdShipmentsData = {
     body: {
         providerId: string;
         options?: {
+            /**
+             * The courier's own booking choices, by the keys its manifest declares (`bookingOptions`): at most 10, each a string, number or boolean within the declaration. A key it does not declare, or a value outside it, refuses the booking before anything is written.
+             */
             bookingOptions?: {
                 [key: string]: string | number | boolean;
             };
@@ -72658,6 +72668,9 @@ export type PostApiV1AdminOrdersBulkShipData = {
         orderIds: Array<string>;
         providerId: string;
         options?: {
+            /**
+             * The courier's own booking choices, by the keys its manifest declares (`bookingOptions`): at most 10, each a string, number or boolean within the declaration. A key it does not declare, or a value outside it, refuses the booking before anything is written.
+             */
             bookingOptions?: {
                 [key: string]: string | number | boolean;
             };
@@ -78044,7 +78057,7 @@ export type PostApiV1AdminProductsBulkEditData = {
                  */
                 onHand?: number;
                 /**
-                 * Required with onHand: the SKU's stockVersion from dashboard.products.bulk_edit_read. Any stock change since (a sale) fails the row with stock_changed instead of booking the count over it.
+                 * Required with onHand: the SKU's stockVersion from dashboard.products.bulk_edit_read. Any stock change since (a sale) fails the row with stock_version_conflict instead of booking the count over it.
                  */
                 expectedStockVersion?: number;
             }>;
