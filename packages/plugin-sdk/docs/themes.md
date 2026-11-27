@@ -45,7 +45,7 @@ Your module is compiled once, when you pack, and the same code runs in every sto
 | A category or collection a template names | A handle: `/categories/@<handle>`, `{ "kind": "category", "handle": "<handle>" }` | `/categories/<slug>`, `/collections/<id>` |
 | Fields on a card | `product.fields` (the fields the merchant chose), your own `<app id>.<key>` fields | `custom.*` |
 | Pictures | Image settings the merchant fills, your own neutral placeholders | Third-party art |
-| Words | `t(context, { en, bn })` and the SDK formatters | English-only strings |
+| Words | `t(context, { en, … })` in every language you ship, and the SDK formatters | Words in one language only |
 
 ## The portability rules
 
@@ -196,9 +196,9 @@ Right:
 <a {...quickAdd(product)}>Add to cart</a>       // on a card
 ```
 
-### 7. Both languages, and logical CSS
+### 7. Every language, and logical CSS
 
-- Every word your theme writes goes through `t(context, { en: "Sold out", bn: "বিক্রি শেষ" })`. Scalius stores ship in English and Bangla; a language you leave out falls back to English.
+- Every word your theme writes goes through `t(context, { en: "Sold out", bn: "বিক্রি শেষ" })`. English is required; add each language you translate (`bn`, `pt-BR`, …). A store runs in up to 20 languages, and a language you leave out falls back to English.
 - Format with the SDK: `formatNumber`, `plural`, `formatMoney`, `formatDate`. Money arrives as `StorefrontMoney` (`{ amountMinor, currency, formatted }`); show `formatted` or `<Price />`, never arithmetic on floats.
 - Write sides as logical properties so a right-to-left page mirrors without a second stylesheet: `margin-inline-start` (not `margin-left`), `padding-inline`, `inset-inline-start`, `border-inline-end`, `text-align: start`.
 - Style on the store's tokens so the merchant's colours and type still apply: `var(--primary)`, `--primary-foreground`, `--foreground`, `--background`, `--border`, `--muted-foreground`, `--radius`, `--theme-font-body`, `--theme-font-heading`.
@@ -227,11 +227,11 @@ A template that leaves dark off (`light`, no switch) keeps the merchant's own sc
 **What the store refuses is what validate refuses.** The store checks a template by applying it to the default theme and running the save check every theme save and publish runs: readable text in every colour set the template shows (its `colors`, and its `darkColors` and `pagePaint` as you wrote them, never remade), helper text apart from the error colour, the private pages (arrangement, tokens, words, icons) and the homepage sections. A template that fails is not offered in the store's template library, and the app's page says why. `validate` runs the same function and prints each refused value with its place in your manifest, the store's words (what is wrong and what is allowed) and its reason when it has one:
 
 ```text
-✗ Theme templates: storefront.templates[0] (studio).theme.tokens.colors.destructive: destructive on card has contrast 4.28:1; it needs at least 4.5:1.
+✗ Theme templates: storefront.templates[0] (studio).theme.tokens.colors.destructive: destructive on card has contrast 4.28:1; it needs at least 4.5:1. [contrast]
 ✗ Theme templates: storefront.templates[0] (studio).theme.privatePages.labels.cart.summaryHeading.en: These words sit among the amounts: no digits or currency signs; the store writes every amount. [label_figures]
 ```
 
-A template that sets blocks but no tokens is checked against the default colours it keeps (`theme (the default theme's tokens.colors…, which this template keeps)`). A merchant's own blocks can still add a pair your palette fails; set the blocks your palette is made for.
+These colour checks (`contrast`, `semantic_color`, `dark_colors_missing`) run when a theme is written (saved, published, installed, applied, validated), never when a stored one is read: a store whose theme a later, stricter check refuses keeps drawing it as saved, and is told only when it saves again. A template that sets blocks but no tokens is checked against the default colours it keeps (`theme (the default theme's tokens.colors…, which this template keeps)`). A merchant's own blocks can still add a pair your palette fails; set the blocks your palette is made for.
 
 ```ts
 templates: [{
@@ -299,7 +299,7 @@ What `pnpm plugin validate` checks for portability:
 - [ ] No literal `/products/…`, `/categories/<slug>` or `/collections/<id>` anywhere, and no page path that is not a core route. Header link lists ship empty.
 - [ ] No `custom.*` in the template, the settings or the code. Your own fields are declared in `customFields`, and your code writes them.
 - [ ] Every image is yours or licensed for redistribution to every store, and each is under 200 KiB.
-- [ ] Every word has English and Bangla; the stylesheet has no `left` or `right`.
+- [ ] Every word has English and each language you ship; the stylesheet has no `left` or `right`.
 - [ ] Every control works with JavaScript turned off; the product page buys through `<BuyForm />`.
 - [ ] In a fresh local store: install, apply the template, publish, then browse the home page, a category, a product, search and the cart on a phone and a computer. Repeat in a store with a full catalogue.
 - [ ] Your listing says which pages or categories a merchant can create for the full look.

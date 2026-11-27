@@ -25,13 +25,27 @@
 //   matches is the store's host by the host's own attributes;
 // - URLs: every one that can fetch (`url()`, `image-set()`) resolves within
 //   the app's own public files (written `./public/...`) or is a fragment
-//   (`url(#filter)`); nothing that would choose a URL later (`var()`, `env()`,
-//   `attr()` inside `image-set()`, `src()`, `image()`, `cross-fade()`,
-//   `element()`) and no `data:`.
+//   (`url(#filter)`); nothing that would choose a URL later (`var()` or `env()`
+//   inside `image-set()`, `src()`, `image()`, `cross-fade()`, `element()`),
+//   no `attr()` anywhere (a value read from the markup, where `title` and
+//   `aria-label` carry free text), and no `data:`.
 // The new sheet is written from the parse alone: rules, selectors and values
-// re-serialized token by token, every non-ASCII character as a CSS escape.
+// re-serialized token by token, every non-ASCII character as a CSS escape,
+// and it tokenises again exactly as the parse did.
+//
+// The store checks a stored sheet again whenever this checker changes
+// (`BUYER_CHROME_CSS_VERSION`, `recheckedBuyerChromeSheet`): a release whose
+// sheet an older checker accepted is drawn only once this one writes it
+// unchanged.
 // Self-contained (no imports): the differential test loads it into Node
 // beside Chromium as it is.
+
+/**
+ * This checker's version: what it accepts and how it writes. Raised with every
+ * change to this file (buyer-chrome-css.test.ts seals the file to it), so a
+ * sheet an earlier checker accepted is checked again before it is drawn.
+ */
+export const BUYER_CHROME_CSS_VERSION = 1;
 
 /** The at-rules a buyer-page sheet may hold (ASCII lower case, vendor prefixes as written). */
 export const BUYER_CHROME_CSS_AT_RULES = ["media", "supports", "layer", "container", "keyframes", "-webkit-keyframes", "starting-style"] as const;
@@ -231,7 +245,7 @@ const ALLOWED_AT_RULES = new Set<string>(BUYER_CHROME_CSS_AT_RULES);
 const GROUP_AT_RULES = new Set(["media", "supports", "layer", "container", "starting-style"]);
 const KEYFRAMES = new Set(["keyframes", "-webkit-keyframes"]);
 /** Functions that would choose a URL at computed time, or fetch one the store did not resolve. */
-const REFUSED_FUNCTIONS = new Set(["src", "image", "cross-fade", "-webkit-cross-fade", "element", "-moz-element", "host-context"]);
+const REFUSED_FUNCTIONS = new Set(["src", "image", "cross-fade", "-webkit-cross-fade", "element", "-moz-element", "host-context", "attr"]);
 const IMAGE_SET = new Set(["image-set", "-webkit-image-set"]);
 const SUBSTITUTIONS = new Set(["var", "env", "attr"]);
 const ATTRIBUTE_DELIMS = new Set(["=", "~", "|", "^", "$", "*"]);
@@ -372,11 +386,13 @@ function resolveUrl(value: string): string {
 function serialize(values: CssComponent[], context: Context, within: string | null = null): string {
   let out = "";
   const push = (text: string) => {
-    // Two tokens that would read as one (`a` `(`, `1` `px`, `/` `*`) keep a comment between them.
+    // Two tokens that would read as one (`a` `(`, `1` `px`, `/` `*`, `.` `5em`, `+` `5px`, `1` `.5px`) keep a
+    // comment between them, so the text tokenises again as the parse read it.
     const last = out.at(-1) ?? "";
     const first = text[0] ?? "";
     const word = (c: string) => /[A-Za-z0-9_\\%-]/.test(c);
-    if (out !== "" && ((word(last) && (word(first) || first === "(")) || (last === "/" && first === "*") || (last === "@" && word(first)) || (last === "#" && word(first)) || (last === "-" && /[0-9.]/.test(first)) || (last === "<" && first === "!"))) out += "/**/";
+    const numeric = /^\.?[0-9]/.test(text);
+    if (out !== "" && ((word(last) && (word(first) || first === "(")) || (last === "/" && first === "*") || (last === "@" && word(first)) || (last === "#" && word(first)) || (last === "-" && /[0-9.]/.test(first)) || ((last === "." || last === "+" || /[0-9]/.test(last)) && numeric) || (last === "<" && first === "!"))) out += "/**/";
     out += text;
   };
   for (const value of values) {
@@ -578,6 +594,21 @@ export function parsedBuyerChromeCss(text: string): BuyerChromeSheet {
     if (error instanceof Refusal) return { ok: false, problem: error.message };
     throw error;
   }
+}
+
+/**
+ * A stored sheet (a release's `buyer-chrome.css`) checked again by this
+ * checker: plain ASCII, read without a refusal, and written by this checker
+ * byte for byte as it is stored. A sheet an earlier checker wrote that this
+ * one would refuse or write otherwise is not this checker's reading.
+ */
+export function recheckedBuyerChromeSheet(bytes: Uint8Array): { ok: true } | { ok: false; problem: string } {
+  if (bytes.some((byte) => byte < 0x20 || byte > 0x7e)) return { ok: false, problem: "the store's sheet is not plain ASCII" };
+  const text = new TextDecoder().decode(bytes);
+  const parsed = parsedBuyerChromeCss(text);
+  if (!parsed.ok) return parsed;
+  if (parsed.text !== text) return { ok: false, problem: "this version of the store writes the stylesheet otherwise; the app packs it again" };
+  return { ok: true };
 }
 
 /** Why the decoded text cannot style a buyer page's chrome, or null when it can. */

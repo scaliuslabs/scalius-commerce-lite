@@ -13,8 +13,9 @@
 
 import { z } from "zod";
 import { PROTECTED_FIELD_KEYWORD, protectedPathsOf, redactProtectedData, type ProtectedCustomerData, type ProtectedPath } from "./plugins/protected-data";
-import { STABLE_APP_OPERATIONS, type StableAppOperationName } from "./plugins/app-operations";
+import type { StableAppOperationName } from "./plugins/app-operations";
 import { APP_OWNED_FIELD_KEYWORD, appOwnedPathsOf, projectAppOwnedData, type AppOwnedMode, type AppOwnedPath } from "./plugins/app-owned-data";
+import { schemaProjector, type SchemaProjector } from "./schema-projection";
 import {
   FULFILLMENT_RECORD_STATUSES,
   FULFILLMENT_STATUSES,
@@ -38,6 +39,7 @@ import { REVIEW_LIMITS, REVIEW_REJECTION_REASONS, REVIEW_STATUSES } from "./revi
 import { POINT_OF_SALE_TENDER_VIAS } from "./payment-terms";
 import { buyerText } from "./buyer-text";
 import { OBJECT_STATUSES } from "./plugins/object-status";
+import { lineAddOnSchema } from "./plugins/line-add-on";
 
 const id = z.string().min(1).max(128);
 const text = z.string().max(4000);
@@ -72,7 +74,10 @@ const postalAddressSchema = z.object({
   postalCode: text.nullable(),
   /** ISO 3166-1 alpha-2. */
   countryCode: z.string().length(2).nullable(),
-  /** The store's delivery place ids (Bangladesh City, Thana, Area). */
+  /**
+   * The store's own delivery places: up to three levels whose meaning a
+   * regional pack defines, each null where the store has none.
+   */
   placeIds: z.object({ city: id.nullable(), zone: id.nullable(), area: id.nullable() }),
 });
 
@@ -141,16 +146,15 @@ const orderLineSchema = z.object({
     confirmation: z.object({ text, revision: z.string().max(64).nullable() }).nullable().optional(),
   })).max(60)),
   /**
-   * Apps' add-ons to each unit of the line (`cart.line_prices` adjustments: a
-   * protection plan, gift wrap), already inside `unitPriceMinor`. `appId` is
-   * null for add-ons frozen before apps were named on them.
+   * Apps' add-ons on the line (`cart.line_prices` add-ons: a protection plan,
+   * gift wrap), frozen at checkout and already inside `unitPriceMinor` and
+   * `subtotalMinor`, in the one add-on shape every app surface carries
+   * (`LineAddOn`): `totalMinor` exact; `amountMinor` per unit (`per: "unit"`)
+   * or per bundle unit (`per: "bundle"`: an expanded bundle's or a kit's
+   * add-on, on its anchor line) when exact, else null; `units` how many of
+   * those the line holds (null once staff change a bundle line's quantity).
    */
-  adjustments: z.array(z.object({
-    appId: id.nullable(),
-    title: text,
-    /** Added to each unit. */
-    amountMinor: minor,
-  })).max(10),
+  addOns: z.array(lineAddOnSchema).max(10),
   /**
    * The bundle the line was bought in (`cart.transform`), frozen at checkout:
    * lines with the same `id` are one bought bundle. An expanded bundle's
@@ -944,16 +948,14 @@ export type EventRepresentationInput<T extends EventRepresentationType> =
  * resource no longer exists. `fetch` names a stable app API read whose
  * answer carries the same representation, the resource itself or the list
  * it is in, by its `id`: `appOperation` is what an app passes to
- * `ctx.api.call`, `operationId`/`method`/`path` what an HTTP or agent caller
- * uses. It is null for a resource no stable operation reads; the receiver
- * keeps the `id`.
+ * `ctx.api.call`, `method` and `path` what an HTTP caller sends. It is null
+ * for a resource no stable operation reads; the receiver keeps the `id`.
  */
 export const eventDataTruncationSchema = z.object({
   truncated: z.literal(true),
   id,
   fetch: z.object({
     appOperation: z.string().min(1).max(128),
-    operationId: z.string().min(1).max(128),
     method: z.literal("GET"),
     path: z.string().min(1).max(512),
   }).nullable(),
@@ -1000,14 +1002,17 @@ export function eventDataTruncation(type: EventRepresentationType, resourceId: s
   return eventDataTruncationSchema.parse({
     truncated: true,
     id: resourceId,
-    fetch: hint && { appOperation: hint.appOperation, operationId: STABLE_APP_OPERATIONS[hint.appOperation], method: "GET", path: hint.path },
+    fetch: hint && { appOperation: hint.appOperation, method: "GET", path: hint.path },
   });
 }
 
 /**
  * A copy of a sealed representation as one reader may see it (per
- * subscription): the protected fields outside `customerData` as null, and,
- * for an app's reader, the app-owned answers narrowed to that app's own.
+ * subscription): only the keys its schema declares (whatever built it), the
+ * protected fields outside `customerData` as null, and, for an app's reader,
+ * the app-owned answers narrowed to that app's own. The projection answers a
+ * fresh copy (every object and array), so the representation one drain
+ * shares across endpoints is never changed by one endpoint's view.
  */
 export function projectEventRepresentation<T extends EventRepresentationType>(
   type: T,
@@ -1015,32 +1020,37 @@ export function projectEventRepresentation<T extends EventRepresentationType>(
   customerData: ReadonlySet<ProtectedCustomerData>,
   appId: string | null = null,
 ): EventRepresentation<T> {
-  const projected = redactProtectedData(structuredClone(representation), eventRepresentationProtectedPaths(type), customerData);
-  return projectAppOwnedData(projected, eventRepresentationAppOwnedPaths(type), appId);
+  const { project, protectedPaths, appOwnedPaths } = derived(type);
+  return projectAppOwnedData(redactProtectedData(project(representation), protectedPaths, customerData), appOwnedPaths, appId);
 }
 
-const appOwnedPathsByType = new Map<EventRepresentationType, readonly AppOwnedPath[]>();
+type Derived = { project: SchemaProjector; protectedPaths: readonly ProtectedPath[]; appOwnedPaths: readonly AppOwnedPath[] };
+const derivedByType = new Map<EventRepresentationType, Derived>();
+
+/** What a representation's schema yields, derived once per type: its projector and its marked fields. */
+function derived(type: EventRepresentationType): Derived {
+  let found = derivedByType.get(type);
+  if (!found) {
+    const schema = z.toJSONSchema(EVENT_REPRESENTATION_SCHEMAS[type], { io: "output", unrepresentable: "any" }) as Record<string, unknown>;
+    const defs = (schema.$defs ?? {}) as Record<string, unknown>;
+    found = {
+      project: schemaProjector(schema, (ref) => (ref === "#" ? schema : ref.startsWith("#/$defs/") ? defs[ref.slice("#/$defs/".length)] : undefined)),
+      protectedPaths: protectedPathsOf(schema),
+      appOwnedPaths: appOwnedPathsOf(schema),
+    };
+    derivedByType.set(type, found);
+  }
+  return found;
+}
 
 /** The app-owned fields of a representation (derived once per type from its schema). */
 export function eventRepresentationAppOwnedPaths(type: EventRepresentationType): readonly AppOwnedPath[] {
-  let paths = appOwnedPathsByType.get(type);
-  if (!paths) {
-    paths = appOwnedPathsOf(z.toJSONSchema(EVENT_REPRESENTATION_SCHEMAS[type], { io: "output", unrepresentable: "any" }));
-    appOwnedPathsByType.set(type, paths);
-  }
-  return paths;
+  return derived(type).appOwnedPaths;
 }
-
-const pathsByType = new Map<EventRepresentationType, readonly ProtectedPath[]>();
 
 /** The protected fields of a representation (derived once per type from its schema). */
 export function eventRepresentationProtectedPaths(type: EventRepresentationType): readonly ProtectedPath[] {
-  let paths = pathsByType.get(type);
-  if (!paths) {
-    paths = protectedPathsOf(z.toJSONSchema(EVENT_REPRESENTATION_SCHEMAS[type], { io: "output", unrepresentable: "any" }));
-    pathsByType.set(type, paths);
-  }
-  return paths;
+  return derived(type).protectedPaths;
 }
 
 /** A status field: `status`, `paymentStatus`, `fulfillmentStatus` and the like. */

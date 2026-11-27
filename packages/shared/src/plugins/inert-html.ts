@@ -200,9 +200,7 @@ const POPOVER_TAGS = new Set(["div", "nav", "aside", "section", "ul", "ol"]);
 export interface InertPanel {
   /** A side sheet (`drawer`) or a panel under the button that opens it (`menu`). */
   kind: "drawer" | "menu";
-  /** The theme's name for it (`aria-label`), or null. */
-  label: string | null;
-  /** The panel's own markup, rebuilt as the region's is. */
+  /** The panel's own markup, rebuilt as the region's is (a label of the theme's stays on it, inside the theme's frame). */
   html: string;
 }
 
@@ -356,6 +354,8 @@ interface Rebuild {
   options: InertChromeOptions;
   panels: ReadonlyMap<string, number>;
   lifted: InertPanel[];
+  /** A panel's id twice: which one a button opens would be a guess, so nothing of the theme's draws. */
+  ambiguous: boolean;
 }
 
 function walk(nodes: ChildNode[], rebuild: Rebuild, out: string[]): void {
@@ -388,8 +388,8 @@ function walk(nodes: ChildNode[], rebuild: Rebuild, out: string[]): void {
     }
     if (panel !== undefined) {
       const kind = "data-menu-drawer" in node.attribs || node.attribs["data-panel"] === "drawer" ? "drawer" : "menu";
-      const label = (node.attribs["aria-label"] ?? "").trim().slice(0, 80) || null;
-      rebuild.lifted[panel] = { kind, label, html: target.join("") };
+      if (rebuild.lifted[panel]) rebuild.ambiguous = true;
+      rebuild.lifted[panel] = { kind, html: target.join("") };
     }
   }
 }
@@ -458,10 +458,13 @@ export const INERT_MARKUP_MAX_BYTES = 64 * 1024;
 export function inertChrome(html: string, options: InertChromeOptions): InertChrome | null {
   if (html.length > INERT_MARKUP_MAX_BYTES / 3 && new TextEncoder().encode(html).byteLength > INERT_MARKUP_MAX_BYTES) return null;
   const document = parseDocument(untrustedHtml(html), { ...UNTRUSTED_HTML_PARSING, recognizeSelfClosing: true });
-  const rebuild: Rebuild = { options, panels: panelIds(document.children), lifted: [] };
+  const rebuild: Rebuild = { options, panels: panelIds(document.children), lifted: [], ambiguous: false };
   const out: string[] = [];
   walk(document.children, rebuild, out);
-  return { html: out.join(""), panels: rebuild.lifted.filter(Boolean) };
+  // Every panel its buttons name, each once: a popover id twice, or one the rebuild left out, draws the store's chrome.
+  const panels = Array.from({ length: rebuild.panels.size }, (_, index) => rebuild.lifted[index]);
+  if (rebuild.ambiguous || panels.some((panel) => panel === undefined)) return null;
+  return { html: out.join(""), panels: panels as InertPanel[] };
 }
 
 /** The region's own markup alone (its panels left out), or null over the bound. */

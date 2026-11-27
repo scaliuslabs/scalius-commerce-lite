@@ -6,8 +6,11 @@
 //     ...) throws `PluginPlatformError` whose `code` is one of these (the
 //     bridge forwards only these; anything else reads `internal_error`);
 //   - a refused `ctx.api.call` (and the same stable operation over HTTP)
-//     answers `{ ok: false, status, error: { code, message } }` with one of
-//     these as `code`.
+//     answers `{ ok: false, status, error: { code, message, details? } }`
+//     with one of these as `code`. `details` reaches an app only for a code
+//     that declares it (`details` below, a JSON Schema): projected to the
+//     declared keys, its lists cut to their `maxItems`; every other code
+//     carries none. The declaration is sealed with the code.
 //
 // One code per fact: `object_invalid` (never `object_invalid_record`),
 // `installation_inactive` (never `plugin_inactive`), `internal_error` (never
@@ -22,18 +25,56 @@ export interface AppErrorCodeEntry {
   readonly status: number;
   /** What happened, and what the app does about it. */
   readonly meaning: string;
+  /** The `error.details` an app receives with it from `ctx.api.call` (JSON Schema); none when absent. */
+  readonly details?: Readonly<Record<string, unknown>>;
 }
+
+const id = { type: "string" } as const;
+/** An object of required fields. */
+const fields = (properties: Record<string, unknown>, optional: readonly string[] = []) => ({
+  type: "object",
+  properties,
+  required: Object.keys(properties).filter((key) => !optional.includes(key)),
+}) as const;
+
+/**
+ * The `error.details` each code delivers to an app (JSON Schema), in one
+ * table: a code here declares its details; any other code carries none. A
+ * field is only ever added (protocolBreakingChanges refuses a removed or
+ * retyped one), and the code's `meaning` names each field an app reads.
+ */
+const DETAILS = {
+  // A refusal that names a machine-readable reason (a theme's: the sealed STOREFRONT_THEME_SAVE_REASONS) says it once and on each issue.
+  validation_error: fields({ reason: { type: "string" }, issues: { type: "array", maxItems: 20, items: fields({ path: { type: "array", items: { anyOf: [{ type: "string" }, { type: "integer" }] } }, message: { type: "string" }, reason: { type: "string" } }, ["reason"]) } }, ["issues", "reason"]),
+  admin_order_create_request_mismatch: fields({ state: { type: "string", enum: ["committed", "processing", "failed"] }, canRetryWithNewKey: { type: "boolean" }, orderId: id }, ["orderId"]),
+  handle_unresolved: fields({ unresolved: { type: "array", maxItems: 20, items: fields({ kind: { type: "string" }, handle: { type: "string" } }) } }),
+  payout_not_reversible: fields({ payoutId: id, status: { type: "string" } }),
+  payout_reversal_exceeds_payout: fields({ payoutId: id, reversibleMinor: { type: "integer", minimum: 0 } }),
+  payout_reversal_currency_mismatch: fields({ payoutId: id, currency: { type: "string" } }),
+  payout_reversal_outcome_unknown: fields({ payoutId: id, reversalId: id }),
+  payout_outcome_unknown: fields({ payoutId: id }),
+  sales_channel_product_unpublished: fields({ salesChannelId: id, productIds: { type: "array", items: id } }),
+  review_exists: fields({ reviewId: id }),
+  // A payout's or reversal's own record names the first one; the key layer and every other command send none.
+  idempotency_key_reused: fields({ payoutId: id, reversalId: id }, ["payoutId", "reversalId"]),
+  payment_in_progress: fields({ paymentAttemptId: id, status: { type: "string" } }, ["paymentAttemptId", "status"]),
+  stock_version_conflict: fields({ variantId: id }, ["variantId"]),
+} as const;
 
 export const APP_ERROR_CODES = {
   // ── Any operation ──
-  validation_error: { status: 400, meaning: "A path, query or body value the operation's schema refuses; details.issues names the fields." },
+  validation_error: {
+    status: 400,
+    meaning: "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message). A refusal with a machine-readable reason (a theme's, one of STOREFRONT_THEME_SAVE_REASONS) carries it as details.reason and on each issue it applies to. A path is into the operation's input; for an address it names the field within that address, and where the operation checks a normalised form of its input (products.create, orders.create), it is into that form.",
+    details: DETAILS.validation_error,
+  },
   invalid_cursor: { status: 400, meaning: "The cursor is not one this list issued for this order; start again from the first page." },
   unauthorized: { status: 401, meaning: "No valid credential." },
   forbidden: { status: 403, meaning: "The caller may not do this to this resource." },
   not_found: { status: 404, meaning: "The resource does not exist (or is not visible to the caller)." },
   conflict: { status: 409, meaning: "The resource is in a state that refuses the write; read it again." },
   payload_too_large: { status: 413, meaning: "The request body is over the operation's limit." },
-  rate_limited: { status: 429, meaning: "Too many calls; retry after details.retryAfterSeconds." },
+  rate_limited: { status: 429, meaning: "Too many calls; retry later. An app's limits are per minute; an HTTP answer's Retry-After header says when." },
   internal_error: { status: 500, meaning: "The platform failed; nothing was promised. Retry with the same Idempotency-Key." },
   service_unavailable: { status: 503, meaning: "A dependency is unavailable right now; retry later." },
 
@@ -52,13 +93,13 @@ export const APP_ERROR_CODES = {
   idempotency_key_required: { status: 400, meaning: "The operation needs an Idempotency-Key." },
   idempotency_not_supported: { status: 400, meaning: "The operation takes no Idempotency-Key." },
   idempotency_key_invalid: { status: 400, meaning: "The Idempotency-Key is not 8 to 200 printable characters." },
-  idempotency_key_reused: { status: 422, meaning: "The key was used for a different request; use a new key." },
+  idempotency_key_reused: { status: 422, meaning: "The key was used for a different request; use a new key. The platform's key layer (within 24 hours) and the command's own record (after) answer it alike; only a payout's or reversal's own record also names the first one (details.payoutId, details.reversalId).", details: DETAILS.idempotency_key_reused },
   idempotency_in_progress: { status: 409, meaning: "The first request with this key is still running; retry shortly." },
   idempotency_outcome_unknown: { status: 409, meaning: "A first request with this key may have committed before its answer was lost; read to check, and repeat with a new key only if it is missing." },
   idempotency_secret_not_replayed: { status: 409, meaning: "The first response carried a one-time secret, which is never replayed." },
 
   // ── Revisions and states (409: read the resource again, then retry) ──
-  product_revision_conflict: { status: 409, meaning: "The product changed since its revision was read." },
+  product_revision_conflict: { status: 409, meaning: "The product changed since its revision was read (a bulk run lists the product in its failures with this code)." },
   product_state_conflict: { status: 409, meaning: "The product is in a state (trashed, live) that refuses the write." },
   brand_revision_conflict: { status: 409, meaning: "The brand changed since its revision was read." },
   brand_state_conflict: { status: 409, meaning: "The brand is in a state that refuses the write." },
@@ -76,8 +117,13 @@ export const APP_ERROR_CODES = {
   purchase_order_revision_conflict: { status: 409, meaning: "The purchase order changed since its revision was read." },
   purchase_order_state_conflict: { status: 409, meaning: "The purchase order's status refuses the write (an ordered one's lines, a received or cancelled one)." },
   inventory_transfer_revision_conflict: { status: 409, meaning: "The stock transfer changed since its revision was read." },
-  order_revision_conflict: { status: 409, meaning: "The order changed since its revision was read (a return request names the order's revision)." },
-  admin_order_create_request_mismatch: { status: 409, meaning: "The order request's key already belongs to another request: details.state is committed (details.orderId is the order it placed: read it, never place it again), processing (retry shortly) or failed (details.canRetryWithNewKey)." },
+  order_revision_conflict: { status: 409, meaning: "The order changed since the revision the write named (`expectedRevision`) was read, or before the write committed." },
+  stock_version_conflict: { status: 409, meaning: "The SKU's stock changed since the stockVersion the write named (`expectedStockVersion`) was read (a stock write, a counted line of a stock command); a bulk run lists the SKU in its failures with this code.", details: DETAILS.stock_version_conflict },
+  admin_order_create_request_mismatch: {
+    status: 409,
+    meaning: "The order request's key already belongs to another request: details.state is committed (details.orderId is the order it placed: read it, never place it again), processing (retry shortly) or failed (details.canRetryWithNewKey).",
+    details: DETAILS.admin_order_create_request_mismatch,
+  },
   return_revision_conflict: { status: 409, meaning: "The return changed since its revision was read." },
   return_command_in_progress: { status: 409, meaning: "Another return command (a receipt, a racing request) is running on the order; retry shortly with the same key." },
   segment_revision_conflict: { status: 409, meaning: "The customer segment changed since its revision was read." },
@@ -99,7 +145,11 @@ export const APP_ERROR_CODES = {
   cost_scope_required: { status: 403, meaning: "Purchase order events carry costs: the app's endpoint needs read_product_costs to receive them." },
   conversation_scope_required: { status: 403, meaning: "Conversation events carry buyers' messages: the app's endpoint needs read_conversations to receive them." },
   menu_in_trash: { status: 409, meaning: "The menu is in the trash." },
-  handle_unresolved: { status: 422, meaning: "No category or collection has the handle; details.unresolved lists them." },
+  handle_unresolved: {
+    status: 422,
+    meaning: "No category or collection has the handle; details.unresolved lists them (the first 20, each its kind and handle).",
+    details: DETAILS.handle_unresolved,
+  },
   section_not_found: { status: 404, meaning: "No section with that id is on the page." },
   template_not_owned: { status: 403, meaning: "An app applies only its own templates." },
   template_unavailable: { status: 422, meaning: "The template does not fit the store's theme." },
@@ -107,22 +157,20 @@ export const APP_ERROR_CODES = {
   object_limit: { status: 409, meaning: "The store holds the most object types it may." },
   payment_declined: { status: 422, meaning: "The provider declined the charge; nothing was taken." },
   payment_outcome_unknown: { status: 503, meaning: "The provider's answer is unknown; retry with the same Idempotency-Key to learn it." },
-  payment_in_progress: { status: 409, meaning: "Another charge of the order is still running." },
+  payment_in_progress: { status: 409, meaning: "Another payment of the order is still open: a charge or a payment page being set up right now (retry shortly), or a payment page the buyer could still pay (payments.create names it in details.paymentAttemptId and records anyway with allowOpenAttempt).", details: DETAILS.payment_in_progress },
   payment_not_possible: { status: 409, meaning: "The order or saved method cannot be charged now." },
   payment_method_customer_mismatch: { status: 422, meaning: "The saved method belongs to another customer than the order's." },
   provider_invalid_response: { status: 503, meaning: "A provider answered something invalid (another order, a malformed answer); treat the outcome as unknown and retry with the same Idempotency-Key." },
   app_gift_card_limit: { status: 403, meaning: "The app reached the merchant's daily gift card value limit." },
   payout_provider_unavailable: { status: 422, meaning: "The payout provider is not an installed, active, set-up payout provider; nothing was recorded." },
-  payout_request_mismatch: { status: 409, meaning: "The Idempotency-Key already sent a different payout (details.payoutId); use a new key for a new payout." },
   payout_reversal_unsupported: { status: 422, meaning: "The payout's provider cannot reverse payouts (it does not implement reversePayout); nothing was recorded." },
-  payout_not_reversible: { status: 409, meaning: "Only a paid payout can be reversed (details.status is the payout's)." },
-  payout_reversal_exceeds_payout: { status: 409, meaning: "The reversal takes back more than the payout has left to give back (details.reversibleMinor), or the payout already has 20 reversals." },
-  payout_reversal_currency_mismatch: { status: 422, meaning: "A reversal is in its payout's currency (details.currency)." },
-  payout_reversal_request_mismatch: { status: 409, meaning: "The Idempotency-Key already reversed another amount or payout (details.reversalId); use a new key for a new reversal." },
-  payout_reversal_outcome_unknown: { status: 503, meaning: "The reversal is recorded (details.reversalId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resume it, never applied twice." },
-  payout_outcome_unknown: { status: 503, meaning: "The payout is recorded (details.payoutId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resubmit it, never sent twice." },
+  payout_not_reversible: { status: 409, meaning: "Only a paid payout can be reversed (details.status is the payout's).", details: DETAILS.payout_not_reversible },
+  payout_reversal_exceeds_payout: { status: 409, meaning: "The reversal takes back more than the payout has left to give back (details.reversibleMinor), or the payout already has 20 reversals.", details: DETAILS.payout_reversal_exceeds_payout },
+  payout_reversal_currency_mismatch: { status: 422, meaning: "A reversal is in its payout's currency (details.currency).", details: DETAILS.payout_reversal_currency_mismatch },
+  payout_reversal_outcome_unknown: { status: 503, meaning: "The reversal is recorded (details.reversalId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resume it, never applied twice.", details: DETAILS.payout_reversal_outcome_unknown },
+  payout_outcome_unknown: { status: 503, meaning: "The payout is recorded (details.payoutId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resubmit it, never sent twice.", details: DETAILS.payout_outcome_unknown },
   conversation_channel_unavailable: { status: 422, meaning: "The thread's chat channel has no installed, active, set-up messaging provider to carry a public reply; add an internal note or set the app up." },
-  sales_channel_product_unpublished: { status: 422, meaning: "An order or quote on an app's sales channel names a product not published to it (details.productIds); publish it to the channel first. Nothing was written." },
+  sales_channel_product_unpublished: { status: 422, meaning: "An order or quote on an app's sales channel names a product not published to it (details.productIds); publish it to the channel first. Nothing was written.", details: DETAILS.sales_channel_product_unpublished },
   pos_sales_channel_not_owned: { status: 403, meaning: "An app sells in person only from its own sales channel (`<app id>:<channel>`, declared in its manifest)." },
   pos_location_unavailable: { status: 422, meaning: "The sale's location does not exist or is archived." },
   pos_location_not_on_channel: { status: 422, meaning: "The sales channel does not sell from the sale's location." },
@@ -139,7 +187,7 @@ export const APP_ERROR_CODES = {
   digital_asset_not_ready: { status: 409, meaning: "The digital item is not ready to deliver (its file is still uploading, or it is archived)." },
   digital_keys_exhausted: { status: 409, meaning: "The licence-key pool has too few keys for the line; the store imports more." },
   reviews_disabled: { status: 403, meaning: "The store is not taking reviews (its reviews setting is off)." },
-  review_exists: { status: 409, meaning: "The buyer already has a live review of the product, or the order line has its review; details.reviewId names it." },
+  review_exists: { status: 409, meaning: "The buyer already has a live review of the product, or the order line has its review; details.reviewId names it.", details: DETAILS.review_exists },
   review_not_eligible: { status: 409, meaning: "The order line was not handed over on a delivered order, or its review window closed." },
   review_not_verifiable: { status: 422, meaning: "A verified purchase needs a delivered order line of the review's customer; nothing was written." },
 

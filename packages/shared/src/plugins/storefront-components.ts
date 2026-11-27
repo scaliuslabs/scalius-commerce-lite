@@ -34,6 +34,7 @@ import {
   type PluginSettingsSchema,
 } from "./settings-schema";
 import { isStorefrontSkinTarget } from "../storefront-theme/skins";
+import { STOREFRONT_THEME_DOCUMENT_VERSION } from "../storefront-theme/version";
 
 /** The zod-free part (constants, data shapes, render messages): ./storefront-protocol.ts. */
 export * from "./storefront-protocol";
@@ -77,13 +78,21 @@ export const storefrontSkinDeclarationSchema = z.object({
    * Admin approves it (`storefrontBuyerPages`). Absent: the store's own
    * header and footer draw there.
    */
+  // Only a header or footer skin draws there: install-time policy (manifest-policy.ts), never a stored read's.
   buyerPages: z.literal(true).optional(),
-}).strict().superRefine((skin, context) => {
-  if (skin.buyerPages && skin.target !== "header" && skin.target !== "footer") {
-    context.addIssue({ code: "custom", path: ["buyerPages"], message: "Only a header or footer skin draws on the buyer's own pages." });
-  }
-});
+}).strict();
 export type StorefrontSkinDeclaration = z.infer<typeof storefrontSkinDeclarationSchema> & { target: StorefrontSkinTarget };
+
+/**
+ * The theme document version a template's `theme` or a preset's `sections`
+ * were written for: required, so a declaration never reads as an older
+ * version than its author wrote (the store upgrades it from there).
+ */
+const themeVersion = (what: string) => z.number({
+  error: (issue) => issue.input === undefined
+    ? `State the theme document version ${what} written for (themeVersion): the version you wrote it against, never a newer one (this release writes ${STOREFRONT_THEME_DOCUMENT_VERSION}).`
+    : undefined,
+}).int().positive();
 
 /**
  * A ready-made look (`storefront.templates`): theme values the template
@@ -98,8 +107,8 @@ export const storefrontTemplateDeclarationSchema = z.object({
   id: key,
   name: title,
   description: description.optional(),
-  /** The theme document version `theme` was written for (absent: 10, `STOREFRONT_DECLARATION_THEME_VERSION`). */
-  themeVersion: z.number().int().positive().optional(),
+  /** The theme document version `theme` was written for (`STOREFRONT_THEME_DOCUMENT_VERSION` for this release). */
+  themeVersion: themeVersion("the template's theme is"),
   theme: z.record(z.string(), z.unknown()).refine((value) => JSON.stringify(value).length <= 64 * 1024, "A template's theme is at most 64 KiB."),
 }).strict();
 export type StorefrontTemplateDeclaration = z.infer<typeof storefrontTemplateDeclarationSchema>;
@@ -116,8 +125,8 @@ export const storefrontPagePresetDeclarationSchema = z.object({
   id: key,
   name: title,
   description: description.optional(),
-  /** The theme document version `sections` were written for (absent: 10, `STOREFRONT_DECLARATION_THEME_VERSION`). */
-  themeVersion: z.number().int().positive().optional(),
+  /** The theme document version `sections` were written for (`STOREFRONT_THEME_DOCUMENT_VERSION` for this release). */
+  themeVersion: themeVersion("the preset's sections are"),
   sections: z.array(z.record(z.string(), z.unknown())).min(1).max(24)
     .refine((value) => JSON.stringify(value).length <= 64 * 1024, "A page preset's sections are at most 64 KiB."),
 }).strict();

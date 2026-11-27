@@ -45,7 +45,7 @@ const title = [storeName?.trim(), copy.nav.menu].filter(Boolean).join(" · ");
     popover="auto"
     data-buyer-chrome-panel={panel.kind}
     data-menu-drawer={panel.kind === "drawer" ? "" : undefined}
-    aria-label={panel.label ?? copy.nav.menu}
+    aria-label={copy.nav.menu}
   >
     <div class="buyer-chrome-panel-bar">
       <span>{title}</span>

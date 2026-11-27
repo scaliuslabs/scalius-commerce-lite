@@ -14,6 +14,7 @@ import type { Database } from "@scalius/database/client";
 import { getDb } from "@scalius/database/client";
 import {
   effectivePluginPermissions,
+  hasRecentPluginLogLine,
   markPluginFailed,
   maskPluginLogText,
   pendingPluginMigrations,
@@ -218,11 +219,13 @@ export class PluginHost {
     const settingsLanguage = buyerLanguage ? { locale: buyerLanguage, defaultLocale: options.defaultLocale || buyerLanguage } : null;
     const outcome = await this.run(installation, { kind: "function", point, input }, source, wallMs, {}, settingsLanguage, options.deadline);
     if (!outcome.ok) return failed(outcome);
-    const checked = checkPluginFunctionOutput(point, outcome.value);
+    const checked = checkPluginFunctionOutput(point, outcome.value, { language: buyerLanguage });
     if (!checked.ok) {
       await this.incident(installation, source, checked.message);
       return { ok: false, value: null, error: checked.message, failure: "invalid" };
     }
+    // A label the store drew in its own neutral word instead: the answer stands, the app is told after the request.
+    if (checked.notices) this.notice(installation, source, checked.notices);
     return { ok: true, value: checked.value, error: null };
   }
 
@@ -469,6 +472,26 @@ export class PluginHost {
     return outcome.ok ? { ok: true, value: null, error: null } : failed(outcome);
   }
 
+  /**
+   * A run past a limit: a breach (repeated breaches stop the app), except a
+   * function the merchant approved as blocking. Stopping that app would drop
+   * a check the merchant asked to run on every order; its run fails (the
+   * checkout is refused) and the app's log says why, and it never counts.
+   */
+  private async overLimit(installation: PluginInstallation, invocation: PluginInvocation, kind: PluginBreachKind, detail: string, lines: PluginLogInput[]): Promise<void> {
+    const blocking = invocation.kind === "function" && (installation.grant?.blockingFunctions ?? []).some((point) => point === invocation.point);
+    if (blocking) {
+      lines.push({ level: "warn", source: "host", message: `${detail} (a blocking function: not counted as a breach).` });
+      // Staff hear it, once an hour per app and point, after the request: the checkouts it refuses are theirs to act on.
+      this.noticeStaff(installation, invocation.point, {
+        title: `${installation.manifest.name} is refusing checkouts`,
+        body: `Its ${invocation.point} check ran past its limit, so checkouts that need it are refused. Check its log, or deactivate it.`,
+      });
+      return;
+    }
+    await this.breach(installation, kind, detail);
+  }
+
   /** Records a limit breach; repeated breaches stop the app (safety.ts) and tell the staff. */
   private async breach(installation: PluginInstallation, kind: PluginBreachKind, detail: string): Promise<void> {
     try {
@@ -566,7 +589,7 @@ export class PluginHost {
       } else if (thrown instanceof PluginTimeoutError) {
         error = `${source} exceeded its ${wallMs} ms wall-time limit.`;
         failure = "timeout";
-        await this.breach(installation, "wall_time", `${source} ran longer than ${wallMs} ms`);
+        await this.overLimit(installation, invocation, "wall_time", `${source} ran longer than ${wallMs} ms`, lines);
       } else if (thrown instanceof PluginLoadError && thrown.outdated) {
         // The deployment carries a newer build: bring the installation in
         // step (bundled-sync.ts); the next call runs the new version, or
@@ -588,7 +611,7 @@ export class PluginHost {
         const limit = isolateLimitOf(thrown);
         if (limit) {
           error = `${source} went over its ${limit === "cpu" ? "CPU time" : "calls per run"} limit.`;
-          await this.breach(installation, limit, `${source} ran out of ${limit === "cpu" ? "CPU time" : "calls"}`);
+          await this.overLimit(installation, invocation, limit, `${source} ran out of ${limit === "cpu" ? "CPU time" : "calls"}`, lines);
         }
       }
     } finally {
@@ -625,6 +648,55 @@ export class PluginHost {
     await this.writeLogs(installation, [{ level: "error", source: "host", message: `${source}: ${message}` }], secrets);
   }
 
+  /**
+   * What the store changed in an answer it kept (a label drawn in its own
+   * word), logged for the app as a warning after the request (`waitUntil`):
+   * a checkout never waits on it. A notice repeats on every run while the
+   * app's words stay, so each line (app, function point and words) is written
+   * at most once per `PLUGIN_NOTICE_REPEAT_MS`: once per isolate by memory,
+   * across isolates by the app's log itself (`hasRecentPluginLogLine`, as the
+   * storefront's incidents are), keeping its real incidents in its log.
+   */
+  notice(installation: PluginInstallation, source: string, messages: readonly string[], now = Date.now()): void {
+    writePluginNotices({
+      db: this.db,
+      pluginId: installation.pluginId,
+      lines: messages.map((message) => ({ level: "warn" as const, source: "host", message: `${source}: ${message}` })),
+      waitUntil: (work) => this.ctx.waitUntil(work),
+      write: async (fresh) => {
+        const { secrets } = await this.seed(installation, false);
+        await this.writeLogs(installation, fresh, secrets);
+      },
+      now,
+    });
+  }
+
+  /**
+   * A staff notice about one app's function point, through the one notice
+   * limit (`writePluginNotices`): after the request, at most once per
+   * `PLUGIN_NOTICE_REPEAT_MS` per app and line. The app's log line it writes
+   * is the record the limit reads across isolates; the push follows it.
+   */
+  noticeStaff(installation: PluginInstallation, point: string, notice: { title: string; body: string }, now = Date.now()): void {
+    writePluginNotices({
+      db: this.db,
+      pluginId: installation.pluginId,
+      lines: [{ level: "warn", source: "host", message: `Staff told: ${notice.title} (${point}).` }],
+      waitUntil: (work) => this.ctx.waitUntil(work),
+      write: async (fresh) => {
+        await this.writeLogs(installation, fresh, []);
+        const { resolveDashboardLink, sendAdminPushNotice } = await import("@scalius/core/modules/notifications");
+        await sendAdminPushNotice(this.db, this.env, {
+          title: notice.title,
+          body: notice.body,
+          link: resolveDashboardLink(this.env, `/admin/apps/${installation.pluginId}`),
+          data: { pluginId: installation.pluginId, notificationType: "plugin_function_failing", point },
+        });
+      },
+      now,
+    });
+  }
+
   private async writeLogs(installation: PluginInstallation, lines: PluginLogInput[], secrets: string[]): Promise<void> {
     if (lines.length === 0) return;
     try {
@@ -633,6 +705,47 @@ export class PluginHost {
       console.warn(`[plugins] ${installation.pluginId} log write failed`);
     }
   }
+}
+
+/** The same notice line is written again only after this long (per app, function point and words). */
+export const PLUGIN_NOTICE_REPEAT_MS = 60 * 60 * 1000;
+/** How many notice lines an isolate remembers before it starts over (its log check still holds across). */
+const PLUGIN_NOTICES_REMEMBERED = 1_000;
+const recentNotices = new Map<string, number>();
+
+/**
+ * The one way the host tells an app's log something a run did not fail on
+ * (a label drawn in the store's word, an add-on charged other than answered):
+ * each line (app, its source, its words) at most once per
+ * `PLUGIN_NOTICE_REPEAT_MS`, once per isolate by memory and across isolates
+ * by the app's log itself (`hasRecentPluginLogLine`), written after the
+ * request (`waitUntil`), never awaited by a checkout. A notice repeats on
+ * every run while its cause stays; without this limit it would write a row
+ * on every cart check and push the app's real incidents out of its log.
+ */
+export function writePluginNotices(input: {
+  db: Database;
+  pluginId: string;
+  lines: readonly PluginLogInput[];
+  waitUntil: (work: Promise<unknown>) => void;
+  write: (lines: PluginLogInput[]) => Promise<void>;
+  now?: number;
+}): void {
+  const now = input.now ?? Date.now();
+  const lines = input.lines.map((line) => ({ ...line, message: line.message.slice(0, 500) })).filter((line) => {
+    const key = `${input.pluginId}\n${line.source}\n${line.message}`;
+    const last = recentNotices.get(key);
+    if (last !== undefined && now - last < PLUGIN_NOTICE_REPEAT_MS) return false;
+    if (recentNotices.size >= PLUGIN_NOTICES_REMEMBERED) recentNotices.clear();
+    recentNotices.set(key, now);
+    return true;
+  });
+  if (lines.length === 0) return;
+  input.waitUntil((async () => {
+    const fresh: PluginLogInput[] = [];
+    for (const line of lines) if (!(await hasRecentPluginLogLine(input.db, input.pluginId, line, now - PLUGIN_NOTICE_REPEAT_MS))) fresh.push(line);
+    if (fresh.length > 0) await input.write(fresh);
+  })().catch(() => console.warn(`[plugins] ${input.pluginId} notice write failed`)));
 }
 
 /** Additional authority for provider operations and staff-invoked routes. */

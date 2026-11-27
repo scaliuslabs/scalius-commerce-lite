@@ -29,6 +29,7 @@ import { FUNCTION_READS_MAX, functionReadDeclarationSchema, functionReadIssues }
 import { PROVIDER_KINDS } from "./providers/kinds";
 import { providerRequiredScopes } from "./protected-data";
 import { PIXEL_CONSENT_CATEGORIES, PIXEL_EVENT_NAMES } from "./buyer-events";
+import { comparePluginVersions } from "./versions";
 import {
   PLUGIN_FEATURES_MAX,
   pluginFeatureOwners,
@@ -483,15 +484,6 @@ const httpsUrl = z.string().url().max(2048).refine((value) => value.startsWith("
 const tagline = z.string().trim().min(1).max(100);
 const platformVersion = z.string().regex(SEMVER, "Use a semantic version.");
 
-/** Whether semantic version `left` is below `right` (pre-release tags ignored). */
-function semverBelow(left: string, right: string): boolean {
-  const parts = (value: string) => value.split("-")[0]!.split(".").map(Number);
-  const [a, b] = [parts(left), parts(right)];
-  for (let index = 0; index < 3; index += 1) {
-    if (a[index]! !== b[index]!) return a[index]! < b[index]!;
-  }
-  return false;
-}
 
 // ── Translations ──────────────────────────────────────────────────────────
 
@@ -1071,7 +1063,7 @@ export const pluginManifestSchema = z.object({
   unique(manifest.categories, ["categories"], "Categories");
   unique(manifest.screenshots, ["screenshots"], "Screenshots");
   unique(manifest.countries ?? [], ["countries"], "Countries");
-  if (manifest.minPlatformVersion && semverBelow(SCALIUS_PLATFORM_VERSION, manifest.minPlatformVersion)) {
+  if (manifest.minPlatformVersion && comparePluginVersions(SCALIUS_PLATFORM_VERSION, manifest.minPlatformVersion) < 0) {
     context.addIssue({
       code: "custom",
       path: ["minPlatformVersion"],
@@ -1226,7 +1218,7 @@ export function pluginCompatibility(value: unknown):
       message: `Built for plugin API ${typeof raw.apiVersion === "string" ? raw.apiVersion : "(none)"}; this Scalius supports ${SUPPORTED_PLUGIN_API_VERSIONS.join(", ")}.`,
     };
   }
-  if (typeof raw.minPlatformVersion === "string" && SEMVER.test(raw.minPlatformVersion) && semverBelow(SCALIUS_PLATFORM_VERSION, raw.minPlatformVersion)) {
+  if (typeof raw.minPlatformVersion === "string" && SEMVER.test(raw.minPlatformVersion) && comparePluginVersions(SCALIUS_PLATFORM_VERSION, raw.minPlatformVersion) < 0) {
     return {
       ok: false,
       reason: "platform_version",
@@ -1326,7 +1318,7 @@ export function pluginGrantRequest(declared: PluginManifest, features: Iterable<
       || Boolean(manifest.storefront.stylesheet),
     storefrontConnect: sorted(manifest.storefront.connect),
     storefrontPixel: manifest.storefront.pixel !== undefined,
-    storefrontBuyerPages: manifest.storefront.skins.some((skin) => skin.buyerPages === true),
+    storefrontBuyerPages: manifest.storefront.skins.some((skin) => skin.buyerPages === true && (skin.target === "header" || skin.target === "footer")),
     features: enabled,
     messageRecipients: sorted(manifest.messaging.recipients.map(pluginMessageRecipientKey)),
     buyerFiles: (manifest.checkout?.attributes ?? []).some((field) => field.type === "file")

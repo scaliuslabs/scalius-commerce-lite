@@ -1908,7 +1908,7 @@ Body:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `expectedRevision` | integer |  | The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since; at least 1 |
+| `expectedRevision` | integer |  | The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is; at least 1 |
 
 Response `data`:
 
@@ -2070,7 +2070,7 @@ Body:
 | `notes` | string |  | at most 500 characters |
 | `pool` | "stock" \| "preorderStock" |  | default `"stock"` |
 | `locationId` | string |  | 1 to 100 characters |
-| `expectedStockVersion` | integer |  | The SKU's stockVersion you read; any stock change since is refused with 409. Omit to apply whatever happened since; at least 0 |
+| `expectedStockVersion` | integer |  | The SKU's stockVersion you read. Any stock change since is refused with 409 `stock_version_conflict` and nothing changes. Omit it to act on the stock as it is; at least 0 |
 
 Response `data`:
 
@@ -2100,7 +2100,7 @@ Body:
 | `newStock` | integer | yes | Counted whole-number stock at the location; 0 to 9007199254740991 |
 | `reason` | string |  | Reason for stocktake; at most 500 characters |
 | `locationId` | string |  | Active location counted or adjusted; the default location when omitted; 1 to 100 characters |
-| `expectedStockVersion` | integer |  | The SKU's stockVersion you read; any stock change since is refused with 409. Omit to set the count whatever happened since; at least 0 |
+| `expectedStockVersion` | integer |  | The SKU's stockVersion you read. Any stock change since is refused with 409 `stock_version_conflict` and nothing changes. Omit it to act on the stock as it is; at least 0 |
 
 Response `data`:
 
@@ -2885,7 +2885,7 @@ Body:
 | `billingAddress` | { countryCode: string, company?: string \| null, line1?: string \| null, line2?: string \| null, dependentLocality?: string \| null, locality?: string \| null, adminArea?: string \| null, postalCode?: string \| null, placeIds?: { city?, zone?, area? }, name?: string \| null } \| null |  | Omit or null when the shipping address bills |
 | `shippingMinor` | integer | yes | The delivery charge, in minor units of the store currency; 0 to 9000000000000 |
 | `discountMinor` | integer |  | An order discount set by hand, in minor units of the store currency; 0 to 9000000000000 |
-| `paymentMethod` | "cod" \| "net_terms" |  | How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create); default `"cod"` |
+| `paymentMethod` | "cod" \| "net_terms" |  | How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with payments.create); default `"cod"` |
 | `paymentTerms` | { kind: "net", days: integer } |  | An invoice's terms, `{ kind: "net", days }` (1 to 365): the order is due that many days after it is placed. Only with `net_terms`; omitted, the store's net days (Settings → Payments) |
 | `attributes` | Record<string, string> |  | Checkout attributes the store's apps declare (`<app id>.<key>`); unknown keys are dropped |
 | `notes` | string \| null |  | at most 500 characters |
@@ -2967,7 +2967,7 @@ Body:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `expectedRevision` | integer |  | The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409. Omit to mark it whatever happened since; at least 1 |
+| `expectedRevision` | integer |  | The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is; at least 1 |
 
 Response `data`:
 
@@ -2992,7 +2992,7 @@ Body:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `expectedRevision` | integer |  | The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since; at least 1 |
+| `expectedRevision` | integer |  | The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is; at least 1 |
 
 Response `data`:
 
@@ -3020,7 +3020,7 @@ Body:
 | `billingAddress` | { countryCode: string, company?: string \| null, line1?: string \| null, line2?: string \| null, dependentLocality?: string \| null, locality?: string \| null, adminArea?: string \| null, postalCode?: string \| null, placeIds?: { city?, zone?, area? }, name?: string \| null } \| null |  | Omit or null when the shipping address bills |
 | `shippingMinor` | integer | yes | The delivery charge, in minor units of the store currency; 0 to 9000000000000 |
 | `discountMinor` | integer |  | An order discount set by hand, in minor units of the store currency; 0 to 9000000000000 |
-| `paymentMethod` | "cod" \| "net_terms" |  | How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create); default `"cod"` |
+| `paymentMethod` | "cod" \| "net_terms" |  | How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with payments.create); default `"cod"` |
 | `paymentTerms` | { kind: "net", days: integer } |  | An invoice's terms, `{ kind: "net", days }` (1 to 365): the order is due that many days after it is placed. Only with `net_terms`; omitted, the store's net days (Settings → Payments) |
 | `attributes` | Record<string, string> |  | Checkout attributes the store's apps declare (`<app id>.<key>`); unknown keys are dropped |
 | `notes` | string \| null |  | at most 500 characters |
@@ -3051,7 +3051,7 @@ Body:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `expectedRevision` | integer | yes | The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision; at least 1 |
+| `expectedRevision` | integer | yes | The order `revision` you read; a change since is refused with 409 `order_revision_conflict` and the hold stays. Releasing a released hold answers it again whatever the revision; at least 1 |
 
 Response `data`:
 
@@ -3080,7 +3080,7 @@ Body:
 | `status` | "pending" \| "confirmed" \| "completed" \| "cancelled" | yes | The statuses this editor sets. Shipped, delivered, returned and refunded are recorded by the operations that move the goods and money; asking for one here is refused with those operations in `details.operations` (agents) and `details.appOperations` (apps) |
 | `reason` | "customer_changed_mind" \| "unreachable" \| "fake_order" \| "out_of_stock" \| "other" |  |  |
 | `notifyCustomer` | boolean |  | False sends the customer no message about this change (a test or duplicate order). Default true |
-| `expectedRevision` | integer |  | The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since; at least 1 |
+| `expectedRevision` | integer |  | The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is; at least 1 |
 
 Response `data`:
 
@@ -3295,7 +3295,7 @@ Body:
 | `paymentMethodId` | string | yes | A saved method of the order's customer (payment_methods.list); 1 to 128 characters |
 | `amountMinor` | integer |  | What to charge, in minor units of the order's `currency`. Default: its `balanceDueMinor`; another amount must be one the order takes (a deposit); 1 to 9000000000000 |
 | `capture` | "automatic" \| "manual" |  | `manual` only authorizes (money held): capture it with payments.capture or release it with payments.void. Needs a provider that authorizes; default `"automatic"` |
-| `expectedRevision` | integer |  | The order `revision` you read; a different one is refused with 409 before the provider is called; at least 1 |
+| `expectedRevision` | integer |  | The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is; at least 1 |
 
 Response `data`:
 
@@ -3330,7 +3330,8 @@ Body:
 | `via` | "bank_transfer" \| "cash" \| "cheque" \| "card_terminal" \| "mobile_wallet" \| "other" | yes | How it was received |
 | `reference` | string \| null |  | The bank, cheque or transfer reference; at most 120 characters |
 | `note` | string \| null |  | at most 500 characters |
-| `expectedRevision` | integer |  | The order `revision` you read; a different one is refused with 409; at least 1 |
+| `expectedRevision` | integer |  | The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is; at least 1 |
+| `allowOpenAttempt` | boolean |  | Record it, for the amount given, even though the buyer has a payment page open for the order that could still be paid: the order's open payment pages are cancelled at their provider in the same write, whether or not one was open when you read the order. If the buyer still pays on one, that payment is applied to what the order then owes when it is exactly that; on an order already paid in full it is refunded automatically (a late payment, with a timeline line; the order shows it as received until the refund lands); any other amount is left on the order for staff to reconcile, never counted. Without it, an open page (one the buyer touched within the last 24 hours, or a provider still processing a payment on one), or a payment being set up or charged right now, refuses the payment with 409 `payment_in_progress` (`details.paymentAttemptId`, `details.status`); one being set up or charged is refused either way |
 
 Response `data`:
 
@@ -3731,7 +3732,7 @@ Body:
 | `metaDescription` | string \| null |  | at most 500 characters |
 | `options` | { name: string, values: string[], standardMapping?: "size" \| "color" \| "material" \| "pattern" \| "none", swatches?: Record<string, { color, mediaId }> }[] |  | Merchant-named options (up to five). Leave empty for a product sold as one SKU; at most 5 items; default `[]` |
 | `variants` | { sku: string, priceMinor: integer, optionValues?: Record<string, string>, barcode?: string \| null, barcodeType?: "ean13" \| "upc" \| "isbn" \| "gtin" \| "code128" \| "custom" \| null \| null, trackInventory?: boolean, weightGrams?: number \| null }[] | yes | With options, one SKU per combination, each using every option's value; without options, exactly one; 1 to 150 items |
-| `mediaIds` | string[] |  | Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured; at most 50 items; default `[]` |
+| `mediaIds` | string[] |  | Ready media library files (`media.import_url`), in gallery order; the first is featured; at most 50 items; default `[]` |
 | `salesChannelIds` | string[] |  | The sales channels to publish it to. Omit to publish it to every channel; at most 50 items |
 
 Response `data`:
@@ -4438,7 +4439,7 @@ Body:
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `providerId` | string | yes | 1 to 180 characters |
-| `options` | { deliveryType?: integer, itemType?: integer, itemWeight?: number, note?: string } |  |  |
+| `options` | { bookingOptions?: Record<string, string \| number \| boolean>, itemWeight?: number, note?: string } |  |  |
 
 Response `data`:
 
@@ -5066,7 +5067,7 @@ Body:
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `url` | string | yes | HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused; 1 to 2048 characters |
-| `topics` | ("*" \| "order.*" \| "return.*" \| "product.*" \| "variant.*" \| "purchase_order.*" \| "inventory_transfer.*" \| "customer.*" \| "fulfillment.*" \| "refund.*" \| "shipment.*" \| "payment.*" \| "checkout.*" \| "discount.*" \| "review.*" \| "gift_card.*" \| "gift_card_transaction.*" \| "object.*" \| "conversation.*" \| "payout.*" \| "warranty.*" \| "order.created" \| "order.updated" \| "order.paid" \| "order.cancelled" \| "order.fulfilled" \| "order.refunded" \| "return.updated" \| "product.created" \| "product.updated" \| "product.deleted" \| "product.publication_changed" \| "variant.inventory_changed" \| "purchase_order.updated" \| "inventory_transfer.updated" \| "customer.created" \| "customer.updated" \| "customer.consent_changed" \| "fulfillment.created" \| "fulfillment.voided" \| "refund.created" \| "refund.updated" \| "shipment.updated" \| "payment.updated" \| "checkout.abandoned" \| "discount.created" \| "discount.updated" \| "discount.deleted" \| "discount.redeemed" \| "review.created" \| "review.updated" \| "gift_card.created" \| "gift_card.updated" \| "gift_card_transaction.created" \| "object.created" \| "object.updated" \| "object.deleted" \| "customer.redact_requested" \| "customer.data_requested" \| "customer.erased" \| "conversation.message_received" \| "payout.created" \| "payout.updated" \| "payout.reversal_updated" \| "warranty.issued" \| "warranty.voided")[] | yes | 1 to 66 items |
+| `topics` | ("*" \| "order.*" \| "return.*" \| "product.*" \| "variant.*" \| "purchase_order.*" \| "inventory_transfer.*" \| "customer.*" \| "fulfillment.*" \| "refund.*" \| "shipment.*" \| "payment.*" \| "checkout.*" \| "discount.*" \| "review.*" \| "gift_card.*" \| "gift_card_transaction.*" \| "object.*" \| "conversation.*" \| "payout.*" \| "warranty.*" \| "order.created" \| "order.updated" \| "order.paid" \| "order.cancelled" \| "order.fulfilled" \| "order.refunded" \| "return.updated" \| "product.created" \| "product.updated" \| "product.deleted" \| "product.publication_changed" \| "variant.inventory_changed" \| "purchase_order.updated" \| "inventory_transfer.updated" \| "customer.created" \| "customer.updated" \| "customer.consent_changed" \| "fulfillment.created" \| "fulfillment.voided" \| "refund.created" \| "refund.updated" \| "shipment.updated" \| "payment.updated" \| "checkout.abandoned" \| "discount.created" \| "discount.updated" \| "discount.deleted" \| "discount.redeemed" \| "review.created" \| "review.updated" \| "gift_card.created" \| "gift_card.updated" \| "gift_card_transaction.created" \| "object.created" \| "object.updated" \| "object.deleted" \| "customer.erased" \| "conversation.message_received" \| "payout.created" \| "payout.updated" \| "payout.reversal_updated" \| "warranty.issued" \| "warranty.voided")[] | yes | 1 to 100 items |
 | `description` | string \| null |  | at most 200 characters |
 | `customerData` | ("name" \| "email" \| "phone" \| "address")[] |  | The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default; at most 4 items |
 
@@ -5137,7 +5138,7 @@ Body:
 | --- | --- | --- | --- |
 | `expectedRevision` | integer | yes | The subscription's `revision` you read; a stale one is refused with 409; at least 0 |
 | `url` | string |  | HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused; 1 to 2048 characters |
-| `topics` | ("*" \| "order.*" \| "return.*" \| "product.*" \| "variant.*" \| "purchase_order.*" \| "inventory_transfer.*" \| "customer.*" \| "fulfillment.*" \| "refund.*" \| "shipment.*" \| "payment.*" \| "checkout.*" \| "discount.*" \| "review.*" \| "gift_card.*" \| "gift_card_transaction.*" \| "object.*" \| "conversation.*" \| "payout.*" \| "warranty.*" \| "order.created" \| "order.updated" \| "order.paid" \| "order.cancelled" \| "order.fulfilled" \| "order.refunded" \| "return.updated" \| "product.created" \| "product.updated" \| "product.deleted" \| "product.publication_changed" \| "variant.inventory_changed" \| "purchase_order.updated" \| "inventory_transfer.updated" \| "customer.created" \| "customer.updated" \| "customer.consent_changed" \| "fulfillment.created" \| "fulfillment.voided" \| "refund.created" \| "refund.updated" \| "shipment.updated" \| "payment.updated" \| "checkout.abandoned" \| "discount.created" \| "discount.updated" \| "discount.deleted" \| "discount.redeemed" \| "review.created" \| "review.updated" \| "gift_card.created" \| "gift_card.updated" \| "gift_card_transaction.created" \| "object.created" \| "object.updated" \| "object.deleted" \| "customer.redact_requested" \| "customer.data_requested" \| "customer.erased" \| "conversation.message_received" \| "payout.created" \| "payout.updated" \| "payout.reversal_updated" \| "warranty.issued" \| "warranty.voided")[] |  | 1 to 66 items |
+| `topics` | ("*" \| "order.*" \| "return.*" \| "product.*" \| "variant.*" \| "purchase_order.*" \| "inventory_transfer.*" \| "customer.*" \| "fulfillment.*" \| "refund.*" \| "shipment.*" \| "payment.*" \| "checkout.*" \| "discount.*" \| "review.*" \| "gift_card.*" \| "gift_card_transaction.*" \| "object.*" \| "conversation.*" \| "payout.*" \| "warranty.*" \| "order.created" \| "order.updated" \| "order.paid" \| "order.cancelled" \| "order.fulfilled" \| "order.refunded" \| "return.updated" \| "product.created" \| "product.updated" \| "product.deleted" \| "product.publication_changed" \| "variant.inventory_changed" \| "purchase_order.updated" \| "inventory_transfer.updated" \| "customer.created" \| "customer.updated" \| "customer.consent_changed" \| "fulfillment.created" \| "fulfillment.voided" \| "refund.created" \| "refund.updated" \| "shipment.updated" \| "payment.updated" \| "checkout.abandoned" \| "discount.created" \| "discount.updated" \| "discount.deleted" \| "discount.redeemed" \| "review.created" \| "review.updated" \| "gift_card.created" \| "gift_card.updated" \| "gift_card_transaction.created" \| "object.created" \| "object.updated" \| "object.deleted" \| "customer.erased" \| "conversation.message_received" \| "payout.created" \| "payout.updated" \| "payout.reversal_updated" \| "warranty.issued" \| "warranty.voided")[] |  | 1 to 100 items |
 | `description` | string \| null |  | at most 200 characters |
 | `customerData` | ("name" \| "email" \| "phone" \| "address")[] |  | The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default; at most 4 items |
 | `status` | "active" \| "disabled" |  |  |
@@ -5189,7 +5190,7 @@ The resources and shapes the operations name.
 | `name` | string | yes |  |
 | `description` | string \| null | yes |  |
 | `type` | "single_line_text" \| "multi_line_text" \| "integer" \| "decimal" \| "boolean" \| "date" \| "date_time" \| "url" \| "color" \| "json" \| "money" \| "product_reference" \| "variant_reference" \| "collection_reference" \| "media_reference" \| "object_reference" \| "list.single_line_text" \| "list.multi_line_text" \| "list.integer" \| "list.decimal" \| "list.date" \| "list.date_time" \| "list.url" \| "list.color" \| "list.money" \| "list.product_reference" \| "list.variant_reference" \| "list.collection_reference" \| "list.media_reference" \| "list.object_reference" | yes |  |
-| `validations` | { to?: string \| null, min?: string \| number \| unknown, max?: string \| number \| unknown, regex?: string \| null, choices?: string[] \| null } | yes |  |
+| `validations` | { to?: string \| null, min?: string \| number \| null, max?: string \| number \| null, regex?: string \| null, choices?: string[] \| null } | yes |  |
 | `storefrontVisible` | boolean | yes |  |
 | `position` | integer | yes |  |
 | `revision` | integer | yes | at least 1 |
@@ -5283,7 +5284,7 @@ The resources and shapes the operations name.
 | `unchanged` | integer | yes | Items already as asked (no write) |
 | `failed` | integer | yes | Items refused; the first 50 are in failures with a code |
 | `currency` | string \| null | yes | The store currency of every *Minor amount in sample (price runs); null otherwise |
-| `sample` | (Record<string, string \| number \| boolean \| unknown>)[] | yes | Before and after of the first 50 changes: prices (variantId, sku, beforeMinor, afterMinor), stock (variantId, locationId, beforeOnHand, afterOnHand), tags (customerId), status and publishing (productId) |
+| `sample` | (Record<string, string \| number \| boolean \| null>)[] | yes | Before and after of the first 50 changes: prices (variantId, sku, beforeMinor, afterMinor), stock (variantId, locationId, beforeOnHand, afterOnHand), tags (customerId), status and publishing (productId) |
 | `failures` | { id: string, code: string }[] | yes |  |
 | `errorCode` | string \| null | yes | Why a failed run stopped |
 | `createdAt` | string \| null | yes | ISO 8601 date-time |
@@ -5700,7 +5701,7 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `to` | string |  |  |
 | `required` | boolean |  | default `false` |
 | `description` | string |  | at most 300 characters |
-| `validations` | { min?: string \| number \| unknown, max?: string \| number \| unknown, regex?: string \| null, choices?: string[] \| null } |  | default `{}` |
+| `validations` | { min?: string \| number \| null, max?: string \| number \| null, regex?: string \| null, choices?: string[] \| null } |  | default `{}` |
 
 ### ObjectRecord
 
@@ -5805,7 +5806,7 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `billingAddress` | { name: string \| null, phone: string \| null, company: string \| null, line1: string \| null, line2: string \| null, dependentLocality: string \| null, locality: string \| null, adminArea: string \| null, postalCode: string \| null, countryCode: string \| null, placeIds: { city, zone, area } } \| null | yes |  |
 | `fulfillmentLocationId` | string \| null | yes | 1 to 128 characters |
 | `revision` | integer | yes |  |
-| `lines` | { id: string, productId: string, variantId: string \| null, title: string \| null, variantLabel: string \| null, sku: string \| null, quantity: integer, fulfilledQuantity: integer, unitPriceMinor: integer, subtotalMinor: integer, discountMinor: integer, taxMinor: integer, purchaseOptions: string[], properties: { key, label, value, displayValue, priceMinor, appId, textRevision?, revision?, confirmation? }[], adjustments: { appId, title, amountMinor }[], bundle?: { id, title, kind, kit, anchor, units, perUnit } \| null }[] | yes |  |
+| `lines` | { id: string, productId: string, variantId: string \| null, title: string \| null, variantLabel: string \| null, sku: string \| null, quantity: integer, fulfilledQuantity: integer, unitPriceMinor: integer, subtotalMinor: integer, discountMinor: integer, taxMinor: integer, purchaseOptions: string[], properties: { key, label, value, displayValue, priceMinor, appId, textRevision?, revision?, confirmation? }[], addOns: { appId, title, totalMinor, amountMinor, per, units }[], bundle?: { id, title, kind, kit, anchor, units, perUnit } \| null }[] | yes |  |
 | `attributes` | Record<string, string> | yes | its keys are `<app id>.<key>`; an app reads and writes only its own |
 | `discountApplications` | { source: "store" \| "app", discountId: string \| null, appId: string \| null, title: string, code: string \| null, method: "automatic" \| "code", amountMinor: integer, shippingAmountMinor: integer, lines: { orderItemId, amountMinor }[] }[] | yes |  |
 | `pointOfSale` | { locationId: string, staffMemberId: string \| null, tenders: { via, amountMinor, reference }[], tenderedMinor: integer, changeMinor: integer } \| null | yes |  |
@@ -6094,7 +6095,7 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `revision` | integer | yes | Advances on every edit of the zone; local pickup is 0 until the merchant first saves it; at least 0 |
 | `currency` | string | yes | The store currency: every `*Minor` amount of the zone is in it; 3 to 3 characters |
 | `regions` | { countryCode: string, scope: "country" \| "admin_area" \| "postal_prefix", adminArea: string \| null, postalPrefix: string \| null }[] | yes | Where the zone delivers. A region belongs to one zone |
-| `places` | { id: string, name: string, type: "city" \| "zone" \| "area", parentName: string \| null }[] | yes | Bangladesh delivery places (city, thana, area) the zone serves. A place belongs to one zone |
+| `places` | { id: string, name: string, type: "city" \| "zone" \| "area", parentName: string \| null }[] | yes | The store's own delivery places the zone serves, each at one of up to three levels (`city`, `zone`, `area`) whose meaning a regional pack defines; empty for a store with none. A place belongs to one zone |
 | `rates` | [ShippingRate](#shippingrate)[] | yes |  |
 
 ### StaffMemberResource
@@ -6143,7 +6144,7 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `kind` | "country" \| "admin_area" \| "postal_prefix" \| "place" | yes | `country` is the registration: where the store collects tax. The others are regions of a registered country; the most specific region with rates of a line's class applies, and broader regions add only through `combinable` rates |
 | `adminArea` | string \| null | yes |  |
 | `postalPrefix` | string \| null | yes |  |
-| `place` | { id: string, type: "city" \| "zone" \| "area", name: string \| null } \| null | yes | A Bangladesh delivery place (kind `place`) |
+| `place` | { id: string, type: "city" \| "zone" \| "area", name: string \| null } \| null | yes | One of the store's own delivery places (kind `place`) |
 | `providerId` | string \| null | yes | A country's tax provider (`<app id>:<provider id>`); null uses the store-wide one, `system` being the rates below |
 | `revision` | integer | yes | at least 0 |
 | `taxEnabled` | boolean | yes | Whether the store collects tax at all |

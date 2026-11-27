@@ -707,7 +707,7 @@ const bulkEditSaveRowSchema = z.object({
         id: z.string().min(1).max(180),
         weightGrams: z.number().min(0).max(MAX_SKU_WEIGHT_GRAMS).nullable().optional().openapi({ description: "Grams; null: no weight. A SKU that ships." }),
         onHand: z.number().int().min(0).max(MAX_SKU_STOCK).optional().openapi({ description: "Counted on hand at the default location. A tracked physical SKU; recorded in the stock ledger." }),
-        expectedStockVersion: z.number().int().min(0).optional().openapi({ description: "Required with onHand: the SKU's stockVersion from dashboard.products.bulk_edit_read. Any stock change since (a sale) fails the row with stock_changed instead of booking the count over it." }),
+        expectedStockVersion: z.number().int().min(0).optional().openapi({ description: "Required with onHand: the SKU's stockVersion from dashboard.products.bulk_edit_read. Any stock change since (a sale) fails the row with stock_version_conflict instead of booking the count over it." }),
     }).strict().refine((sku) => (sku.onHand === undefined) === (sku.expectedStockVersion === undefined), {
         message: "Send expectedStockVersion with onHand, and only with it.",
         path: ["expectedStockVersion"],
@@ -732,7 +732,7 @@ const bulkEditSaveRoute = createRoute({
     operationId: "dashboard.products.bulk_edit_save",
     tags: ["Admin - Products"],
     summary: "Save the bulk editor's changed products in one request",
-    description: `The changed rows of dashboard.products.bulk_edit_read (at most ${PRODUCT_BULK_EDIT_MAX}): status, price and discount, shipping profile, SKU weight and counted on hand at the default location. Every row commits in one batch, each under its own expectedAggregateRevision, so a row that fails (a stale revision, a refused value, a write that landed since the read) is reported in \`results\`, left whole, and the others stay saved. Counted quantities go through the stock ledger. The Idempotency-Key is required: a retry with the same key and body answers the first response, another body under it is refused. Each count names the stockVersion it was made against; a sale since fails that row (stock_changed). Rows past what one request may spend on this plan (only counted SKUs cost: their low-stock refresh) come back in \`remaining\`, unsaved: send them again.`,
+    description: `The changed rows of dashboard.products.bulk_edit_read (at most ${PRODUCT_BULK_EDIT_MAX}): status, price and discount, shipping profile, SKU weight and counted on hand at the default location. Every row commits in one batch, each under its own expectedAggregateRevision, so a row that fails (a stale revision, a refused value, a write that landed since the read) is reported in \`results\`, left whole, and the others stay saved. Counted quantities go through the stock ledger. The Idempotency-Key is required: a retry with the same key and body answers the first response, another body under it is refused. Each count names the stockVersion it was made against; a sale since fails that row (stock_version_conflict). Rows past what one request may spend on this plan (only counted SKUs cost: their low-stock refresh) come back in \`remaining\`, unsaved: send them again.`,
     request: {
         headers: idempotencyKeyHeaderSchema,
         body: { required: true, content: { "application/json": { schema: bulkEditSaveBodySchema } } },

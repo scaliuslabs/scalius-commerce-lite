@@ -4,7 +4,7 @@ import { withGiftCardRecipientFields } from "@scalius/shared/gift-card-recipient
 import { BACKUP_MARKET_ID, DEFAULT_SHIPPING_PROFILE_ID, products, productVariants } from "@scalius/database/schema";
 import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
-import { addOnShareMinor, discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
+import { discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
 import { addOnFoldLabel, addOnTotals, lineAddOnsOf, type AddOnFolding } from "@scalius/shared/add-on-folding";
 import type { AddOnTotals } from "@scalius/shared/add-on-totals";
 import { isLineAmountInRange } from "@scalius/shared/order-limits";
@@ -56,7 +56,7 @@ import { appFlagsSql } from "../../utils/app-flags";
 import { shippingWeightGrams, type ShippingLine } from "../delivery/browser";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 import { resolvePrice, storeAmountMinor, type AppLinePrice, type ResolvedPriceSource, type StoreAmountConversion } from "@scalius/shared/market-pricing";
-import { addOnUnavailable, bundleAnchors, resolveCartWithAppLinePrices, type AppLineAddOn, type AppLinePricer } from "./app-line-prices";
+import { addOnChargeMinor, addOnUnavailable, bundleAnchors, reportAddOnCharge, resolveCartWithAppLinePrices, type AddOnReport, type AppLineAddOn, type AppLinePricer } from "./app-line-prices";
 import { expandCartKits, type CartTransformer, type TransformedCart } from "./cart-transform";
 import { cartKitItems, cartProductTranslationsSql, cartVariantOptionValuesSql, translateCartRows, type CartBuyerRead } from "./kit-items";
 import {
@@ -688,8 +688,10 @@ export function resolveStorefrontCartValidationFromRows(
         priceScope?: CheckoutPriceScope | null;
         /** `cart.line_prices` answers by line index (app-line-prices.ts). */
         appPrices?: ReadonlyMap<number, AppLinePrice>;
-        /** `cart.line_prices` add-ons by line index, bounded; fixed ones already rounded, shares taken here. */
+        /** `cart.line_prices` add-ons by line index, bounded, as answered: charged here, rounded once (`addOnChargeMinor`). */
         appAdjustments?: ReadonlyMap<number, AppLineAddOn[]>;
+        /** Tells an app's log when an add-on is charged other than it answered (`reportAddOnCharge`). */
+        reportAddOn?: AddOnReport;
         /** `cart.line_prices` prices of kit SKUs (a kit is one line to apps), by bundle id. */
         kitPrices?: ReadonlyMap<string, AppLinePrice>;
         /** Kit items whose lines must be laid out again to match the kit's split (`priceKitLines`). */
@@ -1085,8 +1087,12 @@ export function resolveStorefrontCartValidationFromRows(
         const lineAddOns = isGiftCard ? [] : options.appAdjustments?.get(index) ?? [];
         // A bundle's add-on is priced on its anchor after the loop (`priceBundleAddOns`).
         const bundleAddOns = lineAddOns.filter((addOn) => addOn.bundle);
-        const adjustments = lineAddOns.filter((addOn) => !addOn.bundle).map((addOn) =>
-            lineAdjustmentProperty(addOn.title, "percent" in addOn ? addOnShareMinor(itemUnitMinor, addOn.percent, money.incrementMinor) : addOn.amountMinor, addOn.appId, addOn.details));
+        const adjustments = lineAddOns.filter((addOn) => !addOn.bundle).map((addOn) => {
+            // One rounding, to the line's step (the increment on a plain line), as the offers price it.
+            const charged = addOnChargeMinor(addOn, itemUnitMinor, 1, conversion);
+            reportAddOnCharge(options.reportAddOn, addOn, charged, itemUnitMinor, 1, conversion);
+            return lineAdjustmentProperty(addOn.title, charged, addOn.appId, addOn.details);
+        });
         const adjustmentsMinor = adjustments.reduce((total, adjustment) => total + adjustment.priceMinor, 0);
         const unitPriceMinor = baseUnitPriceMinor + propertiesPriceMinor + adjustmentsMinor;
         const submittedPriceMinor = typeof item.price === "number"
@@ -1176,17 +1182,18 @@ export function resolveStorefrontCartValidationFromRows(
     // A bundle's add-ons, once every line of it is priced: one fee per bundle
     // unit (a share of the bundle unit's price: each line's item price times
     // what it holds per unit; a kit's lines' prices are its price), on the
-    // anchor at the fee over the anchor's units per bundle unit. A fee that
-    // does not divide evenly refuses checkout.
+    // anchor at the fee over the anchor's units per bundle unit, the fee
+    // rounded once to the step that divides (`addOnChargeMinor`): never refused for it.
     for (const anchor of bundleAnchors) {
         const lines = validatedItems.filter((line) => line.bundle && line.bundle.id === anchor.validated.bundle?.id);
         const bundleUnitMinor = lines.reduce((total, line) =>
             total + (line.baseUnitPriceMinor + line.propertiesPriceMinor) * (line.quantity / Math.max(1, line.bundle!.units ?? line.quantity)), 0);
         const priced = anchor.addOns.map((addOn) => {
-            const perBundleUnit = "percent" in addOn ? addOnShareMinor(bundleUnitMinor, addOn.percent, money.incrementMinor) : addOn.amountMinor;
             const perUnit = addOn.bundle!.perUnit;
+            const perBundleUnit = addOnChargeMinor(addOn, bundleUnitMinor, perUnit, conversion);
+            reportAddOnCharge(options.reportAddOn, addOn, perBundleUnit, bundleUnitMinor, perUnit, conversion);
             const perAnchorUnit = perBundleUnit / perUnit;
-            if (!Number.isSafeInteger(perAnchorUnit) || perAnchorUnit % money.incrementMinor !== 0) throw addOnUnavailable();
+            if (!Number.isSafeInteger(perAnchorUnit)) throw addOnUnavailable();
             return lineAdjustmentProperty(addOn.title, perAnchorUnit, addOn.appId, addOn.details);
         });
         const line = anchor.validated;
@@ -1686,12 +1693,14 @@ export function presentStorefrontCartValidation(
             kitComponents: _kitComponents,
             kitItems,
             priceSource: _priceSource,
-            bundle: _bundle,
+            bundle,
             sourceIndex: _sourceIndex,
             shippingWeightGrams: _shippingWeightGrams,
             ...item
         }, position) => ({
             ...item,
+            // A kit or an app's bundle sold as one line: its add-ons are once per bundle unit.
+            bundle: bundle?.kind === "expand",
             // A kit line's items (the cart check's); null on any other line.
             kitItems: kitItems ?? null,
             lineInputs: item.lineInputs ?? [],

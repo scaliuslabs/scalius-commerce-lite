@@ -383,9 +383,14 @@ for (const width of WIDTHS) {
         if (!href) return { href };
         const answer = await fetch(href);
         const text = await answer.text();
-        return { href, status: answer.status, type: answer.headers.get("content-type"), ascii: /^[\x20-\x7e]*$/.test(text), tampered: (await fetch(href.replace(/[0-9a-f]{64}\.css$/, `${"0".repeat(64)}.css`))).status };
+        return {
+          href, status: answer.status, type: answer.headers.get("content-type"), ascii: /^[\x20-\x7e]*$/.test(text),
+          tampered: (await fetch(href.replace(/[0-9a-f]{64}\.css$/, `${"0".repeat(64)}.css`))).status,
+          // Another checker version's path: never this storefront's reading (third review, rc.1).
+          otherChecker: (await fetch(href.replace(/\/c[0-9]+\//, "/c0/"))).status,
+        };
       });
-      if (!/^\/_buyer-chrome\/[^/]+\/[0-9a-f]{64}\/[0-9a-f]{64}\.css$/.test(themed.href ?? "") || themed.status !== 200 || themed.type !== "text/css; charset=utf-8" || !themed.ascii || themed.tampered !== 404) problems.push(`sheet: the theme's sheet is not the store's derived file (${JSON.stringify(themed)})`);
+      if (!/^\/_buyer-chrome\/[^/]+\/[0-9a-f]{64}\/c[0-9]+\/[0-9a-f]{64}\.css$/.test(themed.href ?? "") || themed.status !== 200 || themed.type !== "text/css; charset=utf-8" || !themed.ascii || themed.tampered !== 404 || themed.otherChecker !== 404) problems.push(`sheet: the theme's sheet is not the store's derived file (${JSON.stringify(themed)})`);
     if (width === WIDTHS[0] && scheme === SCHEMES[0]) console.log(`  base sheet: ${baseText.length} characters (dev, unminified)`);
       problems.push(...theme.errors.map((error) => `request: ${error}`));
     } catch (error) {

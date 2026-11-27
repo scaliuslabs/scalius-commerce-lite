@@ -113,7 +113,7 @@ The table `admin_identity_handoff_events` records every verified token on its fi
 
 | Field | Meaning |
 |-------|---------|
-| `platform` | `{ name: "scalius-commerce", version }`, the API release. |
+| `platform` | `{ name: "scalius-commerce", version }`: the platform release (the root package version, the one an app manifest's `minPlatformVersion` is checked against). Builds before 2.0.0-rc.1 report `"1.0.0"` here. |
 | `api` | `{ current, supportedMajors, basePath, openapi }`. |
 | `database.provider` | `d1`, `turso`, `postgres`, or `null` when the provider configuration is incomplete. |
 | `database.schema` | `expected` and `applied` (`{ version, name }` of the newest migration the build requires, and of the highest row in the store's `scalius_schema_migrations` ledger or `null`), `status` and `detail` (a short error text, only when `unavailable`). |

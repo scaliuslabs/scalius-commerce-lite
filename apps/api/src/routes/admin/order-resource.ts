@@ -15,13 +15,18 @@ export const OrderResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.orde
 export const orderResourceSchema = z.object({ order: OrderResource });
 
 /**
- * An order write's `expectedRevision`, by the name each caller's read gives
- * it: an app reads the order resource (`revision`), the dashboard's order
- * page read calls the same number `version`.
+ * The optional precondition of an order write (`expectedRevision`), by the
+ * name each caller's read gives it: an app reads the order resource
+ * (`revision`), the dashboard's order page read calls the same number
+ * `version`. Given, a stale one is refused with 409 `order_revision_conflict`
+ * and nothing changes; omitted, the write acts on the order as it is. It
+ * stays optional: an app acting on an outside event (a courier's delivery)
+ * has no read to compare with, and the order's own states refuse an illegal
+ * move either way.
  */
-export function orderExpectedRevisionDescription(refusal: string): string {
-  return `The order's revision you read: \`revision\` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, \`version\` in dashboard.orders.get; ${refusal}`;
-}
+export const optionalOrderRevisionSchema = z.number().int().min(1).optional().openapi({
+  description: "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is.",
+});
 
 /** The order's sealed representation, read after a write (not found once it is gone). */
 export async function readOrderResource(db: Database, orderId: string) {

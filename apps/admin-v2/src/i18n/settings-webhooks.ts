@@ -367,8 +367,6 @@ export const webhookTopicMessages = defineMessages<EventTopicFilter>({
     "object.created": "Object created",
     "object.updated": "Object updated",
     "object.deleted": "Object deleted",
-    "customer.redact_requested": "Customer erasure requested (reserved)",
-    "customer.data_requested": "Customer data requested (reserved)",
     "customer.erased": "Customer data erased",
   },
   bn: {
@@ -435,8 +433,6 @@ export const webhookTopicMessages = defineMessages<EventTopicFilter>({
     "object.created": "অবজেক্ট তৈরি হয়েছে",
     "object.updated": "অবজেক্ট আপডেট হয়েছে",
     "object.deleted": "অবজেক্ট ডিলিট হয়েছে",
-    "customer.redact_requested": "কাস্টমারের তথ্য মুছে ফেলার অনুরোধ (সংরক্ষিত)",
-    "customer.data_requested": "কাস্টমারের তথ্য চাওয়ার অনুরোধ (সংরক্ষিত)",
     "customer.erased": "কাস্টমারের তথ্য মুছে ফেলা হয়েছে",
   },
 });

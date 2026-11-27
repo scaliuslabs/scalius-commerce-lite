@@ -7,6 +7,8 @@
 // before Astro: no page render, no layout read.
 
 import { INTERNAL_SERVICE_ORIGIN } from "@scalius/shared/platform-config";
+import { BUYER_CHROME_CSS_VERSION } from "@scalius/shared/plugins/buyer-chrome-css";
+import { BUYER_CHROME_CHECKER_HEADER } from "@scalius/shared/plugins/buyer-chrome-mark";
 import { STOREFRONT_BUYER_CHROME_FILE, STOREFRONT_FILE_PATH, parseStorefrontExtensionPath, storefrontFileContentType } from "@scalius/shared/plugins/storefront-protocol";
 import { BUNDLED_STOREFRONT_EXTENSIONS } from "@/extensions/bundled.gen";
 import { backendFetch } from "./backend";
@@ -91,20 +93,22 @@ async function servePixelFrame(
 
 // ── A buyer page chrome's stylesheet, on the store's own path ──────────────
 //
-// `/_buyer-chrome/<plugin id>/<release>/<sha256>.css`: the store's reading of
-// an app's stylesheet (the release's `buyer-chrome.css`, which the upload
-// accepted only as exactly what the store writes from `styles.css`), served
-// only when its bytes hash to the name and are plain ASCII, as
+// `/_buyer-chrome/<plugin id>/<release>/c<checker>/<sha256>.css`: the store's
+// reading of an app's stylesheet (the release's `buyer-chrome.css`), served
+// only when this storefront's checker version is the path's, the API serves
+// it under a mark of that version (apps/api plugins/buyer-chrome-check.ts:
+// the upload's check, or the check after a deploy whose checker is newer),
+// and its bytes hash to the name and are plain ASCII; as
 // `text/css; charset=utf-8`, immutable. Beside it, `public/<path>` serves the
 // release's public files, which the sheet's URLs name relative to it. Outside
 // every app's file path (`/_x/<app>/...`): an app ships no file a buyer
 // page's chrome imports. The page names the path; it never parses a sheet.
 
-const BUYER_CHROME_PATH = /^\/_buyer-chrome\/([a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*)\/([0-9a-f]{64})\/(?:([0-9a-f]{64})\.css|(public\/.+))$/;
+const BUYER_CHROME_PATH = /^\/_buyer-chrome\/([a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*)\/([0-9a-f]{64})\/c([0-9]{1,6})\/(?:([0-9a-f]{64})\.css|(public\/.+))$/;
 
-/** The store's path of a release's derived buyer-chrome sheet. */
+/** The store's path of a release's derived buyer-chrome sheet, under this storefront's checker version. */
 export function buyerChromeSheetPath(pluginId: string, release: string, sha256: string): string {
-  return `/_buyer-chrome/${pluginId}/${release}/${sha256}.css`;
+  return `/_buyer-chrome/${pluginId}/${release}/c${BUYER_CHROME_CSS_VERSION}/${sha256}.css`;
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
@@ -112,19 +116,42 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-/** The release's derived buyer-chrome sheet and its hash; null when it ships none or it is not plain ASCII. Throws when it cannot be read now. */
+/**
+ * The release's derived buyer-chrome sheet and its hash, as this storefront's
+ * checker allows it; null when it ships none, no mark of this checker's
+ * version allows it, or it is not plain ASCII. A bundled app's sheet was
+ * written by this build's checker (`pnpm plugin`; `regen:check` keeps it
+ * current). Throws when it cannot be read now.
+ */
 export async function readBuyerChromeSheet(env: { BACKEND_API?: Fetcher }, store: string, pluginId: string, release: string): Promise<{ bytes: Uint8Array; sha256: string } | null> {
-  const file = await readExtensionFile(env, store, pluginId, release, STOREFRONT_BUYER_CHROME_FILE);
-  if (!file) return null;
+  const bundled = BUNDLED_STOREFRONT_EXTENSIONS[pluginId];
+  const bytes = bundled && bundled.release === release
+    ? (await readExtensionFile(env, store, pluginId, release, STOREFRONT_BUYER_CHROME_FILE))?.bytes ?? null
+    : await readMarkedBuyerChromeSheet(env, store, pluginId, release);
   // The store writes it in ASCII: any other byte is not the store's reading.
-  if (file.bytes.some((byte) => byte < 0x20 || byte > 0x7e)) return null;
-  return { bytes: file.bytes, sha256: await sha256Hex(file.bytes) };
+  if (!bytes || bytes.some((byte) => byte < 0x20 || byte > 0x7e)) return null;
+  return { bytes, sha256: await sha256Hex(bytes) };
+}
+
+/** An installed release's sheet from the API, only when it names this checker's version; cached under that version. */
+async function readMarkedBuyerChromeSheet(env: { BACKEND_API?: Fetcher }, store: string, pluginId: string, release: string): Promise<Uint8Array | null> {
+  const cache = defaultCache();
+  const key = extensionFileCacheKey(store, pluginId, release, `c${BUYER_CHROME_CSS_VERSION}/${STOREFRONT_BUYER_CHROME_FILE}`);
+  const cached = await cache?.match(key).catch(() => undefined);
+  if (cached?.ok) return new Uint8Array(await cached.arrayBuffer());
+  const response = await backendFetch(env, `/api/v1/storefront/extensions/${encodeURIComponent(pluginId)}/${release}?path=${encodeURIComponent(STOREFRONT_BUYER_CHROME_FILE)}`);
+  if (!response?.ok || response.headers.get(BUYER_CHROME_CHECKER_HEADER) !== String(BUYER_CHROME_CSS_VERSION)) return null;
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  await cache?.put(key, new Response(bytes, { headers: { "Content-Type": "text/css; charset=utf-8", "Cache-Control": IMMUTABLE } })).catch(() => undefined);
+  return bytes;
 }
 
 async function serveBuyerChromeFile(request: Request, env: { BACKEND_API?: Fetcher }, url: URL, notFound: () => Response): Promise<Response> {
   const match = BUYER_CHROME_PATH.exec(url.pathname);
   if (!match) return notFound();
-  const [, pluginId, release, sha256, publicPath] = match as unknown as [string, string, string, string | undefined, string | undefined];
+  const [, pluginId, release, checker, sha256, publicPath] = match as unknown as [string, string, string, string, string | undefined, string | undefined];
+  // A path an older (or newer) checker named is not this storefront's reading.
+  if (checker !== String(BUYER_CHROME_CSS_VERSION)) return notFound();
   let bytes: Uint8Array;
   let contentType: string;
   if (sha256) {

@@ -10,6 +10,7 @@
  */
 import {
   STOREFRONT_SECTION_REGISTRY,
+  storefrontThemeDocumentPolicyIssues,
   storefrontThemeDocumentSchema,
   type StorefrontSection,
   type StorefrontThemeDocument,
@@ -184,8 +185,10 @@ function checkedParts(theme: Theme, apps: DraftApps): DraftPart[] {
 /** Every part of the document that is not valid now. */
 export function invalidDraftParts(theme: Theme, apps: DraftApps): DraftPart[] {
   const parts = new Set(checkedParts(theme, apps));
+  // What the server's save refuses: the structure, then the write policy (readable colours, dark colours, the paint).
   const result = storefrontThemeDocumentSchema.safeParse(theme);
-  if (!result.success) for (const issue of result.error.issues) parts.add(draftPartOf(theme, issue.path as Path));
+  const issues = result.success ? storefrontThemeDocumentPolicyIssues(result.data) : result.error.issues;
+  for (const issue of issues) parts.add(draftPartOf(theme, issue.path as Path));
   return [...parts];
 }
 

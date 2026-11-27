@@ -3,7 +3,7 @@
 // from this checkout (scripts/plugin-host.mjs); the SDK's `scalius-plugin`
 // carries it built in (scripts/plugin-host.sdk.mjs).
 export * from "@scalius/shared/plugins";
-export { pluginObjectPatternIssues } from "@scalius/shared/plugins/object-patterns";
+export { pluginManifestPolicyIssues } from "@scalius/shared/plugins/manifest-policy";
 export { checkPluginAsset, checkStorefrontPublicFile } from "@scalius/shared/plugins/assets";
 export { storefrontTemplateCardFieldNotes } from "@scalius/shared/plugins/storefront-template-fields";
 // The store's own template check (install, library, apply): each template applied and run through the save checker.

@@ -64,6 +64,7 @@ import { assertContactFilterAllowed } from "./contact-access";
 import { handOverOrderLines } from "./orders/fulfilments";
 import { bookOrderShipment, createShipmentBodySchema } from "./orders-status";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
+import { optionalOrderRevisionSchema } from "./order-resource";
 import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
 import { requestStaffId } from "./request-actor";
 import { minorMoney } from "@scalius/shared/money-field";
@@ -316,7 +317,7 @@ const orderCreateObject = z.object({
   shippingMinor: minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT)).openapi({ description: "The delivery charge, in minor units of the store currency." }),
   discountMinor: minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT)).optional().openapi({ description: "An order discount set by hand, in minor units of the store currency." }),
   paymentMethod: manualOrderPaymentMethodSchema.default("cod").openapi({
-    description: "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create).",
+    description: "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with payments.create).",
   }),
   paymentTerms: paymentTermsSchema.optional().openapi({
     description: "An invoice's terms, `{ kind: \"net\", days }` (1 to 365): the order is due that many days after it is placed. Only with `net_terms`; omitted, the store's net days (Settings → Payments).",
@@ -425,7 +426,7 @@ function manualOrderInputOfBody(c: Context, body: OrderPricedBody) {
 }
 
 const invalidOrder = (issues: z.core.$ZodIssue[]) => new ValidationError(issues[0]?.message ?? "Check the order.", {
-  issues: issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
+  issues: issues.map((issue) => ({ path: issue.path.filter((key) => typeof key !== "symbol"), message: issue.message })),
 });
 
 /** A UUID the order-create attempt table takes, derived from the caller's Idempotency-Key (random without one). */
@@ -469,7 +470,7 @@ app.openapi(createRoute({
       ? "An in-person sale needs the buyer's phone (or a customerId)."
       : body.paymentMethod === "net_terms"
       ? "An invoice order needs the buyer's phone."
-      : "A cash-on-delivery order needs the buyer's phone.", { issues: [{ field: body.customerId ? "customerId" : "contact.phone", code: "phone_required" }] });
+      : "A cash-on-delivery order needs the buyer's phone.", { issues: [{ path: body.customerId ? ["customerId"] : ["contact", "phone"], message: "The buyer's phone is required." }] });
   }
   const parsed = createOrderSchema.safeParse({
     ...input,
@@ -542,7 +543,7 @@ app.openapi(createRoute({
 
 const releaseHoldBody = z.object({
   expectedRevision: z.number().int().min(1).openapi({
-    description: "The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision.",
+    description: "The order `revision` you read; a change since is refused with 409 `order_revision_conflict` and the hold stays. Releasing a released hold answers it again whatever the revision.",
   }),
 }).strict();
 
@@ -596,7 +597,10 @@ const recordPaymentBody = z.object({
   via: z.enum(RECORDED_PAYMENT_VIAS).openapi({ description: "How it was received." }),
   reference: z.string().trim().max(120).nullable().optional().openapi({ description: "The bank, cheque or transfer reference." }),
   note: z.string().trim().max(500).nullable().optional(),
-  expectedRevision: z.number().int().min(1).optional().openapi({ description: "The order `revision` you read; a different one is refused with 409." }),
+  expectedRevision: optionalOrderRevisionSchema,
+  allowOpenAttempt: z.boolean().optional().openapi({
+    description: "Record it, for the amount given, even though the buyer has a payment page open for the order that could still be paid: the order's open payment pages are cancelled at their provider in the same write, whether or not one was open when you read the order. If the buyer still pays on one, that payment is applied to what the order then owes when it is exactly that; on an order already paid in full it is refunded automatically (a late payment, with a timeline line; the order shows it as received until the refund lands); any other amount is left on the order for staff to reconcile, never counted. Without it, an open page (one the buyer touched within the last 24 hours, or a provider still processing a payment on one), or a payment being set up or charged right now, refuses the payment with 409 `payment_in_progress` (`details.paymentAttemptId`, `details.status`); one being set up or charged is refused either way.",
+  }),
 }).strict();
 
 app.openapi(createRoute({
@@ -632,6 +636,7 @@ app.openapi(createRoute({
     recordedBy,
     requestKey: await scopedRequestKey(c, "dashboard.resources.payments.create", c.req.valid("header")["idempotency-key"]),
     ...(body.expectedRevision !== undefined ? { expectedVersion: body.expectedRevision } : {}),
+    ...(body.allowOpenAttempt ? { allowOpenAttempt: true } : {}),
     // The timeline line commits with the payment, once per payment: in the
     // order's currency (the dashboard words it, like a cash collection).
     timelineLine: async ({ paymentId, currency, landed }) => ({ statement: buildOrderEventInsert(db, {

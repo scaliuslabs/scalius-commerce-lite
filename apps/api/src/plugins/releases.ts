@@ -31,9 +31,10 @@ import { providerFetch } from "@scalius/core/integrations/provider-fetch";
 import { pluginCompatibility, type PluginManifest } from "@scalius/shared/plugins";
 import { checkPluginAsset } from "@scalius/shared/plugins/assets";
 import { verifyStorefrontFiles } from "@scalius/shared/plugins/storefront-files";
-import { STOREFRONT_COMPONENT_LIMITS, storefrontFileContentType } from "@scalius/shared/plugins/storefront-protocol";
+import { BUYER_CHROME_CSS_VERSION } from "@scalius/shared/plugins/buyer-chrome-css";
+import { STOREFRONT_BUYER_CHROME_FILE, STOREFRONT_COMPONENT_LIMITS, storefrontFileContentType } from "@scalius/shared/plugins/storefront-protocol";
 import {
-  isNewerPluginVersion,
+  comparePluginVersions,
   pluginPackageSignatureSchema,
   pluginRegistryIndexSchema,
   sealedAssetDigests,
@@ -47,6 +48,7 @@ import {
 } from "@scalius/shared/plugins/registry";
 import { pluginAssetKey } from "./listing";
 import { pluginBundleKey } from "./loaders/sandbox";
+import { markBuyerChromeSheet } from "./buyer-chrome-check";
 import { pluginStorefrontFileKey, pluginStorefrontIndexKey } from "./storefront-files";
 
 /** The largest storefront file a registry download reads. */
@@ -236,8 +238,14 @@ export async function verifyRelease(input: VerifyReleaseInput): Promise<PluginRe
   return { manifest, sha256, code: input.code, assets, storefront, signer };
 }
 
-/** Stores a verified release's bundle and images in R2 (private prefix), where the sandbox loader and the image route read them. */
-export async function storeRelease(env: Env, release: PluginRelease): Promise<void> {
+/**
+ * Stores a verified release's bundle and images in R2 (private prefix), where
+ * the sandbox loader and the image route read them. A release with the
+ * store's reading of its sheet for the buyer's own pages (`buyer-chrome.css`,
+ * which the verify checked with this checker) is marked as this checker's
+ * (buyer-chrome-check.ts), after its files and index.
+ */
+export async function storeRelease(env: Env, release: PluginRelease, db: Database): Promise<void> {
   const { manifest, sha256 } = release;
   await env.BUCKET.put(pluginBundleKey(manifest.id, manifest.version, sha256), release.code, {
     httpMetadata: { contentType: "text/javascript" },
@@ -257,6 +265,8 @@ export async function storeRelease(env: Env, release: PluginRelease): Promise<vo
     await env.BUCKET.put(pluginStorefrontIndexKey(manifest.id, manifest.version, sha256), JSON.stringify(digests), {
       httpMetadata: { contentType: "application/json" },
     });
+    const sheet = digests[STOREFRONT_BUYER_CHROME_FILE];
+    if (sheet) await markBuyerChromeSheet(db, manifest.id, sha256, { checker: BUYER_CHROME_CSS_VERSION, sha256: sheet });
   }
 }
 
@@ -298,7 +308,7 @@ export async function downloadRegistryRelease(
 export function latestEntry(index: PluginRegistryIndex, id: string, version?: string): PluginRegistryEntry | null {
   const entries = index.apps.filter((entry) => entry.id === id);
   if (version) return entries.find((entry) => entry.version === version) ?? null;
-  return entries.reduce<PluginRegistryEntry | null>((best, entry) => (!best || isNewerPluginVersion(entry.version, best.version) ? entry : best), null);
+  return entries.reduce<PluginRegistryEntry | null>((best, entry) => (!best || comparePluginVersions(entry.version, best.version) > 0 ? entry : best), null);
 }
 
 // ── Upload ─────────────────────────────────────────────────────────────────
@@ -398,5 +408,5 @@ export async function installRelease(
 
 /** Whether a listed release is newer than the installed version. */
 export function hasUpdate(installed: PluginInstallation, entry: PluginRegistryEntry): boolean {
-  return entry.id === installed.pluginId && isNewerPluginVersion(entry.version, installed.version);
+  return entry.id === installed.pluginId && comparePluginVersions(entry.version, installed.version) > 0;
 }

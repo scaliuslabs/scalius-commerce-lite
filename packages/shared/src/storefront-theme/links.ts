@@ -14,10 +14,43 @@ export function canonicalStorefrontLink(value: unknown): string | null {
   return parsed.ok && parsed.kind !== "label" && parsed.href ? parsed.href : null;
 }
 
-/** A navigation-safe href, already canonical (`canonicalStorefrontLink(value) === value`). */
+/**
+ * Why a theme link is refused (`params.reason`): a save refuses it; a read of a
+ * stored one reads it as no link (read-repair.ts), never as a working link.
+ */
+export const STOREFRONT_INVALID_LINK = "invalid_link";
+
+/**
+ * A link a theme draws (an announcement, a hero slide, a section's banner or
+ * cards): navigation-safe and canonical, and when it is a path, a page a
+ * buyer can open on this store (`isStorefrontThemeLinkPath`): a store page or
+ * an app's page (`/apps/<id>/…`, drawn inside the store's layout, as
+ * navigation menus link to it), never the store's API, its files or build
+ * assets. It may leave for another site over https: these are the merchant's
+ * own links. The bottom bar's tabs are stricter: the store's own navigation
+ * opens only the store's pages (`storefrontStorePathSchema`).
+ */
+export function isStorefrontThemeLink(value: string): boolean {
+  if (canonicalStorefrontLink(value) !== value) return false;
+  return !value.startsWith("/") || isStorefrontThemeLinkPath(value.split(/[?#]/)[0]!);
+}
+
+/**
+ * What a theme link's path may never open: the store's API and every `_` or
+ * `~` first segment (the app file gateway `/_x/…`, build assets, islands,
+ * Partytown). An app's page (`/apps/<id>/…`) is a buyer destination here.
+ */
+export const STOREFRONT_THEME_LINK_RESERVED = /^\/(?:api|[_~][^/]*)(?:\/|$)/i;
+
+/** A path a theme link may open: a store page or an app's page, by the store-path rule otherwise (`isStorefrontStorePath`). */
+export function isStorefrontThemeLinkPath(path: string): boolean {
+  return storePathPasses(path, STOREFRONT_THEME_LINK_RESERVED);
+}
+
+/** A theme link (`isStorefrontThemeLink`), already canonical. */
 export const storefrontLinkSchema = z.string().max(STOREFRONT_LINK_MAX_LENGTH).refine(
-  (value) => canonicalStorefrontLink(value) === value,
-  "Use a store path such as /collections/new or an https:// link.",
+  isStorefrontThemeLink,
+  { message: "Use a page of this store such as /collections/new, an app's page (/apps/…), or an https:// link: never /api or /_ paths.", params: { reason: STOREFRONT_INVALID_LINK } },
 );
 
 /**
@@ -29,12 +62,32 @@ export const STOREFRONT_STORE_PATH_RESERVED = /^\/(?:api|apps|[_~][^/]*)(?:\/|$)
 const STORE_PATH_SHAPE = /^\/(?!\/)[^\\\s?#]*$/;
 export const STOREFRONT_STORE_PATH_MESSAGE = "Link to a page of this store, such as /products/x: no other site, query, /api, /apps or /_ paths.";
 
-/** A page path on this store: no other origin, query, fragment, dot segments, encoded separators or store machinery. */
+/**
+ * Escapes a store page path never needs: a letter, digit or `-._~` (`/%61pps`
+ * is `/apps` to the router) and a separator (`%2F`, `%5C`).
+ */
+const NEEDLESS_ESCAPE = /%(?:[46][1-9a-f]|[57][0-9a]|3[0-9]|2d|2e|5f|7e|2f|5c)/i;
+/** An escape left after one decoding (`%2561` decodes to `%61`): a path the router could read once more. */
+const ESCAPE_AFTER_DECODING = /%[0-9a-f]{2}/i;
+
+/**
+ * A page path on this store, as written and as the router reads it decoded:
+ * no other origin, query, fragment, dot segments, needless escapes, escapes a
+ * second decoding would read (`%2561pps`), malformed escapes or store
+ * machinery. A percent sign a path names stays (`/pages/50%25-off`). A pure
+ * predicate: it never throws.
+ */
 export function isStorefrontStorePath(path: string): boolean {
-  return STORE_PATH_SHAPE.test(path)
-    && !path.split("/").some((part) => part === "." || part === "..")
-    && !/%(?:2f|5c|2e)/i.test(path)
-    && !STOREFRONT_STORE_PATH_RESERVED.test(path);
+  return storePathPasses(path, STOREFRONT_STORE_PATH_RESERVED);
+}
+
+/** The store-path rule with its set of reserved first segments. */
+function storePathPasses(path: string, reserved: RegExp): boolean {
+  if (!STORE_PATH_SHAPE.test(path) || NEEDLESS_ESCAPE.test(path)) return false;
+  let decoded: string;
+  try { decoded = decodeURIComponent(path); } catch { return false; }
+  if (ESCAPE_AFTER_DECODING.test(decoded)) return false;
+  return [path, decoded].every((each) => !each.split("/").some((part) => part === "." || part === "..") && !reserved.test(each));
 }
 
 /** The one schema of a page path on this store (a buyer link an app draws, a bottom bar link tab): one refusal, with the caller's reason. */

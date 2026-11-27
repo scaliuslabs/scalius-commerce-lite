@@ -5,6 +5,6 @@
 // A Text module: a string, not compiled at isolate start.
 import runtime from "./sandbox-runtime.gen.txt";
 
-export const SANDBOX_RUNTIME_SHA256 = "d75d02f41d3a3c51991766db3ad142e1a6e22d63c80cb31f6037798b2d5bb747";
+export const SANDBOX_RUNTIME_SHA256 = "0f79a8fd20925d836103a4e37110711a4b35ab6a111e6334f19da2e2ef3581cf";
 
 export const SANDBOX_RUNTIME_MODULE: string = runtime;

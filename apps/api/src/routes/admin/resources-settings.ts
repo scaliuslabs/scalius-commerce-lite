@@ -258,7 +258,7 @@ const ShippingZoneResource = z.object({
     name: z.string(),
     type: z.enum(["city", "zone", "area"]),
     parentName: z.string().nullable(),
-  })).openapi({ description: "Bangladesh delivery places (city, thana, area) the zone serves. A place belongs to one zone." }),
+  })).openapi({ description: "The store's own delivery places the zone serves, each at one of up to three levels (`city`, `zone`, `area`) whose meaning a regional pack defines; empty for a store with none. A place belongs to one zone." }),
   rates: z.array(ShippingRate),
 }).openapi("ShippingZoneResource");
 
@@ -405,7 +405,7 @@ const TaxRegionResource = z.object({
     id: z.string(),
     type: z.enum(["city", "zone", "area"]),
     name: z.string().nullable(),
-  }).nullable().openapi({ description: "A Bangladesh delivery place (kind `place`)." }),
+  }).nullable().openapi({ description: "One of the store's own delivery places (kind `place`)." }),
   providerId: z.string().nullable().openapi({ description: "A country's tax provider (`<app id>:<provider id>`); null uses the store-wide one, `system` being the rates below." }),
   revision: z.number().int().positive(),
   taxEnabled: z.boolean().openapi({ description: "Whether the store collects tax at all." }),

@@ -168,10 +168,10 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
       if (!index) continue;
       // The newest listed version of each app.
       const newest = new Map<string, (typeof index.apps)[number]>();
-      const { isNewerPluginVersion } = await import("@scalius/shared/plugins/registry");
+      const { comparePluginVersions } = await import("@scalius/shared/plugins/registry");
       for (const entry of index.apps) {
         const best = newest.get(entry.id);
-        if (!best || isNewerPluginVersion(entry.version, best.version)) newest.set(entry.id, entry);
+        if (!best || comparePluginVersions(entry.version, best.version) > 0) newest.set(entry.id, entry);
       }
       for (const entry of newest.values()) {
         const manifest = entry.manifest as { name?: unknown; tagline?: unknown; description?: unknown; author?: { name?: unknown } };
@@ -324,7 +324,7 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
     }
     const { downloadRegistryRelease, storeRelease, installRelease } = await releases();
     const release = await downloadRegistryRelease(db, body);
-    await storeRelease(c.env, release);
+    await storeRelease(c.env, release, db);
     const installation = await installRelease(db, release, { source: "registry", actorUserId: actorId(c) });
     return ok(c, { app: await deps.detail(c, installation) });
   });
@@ -374,7 +374,7 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
     }
     // Before anything is stored: an update keeps the developer the app was installed with.
     requirePinnedSigner(current, { source: "registry", signerKeyId: release.signer?.id ?? null });
-    await storeRelease(c.env, release);
+    await storeRelease(c.env, release, db);
     const { updatePluginToRelease } = await lifecycle();
     const result = await updatePluginToRelease(
       deps.lifecycleContext(c) as never,
@@ -437,7 +437,7 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
     }
     // Before anything is stored or trusted: an update keeps the developer the app was installed with.
     if (current) requirePinnedSigner(current, { source: "upload", signerKeyId: release.signer?.id ?? null });
-    await storeRelease(c.env, release);
+    await storeRelease(c.env, release, db);
     if (newKey) await trustDeveloperKey(db, newKey);
     if (!current) {
       const installation = await installRelease(db, release, { source: "upload", actorUserId: actorId(c) });

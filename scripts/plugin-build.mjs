@@ -623,7 +623,7 @@ export async function packPlugin(source) {
   if (!parsed.ok) {
     throw new Error(`${source}: invalid manifest: ${parsed.issues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
   }
-  const patternIssues = contract.pluginObjectPatternIssues(parsed.manifest);
+  const patternIssues = contract.pluginManifestPolicyIssues(parsed.manifest);
   if (patternIssues.length > 0) throw new Error(`${source}: invalid manifest: ${patternIssues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
   const issues = contract.checkPluginHandlers(contract.pluginHandlerInventory(parsed.manifest), loaded);
   if (issues.length > 0) throw new Error(`${source}: ${issues.join(" ")}`);

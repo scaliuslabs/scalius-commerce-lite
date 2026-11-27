@@ -34,7 +34,7 @@ import {
   cleanupExpiredScannerTokenClaims,
   pruneExpiredIdentityHandoffEvents,
 } from "@scalius/core/auth";
-import { dueSessionCancelProbes, reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
+import { dueIdleSessionProbes, dueSessionCancelProbes, reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { sweepExpiredStaffAttempts } from "@scalius/core/auth/staff-attempts";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
@@ -825,6 +825,16 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
+    // After a deploy, each installed theme's sheet for the buyer's own pages checked again by this
+    // version's checker, one release a run, until none is left (plugins/buyer-chrome-check.ts).
+    name: "buyer_chrome_recheck",
+    async run({ env, timed }) {
+      const { recheckBuyerChromeAfterDeploy } = await import("./plugins/buyer-chrome-check");
+      const result = await timed("buyer_chrome_recheck", () => recheckBuyerChromeAfterDeploy(env));
+      if (result && result.checked > 0) console.log(`[scheduled] Buyer-page sheets checked: ${result.checked}, refused=${result.refused}, remaining=${result.remaining}`);
+    },
+  },
+  {
     // Agent access: expired OAuth grants and tokens, sealed artifacts and
     // browser handoffs, pairings and OAuth approvals nobody finished, and requests and pairings
     // that ended without a connection. Cleanup, never on a buyer's path; each
@@ -900,7 +910,7 @@ export const BACKGROUND_DRAINS: ReadonlyArray<BackgroundDrain> = [
   },
   {
     name: "payment_event_drain",
-    due: (db) => [...duePaymentEventProbes(db), ...dueSessionCancelProbes(db)],
+    due: (db) => [...duePaymentEventProbes(db), ...dueSessionCancelProbes(db), ...dueIdleSessionProbes(db)],
     async run({ db, env, executionCtx }) {
       const { drainPaymentEvents } = await import("./background/payment-events");
       return drainPaymentEvents(db, env, executionCtx);

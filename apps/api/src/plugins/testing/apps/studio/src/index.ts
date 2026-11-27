@@ -91,6 +91,7 @@ export const manifest = {
       id: "studio",
       name: "Studio",
       description: "The Studio header, footer and card, with a hero, featured products and questions on the homepage.",
+      themeVersion: 16,
       theme: {
         apps: {
           skins: {

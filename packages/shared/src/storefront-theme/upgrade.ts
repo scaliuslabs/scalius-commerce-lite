@@ -1,6 +1,7 @@
 // The upgrade chain (../storefront-theme.md, "Compatibility"): a stored theme
 // document of an older version is upgraded when it is read, one version at a
-// time, and then parsed strictly as the current version. The next save
+// time, and then parsed for the current version's structure (a key it does
+// not know is left out, read-repair.ts; only a save is strict). The next save
 // stores the current version; nothing is written on read.
 //
 // A step is pure JSON in, JSON out (no I/O, no clock) and changes only the
@@ -12,9 +13,10 @@
 import { STOREFRONT_THEME_DOCUMENT_VERSION, storefrontThemeDocumentSchema, type StorefrontThemeDocument } from "./document";
 import { STOREFRONT_SECTION_REGISTRY, type StorefrontSectionSettingsUpgrade } from "./sections";
 import { storefrontPrivatePageDefaults } from "./private-pages";
+import { repairStoredStorefrontTheme, type StorefrontThemeReadRepair } from "./read-repair";
 import { privateCartPresetArrangement, privateDrawerWith, type PrivatePageArrangement } from "./private-arrangement";
 import { PRIVATE_ANATOMY_VERSION } from "./private-anatomy";
-import { PRIVATE_CHECKER_VERSION, readStoredPrivatePages, refusedPrivatePages } from "./private-layout";
+import { privatePagesCompiledCurrent, privatePagesCompiledIntact, readStoredPrivatePages, uncompiledPrivatePages, type PrivatePagesHeld } from "./private-layout";
 
 /**
  * The oldest stored version that still reads. Migration 0155 reset every
@@ -385,18 +387,37 @@ function withoutPrivatePageTemplates(document: Json): Json {
   return { ...document, pages: { ...pages, templates } };
 }
 
-/** A stored document read through the chain: the current document and the version it was stored at. */
+/** How many rounds a read repairs before it gives up (each round repairs every issue it found). */
+const READ_REPAIR_ROUNDS = 4;
+
+/** A stored document read through the chain: the current document, the version it was stored at, and what the read repaired. */
 export type StoredStorefrontThemeRead =
-  | { ok: true; document: StorefrontThemeDocument; storedVersion: number }
+  | {
+    ok: true;
+    document: StorefrontThemeDocument;
+    storedVersion: number;
+    /** Values the read repaired (read-repair.ts); absent when none. */
+    repairs?: StorefrontThemeReadRepair[];
+    /** What the stored document held that a theme cannot set (dropped here); the maintenance compile refuses the pages it reached. */
+    held?: PrivatePagesHeld[];
+  }
   | { ok: false; reason: string };
 
 /**
  * Reads a stored document (JSON text or a parsed value): upgraded, then
- * strictly parsed. What a theme cannot set on a private page (a stylesheet,
+ * parsed for its structure (a key this build does not know is left out). A read never runs the write policy
+ * (`storefrontThemeDocumentPolicyIssues`): a document a later build's policy
+ * refuses still reads and draws as it was saved, and is refused only when it
+ * is saved again. Nor does it fail on a value a check with a save reason
+ * refuses (a link, a tab, a slide's product): that value is repaired
+ * (read-repair.ts: never drawn as a working link) and listed in `repairs`.
+ * What a theme cannot set on a private page (a stylesheet,
  * its chrome, its search, files, a content block) is dropped first, as the
- * stored path alone does, and the private pages' compile is then refused: the
- * theme reads, its private pages draw the store's default look until the
- * next save (which refuses those fields with `not_available`).
+ * stored path alone does (`held`): the theme reads, and its private pages
+ * draw the store's default look until the maintenance compile compiles the
+ * rest and refuses the pages those fields reached. A compile is served only
+ * while this build made it and its fingerprint matches the source; any other
+ * reads as never compiled (never half a look).
  */
 export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefrontThemeRead {
   let parsed: unknown = value;
@@ -415,13 +436,30 @@ export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefr
   }
   upgraded = withoutPrivatePageTemplates(upgraded);
   const released = readStoredPrivatePages(upgraded.privatePages);
-  const result = storefrontThemeDocumentSchema.safeParse("privatePages" in upgraded ? { ...upgraded, privatePages: released.value } : upgraded);
-  if (!result.success) {
-    const issue = result.error.issues[0];
-    return { ok: false, reason: `${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}` };
+  let candidate: Json = "privatePages" in upgraded ? { ...upgraded, privatePages: released.value } : upgraded;
+  // The stored input a compile's fingerprint covers: before any repair, so it matches every later read.
+  const stored = candidate;
+  const repairs: StorefrontThemeReadRepair[] = [];
+  // A repair can let a check that waited on the shape run (a list's own checks): a few rounds settle it.
+  for (let round = 0; ; round += 1) {
+    const result = storefrontThemeDocumentSchema.safeParse(candidate);
+    if (result.success) {
+      // A compile is served only while it belongs to this source (its fingerprint) and this build made it; a
+      // stored document holding what a theme cannot set is compiled by maintenance, its held pages refused there.
+      const privatePages = result.data.privatePages;
+      const document = privatePagesCompiledCurrent(privatePages) && !privatePagesCompiledIntact(stored, privatePages)
+        ? { ...result.data, privatePages: uncompiledPrivatePages(privatePages) }
+        : result.data;
+      return { ok: true, document, storedVersion: (parsed as Json).version as number, ...(repairs.length > 0 ? { repairs } : {}), ...(released.held.length > 0 ? { held: released.held } : {}) };
+    }
+    const repaired = round < READ_REPAIR_ROUNDS ? repairStoredStorefrontTheme(candidate, result.error.issues, repairs) : null;
+    if (!repaired) {
+      const issue = result.error.issues[0];
+      return { ok: false, reason: `${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}` };
+    }
+    candidate = repaired.document;
+    repairs.push(...repaired.repairs);
   }
-  const document = released.held ? { ...result.data, privatePages: refusedPrivatePages(result.data.privatePages) } : result.data;
-  return { ok: true, document, storedVersion: (parsed as Json).version as number };
 }
 
 /**

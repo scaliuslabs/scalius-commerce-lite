@@ -34,7 +34,8 @@ import { ORDER_CHANNELS } from "../order-channel";
 import { LINE_ADD_ONS_MAX } from "../line-identity";
 import { ADD_ON_DETAILS_MAX } from "../add-on-totals";
 import { appTextSchema } from "./app-text";
-import { isStoreActionOrAmountWord, STORE_WORDS_REASON } from "../store-words";
+import { lineAddOnSchema } from "./line-add-on";
+import { adjustFunctionWords } from "./function-words";
 import { ONLINE_STORE_CHANNEL_ID, SALES_CHANNEL_ID_MAX_LENGTH, SALES_CHANNEL_ID_PATTERN } from "../sales-channels";
 
 const id = z.string().min(1).max(128);
@@ -54,19 +55,16 @@ const storeLabel = z.string().trim().min(1).max(80);
  */
 /**
  * An add-on's title or detail line: app text drawn among the store's money
- * rows, so it never reads as one of the store's action or amount words
- * ("Total", "সর্বমোট", "Place order"; store-words.ts), refused with reason
- * `store_words`.
+ * rows. One that reads as the store's amount word is drawn as the store's
+ * neutral word instead (`adjustFunctionWords`), never refusing the answer.
  */
-const addOnLabel = label.superRefine((text, context) => {
-  if (isStoreActionOrAmountWord(text)) {
-    context.addIssue({ code: "custom", message: `"${text}" is the store's own word for an action or an amount: name what the add-on is.`, params: { reason: STORE_WORDS_REASON } });
-  }
-});
+const addOnLabel = label;
 const addOnDetails = z.array(addOnLabel).max(ADD_ON_DETAILS_MAX).optional();
 
 /** Add-ons one line carries: the one bound the cart, the page and checkout share (`LINE_ADD_ONS_MAX`). */
 const LINE_ADJUSTMENTS_ON_LINE_MAX = LINE_ADD_ONS_MAX;
+
+export { LINE_ADD_ON_PER, lineAddOnSchema, type LineAddOn } from "./line-add-on";
 
 /** One cart line as functions see it. */
 export const functionCartLineSchema = z.object({
@@ -131,7 +129,32 @@ export const functionCartLineSchema = z.object({
      * naming the kit.
      */
     kit: z.object({ variantId: id, productId: id, sku: z.string().max(200).nullable() }).strict().nullable().optional(),
+    /**
+     * The bundle units bought (an expanded bundle's or a kit's: the buyer's
+     * quantity of it; a kit's one line has `quantity` = `units`), and how many
+     * units of this line each holds (`quantity = units × perUnit`; a kit's one
+     * line 1). Null on a merged bundle, whose lines keep their own
+     * quantities. The host always sends them.
+     */
+    units: z.number().int().min(1).nullable().optional(),
+    perUnit: z.number().int().min(1).nullable().optional(),
   }).strict().nullable().optional(),
+  /**
+   * The step an add-on answered on this line is charged in (minor units of
+   * `currency`): the market's increment (`cart.priceIncrementMinor`) on a
+   * plain or merged line; on a bundle's line (an expanded bundle's component,
+   * a kit's one line) the increment times the units the bundle's anchor holds
+   * per bundle unit, since the anchor charges the fee over them. Checkout
+   * rounds every add-on once, half-up, to it: answer multiples of it to be
+   * charged exactly (a share is rounded to it too). On a kit's one line it is
+   * read from the kit's split before your own price for the kit: if that price
+   * makes one of its items split into lines differently (its share starts or
+   * stops dividing), the anchor's units per kit, and so the final step, can
+   * differ, and checkout rounds once to the final step (the app's log says
+   * so). The host always sends it;
+   * optional only so a cart an app's tests build by hand still reads.
+   */
+  addOnStepMinor: nonNegativeMinor.min(1).optional(),
   /**
    * The SKU is a physical good (not digital, a service or a gift card),
    * whatever delivery the buyer picks: a pickup line still requires shipping
@@ -157,14 +180,16 @@ export const functionCartLineSchema = z.object({
    */
   purchaseOptions: z.array(z.string().max(APP_SCOPED_KEY_MAX_LENGTH).regex(APP_SCOPED_KEY_PATTERN)).max(LINE_PURCHASE_OPTIONS_MAX).default([]),
   /**
-   * The apps' add-ons on each unit of the line (`cart.line_prices`
-   * adjustments, each with the app that added it), in `unitPriceMinor`, once
+   * The apps' add-ons on the line (`cart.line_prices` `addOns`, each with
+   * the app that added it), in `unitPriceMinor` and `lineTotalMinor`, once
    * checkout has priced them: what a storefront extension draws as
-   * "Protection ৳350" (an app reads its own by `appId`). Like the price, every
-   * app sees them. Empty before pricing (in `cart.line_prices` and
-   * `cart.transform` themselves) and on a line without one.
+   * "Protection ৳350" (an app reads its own by `appId`). A bundle's add-on is
+   * on its anchor (a store kit's one line, an expanded bundle's anchor
+   * component) with `per: "bundle"`. Like the price, every app sees them.
+   * Empty before pricing (in `cart.line_prices` and `cart.transform`
+   * themselves) and on a line without one.
    */
-  addOns: z.array(z.object({ appId: z.string().max(128), title: z.string().max(80), amountMinor: minor }).strict()).max(LINE_ADJUSTMENTS_ON_LINE_MAX).default([]),
+  addOns: z.array(lineAddOnSchema).max(LINE_ADJUSTMENTS_ON_LINE_MAX).default([]),
 }).strict();
 
 /** Who places the order (`orders.channel`, `@scalius/shared/order-channel`). */
@@ -174,6 +199,13 @@ export const functionCartSchema = z.object({
   /** The currency the buyer pays in (the market's): every `*Minor` amount here is in it. */
   currency: z.string().length(3),
   decimalPlaces: z.number().int().min(0).max(4),
+  /**
+   * The market's price increment, in minor units of `currency` (100 at
+   * whole taka with two decimal places, 1 at every cent): what prices and
+   * add-ons round to. The host always sends it; optional only so a cart an
+   * app's tests build by hand still reads.
+   */
+  priceIncrementMinor: nonNegativeMinor.min(1).optional(),
   /**
    * The store's own currency, the one your settings' amounts are in. It is
    * `currency` unless the market sells in another; answer a fixed amount
@@ -520,7 +552,7 @@ const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT
  * else checkout refuses; two of them pricing one line refuse too
  * (`purchase_options_conflict`): one line has one price.
  *
- * `adjustments`: add-ons to each unit of a line (an engraving's letters, a
+ * `addOns`: add-ons to each unit of a line (an engraving's letters, a
  * gift wrap, a protection plan), applied after the whole price precedence,
  * so sale, segment, app and price-list lines take them too. An add-on is a
  * fixed `amountMinor` or a `percent` of the line's unit price as checkout
@@ -534,8 +566,7 @@ const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT
  * component's unit price times what it holds per bundle unit), charged on
  * the component that holds the fewest per unit; the same app's add-on of
  * the same title on another component counts once, never per component.
- * One that does not divide evenly over that component's units per bundle
- * unit refuses checkout. Merged lines keep their own add-ons. The
+ * Merged lines keep their own add-ons. The
  * buyer sees each as a line component ("Add-on: <title>") in the cart,
  * checkout, receipt and emails; tax, discounts, totals and refunds include it
  * as part of the unit price. An add-on may carry `details`: up to
@@ -549,13 +580,20 @@ const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT
  * exactly as a product price does (৳1,200 in a USD market at 0.0082, +10%,
  * ending .99 is $10.99, as the product is). An add-on rounds half-up to the
  * market's increment without the market's rounding step or ending, which
- * make the item's price point (a ৳50 wrap there is $0.45, not $0.99). A
- * cart-currency amount, and a store-currency one in the store's own
- * currency, rounds half-up to the increment (৳50.50 at whole taka is ৳51).
- * A positive amount never rounds to nothing (it takes one increment); a
- * fixed 0 is a free extra, frozen on the order line like any add-on, so an
- * app decides what to deliver from the order line, never from its current
- * settings.
+ * make the item's price point (a ৳50 wrap there is $0.45, not $0.99).
+ *
+ * Every add-on is rounded once, half-up, to its line's step
+ * (`FunctionCartLine.addOnStepMinor`): the market's increment on a plain or
+ * merged line, the increment times the anchor's units per bundle unit on a
+ * bundle's line, so every unit of the anchor pays the same exact amount
+ * (৳351 over a pair of teas at whole taka is ৳352, ৳176 a tea; ৳50.50 on a
+ * plain line is ৳51). It moves at most half a step either way, never refused
+ * for not dividing, except that a positive amount never becomes free: one
+ * below half a step charges one step. An amount that is a multiple of the
+ * step is charged exactly; one that is not is charged as rounded, and the
+ * app's log says so. A fixed 0 is a free extra, frozen on the order line
+ * like any add-on, so an app decides what to deliver from the order line,
+ * never from its current settings.
  */
 /** Offers one offer run prices at most (a cart line's choices a per-line slot shows). */
 export const LINE_OFFERS_MAX = 250;
@@ -581,7 +619,7 @@ export const cartLinePricesOutputSchema = z.object({
     unitPriceMinor: minor.positive(),
     currency: amountCurrency,
   }).strict()).max(250).default([]),
-  adjustments: z.array(z.union([
+  addOns: z.array(z.union([
     z.object({
       lineId: id,
       /**
@@ -663,8 +701,12 @@ export const buyerUiLineSchema = z.object({
   unitPriceMinor: nonNegativeMinor,
   /** A bundle the store sells as one line (`cart.transform` expands it): its add-ons are once per bundle unit. */
   bundle: z.boolean(),
-  /** Every app's add-ons on each unit, with the app that added it ("Protection ৳350"). */
-  addOns: z.array(z.object({ appId: z.string().max(128), title: z.string().max(80), amountMinor: minor }).strict()).max(LINE_ADJUSTMENTS_ON_LINE_MAX),
+  /**
+   * Every app's add-ons on the line, with the app that added it ("Protection
+   * ৳350"): a bundle's once per bundle unit (`per: "bundle"`, the line's
+   * quantity its bundle units).
+   */
+  addOns: z.array(lineAddOnSchema).max(LINE_ADJUSTMENTS_ON_LINE_MAX),
   /**
    * The app's own line inputs (`checkout.lineInputs`, keys without the app
    * id), every one it declares: whether the line takes it (`eligible`, the
@@ -720,17 +762,9 @@ export const buyerUiOrderLineSchema = z.object({
   }).strict().nullable(),
   /**
    * Every app's add-ons the row was charged ("Protection ৳350"), from its
-   * real lines: `totalMinor` exactly; `amountMinor` per unit (`per: "unit"`)
-   * or once per bundle unit (`per: "bundle"`, on a bundle's anchor row) when
-   * one amount is exact for every unit, else null. At most a line's.
+   * real lines (a bundle's on its anchor row, `per: "bundle"`). At most a line's.
    */
-  addOns: z.array(z.object({
-    appId: z.string().max(128).nullable(),
-    title: z.string().max(80),
-    totalMinor: nonNegativeMinor,
-    amountMinor: nonNegativeMinor.nullable(),
-    per: z.enum(["unit", "bundle"]),
-  }).strict()).max(LINE_ADJUSTMENTS_ON_LINE_MAX),
+  addOns: z.array(lineAddOnSchema).max(LINE_ADJUSTMENTS_ON_LINE_MAX),
   /** The app's own line answers frozen on the row (keys without the app id): what the buyer chose for it. */
   inputs: z.array(z.object({
     key: z.string().max(APP_SCOPED_KEY_MAX_LENGTH),
@@ -887,15 +921,22 @@ export const PLUGIN_FUNCTION_INVALID_OUTPUT = "function_invalid_output";
 
 /**
  * A function's answer checked the way the host checks it: the parsed output,
- * or `function_invalid_output` with the first issue's path. The host and the
- * SDK test harness both use this, so a test sees what production does.
+ * or `function_invalid_output` with the first issue's path. A label that passes
+ * for the store's word gives way alone (a row's title to the store's neutral
+ * word, a rename skipped) and is named in `notices` (the app's log), the rest
+ * of the answer standing (`adjustFunctionWords`). The host and the SDK test
+ * harness both use this, so a test sees what production does.
  */
 export function checkPluginFunctionOutput<P extends PluginRunPoint>(
   point: P,
   value: unknown,
-): { ok: true; value: PluginFunctionOutput<P> } | { ok: false; code: typeof PLUGIN_FUNCTION_INVALID_OUTPUT; reason: string | null; message: string } {
+  options: { language?: string | null } = {},
+): { ok: true; value: PluginFunctionOutput<P>; notices?: string[] } | { ok: false; code: typeof PLUGIN_FUNCTION_INVALID_OUTPUT; reason: string | null; message: string } {
   const parsed = PLUGIN_RUN_SCHEMAS[point].output.safeParse(value);
-  if (parsed.success) return { ok: true, value: parsed.data as PluginFunctionOutput<P> };
+  if (parsed.success) {
+    const adjusted = adjustFunctionWords(point, parsed.data, options.language ?? null);
+    return { ok: true, value: adjusted.value as PluginFunctionOutput<P>, ...(adjusted.notices.length > 0 ? { notices: adjusted.notices } : {}) };
+  }
   const issue = parsed.error.issues[0];
   // A refusal that names its reason (`params.reason`) carries it, machine-readable, beside the message.
   const reason = (issue as { params?: { reason?: unknown } } | undefined)?.params?.reason;
