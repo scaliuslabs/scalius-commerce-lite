@@ -16,6 +16,7 @@ import {
   themeSettingsDrafts,
   themeSettingsVersions,
   themeRestorePoints,
+  themeTemplateBases,
   themeTemplateDesigns,
   user,
 } from "@scalius/database/schema";
@@ -65,7 +66,16 @@ import {
   storefrontNextSectionId,
   storefrontSectionSchema,
   switchStorefrontTemplate,
+  applyStorefrontTemplateUpdate,
+  planStorefrontTemplateUpdate,
+  storefrontTemplateUpdateCounts,
+  storefrontTemplateUpdateDefaults,
+  storefrontTemplateUpdateDigest,
+  storefrontTemplateUpdateIssueItems,
   themeDocumentChangeSchema,
+  type StorefrontAppTemplateTheme,
+  type StorefrontTemplateUpdateIssue,
+  type StorefrontTemplateUpdateItem,
   type PrivatePageKey,
   type PrivatePageRefusal,
   type StorefrontLandingPage,
@@ -773,7 +783,7 @@ async function writeThemeDraft(
   /** Keep the draft being replaced as a restore point (a restore, a discard or a template switch). */
   restorePoint?: { previous: StorefrontThemeDocument; reason: ThemeRestorePointReason; template?: string },
   /** More writes that commit with the draft or not at all (a template switch remembers the design it leaves). */
-  also: ReturnType<typeof rememberTemplateDesignStatements> = [],
+  also: Array<ReturnType<typeof rememberTemplateDesignStatements>[number] | ReturnType<typeof templateBaseStatement>> = [],
   /** What the store already holds here: issues it already had are not this write's to fix (`checkStorefrontThemeSave`). */
   baseline?: StorefrontThemeDocument,
 ): Promise<{ theme: StorefrontThemeDocument; revision: number; updatedAt: Date }> {
@@ -1220,6 +1230,8 @@ export async function switchThemeTemplate(
   options: {
     reason?: Extract<ThemeRestorePointReason, "template" | "app">;
     fromHome?: (template: string) => Promise<readonly StorefrontSection[] | null>;
+    /** An app template's declaration as its release ships it: recorded as the template's base when the switch applies it (not when it brings a remembered design back). */
+    declaration?: ThemeTemplateDeclaration;
   } = {},
 ): Promise<ThemeDraftDocument & { plan: StorefrontTemplateSwitchPlan }> {
   const workspace = await getThemeWorkspace(db);
@@ -1240,8 +1252,160 @@ export async function switchThemeTemplate(
     previous: current,
     reason: options.reason ?? "template",
     template: choice.key,
-  }, leaving ? rememberTemplateDesignStatements(db, from, current, actorId) : []);
+  }, [
+    ...(leaving ? rememberTemplateDesignStatements(db, from, current, actorId) : []),
+    // Applied (not a remembered design back): its next release merges against this one.
+    ...(choice.kind === "app" && options.declaration && !switched.plan.restored ? [templateBaseStatement(db, choice.key, options.declaration, "apply")] : []),
+  ]);
   return { ...saved, basePublishedRevision, plan: switched.plan };
+}
+
+// ─── Template updates ────────────────────────────────────────────────────────
+//
+// An app's new release reaches a store already on one of its templates as a
+// proposal (`planStorefrontTemplateUpdate`): the template the store applied
+// (its base, `theme_template_bases`), the same template in the installed
+// release and the store's draft. Nothing reaches the live theme: the merchant
+// takes the improvements and chooses the conflicts into the draft (the draft
+// it replaces kept as a restore point), previews and publishes. Taking it
+// records the installed release as the base, so the same update is never
+// proposed twice.
+
+/** An app template as one release declares it (handles unresolved, at the document version it was written for). */
+export interface ThemeTemplateDeclaration {
+  pluginId: string;
+  appVersion: string;
+  themeVersion: number;
+  theme: unknown;
+}
+
+/** A template's base: the release the store applied it from, last reviewed an update to, or assumed (`update`). */
+export interface ThemeTemplateBase extends ThemeTemplateDeclaration {
+  template: string;
+  source: "apply" | "review" | "update";
+  recordedAt: Date;
+}
+
+function templateBaseStatement(db: Database, template: string, declaration: ThemeTemplateDeclaration, source: "apply" | "review") {
+  const values = {
+    pluginId: declaration.pluginId,
+    appVersion: declaration.appVersion,
+    themeVersion: declaration.themeVersion,
+    theme: JSON.stringify(declaration.theme ?? {}),
+    source,
+    recordedAt: sql`unixepoch()`,
+  };
+  return db.insert(themeTemplateBases).values({ template, ...values }).onConflictDoUpdate({ target: themeTemplateBases.template, set: values });
+}
+
+/** A template's base in this store; null when it keeps none (applied before bases were kept, and not updated since). */
+export async function readThemeTemplateBase(db: Database, template: string): Promise<ThemeTemplateBase | null> {
+  const [row] = await db.select().from(themeTemplateBases).where(eq(themeTemplateBases.template, template)).limit(1);
+  if (!row) return null;
+  let theme: unknown;
+  try {
+    theme = JSON.parse(row.theme);
+  } catch {
+    return null;
+  }
+  return { template: row.template, pluginId: row.pluginId, appVersion: row.appVersion, themeVersion: row.themeVersion, theme, source: row.source, recordedAt: row.recordedAt };
+}
+
+/** What a template update is computed from, each template read against this store (handles resolved, card fields it lacks left out). */
+export interface ThemeTemplateUpdateSources {
+  key: string;
+  /** The base read against this store; null: not known (the merchant compares with the installed release instead). */
+  base: StorefrontAppTemplateTheme | null;
+  theirs: StorefrontAppTemplateTheme;
+  /** THEIRS's sections left out for a handle this store lacks. */
+  unresolved: readonly string[];
+  /** The installed release's declaration: the template's base once the merchant reviews the update. */
+  declaration: ThemeTemplateDeclaration;
+}
+
+export interface ThemeTemplateUpdateProposal {
+  items: StorefrontTemplateUpdateItem[];
+  improvements: number;
+  conflicts: number;
+  /** What the merchant reviewed: an apply sends it back, and a proposal that changed since is refused. */
+  digest: string;
+  /** The save check on the draft with every improvement taken, each issue with the items it comes from (what the draft already had never counts). */
+  issues: StorefrontTemplateUpdateIssue[];
+  draft: { revision: number; basePublishedRevision: number };
+}
+
+function updateInput(theme: StorefrontThemeDocument, sources: ThemeTemplateUpdateSources) {
+  return { mine: theme, key: sources.key, base: sources.base, theirs: sources.theirs, unresolved: sources.unresolved };
+}
+
+/** The save check on the draft with `take` taken, each issue tied to its items. */
+function updateIssues(mine: StorefrontThemeDocument, sources: ThemeTemplateUpdateSources, items: readonly StorefrontTemplateUpdateItem[], take: ReadonlySet<string>): StorefrontTemplateUpdateIssue[] {
+  if (take.size === 0) return [];
+  const merged = applyStorefrontTemplateUpdate(updateInput(mine, sources), take);
+  const checked = checkStorefrontThemeSave(merged, { baseline: mine });
+  return checked.ok ? [] : storefrontTemplateUpdateIssueItems(items, merged, checked.refusal.issues);
+}
+
+/** The update the installed release brings to the draft (none while the draft is on another template). */
+export async function proposeThemeTemplateUpdate(db: Database, sources: ThemeTemplateUpdateSources): Promise<ThemeTemplateUpdateProposal> {
+  const workspace = await getThemeWorkspace(db);
+  const mine = workspace.draft.theme;
+  const items = storefrontThemeTemplateKey(mine) === sources.key ? planStorefrontTemplateUpdate(updateInput(mine, sources)) : [];
+  return {
+    items,
+    ...storefrontTemplateUpdateCounts(items),
+    digest: storefrontTemplateUpdateDigest(items),
+    issues: updateIssues(mine, sources, items, storefrontTemplateUpdateDefaults(items)),
+    draft: { revision: workspace.draft.revision, basePublishedRevision: workspace.draft.basePublishedRevision },
+  };
+}
+
+/**
+ * Takes exactly the items in `take` into the draft (never live): nothing the
+ * merchant was not shown is taken, and every item not taken stays theirs.
+ * One guarded batch keeps the draft it replaces as a restore point (reason
+ * `app`, naming the template) and records the installed release as the
+ * template's base, so the update is not proposed again. Taking nothing
+ * records the base alone. The merged draft is saved through the save check
+ * like any save (what the draft already had is not refused). `digest` must
+ * be the proposal's the merchant reviewed: one that changed since (a new
+ * release, an edited draft) is a conflict. `dryRun` writes nothing and
+ * answers the save check's issues for that choice, each tied to its items.
+ */
+export async function applyThemeTemplateUpdate(
+  db: Database,
+  sources: ThemeTemplateUpdateSources,
+  choice: { digest: string; take: readonly string[]; dryRun?: boolean },
+  expectedDraftRevision: number,
+  basePublishedRevision: number,
+  actorId: string | null = null,
+): Promise<ThemeDraftDocument & { taken: number; issues: StorefrontTemplateUpdateIssue[] }> {
+  const workspace = await getThemeWorkspace(db);
+  if (workspace.published.revision !== basePublishedRevision || workspace.draft.revision !== expectedDraftRevision
+    || workspace.draft.basePublishedRevision !== basePublishedRevision) {
+    throw themeConflict();
+  }
+  const mine = workspace.draft.theme;
+  if (storefrontThemeTemplateKey(mine) !== sources.key) throw themeConflict("The theme draft is no longer on this template. Reload and review the update again.");
+  const items = planStorefrontTemplateUpdate(updateInput(mine, sources));
+  if (storefrontTemplateUpdateDigest(items) !== choice.digest) throw themeConflict("The theme update changed since it was shown. Review it again.");
+  const known = new Set(items.map((item) => item.id));
+  if (choice.take.some((id) => !known.has(id))) throw new ValidationError("Choose changes the theme update lists.", { field: "take" });
+  const take = new Set(choice.take);
+  if (choice.dryRun) return { ...workspace.draft, taken: take.size, issues: updateIssues(mine, sources, items, take) };
+  const base = templateBaseStatement(db, sources.key, sources.declaration, "review");
+  if (take.size === 0) {
+    await base;
+    return { ...workspace.draft, taken: 0, issues: [] };
+  }
+  const merged = applyStorefrontTemplateUpdate(updateInput(mine, sources), take);
+  const theme = storefrontThemeWithoutMedia(merged, await readMissingThemeImages(db, merged));
+  const saved = await writeThemeDraft(db, theme, expectedDraftRevision, basePublishedRevision, basePublishedRevision, actorId, {
+    previous: mine,
+    reason: "app",
+    template: sources.key,
+  }, [base], mine);
+  return { ...saved, basePublishedRevision, taken: take.size, issues: [] };
 }
 
 // ─── Drafted sections (agents and AI providers) ────────────────────────────

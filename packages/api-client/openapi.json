@@ -29468,6 +29468,190 @@
           "left"
         ]
       },
+      "ThemeTemplateUpdate": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "template": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "from": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 80
+          },
+          "to": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "base": {
+            "type": "string",
+            "enum": [
+              "recorded",
+              "assumed",
+              "none"
+            ]
+          },
+          "improvements": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "conflicts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "digest": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThemeTemplateUpdateItem"
+            },
+            "maxItems": 200
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "moreItems": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThemeTemplateUpdateIssue"
+            },
+            "maxItems": 20
+          },
+          "draft": {
+            "type": "object",
+            "properties": {
+              "revision": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "basePublishedRevision": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "revision",
+              "basePublishedRevision"
+            ]
+          }
+        },
+        "required": [
+          "template",
+          "from",
+          "to",
+          "base",
+          "improvements",
+          "conflicts",
+          "digest",
+          "items",
+          "offset",
+          "moreItems",
+          "issues",
+          "draft"
+        ]
+      },
+      "ThemeTemplateUpdateItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 400
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "improvement",
+              "conflict"
+            ]
+          },
+          "area": {
+            "type": "string",
+            "enum": [
+              "tokens",
+              "blocks",
+              "skins",
+              "privatePages",
+              "home"
+            ]
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "set",
+              "add",
+              "remove",
+              "order"
+            ]
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "maxItems": 12
+          },
+          "mine": {
+            "nullable": true,
+            "description": "The store's value now (absent: none); for `order`, the template sections' ids in the store's order."
+          },
+          "theirs": {
+            "nullable": true,
+            "description": "The update's value (absent: it removes it); for `order`, the same ids in the update's order."
+          },
+          "replaces": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "An added section that takes the place of one the update removes (a renamed id): that section's id."
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "area",
+          "change",
+          "path"
+        ]
+      },
+      "ThemeTemplateUpdateIssue": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "itemIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 400
+            },
+            "maxItems": 2000
+          }
+        },
+        "required": [
+          "path",
+          "message",
+          "reason",
+          "itemIds"
+        ]
+      },
       "ThemeRestorePoint": {
         "type": "object",
         "properties": {
@@ -214664,6 +214848,427 @@
         }
       }
     },
+    "/api/v1/admin/settings/theme/template-update": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "What the installed release of the draft's app template brings to the draft",
+        "description": "A three-way merge of the draft with the release the store applied (or last reviewed) and the installed release: `improvement` items change what the merchant never touched since; `conflict` items are where the merchant changed it too, and stay theirs unless taken. Null when the draft is on no app template, no active app offers it, or the store is on the installed release. `compare=true` sets the installed release against the draft with no base: every difference is the merchant's choice. One page of items at a time (`offset`). Nothing is written.",
+        "operationId": "dashboard.theme.template_update_get",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "compare",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0,
+              "maximum": 2000
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The update, or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "update": {
+                          "$ref": "#/components/schemas/ThemeTemplateUpdate"
+                        }
+                      },
+                      "required": [
+                        "update"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when checking what a theme app's new release would change in the store's theme, item by item.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Take a template update's chosen changes into the draft (it goes live only when the draft is published)",
+        "description": "Takes exactly the items in `take` into the draft (every other item stays the store's), keeps the draft it replaces as a restore point (reason `app`, naming the template) and records the installed release as the template's base, so the same update is not proposed again. `take: []` records the base alone (the merchant keeps everything as it is). `digest` is the proposal's the merchant reviewed: one that changed since is a conflict. The merged draft passes the save check like any save; `dryRun: true` writes nothing and answers that check's issues for the choice, each with its items.",
+        "operationId": "dashboard.theme.template_update_apply",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedDraftRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "basePublishedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "digest": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "take": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 400
+                    },
+                    "maxItems": 2000,
+                    "description": "The items to take, improvements and conflicts alike; every other item stays the store's."
+                  },
+                  "dryRun": {
+                    "type": "boolean"
+                  },
+                  "compare": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "expectedDraftRevision",
+                  "basePublishedRevision",
+                  "digest",
+                  "take"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The draft's revision (new unless a dry run or nothing taken), how many changes it took, and a dry run's issues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "basePublishedRevision": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "taken": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "issues": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ThemeTemplateUpdateIssue"
+                          },
+                          "maxItems": 20
+                        }
+                      },
+                      "required": [
+                        "revision",
+                        "basePublishedRevision",
+                        "updatedAt",
+                        "taken",
+                        "issues"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 4096,
+          "maxRequestBytes": 65536,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when taking a theme app update's changes (the improvements and the conflicts the merchant chose) into the theme draft.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.theme.edit"
+        }
+      }
+    },
     "/api/v1/admin/settings/theme/restore-points": {
       "get": {
         "tags": [
@@ -346853,6 +347458,22 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.theme.template_switch"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.template_update_apply",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.template_update_apply"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.template_update_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.template_update_get"
           ]
         },
         {

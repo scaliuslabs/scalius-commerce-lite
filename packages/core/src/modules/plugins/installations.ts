@@ -30,6 +30,7 @@ import { currentProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import { isPluginLinkValue } from "@scalius/shared/plugins/settings-schema";
 import { pluginObjectPatternIssues } from "@scalius/shared/plugins/object-patterns";
 import { pluginManifestPolicyIssues } from "@scalius/shared/plugins/manifest-policy";
+import { themeTemplateBasesAfterUninstall, themeTemplateBasesBeforeUpdate } from "./template-bases";
 import {
   PLUGIN_EXTENSION_RUN,
   PLUGIN_FUNCTION_POINTS,
@@ -472,6 +473,8 @@ interface InstallationBeforeUpdate {
   storedSettings: Record<string, unknown>;
   /** The stored manifest as it runs; null when it no longer reads. */
   manifest: PluginManifest | null;
+  /** The release it runs; absent when its manifest no longer reads. */
+  version?: string;
   /** The developer key the app was installed with (`requirePinnedSigner`). */
   signerKeyId: string | null;
 }
@@ -1065,6 +1068,8 @@ export async function updatePluginInstallation(
   const settings = migrateStoredSettings(current.storedSettings, manifest.settings);
   // While it waits for approval it keeps running nothing new: registrations follow the grant it has.
   const registered = grant === request ? features : knownPluginFeatures(manifest, grant?.features ?? []);
+  // The release this replaces stays the base of its templates the store's theme uses (template-bases.ts).
+  const templateBases = await themeTemplateBasesBeforeUpdate(db, pluginId, current);
 
   try {
     await safeBatch(db, [
@@ -1088,6 +1093,7 @@ export async function updatePluginInstallation(
       ...salesChannelStatements(db, pluginId, manifest.salesChannels, status === "active", (current.manifest?.salesChannels.length ?? 1) > 0),
       // A failed app the update resumes receives the events kept while it was off.
       ...(status === "active" ? [releaseHeldPluginDeliveriesStatement(db, pluginId)] : []),
+      ...templateBases,
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, input.expectedRevision, []);
@@ -1193,6 +1199,8 @@ export async function uninstallPlugin(
   const previousRetained = options.keepData ? (await readRetainedApp(db, pluginId))?.app?.revision ?? 0 : 0;
   // Deleting the data deletes the app's custom fields: refused while the theme's cards show one.
   if (!options.keepData) await assertAppDataDeletable(db, pluginId);
+  // The bases of its templates the store's theme no longer uses go with it (template-bases.ts).
+  const templateBases = await themeTemplateBasesAfterUninstall(db, pluginId);
   const retain = () => {
     const settings = installed?.storedSettings ?? {};
     return retainAppStatement(db, pluginId, {
@@ -1227,6 +1235,7 @@ export async function uninstallPlugin(
           retain(),
         ]
         : appDataDeleteStatements(db, pluginId)),
+      ...templateBases,
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);

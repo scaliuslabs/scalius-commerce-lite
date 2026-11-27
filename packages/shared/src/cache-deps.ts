@@ -1188,6 +1188,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   theme_preview_sessions: DRAFTS,
   theme_restore_points: DRAFTS,
   theme_template_designs: DRAFTS,
+  theme_template_bases: DRAFTS,
   navigation_menu_items: DRAFTS,
   media_folders: "Dashboard organisation of media; never shown to buyers.",
   media_upload_sessions: PRIVATE,

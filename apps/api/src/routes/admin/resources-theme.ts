@@ -234,6 +234,7 @@ app.openapi(createRoute({
   await switchThemeTemplate(db, { kind: "app", key, theme: read.theme }, body.expectedRevision, body.basePublishedRevision, actorOf(c), {
     reason: "app",
     fromHome: (template) => offeredAppTemplateHome(db, template, installations),
+    declaration: read.declaration,
   });
   return ok(c, {
     theme: themeView(await getThemeWorkspace(db), undefined),
