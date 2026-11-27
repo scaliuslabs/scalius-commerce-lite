@@ -9,7 +9,7 @@ import type {
   Product,
   BuyerPriceRange,
 } from "./types";
-import { normalizeProductFacets, normalizeRatingFacet, type ProductListOptions } from "./products";
+import { normalizeProductFacets, normalizeRatingFacet, readListingSort, type ProductListOptions } from "./products";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData } from "./unwrap";
 import { isIdentifierNotFound } from "./identifier-read";
@@ -67,6 +67,7 @@ function normalizeCollectionDetail(payload: unknown): CollectionWithProducts | n
     priceRange?: BuyerPriceRange;
     facets?: unknown;
     ratingFacet?: unknown;
+    sort?: unknown;
   }>(payload);
   if (
     !candidate?.collection ||
@@ -97,6 +98,7 @@ function normalizeCollectionDetail(payload: unknown): CollectionWithProducts | n
     priceRange: candidate.priceRange,
     facets: normalizeProductFacets(candidate.facets),
     ratingFacet: normalizeRatingFacet(candidate.ratingFacet),
+    sort: readListingSort(candidate.sort),
   } as CollectionWithProducts;
 }
 

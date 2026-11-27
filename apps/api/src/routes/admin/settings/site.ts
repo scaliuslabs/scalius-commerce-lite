@@ -28,6 +28,7 @@ import {
   SEO_RETURN_POLICY_METHODS,
   isValidSeoReturnPolicyUrl,
 } from "@scalius/shared/seo-return-policy";
+import { STOREFRONT_DEFAULT_LISTING_SORTS } from "@scalius/shared/listing-sorts";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import {
   runSeoDiscoveryLiveProbe,
@@ -64,6 +65,7 @@ import {
   customerCountriesDocument,
   mediaDocument,
   seoDocument,
+  catalogDocument,
   readStorefrontCardFields,
   businessDocument,
 } from "@scalius/core/modules/settings";
@@ -1419,6 +1421,71 @@ app.openapi(saveSeoRoute, async (c) => {
   const { revision } = await saveSeoSettings(c.get("db"), data, { expectedRevision });
 
   return ok(c, { message: "SEO settings saved successfully", revision });
+});
+
+// ─────────────────────────────────────────
+// CATALOGUE (Online store -> Preferences: how listings behave)
+// ─────────────────────────────────────────
+
+const defaultListingSortSchema = z.enum(STOREFRONT_DEFAULT_LISTING_SORTS).openapi({
+  description: "The order category, collection, brand and search listings open in when their address names none: orders that page by cursor. A collection with picked products keeps its own order; a search with words opens best match first. The list may grow.",
+});
+
+const catalogSettingsSchema = z.object({
+  revision: revisionSchema,
+  defaultListingSort: defaultListingSortSchema,
+});
+
+const getCatalogSettingsRoute = createRoute({
+  method: "get",
+  path: "/catalog",
+  tags: ["Admin - Settings"],
+  summary: "Get catalogue settings",
+  operationId: "dashboard.catalog.settings_get",
+  responses: {
+    200: {
+      description: "Catalogue settings",
+      content: { "application/json": { schema: successEnvelope(catalogSettingsSchema) } },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(getCatalogSettingsRoute, async (c) => {
+  const { value, revision } = await readSettingsForEdit(c.get("db"), catalogDocument);
+  return ok(c, { defaultListingSort: value.defaultListingSort, revision });
+});
+
+const saveCatalogSettingsRoute = createRoute({
+  method: "post",
+  path: "/catalog",
+  tags: ["Admin - Settings"],
+  summary: "Save catalogue settings",
+  operationId: "dashboard.catalog.settings_update",
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({ expectedRevision: revisionSchema, defaultListingSort: defaultListingSortSchema }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Catalogue settings saved",
+      content: { "application/json": { schema: savedRevisionResponse } },
+    },
+    ...errorResponses,
+    409: conflictResponse,
+  },
+});
+
+app.openapi(saveCatalogSettingsRoute, async (c) => {
+  const { expectedRevision, defaultListingSort } = c.req.valid("json");
+  const { revision } = await catalogDocument.write(c.get("db"), { defaultListingSort }, {}, { expectedRevision });
+  return ok(c, { message: "Catalogue settings saved", revision });
 });
 
 // ─────────────────────────────────────────

@@ -4,10 +4,12 @@ import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-quer
 import { Link } from "@tanstack/react-router";
 import { Copy } from "lucide-react";
 import { toast } from "~/lib/toast";
-import { postApiV1AdminSettingsSeo, postApiV1AdminSettingsSeoFeedFilesRegistered } from "@scalius/api-client/sdk";
+import { postApiV1AdminSettingsCatalog, postApiV1AdminSettingsSeo, postApiV1AdminSettingsSeoFeedFilesRegistered } from "@scalius/api-client/sdk";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
+import { SearchableSelect } from "~/components/ui/searchable-select";
+import type { StorefrontDefaultListingSort } from "@scalius/shared/listing-sorts";
 import { ChoiceField } from "~/components/ui/field";
 import { standaloneLinkTarget } from "~/components/ui/link";
 import { Textarea } from "~/components/ui/textarea";
@@ -28,7 +30,7 @@ import {
   type FeedDiagnostics,
   type FeedFiles,
 } from "~/lib/api-query-options/online-store";
-import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
+import { catalogSettingsQueryOptions, seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { feedFilePath } from "@scalius/shared/catalog-feed-files";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { formatDateTime, useMessages } from "~/i18n";
@@ -383,12 +385,56 @@ function PreferencesCards() {
   );
 }
 
+/** The orders a store may open its listings in (`STOREFRONT_DEFAULT_LISTING_SORTS`), with their dashboard words. */
+const LISTING_SORT_LABELS = {
+  newest: "sortNewest",
+  popular: "sortPopular",
+} as const satisfies Record<StorefrontDefaultListingSort, string>;
+const LISTING_SORTS = Object.keys(LISTING_SORT_LABELS) as StorefrontDefaultListingSort[];
+
+/** The order listings open in: the catalogue document, saved with the page's save bar. */
+function ListingOrderCard() {
+  const t = useMessages(onlineStoreMessages);
+  const queryClient = useQueryClient();
+  const { data, refetch } = useSuspenseQuery(catalogSettingsQueryOptions());
+  const saved = useMemo(() => ({ defaultListingSort: data.defaultListingSort }), [data]);
+  const { draft, setDraft } = useDocumentDraft({
+    label: t("productListings"),
+    saved,
+    fields: (path) => (path === "defaultListingSort" ? "preferences-listing-sort" : undefined),
+    save: async (next) => {
+      try {
+        await apiData(postApiV1AdminSettingsCatalog({
+          body: { defaultListingSort: next.defaultListingSort, expectedRevision: data.revision },
+        }));
+        await queryClient.invalidateQueries({ queryKey: catalogSettingsQueryOptions().queryKey });
+      } catch (error) {
+        failSave(error, () => void refetch());
+      }
+    },
+  });
+  return (
+    <SectionCard title={t("productListings")} description={t("productListingsHelp")}>
+      <Field id="preferences-listing-sort" label={t("defaultListingSort")} help={t("defaultListingSortHelp")}>
+        <SearchableSelect
+          id="preferences-listing-sort"
+          value={draft.defaultListingSort}
+          options={LISTING_SORTS.map((sort) => ({ value: sort, label: t(LISTING_SORT_LABELS[sort]) }))}
+          triggerClassName="w-full"
+          onValueChange={(sort) => setDraft({ defaultListingSort: sort as StorefrontDefaultListingSort })}
+        />
+      </Field>
+    </SectionCard>
+  );
+}
+
 export function PreferencesPage() {
   const t = useMessages(onlineStoreMessages);
   return (
     <SaveBarProvider savedMessage={t("preferencesSaved")}>
       <OnlineStorePage title={t("preferencesTitle")}>
         <PreferencesCards />
+        <ListingOrderCard />
       </OnlineStorePage>
     </SaveBarProvider>
   );

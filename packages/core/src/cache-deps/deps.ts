@@ -105,6 +105,8 @@ export const deps = {
   analytics: (): void => declare(cacheDep.analytics()),
   /** `rd`: the URL redirects (a 404 path's lookup). */
   redirects: (): void => declare(cacheDep.redirects()),
+  /** `gc`: whether the store holds a live gift card (checkout configuration). */
+  giftCardsLive: (): void => declare(cacheDep.giftCardsLive()),
   /** `cf:<ownerType>`: the storefront-visible custom field definitions a reader shows values of. */
   customFieldDefinitions: (ownerType: string): void => declare(cacheDep.customFieldDefinitions(ownerType)),
   /** `plg:<id>`: one app installation (status, version, grant, manifest, settings). */

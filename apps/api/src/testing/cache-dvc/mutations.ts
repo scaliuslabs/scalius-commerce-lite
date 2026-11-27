@@ -99,6 +99,7 @@ export const STRUCTURAL_OP_GAPS: Readonly<Record<string, string>> = {
   "promotion_redemptions:delete": "immutable (PROMOTION_REDEMPTION_IMMUTABLE trigger)",
   "promotion_redemptions:insert": "needs a matching order_discount_allocations row, and a delete+insert is refused as immutable",
   "category_closure:update": "trigger-owned: the category tree triggers only insert and delete closure rows",
+  "gift_cards:delete": "durable records (gift_cards_delete_blocked trigger)",
 };
 
 /**
@@ -135,6 +136,10 @@ export const TRIGGER_OWNED_COLUMNS: ReadonlySet<string> = new Set([
   "product_reviews.reviewer_key",
   // The app that wrote a review (0204): identity too, set only by an app review's insert.
   "product_reviews.app_id",
+  // A gift card's identity and source: a trigger refuses every update (gift_cards_identity_immutable);
+  // inserts cover them. Its balance is the ledger's projection (gift_cards_balance_projection_guard).
+  ...["code_hash", "code_ciphertext", "code_last4", "currency_code", "initial_amount_minor", "source", "source_order_id",
+    "source_order_item_id", "source_unit_index", "source_refund_attempt_id", "balance_minor"].map((column) => `gift_cards.${column}`),
 ]);
 
 function writableByGenerator(table: string): boolean {
@@ -322,11 +327,13 @@ export class RowMutator {
     if (!table || !writableByGenerator(tableName)) return null;
     if (tableName === "product_reviews") return this.insertReview();
     if (tableName === "store_languages") return this.insertStoreLanguage();
+    if (tableName === "variant_components") return this.insertKitComponent();
     const current = this.rows(tableName);
     const rows = current.length > 0 ? current : this.seeded.get(tableName) ?? [];
     if (rows.length === 0) return null;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-      const source = { ...this.rng.pick(rows) };
+      const picked = this.rng.pick(rows);
+      const source = { ...picked };
       this.counter += 1;
       const suffix = `x${this.counter}`;
       for (const column of table.columns) {
@@ -359,6 +366,10 @@ export class RowMutator {
         source.id = `oty_${source.namespace}.${source.type}`;
       }
       normalizeCompanions(table, source);
+      if (tableName === "gift_cards") {
+        // A card is born empty with its own code; its last four and currency keep their fixed shapes.
+        Object.assign(source, { balance_minor: 0, code_hash: `${String(picked.code_hash)}_${suffix}`, code_last4: picked.code_last4, currency_code: picked.currency_code });
+      }
       const columns = table.columns.map((column) => column.name).filter((name) => source[name] !== null || !table.columns.find((each) => each.name === name)!.pk);
       const values = columns.map((name) => source[name] ?? null) as SQLInputValue[];
       try {
@@ -420,6 +431,46 @@ export class RowMutator {
     } catch (error) {
       this.sqlite.exec("ROLLBACK TO dvc_review; RELEASE dvc_review");
       this.coverage.refused("product_reviews", errorText(error));
+      return null;
+    }
+  }
+
+  /**
+   * A kit component the database accepts (0224): the kit SKU holds no stock
+   * and is no kit's component; the component is a live SKU that is no kit
+   * itself; neither is a gift card; the kit has fewer than 20 items and not
+   * this one yet. A clone of an existing row repeats its key, and a re-pointed
+   * one lands on a SKU with stock, so the generic insert can never write one.
+   */
+  private insertKitComponent(): Mutation | null {
+    const notGiftCard = (alias: string) => `NOT EXISTS (SELECT 1 FROM products AS gift WHERE gift.id = ${alias}.product_id AND gift.is_gift_card = 1)`;
+    const kits = this.sqlite.prepare(`SELECT kit.id FROM product_variants AS kit
+      WHERE kit.deleted_at IS NULL AND kit.stock = 0 AND kit.reserved_stock = 0 AND kit.preorder_stock = 0 AND ${notGiftCard("kit")}
+        AND NOT EXISTS (SELECT 1 FROM variant_components AS part WHERE part.component_variant_id = kit.id)
+        AND (SELECT count(*) FROM variant_components AS item WHERE item.kit_variant_id = kit.id) < 20
+      ORDER BY kit.id`).all() as Array<{ id: string }>;
+    if (kits.length === 0) return null;
+    const kit = this.rng.pick(kits).id;
+    const components = this.sqlite.prepare(`SELECT sku.id FROM product_variants AS sku
+      WHERE sku.deleted_at IS NULL AND sku.id <> ? AND ${notGiftCard("sku")}
+        AND NOT EXISTS (SELECT 1 FROM variant_components AS nested WHERE nested.kit_variant_id = sku.id)
+        AND NOT EXISTS (SELECT 1 FROM variant_components AS taken WHERE taken.kit_variant_id = ? AND taken.component_variant_id = sku.id)
+      ORDER BY sku.id`).all(kit, kit) as Array<{ id: string }>;
+    if (components.length === 0) return null;
+    const component = this.rng.pick(components).id;
+    const position = (this.sqlite.prepare("SELECT count(*) AS n FROM variant_components WHERE kit_variant_id = ?").get(kit) as { n: number }).n;
+    const quantity = this.rng.int(1, 5);
+    try {
+      this.run("INSERT INTO variant_components (kit_variant_id, component_variant_id, quantity, position) VALUES (?, ?, ?, ?)", [kit, component, quantity, position]);
+      const mutation: Mutation = {
+        kind: "insert", table: "variant_components", columns: ["kit_variant_id", "component_variant_id", "quantity", "position"],
+        description: `INSERT INTO variant_components kit_variant_id="${kit}" component_variant_id="${component}" quantity=${quantity}`,
+      };
+      this.coverage.record(mutation);
+      this.idPool = null;
+      return mutation;
+    } catch (error) {
+      this.coverage.refused("variant_components", errorText(error));
       return null;
     }
   }

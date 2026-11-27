@@ -76,8 +76,8 @@ const state = {
   edit: null as CartLineEdit | null,
   /**
    * The product can't be bought, and a note on the page says why: its
-   * buyer-input setup is broken, or it is paid only online and checkout
-   * takes no online payment.
+   * buyer-input setup is broken, or cash can't pay for it and nothing else
+   * can (the store lists no way to pay but cash and holds no live gift card).
    */
   purchaseBlocked: false,
   adding: false,

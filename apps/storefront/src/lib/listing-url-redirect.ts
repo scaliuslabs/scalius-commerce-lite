@@ -39,7 +39,8 @@ export function catalogRedirectBeforeReads(routePattern: string, url: URL): Resp
       return listingQueryRedirect(url);
     }
     case "/collections/[id]":
-      return listingQueryRedirect(url);
+      // A collection's search ranks by relevance, as the search page's does.
+      return listingQueryRedirect(url, true);
     case "/search": {
       const scope = searchScopeRedirect(url);
       const scoped = scope ? canonicalRedirect(url, scope) : null;

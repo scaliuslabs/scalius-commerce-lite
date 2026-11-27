@@ -31,6 +31,7 @@ import type {
   PostApiV1OrdersResponse as PostOrdersResponse,
 } from "@scalius/api-client/types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import type { StorefrontSearchSort } from "@scalius/shared/listing-sorts";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import type {
   DeliveryMethodKind,
@@ -95,6 +96,8 @@ export interface PaginatedResponse<T> {
   ratingFacet?: RatingFacetValue[];
   /** Set when the search matched nothing and these results are for this corrected query. */
   correctedQuery?: string | null;
+  /** The order the listing was read in (the response's `sort`): the store's default when the URL named none. */
+  sort?: StorefrontSearchSort;
 }
 
 /** One "N★ & up" row of a listing: products averaging at least `min` stars. */
@@ -472,8 +475,8 @@ export interface ProductVariant {
   discountAmount: number | null;
   /** physical (shipped or picked up), digital, or service (performed, no delivery); a kit's from its items. */
   fulfillmentKind?: FulfillmentKind;
-  /** Product page only: paid only online (a key, a download, a gift card, or a kit holding one). */
-  paidOnlineOnly?: boolean;
+  /** Product page only: cash may pay for it (false for a key, a download, a gift card, or a kit holding one). */
+  cashPayable?: boolean;
   /** Product page only: this SKU's warranty, an id in the product's `warranties`; null without one. */
   warrantyId?: string | null;
   /** Product page only: its contents, price against them and band when it is a kit; null otherwise. */
@@ -627,6 +630,8 @@ export interface CollectionWithProducts extends Collection {
   priceRange?: BuyerPriceRange;
   facets?: ProductFacet[];
   ratingFacet?: RatingFacetValue[];
+  /** The order the listing was read in (its own when it has picked products, else the store's default). */
+  sort?: StorefrontSearchSort;
 }
 
 // ---------------------------------------------------------------------------

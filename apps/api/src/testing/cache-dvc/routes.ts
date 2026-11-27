@@ -31,6 +31,9 @@ const LIST = "page=1&limit=20";
 function productParts(): string[] {
   const parts = [
     `/api/v1/products?${LIST}&sort=newest`,
+    // No order named, as the storefront sends a bare listing: the store's default (the catalogue settings row).
+    `/api/v1/products?${LIST}`,
+    `/api/v1/products?${LIST}&material=linen`,
     `/api/v1/products?${LIST}&sort=price-asc`,
     `/api/v1/products?${LIST}&sort=price-desc`,
     `/api/v1/products?${LIST}&sort=name-asc`,
@@ -93,6 +96,9 @@ function categoryParts(): string[] {
     );
   }
   parts.push(
+    // No order named: the store's default, read in the category lookup's batch.
+    `/api/v1/categories/men/products?${LIST}`,
+    `/api/v1/categories/panjabi/products?${LIST}&material=linen`,
     `/api/v1/categories/men/products?${LIST}&sort=price-asc`,
     `/api/v1/categories/men/products?${LIST}&sort=popular`,
     `/api/v1/categories/panjabi/products?${LIST}&sort=price-desc&material=linen`,

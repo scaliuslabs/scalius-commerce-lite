@@ -209,6 +209,8 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
     batch: "sequential",
     limits: { request: 16_384 },
   },
+  "dashboard.catalog.settings_get": { limits: { request: 16_384 } },
+  "dashboard.catalog.settings_update": { revision: "required", limits: { request: 16_384, response: 16_384 } },
   "dashboard.seo.settings_get": { limits: { request: 16_384 } },
   "dashboard.seo.settings_update": { revision: "required", limits: { request: 65_536, response: 16_384 } },
   "dashboard.settings_providers.list": { limits: { request: 16_384, response: 65_536 } },

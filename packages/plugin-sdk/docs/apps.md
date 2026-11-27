@@ -453,6 +453,7 @@ SQL triggers write event facts in the same transaction as the change, so a commi
 - An event is `{ id, topic, apiVersion, occurredAt, resource: { type, id }, facts }`. Facts carry ids, states and quantities, never contact data, credentials or money. Read the resource with `ctx.api`.
 - The catalogue (`EVENT_TOPICS` in `@scalius/plugin-sdk/manifest`; every topic's facts in [the event reference](events.md)) is versioned and grows only by addition. It covers orders, returns, products and publications, variant inventory, purchase orders, transfers, customers and consent, fulfillments, refunds, shipments, payments, abandoned checkouts, discounts and redemptions, reviews, gift cards and their transactions, object events, buyer messages in the inbox (`conversation.message_received`) and payouts (`payout.created`, `payout.updated`, delivered only to the app that sent the payout). Every topic has an emitter: the catalogue names nothing the platform does not send.
 - Fulfilment and refund events list the order lines they cover (see [Line facts and refunds](commerce-hooks.md#5-line-facts-and-refunds)).
+- `order.created` fires when an order is placed, before it is paid (cash on delivery, an invoice, a payment still under way): an app that delivers on it delivers before payment. Deliver a key, a download or anything else sent once paid on `order.paid`.
 
 ### Abandoned checkouts
 
