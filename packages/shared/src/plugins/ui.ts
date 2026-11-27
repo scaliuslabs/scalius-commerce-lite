@@ -10,7 +10,7 @@
 //
 // A node means the same on both surfaces; each surface allows a subset of the
 // nodes, actions and link targets (`PLUGIN_UI_SURFACES`). Text is always plain
-// text (never HTML). One action union: a request to the app's own route, a
+// text (never HTML); a text node's links are pieces of its sentence. One action union: a request to the app's own route, a
 // cart operation (buyer), or opening a page.
 //
 //   { version: 1, root: { type: "stack", children: [ { type: "text", text: "…" } ] } }
@@ -36,6 +36,8 @@ export const PLUGIN_UI_LIMITS = {
   maxTableRows: 100,
   maxOptions: 100,
   maxKeyValueItems: 50,
+  /** Pieces of one text node's sentence (`PluginUiSpan`); they are not nodes. */
+  maxSpans: 20,
   text: 2000,
   label: 120,
 } as const;
@@ -237,6 +239,17 @@ export type PluginUiImageSource = string | { media: string } | { app: string };
 
 // ── Node types ────────────────────────────────────────────────────────────
 
+/**
+ * One piece of a text node's sentence: plain words, or a link's words with
+ * `to` (a link's rules: trimmed, 1 to 120 characters, the surface's targets).
+ * Plain words are kept as written, spaces included, so the app sets the
+ * spacing between pieces. Text, never markup.
+ */
+export interface PluginUiSpan {
+  text: string;
+  to?: PluginUiTarget;
+}
+
 export interface PluginUiButton {
   type: "button";
   label: string;
@@ -315,8 +328,12 @@ export type PluginUiNode =
   | { type: "stack"; direction?: "vertical" | "horizontal"; gap?: "sm" | "md" | "lg"; tone?: PluginUiTone; children: PluginUiNode[] }
   | { type: "columns"; children: PluginUiNode[] }
   | { type: "heading"; text: string; level?: 2 | 3 | 4 }
-  /** `tone` colours the words (a price, a warning); `mono` sets them in the monospace face (an ID, a code). */
-  | { type: "text"; text: string; tone?: PluginUiTone; size?: "sm" | "md"; emphasis?: "strong" | "mono" }
+  /**
+   * Words, or a sentence of pieces (`PluginUiSpan[]`) some of which are links
+   * drawn inside it. `tone` colours the words (a price, a warning); `mono`
+   * sets them in the monospace face (an ID, a code).
+   */
+  | { type: "text"; text: string | PluginUiSpan[]; tone?: PluginUiTone; size?: "sm" | "md"; emphasis?: "strong" | "mono" }
   | { type: "badge"; text: string; tone?: PluginUiTone }
   | { type: "banner"; tone: PluginUiTone; title?: string; text?: string; actions?: PluginUiButton[] }
   | { type: "key-value"; items: Array<{ label: string; value: string | number | boolean | null; tone?: PluginUiTone }> }
@@ -452,6 +469,20 @@ const fileFieldSchema = z.object({
   maxBytes: z.number().int().min(1).max(BUYER_UPLOAD_DECLARATION_LIMITS.maxBytes).optional(),
 }).strict();
 
+/** A span's words: plain ones as written (1 to 2000 characters), a link's by a link's label rules. */
+const spanSchema = z.object({ text: z.string().min(1).max(PLUGIN_UI_LIMITS.text), to: pluginUiTargetSchema.optional() }).strict()
+  .overwrite((span) => (span.to ? { ...span, text: span.text.trim() } : span))
+  .superRefine((span, context) => {
+    if (span.to && (span.text.length < 1 || span.text.length > PLUGIN_UI_LIMITS.label)) {
+      context.addIssue({ code: "custom", path: ["text"], message: `A link's words are 1 to ${PLUGIN_UI_LIMITS.label} characters.` });
+    }
+  });
+/** A text node's sentence: 1 to 20 pieces of at most 2000 characters in all (as one text). */
+const spans = z.array(spanSchema).min(1).max(PLUGIN_UI_LIMITS.maxSpans).refine(
+  (pieces) => pieces.reduce((total, piece) => total + piece.text.length, 0) <= PLUGIN_UI_LIMITS.text,
+  `A text's pieces hold at most ${PLUGIN_UI_LIMITS.text} characters in all.`,
+);
+
 const children = z.array(z.lazy(() => pluginUiNodeSchema)).max(PLUGIN_UI_LIMITS.maxChildren);
 /** An app's public file (`public/…`, served under its release). */
 const appFile = z.string().max(256).regex(/^public\/[a-zA-Z0-9_/-]+(?:\.[a-zA-Z0-9]+)?$/).refine((path) => !path.includes(".."));
@@ -471,7 +502,7 @@ const nodeUnion = z.discriminatedUnion("type", [
   z.object({ type: z.literal("heading"), text: label, level: z.union([z.literal(2), z.literal(3), z.literal(4)]).optional() }).strict(),
   z.object({
     type: z.literal("text"),
-    text,
+    text: z.union([text, spans]),
     tone: tone.optional(),
     size: z.enum(["sm", "md"]).optional(),
     emphasis: z.enum(["strong", "mono"]).optional(),
@@ -573,9 +604,10 @@ function attachedButtons(node: PluginUiNode): readonly PluginUiButton[] {
   }
 }
 
-/** Every link target a node names (its own, its table's rows and cells). */
+/** Every link target a node names (its own, its text's links, its table's rows and cells). */
 function nodeTargets(node: PluginUiNode): PluginUiTarget[] {
   if (node.type === "link") return [node.to];
+  if (node.type === "text") return typeof node.text === "string" ? [] : node.text.flatMap((span) => (span.to ? [span.to] : []));
   if (node.type === "button" && node.action.kind === "navigate") return [node.action.to];
   if (node.type === "table") {
     return node.rows.flatMap((row) => [
@@ -622,22 +654,42 @@ export function pluginUiNodes(root: PluginUiNode): PluginUiNode[] {
 
 const inputTypes = new Set<string>(PLUGIN_UI_INPUT_TYPES);
 
-/** The words a buyer node draws as a label or a button: what may never be the store's (`isStoreActionOrAmountWord`). */
-function buyerLabels(node: PluginUiNode): Array<{ text: string; at: (string | number)[] }> {
-  switch (node.type) {
-    case "button": return [{ text: node.label, at: ["label"] }];
-    case "heading": case "badge": return [{ text: node.text, at: ["text"] }];
-    case "banner": return node.title ? [{ text: node.title, at: ["title"] }] : [];
-    case "key-value": return node.items.map((item, index) => ({ text: item.label, at: ["items", index, "label"] }));
-    default: return [];
-  }
+type BuyerLabel = { text: string; at: (string | number)[] };
+type BuyerNodeType = (typeof PLUGIN_UI_SURFACES.buyer.nodes)[number];
+const none = (): BuyerLabel[] => [];
+/**
+ * The words each buyer node draws as a label, a link or a button: what may
+ * never be the store's (`isStoreActionOrAmountWord`). Body words (a text's
+ * plain words, a banner's text) are not labels. Keyed by the buyer surface's
+ * nodes, so a node the surface gains names its labels here.
+ */
+const BUYER_LABELS: { [T in BuyerNodeType]: (node: Extract<PluginUiNode, { type: T }>) => BuyerLabel[] } = {
+  stack: none, columns: none, image: none, divider: none, mark: none,
+  heading: (node) => [{ text: node.text, at: ["text"] }],
+  badge: (node) => [{ text: node.text, at: ["text"] }],
+  link: (node) => [{ text: node.text, at: ["text"] }],
+  text: (node) => (typeof node.text === "string" ? [] : node.text.flatMap((span, index) => (span.to ? [{ text: span.text, at: ["text", index, "text"] }] : []))),
+  banner: (node) => (node.title ? [{ text: node.title, at: ["title"] }] : []),
+  "key-value": (node) => node.items.map((item, index) => ({ text: item.label, at: ["items", index, "label"] })),
+  button: (node) => [
+    { text: node.label, at: ["label"] },
+    ...(node.confirm ? [{ text: node.confirm.title, at: ["confirm", "title"] }] : []),
+    ...(node.confirm?.confirmLabel ? [{ text: node.confirm.confirmLabel, at: ["confirm", "confirmLabel"] }] : []),
+  ],
+  field: (node) => (node.choices ?? []).map((choice, index) => ({ text: choice.label, at: ["choices", index, "label"] })),
+  disclosure: (node) => [{ text: node.summary, at: ["summary"] }],
+};
+
+function buyerLabels(node: PluginUiNode): BuyerLabel[] {
+  const labels = BUYER_LABELS[node.type as BuyerNodeType] as ((node: PluginUiNode) => BuyerLabel[]) | undefined;
+  return labels ? labels(node) : [];
 }
 
 /**
  * Structural rules zod cannot say: the surface's nodes, actions, link
  * targets and image sources, its size and depth, pages only at the root,
- * inputs only in forms, unique input names, and on a buyer page no label or
- * button that reads as the store's own action or amount word.
+ * inputs only in forms, unique input names, and on a buyer page no label,
+ * link or button that reads as the store's own action or amount word.
  */
 function checkTree(root: PluginUiNode, surface: PluginUiSurface, context: z.RefinementCtx): void {
   const rules = PLUGIN_UI_SURFACES[surface];
@@ -660,7 +712,7 @@ function checkTree(root: PluginUiNode, surface: PluginUiSurface, context: z.Refi
     if (node.type === "image" && (typeof node.src === "string") !== (rules.images === "url")) {
       return report([...path, "src"], surface === "admin" ? "Use an https:// image address." : "Use { media } or { app } for an image."), false;
     }
-    // On a buyer page an app's labels and buttons never read as the store's action or amount words (store-words.ts).
+    // On a buyer page an app's labels, links and buttons never read as the store's action or amount words (store-words.ts).
     if (surface === "buyer") {
       const word = buyerLabels(node).find((entry) => isStoreActionOrAmountWord(entry.text));
       if (word) {

@@ -365,7 +365,7 @@ Admin pages, cards, actions and widgets are drawn by the dashboard from a declar
 - **Widgets** (5) appear on the dashboard home.
 - **The dashboard's language.** `adminLocale(request)` is `en` or `bn`; write your words for both, and numbers in your text with `adminNumber(value, locale)` ("1,250", "১,২৫০"), never `Intl` directly. Money and date cells of a `ui.table` are formatted by the dashboard.
 - **List columns** add a column (and optional filter) to the orders, products or customers list from an object record or your custom field.
-- Answer pages, cards and widgets with `ui.page(...)` or `ui.view(...)`, and buttons and forms with `ui.result(...)`. The builder covers layout (`stack`, `columns`, `section`, `card`, `divider`), text (`heading`, `text`, `badge`, `banner`), data (`keyValue`, `stat`, `table`, `progress`, `empty`, `image`, `link`), and forms (`form`, `textField`, `textarea`, `numberField`, `select`, `checkbox`, `dateField`, `button`). `adminContext(request)` reads the request, including the dashboard language.
+- Answer pages, cards and widgets with `ui.page(...)` or `ui.view(...)`, and buttons and forms with `ui.result(...)`. The builder covers layout (`stack`, `columns`, `section`, `card`, `divider`), text (`heading`, `text`, `badge`, `banner`; `ui.text([{ text: "Synced. " }, { text: "Open the log", to: ui.to.page("log") }])` draws a link inside a sentence, underlined), data (`keyValue`, `stat`, `table`, `progress`, `empty`, `image`, `link`), and forms (`form`, `textField`, `textarea`, `numberField`, `select`, `checkbox`, `dateField`, `button`). `adminContext(request)` reads the request, including the dashboard language.
 
 ## Translations
 

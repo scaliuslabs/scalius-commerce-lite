@@ -1,7 +1,7 @@
 // The store's own words for its actions and amounts, in every language core
 // ships (English and Bangla): what the summary, the totals and the buy and
 // checkout buttons say. An app's words drawn beside them (an add-on's title,
-// a buyer block's button, key-value label, heading, banner title or badge)
+// a buyer block's labels, links and buttons: ui.ts `BUYER_LABELS`)
 // may never read as one of these, or a buyer could take an app's row for the
 // store's total or an app's button for the store's checkout. The words come
 // from the built-in checkout copy (`checkout-language-presets.ts`) and the

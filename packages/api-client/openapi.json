@@ -8541,8 +8541,138 @@
                 ]
               },
               "text": {
-                "type": "string",
-                "maxLength": 2000
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "to": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "app-page"
+                                  ]
+                                },
+                                "page": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                },
+                                "query": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string",
+                                    "maxLength": 512
+                                  }
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "page"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "resource"
+                                  ]
+                                },
+                                "resource": {
+                                  "type": "string",
+                                  "enum": [
+                                    "product",
+                                    "order",
+                                    "customer",
+                                    "category",
+                                    "collection",
+                                    "brand",
+                                    "page"
+                                  ]
+                                },
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 128
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "resource",
+                                "id"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "external"
+                                  ]
+                                },
+                                "href": {
+                                  "type": "string",
+                                  "maxLength": 2048,
+                                  "format": "uri"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "href"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "store"
+                                  ]
+                                },
+                                "path": {
+                                  "type": "string",
+                                  "maxLength": 2048,
+                                  "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "path"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "text"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 20
+                  }
+                ]
               },
               "tone": {
                 "type": "string",
@@ -12904,8 +13034,138 @@
                           ]
                         },
                         "text": {
-                          "type": "string",
-                          "maxLength": 2000
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 2000
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "text": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 2000
+                                  },
+                                  "to": {
+                                    "oneOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "enum": [
+                                              "app-page"
+                                            ]
+                                          },
+                                          "page": {
+                                            "type": "string",
+                                            "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                          },
+                                          "query": {
+                                            "type": "object",
+                                            "additionalProperties": {
+                                              "type": "string",
+                                              "maxLength": 512
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "kind",
+                                          "page"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "enum": [
+                                              "resource"
+                                            ]
+                                          },
+                                          "resource": {
+                                            "type": "string",
+                                            "enum": [
+                                              "product",
+                                              "order",
+                                              "customer",
+                                              "category",
+                                              "collection",
+                                              "brand",
+                                              "page"
+                                            ]
+                                          },
+                                          "id": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 128
+                                          }
+                                        },
+                                        "required": [
+                                          "kind",
+                                          "resource",
+                                          "id"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "enum": [
+                                              "external"
+                                            ]
+                                          },
+                                          "href": {
+                                            "type": "string",
+                                            "maxLength": 2048,
+                                            "format": "uri"
+                                          }
+                                        },
+                                        "required": [
+                                          "kind",
+                                          "href"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "enum": [
+                                              "store"
+                                            ]
+                                          },
+                                          "path": {
+                                            "type": "string",
+                                            "maxLength": 2048,
+                                            "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                                          }
+                                        },
+                                        "required": [
+                                          "kind",
+                                          "path"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "text"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "minItems": 1,
+                              "maxItems": 20
+                            }
+                          ]
                         },
                         "tone": {
                           "type": "string",
@@ -59122,8 +59382,138 @@
                                         ]
                                       },
                                       "text": {
-                                        "type": "string",
-                                        "maxLength": 2000
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "maxLength": 2000
+                                          },
+                                          {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "text": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 2000
+                                                },
+                                                "to": {
+                                                  "oneOf": [
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "app-page"
+                                                          ]
+                                                        },
+                                                        "page": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                                        },
+                                                        "query": {
+                                                          "type": "object",
+                                                          "additionalProperties": {
+                                                            "type": "string",
+                                                            "maxLength": 512
+                                                          }
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "page"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "resource"
+                                                          ]
+                                                        },
+                                                        "resource": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "product",
+                                                            "order",
+                                                            "customer",
+                                                            "category",
+                                                            "collection",
+                                                            "brand",
+                                                            "page"
+                                                          ]
+                                                        },
+                                                        "id": {
+                                                          "type": "string",
+                                                          "minLength": 1,
+                                                          "maxLength": 128
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "resource",
+                                                        "id"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "external"
+                                                          ]
+                                                        },
+                                                        "href": {
+                                                          "type": "string",
+                                                          "maxLength": 2048,
+                                                          "format": "uri"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "href"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "store"
+                                                          ]
+                                                        },
+                                                        "path": {
+                                                          "type": "string",
+                                                          "maxLength": 2048,
+                                                          "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "path"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  ]
+                                                }
+                                              },
+                                              "required": [
+                                                "text"
+                                              ],
+                                              "additionalProperties": false
+                                            },
+                                            "minItems": 1,
+                                            "maxItems": 20
+                                          }
+                                        ]
                                       },
                                       "tone": {
                                         "type": "string",
@@ -91665,8 +92055,138 @@
                                             ]
                                           },
                                           "text": {
-                                            "type": "string",
-                                            "maxLength": 2000
+                                            "anyOf": [
+                                              {
+                                                "type": "string",
+                                                "maxLength": 2000
+                                              },
+                                              {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "text": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 2000
+                                                    },
+                                                    "to": {
+                                                      "oneOf": [
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "kind": {
+                                                              "type": "string",
+                                                              "enum": [
+                                                                "app-page"
+                                                              ]
+                                                            },
+                                                            "page": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                                            },
+                                                            "query": {
+                                                              "type": "object",
+                                                              "additionalProperties": {
+                                                                "type": "string",
+                                                                "maxLength": 512
+                                                              }
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "kind",
+                                                            "page"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "kind": {
+                                                              "type": "string",
+                                                              "enum": [
+                                                                "resource"
+                                                              ]
+                                                            },
+                                                            "resource": {
+                                                              "type": "string",
+                                                              "enum": [
+                                                                "product",
+                                                                "order",
+                                                                "customer",
+                                                                "category",
+                                                                "collection",
+                                                                "brand",
+                                                                "page"
+                                                              ]
+                                                            },
+                                                            "id": {
+                                                              "type": "string",
+                                                              "minLength": 1,
+                                                              "maxLength": 128
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "kind",
+                                                            "resource",
+                                                            "id"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "kind": {
+                                                              "type": "string",
+                                                              "enum": [
+                                                                "external"
+                                                              ]
+                                                            },
+                                                            "href": {
+                                                              "type": "string",
+                                                              "maxLength": 2048,
+                                                              "format": "uri"
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "kind",
+                                                            "href"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "kind": {
+                                                              "type": "string",
+                                                              "enum": [
+                                                                "store"
+                                                              ]
+                                                            },
+                                                            "path": {
+                                                              "type": "string",
+                                                              "maxLength": 2048,
+                                                              "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "kind",
+                                                            "path"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        }
+                                                      ]
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "text"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                "minItems": 1,
+                                                "maxItems": 20
+                                              }
+                                            ]
                                           },
                                           "tone": {
                                             "type": "string",
@@ -97366,8 +97886,138 @@
                                         ]
                                       },
                                       "text": {
-                                        "type": "string",
-                                        "maxLength": 2000
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "maxLength": 2000
+                                          },
+                                          {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "text": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 2000
+                                                },
+                                                "to": {
+                                                  "oneOf": [
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "app-page"
+                                                          ]
+                                                        },
+                                                        "page": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                                        },
+                                                        "query": {
+                                                          "type": "object",
+                                                          "additionalProperties": {
+                                                            "type": "string",
+                                                            "maxLength": 512
+                                                          }
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "page"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "resource"
+                                                          ]
+                                                        },
+                                                        "resource": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "product",
+                                                            "order",
+                                                            "customer",
+                                                            "category",
+                                                            "collection",
+                                                            "brand",
+                                                            "page"
+                                                          ]
+                                                        },
+                                                        "id": {
+                                                          "type": "string",
+                                                          "minLength": 1,
+                                                          "maxLength": 128
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "resource",
+                                                        "id"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "external"
+                                                          ]
+                                                        },
+                                                        "href": {
+                                                          "type": "string",
+                                                          "maxLength": 2048,
+                                                          "format": "uri"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "href"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "store"
+                                                          ]
+                                                        },
+                                                        "path": {
+                                                          "type": "string",
+                                                          "maxLength": 2048,
+                                                          "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "path"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  ]
+                                                }
+                                              },
+                                              "required": [
+                                                "text"
+                                              ],
+                                              "additionalProperties": false
+                                            },
+                                            "minItems": 1,
+                                            "maxItems": 20
+                                          }
+                                        ]
                                       },
                                       "tone": {
                                         "type": "string",
@@ -102502,8 +103152,138 @@
                                         ]
                                       },
                                       "text": {
-                                        "type": "string",
-                                        "maxLength": 2000
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "maxLength": 2000
+                                          },
+                                          {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "text": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 2000
+                                                },
+                                                "to": {
+                                                  "oneOf": [
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "app-page"
+                                                          ]
+                                                        },
+                                                        "page": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                                        },
+                                                        "query": {
+                                                          "type": "object",
+                                                          "additionalProperties": {
+                                                            "type": "string",
+                                                            "maxLength": 512
+                                                          }
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "page"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "resource"
+                                                          ]
+                                                        },
+                                                        "resource": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "product",
+                                                            "order",
+                                                            "customer",
+                                                            "category",
+                                                            "collection",
+                                                            "brand",
+                                                            "page"
+                                                          ]
+                                                        },
+                                                        "id": {
+                                                          "type": "string",
+                                                          "minLength": 1,
+                                                          "maxLength": 128
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "resource",
+                                                        "id"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "external"
+                                                          ]
+                                                        },
+                                                        "href": {
+                                                          "type": "string",
+                                                          "maxLength": 2048,
+                                                          "format": "uri"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "href"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "store"
+                                                          ]
+                                                        },
+                                                        "path": {
+                                                          "type": "string",
+                                                          "maxLength": 2048,
+                                                          "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "path"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  ]
+                                                }
+                                              },
+                                              "required": [
+                                                "text"
+                                              ],
+                                              "additionalProperties": false
+                                            },
+                                            "minItems": 1,
+                                            "maxItems": 20
+                                          }
+                                        ]
                                       },
                                       "tone": {
                                         "type": "string",

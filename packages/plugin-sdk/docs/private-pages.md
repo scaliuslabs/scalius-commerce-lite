@@ -250,7 +250,7 @@ The store draws an app's block from typed nodes ([commerce hooks](commerce-hooks
 | `ui.mark` | A tone's glyph in a circle (the circle is twice its `size`) | each | `text`, `border`, `size` |
 | `ui.text` | Words | each | `text`, `font`, `size`, `weight`, `leading` |
 | `ui.heading` | A heading | | `text`, `size`, `weight`, `font`, `case` |
-| `ui.link` | A link | | `text`, `size`, `weight` |
+| `ui.link` | A link, on a line of its own or inside a sentence (`ui.text` pieces); the store always underlines it | | `text`, `size`, `weight` |
 | `ui.keyvalue` | Label and value rows: the labels are its muted words, the values its text | | `text`, `muted`, `size`, `weight` |
 | `ui.disclosure` | A disclosure the buyer opens | | `background`, `text`, `border`, `radius` |
 | `ui.row` | A plain stack or columns (no colour, no row of the table) | | `gap` |
@@ -259,7 +259,7 @@ The tones are `neutral`, `info`, `success`, `warning` and `critical`; critical w
 
 A button's tones are its own: fill `ui.button.primary` ("Add Now") and a protected line's `critical` "Remove" keeps its own look. Each tone reads on the surface it sits on, and no `ui.button` key, in any tone, is drawn larger or heavier than the store's own action on the page (Place order on the cart): `prominence` otherwise. The cart drawer's buttons carry the same `data-tone` for your public stylesheet.
 
-**What a box holds.** A banner, a toned stack and a disclosure draw their children on their own surface. When you give one a surface (`background` or `gradient`), every kind and tone it can hold gets a row inside it (a banner: its buttons only; an app's box: that app's nodes only), checked on that box in each scheme: a link or a price inside an amber offer row is checked on amber, not on the line. A box that paints nothing adds no rows. A node writes only the colours you set for it and reads the rest from the row it stands on, so its rule is the same in every box at any depth. A field or a field label drawn in an app's painted box is checked on it too.
+**What a box holds.** A banner, a toned stack and a disclosure draw their children on their own surface. When you give one a surface (`background` or `gradient`), every kind and tone it can hold gets a row inside it (a banner: its buttons only; an app's box: that app's nodes only), checked on that box in each scheme: a link or a price inside an amber offer row is checked on amber, not on the line, and so is a link inside a sentence there (the sentence paints nothing of its own). A box that paints nothing adds no rows. A node writes only the colours you set for it and reads the rest from the row it stands on, so its rule is the same in every box at any depth. A field or a field label drawn in an app's painted box is checked on it too.
 
 ### Floors
 

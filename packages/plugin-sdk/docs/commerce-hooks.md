@@ -196,23 +196,24 @@ Buyer UI is a storefront extension, not a function. Declare `storefront.extensio
   - **A toned row.** Add `tone` to draw the stack on that tone's surface, such as an offer row or a status box. Its height comes from its padding, gap and pieces. If its last piece (the action) wraps to a line of its own, it keeps to the row's end.
   - **A mark.** `ui.mark(tone)` is the tone's glyph in a circle: "!" warning, a tick for success, "i" info, "×" critical, a dot for neutral. It is decoration and hidden from screen readers, so the words beside it must say the same thing.
   - **Text.** `ui.text(text, { tone })` colours the words (critical words take the error colour), and `emphasis: "mono"` sets an ID or a code in the monospace face.
+  - **A link inside a sentence.** Give `ui.text` pieces instead of a string: `ui.text([{ text: "Covers accidental damage. " }, { text: "Read the terms", to: ui.to.store("/pages/protection") }])`. The store draws one paragraph with the link inside it, at the sentence's size and always underlined. A sentence holds 1 to 20 pieces and 2000 characters in all. A plain piece is 1 to 2000 characters and keeps its spaces as written, so put the space between pieces yourself. A link's words follow a link's rules: trimmed, 1 to 120 characters, and the same targets as `ui.link` (`store_path_reserved` included). A piece holds words and an optional `to`, never an action or markup.
   - **Buttons** are at least 44px tall on a phone.
   - A toned stack and a mark show only on buyer pages: a dashboard tree that uses one is refused.
-- A buyer block's button label, key-value label, heading, banner title and badge may not be one of the store's action or amount words either (the same list as add-on titles; case, spacing and end punctuation ignored): the run fails as `function_invalid_output` with reason `store_words`. Body text is yours.
-- A buyer link (`ui.to.store(path)`, a link or a `navigate` button) opens a page of the store. `/api`, `/apps` (any app's routes; reach your own with a `route` action), `/_x` (your files are `{ app }` image sources) and every path whose first segment starts with `_` or `~` are refused: the run fails as `function_invalid_output` with reason `store_path_reserved`.
+- A buyer block's labels may not be one of the store's action or amount words either (the same list as add-on titles; case, spacing and end punctuation ignored): a button's label and its confirm title and label, a link's words, a sentence's link words, a heading, a badge, a banner title, a key-value label, a disclosure summary and a field's choice labels. One that is fails the run as `function_invalid_output` with reason `store_words`. Body words are yours: a text's plain words and a banner's text.
+- A buyer link (`ui.to.store(path)` on a link, a sentence's link or a `navigate` button) opens a page of the store. `/api`, `/apps` (any app's routes; reach your own with a `route` action), `/_x` (your files are `{ app }` image sources) and every path whose first segment starts with `_` or `~` are refused: the run fails as `function_invalid_output` with reason `store_path_reserved`.
 
   The offer row under a cart line:
 
   ```ts
   ui.stack([
     ui.mark("warning"),
-    ui.stack([ui.text("Add protection for lifetime support."), ui.link("Learn more", ui.to.store("/pages/protection"))]),
+    ui.text([{ text: "Add protection for lifetime support. " }, { text: "Learn more", to: ui.to.store("/pages/protection") }]),
     ui.text("৳350", { tone: "success", emphasis: "strong" }),
     ui.button("Add now", ui.cart.setLineInput("plan", "lifetime", [line.lineKey])),
   ], { direction: "horizontal", tone: "warning" })
   ```
 
-  A theme styles these pieces with tokens under `ui.<kind>[.<tone>]`: `ui.stack.warning`, `ui.mark.warning`, `ui.text.success`, `ui.link`, `ui.keyvalue`, `ui.button` (see [private pages](private-pages.md)).
+  A theme styles these pieces with tokens under `ui.<kind>[.<tone>]`: `ui.stack.warning`, `ui.mark.warning`, `ui.text.success`, `ui.link` (a link node and a sentence's links), `ui.keyvalue`, `ui.button` (see [private pages](private-pages.md)).
 - Test with `harness.extension(fixtures.storefrontExtensionInput(target, overrides?))`. The fixture builds a complete, valid input for the slot's page.
 
 The slot list is in [Storefront](storefront.md#slots).

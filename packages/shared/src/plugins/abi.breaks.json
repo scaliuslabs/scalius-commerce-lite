@@ -1954,5 +1954,17 @@
   "from": "43d11be555c837a3",
   "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
   "reason": "Pre-release (private pages, beta 8): buyer UI gains a `mark` node (a tone's glyph) and an optional `tone` on `stack` (a toned row: an offer row, a status box), drawn on buyer pages only; the SDK gains `ui.mark`. An added union arm and an optional field; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/plugin-sdk/src/ui.d.ts#variable:ui: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release tightens the buyer `store_words` check: a link node's words, a text's link words, a disclosure summary, a field's computed choice labels and a button's confirm title and label are refused when they read as the store's action or amount words, as buttons, headings, badges, banner titles and key-value labels already were; a tree that used those words there is now refused."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release tightens the buyer `store_words` check: a link node's words, a text's link words, a disclosure summary, a field's computed choice labels and a button's confirm title and label are refused when they read as the store's action or amount words, as buttons, headings, badges, banner titles and key-value labels already were; a tree that used those words there is now refused."
  }
 ]
