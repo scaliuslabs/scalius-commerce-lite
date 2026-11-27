@@ -363,7 +363,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const drawnPage = { "sample-receipt": "receipt", "sample-account": "account", "sample-checkout": "checkout" }[body.page] ?? "cart";
         const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, terms: body.terms === true, ...(typeof body.slowCheckMs === "number" ? { slowCheckMs: body.slowCheckMs } : {}), ...(body.page === "home" || drawnPage !== "cart" ? { page: body.page } : {}) });
         const tables = shared.privatePageTokenMode(served.privatePages, drawnPage) ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served), drawnPage) : [];
-        return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: served.privatePages.compiled.refused === true });
+        return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: Boolean(served.privatePages.compiled.refused?.[drawnPage]) });
       }
       // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens), and the
       // app node kinds that have rows (their selectors inside a block).

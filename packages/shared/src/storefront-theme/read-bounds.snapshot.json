@@ -1,0 +1,2018 @@
+{
+ "$.apps.skins.footer.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.apps.skins.footer.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "$.apps.skins.footer.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "$.apps.skins.footer.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "$.apps.skins.footer.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.apps.skins.footer.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "$.apps.skins.header.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.apps.skins.header.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "$.apps.skins.header.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "$.apps.skins.header.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "$.apps.skins.header.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.apps.skins.header.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "$.apps.skins.listing_main.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.apps.skins.listing_main.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "$.apps.skins.listing_main.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "$.apps.skins.listing_main.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "$.apps.skins.listing_main.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.apps.skins.listing_main.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "$.apps.skins.product_card.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.apps.skins.product_card.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "$.apps.skins.product_card.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "$.apps.skins.product_card.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "$.apps.skins.product_card.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.apps.skins.product_card.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "$.apps.skins.product_main.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.apps.skins.product_main.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "$.apps.skins.product_main.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "$.apps.skins.product_main.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "$.apps.skins.product_main.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.apps.skins.product_main.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "$.blocks.card|standard.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.card|standard.fields max_length": {
+  "kind": "max",
+  "value": 3
+ },
+ "$.blocks.desktopNav|cascading.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.desktopNav|departments-rail.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.desktopNav|drill-in-drawer.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.desktopNav|dropdown.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.desktopNav|mega-panel.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.desktopNav|sticky-category-bar.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.footer|centered-compact.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.footer|centered-compact.settings.about max_length": {
+  "kind": "max",
+  "value": 1000
+ },
+ "$.blocks.footer|centered-compact.settings.copyright max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "$.blocks.footer|centered-compact.settings.tagline max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.footer|columns.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.footer|columns.settings.about max_length": {
+  "kind": "max",
+  "value": 1000
+ },
+ "$.blocks.footer|columns.settings.copyright max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "$.blocks.footer|columns.settings.tagline max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.footer|directory.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.footer|directory.settings.about max_length": {
+  "kind": "max",
+  "value": 1000
+ },
+ "$.blocks.footer|directory.settings.copyright max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "$.blocks.footer|directory.settings.tagline max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.header|centered-logo.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.header|inline-nav.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.header|search-first.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.listing.filters.column greater_than": {
+  "kind": "min",
+  "value": 180
+ },
+ "$.blocks.listing.filters.column less_than": {
+  "kind": "max",
+  "value": 340
+ },
+ "$.blocks.listing.filters.label greater_than": {
+  "kind": "min",
+  "value": 12
+ },
+ "$.blocks.listing.filters.label less_than": {
+  "kind": "max",
+  "value": 18
+ },
+ "$.blocks.listing.filters.order length_equals": {
+  "kind": "max",
+  "value": 6
+ },
+ "$.blocks.listing.filters.rowPitch greater_than": {
+  "kind": "min",
+  "value": 24
+ },
+ "$.blocks.listing.filters.rowPitch less_than": {
+  "kind": "max",
+  "value": 36
+ },
+ "$.blocks.listing.layout|grid.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.listing.layout|list.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.listing.layout|quick-grid.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.listing.layout|shelves.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.listing.layout|shelves.settings.maxShelves greater_than": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.blocks.listing.layout|shelves.settings.maxShelves less_than": {
+  "kind": "max",
+  "value": 8
+ },
+ "$.blocks.listing.maxColumns greater_than": {
+  "kind": "min",
+  "value": 3
+ },
+ "$.blocks.listing.maxColumns less_than": {
+  "kind": "max",
+  "value": 6
+ },
+ "$.blocks.listing.toolbar max_length": {
+  "kind": "max",
+  "value": 11
+ },
+ "$.blocks.mobileNav|accordion-drawer.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.mobileNav|bottom-tabs.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.mobileNav|bottom-tabs.settings.tabs max_length": {
+  "kind": "max",
+  "value": 5
+ },
+ "$.blocks.mobileNav|bottom-tabs.settings.tabs min_length": {
+  "kind": "min",
+  "value": 3
+ },
+ "$.blocks.mobileNav|bottom-tabs.settings.tabs[]|link.href max_length": {
+  "kind": "max",
+  "value": 2048
+ },
+ "$.blocks.mobileNav|bottom-tabs.settings.tabs[]|link.label max_length": {
+  "kind": "max",
+  "value": 96
+ },
+ "$.blocks.mobileNav|drill-in-drawer.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.navigation.linkBudget greater_than": {
+  "kind": "min",
+  "value": 20
+ },
+ "$.blocks.navigation.linkBudget less_than": {
+  "kind": "max",
+  "value": 150
+ },
+ "$.blocks.navigation.maxTopItems greater_than": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.blocks.navigation.maxTopItems less_than": {
+  "kind": "max",
+  "value": 18
+ },
+ "$.blocks.product.apps max_length": {
+  "kind": "max",
+  "value": 10
+ },
+ "$.blocks.product.apps[].bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.product.apps[].values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "$.blocks.product.apps[].values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "$.blocks.product.apps[].values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "$.blocks.product.apps[].values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.blocks.product.apps[].values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "$.blocks.product.below max_length": {
+  "kind": "max",
+  "value": 10
+ },
+ "$.blocks.product.buyBox|classic.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.product.buyBox|marketplace-3col.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.product.gallery|classic.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.product.gallery|image-grid.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.product.gallery|portrait.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.product.gallery|stacked.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.product.gallery|thumbs-below.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.product.gallery|thumbs-left.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.receipt.sections length_equals": {
+  "kind": "max",
+  "value": 3
+ },
+ "$.blocks.topBar|announcement.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.topBar|announcement.settings.link max_length": {
+  "kind": "max",
+  "value": 2048
+ },
+ "$.blocks.topBar|announcement.settings.text max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.topBar|none.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.topBar|utility.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.blocks.topBar|utility.settings.link max_length": {
+  "kind": "max",
+  "value": 2048
+ },
+ "$.blocks.topBar|utility.settings.text max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "$.brand.darkLogo max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "$.brand.darkLogo min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.brand.favicon max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "$.brand.favicon min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.brand.footerLogo max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "$.brand.footerLogo min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.brand.logo max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "$.brand.logo min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.brand.logoWidth greater_than": {
+  "kind": "min",
+  "value": 80
+ },
+ "$.brand.logoWidth less_than": {
+  "kind": "max",
+  "value": 240
+ },
+ "$.pages.home max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.pages.homeMode|product.productId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "$.pages.homeMode|product.productId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.pages.landing{}.description max_length": {
+  "kind": "max",
+  "value": 320
+ },
+ "$.pages.landing{}.sections max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.pages.landing{}.title max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "$.pages.landing{}.title min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.pages.landing{key} max_length": {
+  "kind": "max",
+  "value": 100
+ },
+ "$.pages.landing{key} min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.pages.templates.collection.main greater_than": {
+  "kind": "min",
+  "value": 0
+ },
+ "$.pages.templates.collection.main less_than": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.pages.templates.collection.sections max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.pages.templates.page.main greater_than": {
+  "kind": "min",
+  "value": 0
+ },
+ "$.pages.templates.page.main less_than": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.pages.templates.page.sections max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.pages.templates.product.main greater_than": {
+  "kind": "min",
+  "value": 0
+ },
+ "$.pages.templates.product.main less_than": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.pages.templates.product.sections max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.privatePages.compiled.anatomy greater_than": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.privatePages.compiled.css{} max_length": {
+  "kind": "max",
+  "value": 65536
+ },
+ "$.privatePages.compiled.policy greater_than": {
+  "kind": "min",
+  "value": 0
+ },
+ "$.privatePages.compiled.refused{} max_length": {
+  "kind": "max",
+  "value": 8
+ },
+ "$.privatePages.compiled.refused{} min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.privatePages.compiled.refused{}[].message max_length": {
+  "kind": "max",
+  "value": 600
+ },
+ "$.privatePages.compiled.refused{}[].path max_length": {
+  "kind": "max",
+  "value": 240
+ },
+ "$.privatePages.compiled.sanitizer greater_than": {
+  "kind": "min",
+  "value": 0
+ },
+ "$.privatePages.labels.cart.empty{} max_length": {
+  "kind": "max",
+  "value": 500
+ },
+ "$.privatePages.labels.cart.empty{} min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.privatePages.labels.cart.emptyText{} max_length": {
+  "kind": "max",
+  "value": 500
+ },
+ "$.privatePages.labels.cart.emptyText{} min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.privatePages.labels.cart.heading{} max_length": {
+  "kind": "max",
+  "value": 500
+ },
+ "$.privatePages.labels.cart.heading{} min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.privatePages.labels.cart.intro{} max_length": {
+  "kind": "max",
+  "value": 500
+ },
+ "$.privatePages.labels.cart.intro{} min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.privatePages.labels.cart.summaryHeading{} max_length": {
+  "kind": "max",
+  "value": 500
+ },
+ "$.privatePages.labels.cart.summaryHeading{} min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.privatePages.labels.drawer.empty{} max_length": {
+  "kind": "max",
+  "value": 500
+ },
+ "$.privatePages.labels.drawer.empty{} min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.privatePages.labels.drawer.title{} max_length": {
+  "kind": "max",
+  "value": 500
+ },
+ "$.privatePages.labels.drawer.title{} min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "$.privatePages.pages.account.items{} max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.privatePages.pages.account.layout max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.privatePages.pages.cart.items{} max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.privatePages.pages.cart.layout max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.privatePages.pages.cart.layout[]<lazy>|layout.children max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.privatePages.pages.cart.layout[]<lazy>|layout.hook max_length": {
+  "kind": "max",
+  "value": 40
+ },
+ "$.privatePages.pages.cartDrawer.items{} max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.privatePages.pages.cartDrawer.layout max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.privatePages.pages.checkout.items{} max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.privatePages.pages.checkout.layout max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.privatePages.pages.receipt.items{} max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.privatePages.pages.receipt.layout max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "$.tokens.pagePaint|linear.angle greater_than": {
+  "kind": "min",
+  "value": 0
+ },
+ "$.tokens.pagePaint|linear.angle less_than": {
+  "kind": "max",
+  "value": 359
+ },
+ "$.tokens.pagePaint|linear.stops max_length": {
+  "kind": "max",
+  "value": 4
+ },
+ "$.tokens.pagePaint|linear.stops min_length": {
+  "kind": "min",
+  "value": 2
+ },
+ "$.tokens.pagePaint|radial.stops max_length": {
+  "kind": "max",
+  "value": 4
+ },
+ "$.tokens.pagePaint|radial.stops min_length": {
+  "kind": "min",
+  "value": 2
+ },
+ "$.translations max_length": {
+  "kind": "max",
+  "value": 40
+ },
+ "$.translations[].fields{} max_length": {
+  "kind": "max",
+  "value": 8000
+ },
+ "$.translations[].fields{key} max_length": {
+  "kind": "max",
+  "value": 8000
+ },
+ "$.translations[].fields{key} min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "refine: app values per part": {
+  "kind": "max",
+  "value": 40
+ },
+ "refine: bottom bar tab label characters": {
+  "kind": "max",
+  "value": 24
+ },
+ "refine: bottom bar tabs (fewest)": {
+  "kind": "min",
+  "value": 3
+ },
+ "refine: bottom bar tabs (most)": {
+  "kind": "max",
+  "value": 5
+ },
+ "refine: fields per app list item": {
+  "kind": "max",
+  "value": 12
+ },
+ "refine: landing pages": {
+  "kind": "max",
+  "value": 20
+ },
+ "refine: private arrangement depth": {
+  "kind": "max",
+  "value": 12
+ },
+ "refine: private words languages": {
+  "kind": "max",
+  "value": 8
+ },
+ "refine: sections per page": {
+  "kind": "max",
+  "value": 24
+ },
+ "refine: setting bindings per part": {
+  "kind": "max",
+  "value": 20
+ },
+ "refine: slide products per page": {
+  "kind": "max",
+  "value": 10
+ },
+ "refine: translated texts per row": {
+  "kind": "max",
+  "value": 2000
+ },
+ "section|app.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|app.settings.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|app.settings.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|app.settings.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|app.settings.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|app.settings.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|banner_mosaic.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|banner_mosaic.settings.tiles max_length": {
+  "kind": "max",
+  "value": 5
+ },
+ "section|banner_mosaic.settings.tiles[].alt max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|banner_mosaic.settings.tiles[].bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|banner_mosaic.settings.tiles[].href max_length": {
+  "kind": "max",
+  "value": 300
+ },
+ "section|banner_mosaic.settings.tiles[].mediaId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|banner_mosaic.settings.tiles[].mediaId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|banner_mosaic.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|banner_mosaic.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|banner_mosaic.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|banner_mosaic.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|banner_mosaic.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|banner_mosaic.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|banner.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|banner.settings.cta.href max_length": {
+  "kind": "max",
+  "value": 300
+ },
+ "section|banner.settings.cta.label max_length": {
+  "kind": "max",
+  "value": 40
+ },
+ "section|banner.settings.cta.label min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|banner.settings.heading max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "section|banner.settings.mediaId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|banner.settings.mediaId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|banner.settings.text max_length": {
+  "kind": "max",
+  "value": 300
+ },
+ "section|banner.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|banner.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|banner.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|banner.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|banner.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|banner.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|brand_wall.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|brand_wall.settings.title max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|brand_wall.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|brand_wall.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|brand_wall.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|brand_wall.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|brand_wall.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|brand_wall.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|category_tiles.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|category_tiles.settings.categoryIds max_length": {
+  "kind": "max",
+  "value": 12
+ },
+ "section|category_tiles.settings.categoryIds[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|category_tiles.settings.categoryIds[] min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|category_tiles.settings.title max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|category_tiles.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|category_tiles.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|category_tiles.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|category_tiles.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|category_tiles.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|category_tiles.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|collections.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|collections.settings.collectionIds max_length": {
+  "kind": "max",
+  "value": 8
+ },
+ "section|collections.settings.collectionIds[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|collections.settings.collectionIds[] min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|collections.settings.title max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|collections.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|collections.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|collections.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|collections.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|collections.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|collections.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|deal_block.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|deal_block.settings.mediaId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|deal_block.settings.mediaId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|deal_block.settings.promotionId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|deal_block.settings.promotionId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|deal_block.settings.source|category.categoryId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|deal_block.settings.source|category.categoryId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|deal_block.settings.source|collection.collectionId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|deal_block.settings.source|collection.collectionId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|deal_block.settings.title max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|deal_block.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|deal_block.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|deal_block.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|deal_block.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|deal_block.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|deal_block.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|editorial.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|editorial.settings|image-with-text.body max_length": {
+  "kind": "max",
+  "value": 2000
+ },
+ "section|editorial.settings|image-with-text.heading max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "section|editorial.settings|image-with-text.mediaId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|editorial.settings|image-with-text.mediaId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|editorial.settings|multicolumn.columns max_length": {
+  "kind": "max",
+  "value": 4
+ },
+ "section|editorial.settings|multicolumn.columns[].bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|editorial.settings|multicolumn.columns[].text max_length": {
+  "kind": "max",
+  "value": 400
+ },
+ "section|editorial.settings|multicolumn.columns[].title max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|editorial.settings|multicolumn.heading max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "section|editorial.settings|rich-text.body max_length": {
+  "kind": "max",
+  "value": 2000
+ },
+ "section|editorial.settings|rich-text.heading max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "section|editorial.settings|testimonial.quotes max_length": {
+  "kind": "max",
+  "value": 6
+ },
+ "section|editorial.settings|testimonial.quotes[].author max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|editorial.settings|testimonial.quotes[].bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|editorial.settings|testimonial.quotes[].quote max_length": {
+  "kind": "max",
+  "value": 400
+ },
+ "section|editorial.settings|testimonial.quotes[].quote min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|editorial.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|editorial.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|editorial.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|editorial.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|editorial.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|editorial.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|endless_grid.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|endless_grid.settings.title max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|endless_grid.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|endless_grid.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|endless_grid.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|endless_grid.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|endless_grid.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|endless_grid.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|faq.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|faq.settings.heading max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "section|faq.settings.items max_length": {
+  "kind": "max",
+  "value": 20
+ },
+ "section|faq.settings.items[].answer max_length": {
+  "kind": "max",
+  "value": 1000
+ },
+ "section|faq.settings.items[].answer min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|faq.settings.items[].bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|faq.settings.items[].question max_length": {
+  "kind": "max",
+  "value": 200
+ },
+ "section|faq.settings.items[].question min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|faq.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|faq.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|faq.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|faq.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|faq.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|faq.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|hero.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|hero.settings.sideBanners max_length": {
+  "kind": "max",
+  "value": 2
+ },
+ "section|hero.settings.sideBanners[].alt max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|hero.settings.sideBanners[].bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|hero.settings.sideBanners[].href max_length": {
+  "kind": "max",
+  "value": 300
+ },
+ "section|hero.settings.sideBanners[].mediaId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|hero.settings.sideBanners[].mediaId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|hero.settings.slides max_length": {
+  "kind": "max",
+  "value": 10
+ },
+ "section|hero.settings.slides[].alt max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|hero.settings.slides[].alt min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|hero.settings.slides[].bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|hero.settings.slides[].buttonLabel max_length": {
+  "kind": "max",
+  "value": 40
+ },
+ "section|hero.settings.slides[].focalPoint.x greater_than": {
+  "kind": "min",
+  "value": 0
+ },
+ "section|hero.settings.slides[].focalPoint.x less_than": {
+  "kind": "max",
+  "value": 100
+ },
+ "section|hero.settings.slides[].focalPoint.y greater_than": {
+  "kind": "min",
+  "value": 0
+ },
+ "section|hero.settings.slides[].focalPoint.y less_than": {
+  "kind": "max",
+  "value": 100
+ },
+ "section|hero.settings.slides[].heading max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|hero.settings.slides[].image max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|hero.settings.slides[].image min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|hero.settings.slides[].link max_length": {
+  "kind": "max",
+  "value": 2048
+ },
+ "section|hero.settings.slides[].phoneFocalPoint.x greater_than": {
+  "kind": "min",
+  "value": 0
+ },
+ "section|hero.settings.slides[].phoneFocalPoint.x less_than": {
+  "kind": "max",
+  "value": 100
+ },
+ "section|hero.settings.slides[].phoneFocalPoint.y greater_than": {
+  "kind": "min",
+  "value": 0
+ },
+ "section|hero.settings.slides[].phoneFocalPoint.y less_than": {
+  "kind": "max",
+  "value": 100
+ },
+ "section|hero.settings.slides[].phoneImage max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|hero.settings.slides[].phoneImage min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|hero.settings.slides[].product max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|hero.settings.slides[].product min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|hero.settings.slides[].text max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|hero.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|hero.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|hero.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|hero.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|hero.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|hero.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|lookbook.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|lookbook.settings.mediaId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|lookbook.settings.mediaId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|lookbook.settings.source|category.categoryId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|lookbook.settings.source|category.categoryId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|lookbook.settings.source|collection.collectionId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|lookbook.settings.source|collection.collectionId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|lookbook.settings.title max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|lookbook.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|lookbook.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|lookbook.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|lookbook.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|lookbook.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|lookbook.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|newsletter.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|newsletter.settings.buttonLabel max_length": {
+  "kind": "max",
+  "value": 40
+ },
+ "section|newsletter.settings.heading max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "section|newsletter.settings.mediaId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|newsletter.settings.mediaId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|newsletter.settings.text max_length": {
+  "kind": "max",
+  "value": 300
+ },
+ "section|newsletter.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|newsletter.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|newsletter.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|newsletter.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|newsletter.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|newsletter.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|objects.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|objects.settings.heading max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "section|objects.settings.limit greater_than": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|objects.settings.limit less_than": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|objects.settings.typeId max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|objects.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|objects.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|objects.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|objects.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|objects.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|objects.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|product_grid.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|product_grid.settings.columns greater_than": {
+  "kind": "min",
+  "value": 2
+ },
+ "section|product_grid.settings.columns less_than": {
+  "kind": "max",
+  "value": 6
+ },
+ "section|product_grid.settings.rows greater_than": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|product_grid.settings.rows less_than": {
+  "kind": "max",
+  "value": 6
+ },
+ "section|product_grid.settings.source|category.categoryId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|product_grid.settings.source|category.categoryId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|product_grid.settings.source|collection.collectionId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|product_grid.settings.source|collection.collectionId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|product_grid.settings.title max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|product_grid.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|product_grid.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|product_grid.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|product_grid.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|product_grid.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|product_grid.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|product_rail.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|product_rail.settings.limit greater_than": {
+  "kind": "min",
+  "value": 4
+ },
+ "section|product_rail.settings.limit less_than": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|product_rail.settings.source|category.categoryId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|product_rail.settings.source|category.categoryId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|product_rail.settings.source|collection.collectionId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|product_rail.settings.source|collection.collectionId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|product_rail.settings.title max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|product_rail.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|product_rail.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|product_rail.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|product_rail.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|product_rail.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|product_rail.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|product_tabs.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|product_tabs.settings.limit greater_than": {
+  "kind": "min",
+  "value": 4
+ },
+ "section|product_tabs.settings.limit less_than": {
+  "kind": "max",
+  "value": 12
+ },
+ "section|product_tabs.settings.tabs max_length": {
+  "kind": "max",
+  "value": 4
+ },
+ "section|product_tabs.settings.tabs min_length": {
+  "kind": "min",
+  "value": 2
+ },
+ "section|product_tabs.settings.tabs[].bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|product_tabs.settings.tabs[].label max_length": {
+  "kind": "max",
+  "value": 40
+ },
+ "section|product_tabs.settings.tabs[].source|category.categoryId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|product_tabs.settings.tabs[].source|category.categoryId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|product_tabs.settings.tabs[].source|collection.collectionId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|product_tabs.settings.tabs[].source|collection.collectionId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|product_tabs.settings.title max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|product_tabs.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|product_tabs.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|product_tabs.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|product_tabs.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|product_tabs.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|product_tabs.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|recently_viewed.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|recently_viewed.settings.title max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|recently_viewed.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|recently_viewed.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|recently_viewed.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|recently_viewed.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|recently_viewed.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|recently_viewed.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|seo_text.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|seo_text.settings.body max_length": {
+  "kind": "max",
+  "value": 8000
+ },
+ "section|seo_text.settings.heading max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "section|seo_text.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|seo_text.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|seo_text.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|seo_text.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|seo_text.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|seo_text.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|shop_by.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|shop_by.settings.cards max_length": {
+  "kind": "max",
+  "value": 8
+ },
+ "section|shop_by.settings.cards[].bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|shop_by.settings.cards[].href max_length": {
+  "kind": "max",
+  "value": 300
+ },
+ "section|shop_by.settings.cards[].mediaId max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|shop_by.settings.cards[].mediaId min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|shop_by.settings.cards[].subtitle max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "section|shop_by.settings.cards[].title max_length": {
+  "kind": "max",
+  "value": 60
+ },
+ "section|shop_by.settings.cards[].title min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|shop_by.settings.title max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|shop_by.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|shop_by.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|shop_by.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|shop_by.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|shop_by.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|shop_by.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|specifications.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|specifications.settings.heading max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "section|specifications.settings.objectField max_length": {
+  "kind": "max",
+  "value": 166
+ },
+ "section|specifications.settings.rows max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|specifications.settings.rows[].bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|specifications.settings.rows[].label max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|specifications.settings.rows[].value max_length": {
+  "kind": "max",
+  "value": 1000
+ },
+ "section|specifications.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|specifications.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|specifications.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|specifications.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|specifications.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|specifications.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|usp_strip.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|usp_strip.settings.source|custom.items max_length": {
+  "kind": "max",
+  "value": 4
+ },
+ "section|usp_strip.settings.source|custom.items min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|usp_strip.settings.source|custom.items[].bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|usp_strip.settings.source|custom.items[].detail max_length": {
+  "kind": "max",
+  "value": 80
+ },
+ "section|usp_strip.settings.source|custom.items[].title max_length": {
+  "kind": "max",
+  "value": 60
+ },
+ "section|usp_strip.settings.source|custom.items[].title min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|usp_strip.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|usp_strip.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|usp_strip.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|usp_strip.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|usp_strip.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|usp_strip.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|utility_cards.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|utility_cards.settings.cards max_length": {
+  "kind": "max",
+  "value": 4
+ },
+ "section|utility_cards.settings.cards[].bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|utility_cards.settings.cards[].href max_length": {
+  "kind": "max",
+  "value": 300
+ },
+ "section|utility_cards.settings.cards[].text max_length": {
+  "kind": "max",
+  "value": 120
+ },
+ "section|utility_cards.settings.cards[].title max_length": {
+  "kind": "max",
+  "value": 60
+ },
+ "section|utility_cards.settings.cards[].title min_length": {
+  "kind": "min",
+  "value": 1
+ },
+ "section|utility_cards.skin.bindings{key} max_length": {
+  "kind": "max",
+  "value": 160
+ },
+ "section|utility_cards.skin.values{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ },
+ "section|utility_cards.skin.values{}|3 max_length": {
+  "kind": "max",
+  "value": 50
+ },
+ "section|utility_cards.skin.values{}|3[] max_length": {
+  "kind": "max",
+  "value": 64
+ },
+ "section|utility_cards.skin.values{}|4 max_length": {
+  "kind": "max",
+  "value": 24
+ },
+ "section|utility_cards.skin.values{}|4[]{}|0 max_length": {
+  "kind": "max",
+  "value": 5000
+ }
+}

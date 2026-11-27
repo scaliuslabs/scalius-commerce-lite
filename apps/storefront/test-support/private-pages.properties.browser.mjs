@@ -399,13 +399,15 @@ const REGRESSIONS = {
   "a dark page under the dark colours": { request: { scheme: "system" }, privatePages: { tokens: { cart: { page: DARK } } } },
   "the store's own header under dark tokens": { privatePages: { tokens: { cart: { chrome: { background: "#111111", text: "#ffffff", muted: "#d4d4d4", link: "#c4b5fd" } } } } },
   "the store's own page, no theme, in every state": { states: "all", privatePages: {} },
-  // The theme's page paint (tokens.pagePaint) shows on private pages: behind the store's own page, and under tokens
-  // that paint no page surface, where the table checks every word along the gradient.
-  "the theme's page paint behind the store's own page": { request: { paint: PAINT }, privatePages: {} },
+  // The theme's page paint (tokens.pagePaint) shows on a private page the theme names: behind the store's own rows
+  // (named by an empty token set), and under tokens that paint no page surface, where the table checks every word
+  // along the gradient. A page the theme does not name draws the store's own page on the page colour.
+  "the theme's page paint, the cart not named": { request: { paint: PAINT }, privatePages: {} },
+  "the theme's page paint behind the store's own page": { request: { paint: PAINT }, privatePages: { tokens: { cart: {} } } },
   "the theme's page paint under a dark summary": { request: { paint: PAINT, scheme: "light" }, privatePages: { tokens: { cart: { summary: DARK, page: { text: "#000000" } } } } },
-  // A dark page paint (the dark colours' own stops): with no tokens the page is drawn in token mode, its default rows
-  // computed from the paint; with tokens, those that paint no page surface stand on it too.
-  "a dark page paint, no private tokens": { states: "all", request: { palette: "retail", scheme: "dark", paint: DARK_PAINT }, privatePages: {} },
+  // A dark page paint (the dark colours' own stops): with the cart named and no tokens the page is drawn in token
+  // mode, its default rows computed from the paint; with tokens, those that paint no page surface stand on it too.
+  "a dark page paint, no private tokens": { states: "all", request: { palette: "retail", scheme: "dark", paint: DARK_PAINT }, privatePages: { tokens: { cart: {} } } },
   "a dark page paint under dark tokens": { request: { palette: "retail", scheme: "dark", paint: DARK_PAINT }, privatePages: { tokens: { cart: { summary: DARK, lines: DARK } } } },
   // Review 5, S4: between a deploy and the maintenance compile the default look is served: it stands on the page colour,
   // never on the theme's page paint, which no table checked it on.

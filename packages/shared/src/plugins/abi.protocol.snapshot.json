@@ -19351,10 +19351,13 @@
  "errors": {
   "validation_error": {
    "status": 400,
-   "meaning": "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message). A path is into the operation's input; for an address it names the field within that address, and where the operation checks a normalised form of its input (products.create, orders.create), it is into that form.",
+   "meaning": "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message). A refusal with a machine-readable reason (a theme's, one of STOREFRONT_THEME_SAVE_REASONS) carries it as details.reason and on each issue it applies to. A path is into the operation's input; for an address it names the field within that address, and where the operation checks a normalised form of its input (products.create, orders.create), it is into that form.",
    "details": {
     "type": "object",
     "properties": {
+     "reason": {
+      "type": "string"
+     },
      "issues": {
       "type": "array",
       "maxItems": 20,
@@ -19375,6 +19378,9 @@
          }
         },
         "message": {
+         "type": "string"
+        },
+        "reason": {
          "type": "string"
         }
        },
