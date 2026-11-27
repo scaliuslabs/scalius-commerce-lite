@@ -59,8 +59,8 @@ export type CustomizationFieldType = (typeof CUSTOMIZATION_FIELD_TYPES)[number];
 export const LINE_INPUT_FIELD_TYPES = [...CUSTOMIZATION_FIELD_TYPES, "file"] as const;
 export type LineInputFieldType = (typeof LINE_INPUT_FIELD_TYPES)[number];
 
-export { LINE_INPUT_SURFACES, lineInputDrawnOn, type LineInputSurface } from "./line-input-surfaces";
-import type { LineInputSurface } from "./line-input-surfaces";
+export { LINE_INPUT_SURFACES, lineInputDrawnOn, isAppDrawnChoice, printedLineAnswers, type LineInputSurface } from "./line-input-surfaces";
+import { isAppDrawnChoice, type LineInputSurface } from "./line-input-surfaces";
 
 export const CUSTOMIZATION_LIMITS = {
   fields: 10,
@@ -137,6 +137,8 @@ interface CustomizationFieldBase {
    * answer to a choice that needs confirmation must carry it.
    */
   textRevision?: string;
+  /** A choice its app draws itself (`isAppDrawnChoice`): frozen on the answer (`ResolvedLineProperty.appDrawnChoice`). */
+  appDrawnChoice?: true;
 }
 
 export interface CustomizationTextField extends CustomizationFieldBase {
@@ -624,6 +626,7 @@ export function readOrderLineProperties(properties: string | readonly unknown[] 
       ...(details.length > 0 ? { details } : {}),
       ...(typeof entry.textRevision === "string" && LINE_PROPERTY_REVISION_PATTERN.test(entry.textRevision) ? { textRevision: entry.textRevision } : {}),
       ...(typeof entry.revision === "string" && LINE_PROPERTY_REVISION_PATTERN.test(entry.revision) ? { revision: entry.revision } : {}),
+      ...(entry.appDrawnChoice === true ? { appDrawnChoice: true as const } : {}),
       ...(isRecord(entry.confirmation) && typeof entry.confirmation.text === "string" ? { confirmation: { text: entry.confirmation.text } } : {}),
     });
   }
@@ -808,7 +811,7 @@ export function withAppLineInputs(
   for (const app of [...apps].sort((left, right) => (left.appId < right.appId ? -1 : left.appId > right.appId ? 1 : 0))) {
     for (const input of app.inputs) {
       if ((input.products || input.variants) && !shown(app.appId, input)) continue;
-      const base = { key: appScopedKey(app.appId, input.key), label: input.label, required: false, help: input.help ?? null, appId: app.appId, ...(input.textRevision ? { textRevision: input.textRevision } : {}) };
+      const base = { key: appScopedKey(app.appId, input.key), label: input.label, required: false, help: input.help ?? null, appId: app.appId, ...(input.textRevision ? { textRevision: input.textRevision } : {}), ...(isAppDrawnChoice(input) ? { appDrawnChoice: true as const } : {}) };
       if (input.type === "select") {
         fields.push({ ...base, type: "select", options: (input.options ?? []).map((option) => ({ value: option.value, label: option.label, priceMinor: 0, ...(option.confirm ? { confirm: option.confirm } : {}) })) });
       } else if (input.type === "checkbox") {
@@ -868,6 +871,12 @@ export interface ResolvedLineProperty {
   revision?: string;
   /** A choice that needs confirmation: the agreement the buyer accepted, as shown. */
   confirmation?: { text: string };
+  /**
+   * A choice its app draws itself (`surfaces: []`, a select or a checkbox): where the
+   * same app's add-on is on the line, that row states it and no surface prints this
+   * answer (`printedLineAnswers`).
+   */
+  appDrawnChoice?: true;
   /** An app add-on's detail lines (`cart.line_prices` `details`, text): what its summary row opens to. */
   details?: string[];
 }
@@ -1103,6 +1112,7 @@ export function resolveLineProperties(
       key: field.key, type: field.type, label: field.label, value, displayValue, priceMinor,
       ...(field.appId ? { appId: field.appId } : {}),
       ...(field.textRevision ? { textRevision: field.textRevision, ...(revision ? { revision } : {}) } : {}),
+      ...(field.appDrawnChoice ? { appDrawnChoice: true as const } : {}),
       ...(confirm ? { confirmation: { text: confirm.text } } : {}),
     });
     propertiesPriceMinor += priceMinor;

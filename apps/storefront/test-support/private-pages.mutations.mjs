@@ -9,6 +9,11 @@
 // `cases` are the named cases (REGRESSIONS) that must fail under it, and `expect`
 // the check that must fail: one of the problems the failing draws report must
 // match it (a mutation caught by some other failure is not caught).
+//
+// A rule of the store's stylesheet is undone by `css` instead (Tailwind reads the
+// stylesheet's imports from disk, past Vite's module hooks): the gallery draws it
+// after the store's sheets, and `undoes` names the source text it takes back,
+// which must be in its file exactly once, as a rewrite's must.
 
 import { readFileSync } from "node:fs";
 
@@ -25,13 +30,25 @@ const B1 = "review 4, B1: tokens only, a dark lines panel over the default arran
 const B2 = "review 4, B2: an app's warning and success badges under a dark line";
 const B3 = "review 4, B3: the sign-in dialog under dark dialog tokens";
 const B4 = "review 4, B4: tokens only, a dark details form in every state";
-const S6 = "review 4, S6: Place order's focus ring on a dark form";
 const S8 = "review 4, S8: a 40px wide-tracked title clamped to two lines";
 const KINDS = "review 4: every node kind under a dark summary and a dark line, in every state";
 const COLUMNS = "review 3: two 480px columns on a phone";
 const HEADER = "the store's own header under dark tokens";
 const DEPTH = "review 6, B3: the cart unfolded, progress first, at its largest lines";
 const PROTECTED = "the customer's cart, protected";
+// rc-gate-hygiene's cases (private-pages.properties.browser.mjs `HYGIENE_CASES`).
+const WORDS_APART = "Place order's words apart from its dock's";
+const SQUARE_ACTIONS = "a theme's square corners on the filled buttons, over the store's rounded button shape";
+const DIALOG_WORDS = "the theme's words in both confirmation dialogs";
+const EMPTY_LAZY = "an empty cart whose lazy file does not load";
+const YELLOW_ACTION = "a yellow action row beside Place order and Confirm in their own look";
+const EDGED_BESIDE = "an edged Place order beside an action row with no border";
+const DRAWER_BELOW = "the customer's offered cart in the drawer: a line's app block under the line";
+const SQUARE_PAYMENT = "a theme of square buttons on soft surfaces: the payment step in the customer's look";
+const SQUARE_CART = "a square theme: every button and field of the cart";
+const ANATOMY = "packages/shared/src/storefront-theme/private-anatomy.ts";
+const DIALOG = "apps/storefront/src/lib/cart/confirm-dialog.ts";
+const FOUNDATION = "apps/storefront/src/styles/theme-foundation.css";
 
 const CART = "apps/storefront/src/pages/cart.astro";
 const CART_ROOT = '    data-private="cart"\n  >\n';
@@ -184,12 +201,16 @@ export const MUTATIONS = {
     cases: [HEADER],
     expect: /is none of its row's colours \(chrome:/,
   },
-  "M9 every nested row leaves out what its parent has": {
-    why: "Place order inherits its dock's words' colour, but it is also a filled button whose row sets its own",
-    rewrites: [rewrite(TOKENS, 'const inherited = row.nested && (row.kind === "box" || row.kind === "text") && !row.key.startsWith("ui.") ? parent : null;', "const inherited = row.nested ? parent : null;")],
-    cases: [S6],
-    // Its words take the dock's colour, not its own row's: the walk sees it, and the pixels where that colour does not read.
-    expect: /"Place order" .*(?:reads [\d.]+:1|is none of its row's colours \(submit)/,
+  // M9 once left out, for every nested row, the cells its parent has (`inherited` for controls and fields too). A
+  // nested row's element sits inside its parent's (`nested`), so a cell equal to the parent's is the one it inherits:
+  // that mutation drew the same page and could not fail (it survived). The property it guarded, a control's palette
+  // classes reading its own row's cells and not the row around it, is guarded here on today's code. (Place order's
+  // words survive it: its row writes their colour itself; the stepper's edge, a palette class, does not.)
+  "M9 a nested control's cells left to the row around it": {
+    why: "a nested control's row writes no cells of its own: the stepper's border-border class reads its line's border colour, 1.3:1 on the line",
+    rewrites: [rewrite(TOKENS, "    ...CELL_PROPERTIES.map(([cell, property]) => row[cell] && (row[cell] !== inherited?.[cell] || also.has(property)) ? `${property}:${row[cell]}` : \"\"),", "    ...CELL_PROPERTIES.map(([cell, property]) => row[cell] && !(row.nested && row.kind === \"control\") && (row[cell] !== inherited?.[cell] || also.has(property)) ? `${property}:${row[cell]}` : \"\"),")],
+    cases: [WORDS_APART],
+    expect: /line-quantity: its border reads [\d.]+:1 on what is behind it|"Place order" .*(?:reads [\d.]+:1|is none of its row's colours \(submit)/,
   },
   "M10 a title's clamp on its heading": {
     why: "the line title's heading clips its link's focus ring",
@@ -232,7 +253,7 @@ export const MUTATIONS = {
   },
   "H1 token mode paints no hover": {
     why: "a hover surface paints nothing in token mode: a control the host gives a hover shows none under the pointer",
-    rewrites: [rewrite(TOKENS, '.map((name) => [name, ["background-color:var(--pt-h)", ":hover"]] as const),', '.map((name) => [name, ["background-color:transparent"]] as const),')],
+    rewrites: [rewrite(TOKENS, '"sm:hover:bg-muted/60"].map((name) => [name, ["background-color:var(--pt-h)", ":hover"]] as const),', '"sm:hover:bg-muted/60"].map((name) => [name, ["background-color:transparent"]] as const),')],
     cases: [B1],
     expect: /shows no hover/,
   },
@@ -280,7 +301,7 @@ export const MUTATIONS = {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",
     // With the layout's guard too (review 5, S4), which draws no paint on a cart not in token mode.
     rewrites: [
-      rewrite("packages/shared/src/storefront-theme/private-layout.ts", "painted && privatePageHasOwnPage(page) ? {} : null", "null"),
+      rewrite("packages/shared/src/storefront-theme/private-layout.ts", "painted && privatePageHasOwnPage(page) && privatePageNamed({ pages, tokens: value.tokens }, page) ? {} : null", "null"),
       rewrite("apps/storefront/src/layouts/Layout.astro", "themePaint(privateStyle !== undefined && !privateTokens ? { ...storefrontTheme, tokens: unpaintedTokens } : storefrontTheme, resolvedTheme)", "themePaint(storefrontTheme, resolvedTheme)"),
     ],
     cases: ["a dark page paint, no private tokens"],
@@ -392,6 +413,89 @@ export const MUTATIONS = {
     rewrites: [rewrite("apps/storefront/src/components/account/AccountShell.astro", 'data-part="sign-out"', 'data-part="sign-out" hidden')],
     cases: ["the account in the customer's look"],
     expect: /^account: \[data-part="sign-out"\]: not visible/,
+  },
+  // ─── Drawn as the theme wrote it (rc-gate-hygiene): each of this release's fixes, undone ───
+  "H-a shape tokens at zero specificity": {
+    why: "a private page's shape tokens drop token mode's prefix: the store's button corners (one class) outrank a theme's radius 0 on Place order and Confirm",
+    rewrites: [rewrite(TOKENS, ".map((suffix) => `${PRIVATE_TOKEN_MODE} :where(${selector})${suffix}`).join(\",\");", ".map((suffix) => `:where(${selector})${suffix}`).join(\",\");")],
+    cases: [SQUARE_ACTIONS],
+    expect: /drawn as written: .*corners where its target (?:submit|dialog-confirm|action) says 0px/,
+  },
+  "H-b Place order's dialog in the store's words": {
+    why: "the theme's dialog.confirm and dialog.goBack word the line's dialog only (as before the fix): Place order's decision dialog says Go back and Confirm",
+    rewrites: [
+      rewrite(DIALOG, '  back.textContent = themeLabel(doc, "dialog.goBack") ?? words.goBack;', "  back.textContent = words.goBack;"),
+      rewrite(DIALOG, '  confirm.textContent = themeLabel(doc, "dialog.confirm") ?? words.confirm;', "  confirm.textContent = words.confirm;"),
+      rewrite(DIALOG, "    goBack: copy.goBack,\n    confirm: copy.confirm,\n", '    goBack: themeLabel(document, "dialog.goBack") ?? copy.goBack,\n    confirm: themeLabel(document, "dialog.confirm") ?? copy.confirm,\n'),
+    ],
+    cases: [DIALOG_WORDS],
+    expect: /^confirm from Place order: (?:Go back|Confirm) reads "[^"]*", not the theme's/,
+  },
+  "H-c an empty cart's words left to its lazy file": {
+    why: "the empty cart's heading is drawn without its words, which only the lazy file (refused here) would write, as before the fix",
+    rewrites: [rewrite(CART, '<h2 class="mt-2 text-lg font-medium text-foreground">{copy.emptyCartText}</h2>', '<h2 class="mt-2 text-lg font-medium text-foreground"></h2>')],
+    cases: [EMPTY_LAZY],
+    expect: /\[data-part="cart-empty"\] h2: (?:not visible|missing)/,
+  },
+  "H-d the action row reaches the filled actions": {
+    why: "the cart's action row (every .bg-primary) no longer leaves out Place order and Confirm: its yellow gradient paints over their own rows' fill",
+    rewrites: [rewrite(ANATOMY, '  styles: actionApart("cart", CART_STYLES),', "  styles: CART_STYLES,")],
+    cases: [YELLOW_ACTION],
+    expect: /paints an image its row \((?:submit|dialog-confirm)\) does not|(?:Place order|Confirm): its fill reads [\d.]+:1|"(?:Place order|Confirm)[^"]*" .*is none of its row's colours \((?:submit|dialog-confirm)/,
+  },
+  // With the action row kept apart nothing a theme writes reaches a filled action's border style, so the solid edge's
+  // prefix guards in depth: undone alone it draws the same page. Undone with the action row reaching Place order (H-d),
+  // the action row's `border-style: none` takes the edge the save passed it by.
+  "H-e an edge's solid style at zero specificity, the action row reaching it": {
+    why: "an edged Place order's border-style:solid is written at zero specificity and the action row reaches it: its border-style:none takes the edge",
+    rewrites: [
+      rewrite(TOKENS, 'declare(false, `${PRIVATE_TOKEN_MODE} :where(${selector})`, "border-style:solid");', 'declare(false, `:where(${selector})`, "border-style:solid");'),
+      rewrite(ANATOMY, '  styles: actionApart("cart", CART_STYLES),', "  styles: CART_STYLES,"),
+    ],
+    cases: [EDGED_BESIDE],
+    expect: /Place order: .*edge is no solid 2px border/,
+  },
+  "H-f the drawer's line keeps its app block in its text column": {
+    why: "the drawer's own line draws a line's app block beside the image, while the customer's cart page draws it under the whole line",
+    rewrites: [rewrite("apps/storefront/src/lib/private-pages/drawer.ts", "  const lineTarget = line ? null : lineTargetPlace(cartLine);", "  const lineTarget = null;")],
+    cases: [DRAWER_BELOW],
+    expect: /a line's app block is drawn at .*the cart page puts it under the line/,
+  },
+  "H-g the host's other action buttons keep their surface radius": {
+    why: "an outline action button (the payment step's Apply, data-control=\"action\") draws the theme's surface radius, not its square button corners",
+    rewrites: [],
+    css: ':where([data-control="action"], [data-ui="button"]):where(.rounded-sm, .rounded-md, .rounded-lg, .rounded-xl) { border-radius: revert-layer }',
+    undoes: { file: FOUNDATION, find: ':where([data-control="action"], [data-ui="button"]):where(.rounded-lg):where(:not([data-part="gateway"] *)) {' },
+    cases: [SQUARE_PAYMENT],
+    expect: /corners where the theme's buttons are square/,
+  },
+  "H-h the radius steps add a pixel to a square theme": {
+    why: "rounded-lg and rounded-xl draw the theme's radius plus 1px and 2px: a square theme's fields draw rounded corners",
+    rewrites: [],
+    // The steps are `@theme inline`: the utilities carry their values, so the old ones are written on the utilities, in
+    // their own cascade layer (an unlayered rule would also beat the buttons' own corners, more than this undoes).
+    css: "@layer utilities{.rounded-lg{border-radius:calc(var(--radius) + 1px)}.rounded-xl{border-radius:calc(var(--radius) + 2px)}}",
+    undoes: { file: FOUNDATION, find: "  --radius-lg: calc(var(--radius) + min(1px, var(--radius) * 1000));" },
+    cases: [SQUARE_CART],
+    expect: /corners where the theme's fields are square/,
+  },
+  "H-j a line reads its details before its title": {
+    why: "the cart's line keeps a theme's arrangement order in its markup: the options drawn over the title are read (and tabbed to) before it",
+    rewrites: [rewrite("apps/storefront/src/lib/cart/line-reading-order.ts", "  if (at <= 0 || nodes.slice(0, at).every(decorative) || nodes.length > LINE_ORDER_CLASSES.length) return children;", "  return children;")],
+    cases: ["the customer's cart, its protection offered"],
+    expect: /reading order: a line reads \S+ before its title/,
+  },
+  "H-k the drawer's footer never yields to its lines": {
+    why: "the drawer's bottom group keeps its money rows, the apps' footer blocks and View cart however little room they leave the lines",
+    rewrites: [rewrite("apps/storefront/src/components/CartFlyout.tsx", "const LINES_SHARE = 0.45;", "const LINES_SHARE = 0;")],
+    cases: ["five lines in the drawer on a phone", "five lines in a theme's arranged drawer on a phone"],
+    expect: /drawer lines: .*whole line|Check out is not wholly on screen/,
+  },
+  "H-i the dialog's actions stack with Confirm on top": {
+    why: "Confirm comes first in the dialog's markup: where its large Confirm and Go back do not fit side by side, Confirm stacks on top, away from the thumb",
+    rewrites: [rewrite(DIALOG, "  actions.append(back, confirm);", "  actions.append(confirm, back);")],
+    cases: [DIALOG_WORDS],
+    expect: /the actions stack with Confirm on top/,
   },
   // Round three: the after-order draws' forced states.
   "after-order: the account's tabs ring outside the strip": {
@@ -512,7 +616,7 @@ export function galleryMutation(name) {
       return code;
     },
   };
-  return { name, plugin, applied, missed, files: [...new Set(mutation.rewrites.map((each) => each.file))], compile: mutation.compile };
+  return { name, plugin, applied, missed, files: [...new Set(mutation.rewrites.map((each) => each.file))], compile: mutation.compile, css: mutation.css };
 }
 
 /** Each mutation names the check it must fail, and each rewrite's text is in its file exactly once (checked without a browser). */
@@ -520,7 +624,8 @@ export async function mutationsHold(read) {
   const problems = [];
   for (const [name, mutation] of Object.entries(MUTATIONS)) {
     if (!(mutation.expect instanceof RegExp)) problems.push(`${name}: names no check that must fail (expect)`);
-    for (const { file, find } of mutation.rewrites) {
+    if (mutation.css && !mutation.undoes) problems.push(`${name}: undoes a stylesheet rule without naming its source text (undoes)`);
+    for (const { file, find } of [...mutation.rewrites, ...(mutation.undoes ? [mutation.undoes] : [])]) {
       const source = await read(file);
       const at = source.indexOf(find);
       if (at < 0 || source.indexOf(find, at + find.length) >= 0) problems.push(`${name}: ${file} does not hold its text exactly once`);

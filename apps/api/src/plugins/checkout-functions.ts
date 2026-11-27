@@ -17,6 +17,7 @@
 // itself never fails. Buyer UI (receipts, account pages), order placement (its
 // own IP and phone limits), staff work and declaration reads are never paced.
 
+import { detachedExecutionContext } from "../utils/execution-context";
 import type { Database } from "@scalius/database/client";
 import {
   orderFunctionRegistrations,
@@ -143,7 +144,7 @@ function isResolved(value: readonly ActiveFunctionRegistrationRow[] | readonly R
 
 /** A context for plugin work outside a Worker invocation (tests, scripts). */
 function contextOf(ctx: ExecutionContext | undefined): ExecutionContext {
-  return ctx ?? ({ waitUntil: () => undefined, passThroughOnException: () => undefined, props: {}, exports: {} } as unknown as ExecutionContext);
+  return ctx ?? detachedExecutionContext();
 }
 
 /**

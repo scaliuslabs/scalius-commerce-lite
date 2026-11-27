@@ -114,6 +114,7 @@ export const orderLinePropertySchema = z.object({
   revision: z.string().optional().openapi({ description: "The revision of the words the buyer answered (absent: none named)." }),
   /** A choice that needs confirmation: the agreement the buyer accepted, as shown. */
   confirmation: z.object({ text: z.string() }).optional(),
+  appDrawnChoice: z.literal(true).optional().openapi({ description: "A choice its app draws itself (an input with `surfaces: []`, a select or a checkbox). Where the row also holds an add-on of the same app, that add-on states it: a buyer surface prints the add-on, not this answer." }),
   /** An app add-on's (`_adjustment`) detail lines, text the app wrote; absent: none. */
   details: addOnDetailsSchema.optional(),
 }).openapi("OrderLineProperty");

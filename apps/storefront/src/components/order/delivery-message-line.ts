@@ -42,6 +42,6 @@ export function deliveryMessageLineMarkup(line: OrderLine, context: LineExtrasCo
       <p class="text-sm font-medium text-foreground">${escapeHtml(copy.messageHeading)}</p>
       <p class="text-sm text-muted-foreground">${escapeHtml(facts)}</p>
     </div>
-    <form method="post" action="/account/delivery-message">${hidden}<button type="submit" class="${BUTTON}" data-part="delivery-reveal">${escapeHtml(copy.showMessage)}<span class="sr-only"> (${escapeHtml(line.productName ?? copy.productFallback)})</span></button></form>
+    <form method="post" action="/account/delivery-message">${hidden}<button type="submit" class="${BUTTON}" data-control="action" data-part="delivery-reveal">${escapeHtml(copy.showMessage)}<span class="sr-only"> (${escapeHtml(line.productName ?? copy.productFallback)})</span></button></form>
   </div>`;
 }

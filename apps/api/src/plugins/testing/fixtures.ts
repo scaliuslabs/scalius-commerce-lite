@@ -1,5 +1,6 @@
 // Test fixtures for the plugin host: an env and context for the in-process
 // runtime app, and the reference plugin installed, configured and active.
+import { settleTestBackground, trackBackground } from "../../../../../scripts/test-background.mjs";
 import type { DatabaseSync } from "node:sqlite";
 import { vi } from "vitest";
 import type { Database } from "@scalius/database/client";
@@ -29,22 +30,18 @@ export function pluginTestEnv(binding: D1Database, overrides: Record<string, unk
   } as unknown as Env;
 }
 
-const backgroundWork: Promise<unknown>[] = [];
-
-/** A request context whose after-response work `settleBackground()` awaits. */
+/** A request context whose after-response work is tracked (scripts/test-background.mjs) and `settleBackground()` awaits. */
 export function pluginTestCtx(): ExecutionContext {
   return {
-    waitUntil: vi.fn((promise: Promise<unknown>) => { backgroundWork.push(promise); }),
+    waitUntil: vi.fn((promise: Promise<unknown>) => { trackBackground(promise); }),
     passThroughOnException: vi.fn(),
     props: {},
     exports: {},
   } as unknown as ExecutionContext;
 }
 
-/** Awaits every task the test contexts handed to `waitUntil`, including tasks those tasks start. */
-export async function settleBackground(): Promise<void> {
-  while (backgroundWork.length > 0) await Promise.allSettled(backgroundWork.splice(0));
-}
+/** Awaits every task the test contexts handed to `waitUntil`, including tasks those tasks start; throws the first that failed. */
+export const settleBackground = settleTestBackground;
 
 /**
  * Loads, before a timed app run, the code the run's stable API calls reach:

@@ -13,6 +13,7 @@ import { pluginHasStorefrontModule, type StorefrontExtension, type StorefrontSki
 import { purchaseOptionId } from "@scalius/shared/plugins/ids";
 import { PIXEL_EVENT_NAMES, type StorefrontAppPixel } from "@scalius/shared/plugins/buyer-events";
 import { grantedProtectedData } from "@scalius/shared/plugins/protected-data";
+import { STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "@scalius/shared/plugins/storefront-protocol";
 import { pluginPublicSettingValues, resolvePluginSettingValues } from "@scalius/shared/plugins/settings-schema";
 import type { AppLineInputs } from "@scalius/shared/line-properties";
 import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
@@ -100,6 +101,20 @@ export function activePluginLineInputs(installations: Iterable<PluginInstallatio
     if (readByCheckout && inputs.length > 0) apps.push({ appId: pluginId, inputs });
   }
   return apps;
+}
+
+/**
+ * The buyer UI slots (`STOREFRONT_UI_SLOTS`) where an active app draws a block: it declares an extension for the
+ * slot (`storefront.extensions`) and its approved grant covers it. A page reserves room or waits for a slot's block
+ * only where one may come.
+ */
+export function activePluginBuyerUiSlots(installations: Iterable<PluginInstallation>): StorefrontUiSlot[] {
+  const slots = new Set<StorefrontUiSlot>();
+  for (const { manifest, grant } of installations) {
+    const granted = new Set(grant?.extensions ?? []);
+    for (const extension of manifest.storefront.extensions) if (granted.has(extension.target)) slots.add(extension.target as StorefrontUiSlot);
+  }
+  return STOREFRONT_UI_SLOTS.filter((slot) => slots.has(slot));
 }
 
 /** The pages a storefront script may load on (`storefront.scripts[].pages`). */

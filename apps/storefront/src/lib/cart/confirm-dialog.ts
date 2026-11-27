@@ -99,17 +99,21 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
     items.append(heading, list);
   }
   const actions = doc.createElement("div");
+  // Go back, then Confirm, in the markup and on screen: side by side where both fit, stacked where they do not, each
+  // across the dialog on a phone with Confirm at the bottom, nearest the thumb. No reordering: Tab reads what is drawn.
+  // Their words wrap, never cut. Focus still starts on the tick box, else Go back.
   actions.className = "flex flex-wrap justify-end gap-2";
   actions.dataset.part = "dialog-actions";
   const back = doc.createElement("button");
   back.type = "button";
-  back.className = "min-h-11 rounded-md border border-border px-4 text-sm font-medium text-foreground hover:bg-muted";
+  back.className = "min-h-11 rounded-md border border-border px-4 py-2 text-center text-sm font-medium text-foreground hover:bg-muted max-sm:grow";
   back.textContent = themeLabel(doc, "dialog.goBack") ?? words.goBack;
   back.dataset.part = "dialog-back";
+  back.dataset.control = "action";
   const confirm = doc.createElement("button");
   confirm.type = "submit";
   confirm.disabled = box !== null;
-  confirm.className = "min-h-11 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50";
+  confirm.className = "min-h-11 rounded-md bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50 max-sm:grow";
   confirm.textContent = themeLabel(doc, "dialog.confirm") ?? words.confirm;
   confirm.dataset.part = "dialog-confirm";
   actions.append(back, confirm);
