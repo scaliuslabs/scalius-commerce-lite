@@ -6773,7 +6773,57 @@
                 }
               },
               "refused": {
-                "type": "boolean"
+                "type": "object",
+                "properties": {
+                  "cart": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/StorefrontPrivatePageRefusal"
+                    },
+                    "minItems": 1,
+                    "maxItems": 8
+                  },
+                  "cartDrawer": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/StorefrontPrivatePageRefusal"
+                    },
+                    "minItems": 1,
+                    "maxItems": 8
+                  },
+                  "checkout": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/StorefrontPrivatePageRefusal"
+                    },
+                    "minItems": 1,
+                    "maxItems": 8
+                  },
+                  "receipt": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/StorefrontPrivatePageRefusal"
+                    },
+                    "minItems": 1,
+                    "maxItems": 8
+                  },
+                  "account": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/StorefrontPrivatePageRefusal"
+                    },
+                    "minItems": 1,
+                    "maxItems": 8
+                  }
+                }
+              },
+              "policy": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "digest": {
+                "type": "string",
+                "pattern": "^[a-z0-9]{1,32}$"
               }
             },
             "required": [
@@ -6944,6 +6994,29 @@
         "required": [
           "app",
           "file"
+        ],
+        "additionalProperties": false
+      },
+      "StorefrontPrivatePageRefusal": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 240
+          },
+          "reason": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,47}$"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 600
+          }
+        },
+        "required": [
+          "path",
+          "reason",
+          "message"
         ],
         "additionalProperties": false
       },
@@ -208908,11 +208981,39 @@
                             "revision": {
                               "type": "integer",
                               "minimum": 0
+                            },
+                            "unreadable": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 500
+                            },
+                            "repairs": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "path": {
+                                    "type": "string",
+                                    "maxLength": 240
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "maxLength": 48
+                                  }
+                                },
+                                "required": [
+                                  "path",
+                                  "reason"
+                                ]
+                              },
+                              "maxItems": 50
                             }
                           },
                           "required": [
                             "theme",
-                            "revision"
+                            "revision",
+                            "unreadable",
+                            "repairs"
                           ]
                         },
                         "draft": {

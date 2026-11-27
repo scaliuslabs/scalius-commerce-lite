@@ -22,6 +22,7 @@ export * from "./storefront-theme/skins";
 export * from "./storefront-theme/home-data";
 export * from "./storefront-theme/document";
 export * from "./storefront-theme/upgrade";
+export * from "./storefront-theme/read-repair";
 export * from "./storefront-theme/text";
 export * from "./storefront-theme/translate";
 export * from "./storefront-theme/save";

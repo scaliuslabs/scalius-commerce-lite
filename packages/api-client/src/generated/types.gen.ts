@@ -1420,7 +1420,15 @@ export type StorefrontPrivatePages = {
             receipt?: string;
             account?: string;
         };
-        refused?: boolean;
+        refused?: {
+            cart?: Array<StorefrontPrivatePageRefusal>;
+            cartDrawer?: Array<StorefrontPrivatePageRefusal>;
+            checkout?: Array<StorefrontPrivatePageRefusal>;
+            receipt?: Array<StorefrontPrivatePageRefusal>;
+            account?: Array<StorefrontPrivatePageRefusal>;
+        };
+        policy?: number;
+        digest?: string;
     };
 };
 
@@ -1456,6 +1464,12 @@ export type StorefrontPrivateWords = {
 export type StorefrontPrivateAsset = {
     app: string;
     file: string;
+};
+
+export type StorefrontPrivatePageRefusal = {
+    path: string;
+    reason: string;
+    message: string;
 };
 
 export type StorefrontBrandImage = {
@@ -59491,6 +59505,11 @@ export type GetApiV1AdminSettingsThemeEditorResponses = {
             published: {
                 theme: StorefrontThemeDocument;
                 revision: number;
+                unreadable: string | null;
+                repairs: Array<{
+                    path: string;
+                    reason: string;
+                }>;
             };
             draft: {
                 revision: number;
