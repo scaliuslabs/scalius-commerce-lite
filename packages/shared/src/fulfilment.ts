@@ -80,10 +80,17 @@ export function allowsCashOnDelivery(lineTypes: readonly (FulfillmentType | null
  * for that payment: automatic fulfilment hands it over only on a settled
  * payment, an invoice's included. The one answer for checkout, the cart
  * check, the staff quote and the storefront (`cashPayable` is its SKU side).
+ * An unknown kind fails closed: only a known non-cash kind pays where cash
+ * doesn't fit.
  */
 export function paymentMethodFits(kind: string | null | undefined, cashFits: boolean): boolean {
-  return kind !== "cash_on_delivery" || cashFits;
+  // Fails closed: a kind no surface knows (null, a typo) is treated as cash.
+  if (cashFits) return true;
+  return typeof kind === "string" && (NON_CASH_PAYMENT_KINDS as readonly string[]).includes(kind);
 }
+
+/** The payment kinds that are not cash at hand-over (`ORDER_PAYMENT_KINDS` less `cash_on_delivery`). */
+export const NON_CASH_PAYMENT_KINDS = ["invoice", "paid_to_store", "gift_card", "online"] as const;
 
 /**
  * Whether cash may pay for a SKU: not for a download, a key or a gift card,
