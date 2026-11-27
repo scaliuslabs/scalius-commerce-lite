@@ -580,8 +580,8 @@ export function renderDownloadLines(lines: readonly BuyerDigitalLine[], options:
       `<a href="${escapeHtml(orderHref)}" data-astro-prefetch="false" class="font-medium text-primary hover:underline">${escapeHtml(fillCopy(downloadCopy().order, { number: pageOrderNumber(line.orderNumber, line.orderId) }))}</a>`,
       delivered ? escapeHtml(fillCopy(downloadCopy().deliveredOn, { date: delivered })) : "",
     ].filter(Boolean).join(" · ");
-    return `<li class="rounded-xl border border-border bg-card p-5">
-      <h2 class="break-words text-base font-semibold text-foreground">${escapeHtml(line.productName ?? downloadCopy().productFallback)}</h2>
+    return `<li data-part="card" class="rounded-xl border border-border bg-card p-5">
+      <h2 data-part="card-title" class="break-words text-base font-semibold text-foreground">${escapeHtml(line.productName ?? downloadCopy().productFallback)}</h2>
       ${line.variantLabel ? `<p class="text-sm text-muted-foreground">${escapeHtml(line.variantLabel)}</p>` : ""}
       <p class="mt-1 text-sm text-muted-foreground">${meta}</p>
       <div class="mt-4 space-y-4">${digitalDeliveryListsMarkup(line.files, line.licenceKeys, context)}</div>

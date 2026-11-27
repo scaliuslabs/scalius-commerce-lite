@@ -8,7 +8,7 @@ import ReceiptCards from "@/components/order/ReceiptCards.astro";
 import ReceiptStatusHeader from "@/components/order/ReceiptStatusHeader.astro";
 import { orderReceiptView } from "@/lib/order-receipt-view";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
-import { privatePageLook } from "@/lib/private-pages/look";
+import { privateRouteLook } from "@/lib/private-pages/look";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
@@ -218,7 +218,7 @@ const receiptCurrencyCode = receiptView?.receiptCurrencyCode ?? configuredCurren
 const receiptTheme = await resolveRequestTheme(Astro, layoutData);
 const receiptBlock = receiptTheme.resolved.blocks.receipt;
 // The theme's look for the receipt (its compiled token rules), in token mode only: else the page is drawn as without a theme.
-const receiptLook = privatePageLook(receiptTheme.theme, "receipt");
+const receiptLook = privateRouteLook(Astro, receiptTheme.theme);
 const shouldClearCheckoutCart = order ? shouldClearCheckoutCartForOrder(order) : false;
 const showsPositiveOrderState = orderSuccessView?.kind === "order_placed"
   || orderSuccessView?.kind === "order_updated";
@@ -395,6 +395,7 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
                       provider: option.presentation.buyerLabel,
                     })}
                 data-payment-retry-button
+                data-part="status-retry"
                 data-endpoint={option.endpoint}
                 data-gateway={option.gateway}
                 data-provider-name={isAppGatewayId(option.gateway) ? option.presentation.buyerLabel : undefined}
@@ -445,6 +446,7 @@ if (stripeRetryPublishableKey) markPaymentPage(Astro.locals);
               <button
                 id="payButton"
                 type="button"
+                data-part="pay"
                 class="mt-4 w-full rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
                 disabled
               >

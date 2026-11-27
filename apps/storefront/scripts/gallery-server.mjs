@@ -335,6 +335,11 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const theme = { ...base, tokens, ...(body.tabs === true ? { blocks: { ...base.blocks, mobileNav: { variant: "bottom-tabs", settings: { tabs: [{ kind: "home" }, { kind: "categories" }, { kind: "offers" }, { kind: "account" }], drawer: "accordion" } } } } : {}) };
         // Saved as the store saves it (site-settings.service.ts): read by the document's schema (a refusal naming its
         // reason, as `not_available`, answers it), then compiled.
+        // `nearFloor`: the account's look generated just above every floor against this palette (src/gallery/near-floor.ts).
+        if (body.nearFloor === true) {
+          const { nearFloorAccountTokens } = await vite.ssrLoadModule("/src/gallery/near-floor.ts");
+          body.privatePages = { tokens: { account: nearFloorAccountTokens({ ...shared.privatePagesContextOf(theme), themeApp: null }) } };
+        }
         const parsed = shared.storefrontPrivatePagesSchema.safeParse({ ...shared.storefrontPrivatePagesDefault(), ...structuredClone(body.privatePages ?? reference?.REFERENCE_PRIVATE_PAGES ?? {}) });
         if (!parsed.success) {
           const named = parsed.error.issues.find((issue) => typeof issue.params?.reason === "string") ?? parsed.error.issues[0];
@@ -360,7 +365,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         // The receipt and the account (`page: "sample-receipt" | "sample-account"`): the theme editor's sample pages, drawn
         // through the same components as the buyer's receipt and account, with the entry's theme as the draft. The payment
         // step: the editor's sample checkout, drawn as buyers get it.
-        const drawnPage = { "sample-receipt": "receipt", "sample-account": "account", "sample-checkout": "checkout" }[body.page] ?? "cart";
+        // The account's own pages (`account-thread`, `account-profile`, …, `warranty-claim`): drawn as a signed-in buyer gets them.
+        const drawnPage = { "sample-receipt": "receipt", "sample-account": "account", "sample-checkout": "checkout" }[body.page] ?? (/^account-|^warranty-claim$/.test(String(body.page)) ? "account" : "cart");
         const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, terms: body.terms === true, ...(body.page === "home" || drawnPage !== "cart" ? { page: body.page } : {}) });
         const tables = shared.privatePageTokenMode(served.privatePages, drawnPage) ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served), drawnPage) : [];
         return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: Boolean(served.privatePages.compiled.refused?.[drawnPage]) || (shared.privatePagesCompiledCurrent(compiled.value) && !shared.privatePagesCompiledCurrent(served.privatePages)) });
@@ -404,7 +410,9 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const rendered = await currentEntry.run(plan.entry, () =>
           runtimeModule.requestRuntime.run(plan.runtime, () =>
             container.renderToResponse(pageModule.default, {
-              request: new Request(plan.url, { headers: plan.headers }),
+              request: plan.body === null
+                ? new Request(plan.url, { headers: plan.headers })
+                : new Request(plan.url, { method: "POST", body: plan.body, headers: { ...plan.headers, "content-type": "application/x-www-form-urlencoded" } }),
               params: plan.params,
               locals: {},
             }),

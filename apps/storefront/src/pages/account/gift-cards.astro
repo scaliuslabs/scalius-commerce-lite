@@ -5,6 +5,8 @@
 // saved code is never echoed and a revealed code is rendered in this no-store
 // response only (never a URL, never storage). Session: the cs_tok cookie.
 import Layout from "@/layouts/Layout.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { privateRouteLook } from "@/lib/private-pages/look";
 import AccountShell from "@/components/account/AccountShell.astro";
 import { getLayoutData } from "@/lib/api";
 import {
@@ -71,6 +73,8 @@ const [layoutData, cards, summary] = await Promise.all([
   listAccountGiftCards(Astro.request),
   readAccountSummaryForRequest(Astro.request),
 ]);
+// The account's look (`PRIVATE_PAGE_ROUTES`), only where the theme set it: else the page draws as without a theme.
+const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutData)).theme);
 const signedOut = !cards.ok && cards.reason === "signed_out";
 if (!cards.ok && !signedOut) Astro.response.status = 503;
 else if (actionResult && !actionResult.ok) Astro.response.status = giftCardPageStatus(actionResult);
@@ -84,7 +88,7 @@ const field =
 const secondaryButton = `${ui.secondaryButton} shrink-0`;
 ---
 
-<Layout title={copy.accountTitle} layoutData={layoutData}>
+<Layout title={copy.accountTitle} layoutData={layoutData} {...look}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <AccountShell
     current="gift-cards"
@@ -109,7 +113,7 @@ const secondaryButton = `${ui.secondaryButton} shrink-0`;
               const cardRevealError = revealError?.giftCardId === card.id ? revealError.text : null;
               const headingId = `gift-card-${card.id}`;
               return (
-                <li class={`${ui.card} ${ui.cardBody}`}>
+                <li data-part="card" class={`${ui.card} ${ui.cardBody}`}>
                   <article aria-labelledby={headingId}>
                     <div class="flex flex-wrap items-start justify-between gap-3">
                       <div class="min-w-0">
@@ -118,7 +122,7 @@ const secondaryButton = `${ui.secondaryButton} shrink-0`;
                       </div>
                       <div class="text-end">
                         <p class="text-lg font-semibold tabular-nums text-foreground">{giftCardMoney(card.balance, card.currencyCode)}</p>
-                        <span class:list={["mt-1 inline-block rounded-md px-2 py-0.5 text-sm font-medium", giftCardStatusTone(status)]}>{giftCardStatusText(status)}</span>
+                        <span data-part="status-badge" class:list={["mt-1 inline-block rounded-md px-2 py-0.5 text-sm font-medium", giftCardStatusTone(status)]}>{giftCardStatusText(status)}</span>
                       </div>
                     </div>
 
@@ -169,8 +173,8 @@ const secondaryButton = `${ui.secondaryButton} shrink-0`;
           </ul>
         )}
 
-        <section class={`${ui.card} ${ui.cardBody}`} aria-labelledby="giftCardSaveHeading">
-          <h2 id="giftCardSaveHeading" class="text-base font-semibold text-foreground">{copy.saveTitle}</h2>
+        <section data-part="card" class={`${ui.card} ${ui.cardBody}`} aria-labelledby="giftCardSaveHeading">
+          <h2 id="giftCardSaveHeading" data-part="card-title" class="text-base font-semibold text-foreground">{copy.saveTitle}</h2>
           <p class="mt-1 text-sm text-muted-foreground">{copy.saveIntro}</p>
           <form method="post" action="/account/gift-cards" class="mt-4 flex flex-col gap-2 sm:flex-row">
             <input type="hidden" name="intent" value="save" />
