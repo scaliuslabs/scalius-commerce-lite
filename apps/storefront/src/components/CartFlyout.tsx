@@ -807,7 +807,7 @@ export default function CartFlyout({ onReady }: Props) {
         </div>
       ),
       quantity: (
-        <div className="flex h-11 items-center overflow-hidden rounded-md bg-muted/50 ring-1 ring-inset ring-input sm:h-8" data-part="line-quantity">
+        <div className="flex h-11 items-center justify-center overflow-hidden rounded-md bg-muted/50 ring-1 ring-inset ring-input sm:h-8" data-part="line-quantity">
           <button
             aria-label={copy.decrease(view.lineName)}
             aria-describedby={describedBy}
@@ -858,39 +858,45 @@ export default function CartFlyout({ onReady }: Props) {
         </div>
       );
     }
+    // The apps' block sits where the cart page's line puts it (`plan.lineTarget`): in the text column, or under the
+    // whole line at its full width, from the image's edge.
+    const below = plan.lineTarget === "below";
     return (
     <div
       key={key}
       data-line-key={key}
       aria-current={key === addedKey ? "true" : undefined}
-      className={`group relative flex gap-2.5 sm:gap-3 bg-card p-2 sm:p-2.5 rounded-xl border shadow-sm ${ring}`}
+      className={`group relative bg-card p-2 sm:p-2.5 rounded-xl border shadow-sm ${ring}`}
       data-part="line"
     >
-      {/* Compact Image */}
-      {parts.image}
+      <div className="flex gap-2.5 sm:gap-3">
+        {/* Compact Image */}
+        {parts.image}
 
-      <div className="flex flex-1 flex-col min-w-0 justify-between py-0">
-        <div className="flex justify-between items-start gap-1.5">
-          <div className="space-y-0.5 min-w-0 flex-1">
-            {parts.title}
-            {parts.details}
-            {parts.inputs}
-            {parts.target}
-            {parts.issue}
-            {parts.rule}
+        <div className="flex flex-1 flex-col min-w-0 justify-between py-0">
+          <div className="flex justify-between items-start gap-1.5">
+            <div className="space-y-0.5 min-w-0 flex-1">
+              {parts.title}
+              {parts.details}
+              {parts.inputs}
+              {!below && parts.target}
+              {parts.issue}
+              {parts.rule}
+            </div>
+
+            {parts.price}
           </div>
 
-          {parts.price}
-        </div>
+          {/* Controls Row */}
+          <div className="flex items-end justify-between mt-1">
+            {parts.quantity}
 
-        {/* Controls Row */}
-        <div className="flex items-end justify-between mt-1">
-          {parts.quantity}
-
-          {parts.remove}
+            {parts.remove}
+          </div>
+          {parts.limit}
         </div>
-        {parts.limit}
       </div>
+      {below && parts.target}
     </div>
     );
   };

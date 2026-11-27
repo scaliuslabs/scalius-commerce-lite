@@ -581,6 +581,50 @@ const AFTER_ORDER_CASES = {
 };
 Object.assign(REGRESSIONS, AFTER_ORDER_CASES);
 
+// ─── Drawn as the theme wrote it (rc-gate-hygiene) ────────────────────────
+// What the save checked is what the page draws: a token's radius on every element it names, the theme's square Style
+// on every button and field, the theme's words in every dialog, the empty cart's words from the server, the action row
+// apart from the filled actions with rows of their own, an edge drawn solid, and a line's app block where the cart
+// page puts it. The checks live in `drawnAsWritten` and `dialogActions` below; each case names what it expects.
+
+/** The theme's Style corners: square buttons on its softest surfaces, and square everywhere. */
+const SQUARE_BUTTONS = { radius: "soft", buttonShape: "square" };
+const SQUARE = { radius: "square", buttonShape: "square" };
+/** A theme whose filled buttons draw square while the store's button shape is the default radius. */
+const SQUARE_ACTIONS = { submit: { background: "#7c3aed", text: "#ffffff", radius: 0 }, "dialog-confirm": { background: "#7c3aed", text: "#ffffff", radius: 0 }, action: { radius: 0 }, input: { radius: 0 } };
+const HYGIENE_CASES = {
+  // A token's radius outranks the store's button shape on Place order, Confirm and every filled button (`radiusDrawn`).
+  "a theme's square corners on the filled buttons, over the store's rounded button shape": { states: ["lines"], request: { scheme: "light" }, privatePages: { tokens: { cart: SQUARE_ACTIONS } } },
+  // The theme's Style (no private tokens): with square buttons every button the cart, its dialogs, the drawer and the
+  // payment step draw is square whatever its surfaces' radius; square everywhere, every field too (`drawnAsWritten`).
+  "a theme of square buttons on soft surfaces: every button of the cart and its dialogs": { states: ["base", "lines"], request: { style: SQUARE_BUTTONS }, privatePages: {} },
+  "a square theme: every button and field of the cart": { states: ["base"], request: { style: SQUARE }, privatePages: {} },
+  "a theme of square buttons on soft surfaces: the drawer, empty and with lines": { states: ["empty", "base"], request: { style: SQUARE_BUTTONS, page: "home" }, privatePages: {} },
+  "a theme of square buttons on soft surfaces: the payment step in the customer's look": { request: { ...REFERENCE, style: SQUARE_BUTTONS, page: "sample-checkout" }, privatePages: { tokens: { checkout: CHECKOUT_TOKENS } }, states: ["base"] },
+  // The theme's words for the dialogs' two actions, in the line's dialog and in Place order's (`dialogActions`).
+  // On a phone its large Confirm and Go back do not fit side by side: they stack, Confirm first, neither cut.
+  "the theme's words in both confirmation dialogs": { states: ["lines", "decide"], dialogWords: { back: "Cancel", confirm: "Agree and continue" }, privatePages: {
+    labels: { "dialog.goBack": "cancel", "dialog.confirm": "agree-and-continue" },
+    tokens: { cart: { "dialog-confirm": { size: 18, inset: 32, weight: "700" } } },
+  } },
+  // An empty cart says so and leads back to the shop with its lazy file refused: the words are the page's own.
+  "an empty cart whose lazy file does not load": { states: ["empty"], blockLazy: /empty-state/, privatePages: {} },
+  // The action row in a yellow that reads 1.4:1 on the dock: Place order and Confirm keep their own rows' fill.
+  "a yellow action row beside Place order and Confirm in their own look": { states: ["lines"], request: { scheme: "light" }, privatePages: { tokens: { cart: { action: { background: "#fed700", text: "#111111", radius: 24 } } } } },
+  // An edged Place order with no border style of its own, and an action row that takes every border away.
+  "an edged Place order beside an action row with no border": { states: ["base"], request: { scheme: "light" }, privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, submit: { background: "#fed700", text: "#111111", border: "#111111", "border-width": 2, radius: 0, weight: "700" }, action: { "border-style": "none" } } } } },
+  // Place order's words in its own row's colour where its dock's words differ (a white dock with dark words).
+  "Place order's words apart from its dock's": { states: ["lines"], request: { scheme: "light" }, privatePages: { tokens: { cart: { dock: { background: "#ffffff", text: "#111111" }, submit: { background: "#7c3aed", text: "#ffffff" } } } } },
+  // A line's app block in the drawer lies where the cart page's line puts it: under the whole line in the customer's
+  // look (its cart line arranges it so), in the text column under the host's own line.
+  "the customer's offered cart in the drawer: a line's app block under the line": { states: ["customer"], drawerLineTarget: "below", request: { ...REFERENCE, page: "home" } },
+  "the store's own drawer: a line's app block in the text column": { states: ["base"], drawerLineTarget: "column", request: { page: "home" }, privatePages: {} },
+  // The customer's cart arrives without moving under the buyer: what shifts from the first paint until the page is
+  // still (`layoutShift`: the layout-shift score, as Chrome counts it) stays under 0.05, on a phone and a wide screen.
+  "the customer's cart arrives without moving": { states: ["customer"], layoutShift: 0.05, request: REFERENCE },
+};
+Object.assign(REGRESSIONS, HYGIENE_CASES);
+
 // ─── PNG pixels (Chromium's 8-bit RGB or RGBA screenshots) ────────────────
 
 function decode(png) {
@@ -651,7 +695,8 @@ const rgb = (css) => css.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number);
 // ─── In the page ───────────────────────────────────────────────────────────
 
 const MANDATORY = ['[data-part="lines"]', '[data-part="line-title"]', '[data-part="line-price"]', '[data-part="line-quantity"]', '[data-part="line-remove"]', '[data-part="summary"]', "#subtotal", "#total", '[data-part="details-form"]', '[data-part="contact"]', '[data-part="details-submit"]'];
-const EMPTY_MANDATORY = ['[data-part="lines"]', '[data-part="cart-empty"]'];
+/** An empty cart: its words and its way back to the shop, the page's own markup (never a lazy file's). */
+const EMPTY_MANDATORY = ['[data-part="lines"]', '[data-part="cart-empty"]', '[data-part="cart-empty"] h2', "[data-cart-empty-continue]"];
 /** The lines state's cart also holds a store kit (one line, its add-on once per kit) and an app's offer row under it. */
 const KIT_LINE = '[data-part="line"][data-line-key="line:v3:prod_7:variant:var_kit_7:p:none"]';
 const LINES_MANDATORY = [...MANDATORY, KIT_LINE, `${KIT_LINE} [data-buyer-ui-app="acme.offers"] [data-ui="button"]`];
@@ -1288,6 +1333,119 @@ function customerChecks({ state, rows, details }) {
   return problems;
 }
 
+// ─── Drawn as the theme wrote it (rc-gate-hygiene): the checks ─────────────
+
+/**
+ * In the page: every element a style target names draws the target's `radius` token (`radius`: the case's
+ * targets with one), and under the theme's Style (`style`) every button inside `scope` that shows a box (a fill, an
+ * edge or a shadow) draws square corners where its buttons are square, and every field too where it is square
+ * throughout. A round control (`rounded-full`: an icon's circle) keeps its circle. The payment provider's own surface
+ * keeps the store's look and is left out.
+ */
+function drawnAsWritten({ scope, style, radius }) {
+  const squareButtons = style?.buttonShape === "square";
+  const square = squareButtons || style?.radius === "square";
+  const problems = [];
+  const CORNERS = ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius"];
+  const name = (element) => `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ""}[${element.dataset.part ?? element.textContent.trim().slice(0, 24)}]`;
+  const corners = (element) => CORNERS.map((corner) => Number.parseFloat(getComputedStyle(element)[corner]) || 0);
+  for (const { target, selector, value } of radius ?? []) {
+    for (const element of document.querySelectorAll(selector)) {
+      if (!element.checkVisibility()) continue;
+      const drawn = corners(element);
+      if (drawn.some((corner) => Math.abs(corner - value) > 0.5)) problems.push(`${name(element)}: draws ${Math.max(...drawn)}px corners where its target ${target} says ${value}px`);
+    }
+  }
+  if (square) {
+    const clear = (colour) => /^rgba\(\d+, \d+, \d+, 0\)$|^transparent$/.test(colour);
+    const seen = new Set();
+    for (const root of document.querySelectorAll(scope)) {
+      const buttons = 'button,a,[role="button"],summary,input[type="submit"],input[type="button"]';
+      const fields = 'input:not([type="checkbox"],[type="radio"],[type="hidden"],[type="submit"],[type="button"]),select,textarea,[data-field]';
+      for (const element of root.querySelectorAll([...(squareButtons ? [buttons] : []), ...(style?.radius === "square" ? [fields] : [])].join(","))) {
+        if (seen.has(element) || !element.checkVisibility() || element.closest('[data-part="gateway"]') || element.classList.contains("rounded-full")) continue;
+        seen.add(element);
+        const style = getComputedStyle(element);
+        const box = !clear(style.backgroundColor) || style.backgroundImage !== "none" || style.boxShadow !== "none"
+          || ["Top", "Right", "Bottom", "Left"].some((side) => Number.parseFloat(style[`border${side}Width`]) > 0 && style[`border${side}Style`] !== "none");
+        if (box && corners(element).some((corner) => corner > 0.5)) problems.push(`${name(element)}: draws ${Math.max(...corners(element))}px corners where the theme's ${element.matches(buttons) ? "buttons" : "fields"} are square`);
+      }
+    }
+  }
+  return problems;
+}
+
+/**
+ * In an open confirmation dialog: its two actions say the theme's words (`words`, where the case names them), each
+ * lies inside the dialog whole, and when they do not fit side by side they stack with Confirm, the main action, first.
+ */
+function dialogActions({ scope, words }) {
+  const problems = [];
+  const dialog = document.querySelector(scope);
+  if (!dialog) return [`${scope}: not open`];
+  const [back, confirm] = ['[data-part="dialog-back"]', '[data-part="dialog-confirm"]'].map((selector) => dialog.querySelector(selector));
+  if (!back || !confirm) return ["the dialog draws no Go back or no Confirm"];
+  if (words?.back && back.textContent.trim() !== words.back) problems.push(`Go back reads "${back.textContent.trim()}", not the theme's "${words.back}"`);
+  if (words?.confirm && confirm.textContent.trim() !== words.confirm) problems.push(`Confirm reads "${confirm.textContent.trim()}", not the theme's "${words.confirm}"`);
+  const frame = dialog.getBoundingClientRect();
+  for (const [what, element] of [["Go back", back], ["Confirm", confirm]]) {
+    const box = element.getBoundingClientRect();
+    if (box.left < frame.left - 0.5 || box.right > frame.right + 0.5) problems.push(`${what} runs out of the dialog (${Math.round(box.left)}..${Math.round(box.right)} in ${Math.round(frame.left)}..${Math.round(frame.right)})`);
+    if (element.scrollWidth > element.clientWidth + 1) problems.push(`${what}'s words are cut (${element.scrollWidth}px in ${element.clientWidth}px)`);
+  }
+  const [b, c] = [back.getBoundingClientRect(), confirm.getBoundingClientRect()];
+  const sideBySide = b.top < c.bottom - 2 && c.top < b.bottom - 2;
+  if (!sideBySide && c.top > b.top) problems.push("the actions stack with Go back first: the main action, Confirm, comes first");
+  return problems;
+}
+
+/**
+ * In the open drawer: each line's app block lies where the cart page's line puts it: `below`, under the line's
+ * other parts from the image's edge; `column`, in the text column beside the image.
+ */
+function drawerLineTarget(place) {
+  const problems = [];
+  for (const line of document.querySelectorAll('[data-private="cart-drawer"] [data-part="line"]')) {
+    const mount = line.querySelector('[data-buyer-ui-target="cart.line.after"]');
+    if (!mount?.checkVisibility() || mount.childElementCount === 0) continue;
+    const [image, quantity] = ['[data-part="line-image"]', '[data-part="line-quantity"]'].map((selector) => line.querySelector(selector)?.getBoundingClientRect());
+    const box = mount.getBoundingClientRect();
+    if (!image || !quantity) { problems.push("a line draws no image or no stepper to place its app block by"); continue; }
+    if (place === "below" && (Math.abs(box.left - image.left) > 2 || box.top < quantity.bottom - 1)) problems.push(`a line's app block is drawn at ${Math.round(box.left)},${Math.round(box.top)}: the cart page puts it under the line from the image's edge (${Math.round(image.left)}, below ${Math.round(quantity.bottom)})`);
+    if (place === "column" && box.left < image.right) problems.push(`a line's app block is drawn from ${Math.round(box.left)}px, under the image (${Math.round(image.right)}): the cart page puts it in the text column`);
+  }
+  return problems;
+}
+
+/** Installed in every page before its scripts: the layout shifts no input caused, as Chrome scores them. */
+function installLayoutShifts() {
+  window.__ptShifts = [];
+  try {
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (entry.hadRecentInput) continue;
+        const source = entry.sources?.[0]?.node;
+        window.__ptShifts.push({ value: entry.value, at: Math.round(entry.startTime), node: source instanceof Element ? `${source.tagName.toLowerCase()}${source.id ? `#${source.id}` : ""}${source.dataset?.part ? `[data-part=${source.dataset.part}]` : ""}` : String(source?.nodeName ?? "?") });
+      }
+    }).observe({ type: "layout-shift", buffered: true });
+  } catch { /* no Layout Instability API: nothing recorded */ }
+}
+
+/** The layout-shift score so far, against `bound`, naming the largest shifts. */
+function layoutShiftOver(bound) {
+  const shifts = window.__ptShifts ?? [];
+  const score = shifts.reduce((sum, shift) => sum + shift.value, 0);
+  return score < bound ? [] : [`the page moved under the buyer as it arrived: layout shift ${score.toFixed(3)}, at most ${bound} (${shifts.sort((a, b) => b.value - a.value).slice(0, 3).map((shift) => `${shift.node} ${shift.value.toFixed(3)} at ${shift.at}ms`).join(", ")})`];
+}
+
+/** The case's targets with a `radius` token, each with its whole selector (`STYLE_TARGETS`). */
+function radiusTargets(entry, page = "cart") {
+  const tokens = entry?.privatePages?.tokens?.[page] ?? {};
+  return Object.entries(tokens).filter(([, values]) => typeof values.radius === "number")
+    .flatMap(([target, values]) => STYLE_TARGETS.filter((style) => style.name === target).map((style) => ({ target, selector: style.selector, value: values.radius })));
+}
+// ─── end of drawn as the theme wrote it ───
+
 // ─── The checks, from outside ─────────────────────────────────────────────
 
 /**
@@ -1779,11 +1937,12 @@ async function open(context, id, width, server5xx, height = 900) {
 }
 
 /** One draw: the page in one state at one width and scheme, with its interactions. */
-async function draw({ context, id, state, width, height, focus, hover, interact, rows, controls, request, drawn }) {
+async function draw({ context, id, state, width, height, focus, hover, interact, rows, controls, request, drawn, entry }) {
   const problems = [];
   const server5xx = [];
-  if (request?.page === "home") return drawDrawer({ context, id, width, problems, server5xx, rows, state });
+  if (request?.page === "home") return drawDrawer({ context, id, width, problems, server5xx, rows, state, request, entry });
   if (request?.page === "sample-checkout") return drawCheckout({ context, id, width, height, request });
+  if (entry?.blockLazy) await context.route(entry.blockLazy, (route) => route.abort());
   if (AFTER_ORDER_PAGES[request?.page]) return drawAfterOrder({ context, id, width, rows, request, drawn });
   const page = await timed("load", () => open(context, id, width, server5xx, height));
   // The store's own checkout header, and its controls where the theme places them.
@@ -1814,6 +1973,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
     }
     // The first screen and Place order, as a buyer arrives: at scroll 0, then down the cart.
     add("first screen", await page.evaluate(firstScreen, LEAD));
+    if (entry?.layoutShift !== undefined) add("layout shift", await page.evaluate(layoutShiftOver, entry.layoutShift));
     if (state !== "empty") add("dock", await timed("dock", () => dockChecks(page)));
     // Phones: Tab order and the touch scroll run before anything is clicked.
     if (width < 1280 && state !== "empty") add("touch", await timed("touch", () => touchScroll(page)));
@@ -1831,6 +1991,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   // Docked with the fold open too (a phone's cart unfolded is the longest page).
   if (state !== "empty" && width < 1280) at("dock, fold open", await timed("dock", () => reloadSafe(page, () => dockChecks(page))));
   const page0 = await check(state, null, mandatory);
+  at(`${state} drawn as written`, await page.evaluate(drawnAsWritten, { scope: '[data-private="cart"]', style: request?.style, radius: radiusTargets(entry) }));
   at(state, await page.evaluate(controlsPlaced, controls));
   at(`${state} prominence`, await page.evaluate(prominence, '[data-private="cart"] [data-part="summary"]'));
   at(`${state} apps fit`, await page.evaluate(appsFit));
@@ -1879,6 +2040,8 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
       else {
         await settle(page);
         const walked = await check("confirm", "dialog[data-cart-line-confirm][open]", ['[data-part="dialog-back"]', '[data-part="dialog-confirm"]', '[data-part="dialog-title"]']);
+        at("confirm", await page.evaluate(dialogActions, { scope: "dialog[data-cart-line-confirm][open]", words: entry?.dialogWords }));
+        at("confirm drawn as written", await page.evaluate(drawnAsWritten, { scope: "dialog[data-cart-line-confirm][open]", style: request?.style, radius: radiusTargets(entry) }));
         if (focus) at("confirm focus", await focusRings(page, walked.controls));
         await page.keyboard.press("Escape");
       }
@@ -1895,6 +2058,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
       else {
         await settle(page);
         await check("confirm from Place order", "dialog[data-cart-line-confirm][open]", ['[data-part="dialog-back"]', '[data-part="dialog-confirm"]', '[data-part="dialog-title"]']);
+        at("confirm from Place order", await page.evaluate(dialogActions, { scope: "dialog[data-cart-line-confirm][open]", words: entry?.dialogWords }));
         await page.keyboard.press("Escape");
       }
     }
@@ -1955,6 +2119,7 @@ async function drawAfterOrder({ context, id, width, rows, request, drawn }) {
 
 /** The drawer's parts a buyer must see and use. */
 const DRAWER_MANDATORY = ['[data-part="drawer-header"]', '[data-part="drawer-lines"]', '[data-part="drawer-total"]', '[data-part="drawer-checkout"]'];
+const DRAWER_EMPTY_MANDATORY = ['[data-part="drawer-header"]', '[data-part="drawer-empty"]'];
 
 /**
  * The cart drawer over a public page, in the theme's arrangement: opened as a buyer opens it, every add-on row
@@ -2047,6 +2212,7 @@ async function drawCheckout({ context, id, width, height = 900, request }) {
   if (await page.locator("#summaryPanel.hidden").count() > 0) await page.click("#orderSummaryToggle", { timeout: 5_000 }).catch(() => {});
   await page.waitForTimeout(300);
   problems.push(...(await page.evaluate(checkoutChecks)).map((problem) => `payment step: ${problem}`));
+  if (request?.style) problems.push(...(await page.evaluate(drawnAsWritten, { scope: '[data-private="checkout"]', style: request.style })).map((problem) => `payment step drawn as written: ${problem}`));
   if (request?.forged) problems.push(...(await page.evaluate(forgedAbsent, { words: FORGED_WORDS, mark: FORGED_MARK })).map((problem) => `forged: ${problem}`));
   problems.push(...server5xx.map((line) => `server: ${line}`));
   await page.close();
@@ -2054,7 +2220,7 @@ async function drawCheckout({ context, id, width, height = 900, request }) {
 }
 // ─── end of the payment step ───
 
-async function drawDrawer({ context, id, width, problems, server5xx, state }) {
+async function drawDrawer({ context, id, width, problems, server5xx, state, request, entry }) {
   const at = (label, list) => problems.push(...list.map((problem) => `${label}: ${problem}`));
   const page = await timed("load", () => open(context, id, width, server5xx));
   await page.waitForSelector("[data-cart-open], #cart-button", { timeout: 20_000 }).catch(() => {});
@@ -2074,8 +2240,10 @@ async function drawDrawer({ context, id, width, problems, server5xx, state }) {
       if (JSON.stringify(lines) !== JSON.stringify(CUSTOMER_DETAILS)) at("drawer", [`the add-on row opens to ${JSON.stringify(lines)}, not its three lines in order`]);
       await settle(page);
     }
-    const walked = await page.evaluate(walk, { rows: [], anatomy: [{ name: "the drawer", selector: scope }], uiKinds: UI_KINDS, mandatory: DRAWER_MANDATORY, scope, exempt: EXEMPT, styleTargets: [] });
+    const walked = await page.evaluate(walk, { rows: [], anatomy: [{ name: "the drawer", selector: scope }], uiKinds: UI_KINDS, mandatory: state === "empty" ? DRAWER_EMPTY_MANDATORY : DRAWER_MANDATORY, scope, exempt: EXEMPT, styleTargets: [] });
     at("drawer", walked.problems);
+    if (request?.style) at("drawer drawn as written", await page.evaluate(drawnAsWritten, { scope, style: request.style }));
+    if (entry?.drawerLineTarget) at("drawer", await page.evaluate(drawerLineTarget, entry.drawerLineTarget));
     at("drawer", await page.evaluate(wholeTexts));
     at("drawer", await textContrast(page, walked.texts));
     at("drawer", await page.evaluate(clicks));
@@ -2223,11 +2391,12 @@ try {
           if (plan.length === 0) continue;
           const context = await browser.newContext({ colorScheme: scheme, viewport: { width: 1280, height: 900 }, hasTouch: touch });
           await context.addInitScript(installActionFound);
+          await context.addInitScript(installLayoutShifts);
           await context.addInitScript((entries) => { for (const [key, value] of Object.entries(entries)) localStorage.setItem(key, value); }, storage);
           for (const each of plan) {
             if (bailed) { await context.close(); return; }
             draws += 1;
-            const problems = await draw({ context, id, state, ...each, rows, request: entry.request, controls, drawn });
+            const problems = await draw({ context, id, state, ...each, rows, request: entry.request, controls, drawn, entry });
             if (problems.length > 0) {
               failures.push({ index, name: entry.name, where: `${state} at ${each.width}px, ${scheme}`, problems, document: entry });
               // `--bail` (the mutations' runs): one failing draw is the answer.

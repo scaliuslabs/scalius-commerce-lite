@@ -6,7 +6,7 @@
 import { privatePagePlan } from "./plan";
 import type { PrivateAssetUrl } from "./html";
 import type { PrivateNode, StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
-import type { CartDrawerNode, CartDrawerPlan } from "@/lib/cart/drawer-plan";
+import { lineTargetPlace, type CartDrawerNode, type CartDrawerPlan } from "@/lib/cart/drawer-plan";
 
 function drawerNodes(nodes: readonly PrivateNode[]): CartDrawerNode[] {
   return nodes.flatMap((node): CartDrawerNode[] => {
@@ -19,11 +19,14 @@ function drawerNodes(nodes: readonly PrivateNode[]): CartDrawerNode[] {
 export function cartDrawerPlan(theme: StorefrontThemeDocument, language: string, asset: PrivateAssetUrl): CartDrawerPlan | null {
   const plan = privatePagePlan(theme, "cartDrawer", language, asset);
   const line = plan.items.line;
-  if (plan.frame === "standard" && !plan.layout && !line && Object.keys(plan.labels).length === 0 && Object.keys(plan.icons).length === 0) return null;
+  // The host's own line places its apps' block where the cart page's line does (the theme's arrangement of it, or the host's).
+  const lineTarget = line ? null : lineTargetPlace(privatePagePlan(theme, "cart", language, asset).items.line);
+  if (plan.frame === "standard" && !plan.layout && !line && !lineTarget && Object.keys(plan.labels).length === 0 && Object.keys(plan.icons).length === 0) return null;
   return {
     frame: plan.frame ?? "standard",
     layout: plan.layout ? drawerNodes(plan.layout) : null,
     line: line ? drawerNodes(line) : null,
+    ...(lineTarget ? { lineTarget } : {}),
     labels: plan.labels,
     icons: plan.icons,
   };

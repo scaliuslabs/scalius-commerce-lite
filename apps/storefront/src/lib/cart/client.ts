@@ -2,7 +2,7 @@ import { installCartCalls } from "./cart-calls";
 import { checkoutText } from "@/lib/checkout-text";
 import { buyerApiErrorTextNow, loadBuyerApiErrors } from "../buyer-api-error-text-later";
 import { readBuyerAttributes } from "@/lib/buyer-ui/state";
-import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
+import { buyerUiDrawn, renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 import { storefrontUiSlotsOn } from "@scalius/shared/plugins/storefront-protocol";
 import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
 import { emitBuyerEvent } from "@/lib/buyer-events/bus";
@@ -465,12 +465,22 @@ function handleAbandonedCheckout() {
 
 /** The totals ask again after a quote fails in transit (a cold or restarting API), then say so with a retry button. */
 
-function syncCartPagePresentation(ready: boolean): void {
+/**
+ * The page's first showing of a cart with lines waits a moment for its first check's app blocks (an offer row under a
+ * line, a status in the summary): at most `FIRST_REVEAL_WAIT_MS`, so the lines and their blocks appear together and no
+ * line moves under the buyer when the blocks land. A check slower than that never holds the lines: they show, and its
+ * answer lands after them as before.
+ */
+export const FIRST_REVEAL_WAIT_MS = 500;
+let firstRevealHeld = false;
+
+function syncCartPagePresentation(shown: boolean): void {
   const root = document.getElementById("cartPageRoot");
   const cartItems = document.getElementById("cartItems");
   const cartSummary = document.getElementById("cartSummary");
   const checkoutPanel = document.getElementById("checkoutPanel");
   const hasItems = Object.keys(cartStore.get().items).length > 0;
+  const ready = shown && !(firstRevealHeld && hasItems);
 
   if (root) {
     root.dataset.cartReady = ready ? "true" : "false";
@@ -2332,14 +2342,26 @@ export async function initCartFunctionality() {
   if (checkoutForm) onTextEdit(checkoutForm, () => handleAbandonedCheckout(), { signal: runtimeSignal });
 
   // Lines paint straight from the saved cart; the availability check's
-  // answer lands inside each line's fixed status slot and below the totals,
-  // so it never moves painted content (no CLS, no network-gated first paint).
-  await renderCartItems();
-  if (applyPendingCartRepairState()) {
+  // answer lands inside each line's fixed status slot and below the totals.
+  // Its app blocks are drawn with the lines when it answers within
+  // FIRST_REVEAL_WAIT_MS; a slower check never holds the lines longer.
+  firstRevealHeld = Object.keys(cartStore.get().items).length > 0;
+  let checked: Promise<boolean> | null = null;
+  try {
     await renderCartItems();
+    if (applyPendingCartRepairState()) {
+      await renderCartItems();
+    }
+    // The totals may have asked for this check already (the cart's discounts before an address).
+    checked = checkCartNow();
+    await Promise.race([checked.then(() => buyerUiDrawn()), new Promise((done) => setTimeout(done, FIRST_REVEAL_WAIT_MS))]).catch(() => undefined);
+  } finally {
+    if (firstRevealHeld) {
+      firstRevealHeld = false;
+      syncCartPagePresentation(true);
+    }
   }
-  // The totals may have asked for this check already (the cart's discounts before an address).
-  await checkCartNow();
+  await (checked ?? checkCartNow());
   await recoveryCheck;
   updateCheckoutButtonState();
 }

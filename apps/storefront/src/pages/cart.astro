@@ -1162,6 +1162,12 @@ const dialogLabels = Object.fromEntries(Object.entries(cartPlan.labels).filter((
         then shows or hides it as the checked cart says. */}
     <style is:global>
       #cartPageRoot[data-cart-prepaint="items"][data-cart-state="loading"] :is(#checkoutPanel, [data-part="dock"]) { display: block; }
+      /* While the saved lines load, nothing after them in the page's flow is drawn (on a phone the form, a theme's fold
+         bar, the apps' blocks below the cart; Place order's dock stays): the lines arrive with their app blocks and
+         the rest appears with them, so nothing painted moves down (a layout shift). Beside them (a wide page) the form
+         is drawn at once. Clear cart's row keeps its room under the loading lines. */
+      #cartPageRoot[data-cart-prepaint="items"][data-cart-state="loading"] :is([data-part="lines"], :has([data-part="lines"])) ~ :is(#checkoutPanel, :not([data-part="dock"])) { display: none; }
+      #cartPageRoot[data-cart-prepaint="items"][data-cart-state="loading"] [data-part="lines-clear"] { display: block; visibility: hidden; }
       #cartPageRoot:has(#checkoutFormCard.hidden) [data-part="dock"] { display: none; }
       /* Focus moved by keyboard is never left under the docked Place order. */
       html:has([data-part="dock"]) { scroll-padding-block-end: 9rem; }

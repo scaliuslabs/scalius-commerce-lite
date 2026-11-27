@@ -103,8 +103,10 @@
   --color-header-foreground: var(--theme-header-foreground, var(--foreground));
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: calc(var(--radius) + 1px);
-  --radius-xl: calc(var(--radius) + 2px);
+  /* A step above the theme's radius, and none where the theme draws square:
+     `min(1px, radius * 1000)` is 1px for any radius, 0 for a square one. */
+  --radius-lg: calc(var(--radius) + min(1px, var(--radius) * 1000));
+  --radius-xl: calc(var(--radius) + min(2px, var(--radius) * 1000));
 }
 
 .site-root *,
@@ -485,6 +487,14 @@ html {
     color var(--theme-duration) var(--theme-ease),
     border-color var(--theme-duration) var(--theme-ease),
     transform var(--theme-duration) var(--theme-ease);
+}
+
+/* Every other button a buyer's private page or the cart drawer draws (an
+   outline Apply, Go back, an app's button) takes the Style's button corners
+   too, never its surface radius: at zero specificity, so a private page's
+   own tokens and a theme's rules still outrank it. A circle stays a circle. */
+:where([data-private]) :where(button, [role="button"], input[type="submit"], input[type="button"], [data-ui="button"]):where([class*="rounded-"]):where(:not(.rounded-full, [data-theme-size="icon"])) {
+  border-radius: var(--theme-button-radius, var(--radius));
 }
 
 .site-root :where(button, a, input[type="submit"]):where(.bg-primary):active,
