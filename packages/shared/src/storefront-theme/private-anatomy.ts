@@ -88,8 +88,8 @@ export const PRIVATE_TOKEN_NAMES = [
   "background", "gradient", "text", "muted", "link", "error", "placeholder", "ring", "invalid", "border", "border-width", "border-style", "radius", "shadow", "padding", "inset", "gap",
   "font", "weight", "size", "leading", "case", "tracking", "align", "clamp",
   "columns", "columns-wide", "width", "height", "width-wide", "height-wide", "fit", "max-width",
-  // The phone tab bar's own (private-tab-bar.ts): a blurred or solid bar, a label's lines, the current tab's ring.
-  "backdrop", "lines", "ring-width",
+  // The phone tab bar's own (private-tab-bar.ts): a blurred or solid bar, the current tab's ring.
+  "backdrop", "ring-width",
 ] as const;
 export type PrivateTokenName = (typeof PRIVATE_TOKEN_NAMES)[number];
 
@@ -887,8 +887,8 @@ const TAB_BAR: PrivatePageSpec = {
   styles: {
     // The bar: its colour (blurred at 94% over the page, or solid), its top edge and its height (the page reserves it).
     bar: { selector: TAB_BAR_ROOT, absolute: true, tokens: ["background", "border", "height", "backdrop"], kind: "box", surface: "background", ink: "foreground" },
-    // Every tab's label and icon colour, the label's type and its lines (two by default: a label is never cut).
-    label: { selector: `${TAB_BAR_ROOT} [data-part="tab-label"]`, absolute: true, tokens: ["text", "size", "weight", "case", "tracking", "lines"], kind: "text", surface: "under", ink: "muted-foreground", on: "bar", hostSize: 12, hostWeight: 500 },
+    // Every tab's label and icon colour, the label's type and its lines (`clamp`, on the bar 1 or 2; 2 by default: a label is never cut).
+    label: { selector: `${TAB_BAR_ROOT} [data-part="tab-label"]`, absolute: true, tokens: ["text", "size", "weight", "case", "tracking", "clamp"], kind: "text", surface: "under", ink: "muted-foreground", on: "bar", hostSize: 12, hostWeight: 500 },
     // The current tab (`aria-current`): its colour and weight, its icon's chip and a ring around it.
     current: { selector: `${TAB_BAR_ROOT} [data-part="tab"][aria-current]`, absolute: true, tokens: ["text", "weight", "background", "padding", "ring", "ring-width"], kind: "text", surface: "under", ink: "foreground", on: "bar", hostWeight: 600 },
     // Each tab's icon, in its tab's colour: its size and an optional chip (fill, edge, corners, room around the icon).

@@ -1,6 +1,6 @@
 // The rendered gate's reference look (apps/storefront/test-support/private-pages.properties.browser.mjs): a real
-// theme's released template, its names made neutral: its light and dark colours, its other theme tokens, its phone
-// bar and its private pages exactly as the release ships them. Written by a private script from that release and
+// theme's released template with its names and its own words made neutral: its light and dark colours, its other
+// theme tokens, its phone bar and its private pages as the release ships them (structure, tokens, sizes, colours). Written by a private script from that release and
 // checked against it, so the gate draws what stores draw; never edit it by hand. The theme authors' guide
 // (packages/plugin-sdk/docs/private-pages.md) prints its private pages, and private-tokens.test.ts and
 // private-compile-golden.test.ts compile them against its colours.
@@ -78,9 +78,9 @@ export const REFERENCE_MOBILE_NAV = {
   "settings": {
     "tabs": [
       { "kind": "home" },
-      { "kind": "link", "label": "Store", "icon": { "source": "store", "name": "categories" }, "href": "/categories" },
-      { "kind": "link", "label": "Gaming News", "icon": { "source": "store", "name": "news" }, "href": "/blog" },
-      { "kind": "link", "label": "Support", "icon": { "source": "store", "name": "support" }, "href": "/support" },
+      { "kind": "link", "label": "Aisle", "icon": { "source": "store", "name": "categories" }, "href": "/categories" },
+      { "kind": "link", "label": "Latest News", "icon": { "source": "store", "name": "news" }, "href": "/blog" },
+      { "kind": "link", "label": "Helpers", "icon": { "source": "store", "name": "support" }, "href": "/support" },
       { "kind": "account" }
     ],
     "drawer": "accordion"
@@ -779,13 +779,13 @@ export const REFERENCE_PRIVATE_PAGES = {
     }
   },
   "labels": {
-    "cart.heading": { "en": "Your Cart", "bn": "আপনার কার্ট" },
-    "cart.intro": { "en": "Review your items before checkout.", "bn": "চেকআউটের আগে পণ্যগুলো দেখে নিন।" },
-    "cart.summaryHeading": { "en": "Order Summary", "bn": "অর্ডারের সারাংশ" },
-    "cart.empty": { "en": "Your cart is empty.", "bn": "আপনার কার্ট খালি।" },
+    "cart.heading": { "en": "My Basket", "bn": "আমার ঝুড়ি" },
+    "cart.intro": { "en": "Check each item before you pay now.", "bn": "দাম দেওয়ার আগে পণ্যগুলো মিলিয়ে নিন।" },
+    "cart.summaryHeading": { "en": "Basket Totals", "bn": "ঝুড়ির হিসাবটা" },
+    "cart.empty": { "en": "Your basket's empty", "bn": "আপনার ঝুড়ি ফাঁকা।" },
     "cart.emptyText": {
-      "en": "Add a product from the store to see it here.",
-      "bn": "এখানে দেখতে স্টোর থেকে একটি পণ্য যোগ করুন।"
+      "en": "Pick something from the shop to list it here.",
+      "bn": "এখানে রাখতে দোকান থেকে একটি পণ্য বেছে নিন।"
     },
     "cart.continue": "continue-shopping",
     "dialog.goBack": "go-back",

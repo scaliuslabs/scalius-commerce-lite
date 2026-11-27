@@ -342,26 +342,28 @@ The words a part's variant draws are the store's: "Remove" (সরান) for `r
 
 ## The phone tab bar
 
-The store's phone bar (`blocks.mobileNav` with `bottom-tabs`, [themes.md](themes.md)) is drawn on public pages and on the buyer's receipt and account, where no theme stylesheet loads. Its look is one set of tokens, `tokens.tabBar`, that draws it the same on every page: the store compiles and checks it with the other private pages (`compiled.css.tabBar`; refused on its own: the bar then keeps the store's own look and your other pages keep theirs). It takes no arrangement (`pages.tabBar` is refused, `not_available`). Without it the bar is the store's: the page colour at 94% under a blur, 56px, its labels 12px in the muted words and wrapping to a second line, never cut to "…".
+The store's phone bar (`blocks.mobileNav` with `bottom-tabs`, [themes.md](themes.md)) is drawn on public pages and on the buyer's receipt and account, where no theme stylesheet loads. Its look is one set of tokens, `tokens.tabBar`, that draws it the same on every page: the store compiles and checks it with the other private pages (`compiled.css.tabBar`; refused on its own: the bar then keeps the store's own look and your other pages keep theirs). It takes no arrangement: any `pages.tabBar` is refused (`not_available`). Without it the bar is the store's: the page colour at 94% under a blur, 60px, its labels 12px in the muted words and wrapping to a second line, never cut to "…", the current tab in the page's words and 200 heavier.
 
 | Target | Tokens | What it draws |
 | --- | --- | --- |
 | `bar` | `background`, `border` (its top edge), `height` (56 to 96 px; the page reserves it under its content), `backdrop` (`blur`, the default: the colour at 94% over a blur; or `solid`) | The bar. |
-| `label` | `text` (every tab's words and icon), `size` (10 to 16 px), `weight`, `case`, `tracking`, `lines` (`2`, the default: a long label wraps; `1`: one line, a label longer than its column ends in "…") | Each tab's label. |
+| `label` | `text` (every tab's words and icon), `size` (10 to 16 px), `weight`, `case`, `tracking`, `clamp` (on the bar `"2"`, the default: a long label wraps; or `"1"`: one line, a label longer than its column ends in "…") | Each tab's label: 1.25 line height, with 0.15em of room above and below its lines for Bangla's vowel signs. |
 | `current` | `text`, `weight`, `background` and `padding` (0 to 16 px) of its icon's chip, `ring` and `ring-width` (0 to 4 px) around that chip | The tab of the page the buyer is on. |
 | `icon` | `size` (16 to 32 px), `background` (a chip behind it; none without), `border` and `border-width` (0 to 2 px), `radius`, `padding` (0 to 16 px) | Each tab's icon, in its tab's colour. |
 | `badge` | `background`, `text` | The cart's count. |
 
-What the save checks, in every palette buyers see: a label and the current tab's label read 4.5:1 on the bar (under a blur, on the bar's colour with what shows through it at its lightest and its darkest); an icon reads 3:1 on its chip (or on the bar); the cart count reads 4.5:1 on its badge and the badge 3:1 on the bar; the current tab differs from the others by more than its hue: a heavier weight, words at least 1.5:1 apart from theirs, or a ring that reads 3:1 on the bar; and the bar is as tall as a tab needs (its largest icon box with its chip and ring, 3px, and its label's lines at 1.15), so no label is cut. A label's floor is 10px, a phone tab bar's own label size (a page's words keep 12px). Refusals: `token_value` (a value outside its bounds, a bar too short), `contrast`, `unknown_style`, `unknown_token`.
+What the save checks, in every palette buyers see: a label and the current tab's label read 4.5:1 on the bar (under a blur, on the bar's colour with what shows through it at its lightest and its darkest); an icon reads 3:1 on its chip (or on the bar); the cart count reads 4.5:1 on its badge and the badge 3:1 on the bar; the current tab is told apart from the others by more than its hue (WCAG 1.4.1, technique G183: a second cue that reads 3:1), by at least one of: its words 3:1 from the others', a ring at least 2px wide reading 3:1 on the bar (at the blur's lightest and darkest), a weight at least 200 heavier, or a chip at least 4px larger than theirs with both chips drawn (words 1.5:1 apart or one weight step are a shade of the same cue: refused); and the bar is as tall as a tab needs (its largest icon box with its chip and ring, 3px, and its label's lines with their room), so no label is cut. These floors (what a blurred bar lets through, 6%; the 10px label; the four cues) are sealed numbers that only loosen (`theme.tabBar.*` in the contract's limits). A label's floor is 10px, a phone tab bar's own label size (a page's words keep 12px). Refusals: `token_value` (a value outside its bounds, a bar too short), `contrast`, `unknown_style`, `unknown_token`.
 
 Precedence: every rule the tokens write has zero specificity (`:where`) and comes after the store's own bar rules (also zero specificity), so the tokens replace the store's look; on a public page any rule of your own stylesheet outranks both, whatever loads first. On the buyer's own pages your stylesheet never loads: the tokens are the bar's look there. The same holds for the bar's height: `--mobile-tabs-height` (and the page's reserve under it, `--mobile-tabs-reserve`) are the store's at zero specificity, so `bar.height` sets them, and a plain `:root` rule of your stylesheet outranks them on a public page with no specificity trick.
 
-A bar like a dark game store's, 76px with two-line capitals and round chips:
+A theme that styled the bar in its public stylesheet (a 3.6-style rule on `[data-part="tab-label"]` setting its size or line height, or `--mobile-tabs-height` on `:root`) drops those rules to take the tokens: on a public page its own rules still outrank them.
+
+A bar like a dark game store's, 80px with two-line capitals and round chips, the current one 4px larger:
 
 ```json
 {
-  "bar": { "background": "background", "border": "border", "height": 76, "backdrop": "blur" },
-  "label": { "text": "muted-foreground", "size": 10, "weight": "700", "case": "uppercase", "tracking": "wide", "lines": "2" },
+  "bar": { "background": "background", "border": "border", "height": 80, "backdrop": "blur" },
+  "label": { "text": "muted-foreground", "size": 10, "weight": "700", "case": "uppercase", "tracking": "wide", "clamp": "2" },
   "icon": { "size": 20, "padding": 8, "radius": 32, "background": { "light": "#ebebeb", "dark": "#211c31" } },
   "current": { "text": "foreground", "padding": 12, "background": { "light": "#e6e6e6", "dark": "#272436" }, "ring": "#4f5fae", "ring-width": 2 }
 }
@@ -1171,13 +1173,13 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
     }
   },
   "labels": {
-    "cart.heading": { "en": "Your Cart", "bn": "আপনার কার্ট" },
-    "cart.intro": { "en": "Review your items before checkout.", "bn": "চেকআউটের আগে পণ্যগুলো দেখে নিন।" },
-    "cart.summaryHeading": { "en": "Order Summary", "bn": "অর্ডারের সারাংশ" },
-    "cart.empty": { "en": "Your cart is empty.", "bn": "আপনার কার্ট খালি।" },
+    "cart.heading": { "en": "My Basket", "bn": "আমার ঝুড়ি" },
+    "cart.intro": { "en": "Check each item before you pay now.", "bn": "দাম দেওয়ার আগে পণ্যগুলো মিলিয়ে নিন।" },
+    "cart.summaryHeading": { "en": "Basket Totals", "bn": "ঝুড়ির হিসাবটা" },
+    "cart.empty": { "en": "Your basket's empty", "bn": "আপনার ঝুড়ি ফাঁকা।" },
     "cart.emptyText": {
-      "en": "Add a product from the store to see it here.",
-      "bn": "এখানে দেখতে স্টোর থেকে একটি পণ্য যোগ করুন।"
+      "en": "Pick something from the shop to list it here.",
+      "bn": "এখানে রাখতে দোকান থেকে একটি পণ্য বেছে নিন।"
     },
     "cart.continue": "continue-shopping",
     "dialog.goBack": "go-back",
@@ -1535,7 +1537,7 @@ tabBar root data-private=tab-bar
 tabBar part bar hooks=tab-bar,tab,tab-label,tab-icon,tab-badge
 tabBar layouts 
 tabBar style bar [data-private="tab-bar"] tokens=background,border,height,backdrop
-tabBar style label [data-private="tab-bar"] [data-part="tab-label"] tokens=text,size,weight,case,tracking,lines
+tabBar style label [data-private="tab-bar"] [data-part="tab-label"] tokens=text,size,weight,case,tracking,clamp
 tabBar style current [data-private="tab-bar"] [data-part="tab"][aria-current] tokens=text,weight,background,padding,ring,ring-width
 tabBar style icon [data-private="tab-bar"] [data-part="tab-icon"] tokens=size,background,border,border-width,radius,padding graphic
 tabBar style badge [data-private="tab-bar"] [data-part="tab-badge"] tokens=background,text

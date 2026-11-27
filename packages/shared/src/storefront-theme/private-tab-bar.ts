@@ -10,11 +10,24 @@ import { PRIVATE_PAGES, type PrivateTokenName } from "./private-anatomy";
 import { storefrontThemeContrast, storefrontThemeMix, type StorefrontThemeColors } from "./contrast";
 import { PRIVATE_CONTRAST_FLOOR, PRIVATE_MARK_CONTRAST_FLOOR, PRIVATE_TOKEN_SPECS, type PrivatePalette, type PrivateTokenIssue } from "./private-tokens";
 
+/**
+ * The bar's sealed numbers (contract-tables `limits`, each loosening only): how much of what lies under a blurred
+ * bar shows through it (the store's: its colour at 94%), a label's least size, and what tells the current tab apart
+ * from the others by more than its hue (WCAG 1.4.1, technique G183: a cue besides colour that reads 3:1): its words
+ * at least `wordsApart` from theirs, a ring at least `ringWidth` wide reading 3:1 on the bar, a weight at least
+ * `weightStep` heavier, or a chip `chipStep` px larger than theirs, both chips drawn.
+ */
+export const PRIVATE_TAB_BAR_LIMITS = { blurBleed: 0.06, labelMinSize: 10, wordsApart: 3, ringWidth: 2, weightStep: 200, chipStep: 4 } as const;
+const BLUR_BLEED = PRIVATE_TAB_BAR_LIMITS.blurBleed;
+
+/** The bar's own choices, where they differ from a token's everywhere else: a label's lines (`clamp`) are one or two. */
+export const PRIVATE_TAB_BAR_CHOICES = { "label.clamp": ["1", "2"] } as const satisfies Record<string, readonly string[]>;
+
 /** The bar's own bounds (px), where they differ from a token's everywhere else. */
 export const PRIVATE_TAB_BAR_BOUNDS = {
   "bar.height": [56, 96],
   // A label's floor: 10px, a phone tab bar's own label size (a page's words keep 12px). Below it a label is not read.
-  "label.size": [10, 16],
+  "label.size": [PRIVATE_TAB_BAR_LIMITS.labelMinSize, 16],
   "icon.size": [16, 32],
   "icon.padding": [0, 16],
   "icon.radius": [0, 32],
@@ -24,10 +37,14 @@ export const PRIVATE_TAB_BAR_BOUNDS = {
 } as const satisfies Record<string, readonly [number, number]>;
 
 /** The store's own bar, the defaults a token replaces. */
-export const PRIVATE_TAB_BAR_DEFAULTS = { height: 56, labelSize: 12, labelWeight: 500, currentWeight: 600, iconSize: 22, gap: 3, leading: 1.15 } as const;
+export const PRIVATE_TAB_BAR_DEFAULTS = { height: 60, labelSize: 12, labelWeight: 500, currentWeight: 700, iconSize: 22, gap: 3 } as const;
 
-/** How much of what lies under a blurred bar shows through it (the store's own: its colour at 94%). */
-const BLUR_BLEED = 0.06;
+/**
+ * A label's line height, and the room above and below its lines (em) inside its box: Bangla's vowel signs reach
+ * past a Latin line, and the label's box clips (its lines are clamped), so the room is part of the label.
+ */
+export const PRIVATE_TAB_BAR_LABEL = { leading: 1.25, room: 0.15 } as const;
+
 const ROOT = '[data-private="tab-bar"]';
 const SELECTORS = {
   bar: ROOT,
@@ -69,11 +86,12 @@ function validated(tokens: Record<string, Values>): { valid: Record<string, Valu
         continue;
       }
       const bounds = (PRIVATE_TAB_BAR_BOUNDS as Record<string, readonly [number, number]>)[`${target}.${token}`];
-      const ok = bounds
-        ? Number.isInteger(value) && (value as number) >= bounds[0] && (value as number) <= bounds[1]
-        : PRIVATE_TOKEN_SPECS[name].schema.safeParse(value).success;
+      const choices = (PRIVATE_TAB_BAR_CHOICES as Record<string, readonly string[]>)[`${target}.${token}`];
+      const ok = choices ? choices.includes(String(value)) && typeof value === "string"
+        : bounds ? Number.isInteger(value) && (value as number) >= bounds[0] && (value as number) <= bounds[1]
+          : PRIVATE_TOKEN_SPECS[name].schema.safeParse(value).success;
       if (!ok) {
-        issues.push(issue([target, token], "token_value", bounds ? `${target} ${token}: a whole number of pixels from ${bounds[0]} to ${bounds[1]}.` : `${target} ${token}: not a value this token takes.`));
+        issues.push(issue([target, token], "token_value", choices ? `${target} ${token}: on the bar, one of ${choices.join(", ")}.` : bounds ? `${target} ${token}: a whole number of pixels from ${bounds[0]} to ${bounds[1]}.` : `${target} ${token}: not a value this token takes.`));
         continue;
       }
       valid[target]![name] = value;
@@ -121,16 +139,19 @@ function contrastIssues(tokens: Record<string, Values>, palette: PrivatePalette)
   need(["current", "background"], worst(c.current, c.currentChip ? [c.currentChip] : c.under), PRIVATE_MARK_CONTRAST_FLOOR, "The current tab's icon on its chip");
   need(["badge", "text"], storefrontThemeContrast(c.badgeText, c.badge), PRIVATE_CONTRAST_FLOOR, "The cart count on its badge");
   need(["badge", "background"], worst(c.badge, c.under), PRIVATE_MARK_CONTRAST_FLOOR, "The cart count's badge on the bar");
-  // The current tab is told apart by more than its hue: a heavier weight, words a step lighter or darker, or a ring
-  // that reads 3:1 on the bar (WCAG 1.4.11: the ring is then what shows the state).
+  // The current tab is told apart by more than its hue (WCAG 1.4.1, G183), by one of: its words 3:1 apart from the
+  // others'; a ring at least 2px wide reading 3:1 on the bar; a weight at least 200 heavier; a chip at least 4px larger
+  // (both chips drawn). A cue of 1.5:1 words or one weight step is a hue and a shade: refused.
+  const limits = PRIVATE_TAB_BAR_LIMITS;
   const ringWidth = Number(tokens.current?.["ring-width"] ?? 0);
-  const heavier = Number(tokens.current?.weight ?? PRIVATE_TAB_BAR_DEFAULTS.currentWeight) > Number(tokens.label?.weight ?? PRIVATE_TAB_BAR_DEFAULTS.labelWeight);
-  const apart = storefrontThemeContrast(c.current, c.label) >= 1.5;
-  const ringed = Boolean(c.ring && ringWidth > 0);
-  if (!heavier && !apart) {
-    if (ringed) need(["current", "ring"], worst(c.ring!, c.under), PRIVATE_MARK_CONTRAST_FLOOR, "The current tab's ring (what tells it apart) on the bar");
-    else out.push(issue(["current"], "contrast", `The current tab differs from the others by its hue alone ${where}: give it a heavier weight, a ring, or words at least 1.5:1 apart from theirs (${ratio(storefrontThemeContrast(c.current, c.label))}).`));
-  }
+  const words = storefrontThemeContrast(c.current, c.label);
+  const cues = [
+    words >= limits.wordsApart,
+    Boolean(c.ring) && ringWidth >= limits.ringWidth && worst(c.ring!, c.under) >= PRIVATE_MARK_CONTRAST_FLOOR,
+    Number(tokens.current?.weight ?? PRIVATE_TAB_BAR_DEFAULTS.currentWeight) - Number(tokens.label?.weight ?? PRIVATE_TAB_BAR_DEFAULTS.labelWeight) >= limits.weightStep,
+    tokens.icon?.background !== undefined && tokens.current?.background !== undefined && Number(tokens.current?.padding ?? tokens.icon?.padding ?? 0) - Number(tokens.icon?.padding ?? 0) >= limits.chipStep,
+  ];
+  if (!cues.some(Boolean)) out.push(issue(["current"], "contrast", `The current tab is told apart by its hue alone ${where}: give it words at least ${limits.wordsApart}:1 apart from the others' (${ratio(words)} now), a ring at least ${limits.ringWidth}px wide reading 3:1 on the bar, a weight at least ${limits.weightStep} heavier, or a chip at least ${limits.chipStep}px larger than theirs.`));
   return out;
 }
 
@@ -141,8 +162,9 @@ function heightIssues(tokens: Record<string, Values>): PrivateTokenIssue[] {
   const edge = n("icon", "border-width", 0);
   const box = (padding: number, ring: number) => icon + 2 * padding + 2 * edge + 2 * ring;
   const tallest = Math.max(box(n("icon", "padding", 0), 0), box(n("current", "padding", n("icon", "padding", 0)), n("current", "ring-width", 0)));
-  const lines = tokens.label?.lines === "1" ? 1 : 2;
-  const needed = Math.ceil(tallest + PRIVATE_TAB_BAR_DEFAULTS.gap + lines * n("label", "size", PRIVATE_TAB_BAR_DEFAULTS.labelSize) * PRIVATE_TAB_BAR_DEFAULTS.leading);
+  const lines = tokens.label?.clamp === "1" ? 1 : 2;
+  const size = n("label", "size", PRIVATE_TAB_BAR_DEFAULTS.labelSize);
+  const needed = Math.ceil(tallest + PRIVATE_TAB_BAR_DEFAULTS.gap + size * (lines * PRIVATE_TAB_BAR_LABEL.leading + 2 * PRIVATE_TAB_BAR_LABEL.room));
   const height = n("bar", "height", PRIVATE_TAB_BAR_DEFAULTS.height);
   return height >= needed ? [] : [issue(["bar", "height"], "token_value", `The bar is ${height}px; a tab needs ${needed}px (its ${tallest}px icon, the gap and ${lines === 1 ? "a line" : "two lines"} of its label), or a label would be cut.`)];
 }
@@ -163,7 +185,7 @@ function css(tokens: Record<string, Values>, palettes: readonly PrivatePalette[]
       label.size !== undefined && `font-size:${px(label.size)}`,
       label.case !== undefined && `text-transform:${label.case === "uppercase" ? "uppercase" : "none"}`,
       label.tracking !== undefined && `letter-spacing:${({ normal: "normal", wide: "0.04em", wider: "0.08em" } as Record<string, string>)[String(label.tracking)]}`,
-      label.lines === "1" && "display:block;white-space:nowrap;-webkit-line-clamp:none;text-overflow:ellipsis",
+      label.clamp === "1" && "display:block;white-space:nowrap;-webkit-line-clamp:none;text-overflow:ellipsis",
     ]),
     rule(SELECTORS.tab, [weight(label.weight)]),
     rule(SELECTORS.current, [weight(current.weight)]),

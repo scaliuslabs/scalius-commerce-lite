@@ -1170,12 +1170,11 @@ export default function CartFlyout({ onReady }: Props) {
 
         {added}
 
-        {/* 2. CONTENT, ending in the rows above the total: the money rows and the apps' footer blocks. */}
-        {scrollRegion(cart.totalItems === 0 ? emptyState : lineList(true), undefined, cart.totalItems > 0 && extrasBox(<>{summaryRows}{footerTarget}</>))}
+        {/* 2. CONTENT: the lines, then the offers (each with its own Add, read with the lines, never with the total),
+            then the rows above the total: the money rows and the apps' footer blocks. */}
+        {scrollRegion(cart.totalItems === 0 ? emptyState : lineList(true), undefined, cart.totalItems > 0 && <>{offers}{extrasBox(<>{summaryRows}{footerTarget}</>)}</>)}
 
         {undoPart}
-
-        {offers}
 
         {/* 3. FOOTER: the total and Check out, pinned. */}
         {cart.totalItems > 0 && pinned(<>{summaryTotal}{mainAction}{secondaryActions}</>)}

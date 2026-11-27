@@ -712,15 +712,15 @@ Object.assign(REGRESSIONS, HYGIENE_CASES);
 const TAB_BAR_VIEWPORTS = [{ width: 320, height: 640, scheme: "light" }, { width: 390, height: 844, scheme: "dark" }, { width: 320, height: 640, scheme: "dark" }, { width: 390, height: 844, scheme: "light" }];
 /** The outside theme's bar in tokens (private-tab-bar.test.ts `OUTSIDE_THEME_BAR`). */
 const OUTSIDE_BAR = {
-  bar: { background: "background", border: "border", height: 76, backdrop: "blur" },
-  label: { text: "muted-foreground", size: 10, weight: "700", case: "uppercase", tracking: "wide", lines: "2" },
+  bar: { background: "background", border: "border", height: 80, backdrop: "blur" },
+  label: { text: "muted-foreground", size: 10, weight: "700", case: "uppercase", tracking: "wide", clamp: "2" },
   icon: { size: 20, padding: 8, radius: 32, background: { light: "#ebebeb", dark: "#211c31" } },
   current: { text: "foreground", padding: 12, background: { light: "#e6e6e6", dark: "#272436" }, ring: "#4f5fae", "ring-width": 2 },
 };
 /** A hostile look that saves: a solid bar per scheme, square edged chips, heavy wide capitals, a 3px ring, the bar at its least height. */
 const HOSTILE_BAR = {
-  bar: { background: { light: "#fffbe6", dark: "#06140f" }, border: { light: "#111111", dark: "#5ee9b5" }, height: 72, backdrop: "solid" },
-  label: { text: { light: "#4a3b00", dark: "#c9f2e3" }, size: 10, weight: "800", case: "uppercase", tracking: "wider", lines: "2" },
+  bar: { background: { light: "#fffbe6", dark: "#06140f" }, border: { light: "#111111", dark: "#5ee9b5" }, height: 78, backdrop: "solid" },
+  label: { text: { light: "#4a3b00", dark: "#c9f2e3" }, size: 10, weight: "800", case: "uppercase", tracking: "wider", clamp: "2" },
   icon: { size: 24, padding: 6, radius: 0, background: { light: "#f1e6b3", dark: "#123528" }, border: { light: "#111111", dark: "#5ee9b5" }, "border-width": 2 },
   current: { text: { light: "#000000", dark: "#ffffff" }, weight: "800", padding: 6, background: { light: "#fed700", dark: "#0b5d44" }, ring: { light: "#111111", dark: "#ffffff" }, "ring-width": 3 },
   badge: { background: { light: "#111111", dark: "#fed700" }, text: { light: "#fed700", dark: "#111111" } },
@@ -733,6 +733,8 @@ const TAB_BAR_CASES = {
   // The store's own bar (no tokens) under the customer's tabs: a long label wraps, never ends in "…".
   "the store's own phone tab bar with the customer's tabs, English and Bangla": { states: ["base", "bn"], tabBar: "store", viewports: TAB_BAR_VIEWPORTS, request: { ...REFERENCE, page: "home" } },
   "a phone tab bar label under its floor": { refused: "token_value", refusedFor: /label size/, request: { tabs: true, page: "home", tabBar: { label: { size: 8 } } }, states: ["base"] },
+  // The current tab told apart by words 1.5:1 from the others' and one weight step: a hue and a shade, refused.
+  "a current tab apart by 1.5:1 words alone": { refused: "contrast", refusedFor: /current tab is told apart by its hue alone/, request: { tabs: true, toggle: true, scheme: "system", page: "home", tabBar: { bar: { height: 72 }, label: { text: { light: "#555555", dark: "#a0a0a0" }, weight: "500" }, current: { text: { light: "#000000", dark: "#e6e6e6" }, weight: "600" } } }, states: ["base"] },
 };
 Object.assign(REGRESSIONS, TAB_BAR_CASES);
 
@@ -1680,6 +1682,10 @@ function tabBarShown({ looked }) {
     range.selectNodeContents(label);
     const lines = new Set([...range.getClientRects()].filter((each) => each.width > 1).map((each) => Math.round(each.top))).size;
     if (lines > 2) problems.push(`the label "${name}" takes ${lines} lines`);
+    // Every glyph inside the label's box (it clips): a Bangla vowel sign above or below its line is drawn whole.
+    const glyphs = [...range.getClientRects()].filter((each) => each.width > 1);
+    const clipped = glyphs.filter((each) => each.top < rect.top - 0.5 || each.bottom > rect.bottom + 0.5);
+    if (clipped.length > 0) problems.push(`the label "${name}" clips its glyphs: their box ${Math.round(clipped[0].top)} to ${Math.round(clipped[0].bottom)}, the label's ${Math.round(rect.top)} to ${Math.round(rect.bottom)}`);
     if (rect.top < box.top - 0.5 || rect.bottom > box.bottom + 0.5) problems.push(`the label "${name}" runs out of the bar`);
     if (Number.parseFloat(style.fontSize) < 10) problems.push(`the label "${name}" is drawn at ${style.fontSize}, under the bar's 10px`);
     const ink = parseColour(style.color);
@@ -1696,14 +1702,20 @@ function tabBarShown({ looked }) {
     const glyph = rect.width - ["paddingLeft", "paddingRight", "borderLeftWidth", "borderRightWidth"].reduce((sum, side) => sum + Number.parseFloat(style[side]), 0);
     if (glyph < 14) problems.push(`a tab's icon is drawn ${glyph.toFixed(1)}px wide inside its chip`);
   }
+  // The current tab is told apart by more than its hue: words 3:1 from the others', a ring 2px or wider reading 3:1 on
+  // the bar, a weight 200 heavier, or a chip 4px larger (both drawn).
   const current = bar.querySelector('[data-part="tab"][aria-current]');
   const other = bar.querySelector('[data-part="tab"]:not([aria-current])');
   if (current && other) {
     const [a, b] = [getComputedStyle(current), getComputedStyle(other)];
-    const icon = current.querySelector('[data-part="tab-icon"]');
-    const ringed = icon && getComputedStyle(icon).boxShadow !== "none";
-    const apart = contrast(parseColour(a.color), parseColour(b.color)) >= 1.45;
-    if (Number(a.fontWeight) <= Number(b.fontWeight) && !ringed && !apart) problems.push("the current tab differs from the others by its hue alone");
+    const [mine, theirs] = [current, other].map((tab) => tab.querySelector('[data-part="tab-icon"]'));
+    const ring = mine ? /(rgba?\([^)]*\)|color\([^)]*\))\s+0px\s+0px\s+0px\s+([\d.]+)px/.exec(getComputedStyle(mine).boxShadow) : null;
+    const ringed = ring && Number(ring[2]) >= 1.95 && Math.min(...backs.map((back) => contrast(parseColour(ring[1]), back))) >= 2.95;
+    const apart = contrast(parseColour(a.color), parseColour(b.color)) >= 2.95;
+    const heavier = Number(a.fontWeight) - Number(b.fontWeight) >= 200;
+    const chip = (icon) => icon && parseColour(getComputedStyle(icon).backgroundColor)?.[3] > 0;
+    const larger = chip(mine) && chip(theirs) && mine.getBoundingClientRect().width - theirs.getBoundingClientRect().width >= 7.9;
+    if (!ringed && !apart && !heavier && !larger) problems.push("the current tab is told apart from the others by its hue alone");
   }
   return problems;
 }

@@ -488,8 +488,8 @@ export const MUTATIONS = {
   "H-k the drawer's footer never yields to its lines": {
     why: "the drawer's rows above the total stand outside its scrolling region, however little room they leave the lines",
     rewrites: [rewrite("apps/storefront/src/components/CartFlyout.tsx",
-      "{scrollRegion(cart.totalItems === 0 ? emptyState : lineList(true), undefined, cart.totalItems > 0 && extrasBox(<>{summaryRows}{footerTarget}</>))}",
-      "{scrollRegion(cart.totalItems === 0 ? emptyState : lineList(true))}{cart.totalItems > 0 && extrasBox(<>{summaryRows}{footerTarget}</>)}")],
+      "{scrollRegion(cart.totalItems === 0 ? emptyState : lineList(true), undefined, cart.totalItems > 0 && <>{offers}{extrasBox(<>{summaryRows}{footerTarget}</>)}</>)}",
+      "{scrollRegion(cart.totalItems === 0 ? emptyState : lineList(true))}{cart.totalItems > 0 && <>{offers}{extrasBox(<>{summaryRows}{footerTarget}</>)}</>}")],
     cases: ["five lines in the drawer on a phone", "five lines in the customer's drawer on a phone"],
     expect: /drawer lines: .*whole line|is not wholly on screen/,
   },

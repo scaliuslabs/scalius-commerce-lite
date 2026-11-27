@@ -23,6 +23,7 @@ import { INERT_MARKUP_MAX_BYTES } from "./inert-html";
 import { PRIVATE_COMPILED_CSS_MAX_BYTES, PRIVATE_LAYOUT_MAX_DEPTH, PRIVATE_WORDS_LIMITS } from "../storefront-theme/private-schema";
 import { PRIVATE_CONTRAST_FLOOR, PRIVATE_EDGE_MIN_WIDTH, PRIVATE_MARK_CONTRAST_FLOOR, PRIVATE_TOKEN_LIMITS } from "../storefront-theme/private-tokens";
 import { STOREFRONT_MOBILE_TAB_LIMITS } from "../storefront-theme/blocks";
+import { PRIVATE_TAB_BAR_LIMITS } from "../storefront-theme/private-tab-bar";
 import { STOREFRONT_MAX_SECTIONS, STOREFRONT_PAGE_SLIDE_PRODUCTS_LIMIT } from "../storefront-theme/sections";
 import { STOREFRONT_MAX_LANDING_PAGES } from "../storefront-theme/pages";
 import { STOREFRONT_THEME_TRANSLATION_LIMITS } from "../storefront-theme/text";
@@ -55,6 +56,8 @@ function themeLimits(): Record<string, SealedLimit> {
     "theme.contrastFloor": down(PRIVATE_CONTRAST_FLOOR),
     "theme.markContrastFloor": down(PRIVATE_MARK_CONTRAST_FLOOR),
     "theme.edgeMinWidth": down(PRIVATE_EDGE_MIN_WIDTH),
+    // The phone tab bar's look: what a blurred bar lets through, a label's floor, the current tab's cues (each a floor).
+    ...Object.fromEntries(Object.entries(PRIVATE_TAB_BAR_LIMITS).map(([name, value]) => [`theme.tabBar.${name}`, down(value)])),
     "theme.mobileTabs.max": up(STOREFRONT_MOBILE_TAB_LIMITS.max),
     "theme.mobileTabs.min": down(STOREFRONT_MOBILE_TAB_LIMITS.min),
     "theme.mobileTabs.label": up(STOREFRONT_MOBILE_TAB_LIMITS.label),

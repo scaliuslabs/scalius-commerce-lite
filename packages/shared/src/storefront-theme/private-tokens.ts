@@ -200,7 +200,6 @@ export const PRIVATE_TOKEN_SPECS: Record<PrivateTokenName, TokenSpec> = /* @__PU
   "max-width": { schema: px(480, 1600), write: (value: number) => `max-inline-size:${value}px` },
   // The phone tab bar's (written by private-tab-bar.ts, which knows the bar's own bounds).
   backdrop: choice({ blur: "", solid: "" }),
-  lines: choice({ 1: "", 2: "" }),
   "ring-width": { schema: px(0, 4) },
 }))();
 

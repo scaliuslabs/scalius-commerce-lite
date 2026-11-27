@@ -663,14 +663,6 @@
   "kind": "max",
   "value": 24
  },
- "$.privatePages.pages.tabBar.items{} max_length": {
-  "kind": "max",
-  "value": 24
- },
- "$.privatePages.pages.tabBar.layout max_length": {
-  "kind": "max",
-  "value": 24
- },
  "$.tokens.pagePaint|linear.angle greater_than": {
   "kind": "min",
   "value": 0

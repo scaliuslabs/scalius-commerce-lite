@@ -23980,6 +23980,30 @@
      "value": 2,
      "loosens": "down"
     },
+    "theme.tabBar.blurBleed": {
+     "value": 0.06,
+     "loosens": "down"
+    },
+    "theme.tabBar.labelMinSize": {
+     "value": 10,
+     "loosens": "down"
+    },
+    "theme.tabBar.wordsApart": {
+     "value": 3,
+     "loosens": "down"
+    },
+    "theme.tabBar.ringWidth": {
+     "value": 2,
+     "loosens": "down"
+    },
+    "theme.tabBar.weightStep": {
+     "value": 200,
+     "loosens": "down"
+    },
+    "theme.tabBar.chipStep": {
+     "value": 4,
+     "loosens": "down"
+    },
     "theme.mobileTabs.max": {
      "value": 5,
      "loosens": "up"

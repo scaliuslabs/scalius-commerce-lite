@@ -155,7 +155,8 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
   /* The store's own bar. Every rule here has zero specificity (`:where`), so the theme's tokens (written after it)
      replace it and any rule of a theme's own stylesheet outranks it on a public page, whatever loads first. */
   :where(:root) {
-    --mobile-tabs-height: 3.5rem;
+    /* Two lines of a 12px label with room for Bangla's vowel signs under a 22px icon (private-tab-bar.ts). */
+    --mobile-tabs-height: 3.75rem;
     --mobile-tabs-reserve: calc(var(--mobile-tabs-height) + 1px + env(safe-area-inset-bottom, 0px));
   }
 
@@ -226,24 +227,26 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* The current tab: its words and a weight 200 heavier (a cue besides colour, WCAG 1.4.1). */
   :where(.mobile-tab[aria-current]) {
     color: var(--foreground);
-    font-weight: 600;
+    font-weight: 700;
   }
 
-  /* A label is never cut: a long name ("Gaming News" at 320px, in English or Bangla) takes a second line. */
+  /* A label is never cut: a long name ("Gaming News" at 320px, in English or Bangla) takes a second line, and its box
+     keeps room above and below its lines for Bangla's vowel signs (PRIVATE_TAB_BAR_LABEL). */
   :where(.mobile-tab [data-part="tab-label"]) {
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     min-width: 0;
     max-width: 100%;
-    padding-inline: 0.125rem;
+    padding: 0.15em 0.125rem;
     overflow: hidden;
     overflow-wrap: anywhere;
     white-space: normal;
     text-align: center;
-    line-height: 1.15;
+    line-height: 1.25;
   }
 
   :where(.mobile-tab:active > :first-child) {
