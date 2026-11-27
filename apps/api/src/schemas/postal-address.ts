@@ -1,8 +1,9 @@
 // The one postal address shape of the stable app API (audit L3): the fields
 // of the sealed representation's `PostalAddress` (`orders.get` shipping and
 // billing addresses, `@scalius/shared/events`), with the store's delivery
-// place ids only under `placeIds` (Bangladesh's City, Thana, Area; AGENTS.md
-// address rules). Every stable input that takes an address takes this.
+// place ids only under `placeIds` (up to three optional levels of the store's
+// own delivery-place hierarchy, whose meaning a regional pack defines). Every
+// stable input that takes an address takes this.
 import { z } from "@hono/zod-openapi";
 
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
@@ -12,7 +13,7 @@ export const placeIdsInputSchema = z.object({
   city: z.string().trim().min(1).max(180).nullable().optional(),
   zone: z.string().trim().min(1).max(180).nullable().optional(),
   area: z.string().trim().min(1).max(180).nullable().optional(),
-}).strict().openapi({ description: "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them." });
+}).strict().openapi({ description: "The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none." });
 
 /** The address lines: what a resource's own contact does not already carry. */
 export const postalAddressLinesInputSchema = z.object({

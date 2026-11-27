@@ -1978,5 +1978,515 @@
   "from": "73274f81298e2d40",
   "change": "sdk.packages/shared/src/resource-states.d.ts#variable:SHIPMENT_STATUSES: an existing signature changed or gained a required member.",
   "reason": "Pre-lock contract fix (rc.1 state machines): the payment record state `confirmed` and the shipment state `processing` leave their lists. `confirmed` had no writer in this codebase's history; `processing` has had none since July 2026, but a store older than that may hold such a parcel and may have sent it as a shipment's status or previous status. Migration 0227 rewrites any stored row to `pending` and `in_transit` without enqueueing an event. The event fact and representation schemas narrow by the same two members."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.cart.transform input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.cart.transform input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.cart.line_prices input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.cart.line_prices input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.cart.validate input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.cart.validate input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.checkout.discounts input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.checkout.discounts input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.checkout.shipping_rates input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.checkout.shipping_rates input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.checkout.payment_methods input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.checkout.payment_methods input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "extensions input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "extensions input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "extensions input lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "extensions input lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiInput: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCart: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCartLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_EXTENSION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontCartLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontIslandContext: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "behaviour: functions input cart.lines[].addOns[].amountMinor on an expanded bundle's anchor component (and a kit's one line) is per bundle unit with per: \"bundle\", not per anchor unit; totalMinor = amountMinor × units, never × quantity.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): a meaning change no schema diff shows. On an app bundle's anchor line `amountMinor` is now what one BUNDLE unit pays (`per: \"bundle\"`), where the old per-unit field was what one ANCHOR unit paid, while the line's `quantity` still counts anchor units: `amountMinor × quantity` now overstates the add-on by the anchor's units per bundle unit (doubles it for a pair). The one rule, stated in commerce-hooks.md: `totalMinor = amountMinor × units` whenever `amountMinor` is a number, `units` being the line's quantity for `per: \"unit\"` and its bundle units for `per: \"bundle\"`; every shape carrying `per` carries `units`. Read `totalMinor` for money."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "194afdd8df8c1369",
+  "change": "functions.cart.line_prices output adjustments: the field is no longer accepted.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the `cart.line_prices` answer's `adjustments` is renamed `addOns`, the name every read of an add-on uses (each entry is exactly one add-on: prices live in `prices`, discounts in `checkout.discounts`); its entries keep `amountMinor` (or `percent`), which means what the read shape's `amountMinor` means (per unit, per bundle unit on a bundle). An app answers `{ prices, addOns, offers }`; the SDK's `priceLines` does."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "194afdd8df8c1369",
+  "change": "functions.cart.line_prices output addOns: a new required field.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the `cart.line_prices` answer's `adjustments` is renamed `addOns`, the name every read of an add-on uses (each entry is exactly one add-on: prices live in `prices`, discounts in `checkout.discounts`); its entries keep `amountMinor` (or `percent`), which means what the read shape's `amountMinor` means (per unit, per bundle unit on a bundle). An app answers `{ prices, addOns, offers }`; the SDK's `priceLines` does."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8c4f377bf14ed519",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8c4f377bf14ed519",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiInput: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8c4f377bf14ed519",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8c4f377bf14ed519",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiOrderLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8c4f377bf14ed519",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCart: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8c4f377bf14ed519",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCartLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8c4f377bf14ed519",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:LineAddOn: the declaration was removed.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8c4f377bf14ed519",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_EXTENSION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8c4f377bf14ed519",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8c4f377bf14ed519",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8c4f377bf14ed519",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontCartLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:StableContractOperation: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): a stable operation in the SDK's contract copy loses `operationId` (the agent and REST name, not part of the app contract; an app names an operation by its app name) and gains `statuses`, the success statuses it answers, now sealed. createContractApi answers a handler's bare data with the operation's first success status (201 for a create) instead of always 200, and hands the app only the keys the operation declares, as the platform does."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4000e92863c20bae",
+  "change": "sdk.packages/plugin-sdk/src/runtime.d.ts#InterfaceDeclaration:PluginRuntimeBridge: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4000e92863c20bae",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractApi: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4000e92863c20bae",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractCall: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4000e92863c20bae",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#InterfaceDeclaration:PluginTestHarnessOptions: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "3e517c5852023605",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1, Nov 27): thirteen sealed meanings told apps to read an `error.details` field (details.orderId, details.payoutId, details.issues, ...) that ctx.api.call never delivered: the bridge passed only code and message. Those codes now declare their details (a JSON Schema on the entry: payout and reversal ids and status, admin order state and orderId, review id, unpublished product ids, unresolved handles, the first 20 schema issues as path and message), the bridge and createContractApi deliver exactly the declared fields, and a removed or retyped details field is a break (protocolBreakingChanges). `rate_limited` promised details.retryAfterSeconds, which no app refusal carries: its meaning now says the limits are per minute and an HTTP answer's Retry-After says when. `validation_error` now says details.issues is there when the schema refused the value (a store rule's refusal names the field in the message). Every other code carries no details, as before."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4f45d4ca3f835914",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, round two, Nov 27): `validation_error` now says where an issue's path points: into the operation's input; for an address, the field within that address; where the operation checks a normalised form of its input (products.create, orders.create), into that form. Its producers on stable operations send the path as keys and list indexes (two sent a dotted string), and the bridge delivers a dotted path from an older producer as keys and indexes. The details declarations moved into one table (DETAILS) with no change to any field."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d7f647d0a67202be",
+  "change": "sdk.packages/plugin-sdk/src/runtime.d.ts#InterfaceDeclaration:PluginRuntimeBridge: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d7f647d0a67202be",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:StableContractOperation: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): a stable operation in the SDK's contract copy loses `operationId` (the agent and REST name, not part of the app contract; an app names an operation by its app name) and gains `statuses`, the success statuses it answers, now sealed. createContractApi answers a handler's bare data with the operation's first success status (201 for a create) instead of always 200, and hands the app only the keys the operation declares, as the platform does."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d7f647d0a67202be",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractCall: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d7f647d0a67202be",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractApi: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d7f647d0a67202be",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#InterfaceDeclaration:PluginTestHarnessOptions: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d7f647d0a67202be",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, round two, Nov 27): `validation_error` now says where an issue's path points: into the operation's input; for an address, the field within that address; where the operation checks a normalised form of its input (products.create, orders.create), into that form. Its producers on stable operations send the path as keys and list indexes (two sent a dotted string), and the bridge delivers a dotted path from an older producer as keys and indexes. The details declarations moved into one table (DETAILS) with no change to any field."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/plugin-sdk/src/ui.d.ts#variable:ui: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all; a link's words 1 to 120 with no space at either end), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release settles what an app's words may be: every word of a UI tree is read with its bidi marks removed; a buyer button's `confirm` (never drawn on buyer pages) is refused; a store link path with a needless escape (`%61pps`, `%2F`) or one a second decoding reads (`%2561`) is refused; and the store's words apply only where an app could pass for the store (`STORE_WORD_LABEL_KINDS`: action words and every fixed word to buttons, links, bulk labels, purchase option titles and payment method and shipping rate renames, amount words and every fixed word to money-row labels, sentences only as a whole fixed word), with a Pay word's slot holding a number or one provider word. A buyer block that breaks them is refused as before; in a function's answer the offending add-on, discount or bundle title is now drawn as the store's neutral word (numbered when several) and an offending rename is skipped, logged once an hour, where beta 8 refused the whole answer; a manifest's checkout words are checked when a release is installed or updated, never when a stored manifest is read. A tree, answer or release that used those words where they apply is now refused or adjusted."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all; a link's words 1 to 120 with no space at either end), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release settles what an app's words may be: every word of a UI tree is read with its bidi marks removed; a buyer button's `confirm` (never drawn on buyer pages) is refused; a store link path with a needless escape (`%61pps`, `%2F`) or one a second decoding reads (`%2561`) is refused; and the store's words apply only where an app could pass for the store (`STORE_WORD_LABEL_KINDS`: action words and every fixed word to buttons, links, bulk labels, purchase option titles and payment method and shipping rate renames, amount words and every fixed word to money-row labels, sentences only as a whole fixed word), with a Pay word's slot holding a number or one provider word. A buyer block that breaks them is refused as before; in a function's answer the offending add-on, discount or bundle title is now drawn as the store's neutral word (numbered when several) and an offending rename is skipped, logged once an hour, where beta 8 refused the whole answer; a manifest's checkout words are checked when a release is installed or updated, never when a stored manifest is read. A tree, answer or release that used those words where they apply is now refused or adjusted."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "1a5a3eadfdb48817",
+  "change": "sdk.packages/plugin-sdk/src/ui.d.ts#variable:ui: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all; a link's words 1 to 120 with no space at either end), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release settles what an app's words may be: every word of a UI tree is read with its bidi marks removed; a buyer button's `confirm` (never drawn on buyer pages) is refused; a store link path with a needless escape (`%61pps`, `%2F`) or one a second decoding reads (`%2561`) is refused; and the store's words apply only where an app could pass for the store (`STORE_WORD_LABEL_KINDS`: action words and every fixed word to buttons, links, bulk labels, purchase option titles and payment method and shipping rate renames, amount words and every fixed word to money-row labels, sentences only as a whole fixed word), with a Pay word's slot holding a number or one provider word. A buyer block that breaks them is refused as before; in a function's answer the offending add-on, discount or bundle title is now drawn as the store's neutral word (numbered when several) and an offending rename is skipped, logged once an hour, where beta 8 refused the whole answer; a manifest's checkout words are checked when a release is installed or updated, never when a stored manifest is read. A tree, answer or release that used those words where they apply is now refused or adjusted."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "1a5a3eadfdb48817",
+  "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all; a link's words 1 to 120 with no space at either end), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release settles what an app's words may be: every word of a UI tree is read with its bidi marks removed; a buyer button's `confirm` (never drawn on buyer pages) is refused; a store link path with a needless escape (`%61pps`, `%2F`) or one a second decoding reads (`%2561`) is refused; and the store's words apply only where an app could pass for the store (`STORE_WORD_LABEL_KINDS`: action words and every fixed word to buttons, links, bulk labels, purchase option titles and payment method and shipping rate renames, amount words and every fixed word to money-row labels, sentences only as a whole fixed word), with a Pay word's slot holding a number or one provider word. A buyer block that breaks them is refused as before; in a function's answer the offending add-on, discount or bundle title is now drawn as the store's neutral word (numbered when several) and an offending rename is skipped, logged once an hour, where beta 8 refused the whole answer; a manifest's checkout words are checked when a release is installed or updated, never when a stored manifest is read. A tree, answer or release that used those words where they apply is now refused or adjusted."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "behaviour: a cart.line_prices add-on on a bundle whose fee does not divide over its anchor's units per bundle unit is charged rounded once to the anchor's step (the increment times those units), where checkout used to refuse it with add_on_unavailable.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): a refusal lifted, recorded because it changes what an app sees. A ৳351 fee over a pair of teas at whole taka used to refuse checkout (`add_on_unavailable`, with no word in the app's log); it is now charged ৳352 a box (৳176 a tea), the nearest multiple of the step, half up, never free, and the app's log says what was charged and the step (`line.addOnStepMinor`) to answer in. `add_on_unavailable` remains only for a sixth add-on on a line or more than an order line keeps."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "0da07cfe75695759",
+  "change": "sdk.packages/plugin-sdk/src/runtime.d.ts#InterfaceDeclaration:PluginRuntimeBridge: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "0da07cfe75695759",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:StableContractOperation: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): a stable operation in the SDK's contract copy loses `operationId` (the agent and REST name, not part of the app contract; an app names an operation by its app name) and gains `statuses`, the success statuses it answers, now sealed. createContractApi answers a handler's bare data with the operation's first success status (201 for a create) instead of always 200, and hands the app only the keys the operation declares, as the platform does."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "0da07cfe75695759",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractCall: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "0da07cfe75695759",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractApi: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "0da07cfe75695759",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#InterfaceDeclaration:PluginTestHarnessOptions: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "0da07cfe75695759",
+  "change": "sdk.packages/plugin-sdk/src/ui.d.ts#variable:ui: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all; a link's words 1 to 120 with no space at either end), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release settles what an app's words may be: every word of a UI tree is read with its bidi marks removed; a buyer button's `confirm` (never drawn on buyer pages) is refused; a store link path with a needless escape (`%61pps`, `%2F`) or one a second decoding reads (`%2561`) is refused; and the store's words apply only where an app could pass for the store (`STORE_WORD_LABEL_KINDS`: action words and every fixed word to buttons, links, bulk labels, purchase option titles and payment method and shipping rate renames, amount words and every fixed word to money-row labels, sentences only as a whole fixed word), with a Pay word's slot holding a number or one provider word. A buyer block that breaks them is refused as before; in a function's answer the offending add-on, discount or bundle title is now drawn as the store's neutral word (numbered when several) and an offending rename is skipped, logged once an hour, where beta 8 refused the whole answer; a manifest's checkout words are checked when a release is installed or updated, never when a stored manifest is read. A tree, answer or release that used those words where they apply is now refused or adjusted."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "0da07cfe75695759",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, round two, Nov 27): `validation_error` now says where an issue's path points: into the operation's input; for an address, the field within that address; where the operation checks a normalised form of its input (products.create, orders.create), into that form. Its producers on stable operations send the path as keys and list indexes (two sent a dotted string), and the bridge delivers a dotted path from an older producer as keys and indexes. The details declarations moved into one table (DETAILS) with no change to any field."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "0da07cfe75695759",
+  "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all; a link's words 1 to 120 with no space at either end), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release settles what an app's words may be: every word of a UI tree is read with its bidi marks removed; a buyer button's `confirm` (never drawn on buyer pages) is refused; a store link path with a needless escape (`%61pps`, `%2F`) or one a second decoding reads (`%2561`) is refused; and the store's words apply only where an app could pass for the store (`STORE_WORD_LABEL_KINDS`: action words and every fixed word to buttons, links, bulk labels, purchase option titles and payment method and shipping rate renames, amount words and every fixed word to money-row labels, sentences only as a whole fixed word), with a Pay word's slot holding a number or one provider word. A buyer block that breaks them is refused as before; in a function's answer the offending add-on, discount or bundle title is now drawn as the store's neutral word (numbered when several) and an offending rename is skipped, logged once an hour, where beta 8 refused the whole answer; a manifest's checkout words are checked when a release is installed or updated, never when a stored manifest is read. A tree, answer or release that used those words where they apply is now refused or adjusted."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/plugin-sdk/src/runtime.d.ts#InterfaceDeclaration:PluginRuntimeBridge: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:StableContractOperation: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): a stable operation in the SDK's contract copy loses `operationId` (the agent and REST name, not part of the app contract; an app names an operation by its app name) and gains `statuses`, the success statuses it answers, now sealed. createContractApi answers a handler's bare data with the operation's first success status (201 for a create) instead of always 200, and hands the app only the keys the operation declares, as the platform does."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractCall: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractApi: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#InterfaceDeclaration:PluginTestHarnessOptions: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/plugin-sdk/src/ui.d.ts#variable:ui: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all; a link's words 1 to 120 with no space at either end), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release settles what an app's words may be: every word of a UI tree is read with its bidi marks removed; a buyer button's `confirm` (never drawn on buyer pages) is refused; a store link path with a needless escape (`%61pps`, `%2F`) or one a second decoding reads (`%2561`) is refused; and the store's words apply only where an app could pass for the store (`STORE_WORD_LABEL_KINDS`: action words and every fixed word to buttons, links, bulk labels, purchase option titles and payment method and shipping rate renames, amount words and every fixed word to money-row labels, sentences only as a whole fixed word), with a Pay word's slot holding a number or one provider word. A buyer block that breaks them is refused as before; in a function's answer the offending add-on, discount or bundle title is now drawn as the store's neutral word (numbered when several) and an offending rename is skipped, logged once an hour, where beta 8 refused the whole answer; a manifest's checkout words are checked when a release is installed or updated, never when a stored manifest is read. A tree, answer or release that used those words where they apply is now refused or adjusted."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, round two, Nov 27): `validation_error` now says where an issue's path points: into the operation's input; for an address, the field within that address; where the operation checks a normalised form of its input (products.create, orders.create), into that form. Its producers on stable operations send the path as keys and list indexes (two sent a dotted string), and the bridge delivers a dotted path from an older producer as keys and indexes. The details declarations moved into one table (DETAILS) with no change to any field."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiInput: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiOrderLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCart: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCartLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_EXTENSION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontCartLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontIslandContext: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2d122b8428facbf5",
+  "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all; a link's words 1 to 120 with no space at either end), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release settles what an app's words may be: every word of a UI tree is read with its bidi marks removed; a buyer button's `confirm` (never drawn on buyer pages) is refused; a store link path with a needless escape (`%61pps`, `%2F`) or one a second decoding reads (`%2561`) is refused; and the store's words apply only where an app could pass for the store (`STORE_WORD_LABEL_KINDS`: action words and every fixed word to buttons, links, bulk labels, purchase option titles and payment method and shipping rate renames, amount words and every fixed word to money-row labels, sentences only as a whole fixed word), with a Pay word's slot holding a number or one provider word. A buyer block that breaks them is refused as before; in a function's answer the offending add-on, discount or bundle title is now drawn as the store's neutral word (numbered when several) and an offending rename is skipped, logged once an hour, where beta 8 refused the whole answer; a manifest's checkout words are checked when a release is installed or updated, never when a stored manifest is read. A tree, answer or release that used those words where they apply is now refused or adjusted."
  }
 ]

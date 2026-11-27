@@ -619,7 +619,7 @@ export async function checkStorefrontCartRules(
     attributes: input.attributes,
   });
   const cart = safeAppCart(() => buildAppFunctionCart({
-    currency: input.currency,
+    currency: { ...input.currency, ...(cartValidation.money ? { priceIncrementMinor: cartValidation.money.incrementMinor } : {}) },
     // Without a market's money the cart is in the store's own currency.
     storeCurrency: cartValidation.money ? functionStoreCurrency(cartValidation.money) : input.currency,
     channel: input.channel,

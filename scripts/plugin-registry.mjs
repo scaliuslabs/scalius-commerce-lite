@@ -239,11 +239,6 @@ function listFiles(directory) {
   });
 }
 
-function compareVersions(registry, left, right) {
-  if (left === right) return 0;
-  return registry.isNewerPluginVersion(left, right) ? 1 : -1;
-}
-
 /**
  * Builds or extends a static registry folder from signed `dist` folders
  * (`pnpm plugin pack --key`). Same id and version replaces its entry. Returns
@@ -319,7 +314,7 @@ export async function buildRegistry(distDirs, { out, name = null }) {
   const next = registry.pluginRegistryIndexSchema.parse({
     version: 1,
     name: registryName,
-    apps: [...index.apps].sort((left, right) => left.id.localeCompare(right.id) || compareVersions(registry, left.version, right.version)),
+    apps: [...index.apps].sort((left, right) => left.id.localeCompare(right.id) || registry.comparePluginVersions(left.version, right.version)),
   });
   mkdirSync(out, { recursive: true });
   writeFileSync(indexPath, `${JSON.stringify(next, null, 2)}\n`);
@@ -365,7 +360,7 @@ async function download(url, maxBytes, fetchImpl) {
 export function pickRelease(registry, index, id, version) {
   const entries = index.apps.filter((entry) => entry.id === id);
   if (version) return entries.find((entry) => entry.version === version) ?? null;
-  return entries.reduce((best, entry) => (!best || registry.isNewerPluginVersion(entry.version, best.version) ? entry : best), null);
+  return entries.reduce((best, entry) => (!best || registry.comparePluginVersions(entry.version, best.version) > 0 ? entry : best), null);
 }
 
 /** The package folder name of a plugin id: `acme.tally` is `acme-tally`. */
@@ -410,7 +405,7 @@ export async function installFromRegistry({ id, indexUrl, version = null, plugin
 
   const parsed = contract.parsePluginManifest(entry.manifest);
   if (!parsed.ok) throw new Error(`The release's manifest is invalid: ${parsed.issues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
-  const patternIssues = contract.pluginObjectPatternIssues(parsed.manifest);
+  const patternIssues = contract.pluginManifestPolicyIssues(parsed.manifest);
   if (patternIssues.length > 0) throw new Error(`The release's manifest is invalid: ${patternIssues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
   if (parsed.manifest.id !== entry.id || parsed.manifest.version !== entry.version) throw new Error("The release's manifest names another app or version than its listing.");
   const compatible = contract.pluginCompatibility(entry.manifest);

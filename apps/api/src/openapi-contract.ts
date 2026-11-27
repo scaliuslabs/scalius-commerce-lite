@@ -543,19 +543,27 @@ function normalizeUnconstrainedOpenApiSchemas(value: unknown): void {
     delete record.nullable;
     return;
   }
-  // A shared component that may be null (`z.union([Named, z.null()])`, since
+  // `z.null()` in a union is written as a `{ nullable: true }` option. In
+  // OpenAPI 3.0 null is `nullable` on the union itself: an option of its own
+  // would read as "anything" (an empty schema) and match every value. A shared
+  // component that may be null (`z.union([Named, z.null()])`, since
   // `.nullable()` on a named schema would make the component itself
   // nullable) is OpenAPI 3.0's nullable reference: `allOf` with `nullable`.
   for (const key of ["anyOf", "oneOf"] as const) {
     const options = record[key];
-    if (!Array.isArray(options) || options.length !== 2) continue;
-    const nullIndex = options.findIndex((option) =>
-      option && typeof option === "object" && Object.keys(option).length === 1 && (option as { nullable?: unknown }).nullable === true);
-    const reference = options[1 - nullIndex] as Record<string, unknown> | undefined;
-    if (nullIndex < 0 || !reference || typeof reference.$ref !== "string" || Object.keys(reference).length !== 1) continue;
-    delete record[key];
-    record.allOf = [reference];
+    if (!Array.isArray(options)) continue;
+    const isNull = (option: unknown) =>
+      Boolean(option) && typeof option === "object" && Object.keys(option as object).length === 1 && (option as { nullable?: unknown }).nullable === true;
+    const rest = options.filter((option) => !isNull(option));
+    if (rest.length === options.length || rest.length === 0) continue;
     record.nullable = true;
+    const only = rest.length === 1 ? rest[0] as Record<string, unknown> : null;
+    if (only && typeof only.$ref === "string" && Object.keys(only).length === 1) {
+      delete record[key];
+      record.allOf = [only];
+    } else {
+      record[key] = rest;
+    }
   }
   for (const item of Object.values(record)) {
     normalizeUnconstrainedOpenApiSchemas(item);

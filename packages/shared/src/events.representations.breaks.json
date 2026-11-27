@@ -70,5 +70,23 @@
   "from": "910b78ed85d3fabd",
   "change": "behaviour: a payment's `status` no longer lists `confirmed`, and a shipment's `status` no longer lists `processing`.",
   "reason": "Pre-lock contract fix (rc.1 state machines): both values leave their lists. `confirmed` had no writer in this codebase's history; `processing` has had none since July 2026, but a store older than that may hold such a parcel and may have sent it as a shipment's status or previous status. Migration 0227 rewrites any stored row to `pending` and `in_transit` without enqueueing an event. A list an app reads is open and only gains members after the lock. The schema diff is additive for a response, so this entry records the change for review."
+ },
+ {
+  "snapshot": "events.representations.snapshot.json",
+  "from": "910b78ed85d3fabd",
+  "change": "order lines[].adjustments: the field was removed.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app reads one. An order line's `adjustments` (`{ appId, title, amountMinor }`, per unit, and per anchor unit on a bundle) becomes `addOns`, the same `LineAddOn` the checkout functions and buyer UI carry: `{ appId, title, totalMinor, amountMinor, per }`, one per app and title, `totalMinor` the exact amount on the line, `amountMinor` per unit (`per: \"unit\"`) or per bundle unit (`per: \"bundle\"`, an expanded bundle's or a kit's add-on on its anchor) only when exact for every one, else null (a bundle line whose quantity staff changed). An app that read `lines[].adjustments[].amountMinor` reads `lines[].addOns[]`: `totalMinor` for money, `amountMinor` with `per` for a unit price. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "events.representations.snapshot.json",
+  "from": "910b78ed85d3fabd",
+  "change": "behaviour: order lines[].addOns[].amountMinor on an expanded bundle's or a kit's anchor line is per bundle unit with per: \"bundle\", not per anchor unit as adjustments[].amountMinor was; totalMinor = amountMinor × units, never × quantity.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): a meaning change no schema diff shows. On an app bundle's anchor line `amountMinor` is now what one BUNDLE unit pays (`per: \"bundle\"`), where the old per-unit field was what one ANCHOR unit paid, while the line's `quantity` still counts anchor units: `amountMinor × quantity` now overstates the add-on by the anchor's units per bundle unit (doubles it for a pair). The one rule, stated in commerce-hooks.md: `totalMinor = amountMinor × units` whenever `amountMinor` is a number, `units` being the line's quantity for `per: \"unit\"` and its bundle units for `per: \"bundle\"`; every shape carrying `per` carries `units`. Read `totalMinor` for money."
+ },
+ {
+  "snapshot": "events.representations.snapshot.json",
+  "from": "910b78ed85d3fabd",
+  "change": "truncation fetch.operationId: the field was removed.",
+  "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): the operationId is the agent and REST name of an operation, not part of the app contract, and sealing it here would have frozen every stable operation id through the webhook body. A receiver reads the resource with `appOperation` (what an app passes to ctx.api.call) or with `method` and `path` (what an HTTP caller sends); both stay."
  }
 ]

@@ -33,7 +33,7 @@ import { checkPluginAsset } from "@scalius/shared/plugins/assets";
 import { verifyStorefrontFiles } from "@scalius/shared/plugins/storefront-files";
 import { STOREFRONT_COMPONENT_LIMITS, storefrontFileContentType } from "@scalius/shared/plugins/storefront-protocol";
 import {
-  isNewerPluginVersion,
+  comparePluginVersions,
   pluginPackageSignatureSchema,
   pluginRegistryIndexSchema,
   sealedAssetDigests,
@@ -298,7 +298,7 @@ export async function downloadRegistryRelease(
 export function latestEntry(index: PluginRegistryIndex, id: string, version?: string): PluginRegistryEntry | null {
   const entries = index.apps.filter((entry) => entry.id === id);
   if (version) return entries.find((entry) => entry.version === version) ?? null;
-  return entries.reduce<PluginRegistryEntry | null>((best, entry) => (!best || isNewerPluginVersion(entry.version, best.version) ? entry : best), null);
+  return entries.reduce<PluginRegistryEntry | null>((best, entry) => (!best || comparePluginVersions(entry.version, best.version) > 0 ? entry : best), null);
 }
 
 // ── Upload ─────────────────────────────────────────────────────────────────
@@ -398,5 +398,5 @@ export async function installRelease(
 
 /** Whether a listed release is newer than the installed version. */
 export function hasUpdate(installed: PluginInstallation, entry: PluginRegistryEntry): boolean {
-  return entry.id === installed.pluginId && isNewerPluginVersion(entry.version, installed.version);
+  return entry.id === installed.pluginId && comparePluginVersions(entry.version, installed.version) > 0;
 }

@@ -18,7 +18,17 @@ const BIDI_MARKS = /[\u202A-\u202E\u2066-\u2069\uFEFF]/g;
 
 /** App text as the store draws it: control runs to one space, bidi embedding/override/isolate marks removed, trimmed. */
 export function cleanAppText(value: string): string {
-  return value.replace(BIDI_MARKS, "").replace(CONTROLS, " ").trim();
+  return stripBidiMarks(value).replace(CONTROLS, " ").trim();
+}
+
+/** App words whose spaces and line breaks are the app's own (a text's body, a sentence's plain piece): only the bidi marks removed. */
+export function stripBidiMarks(value: string): string {
+  return value.replace(BIDI_MARKS, "");
+}
+
+/** One line of app words kept as written, never trimmed (a sentence's link words): control runs to one space, bidi marks removed. */
+export function cleanAppLine(value: string): string {
+  return stripBidiMarks(value).replace(CONTROLS, " ");
 }
 
 /**

@@ -361,10 +361,12 @@ export async function saveTranslations(
     if (identities.has(key)) throw new ValidationError("A resource may appear only once in a translation save.");
     identities.add(key);
     if (!(entry.type in TRANSLATABLE_RESOURCES)) throw new ValidationError(`Unknown resource type ${entry.type}.`);
-    const issues = translationFieldIssues(entry.type, entry.fields);
-    if (issues.length > 0) {
-      throw new ValidationError(`Some fields can't be saved: ${issues.map((issue) => issue.code === "too_long" ? `${issue.field} is longer than ${issue.max} characters` : `${issue.field} is not a field of this resource`).join("; ")}.`, { issues });
-    }
+    const issues = translationFieldIssues(entry.type, entry.fields).map((issue) => ({
+      ...issue,
+      path: ["fields", issue.field],
+      message: issue.code === "too_long" ? `${issue.field} is longer than ${issue.max} characters` : `${issue.field} is not a field of this resource`,
+    }));
+    if (issues.length > 0) throw new ValidationError(`Some fields can't be saved: ${issues.map((issue) => issue.message).join("; ")}.`, { issues });
     if (Object.keys(entry.fields).length > MAX_TRANSLATION_FIELDS) throw new ValidationError(`A translation has at most ${MAX_TRANSLATION_FIELDS} fields.`);
     if (entry.slug !== undefined && entry.slug !== null && entry.slug !== "") {
       if (!isSluggedResourceType(entry.type)) throw new ValidationError("This kind of page has no web address to translate.");

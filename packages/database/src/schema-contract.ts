@@ -915,7 +915,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 227,
     name: "0227_dead_record_states",
-    sourceSha256: "c1f65974975b27971654872330edf348ebca807a32fa242348ab49a3ffa3482d",
+    sourceSha256: "e00ce04538716737d5dc8126406a7f12d8f6a350780a8028bce0fa1b068bb3d6",
   },
 ] as const;
 
