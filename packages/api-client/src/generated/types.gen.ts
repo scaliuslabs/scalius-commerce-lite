@@ -2287,6 +2287,10 @@ export type OrderLineProperty = {
     confirmation?: {
         text: string;
     };
+    /**
+     * A choice its app draws itself (an input with `surfaces: []`, a select or a checkbox). Where the row also holds an add-on of the same app, that add-on states it: a buyer surface prints the add-on, not this answer.
+     */
+    appDrawnChoice?: true;
     details?: Array<string>;
 };
 
@@ -7755,6 +7759,10 @@ export type AppGrant = {
      * Runs a pixel that hears buyer events on every page, checkout included, in a sandboxed frame, once the buyer's consent allows it.
      */
     storefrontPixel: boolean;
+    /**
+     * Draws its header or footer on the buyer's account, receipt and order pages, rebuilt inert inside a shadow root: no app code runs there and nothing it draws takes input.
+     */
+    storefrontBuyerPages: boolean;
     /**
      * Asks buyers to upload files (a checkout attribute or line input of type file): it receives their files.
      */

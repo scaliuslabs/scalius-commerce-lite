@@ -139,6 +139,31 @@ export const CART_LINE_CASES: CartLineCase[] = [
     shows: shown({ amount: formatMoney(250), components: [`Add-on: Gold (+${formatMoney(100)})`] }),
   },
   {
+    // The theme author's report: "Protection: Added" printed beside the app's own add-on row for the same thing.
+    label: "an app-drawn choice its app's add-on states: the add-on row alone, a buyer's own words kept",
+    key: "k8a",
+    item: {
+      ...shirt,
+      price: 500,
+      properties: [
+        { key: "arcade.protection.plan", value: "lifetime", label: "Protection", displayValue: "Added", priceMinor: 0, appDrawnChoice: true },
+        { key: "arcade.protection.note", value: "Ana", label: "Note", displayValue: "Ana", priceMinor: 0 },
+      ],
+      adjustments: [{ key: "_adjustment", label: "Account protection", displayValue: "Account protection", priceMinor: 35_000, appId: "arcade.protection" }],
+    },
+    shows: shown({ amount: formatMoney(500), inputs: ["Note: Ana"], components: [`Add-on: Account protection (+${formatMoney(350)})`], edit: true }),
+  },
+  {
+    label: "an app-drawn choice with no add-on of its app on the line (declined): its answer shows",
+    key: "k8b",
+    item: {
+      ...shirt,
+      properties: [{ key: "arcade.protection.plan", value: "declined", label: "Protection", displayValue: "No protection", priceMinor: 0, appDrawnChoice: true }],
+      adjustments: [{ key: "_adjustment", label: "Gift wrap", displayValue: "Gold", priceMinor: 0, appId: "acme.wrap" }],
+    },
+    shows: shown({ inputs: ["Protection: No protection"], components: ["Add-on: Gold"], edit: true }),
+  },
+  {
     label: "a digital line in a cart that ships something else",
     key: "k9",
     item: { ...shirt, fulfillmentKind: "digital" },
