@@ -16,7 +16,7 @@ export const STOREFRONT_LANDING_DESCRIPTION_MAX = 320;
  * reserves today. Frozen: a name added to `STOREFRONT_ROUTE_SEGMENTS` later must
  * not be added here, or a stored document that holds it would stop reading.
  */
-const LANDING_HANDLES_NEVER_VALID: ReadonlySet<string> = new Set([
+export const LANDING_HANDLES_NEVER_VALID: ReadonlySet<string> = new Set([
   "404", "500", "account", "admin", "api", "apps", "blog", "brands", "buy", "cart", "categories", "checkout",
   "collections", "health", "localization", "newsletter", "order-success", "pages", "payment-recovery", "products",
   "search", "track-order",

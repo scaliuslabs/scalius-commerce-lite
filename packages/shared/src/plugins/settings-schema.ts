@@ -7,6 +7,7 @@
 import { z } from "zod";
 import { isStorePagePath, STORE_PAGE_RULE, URL_SETTING_MAX } from "./store-page-path";
 import { PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE } from "./manifest-patterns";
+import { isStorefrontThemeLinkPath } from "../storefront-theme/links";
 
 export const PLUGIN_SETTING_TYPES = [
   "text",
@@ -53,8 +54,21 @@ export const PLUGIN_PRODUCT_ID = /^[A-Za-z0-9_-]{1,64}$/;
  * `newest`, `on-sale`, `popular`, `collection:<id>` or `category:<id>`.
  */
 export const PLUGIN_PRODUCT_SOURCE = /^(?:newest|on-sale|popular|(?:collection|category):[A-Za-z0-9_-]{1,64})$/;
-/** A same-store path (`/collections/new`) or an https URL (a `link` setting's value). */
+/** A same-store path (`/collections/new`) or an https URL (a `link` setting's value): its shape (`isPluginLinkValue` is the whole rule). */
 export const PLUGIN_LINK = /^(?:\/(?!\/)[^\s]*|https:\/\/[^\s]+)$/;
+
+/**
+ * A `link` setting's value: an https URL, or a page a buyer can open on this
+ * store by the theme's link rule (`isStorefrontThemeLinkPath`: a store page or
+ * an app's page, never the API, `/_x` files or `_`/`~` assets, no backslash).
+ * Refused at save. A stored one reads as no link (`resolvePluginSettingValues`:
+ * the field's default, or a list item's link null or the item left out), and a
+ * stored manifest default as none (`upgradeStoredPluginManifest`).
+ */
+export function isPluginLinkValue(value: string): boolean {
+  return PLUGIN_LINK.test(value) && (!value.startsWith("/") || isStorefrontThemeLinkPath(value.split(/[?#]/)[0]!));
+}
+const LINK_RULE = "Use a page of this store (/…) or an https:// link: never /api or /_ paths.";
 
 /** A setting key: snake_case (the manifest's key rule), unique per plugin. */
 export const PLUGIN_SETTING_KEY = PLUGIN_KEY_PATTERN;
@@ -133,7 +147,7 @@ const imageField = z.object({ ...base, type: z.literal("image") }).strict();
 /** One product the merchant picks; the component gets its card (null once it is gone or not public). */
 const productField = z.object({ ...base, type: z.literal("product") }).strict();
 /** A same-store path or an https link. */
-const linkField = z.object({ ...base, type: z.literal("link"), default: z.string().max(2048).regex(PLUGIN_LINK).optional() }).strict();
+const linkField = z.object({ ...base, type: z.literal("link"), default: z.string().max(2048).regex(PLUGIN_LINK, LINK_RULE).refine(isPluginLinkValue, LINK_RULE).optional() }).strict();
 /** Where products come from; the component gets up to `limit` product cards. */
 const productsField = z.object({
   ...base,
@@ -276,7 +290,7 @@ function valueSchema(field: PluginSettingField | PluginSettingItemField): z.ZodT
     case "product":
       return z.string().regex(PLUGIN_PRODUCT_ID);
     case "link":
-      return z.string().max(2048).regex(PLUGIN_LINK, "Use a store path (/…) or an https:// link.");
+      return z.string().max(2048).regex(PLUGIN_LINK, LINK_RULE).refine(isPluginLinkValue, { message: LINK_RULE, params: { reason: "invalid_link" } });
     case "list":
       return z.array(itemSchema(field.fields)).min(field.min).max(field.max);
   }
@@ -369,11 +383,29 @@ export function resolvePluginSettingValues(schema: PluginSettingsSchema, stored:
       result[field.key] = "";
       continue;
     }
-    const parsed = valueSchema(field).safeParse(raw);
+    const parsed = valueSchema(field).safeParse(field.type === "list" ? withReadableItemLinks(field.fields, raw) : raw);
     if (parsed.success) result[field.key] = parsed.data;
     else if (fallback !== undefined) result[field.key] = fallback;
   }
   return result;
+}
+
+/**
+ * A list's items with each link the link rule refuses now (it once took any
+ * `/` path) read as no link, or the item left out when its link is required,
+ * so one stale link never drops the whole list. A save still refuses it.
+ */
+function withReadableItemLinks(fields: readonly PluginSettingItemField[], raw: unknown): unknown {
+  const links = fields.filter((itemField) => itemField.type === "link");
+  if (links.length === 0 || !Array.isArray(raw)) return raw;
+  const refused = (value: unknown) => typeof value === "string" && value !== "" && !isPluginLinkValue(value);
+  return raw.flatMap((item) => {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) return [item];
+    const stale = links.filter((itemField) => refused((item as Record<string, unknown>)[itemField.key]));
+    if (stale.length === 0) return [item];
+    if (stale.some((itemField) => itemField.required)) return [];
+    return [{ ...item, ...Object.fromEntries(stale.map((itemField) => [itemField.key, null])) }];
+  });
 }
 
 /**

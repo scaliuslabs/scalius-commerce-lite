@@ -27,6 +27,7 @@ import {
 import { isEventTopicFilter } from "@scalius/shared/events";
 import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placeholder-credentials";
 import { currentProviderKind } from "@scalius/shared/plugins/providers/kinds";
+import { isPluginLinkValue } from "@scalius/shared/plugins/settings-schema";
 import { pluginObjectPatternIssues } from "@scalius/shared/plugins/object-patterns";
 import { pluginManifestPolicyIssues } from "@scalius/shared/plugins/manifest-policy";
 import {
@@ -223,9 +224,36 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
  *    privacy-request names, rc.1) leaves `events` and each feature's
  *    `events`: an installed app keeps running and loses only a topic nothing
  *    ever sent. An install or update naming one is still refused.
+ * 6. A `link` setting default the link rule now refuses (it once took any
+ *    `/` path) is left out (`readableLinkDefaults`).
  */
 export function upgradeStoredPluginManifest(manifest: Record<string, unknown>): Record<string, unknown> {
-  return withoutRemovedEventTopics(statedThemeVersions(nestAdminParts(buyerUiAsExtensions(permissionsAsScopes(manifest)))));
+  return readableLinkDefaults(withoutRemovedEventTopics(statedThemeVersions(nestAdminParts(buyerUiAsExtensions(permissionsAsScopes(manifest))))));
+}
+
+/**
+ * A `link` setting's default the link rule refuses now (`/api/…`, `/_x/…`, a
+ * backslash: it once took any `/` path) is left out, in any settings list the
+ * manifest has, so the installed app keeps running and the field reads unset.
+ * Installing or updating an app refuses such a default.
+ */
+function readableLinkDefaults<Value>(value: Value): Value {
+  if (Array.isArray(value)) {
+    const items = value.map(readableLinkDefaults);
+    return (items.some((item, index) => item !== value[index]) ? items : value) as Value;
+  }
+  if (!isObject(value)) return value;
+  if (value.type === "link" && typeof value.default === "string" && !isPluginLinkValue(value.default)) {
+    const { default: _refused, ...rest } = value;
+    return rest as Value;
+  }
+  let changed = false;
+  const next: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    next[key] = readableLinkDefaults(child);
+    if (next[key] !== child) changed = true;
+  }
+  return (changed ? next : value) as Value;
 }
 
 /** The theme document version a stored template or preset without one was read at (`themeVersion` was optional then). */
