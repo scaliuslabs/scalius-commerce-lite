@@ -61,7 +61,7 @@ How a new app reaches a store you run with `pnpm dev` (on a deployed Free store 
 4. Open the dashboard: Apps. The app is listed as installed, not active: nothing of it runs yet. The Apps page and the scheduled tick sync bundled apps into the database.
 5. As a Super Admin, open the app and fill its required settings (activation refuses with `installation_settings_incomplete` until they are filled; optional ones can wait).
 6. Review the access it asks for (scopes, hosts, storefront parts) and activate it. Its data updates run, then `lifecycle.activate`. Its storefront sections, components and skins are then offered in the theme editor.
-7. After a code change: `pnpm plugin add <app>` again (or `pnpm plugin build <plugin id>` for an app under `plugins/`). A new version whose access the approved grant covers stays active; one that asks for more waits for approval.
+7. After a code change: `pnpm plugin add <app>` again (or `pnpm plugin build <plugin id>` for an app under `plugins/`). A new version runs at once with the access already approved; what it newly asks for stays off until a Super Admin approves it.
 
 On Workers Free every app is bundled into the store's Worker, so an app is added with `pnpm plugin add` on the operator's checkout, not uploaded on the Apps page (the page says so).
 
@@ -272,10 +272,10 @@ features: [{
 - `ctx.features` lists the features that are on; use it to leave an off feature's parts out of a shared screen.
 - `lifecycle.enable(ctx, { feature })` runs after a feature is turned on, with its access; `lifecycle.disable(ctx, { feature })` runs before it is turned off, while it still has it.
 - An item belongs to at most one feature, and may point only at items of its own feature or of the base (an admin page at its feature's route, a provider at its feature's settings).
-- An update keeps the features that are on and starts new ones off. It needs approval again when an on feature (or the base) asks for more.
+- An update keeps the features that are on and starts new ones off. When an on feature (or the base) asks for more, the app keeps running and only the new access waits for approval.
 - `createPluginTestHarness(module, { features })` runs with those features on (default: all).
 
-Activation shows a Super Admin everything the manifest asks for. An update that asks for more access stays inactive until a Super Admin approves it.
+Activation shows a Super Admin everything the manifest asks for. An update never pauses the app: the new code runs at once with the access already approved (anything the new manifest no longer asks for ends with the update), and whatever it asks for beyond that stays off, exactly as if it never asked, until a Super Admin approves it. Build each release to run under the previous grant: a call outside it is refused, a function point, event, provider, route or storefront part outside it is absent, and a blocking function not yet approved as blocking runs as an optional one.
 
 A `secret` setting is encrypted with a key derived from `CREDENTIAL_ENCRYPTION_KEY` and masked everywhere. It appears decrypted only in `ctx.settings`. A secret that cannot be opened reads as `null`.
 
@@ -598,7 +598,7 @@ An app declares versioned updates of its own data (`manifest.migrations`, up to 
 - **Workers Free (bundled).** An operator adds the app to the fork and deploys: `pnpm plugin add <folder | zip | dist>` from anywhere on their machine, or `pnpm plugin add <vendor.name> --registry <index URL>` for a signed registry release. The Apps page shows that command.
 - **Workers Paid (sandbox).** The Apps page installs from a registry with one click, or from an uploaded package (a ZIP that `pnpm plugin pack` writes). The platform downloads the release, checks its SHA-256, its compatibility, its Ed25519 signature and its images, and stores it in R2. Nothing runs until a Super Admin approves its access.
 - **Signatures.** A release is signed over its id, version, bundle SHA-256 and the SHA-256 of its canonical manifest (`pnpm plugin pack` writes it). The store trusts the official key (pinned in code; empty until the official registry exists) and the keys a Super Admin added (Apps → Registries and trusted developers). An upload signed by an unknown developer, or not signed, installs only after a Super Admin chooses "trust this developer" or "install unsigned app".
-- **Updates.** The Apps page shows newer registry versions. An update that asks for more access waits for a Super Admin. An active app loads the new code and runs its data updates at once; when either fails, the previous version comes back and the page says why.
+- **Updates.** The Apps page shows newer registry versions. An update runs with the access already approved; new access it asks for waits for a Super Admin. An active app loads the new code and runs its data updates at once; when either fails, the previous version comes back and the page says why.
 - **Private apps.** Keep an app in your fork's `plugins/` folder (both loaders: `pnpm plugin add plugins/<dir>`, then deploy), or sign it with your own key and upload it on Paid. Add your public key as a trusted developer once, and your uploads need no extra step. A private app never needs the official registry.
 
 ## Quotas

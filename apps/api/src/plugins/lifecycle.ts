@@ -60,15 +60,16 @@ export async function activatePluginWithHooks(
   } catch (error) {
     if (!(error instanceof PluginError) || error.pluginCode !== "installation_objects_invalid") throw error;
     const failed = await requirePluginInstallation(context.db, pluginId);
-    const restored = pluginNeedsApproval(before) && before.source !== "bundled"
+    const restored = startsWaitingRelease(before)
       ? await rollBackApprovedUpdate(context, failed, error.message) : null;
     return { installation: restored ?? failed, hookError: restored ? `The update was undone. ${error.message}` : error.message };
   }
   const turnedOn = installation.features.filter((feature) => !before.features.includes(feature));
   const host = hostFor(context);
-  // Approving an update that waited for more access: the new code loads and
-  // its data updates run now, and a failure puts back the release it replaced.
-  if (pluginNeedsApproval(before) && before.source !== "bundled") {
+  // Starting a stopped app whose update waited for more access: the new code
+  // loads and its data updates run now, and a failure puts back the release
+  // it replaced. A running app already started its release at the update.
+  if (startsWaitingRelease(before)) {
     const failure = await startNewRelease(host, installation);
     if (failure) {
       const restored = await rollBackApprovedUpdate(context, installation, failure);
@@ -93,6 +94,11 @@ export async function activatePluginWithHooks(
   // Approved features adopt like ones turned on later (provider-adoption.ts).
   await putServicesToUse(context, running, turnedOn);
   return { installation: running, hookError };
+}
+
+/** An approval that starts a release no one has run yet: the app was not running when its wider update arrived. */
+function startsWaitingRelease(before: PluginInstallation): boolean {
+  return before.status !== "active" && pluginNeedsApproval(before) && before.source !== "bundled";
 }
 
 export async function setPluginFeatureWithHooks(
@@ -141,10 +147,10 @@ export async function deactivatePluginWithHooks(
  * (WordPress-style update with automatic rollback):
  *
  *   1. the new code and manifest replace the old (`updatePluginInstallation`):
- *      an update that asks for more access waits for a Super Admin, and its
- *      data updates run when it is approved and first runs;
- *   2. an app that stays active loads the new code (`checkLoads`) and runs its
- *      pending data updates at once;
+ *      a running app keeps running under the grant it had; what the release
+ *      asks beyond it stays off until a Super Admin approves it;
+ *   2. an app that is active loads the new code (`checkLoads`) and runs its
+ *      pending data updates at once (a stopped app does so when it starts);
  *   3. when either fails, the previous release comes back as it was
  *      (`restorePluginRelease`) and the reason is reported. Completed data
  *      updates stay recorded; object types absent from the restored release
@@ -177,7 +183,7 @@ export async function updatePluginToRelease(
     return { installation: restored, rolledBack: true, error: error.message };
   }
   if (updated.status !== "active") {
-    // It waits for a Super Admin: keep the release it replaced so approval can still roll back.
+    // A stopped app starts the release later: keep the one it replaced so starting it can still roll back.
     if (pluginNeedsApproval(updated)) await saveRollbackPoint(context.env, current);
     return { installation: updated, rolledBack: false, error: null };
   }

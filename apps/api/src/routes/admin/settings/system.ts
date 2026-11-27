@@ -40,7 +40,8 @@ import {
     type FirebaseSettings,
     type WhatsAppSettings,
 } from "@scalius/core/modules/settings";
-import { CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE } from "@scalius/shared/checkout-readiness";
+import { CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE, checkoutReadinessAppIssue } from "@scalius/shared/checkout-readiness";
+import { listRefusingFunctions } from "@scalius/core/modules/plugins";
 import { getCustomerSignInReadiness, isCustomerAuthChannelReady } from "@scalius/core/modules/customers";
 import { getCheckoutReadiness } from "@scalius/core/modules/checkout";
 import {
@@ -72,7 +73,7 @@ import {
     serviceUnavailableResponse,
 } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
-import { isReady, type Readiness } from "@scalius/shared/readiness";
+import { isReady, mergeReadiness, readiness, type Readiness } from "@scalius/shared/readiness";
 import { majorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
@@ -286,7 +287,7 @@ const getCheckoutReadinessRoute = createRoute({
     operationId: "dashboard.checkout.readiness_get",
     tags: ["Admin - Settings"],
     summary: "Get checkout readiness",
-    description: "Inspect delivery setup and customer sign-in diagnostics. Delivery diagnostics do not indicate global checkout availability; each cart validates its applicable delivery requirements.",
+    description: "Inspect delivery setup and customer sign-in diagnostics, and any active app keeping checkout from taking orders (`app_function_failing`: a function approved as blocking is failing; `app_refusing_checkout`: a cart rule refused every recent checkout). Delivery diagnostics do not indicate global checkout availability; each cart validates its applicable delivery requirements.",
     responses: {
         200: {
             description: "Checkout readiness",
@@ -298,12 +299,24 @@ const getCheckoutReadinessRoute = createRoute({
 
 app.openapi(getCheckoutReadinessRoute, async (c) => {
     const db = c.get("db");
-    return ok(c, await getCheckoutReadiness(db, {
-        encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
-        runtimeEnv: c.env as Record<string, unknown>,
-        appProviders: requestAppProviders(c),
-        inspectOptionalCustomerSignIn: true,
-    }));
+    const [setup, refusing] = await Promise.all([
+        getCheckoutReadiness(db, {
+            encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+            runtimeEnv: c.env as Record<string, unknown>,
+            appProviders: requestAppProviders(c),
+            inspectOptionalCustomerSignIn: true,
+        }),
+        listRefusingFunctions(db),
+    ]);
+    // An app keeping checkout from taking orders (a blocking function failing, or a rule refusing every checkout).
+    const apps = readiness.from(refusing.map((entry) => checkoutReadinessAppIssue({
+        name: entry.name,
+        point: entry.point,
+        since: new Date(entry.since * 1000).toISOString(),
+        reason: entry.reason,
+        failing: entry.failing,
+    })));
+    return ok(c, { ...setup, ...mergeReadiness(setup, apps) });
 });
 
 const checkoutFlowSettingsSchema = z.object({

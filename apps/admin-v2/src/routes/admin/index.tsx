@@ -162,7 +162,8 @@ function HomePage() {
   const smsBlocked = Boolean(sms.data?.activeProvider) && sms.data?.activeProviderConfigured === false;
   // Active digital products and gift cards a cash-on-delivery-only checkout can't take.
   const onlinePaymentBlocked = setupGuide.data?.onlinePayment?.blockedProducts ?? 0;
-  // An active app whose cart rule refuses every recent checkout: the store sells nothing until it is fixed.
+  // An active app keeping checkout from taking orders (a blocking function failing, or a cart rule
+  // refusing every recent checkout): the store sells nothing until it is fixed.
   const refusingApps = setupGuide.data?.refusingApps ?? [];
   // Each app by its name in the dashboard's language (the apps list is read only when one refuses).
   const appText = useAppTexts(refusingApps.length > 0);
@@ -316,9 +317,11 @@ function HomePage() {
             ) : null}
             {refusingApps.map((app) => (
               <TodoLink key={app.appId} to={`/admin/apps/${encodeURIComponent(app.appId)}`} icon={<TriangleAlert className="h-4 w-4" />}>
-                {app.reason
-                  ? t("appRefusingCheckout", { app: appText(app.appId)?.name ?? app.name, reason: app.reason })
-                  : t("appRefusingCheckoutNoReason", { app: appText(app.appId)?.name ?? app.name })}
+                {app.failing && app.point
+                  ? t("appFailingCheckout", { app: appText(app.appId)?.name ?? app.name, point: app.point, time: formatDateTime(new Date(app.since), { dateStyle: "medium", timeStyle: "short" }) })
+                  : app.reason
+                    ? t("appRefusingCheckout", { app: appText(app.appId)?.name ?? app.name, reason: app.reason })
+                    : t("appRefusingCheckoutNoReason", { app: appText(app.appId)?.name ?? app.name })}
               </TodoLink>
             ))}
             {smsBlocked ? (

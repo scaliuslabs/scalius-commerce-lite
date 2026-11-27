@@ -247,9 +247,11 @@ const setupGuideSchema = z.object({
     refusingApps: z.array(z.object({
         appId: z.string(),
         name: z.string(),
-        reason: z.string().nullable().openapi({ description: "The app's words to the buyer for the latest refusal." }),
+        reason: z.string().nullable().openapi({ description: "The app's words to the buyer for the latest refusal; for a failing function, its latest failure." }),
         since: z.string().openapi({ description: "When it began refusing every checkout (ISO 8601)." }),
-    })).openapi({ description: "Active apps whose cart rule refuses every recent checkout (a delivery-slot app with no open slot), so the store sells nothing; empty otherwise." }),
+        failing: z.boolean().optional().openapi({ description: "True when a function the store approved as blocking is failing (checkout refuses every order that needs it); absent or false: its cart rule refuses by its answer." }),
+        point: z.string().optional().openapi({ description: "The function point that refuses (`cart.validate`, `cart.line_prices`, …)." }),
+    })).openapi({ description: "Active apps keeping checkout from taking orders: a function approved as blocking that is failing, or a cart rule refusing every recent checkout (a delivery-slot app with no open slot); empty otherwise. One per app, a failing function first." }),
     databaseStorage: z.object({
         usedBytes: z.number().int().min(0),
         capBytes: z.number().int().min(0).openapi({ description: "The largest D1 database the deployment's Workers plan allows." }),
@@ -331,12 +333,15 @@ app.openapi(setupGuideRoute, async (c) => {
         getDatabaseProviderForClient(db) === "d1" && c.env.DB ? readD1DatabaseStorage(c.env.DB).catch(() => null) : null,
     ]);
     c.header("Cache-Control", "private, no-store");
-    const refusingApps = [...new Map(refusing.map((entry) => [entry.pluginId, {
+    // One per app: the first listed (a failing function before a refusing rule).
+    const refusingApps = [...refusing.reduce((apps, entry) => apps.has(entry.pluginId) ? apps : apps.set(entry.pluginId, {
         appId: entry.pluginId,
         name: entry.name,
         reason: entry.reason,
         since: new Date(entry.since * 1000).toISOString(),
-    }])).values()];
+        failing: entry.failing,
+        point: entry.point,
+    }), new Map<string, { appId: string; name: string; reason: string | null; since: string; failing: boolean; point: string }>()).values()];
     return ok(c, { dismissed, ...facts, refusingApps, databaseStorage });
 });
 

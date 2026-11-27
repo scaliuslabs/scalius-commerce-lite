@@ -35,6 +35,7 @@ export const DASHBOARD_WHEN_A: Readonly<Record<string, string>> = {
   "dashboard.apps.deactivate": "Use when the merchant wants an installed app stopped while keeping its data and settings.",
   "dashboard.apps.deliveries_list": "Use when checking what events were delivered to an app and which failed.",
   "dashboard.apps.delivery_retry": "Use when a failed or exhausted event delivery to an app should be sent again.",
+  "dashboard.apps.function_blocking_update": "Use when an app's blocking checkout function is failing and the merchant wants checkout to take orders without it (blocking false); approving it as blocking again is the store owner's step in the dashboard.",
   "dashboard.apps.feature_disable": "Use when turning off one feature of an installed app and revoking that feature's access.",
   "dashboard.apps.function_order_get": "Use when asked which apps run at checkout, in what order, or which app's price or decision wins when two apps overlap.",
   "dashboard.apps.function_order_update": "Use when the merchant wants one app to run before another at a checkout point; send every app in the new order (or null) with the revision function_order_get read.",

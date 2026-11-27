@@ -7,12 +7,14 @@ import {
   postApiV1AdminAppsByIdDeliveriesByDeliveryIdRetry,
   postApiV1AdminAppsByIdFeaturesByFeatureIdDisable,
   postApiV1AdminAppsByIdFeaturesByFeatureIdEnable,
+  postApiV1AdminAppsByIdFunctionsByPointBlocking,
   postApiV1AdminAppsByIdUninstall,
   postApiV1AdminAppsRemovedDataByIdDelete,
   postApiV1AdminAppsRemovedDataByIdHandOver,
   putApiV1AdminAppsByIdSettings,
   putApiV1AdminAppsFunctionOrder,
 } from "@scalius/api-client/sdk";
+import type { PostApiV1AdminAppsByIdFunctionsByPointBlockingData } from "@scalius/api-client/types";
 import { AdminApiResponseError } from "../admin-api-error";
 import { apiData } from "../api";
 import type { AppDetail, AppFeature, AppFunctionPointOrder, AppSettingValue, RemovedAppData } from "../api-query-options/apps";
@@ -43,6 +45,20 @@ export function disableAppFeature(app: Pick<AppDetail, "id" | "revision">, featu
     body: { expectedRevision: app.revision },
   }));
 }
+
+/**
+ * Lets checkout continue when one of the app's blocking functions fails
+ * (`blocking: false`, no approval: it only narrows), or lets it block
+ * checkout again (`blocking: true`, Super Admin only).
+ */
+export function setAppFunctionBlocking(app: Pick<AppDetail, "id" | "revision">, point: AppFunctionPoint, blocking: boolean) {
+  return apiData(postApiV1AdminAppsByIdFunctionsByPointBlocking({
+    path: { id: app.id, point },
+    body: { expectedRevision: app.revision, blocking },
+  }));
+}
+
+export type AppFunctionPoint = PostApiV1AdminAppsByIdFunctionsByPointBlockingData["path"]["point"];
 
 export function deactivateApp(app: Pick<AppDetail, "id" | "revision">) {
   return apiData(postApiV1AdminAppsByIdDeactivate({ path: { id: app.id }, body: { expectedRevision: app.revision } }));

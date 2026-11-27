@@ -483,7 +483,7 @@ export class PluginHost {
       // Staff hear it, once an hour per app and point, after the request: the checkouts it refuses are theirs to act on.
       this.noticeStaff(installation, invocation.point, {
         title: `${installation.manifest.name} is refusing checkouts`,
-        body: `Its ${invocation.point} check ran past its limit, so checkouts that need it are refused. Check its log, or deactivate it.`,
+        body: `Its ${invocation.point} check ran past its limit, so checkouts that need it are refused. Update the app, or on its page let checkout continue when it fails, or pause it.`,
       });
       return;
     }

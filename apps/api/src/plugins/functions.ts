@@ -419,16 +419,21 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         settle(host.incident(installation, `function:${point}`, `Not called: this checkout's ${CHECKOUT_APP_BUDGET_MS} ms for apps was spent by the apps before it.${blocking ? " It is approved as blocking, so checkout was refused." : " Checkout went on without it."}`));
       };
       // One more failed answer toward the circuit (never for a run outside the order's path).
-      const count = () => {
+      // A blocking one refused this checkout: it counts as a refusal with the failure's words,
+      // so Home, checkout readiness and the app's page say since when and why (function-circuit.ts).
+      const count = (reason: string | null) => {
         if (options.uncounted) return;
         settle(recordFunctionFailure(db, { pluginId: installation.pluginId, point }).then((state) => (
           state.opened ? noticeOpenCircuit(db, env, host, installation, point, state, blocking) : undefined
         )));
+        if (blocking && functionRefusalDue(registration.refusals, nowSeconds)) {
+          settle(recordFunctionRefusal(db, { pluginId: installation.pluginId, point, reason: reason ?? `${point} failed.` }));
+        }
       };
       // A failed answer: the failure policy now, and a count toward the circuit.
-      const failed = () => {
+      const failed = (reason: string | null = null) => {
         fail();
-        count();
+        count(reason);
       };
       // An app sees only its own buyer answers: `cart.attributes` keeps the
       // `<app id>.<key>` entries of this app, never another app's.
@@ -508,7 +513,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         : NO_APP_FUNCTION_READS;
       if (!read.ok) {
         await host.incident(installation, pluginRunSource(point, scopedInput), `${read.reason} The function did not run.`);
-        failed();
+        failed(`${read.reason} The function did not run.`);
         continue;
       }
       const reads = readNames ? Object.fromEntries(Object.entries(read.reads).filter(([as]) => readNames.has(as))) : read.reads;
@@ -542,7 +547,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         // the request's app budget ran out) is no failure of the app's; the host logged it.
         const ownFault = !(outcome.failure === "outdated" || outcome.failure === "inactive" || outcome.failure === "budget")
           || (outcome.failure === "budget" && hadAtStart >= (options.budgetShare ?? Number.POSITIVE_INFINITY));
-        if (ownFault) failed();
+        if (ownFault) failed(outcome.error);
         else fail();
         continue;
       }
@@ -563,7 +568,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
       if (commit?.length) {
         const prepared = await prepareCommits(host, installation, point, read, commit);
         if (!prepared) {
-          failed();
+          failed("Its answer's commits were refused; see the app's log.");
           continue;
         }
         result.commits = prepared;
@@ -634,7 +639,7 @@ async function noticeOpenCircuit(
   const name = installation.manifest.name;
   const minutes = Math.round(FUNCTION_CIRCUIT.openSeconds / 60);
   const consequence = blocking
-    ? "It is approved as blocking, so checkout refuses orders until it answers again. Fix the app, or stop it on its page (Stop now) and checkout goes on without it."
+    ? "It is approved as blocking, so checkout refuses orders until it answers again. Update the app, or on its page let checkout continue when it fails, or pause it."
     : "Checkout goes on without it meanwhile.";
   await host.incident(
     installation,

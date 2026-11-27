@@ -34,6 +34,7 @@
 import type { Database } from "@scalius/database/client";
 import { pluginInstallations, pluginRegistrations } from "@scalius/database/schema";
 import { and, asc, eq, or, gt, gte, isNotNull, sql } from "drizzle-orm";
+import { toPluginInstallation } from "./installations";
 
 export const FUNCTION_CIRCUIT = {
   /** Failed answers within the window that open the circuit. */
@@ -137,10 +138,17 @@ export async function recordFunctionFailure(
   };
 }
 
-/** A good answer closes the circuit (one write, only when something was counted). */
+/**
+ * A good answer closes the circuit (one write, only when something was
+ * counted). At any point but `cart.validate` (whose answers keep their own
+ * streak) it also ends the refusals a blocking failure counted.
+ */
 export async function recordFunctionSuccess(db: Database, input: { pluginId: string; point: string }): Promise<void> {
   await db.update(pluginRegistrations)
-    .set({ circuitFailures: 0, circuitWindowAt: null, circuitOpenUntil: null })
+    .set({
+      circuitFailures: 0, circuitWindowAt: null, circuitOpenUntil: null,
+      ...(input.point === "cart.validate" ? {} : { refusalCount: 0, refusingSince: null, lastRefusalAt: null, lastRefusal: null }),
+    })
     .where(and(
       registration(input.pluginId, input.point),
       or(gt(pluginRegistrations.circuitFailures, 0), isNotNull(pluginRegistrations.circuitOpenUntil)),
@@ -239,7 +247,14 @@ export async function clearFunctionRefusals(db: Database, input: { pluginId: str
     .where(and(registration(input.pluginId, input.point), gt(pluginRegistrations.refusalCount, 0)));
 }
 
-/** An app refusing every recent checkout: since when, how many counted, and its words for the latest. */
+/**
+ * An app whose function keeps checkout refusing orders: since when, how many
+ * refusals were counted, and the latest words. `failing`: a function the
+ * store approved as blocking fails (a throw, an invalid answer, a timeout),
+ * so every checkout that needs it is refused; `reason` is the failure as the
+ * app's log has it. Otherwise a `cart.validate` refusing every recent
+ * checkout by its answer; `reason` is its words to buyers.
+ */
 export interface FunctionRefusing {
   pluginId: string;
   /** The app's name, as its manifest gives it. */
@@ -249,18 +264,17 @@ export interface FunctionRefusing {
   since: number;
   lastAt: number;
   reason: string | null;
+  failing: boolean;
 }
 
-function manifestName(manifestJson: string | null): string | null {
-  try {
-    const name = (JSON.parse(manifestJson ?? "null") as { name?: unknown } | null)?.name;
-    return typeof name === "string" && name.trim() ? name : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Active apps refusing every recent checkout (one app's when `pluginId` is given), for Home and the app's page. */
+/**
+ * Active apps keeping checkout refusing orders (one app's when `pluginId` is
+ * given), for Home, checkout readiness and the app's page: a blocking
+ * function failing since its first failure (each failure counts as a refusal
+ * with its message, `runPluginFunctions`), or a
+ * `cart.validate` that refused every recent checkout (`FUNCTION_REFUSALS.warnAfter`).
+ * A failing one comes first.
+ */
 export async function listRefusingFunctions(db: Database, pluginId?: string): Promise<FunctionRefusing[]> {
   const rows = await db.select({
     pluginId: pluginRegistrations.pluginId,
@@ -269,25 +283,39 @@ export async function listRefusingFunctions(db: Database, pluginId?: string): Pr
     since: pluginRegistrations.refusingSince,
     lastAt: pluginRegistrations.lastRefusalAt,
     reason: pluginRegistrations.lastRefusal,
-    manifestJson: pluginInstallations.manifestJson,
+    failures: pluginRegistrations.circuitFailures,
+    installation: pluginInstallations,
   }).from(pluginRegistrations)
     .innerJoin(pluginInstallations, eq(pluginInstallations.pluginId, pluginRegistrations.pluginId))
     .where(and(
       eq(pluginRegistrations.kind, "function"),
       pluginId ? eq(pluginRegistrations.pluginId, pluginId) : undefined,
-      gte(pluginRegistrations.refusalCount, FUNCTION_REFUSALS.warnAfter),
+      or(
+        gte(pluginRegistrations.refusalCount, FUNCTION_REFUSALS.warnAfter),
+        and(gt(pluginRegistrations.circuitFailures, 0), isNotNull(pluginRegistrations.refusingSince)),
+      ),
       eq(pluginInstallations.status, "active"),
     ))
     .orderBy(asc(pluginRegistrations.pluginId))
     .limit(20)
     .all();
-  return rows.flatMap((row) => row.since === null || row.lastAt === null ? [] : [{
-    pluginId: row.pluginId,
-    name: manifestName(row.manifestJson) ?? row.pluginId,
-    point: row.point,
-    refusals: Number(row.refusals),
-    since: Number(row.since),
-    lastAt: Number(row.lastAt),
-    reason: row.reason,
-  }]);
+  const entries = rows.flatMap((row) => {
+    if (row.since === null || row.lastAt === null) return [];
+    const installation = toPluginInstallation(row.installation);
+    // Blocking as it runs: declared `block` and approved so (`pluginManifestWithinGrant`).
+    const failing = Number(row.failures) > 0
+      && installation?.manifest.functions.some((fn) => fn.point === row.point && fn.onError === "block") === true;
+    if (!failing && Number(row.refusals) < FUNCTION_REFUSALS.warnAfter) return [];
+    return [{
+      pluginId: row.pluginId,
+      name: installation?.manifest.name ?? row.pluginId,
+      point: row.point,
+      refusals: Number(row.refusals),
+      since: Number(row.since),
+      lastAt: Number(row.lastAt),
+      reason: row.reason,
+      failing,
+    }];
+  });
+  return entries.sort((left, right) => Number(right.failing) - Number(left.failing) || left.pluginId.localeCompare(right.pluginId));
 }

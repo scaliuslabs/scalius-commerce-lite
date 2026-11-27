@@ -29,6 +29,10 @@ export const CHECKOUT_READINESS_CODES = {
     shipping: "missing_active_shipping_method",
     deliveryLocation: "missing_active_delivery_location",
     customerSignIn: "unusable_customer_sign_in",
+    /** An app function the store approved as blocking is failing: checkout refuses every order that needs it. */
+    appFunctionFailing: "app_function_failing",
+    /** An app's cart rule refused every recent checkout by its answer. */
+    appRefusingCheckout: "app_refusing_checkout",
 } as const;
 
 export const CHECKOUT_READINESS_SHIPPING_ISSUE: ReadinessIssue = readinessIssue(
@@ -46,3 +50,25 @@ export const CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE: ReadinessIssue = readine
 
 export const CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE =
     "Checkout is temporarily unavailable while the merchant finishes checkout setup.";
+
+/** An app keeping checkout from taking orders (`listRefusingFunctions`), as checkout readiness reports it. */
+export function checkoutReadinessAppIssue(app: {
+    name: string;
+    point: string;
+    /** ISO time it began. */
+    since: string;
+    reason: string | null;
+    failing: boolean;
+}): ReadinessIssue {
+    return app.failing
+        ? readinessIssue(
+            CHECKOUT_READINESS_CODES.appFunctionFailing,
+            `Checkout is refusing orders because the app ${app.name}'s ${app.point} is failing, since ${app.since}.${app.reason ? ` Last error: ${app.reason}` : ""}`,
+            `Update ${app.name}, or on its page in Apps let checkout continue when it fails, or pause the app.`,
+        )
+        : readinessIssue(
+            CHECKOUT_READINESS_CODES.appRefusingCheckout,
+            `The app ${app.name} has refused every checkout since ${app.since}.${app.reason ? ` Its latest answer to buyers: ${app.reason}` : ""}`,
+            `Change ${app.name}'s settings, or pause the app.`,
+        );
+}
