@@ -19,7 +19,7 @@ import type {
 } from "./types";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
 import { STOREFRONT_SEARCH_SORTS, type StorefrontSearchSort } from "@scalius/shared/listing-sorts";
-import { isProductRecommendations } from "@/lib/recommendations";
+import { isProductRecommendations } from "@/lib/recommendation-shape";
 
 /**
  * A comprehensive data structure for a single product page,

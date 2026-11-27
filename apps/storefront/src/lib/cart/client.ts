@@ -96,13 +96,6 @@ import {
 } from "../checkout/session-state";
 import { inspectCheckoutRecovery } from "../checkout/recovery-status";
 import {
-  fetchAuthoritativeTaxQuote,
-  TaxQuoteCartChangedError,
-  TaxQuoteCartRulesError,
-  TaxQuoteDeliveryLocationError,
-  TaxQuoteDeliveryRateError,
-} from "../checkout/tax-quote-client";
-import {
   cartRuleRefusal,
   isDeliveryRateUnavailable,
   refusedDeliveryRates,
@@ -112,6 +105,20 @@ import {
   type ItemsDeliveryRefusal,
 } from "../checkout/tax-quote-error-contract";
 import { onTextEdit } from "@/lib/text-edits";
+
+/**
+ * The quote's request and answer reading (checkout/tax-quote-client.ts) load beside the page, not before it: the
+ * first quote is the first thing that needs them, and `initCartFunctionality` starts the download at once.
+ */
+let taxQuoteClient: Promise<typeof import("../checkout/tax-quote-client")> | null = null;
+function loadTaxQuoteClient(): Promise<typeof import("../checkout/tax-quote-client")> {
+  taxQuoteClient ??= import("../checkout/tax-quote-client");
+  taxQuoteClient.catch(() => {
+    // A failed download is tried again with the next quote.
+    taxQuoteClient = null;
+  });
+  return taxQuoteClient;
+}
 
 /**
  * The merchant removed the city, thana or area the buyer chose: the checkout
@@ -1645,6 +1652,7 @@ async function refreshTotals() {
 
   totalEl.textContent = activeCheckoutCopy().calculatingText;
   try {
+    const { fetchAuthoritativeTaxQuote } = await loadTaxQuoteClient();
     const quote = await fetchAuthoritativeTaxQuote(quoteInput, fetch, QUOTE_RETRY_DELAYS_MS);
     if (quoteSequence !== cartTaxQuoteSequence) return;
     if (expectedQuoteFingerprintInput) {
@@ -1660,10 +1668,11 @@ async function refreshTotals() {
     if (quoteSequence !== cartTaxQuoteSequence) return;
     // An item that changed is shown on its line and a refused delivery rate
     // re-reads the address's rates; only a real outage asks for a retry.
-    const cartChanged = error instanceof TaxQuoteCartChangedError;
-    const rulesRefused = error instanceof TaxQuoteCartRulesError;
-    const rateRefused = error instanceof TaxQuoteDeliveryRateError;
-    const locationGone = error instanceof TaxQuoteDeliveryLocationError;
+    const quoteClient = await loadTaxQuoteClient().catch(() => null);
+    const cartChanged = quoteClient !== null && error instanceof quoteClient.TaxQuoteCartChangedError;
+    const rulesRefused = quoteClient !== null && error instanceof quoteClient.TaxQuoteCartRulesError;
+    const rateRefused = quoteClient !== null && error instanceof quoteClient.TaxQuoteDeliveryRateError;
+    const locationGone = quoteClient !== null && error instanceof quoteClient.TaxQuoteDeliveryLocationError;
     if (cartChanged) {
       const lines = JSON.stringify(cartStore.get().items);
       if (lines !== quoteRefusalRecheckedLines) {
@@ -2138,6 +2147,7 @@ export async function initCartFunctionality() {
   latestAddOnRows = undefined;
   addOnRowsShown.keys = undefined;
   hydrateCartFromStorage();
+  if (Object.keys(cartStore.get().items).length > 0) loadTaxQuoteClient().catch(() => undefined);
   hostedPaymentRecoverySession = readHostedPaymentRecoverySession();
   const expiredCheckoutId = document.getElementById("cartPageRoot")?.dataset.expiredCheckoutId;
   if (expiredCheckoutId) {
