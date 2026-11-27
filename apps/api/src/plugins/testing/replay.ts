@@ -22,7 +22,7 @@ import { activePluginStorefrontExtensions, PluginError, type PluginInstallation 
 import { pluginGrantRequest, PLUGIN_EXTENSION_RUN, type PluginManifest } from "@scalius/shared/plugins";
 import { parsePluginSurfaceKey } from "@scalius/shared/plugins/storefront";
 import { resolveStorefrontSettings, type StorefrontExtension, type StorefrontRenderContext, type StorefrontRenderJob } from "@scalius/shared/plugins/storefront-components";
-import type { StorefrontSectionSkinData, StorefrontSkinTarget } from "@scalius/shared/plugins/storefront-protocol";
+import type { StorefrontSkinTarget } from "@scalius/shared/plugins/storefront-protocol";
 import type { PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
 import {
   applyStorefrontAppTemplate,
@@ -194,41 +194,15 @@ function sampleValues(schema: PluginSettingsSchema): Record<string, unknown> {
 }
 
 /**
- * A core section's projection with content (the SDK's sample store gives a
- * new section's, which has no slides, tiles or categories): each empty list
- * of slides, tiles, categories or collections filled from the sample store's
- * cards. Other projections stay as the SDK gives them.
- */
-function sampleSectionSkinData(store: ReturnType<typeof fixtureStore>, target: StorefrontSkinTarget): StorefrontSectionSkinData {
-  const data = store.skinData(target) as StorefrontSectionSkinData;
-  const cards = store.productCards();
-  const image = store.image();
-  const tiles = cards.map((card) => ({ id: card.id, title: card.title, url: card.url, image: card.image ?? image, cards: [] }));
-  const fill: Record<string, () => unknown[]> = {
-    slides: () => cards.slice(0, 2).map((card) => ({
-      image: card.image ?? image, focalPoint: { x: 50, y: 50 }, alt: card.title, heading: card.title, text: "Sample text", buttonLabel: "Shop now", link: card.url, product: card,
-    })),
-    tiles: () => tiles.map((tile) => ({ image: tile.image, alt: tile.title, href: tile.url })),
-    categories: () => tiles,
-    collections: () => tiles.map((tile) => ({ ...tile, cards })),
-  };
-  const settings = { ...(data.settings as Record<string, unknown>) };
-  for (const [key, entry] of Object.entries(settings)) {
-    if (Array.isArray(entry) && entry.length === 0 && fill[key]) settings[key] = fill[key]();
-  }
-  return { ...data, settings } as StorefrontSectionSkinData;
-}
-
-/**
  * What the storefront asks the app to draw, over the SDK's sample fixture
  * store, twice: on the applied template's pages (every declared skin with the
  * values the template gives it, else its defaults; each component section
  * the template's homepage places, with its values, and a declared type it
  * does not place once with its defaults), and with sample content (every
- * skin and component section with every setting filled in, a core section's
- * skin over a projection with content). A template ships empty content for
- * the merchant to fill, so the second pass is the one that asks each part to
- * draw.
+ * skin and component section with every setting filled in). A core section's
+ * skin always gets the sample store's filled-in section. A template ships
+ * empty content for the merchant to fill, so the second pass is the one that
+ * asks each part to draw.
  */
 export function replayRenderJobs(installation: PluginInstallation, theme: StorefrontThemeDocument): ReplayRender {
   const store = fixtureStore("sample");
@@ -288,7 +262,7 @@ export function replayRenderJobs(installation: PluginInstallation, theme: Storef
       ask: {
         kind: "skin", target: skin.target, component: skin.id,
         settings: resolveStorefrontSettings(skin.settings, sampleValues(skin.settings), { image: () => store.image(), products: () => [] }),
-        data: section ? sampleSectionSkinData(store, skin.target) : store.skinData(skin.target),
+        data: store.skinData(skin.target),
         ...(section ? { instanceId: `replay-sample-${skin.id}` } : {}),
       } as RenderAsk,
     });
