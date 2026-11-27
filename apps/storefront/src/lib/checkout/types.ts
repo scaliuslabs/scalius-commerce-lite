@@ -58,6 +58,8 @@ export interface CheckoutConfig {
   gateways: Array<{
     id: string;
     flow?: "card" | "hosted" | "cod" | "deferred";
+    /** How its money reaches the store (`cash_on_delivery` never pays for a key, a download or a gift card). */
+    paymentKind?: "cash_on_delivery" | "invoice" | "paid_to_store" | "gift_card" | "online";
     /** A deferred method's terms (days). */
     dueInDays?: number;
     testMode?: boolean;

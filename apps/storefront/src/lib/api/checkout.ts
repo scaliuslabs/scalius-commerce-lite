@@ -19,6 +19,8 @@ export interface GatewayConfig {
    * offered only when the buyer's quote allows it.
    */
   flow?: "card" | "hosted" | "cod" | "deferred";
+  /** How its money reaches the store; `cash_on_delivery` never pays for a key, a download or a gift card. */
+  paymentKind?: "cash_on_delivery" | "invoice" | "paid_to_store" | "gift_card" | "online";
   /** A deferred method's terms: the order is due this many days after it is placed. */
   dueInDays?: number;
   publishableKey?: string;   // Stripe only
@@ -124,30 +126,28 @@ export function checkoutTakesOrders(config: CheckoutConfig | null | undefined): 
 }
 
 /**
- * Whether a SKU paid only online (core's `paidOnlineOnly`: a key, a download,
- * a gift card, a kit holding one) can be bought here by someone: the store
- * lists a way to pay that is not cash (`paymentMethodFits`, the server's one
- * rule), a card, a hosted gateway or the invoice. The invoice reaches only
- * the signed-in buyers it names, and this answer is for a cached page every
- * buyer shares, so it counts: the cart and checkout, where the buyer is
- * known, refuse the buyer it does not reach. An unavailable or unread
+ * Whether the store lists a way to pay other than cash (`paymentMethodFits`
+ * by kind, the server's one rule): a card, a hosted gateway, the invoice or
+ * an app's pay-later method that is not cash. An unavailable or unread
  * checkout answers true: it refuses every order and says so itself.
  */
-export function sellsPaidOnlineOnly(config: CheckoutConfig | null | undefined): boolean {
+export function listsNonCashPayment(config: CheckoutConfig | null | undefined): boolean {
   if (!config || config.unavailable) return true;
-  return config.gateways.some((gateway) => paymentMethodFits(gateway.id, false));
+  return config.gateways.some((gateway) => paymentMethodFits(gateway.paymentKind ?? (gateway.flow === "cod" ? "cash_on_delivery" : "online"), false));
 }
 
 /**
- * Whether nobody can buy what these SKUs sell: every one is paid only online
- * and the store lists no way to pay but cash (`sellsPaidOnlineOnly`). The
- * server refuses the same at checkout; the page only says so first.
+ * Whether only a gift card can pay for what these SKUs sell here: none is
+ * cash payable (core's `cashPayable`: a key, a download, a gift card, a kit
+ * holding one) and the store lists no way to pay but cash. The store always
+ * takes gift cards, so the page stays buyable and says so; checkout takes a
+ * key paid fully by gift card.
  */
-export function paidOnlineOnlyHere(
-  variants: ReadonlyArray<{ paidOnlineOnly?: boolean | null }>,
+export function onlyGiftCardsPayHere(
+  variants: ReadonlyArray<{ cashPayable?: boolean | null }>,
   config: CheckoutConfig | null | undefined,
 ): boolean {
-  return variants.length > 0 && variants.every((variant) => variant.paidOnlineOnly === true) && !sellsPaidOnlineOnly(config);
+  return variants.length > 0 && variants.every((variant) => variant.cashPayable === false) && !listsNonCashPayment(config);
 }
 
 /**

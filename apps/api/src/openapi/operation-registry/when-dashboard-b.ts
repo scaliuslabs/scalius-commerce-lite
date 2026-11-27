@@ -302,6 +302,8 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.seo.feed_files_register": "Use when the merchant says they added product feed file links to Google Merchant Center and Meta Commerce Manager.",
   "dashboard.seo.feed_row_preview": "Use when checking exactly what one product sends to the Google/Meta feed.",
   "dashboard.seo.live_probe": "Use when checking the live robots.txt, sitemap and product feed.",
+  "dashboard.catalog.settings_get": "Use when reading how storefront listings behave: the order listings open in.",
+  "dashboard.catalog.settings_update": "Use when changing the order category, collection, brand and search listings open in.",
   "dashboard.seo.settings_get": "Use when reading SEO settings: homepage title, social image, feeds, return policy schema.",
   "dashboard.seo.settings_update": "Use when changing store SEO settings: homepage title and description, social image, feed options.",
   "dashboard.settings_emi.get": "Use when reading the store's card EMI plans.",

@@ -18,6 +18,7 @@ import {
   normalizeProductFacets,
   normalizeRatingFacet,
   normalizeProductListOptions,
+  readListingSort,
   type ProductListOptions,
 } from "./products";
 
@@ -65,6 +66,7 @@ export async function getProductsByBrand(
           priceRange?: unknown;
           facets?: unknown;
           ratingFacet?: unknown;
+          sort?: unknown;
         }>(data);
         return payload
           ? {
@@ -74,6 +76,7 @@ export async function getProductsByBrand(
               priceRange: normalizeBuyerPriceRange(payload.priceRange),
               facets: normalizeProductFacets(payload.facets),
               ratingFacet: normalizeRatingFacet(payload.ratingFacet),
+              sort: readListingSort(payload.sort),
             }
           : null;
       } catch (error: unknown) {

@@ -26,7 +26,7 @@ interface Props {
   limit: number;
   sortBy: string;
   sortOptions: ComponentProps<typeof CatalogViewSelect>["options"];
-  viewSelect: Pick<ComponentProps<typeof CatalogViewSelect>, "pathname" | "defaultSort" | "currentFilters">;
+  viewSelect: Pick<ComponentProps<typeof CatalogViewSelect>, "pathname" | "currentFilters">;
   results: string;
   /** The count at the end of the line (Dawn); null leaves it in the title. */
   countLabel?: string | null;

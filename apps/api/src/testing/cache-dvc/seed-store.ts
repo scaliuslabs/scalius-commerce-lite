@@ -331,7 +331,9 @@ function seedSql(): string {
     ('set_policies', 'document', ${q({ returnPolicy: "7 days", privacyPolicy: "", termsOfService: "" })}, 'json', 'policies'),
     ('set_countries', 'document', ${q({ allowedCountries: ["BD"], allowedCountriesMode: "include" })}, 'json', 'customer_countries'),
     ('set_payment_methods', 'document', ${q({ cod: { enabled: true } })}, 'json', 'payment_methods'),
-    ('set_customer_requests', 'document', ${q({})}, 'json', 'customer_requests');
+    ('set_customer_requests', 'document', ${q({})}, 'json', 'customer_requests'),
+    -- The order bare listings open in (a curated action flips it): best selling, so a bare page differs from newest.
+    ('set_catalog', 'document', ${q({ defaultListingSort: "popular" })}, 'json', 'catalog');
 
   INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ${q(everySectionTheme())}, 1, ${T}, ${T});
 

@@ -3,7 +3,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { collections } from "@scalius/database/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import { NotFoundError } from "../utils/api-error";
-import { successEnvelope, paginationSchema, errorResponses, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, listingSortSchema, searchSortSchema, LISTING_SORT_DESCRIPTION } from "../schemas/responses";
+import { successEnvelope, paginationSchema, errorResponses, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, searchSortSchema, listingReadSortField, LISTING_SORT_DESCRIPTION } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import { getPublicCollectionCatalog, getPublicCollectionSitemapEntries, listPublicCollectionDirectory } from "@scalius/core/modules/catalog";
 import { marketPresenceQueryField } from "../schemas/markets";
@@ -115,7 +115,8 @@ const collectionCatalogQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   ...listingCursorQuerySchema,
-  sort: listingSortSchema.optional().openapi({ description: LISTING_SORT_DESCRIPTION }),
+  // A collection search ranks by relevance, so `relevance` is one of its orders.
+  sort: searchSortSchema.optional().openapi({ description: LISTING_SORT_DESCRIPTION }),
   minRating: minRatingQuerySchema,
   search: z.string().optional(),
   minPrice: majorMoney(z.coerce.number().min(0)).optional(),
@@ -283,7 +284,7 @@ const getCollectionByIdRoute = createRoute({
         priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
         facets: z.array(productFacetSchema),
         ratingFacet: ratingFacetSchema,
-        sort: searchSortSchema.openapi({ description: "The order read: `sort` when given, best match for a search, else the store's default listing order." }),
+        ...listingReadSortField,
       })) } },
     },
     404: errorResponses[404],

@@ -43,7 +43,7 @@ import {
 import { deps } from "./declare-deps";
 import { hasRequiredCustomization, parseStoredCustomizationSchema } from "@scalius/shared/line-properties";
 import { STOREFRONT_PLACED_KIT_ITEMS_MAX } from "@scalius/shared/plugins/storefront-protocol";
-import { kitFulfillmentKind, paidOnlineOnly, type FulfillmentKind } from "@scalius/shared/fulfilment";
+import { cashPayable, kitFulfillmentKind, type FulfillmentKind } from "@scalius/shared/fulfilment";
 
 /**
  * The items a placed offer's kit lists on its host page, at most: a summary
@@ -211,8 +211,8 @@ export interface StorefrontKit {
     availabilityBand: BuyerAvailabilityBand;
     /** What it sells, from all its items (`kitFulfillmentKind`), never the kit SKU's own setting. */
     fulfillmentKind: FulfillmentKind;
-    /** Paid only online: one of its items is (a key, a download; `paidOnlineOnly`). */
-    paidOnlineOnly: boolean;
+    /** Cash may pay for it: every one of its items is cash payable (`cashPayable`: not a key, a download or a gift card). */
+    cashPayable: boolean;
 }
 
 /** A SKU of another product shown under the page's own offers. */
@@ -228,8 +228,8 @@ export interface StorefrontPlacedOffer {
     imageAlt: string | null;
     /** What it sells; a kit's from its items (`StorefrontKit.fulfillmentKind`). */
     fulfillmentKind: string;
-    /** Paid only online (a key, a download, or a kit holding one): judge its buy button as its own page does. */
-    paidOnlineOnly: boolean;
+    /** Cash may pay for it (`cashPayable`): false for a key, a download, a gift card, or a kit holding one. */
+    cashPayable: boolean;
     /** One unit's price in the page's currency (a kit's: its own price). */
     price: number;
     /** A kit's components summed, or a SKU's regular price while it is on sale; null otherwise. */
@@ -355,7 +355,7 @@ export function resolveProductPageKits(
                 availabilityBand,
                 // From every item, listed or not.
                 fulfillmentKind: kitFulfillmentKind(parts.map((part) => part.fulfillmentKind)),
-                paidOnlineOnly: parts.some((part) => paidOnlineOnly({ fulfillmentKind: part.fulfillmentKind, isGiftCard: Number(part.productGiftCard) === 1 })),
+                cashPayable: parts.every((part) => cashPayable({ fulfillmentKind: part.fulfillmentKind, isGiftCard: Number(part.productGiftCard) === 1 })),
             },
         };
     };
@@ -395,7 +395,7 @@ export function resolveProductPageKits(
             imageMediaId: picture?.mediaId ?? null,
             imageAlt: picture?.altText ?? null,
             fulfillmentKind: kit ? kit.kit.fulfillmentKind : row.fulfillmentKind ?? "physical",
-            paidOnlineOnly: kit ? kit.kit.paidOnlineOnly : paidOnlineOnly({ fulfillmentKind: row.fulfillmentKind, isGiftCard: Number(row.productGiftCard) === 1 }),
+            cashPayable: kit ? kit.kit.cashPayable : cashPayable({ fulfillmentKind: row.fulfillmentKind, isGiftCard: Number(row.productGiftCard) === 1 }),
             price: kit ? kit.kit.price : money(unitMinor),
             compareAtPrice: kit ? kit.kit.compareAtPrice : unit.compareAtMinor !== null ? money(unit.compareAtMinor) : null,
             requiresCustomization: requiresBuyerInput(row.productCustomization),

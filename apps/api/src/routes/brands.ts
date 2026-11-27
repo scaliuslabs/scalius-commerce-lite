@@ -17,7 +17,7 @@ import { publicMarketPricing, publicTranslation } from "../utils/public-market";
 import { localizedHandleFields } from "../schemas/translations";
 import { appliedFacetFilterSchema, appliedFacetFilters, productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError } from "../utils/api-error";
-import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, listingSortSchema, LISTING_SORT_DESCRIPTION, errorResponses } from "../schemas/responses";
+import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, listingSortSchema, listingReadSortField, LISTING_SORT_DESCRIPTION, errorResponses } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import {
   normalizePublicFtsSearchQuery,
@@ -127,7 +127,6 @@ const brandProductSchema = z.object({
 
 const appliedFiltersSchema = z.object({
   attributes: z.array(appliedFacetFilterSchema),
-  sort: listingSortSchema,
   minRating: z.number().int().min(1).max(4).optional(),
   search: z.string().optional(),
   minPrice: majorMoney(z.number().min(0)).optional(),
@@ -243,6 +242,7 @@ const getBrandProductsRoute = createRoute({
         facets: z.array(productFacetSchema),
         ratingFacet: ratingFacetSchema,
         appliedFilters: appliedFiltersSchema,
+        ...listingReadSortField,
       })) } },
     },
     400: errorResponses[400],
@@ -271,11 +271,7 @@ app.openapi(getBrandProductsRoute, async (c) => {
     search: normalizePublicListingSearchParam(params.search),
     attributeFilters,
   }, publicMarketPricing(c));
-  const appliedFilters: z.infer<typeof appliedFiltersSchema> = {
-    attributes: appliedFacetFilters(attributeFilters),
-    // The order read: the one asked for, else the store's default listing order.
-    sort: result.sort as z.infer<typeof listingSortSchema>,
-  };
+  const appliedFilters: z.infer<typeof appliedFiltersSchema> = { attributes: appliedFacetFilters(attributeFilters) };
   const normalizedSearch = normalizePublicFtsSearchQuery(params.search);
   if (normalizedSearch) appliedFilters.search = normalizedSearch;
   if (params.minRating !== undefined) appliedFilters.minRating = params.minRating;
@@ -295,6 +291,7 @@ app.openapi(getBrandProductsRoute, async (c) => {
     facets: result.facets,
     ratingFacet: result.ratingFacet,
     appliedFilters,
+    sort: result.sort,
   };
   return ok(c, response);
 });

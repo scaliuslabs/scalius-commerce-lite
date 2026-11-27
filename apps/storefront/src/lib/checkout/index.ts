@@ -8,7 +8,10 @@ import { codHandler } from "./handlers/cod";
 import { resetStripePaymentElement, stripeHandler } from "./handlers/stripe";
 import { createHostedGatewayHandler } from "./handlers/hosted";
 import { createDeferredGatewayHandler } from "./handlers/deferred";
-import { formatPageNumber, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
+import { formatPageNumber, formatStoreDateTime, pageLanguage, storeRegion } from "@/lib/store-time-zone";
+import { numberLocale } from "@scalius/shared/locale-format";
+import { formatList } from "@scalius/shared/locale-words";
+import { pageBuyerSignedIn, whatCanPayText } from "./what-can-pay";
 import { formatMoney, DEFAULT_CURRENCY } from "@/lib/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { addOnRowsOver } from "@scalius/shared/add-on-totals";
@@ -1050,6 +1053,25 @@ function drawPaymentChoices(
   });
 }
 
+/**
+ * What can pay for this order when no method this buyer has can (never the
+ * bare "no payment method"): cash can't pay for its keys, downloads and gift
+ * cards, so a gift card can (its field is on this step), or paying later for
+ * a signed-in buyer it reaches; otherwise only a gift card can.
+ */
+function whatCanPayHere(config: CheckoutConfig, quote: CheckoutTaxQuote): string {
+  const names = [...new Set(quote.items
+    .filter((item) => item.fulfillmentType === "digital" || item.fulfillmentType === "gift_card")
+    .map((item) => item.productName.trim())
+    .filter(Boolean))];
+  if (names.length === 0) return checkoutCopy.noPaymentMethodsText;
+  return whatCanPayText(checkoutCopy, {
+    items: formatList(names, numberLocale(pageLanguage() || "en", storeRegion())),
+    gateways: config.gateways,
+    signedIn: pageBuyerSignedIn(),
+  });
+}
+
 async function renderGateways(): Promise<void> {
   if (!checkoutConfig || !checkoutData || !authoritativeTaxQuote) return;
   const container = document.getElementById("paymentMethods");
@@ -1067,8 +1089,9 @@ async function renderGateways(): Promise<void> {
   if (checkoutConfig.unavailable || eligibleGateways.length === 0) {
     container.setAttribute("aria-busy", "false");
     showError(
-      checkoutConfig.unavailableMessage ||
-        checkoutCopy.noPaymentMethodsText,
+      checkoutConfig.unavailable
+        ? checkoutConfig.unavailableMessage || checkoutCopy.noPaymentMethodsText
+        : whatCanPayHere(checkoutConfig, authoritativeTaxQuote),
     );
     setPayButton(checkoutCopy.checkoutUnavailableText, true);
     return;

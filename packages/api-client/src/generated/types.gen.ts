@@ -3590,9 +3590,9 @@ export type StorefrontPlacedOffer = {
      */
     fulfillmentKind: string;
     /**
-     * Paid only online (a key, a download, or a kit holding one): where checkout takes no online payment, its buy action is off, as on its own page.
+     * Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. A product page or placed offer stays buyable either way: checkout says what can pay.
      */
-    paidOnlineOnly: boolean;
+    cashPayable: boolean;
     /**
      * One unit's price in the page's currency (a kit's: its own price).
      */
@@ -3681,9 +3681,9 @@ export type StorefrontKit = {
      */
     fulfillmentKind: 'physical' | 'digital' | 'service';
     /**
-     * One of its items is paid only online (a key, a download): no cash on delivery or at the service buys it.
+     * Cash may pay for it: every one of its items is cash payable (false when one is a key, a download or a gift card).
      */
-    paidOnlineOnly: boolean;
+    cashPayable: boolean;
 };
 
 export type PublicReviewSummary = {
@@ -8878,13 +8878,13 @@ export type GetApiV1CollectionsByIdData = {
         page?: number;
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
-         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another).
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which.
          */
-        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
+        sort?: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
          * Only products whose published-review average is at least this many whole stars (1-4).
          */
@@ -9079,7 +9079,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 count: number;
             }>;
             /**
-             * The order read: `sort` when given, best match for a search, else the store's default listing order.
+             * The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order.
              */
             sort: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
@@ -9285,11 +9285,11 @@ export type GetApiV1BrandsBySlugProductsData = {
          */
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
-         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another).
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which.
          */
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
@@ -9482,7 +9482,6 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                         max: number | null;
                     };
                 }>;
-                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
                 minRating?: number;
                 search?: string;
                 /**
@@ -9497,6 +9496,10 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 hasDiscount?: 'true' | 'false';
                 inStock?: 'true';
             };
+            /**
+             * The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order.
+             */
+            sort: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
     };
 };
@@ -11009,10 +11012,6 @@ export type GetApiV1StorefrontLayoutResponses = {
                     policyUrl: string;
                 };
                 socialImage: string;
-                /**
-                 * The order listings open in when their address names none (the listing reads apply the same); a search with words opens best match first.
-                 */
-                defaultListingSort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
             };
             platform: {
                 storefrontUrl: string;
@@ -14269,6 +14268,7 @@ export type GetApiV1CheckoutConfigResponses = {
                 id: string;
                 name: string;
                 flow: 'card' | 'hosted' | 'cod' | 'deferred';
+                paymentKind: 'cash_on_delivery' | 'invoice' | 'paid_to_store' | 'gift_card' | 'online';
                 dueInDays?: number;
                 currencies: Array<string>;
                 countries?: Array<string>;
@@ -21527,11 +21527,11 @@ export type GetApiV1ProductsData = {
          */
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
-         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another). With `search` set, best match (relevance) instead.
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which. With `search` set, best match (relevance) instead.
          */
         sort?: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
@@ -21687,7 +21687,7 @@ export type GetApiV1ProductsResponses = {
              */
             correctedQuery: string | null;
             /**
-             * The order read: `sort` when given, best match for a search, else the store's default listing order.
+             * The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order.
              */
             sort: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
@@ -22511,9 +22511,9 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
                 /**
-                 * Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it.
+                 * Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. A product page or placed offer stays buyable either way: checkout says what can pay.
                  */
-                paidOnlineOnly: boolean;
+                cashPayable: boolean;
                 createdAt: string | null;
             }>;
             total: number;
@@ -22862,9 +22862,9 @@ export type GetApiV1ProductsBySlugResponses = {
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
                 /**
-                 * Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it.
+                 * Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. A product page or placed offer stays buyable either way: checkout says what can pay.
                  */
-                paidOnlineOnly: boolean;
+                cashPayable: boolean;
                 /**
                  * Storefront-visible custom fields with a value, in the merchant's order.
                  */
@@ -23421,11 +23421,11 @@ export type GetApiV1CategoriesBySlugProductsData = {
          */
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
-         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another).
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which.
          */
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
@@ -23697,7 +23697,6 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                         max: number | null;
                     };
                 }>;
-                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
                 minRating?: number;
                 search?: string;
                 /**
@@ -23712,6 +23711,10 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 hasDiscount?: 'true' | 'false';
                 inStock?: 'true';
             };
+            /**
+             * The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order.
+             */
+            sort: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
     };
 };
@@ -23735,9 +23738,12 @@ export type GetApiV1CategoriesBySlugProductSummariesData = {
         page?: number;
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.
          */
         cursor?: string;
+        /**
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which.
+         */
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
          * Only products whose published-review average is at least this many whole stars (1-4).
@@ -23897,7 +23903,6 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                         max: number | null;
                     };
                 }>;
-                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
                 minRating?: number;
                 search?: string;
                 /**
@@ -23912,6 +23917,10 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 hasDiscount?: 'true' | 'false';
                 inStock?: 'true';
             };
+            /**
+             * The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order.
+             */
+            sort: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
     };
 };
@@ -60375,10 +60384,6 @@ export type GetApiV1AdminSettingsSeoResponses = {
                 returnMethod: 'mail' | 'in_store' | 'both';
                 policyUrl: string;
             };
-            /**
-             * The order category, collection, brand and search listings open in when their address names none; a search with words opens best match first.
-             */
-            defaultListingSort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
     };
 };
@@ -60409,10 +60414,6 @@ export type PostApiV1AdminSettingsSeoData = {
             returnMethod?: 'mail' | 'in_store' | 'both';
             policyUrl?: string;
         };
-        /**
-         * The order category, collection, brand and search listings open in when their address names none; a search with words opens best match first.
-         */
-        defaultListingSort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
     };
     path?: never;
     query?: never;
@@ -60789,6 +60790,132 @@ export type GetApiV1AdminSettingsSeoLiveProbeResponses = {
 };
 
 export type GetApiV1AdminSettingsSeoLiveProbeResponse = GetApiV1AdminSettingsSeoLiveProbeResponses[keyof GetApiV1AdminSettingsSeoLiveProbeResponses];
+
+export type GetApiV1AdminSettingsCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/catalog';
+};
+
+export type GetApiV1AdminSettingsCatalogErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsCatalogError = GetApiV1AdminSettingsCatalogErrors[keyof GetApiV1AdminSettingsCatalogErrors];
+
+export type GetApiV1AdminSettingsCatalogResponses = {
+    /**
+     * Catalogue settings
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            /**
+             * The order category, collection, brand and search listings open in when their address names none: orders that page by cursor. A collection with picked products keeps its own order; a search with words opens best match first. The list may grow.
+             */
+            defaultListingSort: 'newest' | 'popular';
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsCatalogResponse = GetApiV1AdminSettingsCatalogResponses[keyof GetApiV1AdminSettingsCatalogResponses];
+
+export type PostApiV1AdminSettingsCatalogData = {
+    body: {
+        expectedRevision: number;
+        /**
+         * The order category, collection, brand and search listings open in when their address names none: orders that page by cursor. A collection with picked products keeps its own order; a search with words opens best match first. The list may grow.
+         */
+        defaultListingSort: 'newest' | 'popular';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/catalog';
+};
+
+export type PostApiV1AdminSettingsCatalogErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsCatalogError = PostApiV1AdminSettingsCatalogErrors[keyof PostApiV1AdminSettingsCatalogErrors];
+
+export type PostApiV1AdminSettingsCatalogResponses = {
+    /**
+     * Catalogue settings saved
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            revision: number;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsCatalogResponse = PostApiV1AdminSettingsCatalogResponses[keyof PostApiV1AdminSettingsCatalogResponses];
 
 export type GetApiV1AdminSettingsStorefrontUrlData = {
     body?: never;

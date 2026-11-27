@@ -33,6 +33,7 @@ import {
   normalizeProductListPayload,
   normalizeProductPageData,
   normalizeRatingFacet,
+  readListingSort,
   type ProductBySlugResult,
   type ProductPageData,
 } from "./product-payloads";
@@ -41,6 +42,7 @@ export {
   normalizeBuyerPriceRange,
   normalizeProductFacets,
   normalizeRatingFacet,
+  readListingSort,
 } from "./product-payloads";
 export type { ProductBySlugResult, ProductPageData } from "./product-payloads";
 
@@ -450,6 +452,7 @@ export async function getProductsByCategory(
           priceRange?: BuyerPriceRange;
           facets?: ProductFacet[];
           ratingFacet?: unknown;
+          sort?: unknown;
         }>(data);
         return d
           ? {
@@ -460,6 +463,7 @@ export async function getProductsByCategory(
               priceRange: normalizeBuyerPriceRange(d.priceRange),
               facets: normalizeProductFacets(d.facets),
               ratingFacet: normalizeRatingFacet(d.ratingFacet),
+              sort: readListingSort(d.sort),
             }
           : null;
       } catch (error: unknown) {

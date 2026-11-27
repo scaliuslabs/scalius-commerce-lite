@@ -54,6 +54,7 @@ import {
   listingPageInfoSchema,
   listingCursorQuerySchema,
   searchSortSchema,
+  listingReadSortField,
   LISTING_SORT_DESCRIPTION,
   errorResponses,
 } from "../schemas/responses";
@@ -435,8 +436,8 @@ const productDetailVariantSchema = z.object({
   discountAmount: z.number().nullable(),
   /** physical (shipped or picked up), digital, or service (performed, no delivery); a kit's from its items. */
   fulfillmentKind: fulfillmentKindSchema,
-  paidOnlineOnly: z.boolean().openapi({
-    description: "Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it.",
+  cashPayable: z.boolean().openapi({
+    description: "Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. A product page or placed offer stays buyable either way: checkout says what can pay.",
   }),
   customFields: storefrontCustomFieldsSchema,
   /** This SKU's effective warranty: an id in the product's `warranties`, or null without one. */
@@ -672,7 +673,7 @@ const listProductsRoute = createRoute({
         correctedQuery: z.string().nullable().openapi({
           description: "Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction).",
         }),
-        sort: searchSortSchema.openapi({ description: "The order read: `sort` when given, best match for a search, else the store's default listing order." }),
+        ...listingReadSortField,
       })) } },
     },
     400: errorResponses[400],
@@ -693,7 +694,7 @@ app.openapi(listProductsRoute, async (c) => {
       queryParams,
       Object.keys(params),
     ),
-    storefrontListingSort(db, { sort: params.sort, search, ids: params.ids }, { searchRanks: true }),
+    storefrontListingSort(db, { sort: params.sort, search, ids: params.ids, cursor: params.cursor }, { searchRanks: true }),
   ]);
 
   const { presence: _presence, ...filters } = params;

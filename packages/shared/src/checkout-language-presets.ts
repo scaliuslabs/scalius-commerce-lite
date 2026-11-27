@@ -416,10 +416,11 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   unexpectedErrorText: "An unexpected error occurred.",
   cartItemsNeedAttentionText: "{count} cart items need attention before checkout.",
   cartRulesBlockedText: "This order can't be placed yet.",
-  // A cart of digital items or gift cards on a store that takes only cash on delivery.
-  cartOnlinePaymentRequiredText: "{items} can only be paid for online, and this store doesn't take online payments yet. This order can't be placed.",
-  // The same cart on a store that takes cash and the invoice, for a buyer the invoice doesn't reach.
-  cartPayLaterOnlyText: "{items} can't be paid for in cash. This store takes them by invoice, for customers it approves: sign in with an approved account, or remove them to order the rest.",
+  // A cart of digital items or gift cards that no way to pay but a gift card can take for this buyer.
+  cartOnlinePaymentRequiredText: "{items} can't be paid for in cash here. Pay with a gift card.",
+  // The same, where the store also offers paying later ({method}) to signed-in buyers it approves: a guest, then a signed-in buyer it doesn't reach.
+  cartPayLaterSignInText: "{items} can't be paid for in cash here. Pay with a gift card, or sign in to pay with {method}.",
+  cartPayLaterNotOpenText: "{items} can't be paid for in cash here, and {method} isn't open to your account. Pay with a gift card.",
   cartDeliveryUnavailableText: "This store isn't delivering yet, so items that need delivery can't be ordered right now. Remove them to order the rest.",
   orderPlacedSuccessText: "Your order was placed successfully. Order ID: {orderId}",
   checkingAccountText: "Checking account…",
@@ -447,7 +448,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   tooManyCheckoutAttemptsText: "Too many checkout attempts. Wait a moment and try again.",
   paymentFailedText: "Payment failed",
   noPaymentMethodsText:
-    "No available payment method can accept this order total. Return to your cart.",
+    "Only a gift card can pay for this order here: enter one above, or return to your cart to change the order.",
   preparingPaymentText: "Preparing payment…",
   paymentMethodUnavailableText: "Payment method unavailable",
   paymentMethodUnavailableMessage: "This payment method is not available. Choose another method.",
@@ -610,7 +611,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   customizationOptionalText: "optional",
   customizationChoosePlaceholderText: "Choose…",
   customizationUnavailableText: "This product can't be ordered right now.",
-  onlinePaymentRequiredText: "This item can only be paid for online, and this store doesn't take online payments yet.",
+  onlinePaymentRequiredText: "This item can't be paid for in cash here. Pay with a gift card at checkout.",
   deliveryUnavailableText: "This store isn't delivering yet, so this item can't be ordered right now.",
   customizationNeededText: "Fill in your details below, then add it to your cart.",
   customizationInvalidText: "Some of your details can't be used. Check them below, then add it to your cart.",
@@ -1210,8 +1211,9 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   unexpectedErrorText: "একটি অপ্রত্যাশিত সমস্যা হয়েছে।",
   cartItemsNeedAttentionText: "চেকআউটের আগে কার্টের {count}টি পণ্য যাচাই করা দরকার।",
   cartRulesBlockedText: "এই অর্ডারটি এখনো দেওয়া যাচ্ছে না।",
-  cartOnlinePaymentRequiredText: "{items}-এর দাম শুধু অনলাইনে দেওয়া যায়, কিন্তু এই স্টোর এখনো অনলাইন পেমেন্ট নেয় না। তাই এই অর্ডারটি দেওয়া যাচ্ছে না।",
-  cartPayLaterOnlyText: "{items}-এর দাম ক্যাশে দেওয়া যায় না। এই স্টোর এগুলোর দাম ইনভয়েসে নেয়, শুধু অনুমোদিত গ্রাহকদের কাছ থেকে: অনুমোদিত অ্যাকাউন্টে সাইন ইন করুন, অথবা বাকিগুলো অর্ডার করতে এগুলো সরিয়ে দিন।",
+  cartOnlinePaymentRequiredText: "{items}-এর দাম এখানে ক্যাশে দেওয়া যায় না। গিফট কার্ড দিয়ে দাম দিন।",
+  cartPayLaterSignInText: "{items}-এর দাম এখানে ক্যাশে দেওয়া যায় না। গিফট কার্ড দিয়ে দাম দিন, অথবা {method} দিয়ে দাম দিতে সাইন ইন করুন।",
+  cartPayLaterNotOpenText: "{items}-এর দাম এখানে ক্যাশে দেওয়া যায় না, আর {method} আপনার অ্যাকাউন্টে চালু নেই। গিফট কার্ড দিয়ে দাম দিন।",
   cartDeliveryUnavailableText: "এই স্টোর এখনো ডেলিভারি দিচ্ছে না, তাই ডেলিভারি লাগে এমন পণ্য এখন অর্ডার করা যাবে না। বাকিগুলো অর্ডার করতে সেগুলো সরিয়ে দিন।",
   orderPlacedSuccessText: "আপনার অর্ডারটি সফলভাবে দেওয়া হয়েছে। অর্ডার আইডি: {orderId}",
   checkingAccountText: "অ্যাকাউন্ট যাচাই করা হচ্ছে…",
@@ -1239,7 +1241,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   tooManyCheckoutAttemptsText: "খুব বেশি চেকআউট চেষ্টা হয়েছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",
   paymentFailedText: "পেমেন্ট ব্যর্থ হয়েছে",
   noPaymentMethodsText:
-    "এই অর্ডারের মোট টাকার জন্য কোনো পেমেন্ট পদ্ধতি পাওয়া যাচ্ছে না। কার্টে ফিরুন।",
+    "এখানে এই অর্ডারের দাম শুধু গিফট কার্ড দিয়ে দেওয়া যায়: ওপরে একটি দিন, অথবা অর্ডার বদলাতে কার্টে ফিরুন।",
   preparingPaymentText: "পেমেন্ট প্রস্তুত হচ্ছে…",
   paymentMethodUnavailableText: "পেমেন্ট পদ্ধতি পাওয়া যাচ্ছে না",
   paymentMethodUnavailableMessage: "এই পেমেন্ট পদ্ধতিটি পাওয়া যাচ্ছে না। অন্য একটি পদ্ধতি বেছে নিন।",
@@ -1396,7 +1398,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   customizationOptionalText: "ঐচ্ছিক",
   customizationChoosePlaceholderText: "বেছে নিন…",
   customizationUnavailableText: "এই পণ্যটি এখন অর্ডার করা যাচ্ছে না।",
-  onlinePaymentRequiredText: "এই পণ্যের দাম শুধু অনলাইনে দেওয়া যায়, কিন্তু এই স্টোর এখনো অনলাইন পেমেন্ট নেয় না।",
+  onlinePaymentRequiredText: "এই পণ্যের দাম এখানে ক্যাশে দেওয়া যায় না। চেকআউটে গিফট কার্ড দিয়ে দাম দিন।",
   deliveryUnavailableText: "এই স্টোর এখনো ডেলিভারি দিচ্ছে না, তাই পণ্যটি এখন অর্ডার করা যাবে না।",
   customizationNeededText: "নিচে আপনার তথ্য দিন, তারপর কার্টে যোগ করুন।",
   customizationInvalidText: "আপনার দেওয়া কিছু তথ্য গ্রহণ করা যাচ্ছে না। নিচে দেখে নিন, তারপর কার্টে যোগ করুন।",

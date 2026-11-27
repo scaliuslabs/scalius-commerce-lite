@@ -875,7 +875,7 @@ export async function createStorefrontOrder(
         taxAuthority?.originCountry,
     );
     const assertCashOnDeliveryFits = (paymentMethod: string) => {
-        if (!paymentMethodFits(paymentMethod, allowsCashOnDelivery)) {
+        if (!paymentMethodFits((appOptions.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS).paymentKind(paymentMethod), allowsCashOnDelivery)) {
             throw new ValidationError("Cash on delivery isn't available for this order. Choose an online payment method.");
         }
         // A method that doesn't serve the country the order is handed over in (cash on delivery: Bangladesh).

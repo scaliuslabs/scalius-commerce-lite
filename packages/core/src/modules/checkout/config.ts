@@ -205,7 +205,7 @@ export async function getCheckoutConfig(
         const countries = providers.countries(methodId);
         const served = countries === "any" ? {} : { countries: [...countries] };
         if (methodId === COD_PAYMENT_METHOD) {
-            gateways.push({ id: methodId, name: COD_LABEL, flow: "cod", currencies: [localCurrencyCode], ...served });
+            gateways.push({ id: methodId, name: COD_LABEL, flow: "cod", paymentKind: "cash_on_delivery", currencies: [localCurrencyCode], ...served });
             continue;
         }
         // The invoice is listed with its terms; a buyer's quote says whether
@@ -215,6 +215,7 @@ export async function getCheckoutConfig(
                 id: methodId,
                 name: NET_TERMS_LABEL,
                 flow: "deferred",
+                paymentKind: "invoice",
                 dueInDays: activePaymentMethods.netTerms.dueInDays,
                 currencies: [localCurrencyCode],
             });
@@ -231,6 +232,7 @@ export async function getCheckoutConfig(
             id: gateway.id,
             name: gateway.checkoutName,
             flow: gateway.flow,
+            paymentKind: providers.paymentKind(gateway.id) ?? "online",
             ...(gateway.flow === "deferred" && gateway.dueInDays ? { dueInDays: gateway.dueInDays } : {}),
             currencies: [localCurrencyCode],
             ...served,

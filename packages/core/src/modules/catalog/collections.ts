@@ -28,7 +28,7 @@ import {
   selectProductMediaProjectionRows,
   type StorefrontProductFilterInput,
 } from "../products";
-import { seoDocument, storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { catalogDocument, storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { selectSettingsDocuments, type SettingsDocumentRow } from "../../settings-store";
 import { marketPriceContextOf, priceProductCards, type MarketPricing } from "../price-lists";
 import { publicCategoryConditions, publishedCategoryIdExists } from "../categories";
@@ -37,7 +37,7 @@ import {
   selectStorefrontCustomFieldRows,
   type StorefrontCustomFieldRow,
 } from "../custom-fields";
-import { getStorefrontCollectionProducts, storefrontCollectionVisibleCountQuery } from "./listing";
+import { getStorefrontCollectionProducts, listingSortWithoutDefault, storefrontCollectionVisibleCountQuery } from "./listing";
 import { resolveProductCardFacts, selectProductCardFactRows, type ProductCardFactRow } from "./card-facts";
 import {
     buildCollectionProductSelect,
@@ -309,10 +309,11 @@ export async function getPublicCollectionCatalog(
     if (/^[\x21-\x7e]{1,200}$/.test(id)) deps.collection(id);
     // A presence page's collection, cards and categories in its language.
     const translation = translationScopeOf(pricing);
-    // A listing whose request names no order (and no search, which ranks by
-    // relevance) opens in the store's default order: its settings row rides
-    // the same batch (`storefrontListingSort`).
-    const readsDefaultSort = !params.sort && !params.search;
+    // A request that names no order (no sort, cursor or search) takes the
+    // store's default, unless the collection has an order of its own (picked
+    // products, read below): the catalogue settings row rides the same batch.
+    const namedSort = listingSortWithoutDefault(params, { searchRanks: true });
+    const readsDefaultSort = namedSort === null;
     // The row, its storefront-visible custom fields and that order: one round trip.
     const [collectionRows, customFieldRows, settingsRows] = await db.batch([
         db
@@ -325,9 +326,8 @@ export async function getPublicCollectionCatalog(
             ))
             .limit(1),
         selectStorefrontCustomFieldRows(db, "collection", id),
-        ...(readsDefaultSort ? [selectSettingsDocuments(db, [seoDocument])] : []),
+        ...(readsDefaultSort ? [selectSettingsDocuments(db, [catalogDocument])] : []),
     ] as never) as unknown as [Array<typeof collections.$inferSelect & { trRows?: string | null; cardFieldsTheme?: string | null }>, StorefrontCustomFieldRow[], SettingsDocumentRow[] | undefined];
-    const sort = params.sort ?? (params.search ? "relevance" : (await seoDocument.fromRows(settingsRows ?? [])).value.defaultListingSort);
     const row = translateRow(translation, "collection", collectionRows[0], COLLECTION_FIELDS);
     if (!row) return null;
     const { cardFieldsTheme, ...collection } = row;
@@ -335,6 +335,10 @@ export async function getPublicCollectionCatalog(
     const config = normalizeCollectionConfig(collection.config);
     declareCollectionMembership(config);
     const membership = collectionMembershipForConfig(config);
+    // Picked products are the collection's own order ("newest" reads them as
+    // placed, then newest): it opens in it whatever the store's default is.
+    const sort = namedSort
+        ?? (membership.productIds.length > 0 ? "newest" : (await catalogDocument.fromRows(settingsRows ?? [])).value.defaultListingSort);
     const buyerPricing = buildBuyerCatalogPricingProjection(db, {
         productScope: eq(products.id, config.featuredProductId ?? ""),
     });

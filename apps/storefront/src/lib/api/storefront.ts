@@ -7,7 +7,6 @@ import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { applyPlatformOrigins, getRuntime } from "./runtime";
 import { unwrapEnvelope } from "./unwrap";
 import { BUILD_ID } from "@/config/build-id";
-import type { StorefrontListingSort } from "@scalius/shared/listing-sorts";
 import type {
   CollectionWithProducts,
   Product,
@@ -255,8 +254,6 @@ export interface LayoutData {
     returnPolicy?: StorefrontReturnPolicySettings | null;
     /** Default og:image: "" or an absolute https URL. */
     socialImage?: string;
-    /** The order listings open in when their URL names none (Online store -> Preferences). */
-    defaultListingSort?: StorefrontListingSort;
   };
   /** Public origins of this deployment (Settings > Store details > Web addresses). */
   platform?: {

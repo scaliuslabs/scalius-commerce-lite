@@ -47,7 +47,7 @@ import { and, asc, sql, eq, isNull } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
 import { readWarrantyDuration } from "@scalius/shared/warranty";
 import { fromMinor } from "@scalius/shared/money";
-import { paidOnlineOnly } from "@scalius/shared/fulfilment";
+import { cashPayable } from "@scalius/shared/fulfilment";
 import { isCustomFieldMoney } from "@scalius/shared/custom-fields";
 import { listProductBuyGetOffers } from "../promotions";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
@@ -601,7 +601,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             // A kit sells what its items sell (its own SKU's setting is not used).
             fulfillmentKind: kit ? kit.fulfillmentKind : v.fulfillmentKind,
             /** Paid only online (a key, a download, a gift card, or a kit holding one). */
-            paidOnlineOnly: kit ? kit.paidOnlineOnly : paidOnlineOnly({ fulfillmentKind: v.fulfillmentKind, isGiftCard: product.isGiftCard === true }),
+            cashPayable: kit ? kit.cashPayable : cashPayable({ fulfillmentKind: v.fulfillmentKind, isGiftCard: product.isGiftCard === true }),
         };
     });
     const productPrice = presentCatalogPrice(pricedProduct, decimalPlaces);

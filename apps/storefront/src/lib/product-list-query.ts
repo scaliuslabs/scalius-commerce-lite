@@ -91,8 +91,9 @@ export interface ProductListQueryState {
   limit: ProductListPageSize;
   sortBy: ProductListSort;
   /**
-   * The sort the listing opens in, which links leave out: "relevance" for
-   * search results, else the store's default listing order.
+   * The order the listing opens in when its URL names none: "relevance" for
+   * search results that rank by it, else the order its read reported
+   * (`readSort`: the store's default, or a collection's own order).
    */
   defaultSort: ProductListSort;
   query: string;
@@ -166,17 +167,21 @@ export function productListCanonicalUrl(resourceUrl: string | null, page: number
   return url.toString();
 }
 
+/**
+ * A listing link from the canonical filters. A sort the filters name stays in
+ * the link, even one equal to today's default: the default is the store's
+ * setting, so a buyer's choice (and a bookmark of it) keeps its meaning when
+ * the merchant changes it. Only best match on a search with words, which no
+ * setting moves, is left out.
+ */
 export function buildProductListHref({
   pathname,
   currentFilters,
   overrides = {},
-  defaultSort = DEFAULT_LISTING_SORT,
 }: {
   pathname: string;
   currentFilters: ProductListFilterState;
   overrides?: Record<string, string | number | string[] | null | undefined>;
-  /** The sort links leave out; null keeps any sort the filters name (a redirect decided before the store's default is known). */
-  defaultSort?: ProductListSort | null;
 }): string {
   const nextFilters: Record<string, string | number | string[]> = {
     ...currentFilters,
@@ -192,11 +197,14 @@ export function buildProductListHref({
   if (Number(nextFilters.page ?? 1) <= 1) {
     delete nextFilters.page;
   }
+  // Best match is a search's fixed first order (no store setting moves it), so it stays out.
+  if (nextFilters.sortBy === "relevance" && nextFilters.q) {
+    delete nextFilters.sortBy;
+  }
 
   const queryString = buildCanonicalQueryString(nextFilters, {
     defaultParams: {
       page: 1,
-      ...(defaultSort === null ? {} : { sortBy: defaultSort }),
       limit: DEFAULT_PRODUCT_LIST_PAGE_SIZE,
     },
   });
@@ -307,43 +315,45 @@ function knownFacetValue(allowed: ReadonlySet<string>, candidate: string): strin
 
 /**
  * Validates a listing URL into API options and canonical filter state.
- * `rankByRelevance` (the /search page) opens results with a query in
- * "relevance"; every other listing opens in the store's default listing order
- * (`defaultListingSort`, the layout's; "newest" until it is known).
+ * `rankByRelevance` (the search page, a collection) opens results with a
+ * query in "relevance". Otherwise a URL that names no order sends no `sort`:
+ * the read applies the store's default (or a collection's own order) and
+ * says which (`readSort`, from the response), so the page shows what it read.
  *
- * A sort the URL names is kept as named, in the API options, the filters and
- * any redirect, whatever the default: the default is the store's setting, so
- * `?sortBy=newest` is a real choice where the store opens on another order,
- * and a redirect decided before the layout is read (the middleware's) must
- * not drop it. A URL that names none leaves `sort` out of the API options:
- * the listing read applies the store's default itself.
+ * A sort the URL names is kept as named, in the API options, the filters,
+ * any redirect and every link, whatever the default: `?sortBy=newest` is a
+ * real choice where the store opens on another order, and a redirect decided
+ * before any read (the middleware's) gives the same answer.
  */
 export function resolveProductListQueryState({
   url,
   facets = [],
   allowUnknownAttributes = false,
   rankByRelevance = false,
-  defaultListingSort = DEFAULT_LISTING_SORT,
+  readSort,
 }: {
   url: URL;
   facets?: readonly ProductFacet[];
   allowUnknownAttributes?: boolean;
   rankByRelevance?: boolean;
-  defaultListingSort?: ProductListSort;
+  /** The order the listing's read reported (its response's `sort`). */
+  readSort?: ProductListSort | null;
 }): ProductListQueryState {
   const params = url.searchParams;
   const rawQuery = getLastParam(params, "q");
   const query = normalizeSearchQuery(rawQuery);
   const ranksByRelevance = rankByRelevance && Boolean(query);
-  const defaultSort: ProductListSort = ranksByRelevance ? "relevance" : defaultListingSort;
-  const { page, changed: pageChanged } = normalizePage(
-    getLastParam(params, "page"),
-  );
   const { sort: namedSort, changed: sortChanged } = normalizeSort(
     getLastParam(params, "sortBy"),
     ranksByRelevance,
   );
-  const sortBy = namedSort ?? defaultSort;
+  const defaultSort: ProductListSort = ranksByRelevance
+    ? "relevance"
+    : (!namedSort && readSort) || DEFAULT_LISTING_SORT;
+  const sortBy = namedSort ?? readSort ?? defaultSort;
+  const { page, changed: pageChanged } = normalizePage(
+    getLastParam(params, "page"),
+  );
   const { limit, changed: limitChanged } = normalizePageSize(getLastParam(params, "limit"));
   const renderParams = collectRenderableParams(params);
   const attributeValues = buildAttributeValueMap(facets);
@@ -520,6 +530,6 @@ export function resolveProductListQueryState({
     query,
     options,
     currentFilters,
-    redirectPath: buildProductListHref({ pathname: url.pathname, currentFilters, defaultSort: null }),
+    redirectPath: buildProductListHref({ pathname: url.pathname, currentFilters }),
   };
 }

@@ -44,7 +44,7 @@ const { controls, refinementCount, shownFacets, ratingRows } = catalogEmbedContr
   facets, ratingFacet, priceRange, currentFilters, query, total: pagination.total, hasReviews, storeShown: resolved.blocks.listing.filters.shown,
 });
 const pageUrl = (page: number) =>
-  buildProductListHref({ pathname, currentFilters, overrides: { page, [PRODUCT_LIST_SHOW_ALL_PARAM]: null }, defaultSort });
+  buildProductListHref({ pathname, currentFilters, overrides: { page, [PRODUCT_LIST_SHOW_ALL_PARAM]: null } });
 const presentation = catalogEmbeddedFilters(catalogListingPresentation(resolved, listingTemplate).filters);
 const groups = kind === "filters"
   ? catalogFacetGroups(shownFacets, {
@@ -61,8 +61,6 @@ const groups = kind === "filters"
       priceRange={priceRange}
       currentFilters={currentFilters}
       query={query}
-      sortBy={sortBy}
-      defaultSort={defaultSort}
       total={pagination.total}
       totalIsCapped={pagination.totalIsCapped}
       pathname={pathname}
@@ -88,7 +86,7 @@ const groups = kind === "filters"
     limit={limit}
     sortBy={sortBy}
     sortOptions={catalogSortOptions({ defaultSort, sortBy, newestLabel, hasReviews })}
-    viewSelect={{ pathname, defaultSort, currentFilters }}
+    viewSelect={{ pathname, currentFilters }}
     results="grid"
     everyWidth
   />

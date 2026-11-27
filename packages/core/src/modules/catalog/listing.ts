@@ -12,8 +12,8 @@ import { productSearchRank, productSearchRelevanceOrder } from "./search-relevan
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
 import { planLimits } from "@scalius/shared/plan-limits";
-import { DEFAULT_LISTING_SORT } from "@scalius/shared/listing-sorts";
-import { cappedCountLimit, capTotal, encodeListCursor } from "@scalius/shared/pagination";
+import { DEFAULT_LISTING_SORT, STOREFRONT_SEARCH_SORTS } from "@scalius/shared/listing-sorts";
+import { cappedCountLimit, capTotal, encodeListCursor, listCursorSort } from "@scalius/shared/pagination";
 import { invalidCursor, keysetCondition, readListCursor, type KeysetOrder } from "../../utils/keyset";
 import {
   presentBuyerPricing,
@@ -24,7 +24,7 @@ import {
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import type { Database } from "@scalius/database/client";
 import { marketAmountMinor, marketDecimalPlaces, marketPriceContextOf, marketShopAmounts, priceProductCards, type MarketPricing } from "../price-lists";
-import { seoDocument, storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { catalogDocument, storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { publicCategoryConditions, publicCategorySubtreeCondition } from "../categories";
 import { loadCatalogCardData } from "./card-facts";
 import { cardFieldsOfTheme, cardFieldsThemeSql } from "./card-fields";
@@ -209,28 +209,40 @@ type StorefrontCatalogScope = {
 type SortedListingParams = StorefrontProductFilterInput & { sort: StorefrontProductSort };
 
 /**
- * The order a listing reads: the one asked for; else best match for a search
- * with words (the catalogue search and a collection; a category or brand
- * page's search box keeps the page's order); else the store's default
- * (`seo.defaultListingSort`, Online store -> Preferences). That one settings
- * read declares the document as the listing's dependency, so a cached
- * listing that took the default is read again once the merchant picks
- * another. The category, brand and catalogue routes start it beside their
- * own first reads (no wave of its own) and pass the answer as `sort`; a
- * collection reads its row in the collection's first batch
- * (`getPublicCollectionCatalog`); the listing functions resolve it themselves
- * when called without.
+ * The order a listing reads without a settings read, or null when it takes
+ * the store's default: the one asked for; else a cursor's own order (a
+ * cursor request that names no sort continues where it was issued, whatever
+ * the default is now); else best match for a search with words (the
+ * catalogue search and a collection; a category or brand page's search box
+ * keeps the page's order); products asked for by id keep newest.
+ */
+export function listingSortWithoutDefault(
+    params: Pick<StorefrontProductFilterInput, "sort" | "search" | "ids" | "cursor">,
+    options: { searchRanks: boolean },
+): StorefrontProductSort | null {
+    if (params.sort) return params.sort;
+    const cursorSort = params.cursor ? listCursorSort(params.cursor) : null;
+    if (cursorSort && (STOREFRONT_SEARCH_SORTS as readonly string[]).includes(cursorSort)) return cursorSort as StorefrontProductSort;
+    if (params.search && options.searchRanks) return "relevance";
+    if (params.ids) return DEFAULT_LISTING_SORT;
+    return null;
+}
+
+/**
+ * The order a listing reads (`listingSortWithoutDefault`, else the store's
+ * default: `catalog.defaultListingSort`, Online store -> Preferences). The
+ * settings read declares the catalogue document as the listing's
+ * dependency, so a cached listing that took the default is read again once
+ * the merchant picks another, and an SEO edit never touches it. The category
+ * route reads it in its lookup's batch and a collection in its row's batch
+ * (no D1 call of their own); a call without `sort` resolves it here.
  */
 export async function storefrontListingSort(
     db: Database,
-    params: Pick<StorefrontProductFilterInput, "sort" | "search" | "ids">,
+    params: Pick<StorefrontProductFilterInput, "sort" | "search" | "ids" | "cursor">,
     options: { searchRanks: boolean },
 ): Promise<StorefrontProductSort> {
-    if (params.sort) return params.sort;
-    if (params.search && options.searchRanks) return "relevance";
-    // Products asked for by id are not a listing: they keep the fixed order.
-    if (params.ids) return DEFAULT_LISTING_SORT;
-    return (await seoDocument.read(db)).defaultListingSort;
+    return listingSortWithoutDefault(params, options) ?? (await catalogDocument.read(db)).defaultListingSort;
 }
 
 async function withListingSort(
@@ -1062,8 +1074,11 @@ export async function getStorefrontCollectionProducts(
     filters: StorefrontProductFilterInput,
     pricing: MarketPricing | null = null,
 ) {
-    const params = await withListingSort(db, filters, { searchRanks: true });
     const { productIds, categoryIds, membershipJson, condition } = storefrontCollectionMembership(membership);
+    // Picked products are the collection's own order: it opens in it whatever the store's default is.
+    const params: SortedListingParams = productIds.length > 0
+        ? { ...filters, sort: listingSortWithoutDefault(filters, { searchRanks: true }) ?? "newest" }
+        : await withListingSort(db, filters, { searchRanks: true });
     // A dynamic collection lists its categories' public products (each
     // category's published state included); a manual one its picked ids.
     deps.categories(categoryIds);

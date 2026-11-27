@@ -6,8 +6,7 @@ import {
   getCheckoutConfig,
   getLayoutData,
   checkoutTakesOrders,
-  paidOnlineOnlyHere,
-  sellsPaidOnlineOnly,
+  onlyGiftCardsPayHere,
   getProductBySlugResult,
   getShippingMethods,
 } from "@/lib/api";
@@ -471,13 +470,11 @@ const deliveryFacts = buildDeliveryFacts({
 const fulfilmentBadge =
   pageFulfilment === "service" ? productPageCopy.noDeliveryNeededBadgeText : null;
 // Digital items, gift cards and kits holding one are never paid in cash
-// (core's `paidOnlineOnly`): on a store that lists no other way to pay (no
-// gateway and no invoice) the page says so instead of starting a purchase
-// checkout must refuse. A store with the invoice keeps the buttons: this page
-// is shared by every buyer, and the cart refuses the buyer it doesn't reach.
-// A product with a SKU cash can pay stays buyable; a cart that also holds a
-// paid-online item is refused cash at checkout.
-const onlinePaymentUnavailable = paidOnlineOnlyHere(buyerVariants, checkoutConfig);
+// (core's `cashPayable`). On a store that lists no other way to pay (no
+// gateway, no invoice) a gift card still pays for them: the page stays
+// buyable for everyone (it is shared, and the store always takes gift cards)
+// and says so; checkout says what can pay for the buyer's cart.
+const giftCardOnly = onlyGiftCardsPayHere(buyerVariants, checkoutConfig);
 // A physical product no delivery or pickup option can bring to this page's
 // buyers can't be ordered: the facts above claim neither delivery nor cash on
 // delivery, and the buttons are off with a note saying why (the cart's rule).
@@ -487,7 +484,7 @@ const onlinePaymentUnavailable = paidOnlineOnlyHere(buyerVariants, checkoutConfi
 const deliveryUnavailable = pageFulfilment === "physical"
   && shippingMethods !== null && checkoutTakesOrders(checkoutConfig)
   && !physicalDeliveryOffered(productShippingMethods, pageCountries, bangladeshAddressesOffered(checkoutConfig));
-const purchaseUnavailable = onlinePaymentUnavailable || deliveryUnavailable;
+const purchaseUnavailable = deliveryUnavailable;
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   settings: layoutData.seo?.returnPolicy,
   storefrontUrl,
@@ -537,8 +534,6 @@ const productPageProjection = (): StorefrontProductPage => pageProjection ??= pr
   price: { current: buyerDisplayedPrice, regular: buyerPricePresentation.pricing.originalPrice, from: buyerPricePresentation.isStartingAt },
   variantPrice: getVariantSchemaPrice,
   page: { currencyCode, currencySymbol },
-  // A placed offer paid only online is off where nothing but cash pays, as on its own page.
-  sellsPaidOnlineOnly: sellsPaidOnlineOnly(checkoutConfig),
   warrantyCopy: productPageCopy,
   // The form's inputs: the product's, then the apps' line inputs shown on it.
   buyerInputs: productBuyerInputFields(product, layoutData.lineInputs, productPageCopy),
@@ -594,7 +589,7 @@ const buyBox = {
     currencyDecimalPlaces,
     priceIncrementMinor: currencyPriceIncrement,
     quickBuyNotice,
-    onlinePaymentUnavailable,
+    giftCardOnly,
     deliveryUnavailable,
     deliveryPreviewHint: editorMarks && deliveryUnavailable,
     actionCopy: productPageCopy,
