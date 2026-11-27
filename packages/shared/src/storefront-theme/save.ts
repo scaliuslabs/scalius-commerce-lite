@@ -8,9 +8,11 @@ import { storefrontThemeDocumentPolicyIssues, storefrontThemeDocumentSchema, typ
 import { PRIVATE_CHECKER_VERSION, compileStorefrontPrivatePages, privatePagesContextOf, type PrivatePagesReason } from "./private-layout";
 import { storefrontThemeAssetIssues, type STOREFRONT_FOREIGN_ASSET } from "./theme-assets";
 import { storefrontThemeTranslationProblems } from "./translate";
+import { storefrontLabelRefusalReason } from "./read-repair";
 import type { STOREFRONT_MOBILE_TAB_REFUSALS } from "./blocks";
 import type { STOREFRONT_PRIVATE_TEMPLATE_REASON } from "./pages";
 import type { STOREFRONT_PAGE_SLIDE_PRODUCTS_REFUSAL } from "./sections";
+import type { STOREFRONT_INVALID_LINK } from "./links";
 
 /** Largest stored theme document: bounds each D1 row and the retained history on Workers Free. */
 export const STOREFRONT_THEME_DOCUMENT_MAX_BYTES = 512 * 1024;
@@ -28,7 +30,7 @@ export const STOREFRONT_THEME_DOCUMENT_MAX_BYTES = 512 * 1024;
  */
 export const STOREFRONT_THEME_SAVE_REASONS = [
   "contrast", "dark_colors_missing", "document_too_large", "duplicate_part", "duplicate_target", "empty_layout",
-  "foreign_asset", "invalid_hook", "label_figures", "label_too_long", "label_variant", "layout_holds", "layout_once",
+  "foreign_asset", "invalid_hook", "invalid_link", "label_figures", "label_too_long", "label_variant", "layout_holds", "layout_once",
   "lead_order", "markup", "missing_part", "missing_target", "no_row", "not_available", "part_order", "private_page_template",
   "prominence", "semantic_color", "slide_products_over_limit", "tab_label", "tab_link_external", "tab_repeated",
   "theme_apps_unavailable", "token_value", "too_deep", "too_large", "too_many_nodes", "translation", "unknown_app",
@@ -46,7 +48,7 @@ export type StorefrontThemeSaveReasonsListed = [
   Listed<Exclude<PrivatePagesReason, StorefrontThemeSaveReason>>,
   Listed<Exclude<StorefrontThemePolicyReason, StorefrontThemeSaveReason>>,
   Listed<Exclude<(typeof STOREFRONT_MOBILE_TAB_REFUSALS)[keyof typeof STOREFRONT_MOBILE_TAB_REFUSALS], StorefrontThemeSaveReason>>,
-  Listed<Exclude<typeof STOREFRONT_PRIVATE_TEMPLATE_REASON | typeof STOREFRONT_PAGE_SLIDE_PRODUCTS_REFUSAL | typeof STOREFRONT_FOREIGN_ASSET, StorefrontThemeSaveReason>>,
+  Listed<Exclude<typeof STOREFRONT_PRIVATE_TEMPLATE_REASON | typeof STOREFRONT_PAGE_SLIDE_PRODUCTS_REFUSAL | typeof STOREFRONT_FOREIGN_ASSET | typeof STOREFRONT_INVALID_LINK, StorefrontThemeSaveReason>>,
 ];
 
 /** One refused value: where it sits in the document, what is wrong and what is allowed, and its machine-readable reason when it has one. */
@@ -90,7 +92,10 @@ export function checkStorefrontThemeSave(theme: unknown): StorefrontThemeSaveChe
     return refused(result.error.issues.map((issue) => ({
       path: issue.path.map(String).join("."),
       message: issue.message,
-      reason: issue.code === "custom" && typeof issue.params?.reason === "string" ? issue.params.reason : null,
+      reason: issue.code === "custom" && typeof issue.params?.reason === "string" ? issue.params.reason
+        // A label's value the schema refuses names the label check's reason (a read keeps the store's words there).
+        : issue.path[0] === "privatePages" && issue.path[1] === "labels" && issue.path.length >= 3 ? storefrontLabelRefusalReason(issue.code)
+          : null,
     })), "The storefront style is not a valid theme document.");
   }
   // The write policy: checked here, where a document is written, never where one is read.

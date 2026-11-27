@@ -12,8 +12,7 @@
 import { STOREFRONT_THEME_DOCUMENT_VERSION, storefrontThemeDocumentSchema, type StorefrontThemeDocument } from "./document";
 import { STOREFRONT_SECTION_REGISTRY, type StorefrontSectionSettingsUpgrade } from "./sections";
 import { storefrontPrivatePageDefaults } from "./private-pages";
-import { STOREFRONT_MOBILE_DEFAULT_TABS, STOREFRONT_MOBILE_TAB_LIMITS } from "./blocks";
-import { isStorefrontStorePath } from "./links";
+import { repairStoredStorefrontTheme, type StorefrontThemeReadRepair } from "./read-repair";
 import { privateCartPresetArrangement, privateDrawerWith, type PrivatePageArrangement } from "./private-arrangement";
 import { PRIVATE_ANATOMY_VERSION } from "./private-anatomy";
 import { readStoredPrivatePages, refusedPrivatePages } from "./private-layout";
@@ -387,28 +386,12 @@ function withoutPrivatePageTemplates(document: Json): Json {
   return { ...document, pages: { ...pages, templates } };
 }
 
-/**
- * A stored document without a link a later, stricter store-path check refuses
- * (`isStorefrontStorePath`, a security check: such a link is never drawn as
- * a working one): a bottom bar link tab whose page fails it is left out, and
- * when that leaves fewer tabs than a bar holds, the bar is the store's own
- * (`STOREFRONT_MOBILE_DEFAULT_TABS`). The rest of the document reads as it
- * was; a save that names such a link is refused (`tab_link_external`).
- */
-function withoutUnsafeStoreLinks(document: Json): Json {
-  const blocks = document.blocks;
-  if (!isRecord(blocks) || !isRecord(blocks.mobileNav) || !isRecord(blocks.mobileNav.settings)) return document;
-  const { settings } = blocks.mobileNav;
-  if (!Array.isArray(settings.tabs)) return document;
-  const kept = settings.tabs.filter((tab) => !(isRecord(tab) && tab.kind === "link" && typeof tab.href === "string" && !isStorefrontStorePath(tab.href)));
-  if (kept.length === settings.tabs.length) return document;
-  const tabs = kept.length >= STOREFRONT_MOBILE_TAB_LIMITS.min ? kept : STOREFRONT_MOBILE_DEFAULT_TABS.map((tab) => ({ ...tab }));
-  return { ...document, blocks: { ...blocks, mobileNav: { ...blocks.mobileNav, settings: { ...settings, tabs } } } };
-}
+/** How many rounds a read repairs before it gives up (each round repairs every issue it found). */
+const READ_REPAIR_ROUNDS = 4;
 
-/** A stored document read through the chain: the current document and the version it was stored at. */
+/** A stored document read through the chain: the current document, the version it was stored at, and what the read repaired. */
 export type StoredStorefrontThemeRead =
-  | { ok: true; document: StorefrontThemeDocument; storedVersion: number }
+  | { ok: true; document: StorefrontThemeDocument; storedVersion: number; repairs?: StorefrontThemeReadRepair[] }
   | { ok: false; reason: string };
 
 /**
@@ -416,8 +399,9 @@ export type StoredStorefrontThemeRead =
  * parsed strictly for its structure. A read never runs the write policy
  * (`storefrontThemeDocumentPolicyIssues`): a document a later build's policy
  * refuses still reads and draws as it was saved, and is refused only when it
- * is saved again. A bottom bar link tab a stricter store-path check refuses
- * is left out (`withoutUnsafeStoreLinks`), never drawn as a working link.
+ * is saved again. Nor does it fail on a value a check with a save reason
+ * refuses (a link, a tab, a slide's product): that value is repaired
+ * (read-repair.ts: never drawn as a working link) and listed in `repairs`.
  * What a theme cannot set on a private page (a stylesheet,
  * its chrome, its search, files, a content block) is dropped first, as the
  * stored path alone does, and the pages it reached are then refused: the
@@ -439,15 +423,25 @@ export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefr
   } catch (error) {
     return { ok: false, reason: error instanceof StorefrontThemeUpgradeError ? error.message : "The stored theme did not upgrade." };
   }
-  upgraded = withoutUnsafeStoreLinks(withoutPrivatePageTemplates(upgraded));
+  upgraded = withoutPrivatePageTemplates(upgraded);
   const released = readStoredPrivatePages(upgraded.privatePages);
-  const result = storefrontThemeDocumentSchema.safeParse("privatePages" in upgraded ? { ...upgraded, privatePages: released.value } : upgraded);
-  if (!result.success) {
-    const issue = result.error.issues[0];
-    return { ok: false, reason: `${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}` };
+  let candidate: Json = "privatePages" in upgraded ? { ...upgraded, privatePages: released.value } : upgraded;
+  const repairs: StorefrontThemeReadRepair[] = [];
+  // A repair can let a check that waited on the shape run (a list's own checks): a few rounds settle it.
+  for (let round = 0; ; round += 1) {
+    const result = storefrontThemeDocumentSchema.safeParse(candidate);
+    if (result.success) {
+      const document = released.held.length > 0 ? { ...result.data, privatePages: refusedPrivatePages(result.data.privatePages, released.held) } : result.data;
+      return { ok: true, document, storedVersion: (parsed as Json).version as number, ...(repairs.length > 0 ? { repairs } : {}) };
+    }
+    const repaired = round < READ_REPAIR_ROUNDS ? repairStoredStorefrontTheme(candidate, result.error.issues) : null;
+    if (!repaired) {
+      const issue = result.error.issues[0];
+      return { ok: false, reason: `${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}` };
+    }
+    candidate = repaired.document;
+    repairs.push(...repaired.repairs);
   }
-  const document = released.held.length > 0 ? { ...result.data, privatePages: refusedPrivatePages(result.data.privatePages, released.held) } : result.data;
-  return { ok: true, document, storedVersion: (parsed as Json).version as number };
 }
 
 /**

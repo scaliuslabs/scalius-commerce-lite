@@ -14,10 +14,16 @@ export function canonicalStorefrontLink(value: unknown): string | null {
   return parsed.ok && parsed.kind !== "label" && parsed.href ? parsed.href : null;
 }
 
+/**
+ * Why a theme link is refused (`params.reason`): a save refuses it; a read of a
+ * stored one reads it as no link (read-repair.ts), never as a working link.
+ */
+export const STOREFRONT_INVALID_LINK = "invalid_link";
+
 /** A navigation-safe href, already canonical (`canonicalStorefrontLink(value) === value`). */
 export const storefrontLinkSchema = z.string().max(STOREFRONT_LINK_MAX_LENGTH).refine(
   (value) => canonicalStorefrontLink(value) === value,
-  "Use a store path such as /collections/new or an https:// link.",
+  { message: "Use a store path such as /collections/new or an https:// link.", params: { reason: STOREFRONT_INVALID_LINK } },
 );
 
 /**
