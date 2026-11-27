@@ -52,6 +52,7 @@ import { PRIVATE_CONTROL_PLACES, PRIVATE_PAGE_KEYS, PRIVATE_PAGE_WORDS, type Pri
 
 export { PRIVATE_UI_TONES, PRIVATE_BUYER_UI_STYLES, type PrivateUiTone, type PrivateBuyerUiStyle } from "./private-buyer-ui";
 import { PRIVATE_BUYER_UI_STYLES } from "./private-buyer-ui";
+import { PRIVATE_TAB_BAR_BOUNDS, PRIVATE_TAB_BAR_CHOICES } from "./private-tab-bar-limits";
 
 /** Words in each language the theme writes them in, keyed by base language (`en`, `bn`). */
 export type PrivateWords = Record<string, string>;
@@ -975,6 +976,10 @@ export function privatePageAnatomy(): string[] {
   lines.push(`buyer-ui attributes=${PRIVATE_BUYER_UI_HOOKS.join(",")}`);
   lines.push(`chrome roots ${PRIVATE_SCOPE_ATTRIBUTE}=core-header|core-footer controls=${PRIVATE_CONTROL_PLACES.join("|")}`);
   lines.push(`layout tokens=${PRIVATE_LAYOUT_TOKENS.join(",")}`);
+  // The phone tab bar's own bounds and choices (private-tab-bar.ts), where they differ from a token's everywhere else:
+  // a choice a line of its own, so one more is growth.
+  for (const [name, [least, most]] of Object.entries(PRIVATE_TAB_BAR_BOUNDS)) lines.push(`tabBar bound ${name} ${least}..${most}px`);
+  for (const [name, values] of Object.entries(PRIVATE_TAB_BAR_CHOICES)) for (const value of values) lines.push(`tabBar choice ${name} ${value}`);
   for (const [kind, style] of Object.entries(PRIVATE_BUYER_UI_STYLES)) lines.push(`buyer-ui style ui.${kind}${style.tones ? `[.${style.tones.join("|")}]` : ""}[@<app>][/<target>] ${style.kind} tokens=${style.tokens.join(",")}`);
   return lines;
 }

@@ -274,6 +274,16 @@ dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-ag
 buyer-ui attributes=data-buyer-ui-target,data-buyer-ui-app,data-ui
 chrome roots data-private=core-header|core-footer controls=header|footer|none
 layout tokens=background,gradient,border,border-width,border-style,radius,shadow,padding,gap,columns,columns-wide
+tabBar bound bar.height 56..96px
+tabBar bound label.size 10..16px
+tabBar bound icon.size 16..32px
+tabBar bound icon.padding 0..16px
+tabBar bound icon.radius 0..32px
+tabBar bound icon.border-width 0..2px
+tabBar bound current.padding 0..16px
+tabBar bound current.ring-width 0..4px
+tabBar choice label.clamp 1
+tabBar choice label.clamp 2
 buyer-ui style ui.banner[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="banner"] tokens=background,text,border,border-width,radius,shadow,padding
 buyer-ui style ui.stack[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="stack"][data-tone] tokens=background,text,border,border-width,radius,shadow,padding,gap
 buyer-ui style ui.button[.primary|secondary|critical][@<app>][/<target>] :is(a[data-ui="button"],[data-ui="button"]>button) tokens=background,text,border,border-width,radius,ring,inset,weight,size,case

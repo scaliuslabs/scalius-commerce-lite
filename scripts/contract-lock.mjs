@@ -219,7 +219,9 @@ export async function buildLock(root = DEFAULT_ROOT, { allowNoReplay = false, pl
  */
 export function referenceReleaseProblems(root) {
   const named = join(root, "internal/reference-theme/reference.json");
-  if (!existsSync(named)) return [];
+  // The public copy has no `internal/`: nothing to hold. The private tree always carries the check: its absence is refused.
+  if (!existsSync(join(root, "internal"))) return [];
+  if (!existsSync(named)) return ["The private tree has no internal/reference-theme/reference.json: the rendered gate's reference look is checked against the outside theme's release from there; restore it."];
   const { themeId, fixture } = JSON.parse(readFileSync(named, "utf8"));
   const release = existsSync(join(root, fixture)) ? /export const REFERENCE_RELEASE = "([^"]+)"/.exec(readFileSync(join(root, fixture), "utf8"))?.[1] : undefined;
   const listed = join(root, "internal/replay/replay.json");

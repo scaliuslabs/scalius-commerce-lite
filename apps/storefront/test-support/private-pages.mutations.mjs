@@ -511,6 +511,18 @@ export const MUTATIONS = {
     cases: ["the phone tab bar in the customer's look, on the account, English and Bangla"],
     expect: /tab bar: a tab's icon is drawn/,
   },
+  "H-o every tab's weight reaches the current tab": {
+    why: "a theme's weight for every tab is written on the current tab too, with no weight of its own beside it: the check counted the store's 700 the page never draws",
+    rewrites: [rewrite("packages/shared/src/storefront-theme/private-tab-bar.ts", "writeCurrent: current !== undefined || tab !== undefined,", "writeCurrent: current !== undefined,")],
+    cases: ["the phone tab bar with only its labels' weight"],
+    expect: /tab bar: the current tab is told apart from the others by its hue alone/,
+  },
+  "H-p a first view held past the phone's LCP budget": {
+    why: "the first view waits for a slow check as long as it takes: the cart's lines stay hidden past 1200ms",
+    rewrites: [rewrite("apps/storefront/src/lib/cart/reveal.ts", "export const FIRST_REVEAL_WAIT_MS = 1200;", "export const FIRST_REVEAL_WAIT_MS = 4000;")],
+    cases: ["the customer's cart with a check slower than the first view's wait"],
+    expect: /first view: the lines showed \d+ms after the cart check was asked/,
+  },
   "H-i the dialog's actions stack with Confirm on top": {
     why: "Confirm comes first in the dialog's markup: where its large Confirm and Go back do not fit side by side, Confirm stacks on top, away from the thumb",
     rewrites: [rewrite(DIALOG, "  actions.append(back, confirm);", "  actions.append(confirm, back);")],

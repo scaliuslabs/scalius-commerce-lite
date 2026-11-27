@@ -10,40 +10,10 @@ import { PRIVATE_PAGES, type PrivateTokenName } from "./private-anatomy";
 import { storefrontThemeContrast, storefrontThemeMix, type StorefrontThemeColors } from "./contrast";
 import { PRIVATE_CONTRAST_FLOOR, PRIVATE_MARK_CONTRAST_FLOOR, PRIVATE_TOKEN_SPECS, type PrivatePalette, type PrivateTokenIssue } from "./private-tokens";
 
-/**
- * The bar's sealed numbers (contract-tables `limits`, each loosening only): how much of what lies under a blurred
- * bar shows through it (the store's: its colour at 94%), a label's least size, and what tells the current tab apart
- * from the others by more than its hue (WCAG 1.4.1, technique G183: a cue besides colour that reads 3:1): its words
- * at least `wordsApart` from theirs, a ring at least `ringWidth` wide reading 3:1 on the bar, a weight at least
- * `weightStep` heavier, or a chip `chipStep` px larger than theirs, both chips drawn.
- */
-export const PRIVATE_TAB_BAR_LIMITS = { blurBleed: 0.06, labelMinSize: 10, wordsApart: 3, ringWidth: 2, weightStep: 200, chipStep: 4 } as const;
+import { PRIVATE_TAB_BAR_BOUNDS, PRIVATE_TAB_BAR_CHOICES, PRIVATE_TAB_BAR_DEFAULTS, PRIVATE_TAB_BAR_LABEL, PRIVATE_TAB_BAR_LIMITS } from "./private-tab-bar-limits";
+
+export { PRIVATE_TAB_BAR_BOUNDS, PRIVATE_TAB_BAR_CHOICES, PRIVATE_TAB_BAR_DEFAULTS, PRIVATE_TAB_BAR_LABEL, PRIVATE_TAB_BAR_LIMITS };
 const BLUR_BLEED = PRIVATE_TAB_BAR_LIMITS.blurBleed;
-
-/** The bar's own choices, where they differ from a token's everywhere else: a label's lines (`clamp`) are one or two. */
-export const PRIVATE_TAB_BAR_CHOICES = { "label.clamp": ["1", "2"] } as const satisfies Record<string, readonly string[]>;
-
-/** The bar's own bounds (px), where they differ from a token's everywhere else. */
-export const PRIVATE_TAB_BAR_BOUNDS = {
-  "bar.height": [56, 96],
-  // A label's floor: 10px, a phone tab bar's own label size (a page's words keep 12px). Below it a label is not read.
-  "label.size": [PRIVATE_TAB_BAR_LIMITS.labelMinSize, 16],
-  "icon.size": [16, 32],
-  "icon.padding": [0, 16],
-  "icon.radius": [0, 32],
-  "icon.border-width": [0, 2],
-  "current.padding": [0, 16],
-  "current.ring-width": [0, 4],
-} as const satisfies Record<string, readonly [number, number]>;
-
-/** The store's own bar, the defaults a token replaces. */
-export const PRIVATE_TAB_BAR_DEFAULTS = { height: 60, labelSize: 12, labelWeight: 500, currentWeight: 700, iconSize: 22, gap: 3 } as const;
-
-/**
- * A label's line height, and the room above and below its lines (em) inside its box: Bangla's vowel signs reach
- * past a Latin line, and the label's box clips (its lines are clamped), so the room is part of the label.
- */
-export const PRIVATE_TAB_BAR_LABEL = { leading: 1.25, room: 0.15 } as const;
 
 const ROOT = '[data-private="tab-bar"]';
 const SELECTORS = {
@@ -121,6 +91,22 @@ function coloursOf(tokens: Record<string, Values>, palette: PrivatePalette) {
   };
 }
 
+/**
+ * The weights the bar draws, the one source of the CSS and of the check: every tab's (`label.weight`, else the store's),
+ * the current tab's (`current.weight`, else the store's own current weight, which the CSS writes too wherever it writes
+ * every tab's: the tabs' rule would otherwise reach the current tab).
+ */
+export function privateTabBarWeights(tokens: Record<string, Values>): { tab: number; current: number; writeTab: boolean; writeCurrent: boolean } {
+  const tab = tokens.label?.weight;
+  const current = tokens.current?.weight;
+  return {
+    tab: Number(tab ?? PRIVATE_TAB_BAR_DEFAULTS.labelWeight),
+    current: Number(current ?? PRIVATE_TAB_BAR_DEFAULTS.currentWeight),
+    writeTab: tab !== undefined,
+    writeCurrent: current !== undefined || tab !== undefined,
+  };
+}
+
 const worst = (colour: string, backs: readonly string[]) => Math.min(...backs.map((back) => storefrontThemeContrast(colour, back)));
 const ratio = (value: number) => `${value.toFixed(2)}:1`;
 
@@ -148,7 +134,7 @@ function contrastIssues(tokens: Record<string, Values>, palette: PrivatePalette)
   const cues = [
     words >= limits.wordsApart,
     Boolean(c.ring) && ringWidth >= limits.ringWidth && worst(c.ring!, c.under) >= PRIVATE_MARK_CONTRAST_FLOOR,
-    Number(tokens.current?.weight ?? PRIVATE_TAB_BAR_DEFAULTS.currentWeight) - Number(tokens.label?.weight ?? PRIVATE_TAB_BAR_DEFAULTS.labelWeight) >= limits.weightStep,
+    privateTabBarWeights(tokens).current - privateTabBarWeights(tokens).tab >= limits.weightStep,
     tokens.icon?.background !== undefined && tokens.current?.background !== undefined && Number(tokens.current?.padding ?? tokens.icon?.padding ?? 0) - Number(tokens.icon?.padding ?? 0) >= limits.chipStep,
   ];
   if (!cues.some(Boolean)) out.push(issue(["current"], "contrast", `The current tab is told apart by its hue alone ${where}: give it words at least ${limits.wordsApart}:1 apart from the others' (${ratio(words)} now), a ring at least ${limits.ringWidth}px wide reading 3:1 on the bar, a weight at least ${limits.weightStep} heavier, or a chip at least ${limits.chipStep}px larger than theirs.`));
@@ -178,7 +164,7 @@ function css(tokens: Record<string, Values>, palettes: readonly PrivatePalette[]
     return body ? `:where(${selector}){${body}}` : "";
   };
   const { bar = {}, label = {}, current = {}, icon = {} } = tokens;
-  const weight = (value: unknown) => value !== undefined && `font-weight:${Number(value)}`;
+  const weights = privateTabBarWeights(tokens);
   const shape = [
     bar.height !== undefined ? `:where(:root){--mobile-tabs-height:${px(bar.height)}}` : "",
     rule(SELECTORS.label, [
@@ -187,8 +173,8 @@ function css(tokens: Record<string, Values>, palettes: readonly PrivatePalette[]
       label.tracking !== undefined && `letter-spacing:${({ normal: "normal", wide: "0.04em", wider: "0.08em" } as Record<string, string>)[String(label.tracking)]}`,
       label.clamp === "1" && "display:block;white-space:nowrap;-webkit-line-clamp:none;text-overflow:ellipsis",
     ]),
-    rule(SELECTORS.tab, [weight(label.weight)]),
-    rule(SELECTORS.current, [weight(current.weight)]),
+    rule(SELECTORS.tab, [weights.writeTab && `font-weight:${weights.tab}`]),
+    rule(SELECTORS.current, [weights.writeCurrent && `font-weight:${weights.current}`]),
     // An icon's box holds its chip's room and edge (border-box, whatever box the host's other rules give it).
     ...(() => {
       if (icon.size === undefined && icon.padding === undefined && icon["border-width"] === undefined && current.padding === undefined) return [rule(SELECTORS.icon, [icon.radius !== undefined && `border-radius:${px(icon.radius)}`])];

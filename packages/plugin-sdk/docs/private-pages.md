@@ -358,7 +358,7 @@ Precedence: every rule the tokens write has zero specificity (`:where`) and come
 
 A theme that styled the bar in its public stylesheet (a 3.6-style rule on `[data-part="tab-label"]` setting its size or line height, or `--mobile-tabs-height` on `:root`) drops those rules to take the tokens: on a public page its own rules still outrank them.
 
-A bar like a dark game store's, 80px with two-line capitals and round chips, the current one 4px larger:
+A bar for a dark store, 80px with two-line capitals and round chips, the current one 4px larger:
 
 ```json
 {
@@ -479,7 +479,7 @@ What stays yours to check: that your header and footer read well without their s
 
 ## The reference cart
 
-The customer's prototype (a dark purple game store with a light scheme) expressed with this model alone: an arrangement with variants, tokens per scheme for the store's parts and the protection app's offer row, badge and status boxes, the store's controls in its header, and labels. Where the prototype's own colour reads under a floor, the nearest colour that passes stands in; the store's tests compile it against its light and dark palettes and show the prototype's own values refused.
+The reference theme (a dark store with a light scheme), as its release sets this model: an arrangement with variants, tokens per scheme for the store's parts and the protection app's offer row, badge and status boxes, the store's controls in its header, and labels. Where the prototype's own colour reads under a floor, the nearest colour that passes stands in; the store's tests compile it against its light and dark palettes and show the prototype's own values refused.
 
 ```json
 {
@@ -1198,9 +1198,9 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 - an app's block on a line and in the summary, and an add-on row, each holding a 120-letter English word and a Bangla one;
 - a store that asks for its terms to be ticked: the required box and its words on a details form coloured per scheme;
 - lines, summary and details in one `columns` with twenty empty groups beside them: refused at save, or drawn with every part at its floor;
-- the default look and the customer's look with one, twenty and ninety-nine lines on a 390×700 phone, a 768×1024 tablet and a 1280×800 laptop;
-- the phone tab bar's look (`tokens.tabBar`) on the account and a public page: the customer's, a hostile one and one just above every floor, and the store's own bar with the customer's tabs;
-- the customer's cart (the reference above), offered and protected, at 390 and 1280, light and dark, and its protected cart in the drawer with the add-on row open;
+- the default look and the reference theme's look with one, twenty and ninety-nine lines on a 390×700 phone, a 768×1024 tablet and a 1280×800 laptop;
+- the phone tab bar's look (`tokens.tabBar`) on the account and a public page: the reference theme's, a hostile one and one just above every floor, and the store's own bar with the reference theme's tabs;
+- the reference theme's cart (above), offered and protected, at 390 and 1280, light and dark, and its protected cart in the drawer with the add-on row open;
 - the store's controls in its header, in the strip at the page's end and nowhere, in a store with the light or dark switch and two markets;
 - a stored document forged past the save (a stylesheet, the theme's chrome and search, content blocks in the page and a line): the store reads it with all of them dropped and its private pages' compile refused, so the theme stays (its light or dark switch is drawn) and its cart draws the default look with none of them;
 - the payment step, drawn as the editor's sample checkout draws it for buyers: a look in palette roles with its methods as a list, the same with a narrow frame and tiles, and a forged stylesheet, at 320, 390 and 1280 px, light and dark. It fails when Pay or the total is not drawn, is off screen when scrolled to or is covered; when Pay is smaller, lighter or fainter than the gift card's Apply, its words read under 4.5:1 on its fill, or it is not found on its card (its fill under 3:1 on what is behind it, with no edge that finds it, as Place order below); when the total is smaller than another money row or reads under 4.5:1; or when the payment provider's surface is painted other than the store paints it. Four mutations prove these fail: Pay hidden, the total hidden, Pay weaker than Apply, token mode reaching into the provider's surface;
@@ -1215,7 +1215,7 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 | A line asking for a decision, a kit and an offer row | 390 dark, 1280 light | the confirmation dialog in both |
 | Place order asking for the decision | 390 light, 1280 dark | the confirmation dialog in both |
 | One, twenty and ninety-nine lines | 390×700 light, 768×1024 dark, 1280×800 light | none |
-| The customer's cart, offered or protected | 390 and 1280, each light and dark | its own checks in all four; focus rings at 390 light and 1280 dark; hover at 1280 dark |
+| The reference theme's cart, offered or protected | 390 and 1280, each light and dark | its own checks in all four; focus rings at 390 light and 1280 dark; hover at 1280 dark |
 | Every other state (empty, Bangla, Arabic, 120-letter words) | 320 light, 1280 dark | none |
 | The drawer | 390 light, 1280 dark | none |
 
@@ -1242,15 +1242,15 @@ In every draw: the first screen, the store's controls, prominence, apps and add-
 | First screen | At scroll 0, none of the page's lead parts starts inside the screen. |
 | Depth | What the theme adds above Place order (its place under the theme less its place under the default look, same cart, the fold open) is over 3200px and 448px a line, or either place cannot be measured. |
 | Touch | On a phone, swiping from the top does not reach the end of the details form, Place order's own place (never its docked bar, on screen from the start). |
-| The customer's cart | The offer row's mark, sentence, price and Add Now are not in one band at 1280 or take more than two at 390; a status box does not paint its tone's surface; the add-on row does not open to its lines in order, or its amount shows more than once. |
+| The reference theme's cart | The offer row's mark, sentence, price and Add Now are not in one band at 1280 or take more than two at 390; a status box does not paint its tone's surface; the add-on row does not open to its lines in order, or its amount shows more than once. |
 | Drawn as written | An element a style target names draws corners other than the target's `radius` token; under square or pill buttons, an action button (filled, `data-control="action"` or an app's `data-ui="button"`) on the cart, its dialogs, the drawer, the payment step, the receipt or the account draws other corners; under a square radius, a field or a public page's `rounded-lg`/`rounded-xl` draws rounded ones; under the default Style, any corner differs from what its class drew before. |
 | Reading order | A line, on the cart page or in the drawer, has its details, price, stepper, actions or app block before its title in the markup. |
-| Drawer lines | Five lines in the drawer on a 390x844 phone show fewer than two whole lines, or on a 320x568 one no whole line (the customer's five lines too: four options each, one protected), the total or Check out is not wholly on screen, or an app block in the drawer's footer is squeezed or lies in a pane of its own shorter than it. |
+| Drawer lines | Five lines in the drawer on a 390x844 phone show fewer than two whole lines, or on a 320x568 one no whole line (the reference theme's five lines too: four options each, one protected), the total or Check out is not wholly on screen, or an app block in the drawer's footer is squeezed or lies in a pane of its own shorter than it. |
 | Dialog actions | A confirmation dialog's Go back or Confirm says other words than the theme's `dialog.goBack` and `dialog.confirm`, runs out of the dialog or cuts its words, where the two do not fit side by side stacks with Confirm on top (it belongs at the bottom, nearest the thumb), or reads its actions in another order than it draws them (Go back, then Confirm). |
 | Empty cart | An empty cart shows no heading or no link back to the shop, with its lazy file refused (they are the page's own markup). |
-| Phone tab bar | On the account and a public page at 320 and 390 px, light and dark, English and Bangla (the customer's look, a hostile look, one just above every floor, the store's own): a label is cut, takes more than two lines, runs out of the bar, is drawn under 10px or reads under 4.5:1 on the bar; an icon runs out of the bar or its glyph is under 14px inside its chip; the current tab differs by its hue alone; the page reserves less than the bar's height; the theme's look is not written where it set one. |
+| Phone tab bar | On the account and a public page at 320 and 390 px (every tab's weight alone too), light and dark, English and Bangla (the reference theme's look, a hostile look, one just above every floor, the store's own): a label is cut, takes more than two lines, runs out of the bar, is drawn under 10px or reads under 4.5:1 on the bar; an icon runs out of the bar or its glyph is under 14px inside its chip; the current tab differs by its hue alone; the page reserves less than the bar's height; the theme's look is not written where it set one. |
 | Drawer line block | A line's app block in the drawer lies elsewhere than the cart page's line puts it: under the whole line from the image's edge, or in the text column. |
-| Layout shift | The customer's cart, at 390 and 1280 px, scores 0.05 or more in layout shift (as Chrome counts it, no input) from its first paint until it is still; behind an 800ms cart check, 0.1 or more on a first view or 0.05 or more on the next. |
+| Layout shift | The reference theme's cart, at 390 and 1280 px, scores 0.05 or more in layout shift (as Chrome counts it, no input) from its first paint until it is still; behind an 800ms cart check, 0.1 or more on a first view or 0.05 or more on the next. Behind a check slower than a first view's 1200ms wait, the lines do not show within 1200ms of the check being asked (the blocks then move them once: that first view alone carries no shift bound). |
 | Server | Any request answers 5xx. |
 
 **How to run it.**
@@ -1260,7 +1260,7 @@ In every draw: the first screen, the store's controls, prominence, apps and add-
 | The gate (named cases and the fast seed set) | `pnpm test:private-pages` |
 | A longer run | `pnpm test:private-pages --seeds 30 --from 100` (`--no-named` for seeds only, `--all-states` for every state of each) |
 | One seed or case | `--seed 7`, `--case "B4"` (a failing seed prints its document) |
-| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (69 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, the total ranked by size only, a filled button's fill unchecked, an edge read by a border it does not draw, Go back filled, the switch drawn under `controls: none`, a nested control's cells left to the row around it, shape tokens at zero specificity, Place order's dialog in the store's words, the empty cart's words left to its lazy file, the action row reaching the filled actions, an edge's solid style at zero specificity with the action row reaching it, the drawer's line block in its text column, outline buttons on their surface radius, the radius steps rounding a square theme, a dialog's actions stacking with Confirm on top, a line reading its details before its title, the drawer's footer never yielding to its lines, its blocks in a pane shorter than they are, a tab's long name cut to an ellipsis, and a tab's icon squeezed inside its chip). A rule of the store's stylesheet is undone by CSS the gallery draws after the store's sheets (Tailwind reads the stylesheet's imports from disk), naming the source text it takes back |
+| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (71 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, the total ranked by size only, a filled button's fill unchecked, an edge read by a border it does not draw, Go back filled, the switch drawn under `controls: none`, a nested control's cells left to the row around it, shape tokens at zero specificity, Place order's dialog in the store's words, the empty cart's words left to its lazy file, the action row reaching the filled actions, an edge's solid style at zero specificity with the action row reaching it, the drawer's line block in its text column, outline buttons on their surface radius, the radius steps rounding a square theme, a dialog's actions stacking with Confirm on top, a line reading its details before its title, the drawer's footer never yielding to its lines, its blocks in a pane shorter than they are, a tab's long name cut to an ellipsis, a tab's icon squeezed inside its chip, every tab's weight reaching the current tab, and a first view held past 1200ms). A rule of the store's stylesheet is undone by CSS the gallery draws after the store's sheets (Tailwind reads the stylesheet's imports from disk), naming the source text it takes back |
 
 The gate checks the cart page with the fixture store's data, not every store's data.
 
@@ -1545,6 +1545,16 @@ dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-ag
 buyer-ui attributes=data-buyer-ui-target,data-buyer-ui-app,data-ui
 chrome roots data-private=core-header|core-footer controls=header|footer|none
 layout tokens=background,gradient,border,border-width,border-style,radius,shadow,padding,gap,columns,columns-wide
+tabBar bound bar.height 56..96px
+tabBar bound label.size 10..16px
+tabBar bound icon.size 16..32px
+tabBar bound icon.padding 0..16px
+tabBar bound icon.radius 0..32px
+tabBar bound icon.border-width 0..2px
+tabBar bound current.padding 0..16px
+tabBar bound current.ring-width 0..4px
+tabBar choice label.clamp 1
+tabBar choice label.clamp 2
 buyer-ui style ui.banner[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="banner"] tokens=background,text,border,border-width,radius,shadow,padding
 buyer-ui style ui.stack[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="stack"][data-tone] tokens=background,text,border,border-width,radius,shadow,padding,gap
 buyer-ui style ui.button[.primary|secondary|critical][@<app>][/<target>] :is(a[data-ui="button"],[data-ui="button"]>button) tokens=background,text,border,border-width,radius,ring,inset,weight,size,case

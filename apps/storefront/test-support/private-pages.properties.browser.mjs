@@ -698,9 +698,14 @@ const HYGIENE_CASES = {
   // still (`layoutShift`: the layout-shift score, as Chrome counts it) stays under 0.05, on a phone and a wide screen.
   "the customer's cart arrives without moving": { states: ["customer"], layoutShift: 0.05, request: REFERENCE },
   // A cart check slower than the first showing's wait (800ms, the gallery's own API answers at once): the first view's
-  // blocks land after the lines and move them (measured 0.089 at 390: its bound, `layoutShift`, 0.1); the next view
-  // reserves each block's remembered room and does not move (measured 0.003: `revisitShift`).
+  // blocks land before the lines show (a first view waits for them up to FIRST_REVEAL_WAIT_MS, 1200ms) and nothing
+  // moves (measured 0.005 at 390: its bound, `layoutShift`, 0.1); the next view reserves each block's remembered room
+  // and does not wait (`revisitShift`).
   "the customer's cart with a slow check, and the next view": { states: ["customer"], layoutShift: 0.1, revisitShift: 0.05, request: { ...REFERENCE, slowCheckMs: 800 } },
+  // A check slower than the wait (2.5s): the lines show by 1200ms after it is asked, the phone's LCP budget, and the
+  // blocks move them once when they land. That one-time shift on a first view is accepted (FIRST_REVEAL_WAIT_MS), so this
+  // case alone carries no shift bound; the next view reserves the blocks' room and does not move.
+  "the customer's cart with a check slower than the first view's wait": { states: ["customer"], linesShownBy: 1200, revisitShift: 0.05, request: { ...REFERENCE, slowCheckMs: 2500 } },
 };
 Object.assign(REGRESSIONS, HYGIENE_CASES);
 
@@ -732,6 +737,8 @@ const TAB_BAR_CASES = {
   "the phone tab bar just above every floor": { states: ["base"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { tabs: true, toggle: true, scheme: "system", page: "account-profile", nearFloorTabBar: true } },
   // The store's own bar (no tokens) under the customer's tabs: a long label wraps, never ends in "…".
   "the store's own phone tab bar with the customer's tabs, English and Bangla": { states: ["base", "bn"], tabBar: "store", viewports: TAB_BAR_VIEWPORTS, request: { ...REFERENCE, page: "home" } },
+  // Every tab's weight alone: the current tab keeps the store's 700, 200 heavier (its rule is written beside the tabs').
+  "the phone tab bar with only its labels' weight": { states: ["base"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { tabs: true, toggle: true, scheme: "system", page: "account-profile", tabBar: { label: { weight: "500" } } } },
   "a phone tab bar label under its floor": { refused: "token_value", refusedFor: /label size/, request: { tabs: true, page: "home", tabBar: { label: { size: 8 } } }, states: ["base"] },
   // The current tab told apart by words 1.5:1 from the others' and one weight step: a hue and a shade, refused.
   "a current tab apart by 1.5:1 words alone": { refused: "contrast", refusedFor: /current tab is told apart by its hue alone/, request: { tabs: true, toggle: true, scheme: "system", page: "home", tabBar: { bar: { height: 72 }, label: { text: { light: "#555555", dark: "#a0a0a0" }, weight: "500" }, current: { text: { light: "#000000", dark: "#e6e6e6" }, weight: "600" } } }, states: ["base"] },
@@ -1600,6 +1607,24 @@ function installLayoutShifts() {
       }
     }).observe({ type: "layout-shift", buffered: true });
   } catch { /* no Layout Instability API: nothing recorded */ }
+  // When the cart check is first asked, and when the cart's lines first show (`data-cart-state="items"`), for `linesShownBy`.
+  const fetched = window.fetch;
+  window.fetch = function (input, init) {
+    if (window.__ptCheckAt === undefined && /validate-cart|cart-validation/.test(String(input?.url ?? input))) window.__ptCheckAt = performance.now();
+    return fetched.call(this, input, init);
+  };
+  new MutationObserver(() => {
+    if (window.__ptLinesAt === undefined && document.querySelector('[data-private="cart"][data-cart-state="items"]')) window.__ptLinesAt = performance.now();
+  }).observe(document, { subtree: true, attributes: true, attributeFilter: ["data-cart-state"], childList: true });
+}
+
+/** The lines show at most `bound` ms after the cart check is asked (its request's start): a slower check never holds them longer. */
+function linesShownBy(bound) {
+  const asked = window.__ptCheckAt;
+  if (asked === undefined) return ["the cart check was never asked"];
+  if (window.__ptLinesAt === undefined) return ["the lines never showed"];
+  const waited = Math.round(window.__ptLinesAt - asked);
+  return waited <= bound + 150 ? [] : [`the lines showed ${waited}ms after the cart check was asked: a first view waits at most ${bound}ms`];
 }
 
 /** The layout-shift score so far, against `bound`, naming the largest shifts. */
@@ -2305,6 +2330,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
     // The first screen and Place order, as a buyer arrives: at scroll 0, then down the cart.
     add("first screen", await page.evaluate(firstScreen, LEAD));
     if (entry?.layoutShift !== undefined) add("layout shift", await page.evaluate(layoutShiftOver, entry.layoutShift));
+    if (entry?.linesShownBy !== undefined) add("first view", await page.evaluate(linesShownBy, entry.linesShownBy));
     if (entry?.revisitShift !== undefined) {
       // The next view in the same browser: the blocks' heights this view remembered reserve their room.
       await page.reload({ waitUntil: "load" });
