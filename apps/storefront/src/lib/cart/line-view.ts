@@ -11,6 +11,7 @@
  * (cart-parity.test.tsx draws both from one cart).
  */
 import type { LineEntryWords } from "@scalius/shared/line-entry-words";
+import { printedLineAnswers } from "@scalius/shared/line-input-surfaces";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { isFreeOrderLine } from "@scalius/shared/order-money-presentation";
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
@@ -150,7 +151,9 @@ export function cartLineView(key: string, item: VariantCartItem, context: CartLi
     image: item.image,
     options: (normalizeCartItemOptions(item.options) ?? []).map(({ name: optionName, label }) => ({ name: optionName, label })),
     purchaseOptions: (item.purchaseOptions ?? []).map(({ id, title }) => ({ id, title })),
-    inputs: properties.map((property) => ({ key: property.key, text: cartLinePropertyText(property, context.surchargeText, context.words) })),
+    // An app-drawn choice its app's add-on row states is not printed beside it (`printedLineAnswers`).
+    inputs: printedLineAnswers(properties, (item.adjustments ?? []).map((adjustment) => adjustment.appId))
+      .map((property) => ({ key: property.key, text: cartLinePropertyText(property, context.surchargeText, context.words) })),
     components: (item.adjustments ?? []).map((adjustment) => cartLinePropertyText(adjustment, context.surchargeText, context.words)),
     editHref: properties.length > 0 ? cartLineEditHref(item) : null,
     fulfilment: fulfilmentNote(item, context.mixedFulfilment === true),

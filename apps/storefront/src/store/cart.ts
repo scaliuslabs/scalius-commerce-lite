@@ -55,6 +55,11 @@ export type CartLineProperty = {
    * the merchant writes): sent with the answer, never part of the identity.
    */
   revision?: string;
+  /**
+   * A choice its app draws itself (`isAppDrawnChoice`), display only: the line
+   * prints it only without an add-on of that app (`printedLineAnswers`).
+   */
+  appDrawnChoice?: true;
 };
 
 /**
@@ -423,6 +428,7 @@ export function normalizeCartLineProperties(
       priceMinor: Number.isSafeInteger(priceMinor) && priceMinor > 0 ? priceMinor : 0,
       // Not identity: a malformed one is dropped, never the line.
       ...(typeof entry.revision === "string" && LINE_PROPERTY_REVISION_PATTERN.test(entry.revision) ? { revision: entry.revision } : {}),
+      ...(entry.appDrawnChoice === true ? { appDrawnChoice: true as const } : {}),
     });
   }
   return properties;

@@ -8,6 +8,7 @@ import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
 import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { presentLineEntry } from "@scalius/shared/line-entry-words";
+import { printedLineAnswers } from "@scalius/shared/line-input-surfaces";
 
 import type { CustomerOrderProgress, CustomerOrderTimelineEvent } from "./api/customer-auth";
 import type { OrderLineProperty, OrderPickup } from "./api/types";
@@ -170,14 +171,19 @@ export interface OrderLinePropertyRow {
  * One row per buyer input under a line: `Label: value` plus `(+৳200)` when it
  * costs extra. `formatSurcharge` formats one property's per-unit surcharge in
  * the order currency (the page's own money formatter). Callers escape the text.
+ * `addOns` is the row's add-ons as the order answered them (`BuyerLineAddOn`,
+ * with their `appId`): an app-drawn choice one of them states is not printed
+ * (`printedLineAnswers`).
  */
 export function orderLinePropertyRows(
   properties: readonly OrderLineProperty[] | null | undefined,
   formatSurcharge: (property: OrderLineProperty) => string,
   copy: CheckoutLanguageData,
+  addOns?: unknown,
 ): OrderLinePropertyRow[] {
   if (!Array.isArray(properties)) return [];
-  return properties.flatMap((frozen) => {
+  const addOnApps = Array.isArray(addOns) ? addOns.map((addOn) => (addOn && typeof addOn === "object" ? (addOn as { appId?: unknown }).appId : null)).filter((appId): appId is string => typeof appId === "string") : [];
+  return printedLineAnswers(properties, addOnApps).flatMap((frozen) => {
     // The platform's words ("Yes", "Add-on") in the receipt's language; the merchant's and apps' as frozen.
     const property = frozen && typeof frozen.key === "string" && typeof frozen.label === "string" && typeof frozen.displayValue === "string"
       ? presentLineEntry(frozen, copy)
