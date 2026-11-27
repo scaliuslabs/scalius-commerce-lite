@@ -7,6 +7,7 @@ import { unwrapData } from "./unwrap";
 import { getApiV1CheckoutConfig } from "@scalius/api-client/sdk";
 import type { CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
 import type { Readiness } from "@scalius/shared/readiness";
+import { paymentMethodFits } from "@scalius/shared/fulfilment";
 
 export interface GatewayConfig {
   /** A registered gateway id or "cod". */
@@ -18,6 +19,8 @@ export interface GatewayConfig {
    * offered only when the buyer's quote allows it.
    */
   flow?: "card" | "hosted" | "cod" | "deferred";
+  /** How its money reaches the store; `cash_on_delivery` never pays for a key, a download or a gift card. */
+  paymentKind?: "cash_on_delivery" | "invoice" | "paid_to_store" | "gift_card" | "online";
   /** A deferred method's terms: the order is due this many days after it is placed. */
   dueInDays?: number;
   publishableKey?: string;   // Stripe only
@@ -45,6 +48,8 @@ export interface CheckoutConfig {
   requireFullBillingAddress?: boolean;
   /** Settings → Checkout: the buyer ticks "I agree to the terms" before the order is placed (absent: off). */
   requireTermsAcceptance?: boolean;
+  /** The store holds a live gift card (`cashUnpayableHere`). */
+  giftCardsLive?: boolean;
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
   currency?: {
@@ -123,28 +128,40 @@ export function checkoutTakesOrders(config: CheckoutConfig | null | undefined): 
 }
 
 /**
- * Whether checkout takes some online payment (card or hosted gateway). A
- * digital item or gift card is never paid in cash, so a store whose checkout
- * offers only cash on delivery can't sell one on its own. An unavailable
+ * Whether the store lists a way to pay other than cash (`paymentMethodFits`
+ * by kind, the server's one rule): a card, a hosted gateway, the invoice or
+ * an app's pay-later method that is not cash. An unavailable or unread
  * checkout answers true: it refuses every order and says so itself.
  */
-export function takesOnlinePayment(config: CheckoutConfig | null | undefined): boolean {
+export function listsNonCashPayment(config: CheckoutConfig | null | undefined): boolean {
   if (!config || config.unavailable) return true;
-  // Paying later by invoice is not paying online: it reaches only some signed-in buyers.
-  return config.gateways.some((gateway) => gateway.id !== "cod" && gateway.flow !== "cod" && gateway.flow !== "deferred");
+  return config.gateways.some((gateway) => paymentMethodFits(gateway.paymentKind ?? (gateway.flow === "cod" ? "cash_on_delivery" : "online"), false));
 }
 
 /**
- * Whether nothing these SKUs sell can be bought here: every one is paid only
- * online (core's `paidOnlineOnly`: a key, a download, a gift card, a kit
- * holding one) and checkout takes no online payment. The server decides the
- * same at checkout; the page only says so first.
+ * On a store that lists no way to pay but cash, what a SKU cash can't pay for
+ * (core's `cashPayable` false: a key, a download, a gift card, a kit holding
+ * one) needs a gift card: `"stopped"` when the store holds no live gift card
+ * (`giftCardsLive`: nobody can pay, so buying is off), `"gift_card"` when it
+ * does (buying stays on; a gift card pays), `null` otherwise (the SKU is cash
+ * payable, or the store lists a gateway or a pay-later method). An
+ * unavailable or unread checkout answers null: it says so itself.
  */
-export function paidOnlineOnlyHere(
-  variants: ReadonlyArray<{ paidOnlineOnly?: boolean | null }>,
+export function cashUnpayableHere(
+  cashPayable: boolean | null | undefined,
   config: CheckoutConfig | null | undefined,
-): boolean {
-  return variants.length > 0 && variants.every((variant) => variant.paidOnlineOnly === true) && !takesOnlinePayment(config);
+): "stopped" | "gift_card" | null {
+  if (cashPayable !== false || listsNonCashPayment(config)) return null;
+  return config?.giftCardsLive === true ? "gift_card" : "stopped";
+}
+
+/** `cashUnpayableHere` for a page: only when none of its SKUs is cash payable (one that is keeps the page buyable). */
+export function pageCashUnpayableHere(
+  variants: ReadonlyArray<{ cashPayable?: boolean | null }>,
+  config: CheckoutConfig | null | undefined,
+): "stopped" | "gift_card" | null {
+  if (variants.length === 0 || !variants.every((variant) => variant.cashPayable === false)) return null;
+  return cashUnpayableHere(false, config);
 }
 
 /**

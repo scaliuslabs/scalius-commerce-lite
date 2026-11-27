@@ -18,6 +18,7 @@ import type {
   RatingFacetValue,
 } from "./types";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
+import { STOREFRONT_SEARCH_SORTS, type StorefrontSearchSort } from "@scalius/shared/listing-sorts";
 import { isProductRecommendations } from "@/lib/recommendations";
 
 /**
@@ -62,7 +63,13 @@ type ProductListPayload = {
   facets?: ProductFacet[];
   ratingFacet?: unknown;
   correctedQuery?: string | null;
+  sort?: unknown;
 };
+
+/** A listing response's `sort` (the order it was read in), when it is one. */
+export function readListingSort(value: unknown): StorefrontSearchSort | undefined {
+  return (STOREFRONT_SEARCH_SORTS as readonly unknown[]).includes(value) ? value as StorefrontSearchSort : undefined;
+}
 
 export function normalizeBuyerPriceRange(value: unknown): BuyerPriceRange | undefined {
   if (!value || typeof value !== "object") return undefined;
@@ -172,5 +179,6 @@ export function normalizeProductListPayload(
     facets: normalizeProductFacets(candidate.facets),
     ratingFacet: normalizeRatingFacet(candidate.ratingFacet),
     correctedQuery: typeof candidate.correctedQuery === "string" ? candidate.correctedQuery : null,
+    sort: readListingSort(candidate.sort),
   };
 }

@@ -12,13 +12,14 @@ import {
   getPublicCategorySitemapEntries,
   getPublicCategoryTree,
 } from "@scalius/core/modules/categories";
-import { getStorefrontCategoryProducts, resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
+import { getStorefrontCategoryProducts, listingSortWithoutDefault, resolvePublicAttributeFilters, storefrontListingSort } from "@scalius/core/modules/catalog";
+import { catalogDocument } from "@scalius/core/modules/settings";
 import { marketPresenceQueryField } from "../schemas/markets";
 import { publicMarketPricing, publicTranslation } from "../utils/public-market";
 import { localizedHandleFields } from "../schemas/translations";
 import { appliedFacetFilterSchema, appliedFacetFilters, productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError } from "../utils/api-error";
-import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, listingSortSchema, LISTING_SORT_DESCRIPTION, errorResponses } from "../schemas/responses";
+import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, listingSortSchema, listingReadSortField, LISTING_SORT_DESCRIPTION, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 import {
@@ -65,7 +66,6 @@ const categoryProductFilterSchema = z.object({
   ...listingCursorQuerySchema,
   sort: listingSortSchema
     .optional()
-    .default("newest")
     .openapi({ description: LISTING_SORT_DESCRIPTION }),
   minRating: minRatingQuerySchema,
   search: z.string().trim().max(100).optional().openapi({ description: "Search within category" }),
@@ -166,7 +166,6 @@ const storefrontCategoryProductSchema = z.object({
 
 const appliedCategoryFiltersSchema = z.object({
   attributes: z.array(appliedFacetFilterSchema),
-  sort: listingSortSchema,
   minRating: z.number().int().min(1).max(4).optional(),
   search: z.string().optional(),
   minPrice: majorMoney(z.number().min(0)).optional(),
@@ -182,7 +181,7 @@ const agentCategoryProductFilterSchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
   limit: z.coerce.number().int().min(1).max(20).optional().default(20),
   ...listingCursorQuerySchema,
-  sort: listingSortSchema.optional().default("newest"),
+  sort: listingSortSchema.optional().openapi({ description: LISTING_SORT_DESCRIPTION }),
   minRating: minRatingQuerySchema,
   search: z.string().trim().max(100).optional(),
   minPrice: majorMoney(z.coerce.number().min(0)).optional(),
@@ -511,6 +510,7 @@ const getCategoryProductsRoute = createRoute({
         facets: z.array(productFacetSchema),
         ratingFacet: ratingFacetSchema,
         appliedFilters: appliedCategoryFiltersSchema,
+        ...listingReadSortField,
       })) } },
     },
     400: errorResponses[400],
@@ -524,14 +524,17 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   const { slug } = c.req.valid("param");
   const params = c.req.valid("query");
   const queryParams = readRepeatedPublicQueryValues(c.req.url);
+  // The store's default order, when the request names none, rides the category lookup's batch.
+  const namedSort = listingSortWithoutDefault(params, { searchRanks: false });
   const [category, attributeFilters] = await Promise.all([
-    getPublicCategoryBySlug(db, slug, publicTranslation(c)),
+    getPublicCategoryBySlug(db, slug, publicTranslation(c), namedSort ? {} : { settings: [catalogDocument] }),
     resolvePublicAttributeFilters(db, queryParams, Object.keys(params)),
   ]);
 
   if (!category) {
     throw new NotFoundError("Category not found");
   }
+  const sort = namedSort ?? (await catalogDocument.fromRows(category.settingsRows ?? [])).value.defaultListingSort;
   const normalizedSearch = normalizePublicFtsSearchQuery(params.search);
   const search = normalizePublicListingSearchParam(params.search);
 
@@ -559,6 +562,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   const { includeSubcategories, shelfPreview, presence: _presence, ...filters } = params;
   const result = await getStorefrontCategoryProducts(db, categoryForProducts, {
     ...filters,
+    sort,
     search,
     attributeFilters,
   }, {
@@ -571,7 +575,6 @@ app.openapi(getCategoryProductsRoute, async (c) => {
 
   const appliedFilters: z.infer<typeof appliedCategoryFiltersSchema> = {
     attributes: appliedFacetFilters(attributeFilters),
-    sort: params.sort,
   };
   if (normalizedSearch) appliedFilters.search = normalizedSearch;
   if (params.minRating !== undefined) appliedFilters.minRating = params.minRating;
@@ -596,6 +599,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     facets: result.facets,
     ratingFacet: result.ratingFacet,
     appliedFilters,
+    sort: result.sort,
   };
   return ok(c, response);
 });
@@ -632,6 +636,7 @@ const getCategoryProductSummariesRoute = createRoute({
         facets: z.array(productFacetSchema),
         ratingFacet: ratingFacetSchema,
         appliedFilters: appliedCategoryFiltersSchema,
+        ...listingReadSortField,
       })) } },
     },
     400: errorResponses[400],
@@ -643,7 +648,11 @@ const getCategoryProductSummariesRoute = createRoute({
 app.openapi(getCategoryProductSummariesRoute, async (c) => {
   const { slug } = c.req.valid("param");
   const params = c.req.valid("query");
-  const summary = await getPublicCategorySection(c.get("db"), slug, "summary", { translation: publicTranslation(c) });
+  // Agents get the store's default order like buyers, read beside the summary.
+  const [summary, sort] = await Promise.all([
+    getPublicCategorySection(c.get("db"), slug, "summary", { translation: publicTranslation(c) }),
+    storefrontListingSort(c.get("db"), params, { searchRanks: false }),
+  ]);
   if (!summary || summary.section !== "summary") throw new NotFoundError("Category not found");
   const category = summary.category;
   const queryParams = readRepeatedPublicQueryValues(c.req.url);
@@ -663,6 +672,7 @@ app.openapi(getCategoryProductSummariesRoute, async (c) => {
     createdAt: category.createdAt,
   }, {
     ...filters,
+    sort,
     search: normalizePublicListingSearchParam(params.search),
     attributeFilters,
   }, {
@@ -671,7 +681,6 @@ app.openapi(getCategoryProductSummariesRoute, async (c) => {
   });
   const appliedFilters: z.infer<typeof appliedCategoryFiltersSchema> = {
     attributes: appliedFacetFilters(attributeFilters),
-    sort: params.sort,
   };
   const normalizedSearch = normalizePublicFtsSearchQuery(params.search);
   if (normalizedSearch) appliedFilters.search = normalizedSearch;

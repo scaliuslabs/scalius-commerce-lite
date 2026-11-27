@@ -12,7 +12,8 @@ import { productSearchRank, productSearchRelevanceOrder } from "./search-relevan
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
 import { planLimits } from "@scalius/shared/plan-limits";
-import { cappedCountLimit, capTotal, encodeListCursor } from "@scalius/shared/pagination";
+import { DEFAULT_LISTING_SORT, STOREFRONT_SEARCH_SORTS } from "@scalius/shared/listing-sorts";
+import { cappedCountLimit, capTotal, encodeListCursor, listCursorSort } from "@scalius/shared/pagination";
 import { invalidCursor, keysetCondition, readListCursor, type KeysetOrder } from "../../utils/keyset";
 import {
   presentBuyerPricing,
@@ -23,7 +24,7 @@ import {
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import type { Database } from "@scalius/database/client";
 import { marketAmountMinor, marketDecimalPlaces, marketPriceContextOf, marketShopAmounts, priceProductCards, type MarketPricing } from "../price-lists";
-import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { catalogDocument, storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { publicCategoryConditions, publicCategorySubtreeCondition } from "../categories";
 import { loadCatalogCardData } from "./card-facts";
 import { cardFieldsOfTheme, cardFieldsThemeSql } from "./card-fields";
@@ -204,6 +205,54 @@ type StorefrontCatalogScope = {
     popularSize?: SQL<number>;
 };
 
+/** Listing filters whose order is settled (`withListingSort`). */
+type SortedListingParams = StorefrontProductFilterInput & { sort: StorefrontProductSort };
+
+/**
+ * The order a listing reads without a settings read, or null when it takes
+ * the store's default: the one asked for; else a cursor's own order (a
+ * cursor request that names no sort continues where it was issued, whatever
+ * the default is now); else best match for a search with words (the
+ * catalogue search and a collection; a category or brand page's search box
+ * keeps the page's order); products asked for by id keep newest.
+ */
+export function listingSortWithoutDefault(
+    params: Pick<StorefrontProductFilterInput, "sort" | "search" | "ids" | "cursor">,
+    options: { searchRanks: boolean },
+): StorefrontProductSort | null {
+    if (params.sort) return params.sort;
+    const cursorSort = params.cursor ? listCursorSort(params.cursor) : null;
+    if (cursorSort && (STOREFRONT_SEARCH_SORTS as readonly string[]).includes(cursorSort)) return cursorSort as StorefrontProductSort;
+    if (params.search && options.searchRanks) return "relevance";
+    if (params.ids) return DEFAULT_LISTING_SORT;
+    return null;
+}
+
+/**
+ * The order a listing reads (`listingSortWithoutDefault`, else the store's
+ * default: `catalog.defaultListingSort`, Online store -> Preferences). The
+ * settings read declares the catalogue document as the listing's
+ * dependency, so a cached listing that took the default is read again once
+ * the merchant picks another, and an SEO edit never touches it. The category
+ * route reads it in its lookup's batch and a collection in its row's batch
+ * (no D1 call of their own); a call without `sort` resolves it here.
+ */
+export async function storefrontListingSort(
+    db: Database,
+    params: Pick<StorefrontProductFilterInput, "sort" | "search" | "ids" | "cursor">,
+    options: { searchRanks: boolean },
+): Promise<StorefrontProductSort> {
+    return listingSortWithoutDefault(params, options) ?? (await catalogDocument.read(db)).defaultListingSort;
+}
+
+async function withListingSort(
+    db: Database,
+    params: StorefrontProductFilterInput,
+    options: { searchRanks: boolean },
+): Promise<SortedListingParams> {
+    return { ...params, sort: await storefrontListingSort(db, params, options) };
+}
+
 /**
  * Reads one catalog page. A search that matches nothing is retried once with
  * the closest catalog words ("kettel" → "kettle", "ব্যাগ" → "bag"); the
@@ -211,18 +260,20 @@ type StorefrontCatalogScope = {
  */
 async function readStorefrontCatalogPage(
     db: Database,
-    params: StorefrontProductFilterInput,
+    params: SortedListingParams,
     scope: StorefrontCatalogScope = {},
     pricing: MarketPricing | null = null,
 ) {
+    // `sort`: the order the page was read in, the store's default when none was asked for.
+    const { sort } = params;
     const result = await readStorefrontCatalogResults(db, params, scope, pricing);
-    if (!params.search || result.pagination.total > 0) return { ...result, correctedQuery: null };
+    if (!params.search || result.pagination.total > 0) return { ...result, sort, correctedQuery: null };
     const correctedQuery = await suggestSearchCorrection(db, params.search);
-    if (!correctedQuery) return { ...result, correctedQuery: null };
+    if (!correctedQuery) return { ...result, sort, correctedQuery: null };
     const corrected = await readStorefrontCatalogResults(db, { ...params, search: correctedQuery }, scope, pricing);
     return corrected.pagination.total > 0
-        ? { ...corrected, correctedQuery }
-        : { ...result, correctedQuery: null };
+        ? { ...corrected, sort, correctedQuery }
+        : { ...result, sort, correctedQuery: null };
 }
 
 /**
@@ -889,7 +940,7 @@ async function readStorefrontCatalogResults(
  * This is the unified query backing the Hono GET /api/storefront/products route.
  */
 export async function getStorefrontProducts(db: Database, params: StorefrontProductFilterInput, pricing: MarketPricing | null = null) {
-    return readStorefrontCatalogPage(db, params, {}, pricing);
+    return readStorefrontCatalogPage(db, await withListingSort(db, params, { searchRanks: true }), {}, pricing);
 }
 
 /**
@@ -906,7 +957,7 @@ export async function getStorefrontCategoryProducts(
     // `lm:cat:<id>` covers the category and every descendant; a subtree also
     // depends on which descendants are published.
     if (options.includeDescendants) deps.anyCategory();
-    return readStorefrontCatalogPage(db, params, {
+    return readStorefrontCatalogPage(db, await withListingSort(db, params, { searchRanks: false }), {
         dependencies: { scopes: [categoryScope(category.id)] },
         // The buyer state's category index: (is_public, category_id, newest).
         condition: options.includeDescendants
@@ -951,7 +1002,7 @@ export async function getStorefrontBrandProducts(
     pricing: MarketPricing | null = null,
 ) {
     deps.brand(brand.id);
-    return readStorefrontCatalogPage(db, params, {
+    return readStorefrontCatalogPage(db, await withListingSort(db, params, { searchRanks: false }), {
         dependencies: { scopes: brandScopes(brand.id) },
         // The buyer state's brand index: (is_public, brand_id, newest).
         condition: eq(buyerState.brandId, brand.id),
@@ -1020,10 +1071,14 @@ export function storefrontCollectionVisibleCountQuery(db: Database, membership: 
 export async function getStorefrontCollectionProducts(
     db: Database,
     membership: StorefrontCollectionMembership,
-    params: StorefrontProductFilterInput,
+    filters: StorefrontProductFilterInput,
     pricing: MarketPricing | null = null,
 ) {
     const { productIds, categoryIds, membershipJson, condition } = storefrontCollectionMembership(membership);
+    // Picked products are the collection's own order: it opens in it whatever the store's default is.
+    const params: SortedListingParams = productIds.length > 0
+        ? { ...filters, sort: listingSortWithoutDefault(filters, { searchRanks: true }) ?? "newest" }
+        : await withListingSort(db, filters, { searchRanks: true });
     // A dynamic collection lists its categories' public products (each
     // category's published state included); a manual one its picked ids.
     deps.categories(categoryIds);
@@ -1036,13 +1091,14 @@ export async function getStorefrontCollectionProducts(
             kind: "category",
             categoryIds: sql`(SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)}))`,
         })})`,
-        orderBy: productIds.length > 0 && (!params.sort || params.sort === "newest")
+        // Newest is the collection's own order: its picked products first, as placed.
+        orderBy: productIds.length > 0 && params.sort === "newest"
             ? sql`COALESCE((
                 SELECT CAST(key AS INTEGER)
                 FROM json_each(${membershipJson}) AS curated_membership
                 WHERE json_extract(curated_membership.value, '$.kind') = 'product'
                     AND json_extract(curated_membership.value, '$.id') = ${buyerState.productId}
-            ), 2147483647), ${getStorefrontProductOrderBy(params.sort ?? "newest")}`
+            ), 2147483647), ${getStorefrontProductOrderBy(params.sort)}`
             : undefined,
     }, pricing);
 }

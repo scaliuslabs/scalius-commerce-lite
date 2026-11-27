@@ -7,7 +7,7 @@
 // gateway: the kernel records it without a provider.
 //
 
-import { providerPaymentKind, type OrderPaymentKind } from "@scalius/shared/order-payment-methods";
+import { orderPaymentKind, providerPaymentKind, type OrderPaymentKind } from "@scalius/shared/order-payment-methods";
 import { ValidationError } from "@scalius/core/errors";
 import { getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { cashOnDeliveryIncrementMinor, isWholeUnitIncrement } from "@scalius/shared/currency-policy";
@@ -156,6 +156,13 @@ export interface PaymentProviders {
    * own methods (their id says it) and an id no installed app provides.
    */
   recordedPaymentKind(id: string): OrderPaymentKind | null;
+  /**
+   * How a method's money reaches the store (`cash_on_delivery`, `invoice`,
+   * `paid_to_store`, `gift_card`, `online`): the platform's own by id, an
+   * app's as its provider declared. Null for an id nothing provides.
+   * `paymentMethodFits` decides by it, never by the id.
+   */
+  paymentKind(id: string): OrderPaymentKind | null;
   /** Merchant-facing name of a payment method or tender. */
   label(id: string): string;
   /** Store-currency eligibility shared by every checkout surface; credential readiness is separate. */
@@ -265,6 +272,10 @@ export function createPaymentProviders(apps: readonly PaymentGateway[] = []): Pa
     recordedPaymentKind: (id) => {
       const gateway = isQualifiedProviderId(id) ? get(id) : undefined;
       return gateway ? providerPaymentKind(gateway) : null;
+    },
+    paymentKind: (id) => {
+      const gateway = isQualifiedProviderId(id) ? get(id) : undefined;
+      return gateway ? providerPaymentKind(gateway) : orderPaymentKind(id);
     },
     label,
     currencyIssue,

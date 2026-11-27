@@ -3,7 +3,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { collections } from "@scalius/database/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import { NotFoundError } from "../utils/api-error";
-import { successEnvelope, paginationSchema, errorResponses, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, listingSortSchema, LISTING_SORT_DESCRIPTION } from "../schemas/responses";
+import { successEnvelope, paginationSchema, errorResponses, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, searchSortSchema, listingReadSortField, LISTING_SORT_DESCRIPTION } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import { getPublicCollectionCatalog, getPublicCollectionSitemapEntries, listPublicCollectionDirectory } from "@scalius/core/modules/catalog";
 import { marketPresenceQueryField } from "../schemas/markets";
@@ -115,7 +115,8 @@ const collectionCatalogQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   ...listingCursorQuerySchema,
-  sort: listingSortSchema.optional().openapi({ description: LISTING_SORT_DESCRIPTION }),
+  // A collection search ranks by relevance, so `relevance` is one of its orders.
+  sort: searchSortSchema.optional().openapi({ description: LISTING_SORT_DESCRIPTION }),
   minRating: minRatingQuerySchema,
   search: z.string().optional(),
   minPrice: majorMoney(z.coerce.number().min(0)).optional(),
@@ -283,6 +284,7 @@ const getCollectionByIdRoute = createRoute({
         priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
         facets: z.array(productFacetSchema),
         ratingFacet: ratingFacetSchema,
+        ...listingReadSortField,
       })) } },
     },
     404: errorResponses[404],
@@ -294,15 +296,17 @@ app.openapi(getCollectionByIdRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   const params = c.req.valid("query");
+  const search = normalizePublicListingSearchParam(params.search);
   const attributeFilters = await resolvePublicAttributeFilters(
     db,
     readRepeatedPublicQueryValues(c.req.url),
     Object.keys(params),
   );
   const { presence: _presence, ...filters } = params;
+  // Without `sort`, the collection read applies the store's default order (in its first batch).
   const result = await getPublicCollectionCatalog(db, id, {
     ...filters,
-    search: normalizePublicListingSearchParam(params.search),
+    search,
     attributeFilters,
   }, publicMarketPricing(c));
 
@@ -332,6 +336,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
     priceRange,
     facets,
     ratingFacet,
+    sort: result.sort,
   };
   return ok(c, response);
 });

@@ -174,11 +174,11 @@ const specRail = bandStyle === "beside-filters" && (placement === "sidebar" || s
 // Amazon and Daraz: the phone's chip row, the facets in a split sheet.
 const marketplacePhoneFilters = phoneBar === "split-sheet" && showFilters;
 const sortOptions = catalogSortOptions({ defaultSort, sortBy, newestLabel: newestLabel ?? copy.sort.latest, hasReviews, copy: copy.sort });
-const viewSelect = { pathname, defaultSort, currentFilters };
+const viewSelect = { pathname, currentFilters };
 // More than one page, or a size the buyer chose: the page size helps.
 const showPageSize = piece("per-page") && (pagination.total > limit || limit !== DEFAULT_PRODUCT_LIST_PAGE_SIZE);
 const pageUrl = (page: number) =>
-  buildProductListHref({ pathname, currentFilters, overrides: { page, [PRODUCT_LIST_SHOW_ALL_PARAM]: null }, defaultSort });
+  buildProductListHref({ pathname, currentFilters, overrides: { page, [PRODUCT_LIST_SHOW_ALL_PARAM]: null } });
 
 // Sub-category pills (Star Tech): the children that still hold products
 // (the category facet names them), else every child; a collection's own
@@ -212,18 +212,19 @@ const aspectChips = piece("aspect-chips") && showFilters
     }, copy.filters.price)
   : [];
 const popularFilters = piece("popular-filter-chips") && products.length > 0
-  ? catalogPopularFilters({ facets: filterFacets, currentFilters, pathname, defaultSort, total: pagination.total })
+  ? catalogPopularFilters({ facets: filterFacets, currentFilters, pathname, total: pagination.total })
   : [];
 const facetValueChips = piece("facet-value-chips")
-  ? catalogFacetValueChips({ facets: filterFacets, currentFilters, pathname, defaultSort })
+  ? catalogFacetValueChips({ facets: filterFacets, currentFilters, pathname })
   : null;
 // Aspect chips share the phone bar's line when there is one.
 const phoneChips = aspectChips.length > 0 && showFilters;
-const quickFilters = (drawer || marketplacePhoneFilters || massRetailPhoneBar) && showFilters ? catalogQuickFilters({ currentFilters, pathname, defaultSort, copy: copy.filters }) : [];
+const quickFilters = (drawer || marketplacePhoneFilters || massRetailPhoneBar) && showFilters ? catalogQuickFilters({ currentFilters, pathname, copy: copy.filters }) : [];
 
 // Shelves are a browse landing: the plain first page, never a filtered,
 // sorted or later page (those list products in the grid).
-const landing = pagination.page === 1 && refinementCount === 0 && !query && sortBy === defaultSort;
+// The bare first page: no order named (a named one, even today's default, is a choice).
+const landing = pagination.page === 1 && refinementCount === 0 && !query && !currentFilters.sortBy;
 const shelves = presentation.shelves && landing
   ? catalogShelves({
       groups: subListings,
@@ -420,8 +421,6 @@ const bandTools = {
           priceRange={priceRange}
           currentFilters={currentFilters}
           query={query}
-          sortBy={sortBy}
-          defaultSort={defaultSort}
           total={pagination.total}
           totalIsCapped={pagination.totalIsCapped}
           pathname={pathname}
@@ -467,7 +466,6 @@ const bandTools = {
       currentFilters={currentFilters}
       pathname={pathname}
       resetPath={resetPath}
-      defaultSort={defaultSort}
       currencySymbol={currencySymbol}
       currencyCode={currencyCode}
       hideSearch={specSearchShowsQuery}

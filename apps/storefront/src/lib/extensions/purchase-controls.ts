@@ -70,7 +70,7 @@ function write(tag: string, attributes: ReadonlyArray<[string, string | null]>):
 
 /** What the page knows of buying here that the projection does not say. */
 export interface PurchasePage {
-  /** Nothing can be bought here (broken buyer inputs, or paid only online where checkout takes no online payment): every buy button is off, as the form's own. */
+  /** Nothing can be bought here (broken buyer inputs, or cash can't pay for it and nothing else can): every buy button is off, as the form's own. */
   blocked: boolean;
   /** The SKU the page opens on (`initialVariantPresentation`): its choice control is drawn chosen. */
   opening: string | null;
