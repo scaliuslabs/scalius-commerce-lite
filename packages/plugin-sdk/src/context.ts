@@ -42,7 +42,13 @@ export interface PluginApiResult<T = unknown> {
   ok: boolean;
   status: number;
   data: T | null;
-  error: { code: string; message: string } | null;
+  /**
+   * A refusal: `code` is one of `APP_ERROR_CODES`. `details` is present only
+   * for a code that declares it (`APP_ERROR_CODES[code].details`, such as
+   * `details.orderId` of `admin_order_create_request_mismatch`), with exactly
+   * the declared fields.
+   */
+  error: { code: string; message: string; details?: Record<string, unknown> } | null;
 }
 
 export interface PluginApi {

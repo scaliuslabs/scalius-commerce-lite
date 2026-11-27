@@ -1954,5 +1954,83 @@
   "from": "43d11be555c837a3",
   "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
   "reason": "Pre-release (private pages, beta 8): buyer UI gains a `mark` node (a tone's glyph) and an optional `tone` on `stack` (a toned row: an offer row, a status box), drawn on buyer pages only; the SDK gains `ui.mark`. An added union arm and an optional field; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:StableContractOperation: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): a stable operation in the SDK's contract copy loses `operationId` (the agent and REST name, not part of the app contract; an app names an operation by its app name) and gains `statuses`, the success statuses it answers, now sealed. createContractApi answers a handler's bare data with the operation's first success status (201 for a create) instead of always 200, and hands the app only the keys the operation declares, as the platform does."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4000e92863c20bae",
+  "change": "sdk.packages/plugin-sdk/src/runtime.d.ts#InterfaceDeclaration:PluginRuntimeBridge: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4000e92863c20bae",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractApi: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4000e92863c20bae",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractCall: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4000e92863c20bae",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#InterfaceDeclaration:PluginTestHarnessOptions: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "3e517c5852023605",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1, Nov 27): thirteen sealed meanings told apps to read an `error.details` field (details.orderId, details.payoutId, details.issues, ...) that ctx.api.call never delivered: the bridge passed only code and message. Those codes now declare their details (a JSON Schema on the entry: payout and reversal ids and status, admin order state and orderId, review id, unpublished product ids, unresolved handles, the first 20 schema issues as path and message), the bridge and createContractApi deliver exactly the declared fields, and a removed or retyped details field is a break (protocolBreakingChanges). `rate_limited` promised details.retryAfterSeconds, which no app refusal carries: its meaning now says the limits are per minute and an HTTP answer's Retry-After says when. `validation_error` now says details.issues is there when the schema refused the value (a store rule's refusal names the field in the message). Every other code carries no details, as before."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4f45d4ca3f835914",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, round two, Nov 27): `validation_error` now says where an issue's path points: into the operation's input; for an address, the field within that address; where the operation checks a normalised form of its input (products.create, orders.create), into that form. Its producers on stable operations send the path as keys and list indexes (two sent a dotted string), and the bridge delivers a dotted path from an older producer as keys and indexes. The details declarations moved into one table (DETAILS) with no change to any field."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d7f647d0a67202be",
+  "change": "sdk.packages/plugin-sdk/src/runtime.d.ts#InterfaceDeclaration:PluginRuntimeBridge: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d7f647d0a67202be",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:StableContractOperation: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): a stable operation in the SDK's contract copy loses `operationId` (the agent and REST name, not part of the app contract; an app names an operation by its app name) and gains `statuses`, the success statuses it answers, now sealed. createContractApi answers a handler's bare data with the operation's first success status (201 for a create) instead of always 200, and hands the app only the keys the operation declares, as the platform does."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d7f647d0a67202be",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractCall: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d7f647d0a67202be",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractApi: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d7f647d0a67202be",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#InterfaceDeclaration:PluginTestHarnessOptions: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "d7f647d0a67202be",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, round two, Nov 27): `validation_error` now says where an issue's path points: into the operation's input; for an address, the field within that address; where the operation checks a normalised form of its input (products.create, orders.create), into that form. Its producers on stable operations send the path as keys and list indexes (two sent a dotted string), and the bridge delivers a dotted path from an older producer as keys and indexes. The details declarations moved into one table (DETAILS) with no change to any field."
  }
 ]

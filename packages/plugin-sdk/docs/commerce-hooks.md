@@ -530,12 +530,14 @@ These parts of the contract are sealed by snapshot tests ([What we promise](prom
 - the event catalogue and webhook representations;
 - function and Buyer UI schemas;
 - stable provider port schemas, port tiers and scopes;
-- the stable app operations, their names and schemas;
+- the stable app operations: their names, methods, paths, success statuses, scopes and schemas;
 - the error codes (`APP_ERROR_CODES`).
+
+What an app receives is exactly what is sealed: a `ctx.api.call` answer and a webhook body carry only the fields their schema declares. A field the platform sends without declaring it never reaches an app, so no app can come to depend on it. An operation's OpenAPI `operationId` is the name agents and REST tooling use; it is not part of the app contract, and nothing an app receives carries it.
 
 **What may change within a version.** Only additions: a new optional manifest field, a new `ctx` method, a new event, a new function point, a new provider operation, a new stable operation, a new optional input or new output field, a new error code, a new optional field on a storefront data shape. A port may move from beta to stable.
 
-**What may not change.** Removing, renaming or retyping a field; making an output field nullable; removing a field's contact-data protection; changing an error code's meaning or status; moving a stable port back to beta; changing a stable operation's name.
+**What may not change.** Removing, renaming or retyping a field; making an output field nullable; removing a field's contact-data protection; changing an error code's meaning or status; moving a stable port back to beta; changing a stable operation's name or the statuses it answers.
 
 **What is not sealed.** Beta operations and beta ports may change in any release. Internal operations are private. Which code an operation answers in a given case is not sealed, only the codes themselves.
 

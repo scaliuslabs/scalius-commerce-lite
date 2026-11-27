@@ -476,7 +476,7 @@ With the Sensitive `write_webhooks` scope, an app keeps up to 5 webhook endpoint
 - Deliveries are the store's own: the body is `{ id, topic, apiVersion, occurredAt, resource: { type, id }, facts, data }`, where `data` is the resource's sealed representation, projected through the endpoint's customer data.
 - Headers: `Scalius-Event-Id` (your idempotency key), `Scalius-Topic`, `Scalius-Api-Version` and `Scalius-Signature: t=<unix seconds>,v1=<hex>`, where the hex is HMAC-SHA256 keyed by the whole secret (`whsec_…`) over `<t>.<raw body>`. Reject signatures older than 5 minutes. `signWebhookPayload` and `verifyWebhookSignature` in `@scalius/plugin-sdk/manifest` compute and check it.
 - 10 s timeout, https only, no redirects followed. 8 attempts over about 23 hours. An endpoint with 8 or more failures over a day is disabled and staff are told.
-- A body above 512 KiB carries `data: { truncated: true, id, fetch: { appOperation, operationId, method: "GET", path } }`: a stable read whose answer carries the same representation, the resource itself (`gift_cards.get` answers `giftCard`) or the list it is in, by `id` (`refunds.list`, a card's `transactions`, `discounts.list?ids=<id>`). `data: null` only means the resource no longer exists.
+- A body above 512 KiB carries `data: { truncated: true, id, fetch: { appOperation, method: "GET", path } }`: a stable read whose answer carries the same representation, the resource itself (`gift_cards.get` answers `giftCard`) or the list it is in, by `id` (`refunds.list`, a card's `transactions`, `discounts.list?ids=<id>`). `data: null` only means the resource no longer exists.
 - Every delivery re-checks the app's live grant: a narrowed grant or an inactive app sends nothing. Uninstalling deletes the endpoints.
 
 ## Failure behaviour
@@ -495,7 +495,7 @@ With the Sensitive `write_webhooks` scope, an app keeps up to 5 webhook endpoint
 | Storage over quota | Adding writes fail with `quota_storage`; deletes work |
 | Theme draws with an inactive app's parts | Publishing is refused with `theme_apps_unavailable` |
 
-A refusal of a `ctx.*` call throws an error with a stable `code` from `APP_ERROR_CODES` (`object_conflict`, `http_not_allowed`, `rate_limited`). A refused `ctx.api.call` answers `{ ok: false, status, data: null, error: { code, message } }`.
+A refusal of a `ctx.*` call throws an error with a stable `code` from `APP_ERROR_CODES` (`object_conflict`, `http_not_allowed`, `rate_limited`). A refused `ctx.api.call` answers `{ ok: false, status, data: null, error: { code, message, details? } }`. `details` is there only for a code that declares it (`APP_ERROR_CODES[code].details`, a JSON Schema: `payout_request_mismatch` carries `payoutId`, `validation_error` the first 20 `issues` as `path` and `message`), with exactly the declared fields; every other code carries none.
 
 ## Testing
 

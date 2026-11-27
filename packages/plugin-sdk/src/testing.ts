@@ -148,7 +148,7 @@ export interface PluginTestHarnessOptions {
    * for calls the stable app API would refuse. `call.scopes` are the
    * app's granted scopes (the manifest's, with the features that are on).
    */
-  api?: (operationId: string, input: PluginApiCallInput | undefined, call: { scopes: readonly string[] }) => PluginApiResult | Promise<PluginApiResult>;
+  api?: (operation: string, input: PluginApiCallInput | undefined, call: { scopes: readonly string[] }) => PluginApiResult | Promise<PluginApiResult>;
   /** Answers `ctx.orders.riskHistory`; by default a buyer with no earlier orders. */
   riskHistory?: (orderId: string) => { orders: number; cancelled: number; returnedToSender: number };
   /**
@@ -396,9 +396,9 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   };
 
   const bridge: PluginRuntimeBridge = {
-    apiCall: async (operationId, input) => copy(options.api
-      ? await options.api(operationId, input as PluginApiCallInput | undefined, { scopes: [...manifest.scopes] })
-      : { ok: false, status: 404, data: null, error: { code: "api_unknown_operation", message: `Unknown operation ${operationId}.` } }),
+    apiCall: async (operation, input) => copy(options.api
+      ? await options.api(operation, input as PluginApiCallInput | undefined, { scopes: [...manifest.scopes] })
+      : { ok: false, status: 404, data: null, error: { code: "api_unknown_operation", message: `Unknown operation ${operation}.` } }),
     objectsGet: async (name, id) => {
       const data = object(name).get(id);
       return data ? copy({ data, revision: revisions.get(revisionKey(name, id)) ?? 1, ...(metadata.get(revisionKey(name, id)) ?? { handle: null, status: defaultStatus(name) }) }) : null;

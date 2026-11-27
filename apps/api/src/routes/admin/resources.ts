@@ -316,7 +316,7 @@ const orderCreateObject = z.object({
   shippingMinor: minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT)).openapi({ description: "The delivery charge, in minor units of the store currency." }),
   discountMinor: minorMoney(z.number().int().min(0).max(MAX_MINOR_AMOUNT)).optional().openapi({ description: "An order discount set by hand, in minor units of the store currency." }),
   paymentMethod: manualOrderPaymentMethodSchema.default("cod").openapi({
-    description: "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create).",
+    description: "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with payments.create).",
   }),
   paymentTerms: paymentTermsSchema.optional().openapi({
     description: "An invoice's terms, `{ kind: \"net\", days }` (1 to 365): the order is due that many days after it is placed. Only with `net_terms`; omitted, the store's net days (Settings → Payments).",
@@ -425,7 +425,7 @@ function manualOrderInputOfBody(c: Context, body: OrderPricedBody) {
 }
 
 const invalidOrder = (issues: z.core.$ZodIssue[]) => new ValidationError(issues[0]?.message ?? "Check the order.", {
-  issues: issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
+  issues: issues.map((issue) => ({ path: issue.path.filter((key) => typeof key !== "symbol"), message: issue.message })),
 });
 
 /** A UUID the order-create attempt table takes, derived from the caller's Idempotency-Key (random without one). */
@@ -469,7 +469,7 @@ app.openapi(createRoute({
       ? "An in-person sale needs the buyer's phone (or a customerId)."
       : body.paymentMethod === "net_terms"
       ? "An invoice order needs the buyer's phone."
-      : "A cash-on-delivery order needs the buyer's phone.", { issues: [{ field: body.customerId ? "customerId" : "contact.phone", code: "phone_required" }] });
+      : "A cash-on-delivery order needs the buyer's phone.", { issues: [{ path: body.customerId ? ["customerId"] : ["contact", "phone"], message: "The buyer's phone is required." }] });
   }
   const parsed = createOrderSchema.safeParse({
     ...input,
