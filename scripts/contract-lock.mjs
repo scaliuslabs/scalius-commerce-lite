@@ -338,6 +338,13 @@ function headAddsLock(root) {
   return gitOk(root, ["cat-file", "-e", `HEAD:${LOCK_FILE}`]) !== null && gitOk(root, ["cat-file", "-e", `HEAD^1:${LOCK_FILE}`]) === null;
 }
 
+/** `--freeze-commit` is refused anywhere but the commit that adds the lock, and for good once the anchor is pinned. */
+function freezeCommitProblem(root) {
+  if (existsSync(join(root, ANCHOR_FILE))) return `--freeze-commit is refused: ${ANCHOR_FILE} pins the anchor, so the freeze commit is behind us.`;
+  if (!headAddsLock(root)) return `--freeze-commit holds only on the commit that adds ${LOCK_FILE} (its first parent has none); this is not that commit.`;
+  return null;
+}
+
 function shallow(root) {
   try {
     return git(root, ["rev-parse", "--is-shallow-repository"]).trim() === "true";
@@ -460,6 +467,8 @@ export async function verifyLock(root = DEFAULT_ROOT, { platform = platformOf(ro
   const lock = readLock(root);
   const lines = [];
   const problems = [];
+  const misused = freezeCommit ? freezeCommitProblem(root) : null;
+  if (misused) return { lock, lines, problems: [misused] };
   const { anchor, expected, problems: anchorProblems } = await resolveAnchor(root, { verifySignatures });
   const atOrPastFreeze = comparePluginVersions(platform, FREEZE) >= 0;
   // Before the freeze, with no freeze tag and no pin here, nothing is locked yet.
@@ -482,11 +491,11 @@ export async function verifyLock(root = DEFAULT_ROOT, { platform = platformOf(ro
   if (anchor) {
     lines.push(`Locked at ${lock.platform}, contract ${lock.contractVersion}. Anchored to ${anchor.tag}; judged by ${anchor.tag}'s rules.`);
     if (readFileSync(join(root, LOCK_FILE), "utf8") !== anchor.text) problems.push(`${LOCK_FILE} is not the lock ${anchor.tag} carries, byte for byte.`);
-  } else if (!expected && freezeCommit && platform === FREEZE && headAddsLock(root) && !existsSync(join(root, ANCHOR_FILE))) {
+  } else if (!expected && freezeCommit && platform === FREEZE) {
     // The one lock trusted with no tag behind it: on the commit that adds it, when the release command says so.
     lines.push(`Locked at ${lock.platform}, contract ${lock.contractVersion}. Not yet anchored: this commit adds the lock and ${FREEZE_TAG} does not exist yet, so judged by this tree's own lock and rules (tag this commit as an annotated, signed ${FREEZE_TAG}).`);
   } else {
-    if (!expected) problems.push(`No ${FREEZE_TAG} tag is here to anchor the lock: fetch tags and full history (git fetch --tags --unshallow).${freezeCommit ? ` --freeze-commit holds only on the commit that adds ${LOCK_FILE}, before ${ANCHOR_FILE} exists.` : ""}`);
+    if (!expected) problems.push(`No ${FREEZE_TAG} tag is here to anchor the lock: fetch tags and full history (git fetch --tags --unshallow).`);
     return { lock, lines, problems };
   }
   let judge;
@@ -589,6 +598,8 @@ export async function verifyLock(root = DEFAULT_ROOT, { platform = platformOf(ro
  * freeze, and says "not yet anchored" on the freeze commit).
  */
 export async function judgeWithAnchor(root = DEFAULT_ROOT, { run = null, verifySignatures, freezeCommit = false } = {}) {
+  const misused = freezeCommit ? freezeCommitProblem(root) : null;
+  if (misused) return { lock: readLock(root), lines: [], problems: [misused], anchored: false, code: 1 };
   const { anchor } = shallow(root) ? { anchor: null } : await resolveAnchor(root, { verifySignatures });
   if (!anchor) {
     // No trusted freeze tag: this tree's verify refuses (only the commit that adds the lock may claim --freeze-commit).
