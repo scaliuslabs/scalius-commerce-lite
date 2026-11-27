@@ -2,7 +2,7 @@ import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import { acceptedPhoneCountryPolicy, validateAndFormatPhone } from "@scalius/shared/customer-utils";
-import { sql, type SQL } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { settingsDocumentsJoin, type SettingsDocumentRow } from "../../settings-store";
 import { sellingCountriesFromSql, sellingCountriesSql } from "../../utils/selling-countries";
 import { customerCountriesDocument, type CustomerCountries } from "./documents";
@@ -34,12 +34,9 @@ export function acceptedCustomerCountries(
 export async function selectDocumentsWithSellingCountries(
     db: Database,
     documents: readonly { key: string }[],
-    /** One more scalar the caller reads in the same statement (checkout configuration's live gift cards). */
-    extra?: SQL<unknown>,
-): Promise<{ rows: SettingsDocumentRow[]; sellingCountries: string[]; extra?: unknown }> {
+): Promise<{ rows: SettingsDocumentRow[]; sellingCountries: string[] }> {
     const found = await db.select({
         selling: sellingCountriesSql(),
-        extra: extra ?? sql`NULL`,
         category: settings.category,
         value: settings.value,
         revision: settings.revision,
@@ -52,7 +49,6 @@ export async function selectDocumentsWithSellingCountries(
             ? []
             : [{ category: row.category, value: row.value, revision: row.revision ?? 0 }]),
         sellingCountries: sellingCountriesFromSql(list[0]?.selling),
-        extra: list[0]?.extra,
     };
 }
 

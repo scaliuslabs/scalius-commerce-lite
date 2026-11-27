@@ -172,14 +172,11 @@ export async function readPresenceMarketWithDocuments(
     db: Database,
     value: string,
     documents: readonly { key: string }[],
-    /** One more scalar the caller reads in the same statement (checkout configuration's live gift cards). */
-    extra?: SQL<unknown>,
-): Promise<{ market: PresenceMarket | null; documentRows: SettingsDocumentRow[]; sellingCountries: string[]; extra?: unknown }> {
+): Promise<{ market: PresenceMarket | null; documentRows: SettingsDocumentRow[]; sellingCountries: string[] }> {
     // A language subfolder (`bn`) is the backup market in that language.
     const language = isLanguageSubfolder(value);
     const rows = await db.select({
         selling: sellingCountriesSql(),
-        extra: extra ?? sql`NULL`,
         id: markets.id,
         handle: markets.handle,
         name: markets.name,
@@ -223,6 +220,5 @@ export async function readPresenceMarketWithDocuments(
             ? []
             : [{ category: each.category, value: each.value, revision: each.revision ?? 0 }]),
         sellingCountries: sellingCountriesFromSql(row.selling),
-        extra: row.extra,
     };
 }

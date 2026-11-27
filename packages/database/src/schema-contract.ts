@@ -920,7 +920,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 228,
     name: "0228_gift_card_liveness",
-    sourceSha256: "d4c30be806d29f912681fc7d50b9ead18d408ad6de8af6a4a173513f170660ea",
+    sourceSha256: "2cde3162b5fb28753306c6492e12cbac94a6bf3df85e10a8a355b827832a5324",
   },
   {
     version: 229,

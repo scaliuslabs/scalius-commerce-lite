@@ -4,6 +4,10 @@
 -- (CACHE_DEP_LATER_TABLES): a card's issue and removal, its status or expiry,
 -- and its balance reaching or leaving zero advance `gc`; a partial redemption
 -- does not.
+-- The live cards' partial index: checkout configuration's probe walks only them.
+-- rewrites gift_cards: one index entry per live card (active, balance above zero), bounded by the cards the store issued
+CREATE INDEX `gift_cards_live_idx` ON `gift_cards` (`currency_code`, `expires_at`) WHERE "gift_cards"."status" = 'active' AND "gift_cards"."balance_minor" > 0;
+--> statement-breakpoint
 CREATE TRIGGER `cdep_gift_cards_ins` AFTER INSERT ON `gift_cards`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
@@ -54,4 +58,4 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (228, '0228_gift_card_liveness', 'd4c30be806d29f912681fc7d50b9ead18d408ad6de8af6a4a173513f170660ea');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (228, '0228_gift_card_liveness', '2cde3162b5fb28753306c6492e12cbac94a6bf3df85e10a8a355b827832a5324');

@@ -1,4 +1,6 @@
 -- See ../0228_gift_card_liveness.sql.
+CREATE INDEX "gift_cards_live_idx" ON "gift_cards" ("currency_code", "expires_at") WHERE "gift_cards"."status" = 'active' AND "gift_cards"."balance_minor" > 0;
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_gift_cards_ins_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -77,4 +79,4 @@ FOR EACH ROW
 WHEN ((OLD."balance_minor" IS DISTINCT FROM NEW."balance_minor") AND OLD."balance_minor" = 0)
 EXECUTE FUNCTION scalius_compat."cdep_gift_cards_upd_balance_old_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (228, '0228_gift_card_liveness', 'd4c30be806d29f912681fc7d50b9ead18d408ad6de8af6a4a173513f170660ea');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (228, '0228_gift_card_liveness', '2cde3162b5fb28753306c6492e12cbac94a6bf3df85e10a8a355b827832a5324');
