@@ -563,14 +563,17 @@ const AFTER_ORDER_PAGES = {
   // The account's own pages as a signed-in buyer gets them (src/gallery/account.ts), each under the account's look.
   "account-inbox": { page: "account", root: '[data-private="account"]', mandatory: ['a[data-part="card"]', '[data-part="nav-badge"]'] },
   // The order page (drawn in the browser): its payment methods to choose between, a reviewed line's stars, its conversation.
-  "account-order": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="payment-choices"] button', '[data-part="rating"]', '[data-part="conversation"]', '[data-summary-row="total"]'] },
+  "account-order": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="payment-choices"] button[aria-checked="true"] [data-choice-dot]', '[data-part="pay"]', '[data-part="rating"]', '[data-part="conversation"]', '[data-summary-row="total"]'] },
   "account-profile-remove-address": { page: "account", root: '[data-private="account"]', scope: "#removeAddress-adr_gallery1", open: "#removeAddress-adr_gallery1", mandatory: ["#removeAddress-adr_gallery1 .bg-destructive"] },
   "account-profile-remove-card": { page: "account", root: '[data-private="account"]', scope: "#removePaymentMethod-cpm_gallery1", open: "#removePaymentMethod-cpm_gallery1", mandatory: ["#removePaymentMethod-cpm_gallery1 .bg-destructive"] },
   "account-warranty-claim-form": { page: "account", root: '[data-private="account"]', mandatory: ["[data-warranty-claim][open] textarea, [data-warranty-claim][open] select, [data-warranty-claim][open] input:not([type=hidden])"] },
   "account-thread": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="conversation"]', '[data-part="message-own"]', '[data-part="message"]', '[data-part="heading-title"]'] },
   "account-profile": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="card-title"]', '[data-part="sign-out"]'] },
   // The profile with its edit dialog open (a card over the page, which its backdrop dims): the dialog is walked.
-  "account-profile-dialog": { page: "account", root: '[data-private="account"]', scope: "#editDetails", open: "#editDetails", mandatory: ['#editDetails [data-part="card-title"]', "#fieldName"] },
+  // Its Save is disabled until a field changes: drawn, and taking no click.
+  "account-profile-dialog": { page: "account", root: '[data-private="account"]', scope: "#editDetails", open: "#editDetails", mandatory: ['#editDetails [data-part="card-title"]', "#fieldName", "#editDetails button[type=submit]:disabled"] },
+  // The details form posted with no name: the server draws the dialog open, the name field invalid and its message.
+  "account-profile-error": { page: "account", root: '[data-private="account"]', scope: "#editDetails", mandatory: ['#fieldName[aria-invalid="true"]', "#nameError", '#editDetails [data-part="card-title"]'] },
   // The reviews with the written review's edit and withdraw forms open.
   "account-reviews": { page: "account", root: '[data-private="account"]', open: '[data-part="card"] details', mandatory: ['[data-part="card"]', '[data-part="rating"]'] },
   // The gift cards with a card's history open.
@@ -721,7 +724,7 @@ const EXEMPT = "script,style,template,noscript,#gallery-page-end,vite-error-over
 function actionKeepsOff(styleTargets) {
   const action = styleTargets.find((each) => each.name === "action");
   if (!action) return [];
-  return [...document.querySelectorAll('[data-part="details-submit"],[data-part="pay"],[data-part="dialog-confirm"]')]
+  return [...document.querySelectorAll('[data-part="details-submit"],[data-part="pay"],[data-part="status-retry"],[data-part="dialog-confirm"]')]
     .filter((element) => element.matches(action.selector)).map((element) => `action reaches the main action ${element.dataset.part}`);
 }
 
@@ -1553,7 +1556,8 @@ async function focusRings(page, controls) {
 /**
  * Under the pointer, each kind of control still reads: its words at their
  * floor on what is behind them while hovered, and a control the host gives a
- * hover surface (a `hover:bg-*` class) shows it (a quarter of its box changes).
+ * hover surface (a `hover:bg-*` class) shows it (a quarter of its box changes),
+ * or, where its row has no hover surface its words read on, is underlined.
  */
 async function hovers(page, controls) {
   const problems = [];
@@ -1568,7 +1572,7 @@ async function hovers(page, controls) {
       const element = document.querySelector(`[data-pt-control="${id}"]`);
       element.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
       const rect = element.getBoundingClientRect();
-      return { x: rect.left, y: rect.top, w: rect.width, h: rect.height, surfaced: [...element.classList].some((name) => /(^|:)hover:bg-/.test(name)) };
+      return { x: rect.left, y: rect.top, w: rect.width, h: rect.height, surfaced: [...element.classList].some((name) => /(^|:)hover:bg-/.test(name)), decorated: getComputedStyle(element).textDecorationLine.includes("underline") };
     }, control.id);
     const clip = { x: Math.max(0, Math.floor(box.x)), y: Math.max(0, Math.floor(box.y)) };
     clip.width = Math.min(viewport.width, Math.ceil(box.x + box.w)) - clip.x;
@@ -1579,11 +1583,13 @@ async function hovers(page, controls) {
     await hidden.evaluate((style) => style.remove());
     await page.mouse.move(box.x + box.w / 2, box.y + box.h / 2);
     // The words as they are drawn under the pointer: their colours, and their boxes inside the control.
-    const words = await page.evaluate(({ id, clip }) => {
+    const { words, underlined } = await page.evaluate(({ id, clip }) => {
       // A colour transition (the hover's, or the words coming back from hidden) drawn to its end.
       for (const animation of document.getAnimations()) animation.finish();
       const element = document.querySelector(`[data-pt-control="${id}"]`);
       const out = [];
+      // Where its box has no hover surface its words keep, the hovered control is underlined instead (`--pt-hd`).
+      const underlined = getComputedStyle(element).textDecorationLine.includes("underline");
       const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         const parent = node.parentElement;
@@ -1595,7 +1601,7 @@ async function hovers(page, controls) {
         const rects = [...range.getClientRects()].map((rect) => ({ x: rect.left - clip.x, y: rect.top - clip.y, w: rect.width, h: rect.height })).filter((rect) => rect.w >= 2 && rect.h >= 4);
         if (rects.length > 0) out.push({ text: node.textContent.trim().slice(0, 30), color: style.color, large: size >= 24 || (size >= 18.6 && Number(style.fontWeight) >= 700), rects });
       }
-      return out;
+      return { words: out, underlined };
     }, { id: control.id, clip });
     const covered = await page.addStyleTag({ content: hide });
     const after = decode(await page.screenshot({ clip, animations: "disabled", caret: "hide" }));
@@ -1613,7 +1619,7 @@ async function hovers(page, controls) {
       const worst = ratios[0];
       if (worst < (word.large ? 3 : 4.5)) problems.push(`control ${control.label} hovered: "${word.text}" ${word.color} reads ${worst.toFixed(2)}:1 on what is behind it`);
     }
-    if (box.surfaced) {
+    if (box.surfaced && !(underlined && !box.decorated)) {
       let changed = 0;
       for (let y = 0; y < Math.min(before.height, after.height); y += 1) {
         for (let x = 0; x < Math.min(before.width, after.width); x += 1) {
@@ -1851,7 +1857,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   const server5xx = [];
   if (request?.page === "home") return drawDrawer({ context, id, width, problems, server5xx, rows, state });
   if (request?.page === "sample-checkout") return drawCheckout({ context, id, width, height, request });
-  if (AFTER_ORDER_PAGES[request?.page]) return drawAfterOrder({ context, id, width, rows, request, drawn });
+  if (AFTER_ORDER_PAGES[request?.page]) return drawAfterOrder({ context, id, width, rows, request, drawn, focus, hover });
   const page = await timed("load", () => open(context, id, width, server5xx, height));
   // The store's own checkout header, and its controls where the theme places them.
   // A store that asks for its terms: the required box and its words, wherever the cart is not empty.
@@ -1988,7 +1994,7 @@ async function afterOrderTargets(page) {
  * (its colour table in token mode, its anatomy without), every word whole and at its floor, every control taking a
  * click, the total no smaller than its rows, the scheme the store shows, and none of a forged document.
  */
-async function drawAfterOrder({ context, id, width, rows, request, drawn }) {
+async function drawAfterOrder({ context, id, width, rows, request, drawn, focus, hover }) {
   const problems = [];
   const server5xx = [];
   const spec = AFTER_ORDER_PAGES[request.page];
@@ -2020,6 +2026,14 @@ async function drawAfterOrder({ context, id, width, rows, request, drawn }) {
   at(spec.page, await timed("contrast", () => textContrast(page, walked.texts)));
   at(spec.page, await timed("clicks", () => page.evaluate(clicks)));
   at(`${spec.page} prominence`, await page.evaluate(prominence, `${spec.root} [data-part="summary"]`));
+  // The page's states, forced as a buyer reaches them: Tab through it in reading order, each kind of control's focus
+  // ring (a card link's inset, the star picker's on its star) and, under a pointer, every control's words on its hover
+  // surface (or its underline where its box has none).
+  if (focus) {
+    at(`${spec.page} focus order`, await timed("tab", () => focusOrder(page, walked.controls)));
+    at(`${spec.page} focus`, await timed("rings", () => focusRings(page, walked.controls)));
+  }
+  if (hover) at(`${spec.page} hover`, await timed("hover", () => hovers(page, walked.controls)));
   at("5xx", server5xx);
   await page.close();
   return problems;
@@ -2291,7 +2305,9 @@ try {
         const drawn = degraded ? null : entry.request?.scheme === "light" || entry.request?.scheme === "dark" ? entry.request.scheme : scheme;
         const rows = tables.find((table) => table.scheme === drawn)?.rows ?? tables[0]?.rows ?? [];
         for (const touch of [true, false]) {
-          const plan = (AFTER_ORDER_PAGES[entry.request?.page] ? [{ width: 390, scheme: "light" }, { width: 390, scheme: "dark" }, { width: 1280, scheme: "light" }, { width: 1280, scheme: "dark" }] : entry.request?.page === "home" ? [{ width: 390, scheme: "light" }, { width: 1280, scheme: "dark" }] : drawsOf(state)).filter((each) => each.scheme === scheme && (each.width < 1280) === touch);
+          // The receipt and the account: Tab order and focus rings on a phone light and the wide page dark, under the
+          // pointer on the wide page in both schemes.
+          const plan = (AFTER_ORDER_PAGES[entry.request?.page] ? [{ width: 390, scheme: "light", focus: true }, { width: 390, scheme: "dark" }, { width: 1280, scheme: "light", hover: true }, { width: 1280, scheme: "dark", focus: true, hover: true }] : entry.request?.page === "home" ? [{ width: 390, scheme: "light" }, { width: 1280, scheme: "dark" }] : drawsOf(state)).filter((each) => each.scheme === scheme && (each.width < 1280) === touch);
           if (plan.length === 0) continue;
           const context = await browser.newContext({ colorScheme: scheme, viewport: { width: 1280, height: 900 }, hasTouch: touch });
           await context.addInitScript(installActionFound);

@@ -246,6 +246,9 @@ function selectGateway(gateway: string): void {
     button.setAttribute("aria-checked", String(selected));
     button.classList.toggle("border-primary", selected);
     button.classList.toggle("bg-primary/10", selected);
+    button.classList.toggle("border-border", !selected);
+    button.classList.toggle("bg-background", !selected);
+    button.querySelector("[data-choice-dot]")?.classList.toggle("hidden", !selected);
   });
   setRecoveryMessage(null);
   setRecoveryButton(recoveryButtonLabel(gateway));
@@ -272,7 +275,9 @@ function renderPaymentRecovery(detail: AccountOrderDetail): void {
   if (methods) {
     methods.innerHTML = gateways.map((gateway) => {
       const selected = gateway === selectedGateway;
-      return `<button type="button" role="radio" aria-checked="${selected}" data-recovery-gateway="${escapeHtml(gateway)}" class="min-h-11 rounded-lg border px-3 py-2 text-start text-sm text-foreground transition-colors hover:bg-muted ${selected ? "border-primary bg-primary/10" : "border-border bg-background"}">${gatewayMarkup(gateway)}</button>`;
+      // The chosen method is marked by a dot in its round mark as well as by its colour (as on the payment step).
+      const mark = `<span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-input" aria-hidden="true"><span data-choice-dot class="h-2.5 w-2.5 rounded-full bg-current text-primary${selected ? "" : " hidden"}"></span></span>`;
+      return `<button type="button" role="radio" aria-checked="${selected}" data-recovery-gateway="${escapeHtml(gateway)}" class="flex min-h-11 items-center gap-3 rounded-lg border px-3 py-2 text-start text-sm text-foreground transition-colors hover:bg-muted ${selected ? "border-primary bg-primary/10" : "border-border bg-background"}">${mark}${gatewayMarkup(gateway)}</button>`;
     }).join("");
   }
   container.classList.remove("hidden");

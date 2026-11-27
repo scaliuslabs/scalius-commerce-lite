@@ -683,6 +683,15 @@ const statusBadge = (on: string): PrivateStyleSpec => ({ selector: '[data-part="
  */
 const ratingStyle = (within: readonly string[]): PrivateStyleSpec => ({ selector: '[data-part="rating"]', tokens: ["text", "muted", "size"], kind: "text", surface: "under", ink: "foreground", within, graphic: true });
 
+/**
+ * A control that starts a payment after the order (the account order's Pay, the receipt's card Pay): a main action as
+ * the payment step's Pay is (`submit`, the same `[data-part="pay"]`), found by its fill at 3:1 on what is around it or
+ * by a drawn edge, never `action`'s. `size` and `weight` are what the page draws with no token.
+ */
+const payStyle = (on: string, host: { size: number; weight: number }): PrivateStyleSpec => ({
+  selector: '[data-part="pay"]', tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", on, boundary: "fill", hostSize: host.size, hostWeight: host.weight, typeFrom: "action",
+});
+
 /** A message's tokens: a box of words (its photos and product cards inside), never a gradient or a shadow. */
 const MESSAGE_TOKENS = ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "padding"] as const satisfies readonly PrivateTokenName[];
 
@@ -717,6 +726,12 @@ const RECEIPT_STYLES: Record<string, PrivateStyleSpec> = {
   "status-title": { selector: '[data-part="status-title"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "status" },
   "status-message": { selector: '[data-part="status-message"]', tokens: ["text", "size", "weight", "leading"], kind: "text", surface: "under", ink: "muted-foreground", on: "status" },
   "status-steps": { selector: '[data-part="status-steps"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", on: "status" },
+  // A way to pay again (each method the order may still be paid with, one press starts it): an outlined main action,
+  // found by its edge at 3:1 on the state's box (by its fill where the theme draws no border); the method it was
+  // started with marked by its link colour and its words.
+  "status-retry": { selector: '[data-part="status-retry"]', tokens: ["background", "text", "muted", "link", "border", "border-width", "radius", "ring"], kind: "control", surface: "under", ink: "foreground", on: "status", boundary: "edge" },
+  // The card form's Pay, under the methods.
+  submit: payStyle("status", { size: 14, weight: 600 }),
   tracking: { selector: '[data-part="tracking"]', tokens: [...BOX_TOKENS], kind: "box", surface: "background", ink: "foreground", part: "tracking" },
   // The order card: its facts (the order number and its state among them), then the money rows and the total.
   order: { selector: '[data-part="order"]', tokens: [...BOX_TOKENS], kind: "box", surface: "background", ink: "foreground", part: "summary" },
@@ -745,7 +760,7 @@ const RECEIPT_PAGE: PrivatePageSpec = {
   frames: ["standard", "wide"],
   parts: {
     progress: part(false, ["progress"]),
-    status: part(true, ["status", "status-mark", "status-title", "status-message", "status-steps", "status-retry"]),
+    status: part(true, ["status", "status-mark", "status-title", "status-message", "status-steps", "status-retry", "pay"]),
     // The order's way to the buyer (its status view, when the order has tracking).
     tracking: part(true, ["tracking"]),
     // The order's number, state and payment, then every money row and the total.
@@ -784,11 +799,14 @@ const RECEIPT_PAGE: PrivatePageSpec = {
  * elements a theme styles are the same on every account page: its cards (an
  * edit dialog is a card over the page), a state's pill, an order's lines and
  * totals, a line's delivery message and its reveal, a conversation and its
- * messages, and every filled button (one that removes something included).
+ * messages, and every filled button (one that removes something included):
+ * each found by its words, as every ordinary button; only Pay (a control that
+ * starts a payment, a main action) and a dialog's Confirm by their fill or edge.
  */
 const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
   ...withoutNotices(ACCOUNT_PAGE_STYLES.head),
-  // Every filled button that removes something (Remove address, Remove a saved card): its words read on its fill, as `action`'s do.
+  // Every filled button that removes something (Remove address, Remove a saved card): found by its words, which read on
+  // its fill, as `action`'s do; its fill is not checked against what is around it.
   "action-critical": { ...ACCOUNT_PAGE_STYLES.head.action!, selector: ACCOUNT_PAGE_STYLES.head.action!.selector.replace(".bg-primary:is(", ".bg-destructive:is("), surface: "destructive", ink: "destructive-foreground", hostWeight: 500 },
   // The shell: the navigation (each page, the current one, Sign out) and the page's heading.
   navigation: { selector: '[data-part="navigation"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", part: "navigation" },
@@ -806,8 +824,11 @@ const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
   content: { selector: '[data-part="content"]', tokens: [], kind: "box", surface: "under", ink: "foreground", part: "content", targets: ["account.overview", "account.order", "account.profile"] },
   card: { selector: '[data-part="card"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", on: "content", fields: true },
   // An order's payment methods to choose between (its payment card): the chosen one's edge in the row's link colour, the
-  // others' in its border colour, clearly apart.
+  // others' in its border colour, clearly apart; never by colour alone: the chosen one also shows a dot in its round mark,
+  // as on the payment step.
   "payment-choices": { selector: '[data-part="payment-choices"]', tokens: ["link", "border"], kind: "box", surface: "under", ink: "foreground", on: "card", chosen: true },
+  // Pay for the chosen method (what is left to pay, or again after a failed payment): a main action.
+  submit: payStyle("card", { size: 14, weight: 500 }),
   "card-title": { selector: '[data-part="card-title"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "card" },
   "status-badge": statusBadge("card"),
   // An order's totals inside its card, drawn at the card's 14px; what is left to pay (`due`) ranks with the total.
@@ -830,7 +851,7 @@ const ACCOUNT_PAGE: PrivatePageSpec = {
     // `tabs`: a strip over the page; `sidebar`: a list beside it on a wide screen (the strip on phones).
     navigation: part(true, ["navigation", "nav-item", "nav-badge", "sign-out"], null, ["tabs", "sidebar"]),
     heading: part(true, ["heading", "heading-title", "heading-intro", "heading-back"]),
-    content: part(true, ["content", "card", "card-title", "status-badge", "summary", "summary-total-label", "add-on-details", "add-on-detail", "line", "line-image", "line-title", "line-details", "line-price", "delivery-message", "delivery-reveal", "conversation", "message", "message-own", "rating", "payment-choices"], "fields"),
+    content: part(true, ["content", "card", "card-title", "status-badge", "summary", "summary-total-label", "add-on-details", "add-on-detail", "line", "line-image", "line-title", "line-details", "line-price", "delivery-message", "delivery-reveal", "conversation", "message", "message-own", "rating", "payment-choices", "pay"], "fields"),
   },
   targets: [],
   lead: ["heading", "content"],

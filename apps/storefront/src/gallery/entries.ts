@@ -60,7 +60,7 @@ export type GalleryPage =
 
 /** The account's pages the rendered gate draws under a theme's look (every page `PRIVATE_PAGE_ROUTES.account` names but its orders and an order, which the sample account and its own tests draw). */
 export const GALLERY_ACCOUNT_PAGES = [
-  "account-inbox", "account-thread", "account-order", "account-profile", "account-profile-dialog", "account-profile-remove-address", "account-profile-remove-card",
+  "account-inbox", "account-thread", "account-order", "account-profile", "account-profile-dialog", "account-profile-error", "account-profile-remove-address", "account-profile-remove-card",
   "account-reviews", "account-gift-cards", "account-downloads", "account-warranties", "account-warranty-claim-form", "warranty-claim",
 ] as const;
 export type GalleryAccountPage = (typeof GALLERY_ACCOUNT_PAGES)[number];

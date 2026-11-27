@@ -168,7 +168,7 @@ const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutDat
                   <p id="accountStripeError" class="hidden text-sm text-destructive"></p>
                 </div>
                 <p id="orderPaymentRecoveryMessage" role="status" class="hidden text-sm"></p>
-                <button type="button" id="orderPaymentRecoveryButton" class={`${ui.primaryButton} w-full`}></button>
+                <button type="button" id="orderPaymentRecoveryButton" data-part="pay" class={`${ui.primaryButton} w-full`}></button>
               </div>
             </section>
 

@@ -407,7 +407,9 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const rendered = await currentEntry.run(plan.entry, () =>
           runtimeModule.requestRuntime.run(plan.runtime, () =>
             container.renderToResponse(pageModule.default, {
-              request: new Request(plan.url, { headers: plan.headers }),
+              request: plan.body === null
+                ? new Request(plan.url, { headers: plan.headers })
+                : new Request(plan.url, { method: "POST", body: plan.body, headers: { ...plan.headers, "content-type": "application/x-www-form-urlencoded" } }),
               params: plan.params,
               locals: {},
             }),

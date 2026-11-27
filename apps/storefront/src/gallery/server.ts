@@ -26,7 +26,8 @@ export { answerFixtureApi, galleryEntry, GALLERY_API_PREFIX };
 
 const SAMPLE_PAGE = "/src/pages/theme-preview/sample/[page].astro";
 
-const PAGES: Record<GalleryPage, { module: string; path: (entry: GalleryEntry) => string; params: (entry: GalleryEntry) => Record<string, string> }> = {
+/** Each gallery page: its module, URL and route params, and (`form`) a form the request posts there. */
+const PAGES: Record<GalleryPage, { module: string; path: (entry: GalleryEntry) => string; params: (entry: GalleryEntry) => Record<string, string>; form?: () => string }> = {
   home: { module: "/src/pages/index.astro", path: () => "/", params: () => ({}) },
   landing: { module: "/src/pages/pages/[slug].astro", path: () => "/pages/eid-sale", params: () => ({ slug: "eid-sale" }) },
   product: {
@@ -55,6 +56,9 @@ const PAGES: Record<GalleryPage, { module: string; path: (entry: GalleryEntry) =
   "account-thread": { module: "/src/pages/account/inbox/[id].astro", path: () => `/account/inbox/${GALLERY_THREAD_ID}`, params: () => ({ id: GALLERY_THREAD_ID }) },
   "account-profile": { module: "/src/pages/account/profile.astro", path: () => "/account/profile", params: () => ({}) },
   "account-profile-dialog": { module: "/src/pages/account/profile.astro", path: () => "/account/profile", params: () => ({}) },
+  // The profile as the store answers a details form posted with no name: the dialog drawn open, the name field invalid
+  // with its message (the page's own error state, drawn by the server).
+  "account-profile-error": { module: "/src/pages/account/profile.astro", path: () => "/account/profile", params: () => ({}), form: () => "intent=details&name=" },
   "account-reviews": { module: "/src/pages/account/reviews.astro", path: () => "/account/reviews", params: () => ({}) },
   "account-gift-cards": { module: "/src/pages/account/gift-cards.astro", path: () => "/account/gift-cards", params: () => ({}) },
   "account-downloads": { module: "/src/pages/account/downloads.astro", path: () => "/account/downloads", params: () => ({}) },
@@ -75,6 +79,8 @@ export interface GalleryRenderPlan {
   page: string;
   url: string;
   headers: Record<string, string>;
+  /** A form posted to the page (url-encoded), or null: a GET. */
+  body: string | null;
   params: Record<string, string>;
   runtime: Record<string, unknown>;
 }
@@ -92,6 +98,7 @@ export function galleryRenderPlan(id: string, origin: string): GalleryRenderPlan
     page: page.module,
     url: `${origin}${presence ? `/${presence}${path === "/" ? "" : path}` : path}`,
     headers: entry.page.startsWith("sample-") ? { cookie: GALLERY_PREVIEW_COOKIE } : (GALLERY_ACCOUNT_PAGES as readonly string[]).includes(entry.page) ? accountHeaders(entry.page) : {},
+    body: page.form?.() ?? null,
     params: page.params(entry),
     runtime: {
       PUBLIC_API_URL: `${galleryApiBase(origin, entry.id)}/api/v1`,
