@@ -2,6 +2,7 @@ import type { ProductRecommendationReason, ProductRecommendations } from "@/lib/
 import { browserApiUrl } from "@/lib/api/browser-url";
 import { readInBackground } from "@/lib/background-read";
 import { pageLanguage } from "@/lib/store-time-zone";
+import { isProductRecommendations } from "./recommendation-shape";
 
 const TITLES = {
   en: { also_bought: "Customers also bought", popular: "Popular right now", new_arrivals: "New arrivals", similar: "You might also like" },
@@ -40,18 +41,8 @@ export function recommendationSourceIds(productIds: readonly string[]): string[]
     .slice(0, RECOMMENDATION_SOURCE_ID_LIMIT);
 }
 
-const REASONS = new Set<string>(["also_bought", "similar", "popular", "new_arrivals"]);
-
-export function isProductRecommendations(value: unknown): value is ProductRecommendations {
-  const candidate = value as Partial<ProductRecommendations> | null;
-  return Boolean(
-    candidate &&
-      typeof candidate === "object" &&
-      typeof candidate.reason === "string" &&
-      REASONS.has(candidate.reason) &&
-      Array.isArray(candidate.products),
-  );
-}
+// Apart from this module's words and fetch so a product read (the first add to cart's quick add) never downloads them.
+export { isProductRecommendations };
 
 /** Query string for the public recommendations endpoint (product ids are not personal data). */
 export function recommendationQuery(productIds: readonly string[], limit: number): string {
