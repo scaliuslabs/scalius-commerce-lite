@@ -222,70 +222,76 @@ for (const width of WIDTHS) {
     for (const covered of await coveredControls(forged.page)) problems.push(`covered: ${covered}`);
     problems.push(...forged.errors.map((error) => `request: ${error}`));
     await forged.context.close();
+    // The isolation checks stand on their own: a theme stage that cannot run reports, never hides them.
+    fail(`${label} (a hostile sheet)`, problems.splice(0));
 
     // ── A theme's own sheet: its behaviours inside the shadow root.
     const theme = await open(ids.theme, width, scheme, { cart: true });
-    draws += 1;
-    const page = theme.page;
-    if (process.env.CHROME_GATE_DUMP) console.log(await page.evaluate(() => Array.from(document.querySelectorAll("scalius-chrome")).map((host) => host.shadowRoot?.innerHTML ?? host.outerHTML).join("\n\n")));
-    const inside = (selector, read) => page.evaluate(([css, how]) => {
-      const host = document.querySelector('scalius-chrome[data-chrome="header"]');
-      const element = host?.shadowRoot?.querySelector(css) ?? null;
-      if (!element) return null;
-      const style = getComputedStyle(element);
-      return how === "visible" ? style.display !== "none" && style.visibility === "visible" && element.getBoundingClientRect().width > 0
-        : how === "color" ? style.color : how === "text" ? (element.textContent ?? "").trim() : element.getAttribute(how);
-    }, [selector, read]);
-    const htmlScheme = () => page.evaluate(() => document.documentElement.getAttribute("data-color-scheme"));
-    const hostScheme = () => page.evaluate(() => document.querySelector('scalius-chrome[data-chrome="header"]')?.getAttribute("data-color-scheme") ?? null);
-    const logo = (value) => (value === "dark" ? "rgb(250, 250, 250)" : "rgb(17, 17, 17)");
-    if (await htmlScheme() !== scheme) problems.push(`scheme: the page draws ${await htmlScheme()} on a ${scheme} device`);
-    if (await hostScheme() !== await htmlScheme()) problems.push(`scheme: the chrome's host says ${await hostScheme()}, the page ${await htmlScheme()}`);
-    if (await inside(".gc-logo", "color") !== logo(scheme)) problems.push(`scheme: the theme's ${scheme} colours do not reach its chrome (${await inside(".gc-logo", "color")})`);
-    if (await inside(".gc-sign-in", "visible") !== true || await inside(".gc-account", "visible") !== false) problems.push("signed in: a guest does not see the guest version alone");
-    if (CART && !/\d/.test(await inside(".gc-count", "text") ?? "")) problems.push(`cart count: the browser's cart shows no count (${JSON.stringify(await inside(".gc-count", "text"))})`);
-    if (!CART) problems.push("cart count: the gallery holds no cart to seed");
-    if (await inside(".gc-signout", "class") !== null || await inside(".gc-search", "class") !== null) problems.push("markup: the theme's fake sign-out or its search form is drawn");
-    const storeSwitch = await page.evaluate(() => {
-      const button = document.querySelector('[data-private="core-footer"] [data-sx-host-color-scheme-toggle]');
-      return button ? getComputedStyle(button).display !== "none" && !button.hidden : false;
-    });
-    if (storeSwitch) problems.push("scheme: the store's switch still shows beside the theme's own");
-    // Its own switch flips the page and the chrome.
-    await page.evaluate(() => document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector(".gc-scheme").scrollIntoView());
-    await page.locator('scalius-chrome[data-chrome="header"] .gc-scheme').click();
-    const flipped = scheme === "dark" ? "light" : "dark";
-    if (await htmlScheme() !== flipped || await hostScheme() !== flipped) problems.push(`switch: the theme's switch leaves the page ${await htmlScheme()} and its host ${await hostScheme()}`);
-    if (await inside(".gc-logo", "color") !== logo(flipped)) problems.push("switch: the chrome keeps its old colours after the switch");
-    if (await inside(".gc-scheme", "aria-pressed") !== String(flipped === "dark")) problems.push(`switch: the theme's switch says aria-pressed=${await inside(".gc-scheme", "aria-pressed")}`);
-    // Signed in: the hint swaps the versions before first paint (the account page reloads on a sign-in itself).
-    await theme.context.addCookies([{ name: "cs_auth", value: "1", url: gallery.url }]);
-    await page.reload({ waitUntil: "load" });
-    await page.waitForTimeout(200);
-    if (await inside(".gc-sign-in", "visible") !== false || await inside(".gc-account", "visible") !== true) problems.push("signed in: a signed-in buyer does not see the signed-in version alone");
-    // The menu drawer on a phone: opens over the page on a press, closes with Escape.
-    if (width < 1024) {
-      await page.evaluate(() => window.scrollTo(0, 0));
-      await page.locator('scalius-chrome[data-chrome="header"] .gc-menu-button').click();
-      const drawer = await page.evaluate(() => {
-        const element = document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector("[data-menu-drawer]");
-        const box = element.getBoundingClientRect();
-        const hit = element.getRootNode().elementFromPoint(box.left + box.width / 2, box.top + 20);
-        return { open: element.matches(":popover-open"), width: box.width, height: box.height, onTop: element.contains(hit) };
+    try {
+      draws += 1;
+      const page = theme.page;
+        const inside = (selector, read) => page.evaluate(([css, how]) => {
+        const host = document.querySelector('scalius-chrome[data-chrome="header"]');
+        const element = host?.shadowRoot?.querySelector(css) ?? null;
+        if (!element) return null;
+        const style = getComputedStyle(element);
+        return how === "visible" ? style.display !== "none" && style.visibility === "visible" && element.getBoundingClientRect().width > 0
+          : how === "color" ? style.color : how === "text" ? (element.textContent ?? "").trim() : element.getAttribute(how);
+      }, [selector, read]);
+      const htmlScheme = () => page.evaluate(() => document.documentElement.getAttribute("data-color-scheme"));
+      const hostScheme = () => page.evaluate(() => document.querySelector('scalius-chrome[data-chrome="header"]')?.getAttribute("data-color-scheme") ?? null);
+      const logo = (value) => (value === "dark" ? "rgb(250, 250, 250)" : "rgb(17, 17, 17)");
+      if (await htmlScheme() !== scheme) problems.push(`scheme: the page draws ${await htmlScheme()} on a ${scheme} device`);
+      if (await hostScheme() !== await htmlScheme()) problems.push(`scheme: the chrome's host says ${await hostScheme()}, the page ${await htmlScheme()}`);
+      if (await inside(".gc-logo", "color") !== logo(scheme)) problems.push(`scheme: the theme's ${scheme} colours do not reach its chrome (${await inside(".gc-logo", "color")})`);
+      if (await inside(".gc-sign-in", "visible") !== true || await inside(".gc-account", "visible") !== false) problems.push("signed in: a guest does not see the guest version alone");
+      if (CART && !/\d/.test(await inside(".gc-count", "text") ?? "")) problems.push(`cart count: the browser's cart shows no count (${JSON.stringify(await inside(".gc-count", "text"))})`);
+      if (!CART) problems.push("cart count: the gallery holds no cart to seed");
+      if (await inside(".gc-signout", "class") !== null || await inside(".gc-search", "class") !== null) problems.push("markup: the theme's fake sign-out or its search form is drawn");
+      const storeSwitch = await page.evaluate(() => {
+        const button = document.querySelector('[data-private="core-footer"] [data-sx-host-color-scheme-toggle]');
+        return button ? getComputedStyle(button).display !== "none" && !button.hidden : false;
       });
-      if (!drawer.open || drawer.width < 100 || drawer.height < 100) problems.push(`drawer: the menu drawer does not open on a press (${JSON.stringify(drawer)})`);
-      else if (!drawer.onTop) problems.push("drawer: the open menu drawer is held under the page");
-      await page.keyboard.press("Escape");
-      if (await page.evaluate(() => document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector("[data-menu-drawer]").matches(":popover-open"))) problems.push("drawer: Escape leaves the menu drawer open");
+      if (storeSwitch) problems.push("scheme: the store's switch still shows beside the theme's own");
+      // Its own switch flips the page and the chrome.
+      await page.evaluate(() => document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector(".gc-scheme").scrollIntoView());
+      await page.locator('scalius-chrome[data-chrome="header"] .gc-scheme').click();
+      const flipped = scheme === "dark" ? "light" : "dark";
+      if (await htmlScheme() !== flipped || await hostScheme() !== flipped) problems.push(`switch: the theme's switch leaves the page ${await htmlScheme()} and its host ${await hostScheme()}`);
+      if (await inside(".gc-logo", "color") !== logo(flipped)) problems.push("switch: the chrome keeps its old colours after the switch");
+      if (await inside(".gc-scheme", "aria-pressed") !== String(flipped === "dark")) problems.push(`switch: the theme's switch says aria-pressed=${await inside(".gc-scheme", "aria-pressed")}`);
+      // Signed in: the hint swaps the versions before first paint (the account page reloads on a sign-in itself).
+      await theme.context.addCookies([{ name: "cs_auth", value: "1", url: gallery.url }]);
+      await page.reload({ waitUntil: "load" });
+      await page.waitForTimeout(200);
+      if (await inside(".gc-sign-in", "visible") !== false || await inside(".gc-account", "visible") !== true) problems.push("signed in: a signed-in buyer does not see the signed-in version alone");
+      // The menu drawer on a phone: opens over the page on a press, closes with Escape.
+      if (width < 1024) {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.locator('scalius-chrome[data-chrome="header"] .gc-menu-button').click();
+        const drawer = await page.evaluate(() => {
+          const element = document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector("[data-menu-drawer]");
+          const box = element.getBoundingClientRect();
+          const hit = element.getRootNode().elementFromPoint(box.left + box.width / 2, box.top + 20);
+          return { open: element.matches(":popover-open"), width: box.width, height: box.height, onTop: element.contains(hit) };
+        });
+        if (!drawer.open || drawer.width < 100 || drawer.height < 100) problems.push(`drawer: the menu drawer does not open on a press (${JSON.stringify(drawer)})`);
+        else if (!drawer.onTop) problems.push("drawer: the open menu drawer is held under the page");
+        await page.keyboard.press("Escape");
+        if (await page.evaluate(() => document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector("[data-menu-drawer]").matches(":popover-open"))) problems.push("drawer: Escape leaves the menu drawer open");
+      }
+      // The store's base under the theme's sheet loads (the shadow root's first import).
+      const base = await page.evaluate(() => /@import url\("([^"]+)"\) layer\(scalius-base\)/.exec(document.querySelector("scalius-chrome").shadowRoot.querySelector("style")?.textContent ?? "")?.[1] ?? null);
+      const baseText = base ? await page.evaluate(async (href) => (await fetch(href, { headers: { accept: "text/css" } })).text(), base) : "";
+      if (!/box-sizing/.test(baseText) || /--theme\(/.test(baseText)) problems.push(`base: the store's base sheet does not load compiled (${base})`);
+    if (width === WIDTHS[0] && scheme === SCHEMES[0]) console.log(`  base sheet: ${baseText.length} characters (dev, unminified)`);
+      problems.push(...theme.errors.map((error) => `request: ${error}`));
+    } catch (error) {
+      problems.push(`theme: the behaviours could not be checked (${String(error?.message ?? error).split("\n")[0]})`);
     }
-    // The store's base under the theme's sheet loads (the shadow root's first import).
-    const base = await page.evaluate(() => /@import url\("([^"]+)"\) layer\(scalius-base\)/.exec(document.querySelector("scalius-chrome").shadowRoot.querySelector("style")?.textContent ?? "")?.[1] ?? null);
-    const baseText = base ? await page.evaluate(async (href) => (await fetch(href, { headers: { accept: "text/css" } })).text(), base) : "";
-    if (!/box-sizing/.test(baseText)) problems.push(`base: the store's base sheet does not load as CSS (${base})`);
-    problems.push(...theme.errors.map((error) => `request: ${error}`));
     await theme.context.close();
-    fail(label, problems);
-    if (problems.length === 0) console.log(`✓ ${label}`);
+    fail(`${label} (a theme's sheet)`, problems);
+    if (!failures.some((failure) => failure.startsWith(`${label} `))) console.log(`✓ ${label}`);
   }
 }
 

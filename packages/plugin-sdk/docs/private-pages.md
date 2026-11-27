@@ -1,6 +1,6 @@
 # Design the buyer's private pages
 
-The cart, checkout, payment, receipt and account pages are a buyer's own pages: they hold a cart, an address, a phone number and a code. No theme or app script runs there, and no theme markup or CSS. You design them with data the store draws:
+The cart, checkout, payment, receipt and account pages are a buyer's own pages: they hold a cart, an address, a phone number and a code. No theme or app script runs there, and no theme markup or CSS beside the store's parts. You design them with data the store draws (and, where the buyer does not pay, your header and footer draw inert in a shadow root: [below](#your-header-and-footer-on-the-buyers-own-pages)):
 
 - you **arrange** the store's parts and the apps' targets, and choose each part's variant;
 - you give the store's parts, and the apps' blocks the store draws, their **look through typed tokens** (colours per scheme, sizes, radii, fonts, columns);
@@ -33,7 +33,7 @@ A theme arranges the store's parts and gives them tokens. It writes no markup an
 
 | You set | Refused |
 | --- | --- |
-| `chrome: "theme"` (your own header and footer) | `not_available` |
+| `chrome: "theme"` (your own header and footer here: declare `buyerPages: true` on your header and footer skins instead, [below](#your-header-and-footer-on-the-buyers-own-pages)) | `not_available` |
 | `search` (the store's search in your header) | `not_available` |
 | `css` (a stylesheet) | `not_available` |
 | `assets` (files for a stylesheet) | `not_available` |
@@ -336,7 +336,7 @@ The words a part's variant draws are the store's: "Remove" (সরান) for `r
 
 The receipt (`/order-success`: the confirmation and the order's status view, and the theme editor's sample receipt) and the account's dashboard and order page take **tokens** (`tokens.receipt`, `tokens.account`), checked by the same colour table and floors as the cart: contrast per scheme, and the total never drawn smaller than another money row. They are not arranged yet: an arrangement other than the store's own for `pages.receipt` or `pages.account` is refused (`not_available`). Their parts are named in the [anatomy](#anatomy-reference) so the names stay when arranging comes.
 
-A thing that is the same thing as on the cart has the cart's name: `page`, `frame`, `action`, `input`, `field-label`, the dialogs (`dialog`, `dialog-title`, …), the money rows (`summary`, `summary-heading`, `summary-rows`, `summary-total`, `summary-total-label`, `summary-add-on`, `summary-add-on-detail`), and an order's line (`line`, `line-image`, `line-title`, `line-details`, `line-price`; the receipt's line image takes no `fit`: it is the image itself, with no box around it). Both pages draw the store's public header and footer (the store's own markup in its closed variants and the palette's colours; on a buyer's page no app's header skin, component, stylesheet or script draws there) and, on phones, the theme's tab bar where it has one. That chrome is outside the page's root and takes the palette, not these tokens, so `chrome`, `scheme` and `localization` are not theirs.
+A thing that is the same thing as on the cart has the cart's name: `page`, `frame`, `action`, `input`, `field-label`, the dialogs (`dialog`, `dialog-title`, …), the money rows (`summary`, `summary-heading`, `summary-rows`, `summary-total`, `summary-total-label`, `summary-add-on`, `summary-add-on-detail`), and an order's line (`line`, `line-image`, `line-title`, `line-details`, `line-price`; the receipt's line image takes no `fit`: it is the image itself, with no box around it). Both pages draw the store's public header and footer (the store's own markup in its closed variants and the palette's colours), or your header and footer skins where they declare `buyerPages: true` ([below](#your-header-and-footer-on-the-buyers-own-pages)); no app component, script or stylesheet in the page's head draws there; and, on phones, the theme's tab bar where it has one. That chrome is outside the page's root and takes the palette, not these tokens, so `chrome`, `scheme` and `localization` are not theirs.
 
 | Page | Target | What it is | Kind |
 | --- | --- | --- | --- |
@@ -370,7 +370,7 @@ A row with no details is a plain row of its title and amount. On the cart page a
 
 ## The store's controls
 
-The cart page and the payment step draw only the store's chrome: its checkout header, no theme or app header or footer. The receipt and the account draw the store's public header and footer ([below](#the-receipt-and-the-account)). The phone tab bar never draws where the buyer is paying (the cart, the checkout and quick checkout, buy now, payment recovery); the receipt and the account pages keep it. `controls` places the store's controls:
+The cart page and the payment step draw only the store's chrome: its checkout header, no theme or app header or footer. The receipt and the account draw the store's public header and footer ([below](#the-receipt-and-the-account)), or yours where your skins ask ([below](#your-header-and-footer-on-the-buyers-own-pages)); then the store's light or dark switch and its market and language forms sit in a strip after your footer, outside your shadow root. The phone tab bar never draws where the buyer is paying (the cart, the checkout and quick checkout, buy now, payment recovery); the receipt and the account pages keep it. `controls` places the store's controls:
 
 | `controls` | Where |
 | --- | --- |
@@ -379,6 +379,26 @@ The cart page and the payment step draw only the store's chrome: its checkout he
 | `none` | Neither. |
 
 The controls are the light or dark switch (`data-host="scheme"`), when the theme offers it (`tokens.colorSchemeToggle`), and the market and language forms (`data-host="localization"`, the same plain forms as the public footer's), when the store sells in several. Their look is the `chrome`, `scheme` and `localization` rows. Under the store's default look (a look not yet compiled by this build) they sit in the header.
+
+## Your header and footer on the buyer's own pages
+
+Declare `buyerPages: true` on your header and footer skins and they draw on the buyer's pages where nothing is paid: the account (its sign-in view too), the receipt, order tracking, warranty claims, the gift-card balance and the newsletter pages. Never on the cart, checkout, buy now or payment recovery, nor on a receipt that takes a payment: the store's own chrome draws there. A Super Admin approves it (the consent screen lists it); until then the store's header and footer draw.
+
+```ts
+skins: [
+  { id: "header", target: "header", name: "Header", settings: [...], buyerPages: true },
+  { id: "footer", target: "footer", name: "Footer", settings: [...], buyerPages: true },
+],
+```
+
+What changes there:
+
+- **Your markup is rebuilt inert.** Same skin, same projection, `context.page.kind === "buyer"` and `context.page.path` the page's first segment (`/account`, never an order's path): hide what a buyer does not need there (search, category rows, a mega menu). No island loads (its markup stays, unwrapped), and no form, field, select, text area or label is kept, your search form included: use `searchOpener()` on a button or link for the store's search. A button is kept only as `type="button"` with `colorSchemeToggle()`, `openCart()` or `searchOpener()`, or with a `popovertarget` naming your `menuDrawer()` (a `popover` element with an id, always drawn `popover="auto"`). `accountLink()`, `whenSignedIn()`, `whenSignedOut()`, `stickyHeader()` and `<CartCount />` keep working. `style` keeps only custom properties with plain values (`style={{ "--logo-width": "180px" }}`). Links keep their `href` only to a URL you were handed exactly (`data.routes`, menus, social profiles, the merchant's link settings), a browsing path of the store (home, products, categories, collections, brands, search, content pages, the blog, the account, order tracking, the cart) or a fragment; a link off the store gets `rel="noopener noreferrer"`. Your slots draw nothing.
+- **It draws inside a shadow root.** Your stylesheet applies there and only there, imported into a cascade layer after the store's base (Tailwind's preflight and the page's font and colour). The page's selectors do not reach your markup and yours do not reach the page; the store's tokens (`--background`, `--primary`, …) are custom properties and inherit in. `:root` matches nothing in a shadow root: write `:root, :host { … }` for your variables, and style the colour scheme on the host the store keeps in step with the page: `:host([data-color-scheme="dark"]) .logo-light { display: none }`.
+- **It stays in its box.** The store's guard (first layer, every rule `!important`, so nothing you write outranks it) keeps the host a plain block in the page's flow and paint-contained: nothing you draw shows outside your header's or footer's own box, a `position: fixed` or `sticky` element is held to it (your header scrolls with the page there), and dropdown panels that hang below the header are clipped. The one thing that opens over the page is your menu drawer, on the buyer's press: use it for navigation on buyer pages.
+- **Your stylesheet may not hold `:host-context()`, `@import`, `@font-face` or `@property`** (they reach past a shadow root: the host's ancestors, an unread sheet, fonts and properties some browsers register for the whole document). `scalius-plugin pack` refuses such a sheet for a theme that asks; on a store, a sheet holding one draws the store's own chrome on buyer pages. Fonts there come from the store's theme fonts, inherited.
+
+What stays yours to check: that your header and footer read well without their search and dropdowns, at 320px, and that a buyer can reach the account's own menu without scrolling past a tall header.
 
 ## What the store guarantees, and what is yours
 

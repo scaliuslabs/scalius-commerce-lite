@@ -26,7 +26,7 @@ A theme is an app. Its manifest declares storefront parts and nothing else; ther
 | --- | --- | --- |
 | Template | `templates` | A ready-made look: tokens, blocks, which of your skins draw the header, footer, card, product page and listings, and the homepage sections. The merchant applies it once; from then on every value is theirs to edit. |
 | Sections | `sections` | New sections the merchant adds in the theme editor, drawn by your module. |
-| Skins | `skins` | Your markup for a core unit (header, footer, product card, product page, listing) or a core section, drawn from that unit's projection. |
+| Skins | `skins` | Your markup for a core unit (header, footer, product card, product page, listing) or a core section, drawn from that unit's projection. A header and footer with `buyerPages: true` also draw on the account, the receipt and order tracking, inert in a shadow root ([private pages](private-pages.md#your-header-and-footer-on-the-buyers-own-pages)). |
 | Islands | `islands` | The only JavaScript a buyer's browser runs: small modules that improve markup that already works. |
 | Stylesheet | `stylesheet: true` | One CSS file on the store's tokens. |
 | Public files | `public/` | Fonts and images you ship with the theme. |

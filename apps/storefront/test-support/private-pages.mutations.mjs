@@ -412,7 +412,10 @@ export const CHROME_MUTATIONS = {
   },
   "C2 a form kept": {
     why: "the rebuild keeps a theme's forms and fields",
-    rewrites: [rewrite("packages/shared/src/plugins/inert-html.ts", '"noscript", "video", "audio", "canvas", "math", "foreignobject", "use", "image", "portal", "form", "input", "select",', '"noscript", "video", "audio", "canvas", "math", "foreignobject", "use", "image", "portal", "select",')],
+    rewrites: [
+      rewrite("packages/shared/src/plugins/inert-html.ts", '"noscript", "video", "audio", "canvas", "math", "foreignobject", "use", "image", "portal", "form", "input", "select",', '"noscript", "video", "audio", "canvas", "math", "foreignobject", "use", "image", "portal", "select",'),
+      rewrite("packages/shared/src/plugins/inert-html.ts", '  "a", "abbr", "address", ', '  "a", "abbr", "address", "form", "input", '),
+    ],
     expect: /^markup: /,
   },
   "C3 no paint containment": {
