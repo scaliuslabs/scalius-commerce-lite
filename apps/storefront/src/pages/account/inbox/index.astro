@@ -5,6 +5,8 @@
 // offers the merchant's topics when there are any. Server-rendered from the
 // session cookie, so it works without JavaScript; the form is a plain POST.
 import Layout from "@/layouts/Layout.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { privateRouteLook } from "@/lib/private-pages/look";
 import AccountShell from "@/components/account/AccountShell.astro";
 import { getLayoutData } from "@/lib/api";
 import {
@@ -27,6 +29,8 @@ const [layoutData, inbox, summary] = await Promise.all([
   readInbox(Astro.request, cursor),
   readAccountSummaryForRequest(Astro.request),
 ]);
+// The account's look (`PRIVATE_PAGE_ROUTES`), only where the theme set it: else the page draws as without a theme.
+const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutData)).theme);
 // The store's language (the layout read set it).
 const copy = conversationCopy();
 const status = readConversationStatusMessage(Astro.url);
@@ -42,7 +46,7 @@ const olderHref = inbox.ok && inbox.data.nextCursor
 const shellState = inbox.ok ? "ok" : inbox.reason === "signed_out" ? "signed_out" : "unavailable";
 ---
 
-<Layout title={copy.inboxTitle} layoutData={layoutData}>
+<Layout title={copy.inboxTitle} layoutData={layoutData} {...look}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <AccountShell
     current="inbox"
@@ -59,7 +63,7 @@ const shellState = inbox.ok ? "ok" : inbox.reason === "signed_out" ? "signed_out
           <p role="status" class:list={["text-sm", status.tone === "error" ? "text-destructive" : "text-primary"]}>{status.text}</p>
         )}
 
-        <details class={`group ${ui.card}`} open={startFailed || (items.length === 0 && !cursor && inbox.data.canStartStoreConversation)}>
+        <details data-part="card" class={`group ${ui.card}`} open={startFailed || (items.length === 0 && !cursor && inbox.data.canStartStoreConversation)}>
           <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-base font-semibold text-foreground">
             {copy.startTitle}
             <svg aria-hidden="true" class="h-4 w-4 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>

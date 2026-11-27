@@ -19,7 +19,7 @@ import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
 import { accountUi as ui } from "@/lib/account-ui";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
-import { privatePageLook } from "@/lib/private-pages/look";
+import { privateRouteLook } from "@/lib/private-pages/look";
 
 export const prerender = false;
 
@@ -48,7 +48,7 @@ const countText = page && !stats ? words.count(formatCount(page.totalOrders), pa
 
 const cards = accountOrderCards(orders, copy, checkoutCopy);
 // The theme's look for the account, only when it set tokens for it: else the page draws as without a theme.
-const look = privatePageLook((await resolveRequestTheme(Astro, layoutData)).theme, "account");
+const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutData)).theme);
 ---
 
 <Layout title={words.title} layoutData={layoutData} {...look}>
@@ -73,7 +73,7 @@ const look = privatePageLook((await resolveRequestTheme(Astro, layoutData)).them
     {stats && (
       <section aria-label={words.summary} class="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:grid-cols-3 sm:gap-4" data-account-summary>
         {stats.map((stat) => (
-          <a href={stat.href} data-astro-prefetch="false" data-account-stat={stat.key} data-part="card" class:list={[ui.card, "block p-4 transition-colors hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", stat.key === "spent" && "col-span-2 sm:col-span-1"]}>
+          <a href={stat.href} data-astro-prefetch="false" data-account-stat={stat.key} data-part="card" class:list={[ui.card, "block p-4 transition-colors hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring", stat.key === "spent" && "col-span-2 sm:col-span-1"]}>
             <span class="block text-sm text-muted-foreground">{stat.label}</span>
             {stat.values.map((value) => <span class="mt-1 block break-words text-xl font-semibold tabular-nums text-foreground">{value}</span>)}
             {stat.note && <span class="mt-1 block text-sm font-medium text-primary">{stat.note}</span>}

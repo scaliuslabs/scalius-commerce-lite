@@ -54,7 +54,16 @@ import { NOOR_SECTION_FIXTURES, NOOR_REPEATED_FIXTURES, repeatedNoorValues } fro
 export type GalleryPage =
   | "home" | "landing" | "product" | "category" | "collection" | "brand" | "search" | "cart" | "page"
   /** The theme editor's sample pages (the entry's theme as a live preview's draft). */
-  | "sample-checkout" | "sample-receipt" | "sample-account";
+  | "sample-checkout" | "sample-receipt" | "sample-account"
+  /** The account's own pages as a signed-in buyer gets them (gallery/account.ts), and a guest's claim thread. */
+  | GalleryAccountPage;
+
+/** The account's pages the rendered gate draws under a theme's look (every page `PRIVATE_PAGE_ROUTES.account` names but its orders and an order, which the sample account and its own tests draw). */
+export const GALLERY_ACCOUNT_PAGES = [
+  "account-inbox", "account-thread", "account-order", "account-profile", "account-profile-dialog", "account-profile-error", "account-profile-remove-address", "account-profile-remove-card",
+  "account-reviews", "account-gift-cards", "account-downloads", "account-warranties", "account-warranty-claim-form", "warranty-claim",
+] as const;
+export type GalleryAccountPage = (typeof GALLERY_ACCOUNT_PAGES)[number];
 
 /** The part of the page an entry is about: axe and the harness checks look only here. */
 export interface GalleryFocus {
@@ -983,7 +992,7 @@ function manyCart(): string {
  * store has Noor installed, so a theme from it draws its header and footer;
  * with `localization`, the store sells in two markets.
  */
-export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean; terms?: boolean; page?: "home" | "sample-checkout" | "sample-receipt" | "sample-account" } = {}): GalleryEntry {
+export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean; terms?: boolean; page?: "home" | "sample-checkout" | "sample-receipt" | "sample-account" | GalleryAccountPage } = {}): GalleryEntry {
   const base = galleryEntry(entryId("app", "buyer-ui"))!;
   // `decide`: the base cart, whose first line asks for a decision and every line sells, so Place order reaches the question.
   const customer = state === "customer" ? "offer" as const : state === "customer-protected" ? "protected" as const : undefined;

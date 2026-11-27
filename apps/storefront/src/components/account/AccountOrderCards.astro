@@ -35,7 +35,7 @@ const { cards, words } = Astro.props;
             {card.request && <span data-part="status-badge" class={accountPill("warning")}>{card.request}</span>}
           </div>
           <h2 data-part="card-title" class="mt-1.5 text-sm font-semibold text-foreground sm:text-base">
-            <a href={card.href} data-astro-prefetch="false" class="after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring">{words.order(card.number)}</a>
+            <a href={card.href} data-astro-prefetch="false" class="after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring">{words.order(card.number)}</a>
           </h2>
           <p class="text-xs text-muted-foreground sm:text-sm">{card.date} · {card.items}</p>
           <p class:list={["mt-1 text-xs [overflow-wrap:anywhere] sm:text-sm", card.detail.warn ? "font-medium text-destructive" : "text-muted-foreground"]}>{card.detail.text}</p>
