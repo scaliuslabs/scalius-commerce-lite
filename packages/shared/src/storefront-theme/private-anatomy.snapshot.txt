@@ -16,7 +16,7 @@ cart layout fold hooks=fold-toggle,fold-body
 cart layout fold holds=lines,summary,discount,cart.page.summary
 cart style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 cart style frame <root> <root> tokens=max-width
-cart style action :is([data-private="cart"],[data-private="dialog"]) .bg-primary:not([data-private="cart"] [data-part="details-submit"],[data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+cart style action :is([data-private="cart"],[data-private="dialog"]) .bg-primary:not([data-private="cart"] [data-part="details-submit"],[data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
 cart style input :is([data-private="cart"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 cart style field-label :is([data-private="cart"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
 cart style notice <root> [data-part="notice"] tokens=background,text,muted,link,error,border,border-width,radius
@@ -130,7 +130,7 @@ checkout lead summary,payment
 checkout layouts stack,columns,grid,group
 checkout style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 checkout style frame <root> <root> tokens=max-width
-checkout style action [data-private="checkout"] .bg-primary:not([data-private="checkout"] [data-part="pay"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+checkout style action [data-private="checkout"] .bg-primary:not([data-private="checkout"] [data-part="pay"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
 checkout style input [data-private="checkout"] :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 checkout style field-label [data-private="checkout"] [data-part="field-label"] tokens=text,size,weight,case,tracking
 checkout style notice <root> [data-part="notice"] tokens=background,text,muted,link,error,border,border-width,radius
@@ -170,7 +170,7 @@ receipt lead status,summary
 receipt layouts stack,columns,grid,group
 receipt style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 receipt style frame <root> <root> tokens=max-width
-receipt style action :is([data-private="receipt"],[data-private="dialog"]) .bg-primary:not([data-part="recommendations"] *):not([data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+receipt style action :is([data-private="receipt"],[data-private="dialog"]) .bg-primary:not([data-part="recommendations"] *):not([data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
 receipt style input :is([data-private="receipt"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 receipt style field-label :is([data-private="receipt"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
 receipt style status <root> [data-part="status"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
@@ -215,7 +215,7 @@ account lead heading,content
 account layouts stack,columns,grid,group
 account style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 account style frame <root> <root> tokens=max-width
-account style action :is([data-private="account"],[data-private="dialog"]) .bg-primary:not([data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+account style action :is([data-private="account"],[data-private="dialog"]) .bg-primary:not([data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
 account style input :is([data-private="account"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 account style field-label :is([data-private="account"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
 account style navigation <root> [data-part="navigation"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding

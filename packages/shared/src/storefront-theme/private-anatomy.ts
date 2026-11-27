@@ -152,8 +152,9 @@ export interface PrivateStyleSpec {
   readonly targets?: readonly string[];
   /**
    * How a buyer tells the control or field from what is around it (WCAG
-   * 1.4.11, 3:1 on what is around it): `fill`, a filled button (Place order,
-   * Confirm), by its own surface, or by a drawn edge where the theme sets a
+   * 1.4.11, 3:1 on what is around it): `fill`, a filled button (every one:
+   * Place order, Confirm, Pay and the store's other filled buttons, `action`),
+   * by its own surface, or by a drawn edge where the theme sets a
    * solid border of at least 2px that reads 3:1 on what is around it over a
    * fill still clearly a colour of its own (CIE76 40 from every point around
    * it: an outlined button is Go back's look); `edge`, an outlined one (a stepper, the
@@ -310,7 +311,8 @@ export function privatePageStyles(root: string, options: { dialogs?: boolean; ch
     page: { selector: "body[data-private-body]", absolute: true, tokens: ["background", "gradient", "text", "muted", "link", "error"], kind: "box", surface: "background", ink: "foreground" },
     frame: { selector: "", tokens: ["max-width"], kind: "box", surface: "under", ink: "foreground", on: "page" },
     // Every filled button the host draws without a target of its own (bg-primary), and every field, on the page and in its dialogs.
-    action: { selector: `${scope} .bg-primary`, absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", hostSize: 14, hostWeight: 600 },
+    // A filled button is found by its fill (or a drawn edge), as Place order is: its fill reads 3:1 on every box it may stand on.
+    action: { selector: `${scope} .bg-primary`, absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", boundary: "fill", hostSize: 14, hostWeight: 600 },
     input: { selector: `${scope} ${FIELD_ELEMENTS}`, absolute: true, element: FIELD_ELEMENTS, tokens: [...FIELD_TOKENS], kind: "field", surface: "background", ink: "foreground" },
     // Every field's label (and a group of fields' legend), wherever fields are drawn: on the box that holds them.
     "field-label": { selector: `${scope} [data-part="field-label"]`, absolute: true, element: '[data-part="field-label"]', tokens: ["text", "size", "weight", "case", "tracking"], kind: "text", surface: "under", ink: "foreground" },
