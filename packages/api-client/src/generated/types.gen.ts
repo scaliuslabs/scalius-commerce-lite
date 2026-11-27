@@ -11076,6 +11076,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 customizationChoosePlaceholderText: string;
                 customizationUnavailableText: string;
                 onlinePaymentRequiredText: string;
+                giftCardPaysText: string;
                 deliveryUnavailableText: string;
                 customizationNeededText: string;
                 customizationInvalidText: string;
@@ -14349,6 +14350,10 @@ export type GetApiV1CheckoutConfigResponses = {
                     bn: string;
                 };
             };
+            /**
+             * The store holds a live gift card (active, unexpired, with a balance). Where no method but cash is listed, a key, a download or a gift card can be bought only with one: without any, the storefront stops it early.
+             */
+            giftCardsLive: boolean;
         };
     };
 };

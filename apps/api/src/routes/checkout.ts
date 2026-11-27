@@ -111,6 +111,9 @@ const checkoutConfigSchema = z.object({
     channels: z.array(z.enum(["email", "sms", "whatsapp"])).max(3),
     label: z.object({ en: z.string().max(200), bn: z.string().max(200) }),
   }),
+  giftCardsLive: z.boolean().openapi({
+    description: "The store holds a live gift card (active, unexpired, with a balance). Where no method but cash is listed, a key, a download or a gift card can be bought only with one: without any, the storefront stops it early.",
+  }),
 });
 
 // ─── GET /config ─────────────────────────────────────────────────────────────

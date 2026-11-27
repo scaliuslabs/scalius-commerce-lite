@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 226,
-  name: "0226_order_line_messages",
+  version: 227,
+  name: "0227_gift_card_liveness",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -911,6 +911,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 226,
     name: "0226_order_line_messages",
     sourceSha256: "ab7145b5fbbfc7bf2aaa4f7468da3f21b0bc1ff3ba31823884476d70451b2820",
+  },
+  {
+    version: 227,
+    name: "0227_gift_card_liveness",
+    sourceSha256: "d4c30be806d29f912681fc7d50b9ead18d408ad6de8af6a4a173513f170660ea",
   },
 ] as const;
 

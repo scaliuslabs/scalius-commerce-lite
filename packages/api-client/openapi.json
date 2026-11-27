@@ -44487,6 +44487,9 @@
                             "onlinePaymentRequiredText": {
                               "type": "string"
                             },
+                            "giftCardPaysText": {
+                              "type": "string"
+                            },
                             "deliveryUnavailableText": {
                               "type": "string"
                             },
@@ -44562,6 +44565,7 @@
                             "customizationChoosePlaceholderText",
                             "customizationUnavailableText",
                             "onlinePaymentRequiredText",
+                            "giftCardPaysText",
                             "deliveryUnavailableText",
                             "customizationNeededText",
                             "customizationInvalidText",
@@ -55115,6 +55119,10 @@
                             "channels",
                             "label"
                           ]
+                        },
+                        "giftCardsLive": {
+                          "type": "boolean",
+                          "description": "The store holds a live gift card (active, unexpired, with a balance). Where no method but cash is listed, a key, a download or a gift card can be bought only with one: without any, the storefront stops it early."
                         }
                       },
                       "required": [
@@ -55132,7 +55140,8 @@
                         "checkoutReadiness",
                         "unavailable",
                         "market",
-                        "marketingConsent"
+                        "marketingConsent",
+                        "giftCardsLive"
                       ]
                     }
                   },

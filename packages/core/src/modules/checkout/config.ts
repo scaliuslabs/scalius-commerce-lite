@@ -2,6 +2,9 @@
 // Assembles the public checkout configuration from DB + gateway registry.
 
 import type { Database } from "@scalius/database/client";
+import { giftCards } from "@scalius/database/schema";
+import { sql } from "drizzle-orm";
+import { deps } from "../../cache-deps";
 import {
     getDecimalPlaces,
     normalizeSupportedCurrencyCode,
@@ -85,6 +88,26 @@ export interface CheckoutConfig {
     };
     /** The market of the requested presence (MARKETS-DESIGN D4); absent when none was asked for. */
     market?: PresenceMarket;
+    /**
+     * Whether the store holds a live gift card (active, unexpired, with a
+     * balance). A store that takes only cash sells a key only to a buyer with
+     * a gift card: without one live, nobody can pay for it.
+     */
+    giftCardsLive: boolean;
+}
+
+/** One day: how long a "live gift card" answer stands while a card's expiry passes without a write. */
+const GIFT_CARD_LIVENESS_SECONDS = 86_400;
+
+/**
+ * Whether a live gift card exists, as one scalar of the configuration's
+ * first statement (an indexed existence probe that stops at the first live
+ * card). The `gc` key follows a card's issue, removal, status, expiry and
+ * balance reaching or leaving zero; an expiry that passes moves no row, so a
+ * "yes" stands for a day at most.
+ */
+function liveGiftCardsSql(nowSeconds: number) {
+    return sql<number>`EXISTS (SELECT 1 FROM ${giftCards} WHERE ${giftCards.status} = 'active' AND ${giftCards.balanceMinor} > 0 AND (${giftCards.expiresAt} IS NULL OR ${giftCards.expiresAt} > ${nowSeconds}))`;
 }
 
 /**
@@ -121,16 +144,23 @@ export async function getCheckoutConfig(
     let rows: SettingsDocumentRow[];
     let sellingCountries: string[];
     let market: PresenceMarket | undefined;
+    let liveGiftCards: unknown;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    // Whether a live gift card exists rides the settings statement: no D1 call of its own.
+    deps.giftCardsLive();
     if (presence === undefined) {
-        ({ rows, sellingCountries } = await selectDocumentsWithSellingCountries(db, documents));
+        ({ rows, sellingCountries, extra: liveGiftCards } = await selectDocumentsWithSellingCountries(db, documents, liveGiftCardsSql(nowSeconds)));
     } else {
-        const read = await readPresenceMarketWithDocuments(db, presence, documents);
+        const read = await readPresenceMarketWithDocuments(db, presence, documents, liveGiftCardsSql(nowSeconds));
         // No active market holds the presence: a 404, and nothing else is read.
         if (!read.market) throw new NotFoundError("Market not found");
         rows = read.documentRows;
         sellingCountries = read.sellingCountries;
         market = read.market;
+        liveGiftCards = read.extra;
     }
+    const giftCardsLive = Number(liveGiftCards) === 1 || liveGiftCards === true;
+    if (giftCardsLive) deps.validUntil((nowSeconds + GIFT_CARD_LIVENESS_SECONDS) * 1000);
     const [checkout, currency, customerAuth, merchantCountries, marketing] = await Promise.all([
         checkoutDocument.fromRows(rows).then((result) => result.value),
         currencyDocument.fromRows(rows).then((result) => result.value),
@@ -187,6 +217,7 @@ export async function getCheckoutConfig(
             unavailableMessage: CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
             marketingConsent,
             ...(market === undefined ? {} : { market }),
+            giftCardsLive,
         };
     }
 
@@ -280,5 +311,6 @@ export async function getCheckoutConfig(
             : undefined,
         marketingConsent,
         ...(market === undefined ? {} : { market }),
+        giftCardsLive,
     };
 }
