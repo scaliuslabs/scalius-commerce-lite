@@ -153,10 +153,12 @@ The API `/readyz` route reads the whole ledger and fails closed on a missing, ex
 | Command | Effect |
 |---------|--------|
 | `pnpm db:migrate:local` | Applies the D1 chain to the local database (`scripts/deploy.mjs --migrate-only --local`, which runs `wrangler d1 migrations apply`). |
-| `pnpm db:migrate:remote` | Applies the D1 chain to the remote database. |
+| `pnpm db:migrate:remote` | Applies the D1 chain to the remote database, after the pre-flight and a recovery point (no freeze: prefer `pnpm run deploy`). |
 | `pnpm --filter @scalius/database upgrade:schema` | Applies or checks releases on an existing TursoDB or PostgreSQL target. |
 | `pnpm --filter @scalius/database migration-plan` | Prints the D1 plan as JSON for an applier that does not use Wrangler (`--out <file>` writes it). |
 | `pnpm --filter @scalius/database compile:migrations` | Compiles an immutable provider bundle (`--provider`, `--out`). |
+
+A remote D1 deploy upgrades the store under guard (`scripts/deploy-upgrade.mjs`). Before it builds anything it reads both ledgers and the running API's `/api/v1/meta` (pass `--api-url`), and refuses a database whose history this tree does not contain: a newer release, another branch's migration, an edited deployed file, a half-applied file. When migrations are pending on a store with data it sets `DATABASE_MIGRATION_FREEZE`, records a D1 Time Travel bookmark in a receipt under `deploy-receipts/<database>/`, migrates, deploys and verifies the API, then releases the freeze; the API refuses ordinary requests for those minutes. If it fails after the schema changed, the store stays frozen and the message names the way out: deploy again, or `wrangler d1 time-travel restore <database> --bookmark=<receipt bookmark>`, `wrangler rollback <receipt apiVersionBefore>`, then `wrangler secret delete DATABASE_MIGRATION_FREEZE`. A restore loses every write after the bookmark (none while the store stayed frozen) and cannot undo what providers already did (captured payments, sent messages). `node scripts/deploy.mjs --check-upgrade --api-url <origin>` runs only the read-only pre-flight.
 
 An ordinary deploy never changes an external database. Select TursoDB or PostgreSQL with `--database-provider turso|postgres`; the read-only preflight needs `--database-target-host`, and live provider verification needs `--api-url`. The selector is a deploy flag, not a new Worker env value or Wrangler var. The explicit upgrade needs a verified write freeze:
 

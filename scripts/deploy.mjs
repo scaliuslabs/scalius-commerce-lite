@@ -18,8 +18,20 @@
  *     (sandboxed plugins, Workers Paid, implies --plan paid); `pnpm plugin sandbox on` makes it the default
  *   node scripts/deploy.mjs --only api --wrangler-config path/to/wrangler.jsonc
  *     --health-only # isolated custom config: verify deployment + /health, not production bindings
- *   node scripts/deploy.mjs --migrate-only   # apply remote D1 migrations
+ *   node scripts/deploy.mjs --migrate-only   # apply remote D1 migrations (pre-flight and recovery point, no freeze)
  *   node scripts/deploy.mjs --migrate-only --local  # apply local D1 migrations only
+ *   node scripts/deploy.mjs --check-upgrade  # read-only: the D1 upgrade pre-flight against the live store, then stop
+ *   node scripts/deploy.mjs --help           # this text; an unknown flag refuses instead of deploying
+ *
+ * A remote D1 API deploy is a guarded upgrade (scripts/deploy-upgrade.mjs):
+ * a read-only pre-flight first (the API's /meta, both migration ledgers, the
+ * freeze state; it refuses a diverged or newer database), then, when
+ * migrations are pending on a store with data, DATABASE_MIGRATION_FREEZE on
+ * the API Worker, a D1 Time Travel bookmark and a receipt in deploy-receipts/,
+ * the migrations, the API deploy and its verification, and the release. A
+ * failure after the schema changed leaves the store frozen and says how to
+ * finish or roll back; `--resume-frozen` acknowledges a freeze a failed deploy
+ * on another machine left.
  *
  * Post-deploy verification URLs (Wrangler configs carry no vars):
  *   --storefront-url <origin> / SCALIUS_STOREFRONT_URL
@@ -50,7 +62,7 @@
 import { execSync } from "child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
-import { delimiter, dirname, join, resolve } from "path";
+import { delimiter, dirname, join, relative, resolve } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { getArgValue, resolvePnpmExecutable, shellQuote } from "./dev-local-utils.mjs";
 import { readLockfile } from "./plugin-build.mjs";
@@ -58,11 +70,68 @@ import { apiWranglerConfig, pluginSandboxEnabled, withPluginSandbox } from "./pl
 import { resolvePlan, withStorefrontPlanProfile } from "./plan.mjs";
 import { readHiddenLine } from "./demo-store/credentials.mjs";
 import { readinessChecksOf, readinessHeaders, readinessOperatorToken, readinessSummary } from "./readiness-operator.mjs";
+import {
+  FREEZE_SECRET,
+  GuardedUpgradeError,
+  createReceipt,
+  decideUpgrade,
+  describeUpgradeDecision,
+  latestReceipt,
+  parseD1ExecuteRows,
+  readFreezeState,
+  readMeta,
+  readRemoteLedgers,
+  readTreeMigrations,
+  receiptHoldsFreeze,
+  receiptPath,
+  receiptsDirectory,
+  rollbackCommands,
+  runGuardedUpgrade,
+  writeReceipt,
+} from "./deploy-upgrade.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const apiDir = resolve(root, "apps", "api");
 const args = process.argv.slice(2);
+const DEPLOY_FLAGS = new Set([
+  "--migrate-only", "--local", "--dry-run", "--skip-verified", "--health-only", "--plugin-sandbox",
+  "--resume-frozen", "--check-upgrade", "--help", "-h", "--",
+]);
+const DEPLOY_VALUE_FLAGS = new Set([
+  "--only", "--wrangler-config", "--database-target-host", "--database-provider", "--storefront-url", "--api-url", "--plan",
+]);
+
+/**
+ * The arguments this script does not know. A deploy is the default action, so
+ * a mistyped or unsupported flag (`--hlep`, `--preflight`) must refuse rather
+ * than deploy.
+ */
+export function unknownDeployArgs(inputArgs) {
+  const unknown = [];
+  for (let index = 0; index < inputArgs.length; index += 1) {
+    const arg = inputArgs[index];
+    const name = arg.split("=")[0];
+    if (DEPLOY_VALUE_FLAGS.has(name)) {
+      if (!arg.includes("=")) index += 1;
+      continue;
+    }
+    if (!DEPLOY_FLAGS.has(arg)) unknown.push(arg);
+  }
+  return unknown;
+}
+
+/** The usage text: this file's header comment. */
+export function deployUsage() {
+  return readFileSync(fileURLToPath(import.meta.url), "utf8")
+    .split("\n")
+    .slice(2)
+    .filter((line, index, lines) => lines.slice(0, index + 1).every((previous) => !previous.startsWith(" */")))
+    .map((line) => line.replace(/^ \*\/?\s?/, ""))
+    .join("\n")
+    .trim();
+}
+
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
 const dryRun = args.includes("--dry-run");
@@ -1354,6 +1423,15 @@ function checkDistSecrets(targets = deployTargets, options = {}) {
 
 // ── Main
 export async function main() {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(deployUsage());
+    return;
+  }
+  const unknown = unknownDeployArgs(args);
+  if (unknown.length > 0) {
+    console.error(`✗ Unknown argument(s): ${unknown.join(" ")}. Nothing was deployed; see node scripts/deploy.mjs --help.`);
+    process.exit(1);
+  }
   if (wranglerConfigArgIndex !== -1 && !args[wranglerConfigArgIndex + 1]) {
     console.error("✗ --wrangler-config requires a path.");
     process.exit(1);
@@ -1491,24 +1569,210 @@ export async function main() {
     return false;
   };
 
+  // ── The guarded upgrade of a remote D1 store (scripts/deploy-upgrade.mjs).
+  const guardsRemoteD1 = databaseProvider === "d1" && !local
+    && (migrateOnly || requestedTarget === null || requestedTarget === "api");
+  const d1Target = customWranglerConfigPath ? "DB" : dbName;
+  const d1ConfigFlag = customWranglerConfigPath ? ` --config ${shellQuote(customWranglerConfigPath)}` : "";
+  const apiConfigFlag = apiDeployConfigPath ? ` --config ${shellQuote(apiDeployConfigPath)}` : "";
+  const receiptDatabase = d1Target ?? "DB";
+  const migrationsDirectory = resolve(
+    dirname(customWranglerConfigPath ?? resolve(apiDir, "wrangler.jsonc")),
+    d1?.migrations_dir ?? "migrations",
+  );
+  const apiUrl = deploymentUrls.apiUrl;
+  const queryRemoteD1 = (sql) => parseD1ExecuteRows(execSync(
+    `${pnpm} exec wrangler d1 execute ${d1Target} --remote --json --command ${shellQuote(sql)}${d1ConfigFlag}`,
+    { cwd: apiDir, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] },
+  ));
+  const receipts = receiptsDirectory(root);
+  const rollbackHint = (receipt) => rollbackCommands(receipt, { d1ConfigFlag, workerConfigFlag: apiConfigFlag });
+
+  /** Read-only. A dry run reads nothing remote: the decision then only names the tree's chain. */
+  const preflightUpgrade = async ({ readRemote }) => {
+    const tree = readTreeMigrations(migrationsDirectory);
+    if (!readRemote) {
+      const decision = decideUpgrade({ tree });
+      for (const line of describeUpgradeDecision(decision)) console.log(line);
+      return decision;
+    }
+    console.log(`\n▶ Upgrade pre-flight → D1 "${d1Target}" (read-only)`);
+    let meta = null;
+    let frozen = null;
+    if (apiUrl) {
+      meta = await readMeta(apiUrl);
+      if (!meta) console.warn(`⚠ Could not read ${apiUrl}/api/v1/meta: the running code's schema and release are not checked.`);
+      frozen = await readFreezeState(apiUrl);
+    } else {
+      console.warn(`⚠ The public API origin is unknown: the running code's schema and release and the freeze state are not checked. To check them, ${API_URL_HINT}.`);
+    }
+    const previous = latestReceipt(receipts, receiptDatabase);
+    const previousHolds = receiptHoldsFreeze(previous);
+    // Without the API to ask, a receipt that left the store frozen is the evidence.
+    if (frozen === null && previousHolds) frozen = true;
+    let remote;
+    try {
+      remote = await readRemoteLedgers(queryRemoteD1);
+    } catch (error) {
+      console.error(`✗ Could not read the D1 migration ledgers of "${d1Target}": ${errorMessage(error)}. Nothing was changed.`);
+      process.exit(1);
+    }
+    const treeRelease = JSON.parse(readFileSync(resolve(apiDir, "package.json"), "utf8")).version;
+    const decision = decideUpgrade({
+      tree, remote, meta, frozen, treeRelease,
+      resumable: previousHolds || args.includes("--resume-frozen"),
+    });
+    for (const line of describeUpgradeDecision(decision)) (decision.ok ? console.log : console.error)(line);
+    if (!decision.ok) {
+      console.error("  Nothing was changed.");
+      process.exit(1);
+    }
+    return { ...decision, previous: previousHolds ? previous : null };
+  };
+
+  const readApiVersion = () => {
+    try {
+      const list = JSON.parse(execSync(`${pnpm} exec wrangler deployments list --json${apiConfigFlag}`, {
+        cwd: apiDir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+      }));
+      return getFullyServedVersion(getLatestDeployment(list))?.version_id ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * Pre-flight again (the authoritative read, right before anything changes),
+   * then freeze, recovery point, migrate, deploy and verify the API, release.
+   * `--migrate-only` runs the same pre-flight and recovery point but neither
+   * freezes nor deploys: the running code then serves the new schema.
+   */
+  const guardedApiDeploy = async ({ migrateOnlyRun = false } = {}) => {
+    const decision = await preflightUpgrade({ readRemote: true });
+    const effective = migrateOnlyRun ? { ...decision, freeze: false, resume: false } : decision;
+    const migrationsApplied = (decision.pending?.length ?? 0) > 0 || decision.resume === true;
+    const receipt = createReceipt({
+      database: receiptDatabase,
+      worker: config.name ?? null,
+      decision: effective,
+      startedAt: new Date().toISOString(),
+      apiVersionBefore: migrateOnlyRun ? null : readApiVersion(),
+      resumes: effective.resume ? decision.previous : null,
+    });
+    const path = relative(root, receiptPath(receipts, receipt));
+    console.log(`  Receipt: ${path}`);
+    try {
+      await runGuardedUpgrade({
+        decision: effective,
+        receipt,
+        rollbackHint,
+        steps: {
+          now: () => new Date().toISOString(),
+          saveReceipt: (next) => writeReceipt(receipts, next),
+          setFreeze: () => {
+            console.log(`\n▶ Freeze writes: ${FREEZE_SECRET} on the API Worker`);
+            execSync(`${pnpm} exec wrangler secret put ${FREEZE_SECRET}${apiConfigFlag}`, {
+              cwd: apiDir, input: "1\n", stdio: ["pipe", "inherit", "inherit"],
+            });
+          },
+          awaitFreeze: async () => {
+            if (!apiUrl) {
+              console.warn("⚠ The API origin is unknown, so the freeze cannot be observed: waiting 30s for it to reach every location.");
+              await sleep(30_000);
+              return;
+            }
+            for (let attempt = 0; attempt < 30; attempt += 1) {
+              if (await readFreezeState(apiUrl) === true) {
+                console.log("✓ The API refuses ordinary requests. Waiting 15s for in-flight requests to finish.");
+                await sleep(15_000);
+                return;
+              }
+              await sleep(3_000);
+            }
+            throw new Error("The API did not start refusing requests within 90s of the freeze being set.");
+          },
+          bookmark: async () => {
+            const output = execSync(`${pnpm} exec wrangler d1 time-travel info ${d1Target} --json${d1ConfigFlag}`, {
+              cwd: apiDir, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"],
+            });
+            const parsed = JSON.parse(output);
+            if (typeof parsed?.bookmark !== "string" || !parsed.bookmark) throw new Error("Wrangler did not return a D1 bookmark.");
+            return { bookmark: parsed.bookmark, takenAt: new Date().toISOString() };
+          },
+          migrate: () => runWithRetry(
+            `${pnpm} exec wrangler d1 migrations apply ${d1Target} --remote${d1ConfigFlag}`,
+            `Apply D1 migrations → ${d1Target} (remote)`,
+            apiDir,
+          ),
+          appliedCount: () => Number(queryRemoteD1("SELECT count(*) AS n FROM d1_migrations")[0]?.n),
+          deployApi: () => {
+            if (!migrateOnlyRun) deployTarget("api", apiDeployConfigPath, plan, pluginSandbox);
+          },
+          verifyApi: async () => {
+            if (migrateOnlyRun) return;
+            await verifyPostDeployTarget("api", config, apiDeployConfigPath, {
+              healthOnly, deploymentUrls, migrationsApplied, databaseProvider,
+            });
+          },
+          releaseFreeze: async () => {
+            console.log(`\n▶ Release the freeze: delete ${FREEZE_SECRET} on the API Worker`);
+            execSync(`${pnpm} exec wrangler secret delete ${FREEZE_SECRET}${apiConfigFlag}`, {
+              cwd: apiDir, stdio: ["ignore", "inherit", "inherit"],
+            });
+            if (!apiUrl) return;
+            for (let attempt = 0; attempt < 20; attempt += 1) {
+              if (await readFreezeState(apiUrl) === false) {
+                console.log("✓ The API serves ordinary requests again.");
+                return;
+              }
+              await sleep(3_000);
+            }
+            console.warn("⚠ The API still answered database_migration_in_progress 60s after the release; check it with pnpm ops:check.");
+          },
+        },
+      });
+    } finally {
+      console.log(`  Receipt (${receipt.outcome}): ${path}`);
+    }
+    if (migrateOnlyRun && migrationsApplied) {
+      console.warn("⚠ --migrate-only: the running API now serves the new schema. `pnpm run deploy` keeps code and schema together under the freeze.");
+    }
+    return migrationsApplied;
+  };
+
+  if (args.includes("--check-upgrade")) {
+    if (!guardsRemoteD1 || dryRun) {
+      console.error("✗ --check-upgrade reads a remote D1 store: it applies to a D1 deploy of the API, without --local or --dry-run.");
+      process.exit(1);
+    }
+    await preflightUpgrade({ readRemote: true });
+    console.log("\n✓ Upgrade check complete: nothing was changed.");
+    return;
+  }
+
   if (migrateOnly) {
     console.log(`\n🗄  Applying D1 schema migrations → "${dbName}" (${target})\n`);
     if (dryRun) {
+      if (!local) await preflightUpgrade({ readRemote: false });
       console.log("DRY RUN: would apply D1 schema migrations.");
       console.log("\n✓ Migration dry run complete.");
       return;
     }
 
     try {
-      const migrationTarget = dbName;
-      runWithRetry(
-        `${pnpm} exec wrangler d1 migrations apply ${migrationTarget} --${target}${persistFlag}${local ? " --config wrangler.local.jsonc" : ""}`,
-        `Apply D1 migrations → ${migrationTarget} (${target})`,
-        apiDir,
-      );
+      if (local) {
+        runWithRetry(
+          `${pnpm} exec wrangler d1 migrations apply ${dbName} --local${persistFlag} --config wrangler.local.jsonc`,
+          `Apply D1 migrations → ${dbName} (local)`,
+          apiDir,
+        );
+      } else {
+        await guardedApiDeploy({ migrateOnlyRun: true });
+      }
       console.log("\n✓ Migrations applied.");
-    } catch {
-      console.error("\n✗ Migration failed after retries. See errors above.");
+    } catch (error) {
+      if (error instanceof GuardedUpgradeError) console.error(`\n✗ ${error.message}`);
+      console.error("\n✗ Migration failed. See errors above.");
       process.exit(1);
     }
     return;
@@ -1520,6 +1784,10 @@ export async function main() {
     + "\n",
   );
   console.log("=".repeat(60));
+
+  // 0. Before anything is built or changed: the upgrade pre-flight. A dry run
+  // reads nothing remote; a real deploy refuses here on a diverged database.
+  if (guardsRemoteD1) await preflightUpgrade({ readRemote: !dryRun });
 
   try {
     // 1. Typecheck first — catches type mismatches esbuild ignores
@@ -1558,18 +1826,22 @@ export async function main() {
         return;
       }
 
-      const migrationsApplied = requestedTarget === "api"
-        ? prepareSelectedProviderSchema()
-        : false;
+      if (requestedTarget === "api" && guardsRemoteD1) {
+        await guardedApiDeploy();
+      } else {
+        const migrationsApplied = requestedTarget === "api"
+          ? prepareSelectedProviderSchema()
+          : false;
 
-      const targetConfigPath = requestedTarget === "api" ? apiDeployConfigPath : null;
-      deployTarget(requestedTarget, targetConfigPath, plan, pluginSandbox);
-      await verifyPostDeployTarget(requestedTarget, config, targetConfigPath, {
-        healthOnly,
-        deploymentUrls,
-        migrationsApplied,
-        databaseProvider,
-      });
+        const targetConfigPath = requestedTarget === "api" ? apiDeployConfigPath : null;
+        deployTarget(requestedTarget, targetConfigPath, plan, pluginSandbox);
+        await verifyPostDeployTarget(requestedTarget, config, targetConfigPath, {
+          healthOnly,
+          deploymentUrls,
+          migrationsApplied,
+          databaseProvider,
+        });
+      }
       if (requestedTarget === "api") await reportFirstAdminSetupKey(deploymentUrls?.apiUrl ?? null);
       console.log(`\n✓ Deploy complete (${requestedTarget}).`);
       return;
@@ -1586,22 +1858,28 @@ export async function main() {
       return;
     }
 
-    // 3. D1 is upgraded locally by Wrangler. External authorities are upgraded
+    // 3. A remote D1 store is upgraded under the freeze with the API deploy
+    // (migrate, deploy, verify, release). External authorities are upgraded
     // only by the frozen control-plane workflow; ordinary deploys prove they
     // are already current without mutating them.
-    const migrationsApplied = prepareSelectedProviderSchema();
-
-    // 4. Deploy both workers
-    for (const targetName of deployTargets) {
-      const targetConfigPath = targetName === "api" ? apiDeployConfigPath : null;
-      deployTarget(targetName, targetConfigPath, plan, pluginSandbox);
-      await verifyPostDeployTarget(targetName, config, targetConfigPath, { deploymentUrls, migrationsApplied, databaseProvider });
+    let migrationsApplied = false;
+    if (guardsRemoteD1) {
+      migrationsApplied = await guardedApiDeploy();
+    } else {
+      migrationsApplied = prepareSelectedProviderSchema();
+      deployTarget("api", apiDeployConfigPath, plan, pluginSandbox);
+      await verifyPostDeployTarget("api", config, apiDeployConfigPath, { deploymentUrls, migrationsApplied, databaseProvider });
     }
-    if (deployTargets.includes("api")) await reportFirstAdminSetupKey(deploymentUrls?.apiUrl ?? null);
+
+    // 4. The storefront, after the API is verified and released
+    deployTarget("storefront", null, plan, pluginSandbox);
+    await verifyPostDeployTarget("storefront", config, null, { deploymentUrls, migrationsApplied, databaseProvider });
+    await reportFirstAdminSetupKey(deploymentUrls?.apiUrl ?? null);
 
     console.log(`\n✓ Deploy complete (${deployTargets.join(" + ")}).`);
-  } catch {
-    console.error("\n✗ Deploy failed after retries. See errors above.");
+  } catch (error) {
+    if (error instanceof GuardedUpgradeError) console.error(`\n✗ ${error.message}`);
+    console.error("\n✗ Deploy failed. See errors above.");
     process.exit(1);
   }
 }
