@@ -19,6 +19,25 @@
       "builtAgainst": "2.0.0-beta.8",
       "sdk": "2.0.0-beta.8",
       "note": "the theme starter (pnpm plugin create --theme), built at cf32c0969d"
+    },
+    {
+      "file": "2.0.0-rc.1/acme.delivery-slots-0.2.0.zip",
+      "id": "acme.delivery-slots",
+      "version": "0.2.0",
+      "sha256": "56f72b89f9292625cf272ec7b1b970fe3e7373841fba777a96858745de5cfd68",
+      "builtAgainst": "2.0.0-rc.1",
+      "sdk": "2.0.0-rc.1",
+      "note": "the SDK's delivery-slots example in a scaffolded app, built at 50470a295a",
+      "settings": "acme.delivery-slots.replay-settings.json"
+    },
+    {
+      "file": "2.0.0-rc.1/acme.starter-theme-0.1.0.zip",
+      "id": "acme.starter-theme",
+      "version": "0.1.0",
+      "sha256": "c934ebb427a5853774d3c3e5cb117c45b252e52a5c344c3eae00867f950dfc26",
+      "builtAgainst": "2.0.0-rc.1",
+      "sdk": "2.0.0-rc.1",
+      "note": "the theme starter (pnpm plugin create --theme), built at 50470a295a"
     }
   ]
 }
