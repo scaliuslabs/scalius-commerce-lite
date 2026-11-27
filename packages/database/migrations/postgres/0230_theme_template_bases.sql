@@ -4,7 +4,7 @@ CREATE TABLE "theme_template_bases" (
 	"template" text PRIMARY KEY NOT NULL,
 	"plugin_id" text NOT NULL,
 	"app_version" text NOT NULL,
-	"theme_version" integer NOT NULL,
+	"theme_version" bigint NOT NULL,
 	"theme" text NOT NULL,
 	"source" text NOT NULL,
 	"recorded_at" bigint DEFAULT (cast(strftime('%s','now') as bigint)) NOT NULL,
