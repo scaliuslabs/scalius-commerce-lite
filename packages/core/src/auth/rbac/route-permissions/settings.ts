@@ -151,6 +151,10 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/settings/theme/template": {
     POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
   },
+  "/api/v1/admin/settings/theme/template-update": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
+  },
   // Drafting changes nothing until the editor saves, but only an editor may ask (it calls the merchant's AI app).
   "/api/v1/admin/settings/theme/ai-draft": {
     POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
@@ -242,6 +246,11 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/settings/sms": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
+  },
+  // Online store -> Preferences, beside the SEO settings: the same people save the page.
+  "/api/v1/admin/settings/catalog": {
+    GET: { anyOf: ANY_STAFF },
+    POST: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
   },
   "/api/v1/admin/settings/seo": {
     GET: { anyOf: ANY_STAFF },

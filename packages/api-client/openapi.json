@@ -18132,9 +18132,9 @@
             "type": "string",
             "description": "What it sells; a kit's from its items."
           },
-          "paidOnlineOnly": {
+          "cashPayable": {
             "type": "boolean",
-            "description": "Paid only online (a key, a download, or a kit holding one): where checkout takes no online payment, its buy action is off, as on its own page."
+            "description": "Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. The storefront turns buying it off only where nothing else can pay (a store that takes only cash and holds no live gift card, checkout config `giftCardsLive`)."
           },
           "price": {
             "type": "number",
@@ -18185,7 +18185,7 @@
           "imageMediaId",
           "imageAlt",
           "fulfillmentKind",
-          "paidOnlineOnly",
+          "cashPayable",
           "price",
           "compareAtPrice",
           "requiresCustomization",
@@ -18332,9 +18332,9 @@
             ],
             "description": "What it sells, from all its items (never the kit SKU's own setting): physical when any item ships, else digital when any item is, else a service."
           },
-          "paidOnlineOnly": {
+          "cashPayable": {
             "type": "boolean",
-            "description": "One of its items is paid only online (a key, a download): no cash on delivery or at the service buys it."
+            "description": "Cash may pay for it: every one of its items is cash payable (false when one is a key, a download or a gift card)."
           }
         },
         "required": [
@@ -18347,7 +18347,7 @@
           "savingPercent",
           "availabilityBand",
           "fulfillmentKind",
-          "paidOnlineOnly"
+          "cashPayable"
         ],
         "description": "A SKU made of other SKUs: checkout sells it as them."
       },
@@ -29483,6 +29483,190 @@
           "left"
         ]
       },
+      "ThemeTemplateUpdate": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "template": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "from": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 80
+          },
+          "to": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "base": {
+            "type": "string",
+            "enum": [
+              "recorded",
+              "assumed",
+              "none"
+            ]
+          },
+          "improvements": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "conflicts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "digest": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThemeTemplateUpdateItem"
+            },
+            "maxItems": 200
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "moreItems": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThemeTemplateUpdateIssue"
+            },
+            "maxItems": 20
+          },
+          "draft": {
+            "type": "object",
+            "properties": {
+              "revision": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "basePublishedRevision": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "revision",
+              "basePublishedRevision"
+            ]
+          }
+        },
+        "required": [
+          "template",
+          "from",
+          "to",
+          "base",
+          "improvements",
+          "conflicts",
+          "digest",
+          "items",
+          "offset",
+          "moreItems",
+          "issues",
+          "draft"
+        ]
+      },
+      "ThemeTemplateUpdateItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 400
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "improvement",
+              "conflict"
+            ]
+          },
+          "area": {
+            "type": "string",
+            "enum": [
+              "tokens",
+              "blocks",
+              "skins",
+              "privatePages",
+              "home"
+            ]
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "set",
+              "add",
+              "remove",
+              "order"
+            ]
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "maxItems": 12
+          },
+          "mine": {
+            "nullable": true,
+            "description": "The store's value now (absent: none); for `order`, the template sections' ids in the store's order."
+          },
+          "theirs": {
+            "nullable": true,
+            "description": "The update's value (absent: it removes it); for `order`, the same ids in the update's order."
+          },
+          "replaces": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "An added section that takes the place of one the update removes (a renamed id): that section's id."
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "area",
+          "change",
+          "path"
+        ]
+      },
+      "ThemeTemplateUpdateIssue": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "itemIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 400
+            },
+            "maxItems": 2000
+          }
+        },
+        "required": [
+          "path",
+          "message",
+          "reason",
+          "itemIds"
+        ]
+      },
       "ThemeRestorePoint": {
         "type": "object",
         "properties": {
@@ -31305,7 +31489,7 @@
           },
           "needsApproval": {
             "type": "boolean",
-            "description": "An update asks for more access than was approved; the app waits until a Super Admin approves it."
+            "description": "The app asks for access that is not approved (an update's new permissions, or a blocking the store turned off): it keeps running with what was approved, and the rest stays off until a Super Admin approves it (`added` lists it)."
           },
           "thirdParty": {
             "type": "boolean",
@@ -32536,6 +32720,34 @@
                   }
                 ]
               },
+              "checkoutContinues": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "point": {
+                      "type": "string",
+                      "enum": [
+                        "cart.transform",
+                        "cart.line_prices",
+                        "cart.validate",
+                        "checkout.discounts",
+                        "checkout.shipping_rates",
+                        "checkout.payment_methods"
+                      ]
+                    },
+                    "at": {
+                      "type": "string",
+                      "description": "When the store turned its blocking off (ISO 8601)."
+                    }
+                  },
+                  "required": [
+                    "point",
+                    "at"
+                  ]
+                },
+                "description": "Function points the app asks to block checkout at where the store lets checkout continue when they fail (dashboard.apps.function_blocking_update). Not part of `request` or `added`: only the store gives the blocking back."
+              },
               "scopes": {
                 "type": "array",
                 "items": {
@@ -32700,7 +32912,35 @@
                   "reason": {
                     "type": "string",
                     "nullable": true,
-                    "description": "The app's words to the buyer for the latest refusal."
+                    "description": "The app's words to the buyer for the latest refusal; null for a failing blocking function (see failure and lastError)."
+                  },
+                  "failing": {
+                    "type": "boolean",
+                    "description": "True when a function the store approved as blocking keeps failing (its circuit is open, or it failed as many times as opens one with no good answer between), so checkout refuses every order that needs it (turn its blocking off with dashboard.apps.function_blocking_update, update the app, or stop it)."
+                  },
+                  "failedOnce": {
+                    "type": "boolean",
+                    "description": "True when such a function failed (that checkout was refused) but not often enough to be failing; lastAt is the latest."
+                  },
+                  "point": {
+                    "type": "string",
+                    "description": "The function point that refuses."
+                  },
+                  "failure": {
+                    "type": "string",
+                    "enum": [
+                      "threw",
+                      "timed_out",
+                      "invalid_answer",
+                      "call_refused",
+                      "could_not_run"
+                    ],
+                    "description": "How a blocking function failed, in the platform's words: threw, timed_out, invalid_answer, call_refused (a read it declared was refused) or could_not_run."
+                  },
+                  "lastError": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "The app's latest error at that point, as its log has it (the app's own text)."
                   }
                 },
                 "required": [
@@ -32709,7 +32949,7 @@
                   "lastAt",
                   "reason"
                 ],
-                "description": "The app's cart rule is refusing every recent checkout (as a delivery-slot app with no open slot does); null otherwise. An accepted checkout clears it."
+                "description": "The app keeps checkout from taking orders: a function approved as blocking is failing, or its cart rule refuses every recent checkout (as a delivery-slot app with no open slot does); null otherwise. A good answer clears it."
               },
               "settings": {
                 "type": "object",
@@ -37378,10 +37618,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -37389,6 +37629,7 @@
             "schema": {
               "type": "string",
               "enum": [
+                "relevance",
                 "newest",
                 "price-asc",
                 "price-desc",
@@ -37398,10 +37639,10 @@
                 "rating",
                 "popular"
               ],
-              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest."
+              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which."
             },
             "required": false,
-            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.",
+            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which.",
             "name": "sort",
             "in": "query"
           },
@@ -37977,6 +38218,21 @@
                           },
                           "maxItems": 4,
                           "description": "\"N★ & up\" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0."
+                        },
+                        "sort": {
+                          "type": "string",
+                          "enum": [
+                            "relevance",
+                            "newest",
+                            "price-asc",
+                            "price-desc",
+                            "name-asc",
+                            "name-desc",
+                            "discount",
+                            "rating",
+                            "popular"
+                          ],
+                          "description": "The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order."
                         }
                       },
                       "required": [
@@ -37987,7 +38243,8 @@
                         "pageInfo",
                         "priceRange",
                         "facets",
-                        "ratingFacet"
+                        "ratingFacet",
+                        "sort"
                       ]
                     }
                   },
@@ -38686,10 +38943,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -38706,11 +38963,10 @@
                 "rating",
                 "popular"
               ],
-              "default": "newest",
-              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest."
+              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which."
             },
             "required": false,
-            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.",
+            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which.",
             "name": "sort",
             "in": "query"
           },
@@ -39238,19 +39494,6 @@
                                 ]
                               }
                             },
-                            "sort": {
-                              "type": "string",
-                              "enum": [
-                                "newest",
-                                "price-asc",
-                                "price-desc",
-                                "name-asc",
-                                "name-desc",
-                                "discount",
-                                "rating",
-                                "popular"
-                              ]
-                            },
                             "minRating": {
                               "type": "integer",
                               "minimum": 1,
@@ -39299,9 +39542,23 @@
                             }
                           },
                           "required": [
-                            "attributes",
-                            "sort"
+                            "attributes"
                           ]
+                        },
+                        "sort": {
+                          "type": "string",
+                          "enum": [
+                            "relevance",
+                            "newest",
+                            "price-asc",
+                            "price-desc",
+                            "name-asc",
+                            "name-desc",
+                            "discount",
+                            "rating",
+                            "popular"
+                          ],
+                          "description": "The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order."
                         }
                       },
                       "required": [
@@ -39312,7 +39569,8 @@
                         "priceRange",
                         "facets",
                         "ratingFacet",
-                        "appliedFilters"
+                        "appliedFilters",
+                        "sort"
                       ]
                     }
                   },
@@ -44494,6 +44752,9 @@
                             "onlinePaymentRequiredText": {
                               "type": "string"
                             },
+                            "giftCardPaysText": {
+                              "type": "string"
+                            },
                             "deliveryUnavailableText": {
                               "type": "string"
                             },
@@ -44569,6 +44830,7 @@
                             "customizationChoosePlaceholderText",
                             "customizationUnavailableText",
                             "onlinePaymentRequiredText",
+                            "giftCardPaysText",
                             "deliveryUnavailableText",
                             "customizationNeededText",
                             "customizationInvalidText",
@@ -54847,6 +55109,16 @@
                                   "deferred"
                                 ]
                               },
+                              "paymentKind": {
+                                "type": "string",
+                                "enum": [
+                                  "cash_on_delivery",
+                                  "invoice",
+                                  "paid_to_store",
+                                  "gift_card",
+                                  "online"
+                                ]
+                              },
                               "dueInDays": {
                                 "type": "integer",
                                 "minimum": 1,
@@ -54902,6 +55174,7 @@
                               "id",
                               "name",
                               "flow",
+                              "paymentKind",
                               "currencies"
                             ]
                           },
@@ -55135,6 +55408,10 @@
                             "channels",
                             "label"
                           ]
+                        },
+                        "giftCardsLive": {
+                          "type": "boolean",
+                          "description": "The store holds a live gift card (active, unexpired, with a balance, in a currency this page sells in). Where no method but cash is listed, a key, a download or a gift card can be bought only with one: without any, the storefront stops it early. Read only when every enabled method is cash on delivery; false on any other store."
                         }
                       },
                       "required": [
@@ -55152,7 +55429,8 @@
                         "checkoutReadiness",
                         "unavailable",
                         "market",
-                        "marketingConsent"
+                        "marketingConsent",
+                        "giftCardsLive"
                       ]
                     }
                   },
@@ -81066,10 +81344,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -81087,10 +81365,10 @@
                 "rating",
                 "popular"
               ],
-              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Defaults to relevance when `search` is set, otherwise newest."
+              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which. With `search` set, best match (relevance) instead."
             },
             "required": false,
-            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Defaults to relevance when `search` is set, otherwise newest.",
+            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which. With `search` set, best match (relevance) instead.",
             "name": "sort",
             "in": "query"
           },
@@ -81472,6 +81750,21 @@
                           "type": "string",
                           "nullable": true,
                           "description": "Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction)."
+                        },
+                        "sort": {
+                          "type": "string",
+                          "enum": [
+                            "relevance",
+                            "newest",
+                            "price-asc",
+                            "price-desc",
+                            "name-asc",
+                            "name-desc",
+                            "discount",
+                            "rating",
+                            "popular"
+                          ],
+                          "description": "The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order."
                         }
                       },
                       "required": [
@@ -81481,7 +81774,8 @@
                         "priceRange",
                         "facets",
                         "ratingFacet",
-                        "correctedQuery"
+                        "correctedQuery",
+                        "sort"
                       ]
                     }
                   },
@@ -84499,9 +84793,9 @@
                                     ],
                                     "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                                   },
-                                  "paidOnlineOnly": {
+                                  "cashPayable": {
                                     "type": "boolean",
-                                    "description": "Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it."
+                                    "description": "Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. The storefront turns buying it off only where nothing else can pay (a store that takes only cash and holds no live gift card, checkout config `giftCardsLive`)."
                                   },
                                   "createdAt": {
                                     "type": "string",
@@ -84527,7 +84821,7 @@
                                   "discountPercentage",
                                   "discountAmount",
                                   "fulfillmentKind",
-                                  "paidOnlineOnly",
+                                  "cashPayable",
                                   "createdAt"
                                 ]
                               },
@@ -85830,9 +86124,9 @@
                                 ],
                                 "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                               },
-                              "paidOnlineOnly": {
+                              "cashPayable": {
                                 "type": "boolean",
-                                "description": "Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it."
+                                "description": "Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. The storefront turns buying it off only where nothing else can pay (a store that takes only cash and holds no live gift card, checkout config `giftCardsLive`)."
                               },
                               "customFields": {
                                 "type": "array",
@@ -85885,7 +86179,7 @@
                               "discountPercentage",
                               "discountAmount",
                               "fulfillmentKind",
-                              "paidOnlineOnly",
+                              "cashPayable",
                               "customFields",
                               "warrantyId",
                               "createdAt",
@@ -87787,10 +88081,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -87807,11 +88101,10 @@
                 "rating",
                 "popular"
               ],
-              "default": "newest",
-              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest."
+              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which."
             },
             "required": false,
-            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.",
+            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which.",
             "name": "sort",
             "in": "query"
           },
@@ -88586,19 +88879,6 @@
                                 ]
                               }
                             },
-                            "sort": {
-                              "type": "string",
-                              "enum": [
-                                "newest",
-                                "price-asc",
-                                "price-desc",
-                                "name-asc",
-                                "name-desc",
-                                "discount",
-                                "rating",
-                                "popular"
-                              ]
-                            },
                             "minRating": {
                               "type": "integer",
                               "minimum": 1,
@@ -88647,9 +88927,23 @@
                             }
                           },
                           "required": [
-                            "attributes",
-                            "sort"
+                            "attributes"
                           ]
+                        },
+                        "sort": {
+                          "type": "string",
+                          "enum": [
+                            "relevance",
+                            "newest",
+                            "price-asc",
+                            "price-desc",
+                            "name-asc",
+                            "name-desc",
+                            "discount",
+                            "rating",
+                            "popular"
+                          ],
+                          "description": "The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order."
                         }
                       },
                       "required": [
@@ -88661,7 +88955,8 @@
                         "priceRange",
                         "facets",
                         "ratingFacet",
-                        "appliedFilters"
+                        "appliedFilters",
+                        "sort"
                       ]
                     }
                   },
@@ -88804,10 +89099,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -88824,9 +89119,10 @@
                 "rating",
                 "popular"
               ],
-              "default": "newest"
+              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which."
             },
             "required": false,
+            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which.",
             "name": "sort",
             "in": "query"
           },
@@ -89283,19 +89579,6 @@
                                 ]
                               }
                             },
-                            "sort": {
-                              "type": "string",
-                              "enum": [
-                                "newest",
-                                "price-asc",
-                                "price-desc",
-                                "name-asc",
-                                "name-desc",
-                                "discount",
-                                "rating",
-                                "popular"
-                              ]
-                            },
                             "minRating": {
                               "type": "integer",
                               "minimum": 1,
@@ -89344,9 +89627,23 @@
                             }
                           },
                           "required": [
-                            "attributes",
-                            "sort"
+                            "attributes"
                           ]
+                        },
+                        "sort": {
+                          "type": "string",
+                          "enum": [
+                            "relevance",
+                            "newest",
+                            "price-asc",
+                            "price-desc",
+                            "name-asc",
+                            "name-desc",
+                            "discount",
+                            "rating",
+                            "popular"
+                          ],
+                          "description": "The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order."
                         }
                       },
                       "required": [
@@ -89357,7 +89654,8 @@
                         "priceRange",
                         "facets",
                         "ratingFacet",
-                        "appliedFilters"
+                        "appliedFilters",
+                        "sort"
                       ]
                     }
                   },
@@ -202072,11 +202370,30 @@
                               "reason": {
                                 "type": "string",
                                 "nullable": true,
-                                "description": "The app's words to the buyer for the latest refusal."
+                                "description": "The app's words to the buyer for the latest refusal; null for a failing function (see failure)."
                               },
                               "since": {
                                 "type": "string",
                                 "description": "When it began refusing every checkout (ISO 8601)."
+                              },
+                              "failing": {
+                                "type": "boolean",
+                                "description": "True when a function the store approved as blocking is failing (checkout refuses every order that needs it); absent or false: its cart rule refuses by its answer."
+                              },
+                              "point": {
+                                "type": "string",
+                                "description": "The function point that refuses (`cart.validate`, `cart.line_prices`, …)."
+                              },
+                              "failure": {
+                                "type": "string",
+                                "enum": [
+                                  "threw",
+                                  "timed_out",
+                                  "invalid_answer",
+                                  "call_refused",
+                                  "could_not_run"
+                                ],
+                                "description": "How a failing function failed, in the platform's words (never the app's text)."
                               }
                             },
                             "required": [
@@ -202086,7 +202403,7 @@
                               "since"
                             ]
                           },
-                          "description": "Active apps whose cart rule refuses every recent checkout (a delivery-slot app with no open slot), so the store sells nothing; empty otherwise."
+                          "description": "Active apps keeping checkout from taking orders: a function approved as blocking that is failing, or a cart rule refusing every recent checkout (a delivery-slot app with no open slot); empty otherwise. One per app, a failing function first."
                         },
                         "databaseStorage": {
                           "type": "object",
@@ -213584,6 +213901,481 @@
         }
       }
     },
+    "/api/v1/admin/settings/catalog": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get catalogue settings",
+        "operationId": "dashboard.catalog.settings_get",
+        "responses": {
+          "200": {
+            "description": "Catalogue settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "defaultListingSort": {
+                          "type": "string",
+                          "enum": [
+                            "newest",
+                            "popular"
+                          ],
+                          "description": "The order category, collection, brand and search listings open in when their address names none: orders that page by cursor. A collection with picked products keeps its own order; a search with words opens best match first. The list may grow."
+                        }
+                      },
+                      "required": [
+                        "revision",
+                        "defaultListingSort"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when reading how storefront listings behave: the order listings open in.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "agent_access.manage",
+            "agent_access.view",
+            "analytics.create",
+            "analytics.edit",
+            "analytics.toggle",
+            "analytics.view",
+            "apps.manage",
+            "apps.use",
+            "apps.view",
+            "attributes.create",
+            "attributes.delete",
+            "attributes.edit",
+            "attributes.view",
+            "categories.create",
+            "categories.delete",
+            "categories.edit",
+            "categories.permanent_delete",
+            "categories.restore",
+            "categories.view",
+            "collections.create",
+            "collections.delete",
+            "collections.edit",
+            "collections.restore",
+            "collections.toggle_status",
+            "collections.view",
+            "conversations.reply",
+            "conversations.view",
+            "customers.create",
+            "customers.delete",
+            "customers.edit",
+            "customers.reset_sign_in",
+            "customers.sync",
+            "customers.view",
+            "customers.view_history",
+            "dashboard.analytics",
+            "dashboard.view",
+            "discounts.create",
+            "discounts.delete",
+            "discounts.edit",
+            "discounts.toggle_status",
+            "discounts.view",
+            "gift_cards.manage",
+            "gift_cards.view",
+            "inventory.manage",
+            "inventory.view",
+            "marketing.send",
+            "media.delete",
+            "media.manage_folders",
+            "media.upload",
+            "media.view",
+            "objects.edit",
+            "objects.view",
+            "orders.change_status",
+            "orders.charge_saved_methods",
+            "orders.create",
+            "orders.delete",
+            "orders.edit",
+            "orders.issue_invoice",
+            "orders.manage_digital_access",
+            "orders.manage_shipments",
+            "orders.manage_warranties",
+            "orders.record_payment",
+            "orders.refund",
+            "orders.restore",
+            "orders.view",
+            "pages.create",
+            "pages.delete",
+            "pages.edit",
+            "pages.publish",
+            "pages.view",
+            "payouts.manage",
+            "products.adjust_stock",
+            "products.bulk_operations",
+            "products.create",
+            "products.delete",
+            "products.edit",
+            "products.permanent_delete",
+            "products.restore",
+            "products.view",
+            "products.view_costs",
+            "reviews.moderate",
+            "reviews.view",
+            "settings.cache.manage",
+            "settings.cache.view",
+            "settings.delivery_locations.edit",
+            "settings.delivery_locations.import",
+            "settings.delivery_locations.view",
+            "settings.delivery_providers.edit",
+            "settings.delivery_providers.view",
+            "settings.footer.edit",
+            "settings.fraud_checker.edit",
+            "settings.fraud_checker.view",
+            "settings.general.edit",
+            "settings.general.view",
+            "settings.header.edit",
+            "settings.notifications.edit",
+            "settings.seo.edit",
+            "settings.shipping_methods.edit",
+            "settings.shipping_methods.view",
+            "settings.theme.edit",
+            "staff.view",
+            "taxes.manage",
+            "taxes.view",
+            "team.manage",
+            "team.manage_roles",
+            "team.view",
+            "webhooks.manage",
+            "webhooks.view"
+          ]
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Save catalogue settings",
+        "operationId": "dashboard.catalog.settings_update",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "defaultListingSort": {
+                    "type": "string",
+                    "enum": [
+                      "newest",
+                      "popular"
+                    ],
+                    "description": "The order category, collection, brand and search listings open in when their address names none: orders that page by cursor. A collection with picked products keeps its own order; a search with words opens best match first. The list may grow."
+                  }
+                },
+                "required": [
+                  "expectedRevision",
+                  "defaultListingSort"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Catalogue settings saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "message",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when changing the order category, collection, brand and search listings open in.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.seo.edit"
+        }
+      }
+    },
     "/api/v1/admin/settings/storefront-url": {
       "get": {
         "tags": [
@@ -214669,6 +215461,427 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "when": "Use when changing the store's theme to another template (built-in or an app's); the draft it replaces stays recoverable.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.theme.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/theme/template-update": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "What the installed release of the draft's app template brings to the draft",
+        "description": "A three-way merge of the draft with the release the store applied (or last reviewed) and the installed release: `improvement` items change what the merchant never touched since; `conflict` items are where the merchant changed it too, and stay theirs unless taken. Null when the draft is on no app template, no active app offers it, or the store is on the installed release. `compare=true` sets the installed release against the draft with no base: every difference is the merchant's choice. One page of items at a time (`offset`). Nothing is written.",
+        "operationId": "dashboard.theme.template_update_get",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "compare",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0,
+              "maximum": 2000
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The update, or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "update": {
+                          "$ref": "#/components/schemas/ThemeTemplateUpdate"
+                        }
+                      },
+                      "required": [
+                        "update"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when checking what a theme app's new release would change in the store's theme, item by item.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Take a template update's chosen changes into the draft (it goes live only when the draft is published)",
+        "description": "Takes exactly the items in `take` into the draft (every other item stays the store's), keeps the draft it replaces as a restore point (reason `app`, naming the template) and records the installed release as the template's base, so the same update is not proposed again. `take: []` records the base alone (the merchant keeps everything as it is). `digest` is the proposal's the merchant reviewed: one that changed since is a conflict. The merged draft passes the save check like any save; `dryRun: true` writes nothing and answers that check's issues for the choice, each with its items.",
+        "operationId": "dashboard.theme.template_update_apply",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedDraftRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "basePublishedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "digest": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "take": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 400
+                    },
+                    "maxItems": 2000,
+                    "description": "The items to take, improvements and conflicts alike; every other item stays the store's."
+                  },
+                  "dryRun": {
+                    "type": "boolean"
+                  },
+                  "compare": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "expectedDraftRevision",
+                  "basePublishedRevision",
+                  "digest",
+                  "take"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The draft's revision (new unless a dry run or nothing taken), how many changes it took, and a dry run's issues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "basePublishedRevision": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "taken": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "issues": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ThemeTemplateUpdateIssue"
+                          },
+                          "maxItems": 20
+                        }
+                      },
+                      "required": [
+                        "revision",
+                        "basePublishedRevision",
+                        "updatedAt",
+                        "taken",
+                        "issues"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 4096,
+          "maxRequestBytes": 65536,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when taking a theme app update's changes (the improvements and the conflicts the merchant chose) into the theme draft.",
           "dryRun": "none",
           "confirmation": "none",
           "impact": "none"
@@ -218661,7 +219874,7 @@
           "Admin - Settings"
         ],
         "summary": "Get checkout readiness",
-        "description": "Inspect delivery setup and customer sign-in diagnostics. Delivery diagnostics do not indicate global checkout availability; each cart validates its applicable delivery requirements.",
+        "description": "Inspect delivery setup and customer sign-in diagnostics, and any active app keeping checkout from taking orders (`app_function_failing`: a function approved as blocking is failing; `app_refusing_checkout`: a cart rule refused every recent checkout). Delivery diagnostics do not indicate global checkout availability; each cart validates its applicable delivery requirements.",
         "responses": {
           "200": {
             "description": "Checkout readiness",
@@ -307256,7 +308469,7 @@
           "Admin - Apps"
         ],
         "summary": "Update an app from its registry (Workers Paid)",
-        "description": "Verifies and stores the new release, then replaces the code. An update that asks for more access waits for a Super Admin's approval. An active app loads the new code and runs its data updates at once; when either fails, the previous version comes back (rolledBack) and the reason is reported.",
+        "description": "Verifies and stores the new release, then replaces the code. An update runs with the access already approved; new access it asks for stays off until a Super Admin approves it (needsApproval). An active app loads the new code and runs its data updates at once; when either fails, the previous version comes back (rolledBack) and the reason is reported.",
         "parameters": [
           {
             "schema": {
@@ -309615,6 +310828,244 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "when": "Use when the merchant wants an installed app stopped while keeping its data and settings.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.manage"
+        }
+      }
+    },
+    "/api/v1/admin/apps/{id}/functions/{point}/blocking": {
+      "post": {
+        "operationId": "dashboard.apps.function_blocking_update",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Let checkout continue when an app's function fails, or let it block checkout again",
+        "description": "For a function the app asks to run as blocking (`onError: \"block\"`). `blocking: false` lets checkout continue when it fails: the store's approval of that blocking is withdrawn (it never grants more), the function keeps running as an optional one, and an update keeps the choice. `blocking: true` approves it as blocking again, a Super Admin's consent like activation. Either change is written to the app's log with who made it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$",
+              "description": "The app's id (vendor.name)."
+            },
+            "required": true,
+            "description": "The app's id (vendor.name).",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cart.transform",
+                "cart.line_prices",
+                "cart.validate",
+                "checkout.discounts",
+                "checkout.shipping_rates",
+                "checkout.payment_methods"
+              ],
+              "description": "The function point (`cart.validate`, `cart.line_prices`, …)."
+            },
+            "required": true,
+            "description": "The function point (`cart.validate`, `cart.line_prices`, …).",
+            "name": "point",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "blocking": {
+                    "type": "boolean"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The app's current revision (every change advances it)."
+                  }
+                },
+                "required": [
+                  "blocking",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "app": {
+                          "$ref": "#/components/schemas/AppDetail"
+                        },
+                        "changed": {
+                          "type": "boolean",
+                          "description": "False when it was already so."
+                        }
+                      },
+                      "required": [
+                        "app",
+                        "changed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 4096,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app's blocking checkout function is failing and the merchant wants checkout to take orders without it (blocking false); approving it as blocking again is the store owner's step in the dashboard.",
           "dryRun": "none",
           "confirmation": "none",
           "impact": "none"
@@ -336215,7 +337666,8 @@
         "summary": "Browse app registries, install or update an app from one, and stop one app or every third-party app at once.",
         "examples": [
           "Are there updates for my apps?",
-          "An app is misbehaving: stop it now."
+          "An app is misbehaving: stop it now.",
+          "Checkout refuses orders because an app keeps failing: let checkout continue without it."
         ],
         "tags": [
           "apps",
@@ -336230,6 +337682,7 @@
           "dashboard.apps.update",
           "dashboard.apps.stop",
           "dashboard.apps.stop_third_party",
+          "dashboard.apps.function_blocking_update",
           "dashboard.apps.get"
         ],
         "requiresFacts": true,
@@ -336237,7 +337690,8 @@
         "requiresVerification": true,
         "rules": [
           "Install and update only when installMode is dashboard (Workers Paid); otherwise give the merchant the installCommand.",
-          "A new install, or an update that asks for more access, waits for a Super Admin's approval in the dashboard.",
+          "A new install waits for a Super Admin's approval in the dashboard. An update runs at once with the access already approved; new access it asks for stays off until approved (needsApproval).",
+          "A failing blocking function (dashboard.apps.get refusing.failing) refuses every order: the merchant may let checkout continue past it (function_blocking_update, blocking false), update or stop the app.",
           "An update may roll back by itself: report rolledBack and its error in plain words.",
           "The emergency stop runs no app code and needs no revision; a Super Admin starts the app again."
         ]
@@ -341133,6 +342587,14 @@
           ]
         },
         {
+          "operationId": "dashboard.apps.function_blocking_update",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-install"
+          ]
+        },
+        {
           "operationId": "dashboard.apps.function_order_get",
           "surface": "dashboard",
           "mode": "curated",
@@ -341565,6 +343027,22 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.catalog_projections.rebuild"
+          ]
+        },
+        {
+          "operationId": "dashboard.catalog.settings_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.catalog.settings_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.catalog.settings_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.catalog.settings_update"
           ]
         },
         {
@@ -346868,6 +348346,22 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.theme.template_switch"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.template_update_apply",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.template_update_apply"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.template_update_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.template_update_get"
           ]
         },
         {

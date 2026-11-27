@@ -8,6 +8,8 @@
  * back, or its look takes the merchant's content by section type; the draft
  * it replaces stays in the history and with the template it leaves. Before
  * the merchant confirms, the dialog shows that plan (`switchStorefrontTemplate`).
+ * An app's new release of the template the draft is on is offered as a theme
+ * update (`ThemeUpdateCard`).
  */
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
@@ -53,6 +55,7 @@ import { useSectionName } from "./theme-editor/use-editor-tree";
 import { useTemplateName } from "./use-template-name";
 import { ThemeAppsUnavailableAlert } from "~/components/admin/apps/ThemeAppParts";
 import { PrivatePagesFallbackAlert } from "./PrivatePagesFallbackAlert";
+import { ThemeUpdateCard } from "./ThemeUpdateCard";
 import { themeAppsUnavailable, type ThemeAppsProblem } from "~/components/admin/apps/theme-app-parts";
 
 type Theme = StorefrontThemeDocument;
@@ -279,6 +282,16 @@ function ThemeOverview({ workspace, refetch }: {
           </div>
         </div>
       </SectionCard>
+
+      {/* An app's new release of the template the draft is on: merged with the merchant's work into the draft. */}
+      <ThemeUpdateCard
+        draft={{ revision: workspace.draft.revision, basePublishedRevision: workspace.draft.basePublishedRevision, template: draft.apps?.template ?? null }}
+        templateName={templateName}
+        sections={draft.pages.home}
+        sectionName={sectionName}
+        canEdit={canEdit}
+        onTaken={refresh}
+      />
 
       <SectionCard title={t("themeTemplates")} description={editor(canEdit ? "templatesHelp" : "readOnly")}>
         <VisualChoice

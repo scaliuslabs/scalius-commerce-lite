@@ -27,6 +27,9 @@ export const APP_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/apps/*/features": { GET: view },
   "/api/v1/admin/apps/*/features/*/enable": { POST: manage },
   "/api/v1/admin/apps/*/features/*/disable": { POST: manage },
+  // A blocking function's failure policy: letting checkout continue narrows
+  // (manage); blocking again is also Super Admin only (enforced by the route).
+  "/api/v1/admin/apps/*/functions/*/blocking": { POST: manage },
   "/api/v1/admin/apps/*/settings": { PUT: manage },
   "/api/v1/admin/apps/*/uninstall": { POST: manage },
   "/api/v1/admin/apps/*/logs": { GET: view },

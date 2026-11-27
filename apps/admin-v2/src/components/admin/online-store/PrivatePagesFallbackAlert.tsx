@@ -20,13 +20,14 @@ import { getLocale, useMessages } from "~/i18n";
 import { formatList } from "@scalius/shared/locale-words";
 import { themePrivateFallbackMessages } from "~/i18n/theme-private-fallback";
 
-type Why = "readability" | "prominence" | "style" | "layout" | "words" | "files" | "unavailable" | "size" | "other";
+type Why = "readability" | "prominence" | "style" | "layout" | "words" | "files" | "unavailable" | "size" | "unfinished" | "other";
 type RepairPart = "tab" | "link" | "slide" | "layout" | "words" | "unknown";
 
 /** Why a page was refused, in the merchant's terms: by where the refused value sits, then its reason. */
 export function privateRefusalWhy(refusal: PrivatePageRefusal): Why {
   if (refusal.reason === "not_available") return "unavailable";
   if (refusal.reason === "too_large") return "size";
+  if (refusal.reason === "compile_unfinished") return "unfinished";
   if (refusal.reason === "foreign_asset") return "files";
   const [, place] = refusal.path.split(".");
   if (place === "pages") return "layout";

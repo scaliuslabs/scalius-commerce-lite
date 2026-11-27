@@ -258,7 +258,10 @@ function renderPaymentRecovery(detail: AccountOrderDetail): void {
   const container = byId("orderPaymentRecovery");
   const methods = byId("orderPaymentRecoveryMethods");
   if (!container) return;
-  recoveryAction = getAccountPaymentRecoveryAction(detail.paymentRecovery, detail.buyerView.paymentAction);
+  // Only on a page the server decided holds a payment step (its chrome, its policy): an order that became
+  // payable after the server read it shows its card on the next load.
+  const marked = document.querySelector("[data-order-detail-page]")?.hasAttribute("data-payment-step") === true;
+  recoveryAction = marked ? getAccountPaymentRecoveryAction(detail.paymentRecovery, detail.buyerView.paymentAction) : null;
   const gateways = availableGateways();
   if (!recoveryAction || gateways.length === 0) return hideRecovery();
   if (!selectedGateway || !gateways.includes(selectedGateway)) {

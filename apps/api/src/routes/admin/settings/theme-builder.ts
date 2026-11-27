@@ -33,9 +33,13 @@ import {
   listThemeRestorePoints,
   restoreThemeRestorePoint,
   switchThemeTemplate,
+  applyThemeTemplateUpdate,
+  getThemeWorkspace,
+  proposeThemeTemplateUpdate,
+  type ThemeTemplateDeclaration,
 } from "@scalius/core/modules/settings";
 import { listPluginInstallations } from "@scalius/core/modules/plugins";
-import { offeredAppTemplateHome, readOfferedAppTemplate } from "../theme-app-templates";
+import { offeredAppTemplateHome, readOfferedAppTemplate, readTemplateUpdateSources } from "../theme-app-templates";
 import { requestAppProviders } from "../../../plugins/providers/app-providers";
 import { ok } from "../../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
@@ -90,6 +94,7 @@ app.openapi(createRoute({
   const db = c.get("db");
   const installations = await listPluginInstallations(db);
   let choice: StorefrontTemplateChoice;
+  let declaration: ThemeTemplateDeclaration | undefined;
   let unresolved: Array<z.infer<typeof themeUnresolvedHandleApiSchema>> = [];
   if ((STOREFRONT_TEMPLATE_IDS as readonly string[]).includes(body.template)) {
     choice = { kind: "core", key: body.template as StorefrontTemplateId };
@@ -98,16 +103,168 @@ app.openapi(createRoute({
     if (!read.ok && read.reason === "missing") throw new NotFoundError("No active app offers that template.");
     if (!read.ok) throw new AppError(422, "template_unavailable", `This template does not fit the store's theme: ${read.problem}`);
     choice = { kind: "app", key: body.template, theme: read.theme };
+    declaration = read.declaration;
     unresolved = read.unresolved.slice(0, 200);
   }
   const switched = await switchThemeTemplate(db, choice, body.expectedDraftRevision, body.basePublishedRevision, requestActorId(c), {
     fromHome: (template) => offeredAppTemplateHome(db, template, installations),
+    declaration,
   });
   return ok(c, {
     ...themeDraftReceipt({ revision: switched.revision, basePublishedRevision: switched.basePublishedRevision, updatedAt: switched.updatedAt }),
     plan: switched.plan,
     unresolved,
   });
+});
+
+// ─── Template updates ────────────────────────────────────────────────────────
+
+/** Most items one page of a proposal lists, and the bytes they take; the dashboard reads the next page from `offset`. */
+const TEMPLATE_UPDATE_PAGE_ITEMS = 200;
+const TEMPLATE_UPDATE_PAGE_BYTES = 40 * 1024;
+/** Most items one apply takes: a proposal is bounded by the template's parts. */
+const TEMPLATE_UPDATE_TAKE_MAX = 2000;
+
+/** The items from `offset` that fit one page (at least one, whatever its size), in order. */
+function pageOf<Item>(items: readonly Item[], offset: number): Item[] {
+  const listed: Item[] = [];
+  let bytes = 0;
+  for (const item of items.slice(offset, offset + TEMPLATE_UPDATE_PAGE_ITEMS)) {
+    bytes += JSON.stringify(item).length;
+    if (bytes > TEMPLATE_UPDATE_PAGE_BYTES && listed.length > 0) break;
+    listed.push(item);
+  }
+  return listed;
+}
+
+const templateUpdateItemSchema = z.object({
+  id: z.string().max(400),
+  kind: z.enum(["improvement", "conflict"]),
+  area: z.enum(["tokens", "blocks", "skins", "privatePages", "home"]),
+  change: z.enum(["set", "add", "remove", "order"]),
+  path: z.array(z.string().max(120)).max(12),
+  mine: z.unknown().optional().openapi({ description: "The store's value now (absent: none); for `order`, the template sections' ids in the store's order." }),
+  theirs: z.unknown().optional().openapi({ description: "The update's value (absent: it removes it); for `order`, the same ids in the update's order." }),
+  replaces: z.string().max(40).optional().openapi({ description: "An added section that takes the place of one the update removes (a renamed id): that section's id." }),
+}).openapi("ThemeTemplateUpdateItem");
+
+const templateUpdateIssueSchema = z.object({
+  path: z.string(),
+  message: z.string(),
+  reason: z.string().nullable(),
+  /** The items the refused value comes from. */
+  itemIds: z.array(z.string().max(400)).max(TEMPLATE_UPDATE_TAKE_MAX),
+}).openapi("ThemeTemplateUpdateIssue");
+
+const templateUpdateSchema = z.object({
+  template: z.string().max(200),
+  /** The release the store's base came from (null: compared with no base); the installed release. */
+  from: z.string().max(80).nullable(),
+  to: z.string().max(80),
+  /** `recorded`: applied or reviewed here; `assumed`: the release installed before an update, the store kept no record of the apply; `none`: compared with no base. */
+  base: z.enum(["recorded", "assumed", "none"]),
+  improvements: z.number().int().nonnegative(),
+  conflicts: z.number().int().nonnegative(),
+  digest: z.string().max(40),
+  /** This page's items, from `offset`. */
+  items: z.array(templateUpdateItemSchema).max(TEMPLATE_UPDATE_PAGE_ITEMS),
+  offset: z.number().int().nonnegative(),
+  /** Items after this page: read them from `offset + items.length`. */
+  moreItems: z.number().int().nonnegative(),
+  /** What the save check refuses in the draft with every improvement taken, each with its items (what the draft already had never counts). */
+  issues: z.array(templateUpdateIssueSchema).max(20),
+  draft: z.object({ revision: revisionSchema, basePublishedRevision: revisionSchema }),
+}).openapi("ThemeTemplateUpdate");
+
+const templateUpdateQuerySchema = z.object({
+  compare: z.enum(["true", "false"]).optional(),
+  offset: z.coerce.number().int().min(0).max(TEMPLATE_UPDATE_TAKE_MAX).optional(),
+});
+
+/** The update for the draft's app template, or null (no app template, no offer, nothing new). */
+async function templateUpdateFor(db: Parameters<typeof readTemplateUpdateSources>[0], compare: boolean) {
+  const workspace = await getThemeWorkspace(db);
+  const key = workspace.draft.theme.apps?.template;
+  if (!key) return null;
+  const read = await readTemplateUpdateSources(db, key, { compare });
+  return read.ok ? read : null;
+}
+
+app.openapi(createRoute({
+  method: "get",
+  path: "/theme/template-update",
+  tags: ["Admin - Settings"],
+  summary: "What the installed release of the draft's app template brings to the draft",
+  description: "A three-way merge of the draft with the release the store applied (or last reviewed) and the installed release: `improvement` items change what the merchant never touched since; `conflict` items are where the merchant changed it too, and stay theirs unless taken. Null when the draft is on no app template, no active app offers it, or the store is on the installed release. `compare=true` sets the installed release against the draft with no base: every difference is the merchant's choice. One page of items at a time (`offset`). Nothing is written.",
+  operationId: "dashboard.theme.template_update_get",
+  request: { query: templateUpdateQuerySchema },
+  responses: {
+    200: { description: "The update, or null", content: { "application/json": { schema: successEnvelope(z.object({ update: templateUpdateSchema.nullable() })) } } },
+    ...errorResponses,
+  },
+}), async (c) => {
+  c.header("Cache-Control", "private, no-store");
+  const db = c.get("db");
+  const query = c.req.valid("query");
+  const read = await templateUpdateFor(db, query.compare === "true");
+  if (!read) return ok(c, { update: null });
+  const proposal = await proposeThemeTemplateUpdate(db, read.sources);
+  if (proposal.items.length === 0) return ok(c, { update: null });
+  return ok(c, {
+    update: {
+      template: read.sources.key,
+      from: read.from,
+      to: read.to,
+      base: read.sources.base === null ? "none" as const : read.assumed ? "assumed" as const : "recorded" as const,
+      improvements: proposal.improvements,
+      conflicts: proposal.conflicts,
+      digest: proposal.digest,
+      ...(() => {
+        const offset = Math.min(query.offset ?? 0, proposal.items.length);
+        const items = pageOf(proposal.items, offset);
+        return { items, offset, moreItems: proposal.items.length - offset - items.length };
+      })(),
+      issues: proposal.issues.slice(0, 20),
+      draft: proposal.draft,
+    },
+  });
+});
+
+app.openapi(createRoute({
+  method: "post",
+  path: "/theme/template-update",
+  tags: ["Admin - Settings"],
+  summary: "Take a template update's chosen changes into the draft (it goes live only when the draft is published)",
+  description: "Takes exactly the items in `take` into the draft (every other item stays the store's), keeps the draft it replaces as a restore point (reason `app`, naming the template) and records the installed release as the template's base, so the same update is not proposed again. `take: []` records the base alone (the merchant keeps everything as it is). `digest` is the proposal's the merchant reviewed: one that changed since is a conflict. The merged draft passes the save check like any save; `dryRun: true` writes nothing and answers that check's issues for the choice, each with its items.",
+  operationId: "dashboard.theme.template_update_apply",
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            ...draftRevisionFields,
+            digest: z.string().min(1).max(40),
+            take: z.array(z.string().max(400)).max(TEMPLATE_UPDATE_TAKE_MAX).openapi({ description: "The items to take, improvements and conflicts alike; every other item stays the store's." }),
+            dryRun: z.boolean().optional(),
+            compare: z.boolean().optional(),
+          }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { description: "The draft's revision (new unless a dry run or nothing taken), how many changes it took, and a dry run's issues", content: { "application/json": { schema: successEnvelope(themeDraftReceiptSchema.extend({ taken: z.number().int().nonnegative(), issues: z.array(templateUpdateIssueSchema).max(20) })) } } },
+    409: conflictResponse,
+    ...errorResponses,
+  },
+}), async (c) => {
+  const body = c.req.valid("json");
+  const db = c.get("db");
+  const read = await templateUpdateFor(db, body.compare === true);
+  if (!read) throw new AppError(409, "theme_template_update_gone", "There is no theme update to take any more. Reload the page.");
+  const saved = await applyThemeTemplateUpdate(db, read.sources, { digest: body.digest, take: body.take, dryRun: body.dryRun === true }, body.expectedDraftRevision, body.basePublishedRevision, requestActorId(c));
+  return ok(c, { ...themeDraftReceipt({ revision: saved.revision, basePublishedRevision: saved.basePublishedRevision, updatedAt: saved.updatedAt }), taken: saved.taken, issues: saved.issues.slice(0, 20) });
 });
 
 // ─── Restore points ──────────────────────────────────────────────────────────

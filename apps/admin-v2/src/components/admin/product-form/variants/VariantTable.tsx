@@ -5,7 +5,7 @@
 import React from "react";
 import { useIsKitSku } from "../kits/kit-sku-ids";
 import { useNavigate } from "@tanstack/react-router";
-import { Blocks, ChevronDown, ChevronRight, Database, PenLine, Printer, Search, Tag, Trash2 } from "lucide-react";
+import { Blocks, ChevronDown, ChevronRight, Database, Printer, Search, Tag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Inset, ReadOnlyValue } from "~/components/ui/field";
@@ -652,12 +652,11 @@ const VariantRow = React.memo(function VariantRow({
   const customerPays = Number.isFinite(variant.price) ? variant.price : null;
   const margin = cost === undefined ? null : costMargin(customerPays, cost, getDecimalPlaces(money.code));
   const actions = React.useMemo<ExtraAction[]>(() => [
-    ...(!readOnly ? [{ label: t("editDetails"), icon: PenLine, onClick: () => onToggleExpand(variant.id) }] : []),
     ...(printable ? [{ label: t("printLabels"), icon: Printer, onClick: () => onPrint([variant.id]) }] : []),
     ...(customData ? [{ label: cf("variantAction"), icon: Database, onClick: () => onCustomData(variant.id) }] : []),
     ...appActions.map((action) => ({ label: action.label, icon: Blocks, destructive: action.destructive, onClick: () => onAppAction(action.key, variant.id) })),
     ...(canRemove ? [{ label: t("stopSelling"), icon: Trash2, destructive: true, onClick: () => onRemove(variant.id) }] : []),
-  ], [readOnly, appActions, canRemove, cf, customData, onAppAction, onCustomData, onPrint, onRemove, onToggleExpand, printable, t, variant.id]);
+  ], [appActions, canRemove, cf, customData, onAppAction, onCustomData, onPrint, onRemove, printable, t, variant.id]);
 
   return (
     <div data-variant-row={variant.id} className={cn(layout.grid, "border-b py-1.5", selected && "bg-muted/50")}>
@@ -673,19 +672,10 @@ const VariantRow = React.memo(function VariantRow({
         onChange={(imageId) => change({ imageId: imageId ?? null })}
       />
       <div className={cn("min-w-0", depth === 1 && "ps-3")}>
-        {/* Only the name is the button, so its focus ring hugs the text. */}
-        <button
-          type="button"
-          onClick={() => onToggleExpand(variant.id)}
-          aria-expanded={expanded}
-          aria-label={t("moreFieldsFor", { name })}
-          title={name}
-          className="inline-flex h-11 max-w-full items-center gap-1 rounded-sm sm:pointer-fine:h-9 text-start font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
+        <p title={name} className="flex h-11 max-w-full items-center sm:pointer-fine:h-9 font-medium">
           <span className="truncate">{label}</span>
-          {expanded ? <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" /> : null}
-        </button>
-        <div className="flex min-w-0 items-center gap-2 text-body text-muted-foreground">
+        </p>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-body text-muted-foreground">
           {/* A code is read whole: it wraps anywhere rather than being cut short (DESIGN F5). */}
           <IdText value={variant.sku} copy wrap className="min-w-0" />
           {/* The compare-at price, crossed out and compact; the full sentence is its name and tooltip. */}
@@ -696,6 +686,19 @@ const VariantRow = React.memo(function VariantRow({
               <span className="sr-only">{t("compareAtWas", { amount: money.whole(compareAt) })}</span>
             </span>
           ) : null}
+          {/* The row's details: advanced fields, then apps' cards for this SKU. */}
+          <button
+            type="button"
+            data-variant-more
+            onClick={() => onToggleExpand(variant.id)}
+            aria-expanded={expanded}
+            className="inline-flex min-h-11 shrink-0 items-center gap-0.5 rounded-sm sm:pointer-fine:min-h-0 font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {/* The visible word starts the name (WCAG 2.5.3); aria-expanded alone says open or closed. */}
+            {t("more")}
+            <span className="sr-only"> {name}</span>
+            <ChevronDown aria-hidden="true" className={cn("size-3.5 shrink-0 transition-transform", expanded && "rotate-180")} />
+          </button>
         </div>
         {photoError ? <p className="text-body text-destructive">{photoError}</p> : null}
       </div>

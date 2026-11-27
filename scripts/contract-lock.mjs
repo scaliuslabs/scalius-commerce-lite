@@ -104,7 +104,7 @@ function versionedJson(root, dir) {
     .flatMap((version) => readdirSync(join(at, version)).filter((name) => name.endsWith(".json")).sort().map((file) => `${dir}/${version}/${file}`));
 }
 
-/** Every frozen file at this tree: the theme goldens and their upgraded outputs, and each replay bundle built against FREEZE or later with its expectation. */
+/** Every frozen file at this tree: the theme goldens and their upgraded outputs, and each replay bundle built against FREEZE or later with its expectation, its re-freezes and additions, and its replay settings. */
 export function frozenFiles(root = DEFAULT_ROOT) {
   const files = [...versionedJson(root, GOLDENS_DIR), ...versionedJson(root, `${GOLDENS_DIR}/upgraded`)];
   for (const set of REPLAY_SETS) {
@@ -113,11 +113,13 @@ export function frozenFiles(root = DEFAULT_ROOT) {
     for (const bundle of JSON.parse(readFileSync(listed, "utf8")).bundles ?? []) {
       if (comparePluginVersions(bundle.builtAgainst, FREEZE) < 0) continue;
       const expectation = `${bundle.id}-${bundle.version}@${bundle.builtAgainst}`;
-      const refreezes = existsSync(join(root, set, "expected")) ? readdirSync(join(root, set, "expected")).filter((name) => name.startsWith(`${expectation}.runtime-`)).sort() : [];
-      files.push(`${set}/${bundle.file}`, `${set}/expected/${expectation}.json`, ...refreezes.map((name) => `${set}/expected/${name}`));
+      // Beside it: its re-freezes for other runtimes and the units it gained later (`.added-<n>`), frozen once written.
+      const refreezes = existsSync(join(root, set, "expected")) ? readdirSync(join(root, set, "expected")).filter((name) => name.startsWith(`${expectation}.runtime-`) || name.startsWith(`${expectation}.added-`)).sort() : [];
+      files.push(`${set}/${bundle.file}`, `${set}/expected/${expectation}.json`, ...refreezes.map((name) => `${set}/expected/${name}`), ...(bundle.settings ? [`${set}/${bundle.settings}`] : []));
     }
   }
-  return files;
+  // Several releases may name one replay settings file: it is frozen once.
+  return [...new Set(files)];
 }
 
 function readLedger(root, path) {
@@ -431,11 +433,11 @@ function frozenFilesAt(root, ref) {
         const expectation = `${bundle.id}-${bundle.version}@${bundle.builtAgainst}`;
         let refreezes = [];
         try {
-          refreezes = git(root, ["ls-tree", "--name-only", ref, "--", `${set}/expected/`]).split("\n").filter((path) => path.startsWith(`${set}/expected/${expectation}.runtime-`));
+          refreezes = git(root, ["ls-tree", "--name-only", ref, "--", `${set}/expected/`]).split("\n").filter((path) => path.startsWith(`${set}/expected/${expectation}.runtime-`) || path.startsWith(`${set}/expected/${expectation}.added-`));
         } catch {
           refreezes = [];
         }
-        return [`${set}/${bundle.file}`, `${set}/expected/${expectation}.json`, ...refreezes];
+        return [`${set}/${bundle.file}`, `${set}/expected/${expectation}.json`, ...refreezes, ...(bundle.settings ? [`${set}/${bundle.settings}`] : [])];
       });
   });
   return [...goldens, ...bundles];

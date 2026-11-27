@@ -1597,6 +1597,27 @@
       "when": 1795458254005,
       "tag": "0227_dead_record_states",
       "breakpoints": true
+    },
+    {
+      "idx": 228,
+      "version": "6",
+      "when": 1795763456529,
+      "tag": "0228_gift_card_liveness",
+      "breakpoints": true
+    },
+    {
+      "idx": 229,
+      "version": "6",
+      "when": 1795764456529,
+      "tag": "0229_kit_item_product_queue",
+      "breakpoints": true
+    },
+    {
+      "idx": 230,
+      "version": "6",
+      "when": 1795782797334,
+      "tag": "0230_theme_template_bases",
+      "breakpoints": true
     }
   ]
 }

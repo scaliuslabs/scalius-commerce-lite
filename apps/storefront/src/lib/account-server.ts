@@ -7,6 +7,7 @@ import { resolveBackendTarget } from "@/lib/api/transport";
 import { sessionCookieOf } from "@/lib/account-inbox-server";
 import { readAccountSummary, type AccountSummary } from "@/lib/account-tabs";
 import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
+import type { OrderPaymentFacts } from "@/lib/private-pages/payment-step";
 import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
 import {
   MARKETING_CONSENT_STATUSES,
@@ -133,6 +134,23 @@ export async function readAccountOrders(request: Request, cursor: string | null)
       phoneVerification: typeof phone === "string" && phone.trim() ? { phone: phone.trim() } : null,
     },
   };
+}
+
+/**
+ * What the account's order page decides its payment step from
+ * (lib/private-pages/payment-step.ts): the order's buyer view and recovery,
+ * as the API sends them to the browser (no app draws here). `not_found` is an
+ * order this buyer does not have (another buyer's, or none).
+ */
+export async function readAccountOrderPayment(
+  request: Request,
+  orderId: string,
+): Promise<AccountRead<OrderPaymentFacts> | { ok: false; reason: "not_found" }> {
+  const answer = await callAccountApi(request, `/api/v1/customer-auth/orders/${encodeURIComponent(orderId)}`);
+  if (answer?.status === 404) return { ok: false, reason: "not_found" };
+  const data = answer?.status === 200 ? answer.data as Partial<OrderPaymentFacts> & { order?: unknown } | null : null;
+  if (!data?.order || !data.buyerView) return failed(answer);
+  return { ok: true, data: { buyerView: data.buyerView, paymentRecovery: data.paymentRecovery ?? null } };
 }
 
 /** The signed-in customer's profile. */

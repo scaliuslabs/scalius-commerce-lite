@@ -6,7 +6,7 @@
 // the light or dark switch); this adds what app components get elsewhere:
 //
 // - `data-scalius-signed-in` on each shadow host, kept with the sign-in hint
-//   (the inline script after a host sets it before first paint);
+//   (the server renders it from the session, so it holds with scripts off);
 // - `[data-scalius-cart-count]` inside a shadow root: the cart's item count;
 // - `[data-cart-open]` inside a shadow root, and the store's phone tab bar
 //   under it: opens the cart drawer;

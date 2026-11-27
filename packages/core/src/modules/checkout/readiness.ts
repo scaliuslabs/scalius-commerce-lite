@@ -20,7 +20,13 @@ import { type CheckoutReadinessOptions, getCustomerSignInReadiness } from "../cu
 
 export async function getCheckoutDeliveryReadiness(
     db: Database,
-): Promise<CheckoutDeliveryReadiness> {
+    /**
+     * One more scalar a caller reads in the shipping statement, which always
+     * answers one row (checkout configuration's live gift cards, on a store
+     * that takes only cash): no D1 call of its own.
+     */
+    alongside?: SQL<unknown>,
+): Promise<CheckoutDeliveryReadiness & { alongside?: unknown }> {
     deps.shipping();
     deps.locations();
 
@@ -48,10 +54,11 @@ export async function getCheckoutDeliveryReadiness(
     `);
 
     const [activeShippingMethodRows, activeHierarchyRows] = await Promise.all([
+        // A one-row source joined with the first active method: one row whether a method exists or not.
         db
-            .select({ id: shippingMethods.id })
-            .from(shippingMethods)
-            .where(and(...shippingConditions))
+            .select({ id: shippingMethods.id, alongside: alongside ?? sql`NULL` })
+            .from(sql`(SELECT 1 AS one) AS readiness_row`)
+            .leftJoin(shippingMethods, and(...shippingConditions))
             .limit(1),
         db
             .select({ id: places.id })
@@ -60,7 +67,7 @@ export async function getCheckoutDeliveryReadiness(
             .limit(1),
     ]);
 
-    const hasActiveShippingMethod = activeShippingMethodRows.length > 0;
+    const hasActiveShippingMethod = activeShippingMethodRows[0]?.id != null;
     const hasActiveDeliveryHierarchy = activeHierarchyRows.length > 0;
     const issues: ReadinessIssue[] = [];
     if (!hasActiveShippingMethod) issues.push(CHECKOUT_READINESS_SHIPPING_ISSUE);
@@ -71,6 +78,7 @@ export async function getCheckoutDeliveryReadiness(
         ...value,
         hasActiveShippingMethod,
         hasActiveDeliveryHierarchy,
+        ...(alongside ? { alongside: activeShippingMethodRows[0]?.alongside } : {}),
     };
 }
 
@@ -81,17 +89,29 @@ export async function getCheckoutReadiness(
         requireDeliverySetup?: boolean;
     } = {},
 ): Promise<CheckoutReadiness> {
-    const [delivery, signIn] = await Promise.all([
-        getCheckoutDeliveryReadiness(db),
+    return (await getCheckoutReadinessAlongside(db, options)).readiness;
+}
+
+/** `getCheckoutReadiness` with one more scalar read in its shipping statement (`alongside`). */
+export async function getCheckoutReadinessAlongside(
+    db: Database,
+    options: CheckoutReadinessOptions & { requireDeliverySetup?: boolean } = {},
+    alongside?: SQL<unknown>,
+): Promise<{ readiness: CheckoutReadiness; alongside?: unknown }> {
+    const [{ alongside: read, ...delivery }, signIn] = await Promise.all([
+        getCheckoutDeliveryReadiness(db, alongside),
         getCustomerSignInReadiness(db, options),
     ]);
     const value = options.requireDeliverySetup === false ? signIn : mergeReadiness(delivery, signIn);
 
     return {
-        ...value,
-        hasActiveShippingMethod: delivery.hasActiveShippingMethod,
-        hasActiveDeliveryHierarchy: delivery.hasActiveDeliveryHierarchy,
-        customerSignInRequired: signIn.customerSignInRequired,
-        hasUsableCustomerSignIn: signIn.hasUsableCustomerSignIn,
+        readiness: {
+            ...value,
+            hasActiveShippingMethod: delivery.hasActiveShippingMethod,
+            hasActiveDeliveryHierarchy: delivery.hasActiveDeliveryHierarchy,
+            customerSignInRequired: signIn.customerSignInRequired,
+            hasUsableCustomerSignIn: signIn.hasUsableCustomerSignIn,
+        },
+        alongside: read,
     };
 }

@@ -22,7 +22,7 @@ export { loadRegistryContract };
 
 // ── Arguments ────────────────────────────────────────────────────────────
 
-const VALUE_FLAGS = new Set(["--dir", "--key", "--developer", "--out", "--name", "--base-url", "--registry", "--version", "--plan", "--fixture", "--store", "--scalius"]);
+const VALUE_FLAGS = new Set(["--dir", "--key", "--developer", "--out", "--name", "--base-url", "--registry", "--version", "--plan", "--fixture", "--store", "--scalius", "--previous"]);
 
 /** Splits `pnpm plugin` arguments into positionals and flags, so a flag's value is never mistaken for a path. */
 export function parseCommandArgs(args) {

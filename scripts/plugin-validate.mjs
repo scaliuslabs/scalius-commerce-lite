@@ -2,11 +2,11 @@
 // plugin, run on the author's machine, reported one line each. Packs nothing
 // and writes nothing.
 
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { bundlePlugin, componentJobs, installedSdk, loadPluginContract, packStorefront, pluginPackageDir, resolvePluginEntry, sdkBuildStamp, SDK_DIR, sealBundle, smokeSettings } from "./plugin-build.mjs";
 import { sdkReference } from "./plugin-host.mjs";
-import { shownPath } from "./plugin-registry.mjs";
+import { readZip, shownPath } from "./plugin-registry.mjs";
 import { PLUGIN_PACKAGE_FILE_MAX_BYTES } from "../packages/shared/src/plugins/package-limits.ts";
 
 export const BUNDLE_WARN_BYTES = 1024 * 1024;
@@ -17,7 +17,7 @@ const mib = (bytes) => `${(bytes / 1024 / 1024).toFixed(2)} MiB`;
  * Runs the checks on the plugin package at `directory`. Returns
  * `{ ok, id, checks }`; each check is `{ status: "pass" | "fail" | "warn" | "note", label, detail? }`.
  */
-export async function validatePlugin(directory) {
+export async function validatePlugin(directory, options = {}) {
   const checks = [];
   const add = (status, label, detail) => checks.push({ status, label, ...(detail ? { detail } : {}) });
   const result = (id = null) => ({ ok: !checks.some((check) => check.status === "fail"), id, checks });
@@ -148,6 +148,17 @@ export async function validatePlugin(directory) {
     for (const problem of contract.storefrontTemplateIconFileProblems(manifest, publicFiles)) add("fail", "Theme templates", problem);
   }
 
+  // Against the release stores have now (`--previous`): what this one does to their template updates.
+  if (options.previous) {
+    const previous = previousManifest(options.previous);
+    if (!previous) add("warn", "Template updates", `${options.previous} holds no manifest.json to compare with.`);
+    else {
+      const notes = contract.storefrontTemplateReleaseNotes({ templates: previous.storefront?.templates ?? [] }, manifest.storefront);
+      for (const note of notes) add(note.level, "Template updates", note.message);
+      if (notes.length === 0) add("pass", "Template updates", `stores on ${previous.version ?? "the previous release"} take this release's template changes in place`);
+    }
+  }
+
   // Card fields a template names: a store keeps only the ones it has, so these warn, never fail.
   for (const note of contract.storefrontTemplateCardFieldNotes(manifest)) add(note.level, "Template card fields", note.message);
 
@@ -165,6 +176,16 @@ export async function validatePlugin(directory) {
   else add("pass", "Bundle size", mib(size));
 
   return result(manifest.id);
+}
+
+/** The manifest of a packed release (the upload ZIP, or a dist folder); null when it has none. */
+function previousManifest(path) {
+  try {
+    const bytes = statSync(path).isFile() ? readZip(readFileSync(path)).get("manifest.json") : readFileSync(join(path, "manifest.json"));
+    return bytes ? JSON.parse(Buffer.from(bytes).toString("utf8")) : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -405,14 +426,14 @@ export function storefrontSummary(storefront, compiledFiles) {
 }
 
 /** Runs the checks, prints them and sets the exit code. */
-export async function runValidate(directory) {
+export async function runValidate(directory, options = {}) {
   if (!existsSync(directory)) {
     console.error(`✗ ${shownPath(directory)} does not exist.`);
     process.exitCode = 1;
     return null;
   }
   console.log(`Checking ${shownPath(directory)}`);
-  const outcome = await validatePlugin(directory);
+  const outcome = await validatePlugin(directory, options);
   console.log(formatChecks(outcome.checks));
   const failed = outcome.checks.filter((check) => check.status === "fail").length;
   if (failed > 0) {

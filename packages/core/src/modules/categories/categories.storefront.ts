@@ -7,6 +7,7 @@ import { sql, eq, and } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { publicCategoryConditions } from "./categories.publication";
 import { deps } from "../../cache-deps";
+import { selectSettingsDocuments, type SettingsDocumentRow } from "../../settings-store";
 import {
   presentStorefrontCustomFields,
   selectStorefrontCustomFieldRows,
@@ -173,15 +174,22 @@ export async function getPublicCategorySummaries(
  * Returns a single category by slug for the storefront, with its published
  * sub-categories and its public breadcrumb (root first, ending with the
  * category). The three reads share one batch, so the tree adds no round trip.
+ * `settings`: settings documents its page also needs (the catalogue's default
+ * listing order), read in the same batch and returned as `settingsRows`.
  * Returns null if not found, not published or soft-deleted.
  */
-export async function getPublicCategoryBySlug(db: Database, slug: string, translation: TranslationScope | null = null) {
+export async function getPublicCategoryBySlug(
+    db: Database,
+    slug: string,
+    translation: TranslationScope | null = null,
+    options: { settings?: readonly { key: string }[] } = {},
+) {
     deps.anyCategory();
     // A localized handle can name the category (MARKETS-DESIGN D9).
     deps.localizedSlugSpace("category");
     const tree = publicCategoryTreeContextQueries(db, slug, STOREFRONT_CATEGORY_PAGE_CHILD_LIMIT, translation);
     const categoryId = publishedCategoryIdBySlug(slug, translation);
-    const [rows, children, breadcrumb, customFieldRows] = await db.batch([
+    const statements = [
         db
             .select({
                 // Its handle in every language (hreflang alternates), at the root too.
@@ -210,7 +218,13 @@ export async function getPublicCategoryBySlug(db: Database, slug: string, transl
         tree.children,
         tree.breadcrumb,
         selectStorefrontCustomFieldRows(db, "category", categoryId),
-    ]);
+    ] as const;
+    // The page's settings documents ride the same batch: no D1 call of their own.
+    const results = await db.batch(options.settings?.length
+        ? [...statements, selectSettingsDocuments(db, options.settings)] as unknown as typeof statements
+        : statements);
+    const [rows, children, breadcrumb, customFieldRows] = results;
+    const settingsRows = (results as unknown as unknown[])[statements.length] as SettingsDocumentRow[] | undefined;
     const read = rows[0];
     if (!read) return null;
     const { localizedSlugs: localizedSlugsText, ...category } = translateRow(translation, "category", read, CATEGORY_FIELDS)!;
@@ -222,6 +236,8 @@ export async function getPublicCategoryBySlug(db: Database, slug: string, transl
         /** The category's handle by language (`localized_slugs`) and its source handle; absent without a localized handle. */
         ...(Object.keys(alternateSlugs).length > 0 ? { localizedSlugs: alternateSlugs, sourceSlug: read.slug } : {}),
         depth: Number(category.depth),
+        /** The `settings` documents' rows, when asked for. */
+        ...(settingsRows ? { settingsRows } : {}),
         /** Storefront-visible custom fields, in the merchant's order. */
         customFields: presentStorefrontCustomFields(customFieldRows as StorefrontCustomFieldRow[]),
         children: translateRows(translation, "category", children as PublicCategoryChild[], NAME_FIELDS),

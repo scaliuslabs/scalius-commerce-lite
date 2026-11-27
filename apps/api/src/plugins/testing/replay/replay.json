@@ -8,7 +8,8 @@
       "sha256": "d9bbccba206a3ab4ebe0ba31532bd578f99e19e33ba6f2bb122d8d2bf4d71b5d",
       "builtAgainst": "2.0.0-beta.8",
       "sdk": "2.0.0-beta.8",
-      "note": "the SDK's delivery-slots example in a scaffolded app, built at cf32c0969d"
+      "note": "the SDK's delivery-slots example in a scaffolded app, built at cf32c0969d",
+      "settings": "acme.delivery-slots.replay-settings.json"
     },
     {
       "file": "2.0.0-beta.8/acme.starter-theme-0.1.0.zip",

@@ -546,14 +546,15 @@ export const MUTATIONS = {
 // ─── A theme's chrome on the buyer's own pages (buyer-chrome.browser.mjs `--mutations`) ───
 const CHROME = "apps/storefront/src/components/private/PrivateChrome.astro";
 const CHROME_STYLE = "apps/storefront/src/lib/private-pages/chrome-style.ts";
-const SHADOW = '<scalius-chrome data-chrome={target}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome>';
+const SHADOW = '<scalius-chrome data-chrome={target} data-color-scheme={colorScheme ?? undefined} data-scalius-signed-in={signedIn}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome>';
+const BUYER_CHROME_SCRIPT = "apps/storefront/src/scripts/buyer-chrome.ts";
 const CSS = "packages/shared/src/plugins/buyer-chrome-css.ts";
 const REBUILD = "packages/shared/src/plugins/inert-html.ts";
 /** Each names the check of buyer-chrome.browser.mjs that must fail under it. */
 export const CHROME_MUTATIONS = {
   "C1 no shadow root": {
     why: "the chrome is drawn in the page itself: its sheet and its layers reach the page",
-    rewrites: [rewrite(CHROME, SHADOW, '<scalius-chrome data-chrome={target}><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></scalius-chrome>')],
+    rewrites: [rewrite(CHROME, SHADOW, '<scalius-chrome data-chrome={target} data-color-scheme={colorScheme ?? undefined} data-scalius-signed-in={signedIn}><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></scalius-chrome>')],
     expect: /^shadow: the (?:header|footer) is drawn without a shadow root|^style: |^covered: /,
   },
   "C2 a form kept": {
@@ -597,6 +598,21 @@ export const CHROME_MUTATIONS = {
     ],
     // The panel check, or the markup check's own finding: a region's markup that names a popover.
     expect: /^panel: |^covered: |^markup: .*\bpopover(?:target)?>/,
+  },
+  "C9 the sign-in hint left to the script": {
+    why: "the server renders no sign-in hint on the host: with scripts off a signed-in buyer sees the theme's guest version",
+    rewrites: [rewrite(CHROME, 'const signedIn = getCustomerSessionTokenFromCookie(Astro.request.headers.get("cookie")) !== null ? "" : undefined;', "const signedIn = undefined;")],
+    expect: /^no script: signed-in versions/,
+  },
+  "C10 no store button without scripts": {
+    why: "with scripts off the theme's drawer has no button that opens it",
+    rewrites: [rewrite(CHROME, "{drawers.length > 0 && (", "{false && (")],
+    expect: /^no script: the store draws no button/,
+  },
+  "C11 a count read once": {
+    why: "the header's count reads the cart at load and never follows it",
+    rewrites: [rewrite(BUYER_CHROME_SCRIPT, "    cartStore.subscribe((state) => {", "    [cartStore.get()].forEach((state) => {")],
+    expect: /^cart count: (?:after|on the next|back on)/,
   },
 };
 

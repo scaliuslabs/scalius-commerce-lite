@@ -1420,6 +1420,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     examples: [
       "Are there updates for my apps?",
       "An app is misbehaving: stop it now.",
+      "Checkout refuses orders because an app keeps failing: let checkout continue without it.",
     ],
     tags: ["apps", "plugins", "registry", "security"],
     operationIds: [
@@ -1429,6 +1430,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
       "dashboard.apps.update",
       "dashboard.apps.stop",
       "dashboard.apps.stop_third_party",
+      "dashboard.apps.function_blocking_update",
       "dashboard.apps.get",
     ],
     requiresFacts: true,
@@ -1436,7 +1438,8 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     requiresVerification: true,
     rules: [
       "Install and update only when installMode is dashboard (Workers Paid); otherwise give the merchant the installCommand.",
-      "A new install, or an update that asks for more access, waits for a Super Admin's approval in the dashboard.",
+      "A new install waits for a Super Admin's approval in the dashboard. An update runs at once with the access already approved; new access it asks for stays off until approved (needsApproval).",
+      "A failing blocking function (dashboard.apps.get refusing.failing) refuses every order: the merchant may let checkout continue past it (function_blocking_update, blocking false), update or stop the app.",
       "An update may roll back by itself: report rolledBack and its error in plain words.",
       "The emergency stop runs no app code and needs no revision; a Super Admin starts the app again.",
     ],

@@ -9,7 +9,7 @@
 import { resolveStorefrontTheme } from "@scalius/shared/storefront-theme";
 import { answerFixtureApi, entryTheme, galleryApiBase, galleryStoreShape, GALLERY_API_PREFIX, unansweredReads } from "./api";
 import { galleryEntries, galleryEntry, GALLERY_ACCOUNT_PAGES, type GalleryEntry, type GalleryPage } from "./entries";
-import { GALLERY_ACCOUNT_SESSION, GALLERY_CLAIM, GALLERY_THREAD_ID } from "./account";
+import { GALLERY_ACCOUNT_SESSION, GALLERY_CLAIM, GALLERY_PAID_ORDER_ID, GALLERY_THREAD_ID } from "./account";
 import { getOrderReceiptCookieName } from "../lib/order-receipt-cookie";
 import { galleryCartSeed } from "./cart-seed";
 import { installGalleryListingApp } from "./listing-app-extension";
@@ -53,6 +53,7 @@ const PAGES: Record<GalleryPage, { module: string; path: (entry: GalleryEntry) =
   account: { module: "/src/pages/account.astro", path: () => "/account", params: () => ({}) },
   "account-inbox": { module: "/src/pages/account/inbox/index.astro", path: () => "/account/inbox", params: () => ({}) },
   "account-order": { module: "/src/pages/account/orders/[id].astro", path: () => `/account/orders/${GALLERY_CLAIM.orderId}`, params: () => ({ id: GALLERY_CLAIM.orderId }) },
+  "account-order-paid": { module: "/src/pages/account/orders/[id].astro", path: () => `/account/orders/${GALLERY_PAID_ORDER_ID}`, params: () => ({ id: GALLERY_PAID_ORDER_ID }) },
   "account-profile-remove-address": { module: "/src/pages/account/profile.astro", path: () => "/account/profile", params: () => ({}) },
   "account-profile-remove-card": { module: "/src/pages/account/profile.astro", path: () => "/account/profile", params: () => ({}) },
   "account-warranty-claim-form": { module: "/src/pages/account/warranties.astro", path: () => "/account/warranties?claim=wty_gallery_open01", params: () => ({}) },

@@ -24,6 +24,8 @@ import {
   functionCircuitOpen,
   listFunctionCircuits,
   listRefusingFunctions,
+  latestPluginErrorLine,
+  FUNCTION_FAILURES,
   isFirstPartyBundledPlugin,
   isOfficialPluginKey,
   isThirdPartyPlugin,
@@ -37,6 +39,8 @@ import {
   pluginNeedsApproval,
   requirePluginInstallation,
   retryPluginEventDelivery,
+  setPluginFunctionBlocking,
+  pluginApprovableRequest,
   writePluginSettings,
   type PluginEventDeliveryView,
   type PluginInstallation,
@@ -235,7 +239,7 @@ const appSummarySchema = z.object({
   ...listingSummaryFields,
   source: z.enum(["bundled", "registry", "upload"]),
   status: z.enum(["installed", "active", "disabled", "failed"]),
-  needsApproval: z.boolean().openapi({ description: "An update asks for more access than was approved; the app waits until a Super Admin approves it." }),
+  needsApproval: z.boolean().openapi({ description: "The app asks for access that is not approved (an update's new permissions, or a blocking the store turned off): it keeps running with what was approved, and the rest stays off until a Super Admin approves it (`added` lists it)." }),
   thirdParty: z.boolean().openapi({ description: "Not published by Scalius: the emergency switch for third-party apps stops it." }),
   signed: z.boolean().openapi({ description: "Its code was verified against a trusted developer key (registry or signed upload); bundled code is the operator's own." }),
   failureReason: z.string().nullable(),
@@ -336,6 +340,10 @@ const appDetailSchema = appSummarySchema.extend({
   request: grantSchema,
   granted: grantSchema.nullable(),
   added: grantSchema.openapi({ description: "What the request adds to the approved grant (everything before the first approval)." }),
+  checkoutContinues: z.array(z.object({
+    point: z.enum(PLUGIN_FUNCTION_POINTS),
+    at: z.string().openapi({ description: "When the store turned its blocking off (ISO 8601)." }),
+  })).optional().openapi({ description: "Function points the app asks to block checkout at where the store lets checkout continue when they fail (dashboard.apps.function_blocking_update). Not part of `request` or `added`: only the store gives the blocking back." }),
   scopes: z.array(scopeRowSchema).openapi({ description: "The requested scopes, for the consent screen." }),
   features: z.array(appFeatureSchema).openapi({ description: "Parts of the app turned on one at a time; each starts off. Off features' providers, settings, routes and jobs do not run and are not listed here." }),
   activatedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
@@ -352,8 +360,13 @@ const appDetailSchema = appSummarySchema.extend({
     refusals: z.number().int().openapi({ description: "Buyers' checkouts the app refused with none accepted between, counted at most once every five minutes." }),
     since: z.string().openapi({ description: "The first of them (ISO 8601)." }),
     lastAt: z.string().openapi({ description: "The latest (ISO 8601)." }),
-    reason: z.string().nullable().openapi({ description: "The app's words to the buyer for the latest refusal." }),
-  }).nullable().openapi({ description: "The app's cart rule is refusing every recent checkout (as a delivery-slot app with no open slot does); null otherwise. An accepted checkout clears it." }),
+    reason: z.string().nullable().openapi({ description: "The app's words to the buyer for the latest refusal; null for a failing blocking function (see failure and lastError)." }),
+    failing: z.boolean().optional().openapi({ description: "True when a function the store approved as blocking keeps failing (its circuit is open, or it failed as many times as opens one with no good answer between), so checkout refuses every order that needs it (turn its blocking off with dashboard.apps.function_blocking_update, update the app, or stop it)." }),
+    failedOnce: z.boolean().optional().openapi({ description: "True when such a function failed (that checkout was refused) but not often enough to be failing; lastAt is the latest." }),
+    point: z.string().optional().openapi({ description: "The function point that refuses." }),
+    failure: z.enum(FUNCTION_FAILURES).optional().openapi({ description: "How a blocking function failed, in the platform's words: threw, timed_out, invalid_answer, call_refused (a read it declared was refused) or could_not_run." }),
+    lastError: z.string().nullable().optional().openapi({ description: "The app's latest error at that point, as its log has it (the app's own text)." }),
+  }).nullable().openapi({ description: "The app keeps checkout from taking orders: a function approved as blocking is failing, or its cart rule refuses every recent checkout (as a delivery-slot app with no open slot does); null otherwise. A good answer clears it." }),
   settings: z.object({
     fields: z.array(settingFieldSchema),
     values: z.record(z.string(), settingValueSchema),
@@ -624,7 +637,8 @@ async function themeUsage(db: Database, installation: PluginInstallation) {
 async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstallation) {
   const db = c.get("db");
   const { manifest } = installation;
-  const request = pluginGrantRequest(installation.declaredManifest, installation.features);
+  // What approval would approve: blockings the store turned off are given back only by the store.
+  const request = pluginApprovableRequest(installation, installation.features);
   const described = describePluginSettings(installation);
   const caps = planLimits().plugins;
   const [approver, lastRuns, scopes, registrySettings, features, uses, connections, usage, circuits, refusing] = await Promise.all([
@@ -639,7 +653,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
     providerConnections(db, installation, manifest.providers),
     themeUsage(db, installation),
     listFunctionCircuits(db, installation.pluginId),
-    listRefusingFunctions(db, installation.pluginId),
+    listRefusingFunctions(db, installation.pluginId, { includeFailedOnce: true }),
   ]);
   const available = runtimeAvailable(c, installation);
   const nowSeconds = Math.floor(Date.now() / 1000);
@@ -651,6 +665,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
     request,
     granted: installation.grant,
     added: pluginGrantAdditions(installation.grant, request),
+    checkoutContinues: installation.checkoutContinues.map((entry) => ({ point: entry.point, at: new Date(entry.at * 1000).toISOString() })),
     scopes,
     features,
     activatedBy: approver ? { id: approver.id, name: approver.name } : null,
@@ -670,6 +685,14 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
         since: new Date(refusing[0].since * 1000).toISOString(),
         lastAt: new Date(refusing[0].lastAt * 1000).toISOString(),
         reason: refusing[0].reason,
+        failing: refusing[0].failing,
+        failedOnce: refusing[0].failedOnce,
+        point: refusing[0].point,
+        ...(refusing[0].failure ? { failure: refusing[0].failure } : {}),
+        // The app's own text, from its log: this page is read with apps.view.
+        ...(refusing[0].failing || refusing[0].failedOnce
+          ? { lastError: (await latestPluginErrorLine(db, installation.pluginId, `function:${refusing[0].point}:`))?.message ?? null }
+          : {}),
       }
       : null,
     settings: {
@@ -1224,6 +1247,55 @@ app.openapi(deactivateRoute, async (c) => {
   const { deactivatePluginWithHooks } = await lifecycle();
   const result = await deactivatePluginWithHooks(lifecycleContext(c), id, { expectedRevision: c.req.valid("json").expectedRevision });
   return ok(c, { app: await detail(c, result.installation), hookError: result.hookError });
+});
+
+// ── A blocking function's failure policy (the store's override) ──
+
+const functionBlockingRoute = createRoute({
+  method: "post",
+  path: "/{id}/functions/{point}/blocking",
+  operationId: "dashboard.apps.function_blocking_update",
+  tags: ["Admin - Apps"],
+  summary: "Let checkout continue when an app's function fails, or let it block checkout again",
+  description: "For a function the app asks to run as blocking (`onError: \"block\"`). `blocking: false` lets checkout continue when it fails: the store's approval of that blocking is withdrawn (it never grants more), the function keeps running as an optional one, and an update keeps the choice. `blocking: true` approves it as blocking again, a Super Admin's consent like activation. Either change is written to the app's log with who made it.",
+  request: {
+    params: idParams.extend({ point: z.enum(PLUGIN_FUNCTION_POINTS).openapi({ description: "The function point (`cart.validate`, `cart.line_prices`, …)." }) }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: z.object({ blocking: z.boolean(), expectedRevision: revisionSchema }).strict() } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Saved",
+      content: { "application/json": { schema: successEnvelope(z.object({ app: appDetailSchema, changed: z.boolean().openapi({ description: "False when it was already so." }) })) } },
+    },
+    ...mutationErrors,
+  },
+});
+
+app.openapi(functionBlockingRoute, async (c) => {
+  noStore(c);
+  const actor = c.get("user") as { id?: string; name?: string | null; isSuperAdmin?: boolean } | undefined;
+  const { id, point } = c.req.valid("param");
+  const body = c.req.valid("json");
+  // Blocking again approves the app pausing checkout: a person's consent, as activation is.
+  if (body.blocking && (!actor?.id || actor.isSuperAdmin !== true || c.get("agentPrincipal") || c.get("pluginPrincipal"))) {
+    throw new ForbiddenError("Only the store owner can let an app block checkout.");
+  }
+  await loadApp(c, id);
+  const who = actor?.name?.trim() || actor?.id || (c.get("agentPrincipal") ? "an agent" : "a staff member");
+  // The change and its record in the app's log are one write; the store's list keeps who and when.
+  const result = await setPluginFunctionBlocking(c.get("db"), id, {
+    point,
+    blocking: body.blocking,
+    expectedRevision: body.expectedRevision,
+    actorUserId: actor?.id ?? null,
+    audit: body.blocking
+      ? `${point}: approved as blocking again by ${who}; checkout refuses orders when it fails.`
+      : `${point}: ${who} let checkout continue when it fails; it runs as an optional function until the store owner lets it block again.`,
+  });
+  return ok(c, { app: await detail(c, result.installation), changed: result.changed });
 });
 
 // ── Features ──

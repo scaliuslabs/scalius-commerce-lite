@@ -3615,9 +3615,9 @@ export type StorefrontPlacedOffer = {
      */
     fulfillmentKind: string;
     /**
-     * Paid only online (a key, a download, or a kit holding one): where checkout takes no online payment, its buy action is off, as on its own page.
+     * Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. The storefront turns buying it off only where nothing else can pay (a store that takes only cash and holds no live gift card, checkout config `giftCardsLive`).
      */
-    paidOnlineOnly: boolean;
+    cashPayable: boolean;
     /**
      * One unit's price in the page's currency (a kit's: its own price).
      */
@@ -3706,9 +3706,9 @@ export type StorefrontKit = {
      */
     fulfillmentKind: 'physical' | 'digital' | 'service';
     /**
-     * One of its items is paid only online (a key, a download): no cash on delivery or at the service buys it.
+     * Cash may pay for it: every one of its items is cash payable (false when one is a key, a download or a gift card).
      */
-    paidOnlineOnly: boolean;
+    cashPayable: boolean;
 };
 
 export type PublicReviewSummary = {
@@ -6467,6 +6467,51 @@ export type ThemeTemplateSwitchPlan = {
     left: Array<string>;
 };
 
+export type ThemeTemplateUpdate = {
+    template: string;
+    from: string | null;
+    to: string;
+    base: 'recorded' | 'assumed' | 'none';
+    improvements: number;
+    conflicts: number;
+    digest: string;
+    items: Array<ThemeTemplateUpdateItem>;
+    offset: number;
+    moreItems: number;
+    issues: Array<ThemeTemplateUpdateIssue>;
+    draft: {
+        revision: number;
+        basePublishedRevision: number;
+    };
+} | null;
+
+export type ThemeTemplateUpdateItem = {
+    id: string;
+    kind: 'improvement' | 'conflict';
+    area: 'tokens' | 'blocks' | 'skins' | 'privatePages' | 'home';
+    change: 'set' | 'add' | 'remove' | 'order';
+    path: Array<string>;
+    /**
+     * The store's value now (absent: none); for `order`, the template sections' ids in the store's order.
+     */
+    mine?: unknown;
+    /**
+     * The update's value (absent: it removes it); for `order`, the same ids in the update's order.
+     */
+    theirs?: unknown;
+    /**
+     * An added section that takes the place of one the update removes (a renamed id): that section's id.
+     */
+    replaces?: string;
+};
+
+export type ThemeTemplateUpdateIssue = {
+    path: string;
+    message: string;
+    reason: string | null;
+    itemIds: Array<string>;
+};
+
 export type ThemeRestorePoint = {
     id: string;
     reason: 'restore' | 'discard' | 'app' | 'template';
@@ -7039,7 +7084,7 @@ export type AppSummary = {
     source: 'bundled' | 'registry' | 'upload';
     status: 'installed' | 'active' | 'disabled' | 'failed';
     /**
-     * An update asks for more access than was approved; the app waits until a Super Admin approves it.
+     * The app asks for access that is not approved (an update's new permissions, or a blocking the store turned off): it keeps running with what was approved, and the rest stays off until a Super Admin approves it (`added` lists it).
      */
     needsApproval: boolean;
     /**
@@ -7436,6 +7481,16 @@ export type AppDetail = AppSummary & {
     granted: AppGrant & unknown;
     added: AppGrant & unknown;
     /**
+     * Function points the app asks to block checkout at where the store lets checkout continue when they fail (dashboard.apps.function_blocking_update). Not part of `request` or `added`: only the store gives the blocking back.
+     */
+    checkoutContinues?: Array<{
+        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods';
+        /**
+         * When the store turned its blocking off (ISO 8601).
+         */
+        at: string;
+    }>;
+    /**
      * The requested scopes, for the consent screen.
      */
     scopes: Array<{
@@ -7482,7 +7537,7 @@ export type AppDetail = AppSummary & {
         blocking: boolean;
     }>;
     /**
-     * The app's cart rule is refusing every recent checkout (as a delivery-slot app with no open slot does); null otherwise. An accepted checkout clears it.
+     * The app keeps checkout from taking orders: a function approved as blocking is failing, or its cart rule refuses every recent checkout (as a delivery-slot app with no open slot does); null otherwise. A good answer clears it.
      */
     refusing: {
         /**
@@ -7498,9 +7553,29 @@ export type AppDetail = AppSummary & {
          */
         lastAt: string;
         /**
-         * The app's words to the buyer for the latest refusal.
+         * The app's words to the buyer for the latest refusal; null for a failing blocking function (see failure and lastError).
          */
         reason: string | null;
+        /**
+         * True when a function the store approved as blocking keeps failing (its circuit is open, or it failed as many times as opens one with no good answer between), so checkout refuses every order that needs it (turn its blocking off with dashboard.apps.function_blocking_update, update the app, or stop it).
+         */
+        failing?: boolean;
+        /**
+         * True when such a function failed (that checkout was refused) but not often enough to be failing; lastAt is the latest.
+         */
+        failedOnce?: boolean;
+        /**
+         * The function point that refuses.
+         */
+        point?: string;
+        /**
+         * How a blocking function failed, in the platform's words: threw, timed_out, invalid_answer, call_refused (a read it declared was refused) or could_not_run.
+         */
+        failure?: 'threw' | 'timed_out' | 'invalid_answer' | 'call_refused' | 'could_not_run';
+        /**
+         * The app's latest error at that point, as its log has it (the app's own text).
+         */
+        lastError?: string | null;
     } | null;
     settings: {
         fields: Array<AppSettingField>;
@@ -8910,13 +8985,13 @@ export type GetApiV1CollectionsByIdData = {
         page?: number;
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
-         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which.
          */
-        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
+        sort?: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
          * Only products whose published-review average is at least this many whole stars (1-4).
          */
@@ -9110,6 +9185,10 @@ export type GetApiV1CollectionsByIdResponses = {
                  */
                 count: number;
             }>;
+            /**
+             * The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order.
+             */
+            sort: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
     };
 };
@@ -9313,11 +9392,11 @@ export type GetApiV1BrandsBySlugProductsData = {
          */
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
-         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which.
          */
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
@@ -9510,7 +9589,6 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                         max: number | null;
                     };
                 }>;
-                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
                 minRating?: number;
                 search?: string;
                 /**
@@ -9525,6 +9603,10 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 hasDiscount?: 'true' | 'false';
                 inStock?: 'true';
             };
+            /**
+             * The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order.
+             */
+            sort: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
     };
 };
@@ -11080,6 +11162,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 customizationChoosePlaceholderText: string;
                 customizationUnavailableText: string;
                 onlinePaymentRequiredText: string;
+                giftCardPaysText: string;
                 deliveryUnavailableText: string;
                 customizationNeededText: string;
                 customizationInvalidText: string;
@@ -14297,6 +14380,7 @@ export type GetApiV1CheckoutConfigResponses = {
                 id: string;
                 name: string;
                 flow: 'card' | 'hosted' | 'cod' | 'deferred';
+                paymentKind: 'cash_on_delivery' | 'invoice' | 'paid_to_store' | 'gift_card' | 'online';
                 dueInDays?: number;
                 currencies: Array<string>;
                 countries?: Array<string>;
@@ -14356,6 +14440,10 @@ export type GetApiV1CheckoutConfigResponses = {
                     bn: string;
                 };
             };
+            /**
+             * The store holds a live gift card (active, unexpired, with a balance, in a currency this page sells in). Where no method but cash is listed, a key, a download or a gift card can be bought only with one: without any, the storefront stops it early. Read only when every enabled method is cash on delivery; false on any other store.
+             */
+            giftCardsLive: boolean;
         };
     };
 };
@@ -21555,11 +21643,11 @@ export type GetApiV1ProductsData = {
          */
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
-         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Defaults to relevance when `search` is set, otherwise newest.
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which. With `search` set, best match (relevance) instead.
          */
         sort?: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
@@ -21714,6 +21802,10 @@ export type GetApiV1ProductsResponses = {
              * Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction).
              */
             correctedQuery: string | null;
+            /**
+             * The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order.
+             */
+            sort: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
     };
 };
@@ -22535,9 +22627,9 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
                 /**
-                 * Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it.
+                 * Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. The storefront turns buying it off only where nothing else can pay (a store that takes only cash and holds no live gift card, checkout config `giftCardsLive`).
                  */
-                paidOnlineOnly: boolean;
+                cashPayable: boolean;
                 createdAt: string | null;
             }>;
             total: number;
@@ -22886,9 +22978,9 @@ export type GetApiV1ProductsBySlugResponses = {
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
                 /**
-                 * Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it.
+                 * Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. The storefront turns buying it off only where nothing else can pay (a store that takes only cash and holds no live gift card, checkout config `giftCardsLive`).
                  */
-                paidOnlineOnly: boolean;
+                cashPayable: boolean;
                 /**
                  * Storefront-visible custom fields with a value, in the merchant's order.
                  */
@@ -23445,11 +23537,11 @@ export type GetApiV1CategoriesBySlugProductsData = {
          */
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
-         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which.
          */
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
@@ -23721,7 +23813,6 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                         max: number | null;
                     };
                 }>;
-                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
                 minRating?: number;
                 search?: string;
                 /**
@@ -23736,6 +23827,10 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 hasDiscount?: 'true' | 'false';
                 inStock?: 'true';
             };
+            /**
+             * The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order.
+             */
+            sort: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
     };
 };
@@ -23759,9 +23854,12 @@ export type GetApiV1CategoriesBySlugProductSummariesData = {
         page?: number;
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.
          */
         cursor?: string;
+        /**
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which.
+         */
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
          * Only products whose published-review average is at least this many whole stars (1-4).
@@ -23921,7 +24019,6 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                         max: number | null;
                     };
                 }>;
-                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
                 minRating?: number;
                 search?: string;
                 /**
@@ -23936,6 +24033,10 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 hasDiscount?: 'true' | 'false';
                 inStock?: 'true';
             };
+            /**
+             * The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order.
+             */
+            sort: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
     };
 };
@@ -57577,19 +57678,31 @@ export type GetApiV1AdminDashboardSetupGuideResponses = {
                 blockedProducts: number;
             };
             /**
-             * Active apps whose cart rule refuses every recent checkout (a delivery-slot app with no open slot), so the store sells nothing; empty otherwise.
+             * Active apps keeping checkout from taking orders: a function approved as blocking that is failing, or a cart rule refusing every recent checkout (a delivery-slot app with no open slot); empty otherwise. One per app, a failing function first.
              */
             refusingApps: Array<{
                 appId: string;
                 name: string;
                 /**
-                 * The app's words to the buyer for the latest refusal.
+                 * The app's words to the buyer for the latest refusal; null for a failing function (see failure).
                  */
                 reason: string | null;
                 /**
                  * When it began refusing every checkout (ISO 8601).
                  */
                 since: string;
+                /**
+                 * True when a function the store approved as blocking is failing (checkout refuses every order that needs it); absent or false: its cart rule refuses by its answer.
+                 */
+                failing?: boolean;
+                /**
+                 * The function point that refuses (`cart.validate`, `cart.line_prices`, …).
+                 */
+                point?: string;
+                /**
+                 * How a failing function failed, in the platform's words (never the app's text).
+                 */
+                failure?: 'threw' | 'timed_out' | 'invalid_answer' | 'call_refused' | 'could_not_run';
             }>;
             /**
              * The D1 database's size against the plan's cap; null on Turso and PostgreSQL, or when D1 reports no size.
@@ -60823,6 +60936,132 @@ export type GetApiV1AdminSettingsSeoLiveProbeResponses = {
 
 export type GetApiV1AdminSettingsSeoLiveProbeResponse = GetApiV1AdminSettingsSeoLiveProbeResponses[keyof GetApiV1AdminSettingsSeoLiveProbeResponses];
 
+export type GetApiV1AdminSettingsCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/catalog';
+};
+
+export type GetApiV1AdminSettingsCatalogErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsCatalogError = GetApiV1AdminSettingsCatalogErrors[keyof GetApiV1AdminSettingsCatalogErrors];
+
+export type GetApiV1AdminSettingsCatalogResponses = {
+    /**
+     * Catalogue settings
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            /**
+             * The order category, collection, brand and search listings open in when their address names none: orders that page by cursor. A collection with picked products keeps its own order; a search with words opens best match first. The list may grow.
+             */
+            defaultListingSort: 'newest' | 'popular';
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsCatalogResponse = GetApiV1AdminSettingsCatalogResponses[keyof GetApiV1AdminSettingsCatalogResponses];
+
+export type PostApiV1AdminSettingsCatalogData = {
+    body: {
+        expectedRevision: number;
+        /**
+         * The order category, collection, brand and search listings open in when their address names none: orders that page by cursor. A collection with picked products keeps its own order; a search with words opens best match first. The list may grow.
+         */
+        defaultListingSort: 'newest' | 'popular';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/catalog';
+};
+
+export type PostApiV1AdminSettingsCatalogErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsCatalogError = PostApiV1AdminSettingsCatalogErrors[keyof PostApiV1AdminSettingsCatalogErrors];
+
+export type PostApiV1AdminSettingsCatalogResponses = {
+    /**
+     * Catalogue settings saved
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            revision: number;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsCatalogResponse = PostApiV1AdminSettingsCatalogResponses[keyof PostApiV1AdminSettingsCatalogResponses];
+
 export type GetApiV1AdminSettingsStorefrontUrlData = {
     body?: never;
     path?: never;
@@ -61138,6 +61377,138 @@ export type PostApiV1AdminSettingsThemeTemplateResponses = {
 };
 
 export type PostApiV1AdminSettingsThemeTemplateResponse = PostApiV1AdminSettingsThemeTemplateResponses[keyof PostApiV1AdminSettingsThemeTemplateResponses];
+
+export type GetApiV1AdminSettingsThemeTemplateUpdateData = {
+    body?: never;
+    path?: never;
+    query?: {
+        compare?: 'true' | 'false';
+        offset?: number | null;
+    };
+    url: '/api/v1/admin/settings/theme/template-update';
+};
+
+export type GetApiV1AdminSettingsThemeTemplateUpdateErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsThemeTemplateUpdateError = GetApiV1AdminSettingsThemeTemplateUpdateErrors[keyof GetApiV1AdminSettingsThemeTemplateUpdateErrors];
+
+export type GetApiV1AdminSettingsThemeTemplateUpdateResponses = {
+    /**
+     * The update, or null
+     */
+    200: {
+        success: true;
+        data: {
+            update: ThemeTemplateUpdate;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeTemplateUpdateResponse = GetApiV1AdminSettingsThemeTemplateUpdateResponses[keyof GetApiV1AdminSettingsThemeTemplateUpdateResponses];
+
+export type PostApiV1AdminSettingsThemeTemplateUpdateData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        digest: string;
+        /**
+         * The items to take, improvements and conflicts alike; every other item stays the store's.
+         */
+        take: Array<string>;
+        dryRun?: boolean;
+        compare?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/template-update';
+};
+
+export type PostApiV1AdminSettingsThemeTemplateUpdateErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsThemeTemplateUpdateError = PostApiV1AdminSettingsThemeTemplateUpdateErrors[keyof PostApiV1AdminSettingsThemeTemplateUpdateErrors];
+
+export type PostApiV1AdminSettingsThemeTemplateUpdateResponses = {
+    /**
+     * The draft's revision (new unless a dry run or nothing taken), how many changes it took, and a dry run's issues
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            basePublishedRevision: number;
+            updatedAt: string | null;
+            taken: number;
+            issues: Array<ThemeTemplateUpdateIssue>;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeTemplateUpdateResponse = PostApiV1AdminSettingsThemeTemplateUpdateResponses[keyof PostApiV1AdminSettingsThemeTemplateUpdateResponses];
 
 export type GetApiV1AdminSettingsThemeRestorePointsData = {
     body?: never;
@@ -88821,6 +89192,86 @@ export type PostApiV1AdminAppsByIdDeactivateResponses = {
 };
 
 export type PostApiV1AdminAppsByIdDeactivateResponse = PostApiV1AdminAppsByIdDeactivateResponses[keyof PostApiV1AdminAppsByIdDeactivateResponses];
+
+export type PostApiV1AdminAppsByIdFunctionsByPointBlockingData = {
+    body: {
+        blocking: boolean;
+        /**
+         * The app's current revision (every change advances it).
+         */
+        expectedRevision: number;
+    };
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+        /**
+         * The function point (`cart.validate`, `cart.line_prices`, …).
+         */
+        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods';
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}/functions/{point}/blocking';
+};
+
+export type PostApiV1AdminAppsByIdFunctionsByPointBlockingErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsByIdFunctionsByPointBlockingError = PostApiV1AdminAppsByIdFunctionsByPointBlockingErrors[keyof PostApiV1AdminAppsByIdFunctionsByPointBlockingErrors];
+
+export type PostApiV1AdminAppsByIdFunctionsByPointBlockingResponses = {
+    /**
+     * Saved
+     */
+    200: {
+        success: true;
+        data: {
+            app: AppDetail;
+            /**
+             * False when it was already so.
+             */
+            changed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdFunctionsByPointBlockingResponse = PostApiV1AdminAppsByIdFunctionsByPointBlockingResponses[keyof PostApiV1AdminAppsByIdFunctionsByPointBlockingResponses];
 
 export type GetApiV1AdminAppsByIdFeaturesData = {
     body?: never;

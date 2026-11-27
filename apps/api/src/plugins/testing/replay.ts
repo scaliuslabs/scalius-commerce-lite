@@ -9,9 +9,9 @@
 // - theme: each template upgraded from its `themeVersion` and checked
 //   (`checkStorefrontAppTemplateTheme`), applied to the default look and
 //   saved (`checkStorefrontThemeSave`), and each page preset upgraded;
-// - buyer UI: each declared extension run on the SDK's fixture input for its
-//   slot and its answer checked as the host checks it (the SDK harness and
-//   the host share `invokePluginDefinition` and `checkPluginFunctionOutput`);
+// - functions: replay-functions.ts (the buyer's cart check and checkout
+//   quote through the real routes, every function and buyer UI extension
+//   they reach, the host's load check);
 // - render jobs: each skin and component section with the values the
 //   applied template gives it, over the SDK's sample fixture store. The test
 //   draws them with the storefront's own render host (it joins two apps, so
@@ -19,7 +19,7 @@
 
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { activePluginStorefrontExtensions, PluginError, type PluginInstallation } from "@scalius/core/modules/plugins";
-import { pluginGrantRequest, PLUGIN_EXTENSION_RUN, type PluginManifest } from "@scalius/shared/plugins";
+import { pluginGrantRequest, type PluginManifest } from "@scalius/shared/plugins";
 import { parsePluginSurfaceKey } from "@scalius/shared/plugins/storefront";
 import { resolveStorefrontSettings, type StorefrontExtension, type StorefrontRenderContext, type StorefrontRenderJob } from "@scalius/shared/plugins/storefront-components";
 import type { StorefrontSkinTarget } from "@scalius/shared/plugins/storefront-protocol";
@@ -32,7 +32,6 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { checkStorefrontThemeSave, type StorefrontThemeSaveIssue } from "@scalius/shared/storefront-theme/save";
-import { createPluginTestHarness, fixtures } from "@scalius/plugin-sdk/testing";
 import { fixtureStore } from "@scalius/plugin-sdk/storefront/testing";
 import { readPluginPackageZip } from "../package-zip";
 import { installRelease, verifyUploadedPackage, type PluginRelease } from "../releases";
@@ -107,38 +106,6 @@ export function replayTheme(manifest: PluginManifest): ReplayTheme {
     pagePresets[preset.id] = read.ok ? `fits (${read.value.length} sections)` : [`does not fit: ${read.problem}`, ...issueLines(read.issues)];
   }
   return { templates, pagePresets, applied: applied ?? DEFAULT_STOREFRONT_THEME };
-}
-
-/**
- * Each declared buyer UI extension on the SDK's fixture input for its slot,
- * its answer checked as the host checks it. `module` is the bundle's
- * `plugin.js`, imported.
- */
-export async function replayBuyerUi(module: unknown, manifest: PluginManifest): Promise<Record<string, ReplayVerdict>> {
-  const outcomes: Record<string, ReplayVerdict> = {};
-  if (manifest.storefront.extensions.length === 0) return outcomes;
-  let harness: ReturnType<typeof createPluginTestHarness>;
-  try {
-    harness = createPluginTestHarness(module);
-  } catch (error) {
-    for (const { target } of manifest.storefront.extensions) outcomes[target] = [`not loaded: ${error instanceof Error ? error.message : String(error)}`];
-    return outcomes;
-  }
-  for (const { target } of manifest.storefront.extensions) {
-    try {
-      const result = await harness.extension(fixtures.storefrontExtensionInput(target));
-      if (!result.ok) {
-        outcomes[target] = [`refused: ${result.error?.code ?? "error"}: ${result.error?.message ?? ""}`];
-        continue;
-      }
-      const value = result.value as { ui: unknown; lines?: unknown[] } | null;
-      const lines = value?.lines?.length ?? 0;
-      outcomes[target] = `valid ${PLUGIN_EXTENSION_RUN} answer (${value?.ui ? "a buyer UI document" : "no document"}${lines > 0 ? `, ${lines} line block(s)` : ""})`;
-    } catch (error) {
-      outcomes[target] = [`threw: ${error instanceof Error ? error.message : String(error)}`];
-    }
-  }
-  return outcomes;
 }
 
 /** A render job as a page asks the host for it (the host names it). */

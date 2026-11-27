@@ -153,7 +153,7 @@ Buyer contact data is protected field by field. `address` means the street: addr
 ### Consent and approvals
 
 - Activation shows a Super Admin everything the manifest asks for: scopes, hosts, provider ports, message recipients, objects, storefront code, browser hosts and Buyer UI slots.
-- An update that asks for more access waits for a Super Admin. An update that asks for the same or less needs no approval.
+- An update never pauses the app: the new code runs at once with the access already approved (anything the new manifest no longer asks for ends with the update), and whatever it asks for beyond that stays off, exactly as if it never asked, until a Super Admin approves it. Build each release to run under the previous grant: a call outside it is refused, a function point, event, provider, route or storefront part outside it is absent, and a blocking function not yet approved as blocking runs as an optional one. An update that asks for the same or less needs no approval.
 - Each feature asks for its own access when it is turned on (see [Features](#features)).
 
 ## Features
@@ -192,7 +192,7 @@ A Super Admin reviews the access and activates the app. Required settings must b
 ### Update
 
 - An active app loads the new code and runs its data updates at once. If either fails, the previous version comes back and the app's page says why.
-- An update that asks for more access returns the app to `installed` until a Super Admin approves it. Its events wait meanwhile.
+- An update that asks for more access keeps the app `active`; only the new access waits for a Super Admin (the dashboard says how many permissions wait). A store can also let checkout continue when one of the app's blocking functions fails: that point then runs as an optional one until the blocking is approved again.
 - A bundled app follows the deployed code. If the deployed release cannot be installed, the app becomes `failed` with the reason.
 - An update of an installed app must come from the same signing key. An app installed unsigned takes the key of its first signed update. A bundled release is not checked this way.
 
@@ -453,6 +453,7 @@ SQL triggers write event facts in the same transaction as the change, so a commi
 - An event is `{ id, topic, apiVersion, occurredAt, resource: { type, id }, facts }`. Facts carry ids, states and quantities, never contact data, credentials or money. Read the resource with `ctx.api`.
 - The catalogue (`EVENT_TOPICS` in `@scalius/plugin-sdk/manifest`; every topic's facts in [the event reference](events.md)) is versioned and grows only by addition. It covers orders, returns, products and publications, variant inventory, purchase orders, transfers, customers and consent, fulfillments, refunds, shipments, payments, abandoned checkouts, discounts and redemptions, reviews, gift cards and their transactions, object events, buyer messages in the inbox (`conversation.message_received`) and payouts (`payout.created`, `payout.updated`, delivered only to the app that sent the payout). Every topic has an emitter: the catalogue names nothing the platform does not send.
 - Fulfilment and refund events list the order lines they cover (see [Line facts and refunds](commerce-hooks.md#5-line-facts-and-refunds)).
+- `order.created` fires when an order is placed, before it is paid (cash on delivery, an invoice, a payment still under way): an app that delivers on it delivers before payment. Deliver a key, a download or anything else sent once paid on `order.paid`.
 
 ### Abandoned checkouts
 

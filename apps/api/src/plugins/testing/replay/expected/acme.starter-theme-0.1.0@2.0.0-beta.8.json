@@ -14,5 +14,15 @@
     "skin footer (footer, sample content)": "drew",
     "skin card (product_card, sample content)": "drew",
     "section product_row (sample content)": "drew"
+  },
+  "load": "loads",
+  "requests": {
+    "cart-validation · plain lines, guest, en": "answered (valid)",
+    "tax-quote · plain lines, guest, en": "answered (valid)",
+    "cart-validation · a kit, signed in, code, en": "answered (valid)",
+    "tax-quote · a kit, signed in, code, en": "answered (valid)",
+    "cart-validation · plain lines, guest, bn": "answered (valid)",
+    "tax-quote · plain lines, guest, bn": "answered (valid)",
+    "cart-validation · plain lines, guest, USD": "answered (valid)"
   }
 }

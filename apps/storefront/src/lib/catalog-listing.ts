@@ -323,12 +323,10 @@ export function catalogFacetValueChips({
   facets,
   currentFilters,
   pathname,
-  defaultSort,
 }: {
   facets: readonly ProductFacet[];
   currentFilters: ProductListFilterState;
   pathname: string;
-  defaultSort: ProductListSort;
 }): { label: string; links: CatalogFilterLink[] } | null {
   for (const facet of facets) {
     if ((facet.kind !== "option" && facet.kind !== "attribute") || facet.display === "range") continue;
@@ -348,7 +346,6 @@ export function catalogFacetValueChips({
             pathname,
             currentFilters,
             overrides: { [facet.slug]: next.length ? next : null, page: null },
-            defaultSort,
           }),
         };
       }),
@@ -366,14 +363,12 @@ export function catalogPopularFilters({
   facets,
   currentFilters,
   pathname,
-  defaultSort,
   total,
   max = 6,
 }: {
   facets: readonly ProductFacet[];
   currentFilters: ProductListFilterState;
   pathname: string;
-  defaultSort: ProductListSort;
   total: number;
   max?: number;
 }): CatalogFilterLink[] {
@@ -398,7 +393,6 @@ export function catalogPopularFilters({
         pathname,
         currentFilters,
         overrides: { [facet.slug]: [...selected(facet.slug), value], page: null },
-        defaultSort,
       }),
     }));
 }
@@ -407,12 +401,10 @@ export function catalogPopularFilters({
 export function catalogQuickFilters({
   currentFilters,
   pathname,
-  defaultSort,
   copy = catalogCopy(pageLanguage()).filters,
 }: {
   currentFilters: ProductListFilterState;
   pathname: string;
-  defaultSort: ProductListSort;
   /** The words, in the store's language (the page's by default). */
   copy?: CatalogCopy["filters"];
 }): CatalogFilterLink[] {
@@ -428,7 +420,6 @@ export function catalogQuickFilters({
         pathname,
         currentFilters,
         overrides: { [name]: active ? null : "true", page: null },
-        defaultSort,
       }),
     };
   });

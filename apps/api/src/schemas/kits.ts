@@ -54,7 +54,7 @@ export const storefrontKitSchema = z.object({
   fulfillmentKind: z.enum(["physical", "digital", "service"]).openapi({
     description: "What it sells, from all its items (never the kit SKU's own setting): physical when any item ships, else digital when any item is, else a service.",
   }),
-  paidOnlineOnly: z.boolean().openapi({ description: "One of its items is paid only online (a key, a download): no cash on delivery or at the service buys it." }),
+  cashPayable: z.boolean().openapi({ description: "Cash may pay for it: every one of its items is cash payable (false when one is a key, a download or a gift card)." }),
 }).openapi("StorefrontKit", { description: "A SKU made of other SKUs: checkout sells it as them." });
 
 export const storefrontPlacedOfferSchema = z.object({
@@ -68,8 +68,8 @@ export const storefrontPlacedOfferSchema = z.object({
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
   fulfillmentKind: z.string().openapi({ description: "What it sells; a kit's from its items." }),
-  paidOnlineOnly: z.boolean().openapi({
-    description: "Paid only online (a key, a download, or a kit holding one): where checkout takes no online payment, its buy action is off, as on its own page.",
+  cashPayable: z.boolean().openapi({
+    description: "Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. The storefront turns buying it off only where nothing else can pay (a store that takes only cash and holds no live gift card, checkout config `giftCardsLive`).",
   }),
   price: z.number().openapi({ description: "One unit's price in the page's currency (a kit's: its own price)." }),
   compareAtPrice: z.number().nullable().openapi({ description: "A kit's items summed, or a SKU's regular price while it is on sale; null otherwise." }),

@@ -91,7 +91,9 @@ async function resolveChoice(
     const name = installation.manifest.name;
     if (installation.status !== "active") return { provider: null, issue: `Activate ${name} in Apps to use it.` };
     const feature = installation.declaredManifest.features.find((entry) => entry.providers.includes(declared.id));
-    return { provider: null, issue: `Turn on ${feature?.name ?? declared.name} in ${name}'s features to use it.` };
+    // On (or in the base) but outside the approved grant: an update asked for this port and it waits for approval.
+    if (!feature || installation.features.includes(feature.id)) return { provider: null, issue: `Approve the access ${name} asks for in Apps to use it.` };
+    return { provider: null, issue: `Turn on ${feature.name} in ${name}'s features to use it.` };
   }
   const settings = await readAppProviderSettings(runtime, installation, declaration, encryptionKey);
   if (!settings.enabled || settings.missingFields.length > 0 || settings.credentialErrors.length > 0) {

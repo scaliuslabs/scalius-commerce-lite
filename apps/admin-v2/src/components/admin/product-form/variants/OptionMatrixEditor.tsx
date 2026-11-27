@@ -1,4 +1,5 @@
 import React from "react";
+import { AppResourceCards } from "~/components/admin/apps/ui/AppResourceCards";
 import { KitSkuIdsContext } from "../kits/kit-sku-ids";
 import { readKitRefusal } from "~/lib/kit-refusal";
 import { seededName } from "~/lib/seeded-names";
@@ -880,6 +881,8 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
         </Field>
         )}
       </FieldRow>
+      {/* Apps' cards for the one saved SKU (`resource=variant`): a product without options has no variant rows to hold them. */}
+      {defaultSku?.id.startsWith("var_") ? <fieldset disabled={readOnly} className="min-w-0" data-sku-app-cards><AppResourceCards target="variant" id={defaultSku.id} inline className="space-y-3" /></fieldset> : null}
     </>
   );
   // Only what is packed is weighed (never a download, a service or a gift card).
