@@ -2522,7 +2522,11 @@ try {
       // Every stored document reads (one the storefront cannot read draws the default theme and tests nothing); a forged
       // one reads with what it held dropped and its private pages' compile refused, a legal one never refused.
       if (degraded && state === states[0]) failures.push({ index, name: entry.name, where: "read", problems: ["the storefront cannot read the saved document: it draws the default theme"], document: entry });
-      if (compileRefused !== Boolean(entry.request?.forged) && state === states[0]) failures.push({ index, name: entry.name, where: "read", problems: [compileRefused ? "the read refused a legal document's private pages" : "the read kept the private pages of a document holding what a theme cannot set"], document: entry });
+      // A row forged past the save in what its compile was made from (its pages, tokens or labels) no longer matches the
+      // compile's fingerprint: the read serves none of its look. One forged only in what the read drops (a stylesheet, the
+      // theme's chrome) keeps its compile; what it forged is never drawn (`forgedAbsent`).
+      const forgedInput = ["pages", "tokens", "labels", "icons", "controls"].some((key) => entry.request?.forged?.[key] !== undefined);
+      if (compileRefused !== forgedInput && state === states[0]) failures.push({ index, name: entry.name, where: "read", problems: [compileRefused ? "the read refused a legal document's private pages" : "the read kept the private pages of a document forged past its save"], document: entry });
       // Where the store's controls are drawn: the theme's place (the customer's: the header), the switch where the store
       // offers it, the market forms where it sells in two markets. A forged document's private pages draw the default
       // look's place (the header) under its own theme's switch.
