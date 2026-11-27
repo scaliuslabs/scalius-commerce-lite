@@ -19,13 +19,22 @@
 //   left out (a section, a tab, a page's tokens or arrangement); and a key
 //   this build does not know in any stored object (a later release's field):
 //   left out. `strict()` holds only for a save.
+// - A field missing that this build requires (`STOREFRONT_READ_MISSING_FIELD`,
+//   a document an older build wrote or sent): its default, the default of
+//   its block variant or section type, or the default theme's at a fixed
+//   place; where there is none, its section or tab is left out, its block
+//   the default theme's. A field added after the freeze is optional, so this
+//   is a guard, never a licence for a required one.
 //
-// Anything else (a wrong type, a missing field, a bound the renderer relies
-// on) is not repaired: the document does not read.
+// Anything else (a wrong type, a bound the renderer relies on) is not
+// repaired: the document does not read.
 
-import { STOREFRONT_MOBILE_DEFAULT_TABS, STOREFRONT_MOBILE_TAB_LIMITS } from "./blocks";
+import { STOREFRONT_MOBILE_DEFAULT_TABS, STOREFRONT_MOBILE_TAB_LIMITS, storefrontBlockDefault } from "./blocks";
+import { STOREFRONT_SECTION_REGISTRY } from "./sections";
+import { storefrontDarkPalette } from "./tokens";
 import { PRIVATE_PAGE_KEYS } from "./private-keys";
 import { DEFAULT_STOREFRONT_THEME } from "./templates";
+import { unionKeyIssues } from "../unknown-keys";
 
 type Json = Record<string, unknown>;
 
@@ -40,10 +49,19 @@ export interface StorefrontThemeReadRepair {
  * The theme document's closed lists (label keys and variants, icon keys, the
  * controls' places, layout kinds and part names, token values such as fonts,
  * block variants and their choices, section types, tab destinations and
- * icons) only grow: a member is never removed or renamed once released. This
- * repair is the guard against a removal by mistake, never a licence for one.
+ * icons, the template id, the homepage's kind) only grow: a member is never
+ * removed or renamed once released. This repair is how a build reads a
+ * member a later release added (a storefront a release behind its API, or
+ * rolled back alone), and the guard against a removal by mistake, never a
+ * licence for one.
  */
 export const STOREFRONT_READ_UNKNOWN_MEMBER = "unknown_member";
+
+/** The reason recorded for a field missing that this build requires: read as its default. */
+export const STOREFRONT_READ_MISSING_FIELD = "missing_field";
+
+/** The codes a field missing is refused with (a required value, an enum, a union, a literal). */
+const MISSING_CODES = new Set(["invalid_type", "invalid_value", "invalid_union"]);
 
 /** The structural issue fields a repair reads (a Zod issue). */
 export interface StorefrontThemeReadIssue {
@@ -88,21 +106,6 @@ function sectionEntry(path: readonly PropertyKey[]): { list: readonly PropertyKe
 const SAVE_REASON_TAB = /^tab_/;
 
 /**
- * The issues as a repair reads them: a union (dark colours or none, an app's
- * value) refused only for a key a branch does not know is that branch's
- * unknown keys, at their place, so a later release's key there is left out too.
- */
-function unionKeyIssues(issues: readonly StorefrontThemeReadIssue[]): StorefrontThemeReadIssue[] {
-  return issues.flatMap((issue) => {
-    const branches = (issue as { errors?: unknown }).errors;
-    if (issue.code !== "invalid_union" || !Array.isArray(branches)) return [issue];
-    const keysOnly = branches.find((branch): branch is StorefrontThemeReadIssue[] => Array.isArray(branch) && branch.length > 0
-      && branch.every((nested) => (nested as StorefrontThemeReadIssue).code === "unrecognized_keys"));
-    return keysOnly ? keysOnly.map((nested) => ({ ...nested, path: [...issue.path, ...nested.path] })) : [issue];
-  });
-}
-
-/**
  * The document with every refused value repaired, and what was repaired; null
  * when an issue is not one a read repairs. Pure: the document is not changed.
  */
@@ -127,6 +130,33 @@ export function repairStoredStorefrontTheme(
     delete parent[path.at(-1) as string];
     return true;
   };
+  // The default a missing field reads as: its block variant's, its section type's, or the default theme's at a
+  // fixed place (no list entry or record entry on the way, which would be another entry's value).
+  const missingDefault = (path: readonly PropertyKey[]): unknown => {
+    const variant = path[0] === "blocks" && typeof path[1] === "string" && path[2] === "settings" ? (at(next, path.slice(0, 2)) as Json).variant : undefined;
+    if (typeof variant === "string") {
+      try { return at(storefrontBlockDefault(path[1] as never, variant), path.slice(2)); } catch { return undefined; }
+    }
+    const section = sectionEntry(path);
+    if (section) {
+      const entry = at(next, [...section.list, section.index]) as Json | undefined;
+      const spec = typeof entry?.type === "string" && Object.hasOwn(STOREFRONT_SECTION_REGISTRY, entry.type)
+        ? STOREFRONT_SECTION_REGISTRY[entry.type as keyof typeof STOREFRONT_SECTION_REGISTRY] : null;
+      const rest = path.slice(section.list.length + 1);
+      return spec && rest[0] === "settings" ? at(spec.defaults, rest.slice(1)) : undefined;
+    }
+    const fixed = path.every((part) => typeof part === "string") && !(path[0] === "pages" && path[1] === "landing" && path.length > 2)
+      && !(path[0] === "privatePages" && ["pages", "tokens", "labels", "icons"].includes(path[1] as string) && path.length > 2)
+      && !(path[0] === "privatePages" && path[1] === "compiled") && path[0] !== "translations" && path[0] !== "apps";
+    return fixed ? defaultAt(path) : undefined;
+  };
+  // A private page's arrangement left out draws the store's own arrangement and look, whole: its compiled
+  // look (and so its token mode) goes with it, never the theme's look over the store's arrangement.
+  const withoutPage = (path: readonly PropertyKey[]) => {
+    const css = at(next, ["privatePages", "compiled", "css"]);
+    if (isRecord(css)) delete css[path[2] as string];
+    return remove(path);
+  };
   // Entries left out of a list, applied from the last so earlier indexes stay right.
   const drops = new Map<string, { list: readonly PropertyKey[]; indexes: Set<number> }>();
   const defaultAt = (path: readonly PropertyKey[]) => at(DEFAULT_STOREFRONT_THEME, path);
@@ -145,6 +175,44 @@ export function repairStoredStorefrontTheme(
     let done = false;
     let unknown = false;
     const tab = path[0] === "blocks" && path[1] === "mobileNav" ? listEntry(path, "tabs") : null;
+    if (MISSING_CODES.has(issue.code) && path.length > 1 && at(next, path) === undefined && isRecord(at(next, path.slice(0, -1)))) {
+      // A field an older build did not write or send: its default where this build has one. A part of the
+      // document itself (its tokens, blocks, pages) is never made up: a document without one does not read.
+      const value = missingDefault(path);
+      const skin = path.indexOf("skin") >= 0 ? path.slice(0, path.indexOf("skin") + 1) : path[0] === "apps" && path[1] === "skins" && path.length > 3 ? path.slice(0, 3) : null;
+      if (value !== undefined) done = set(path, structuredClone(value));
+      // An app skin without its app or values: the part draws without the skin (the store's own look).
+      else if (skin) done = remove(skin);
+      else if (sectionEntry(path)) done = drop(sectionEntry(path)!);
+      // A compile without a field: never compiled (checker 0), so no look of an unknown checker is ever served.
+      else if (path[0] === "privatePages" && path[1] === "compiled") {
+        const anatomy = (at(next, path.slice(0, 2)) as Json | undefined)?.anatomy;
+        done = set(path.slice(0, 2), { anatomy: typeof anatomy === "number" && anatomy >= 1 ? anatomy : 1, sanitizer: 0, css: {} });
+      }
+      // A landing page without a field it needs: left out (its route answers as a page the store does not have).
+      else if (path[0] === "pages" && path[1] === "landing" && typeof path[2] === "string" && path.length > 3) done = remove(path.slice(0, 3));
+      // A homepage kind without its product: the default theme's homepage kind.
+      else if (path[0] === "pages" && path[1] === "homeMode") done = set(path.slice(0, 2), structuredClone(defaultAt(path.slice(0, 2))));
+      // A translation row without a field it needs: left out (that language reads the source words).
+      else if (path[0] === "translations" && typeof path[1] === "number") done = drop({ list: ["translations"], index: path[1] });
+      else if (tab) done = drop(tab);
+      else if (path[0] === "privatePages" && path[1] === "pages" && typeof path[2] === "string" && path.length > 3) done = withoutPage(path.slice(0, 3));
+      else if (path[0] === "blocks" && typeof path[1] === "string" && defaultAt(path.slice(0, 2)) !== undefined) done = set(path.slice(0, 2), structuredClone(defaultAt(path.slice(0, 2))));
+      if (done) {
+        repairs.push({ path: path.map(String).join("."), reason: STOREFRONT_READ_MISSING_FIELD });
+        continue;
+      }
+    }
+    const dark = path.length === 2 && path[0] === "tokens" && path[1] === "darkColors" && issue.code === "invalid_union" ? at(next, path) : undefined;
+    const light = at(next, ["tokens", "colors"]);
+    if (isRecord(dark) && isRecord(light) && Object.keys(light).some((role) => dark[role] === undefined)) {
+      // Dark colours an older build wrote without a role this build has: that role made from the colours, as a
+      // theme's dark colours are first made.
+      const made = storefrontDarkPalette(light as never) as Record<string, unknown>;
+      for (const role of Object.keys(light)) if (dark[role] === undefined) dark[role] = made[role];
+      repairs.push({ path: path.map(String).join("."), reason: STOREFRONT_READ_MISSING_FIELD });
+      continue;
+    }
     if (reason === "invalid_link" || reason === "slide_products_over_limit") {
       done = set(path, null);
     } else if (issue.code === "invalid_type" && nulledLinks.has(path.map(String).join("."))) {
@@ -160,7 +228,7 @@ export function repairStoredStorefrontTheme(
     } else if (reason && SAVE_REASON_TAB.test(reason) && tab) {
       done = drop(tab);
     } else if (reason === "too_deep" && path[0] === "privatePages" && path[1] === "pages" && path.length === 3) {
-      done = remove(path);
+      done = withoutPage(path);
     } else if (!reason && path[0] === "privatePages" && path[1] === "labels" && path.length >= 3) {
       // A label a save refuses (`label_variant`, `label_too_long`): the store's own words there.
       done = remove(path.slice(0, 3));
@@ -176,6 +244,10 @@ export function repairStoredStorefrontTheme(
       // A place for the controls this build does not know: the store's header.
       unknown = true;
       done = remove(path);
+    } else if (path.length > 2 && path[0] === "privatePages" && path[1] === "tokens" && !(PRIVATE_PAGE_KEYS as readonly PropertyKey[]).includes(path[2]!)) {
+      // Tokens for a page this build does not know, refused for their value: left out.
+      unknown = true;
+      done = remove(path.slice(0, 3));
     } else if (path.length === 2 && path[0] === "privatePages" && path[1] === "tokens") {
       // Tokens for a page this build does not know: left out.
       unknown = true;
@@ -184,15 +256,26 @@ export function repairStoredStorefrontTheme(
     } else if (path[0] === "privatePages" && path[1] === "pages" && typeof path[2] === "string" && path.length > 3) {
       // An arrangement naming a layout or a node this build does not know: that page draws the store's own.
       unknown = true;
-      done = remove(path.slice(0, 3));
+      done = withoutPage(path.slice(0, 3));
     } else if (issue.code === "invalid_value" && path.length === 2 && path[0] === "tokens" && typeof at(next, path) === "string" && defaultAt(path) !== undefined) {
       // A token value (a font, a density) this build does not know: the default theme's.
       unknown = true;
       done = set(path, structuredClone(defaultAt(path)));
+    } else if ((issue.code === "invalid_union" || issue.code === "invalid_value") && path.length > 2 && path[0] === "tokens" && path[1] !== "colors" && path[1] !== "darkColors") {
+      // A member this build does not know inside a token (the page paint's kind or colour): the default theme's
+      // token, or none where it has none (an optional token).
+      unknown = true;
+      const token = path.slice(0, 2);
+      done = defaultAt(token) !== undefined ? set(token, structuredClone(defaultAt(token))) : remove(token);
     } else if (tab && (issue.code === "invalid_union" || issue.code === "invalid_value")) {
       // A destination this build does not know: the tab is left out; a store icon it does not know: the link icon.
       unknown = true;
       done = path.at(-1) === "name" && path.at(-2) === "icon" ? set(path, "link") : drop(tab);
+    } else if ((issue.code === "invalid_union" || issue.code === "invalid_value") && (path[0] === "template" || (path[0] === "pages" && path[1] === "homeMode"))) {
+      // A template id or a homepage kind this build does not know: the default theme's.
+      unknown = true;
+      const place = path[0] === "template" ? path.slice(0, 1) : path.slice(0, 2);
+      done = set(place, structuredClone(defaultAt(place)));
     } else if ((issue.code === "invalid_union" || issue.code === "invalid_value") && path[0] === "blocks" && typeof path[1] === "string" && defaultAt(path.slice(0, 2)) !== undefined) {
       // A block variant (or one of its choices) this build does not know: the default theme's block there.
       unknown = true;
@@ -202,7 +285,21 @@ export function repairStoredStorefrontTheme(
       unknown = true;
       done = drop(sectionEntry(path)!);
     }
-    if (!done) return null;
+    if (!done) {
+      // A field a missing-field repair filled that the rest of its object refuses (a choice another one rules out):
+      // that whole object reads as the default theme's.
+      const filled = earlier.find((repair) => repair.reason === STOREFRONT_READ_MISSING_FIELD
+        && path.map(String).join(".").startsWith(repair.path.slice(0, repair.path.lastIndexOf(".") + 1)));
+      const parent = filled ? filled.path.split(".").slice(0, -1).map((part) => (/^\d+$/.test(part) ? Number(part) : part)) : null;
+      if (parent && parent.length > 1 && defaultAt(parent) !== undefined) {
+        done = set(parent, structuredClone(defaultAt(parent)));
+        if (done) {
+          repairs.push({ path: parent.join("."), reason: STOREFRONT_READ_MISSING_FIELD });
+          continue;
+        }
+      }
+      return null;
+    }
     record(reason ?? (unknown ? STOREFRONT_READ_UNKNOWN_MEMBER : storefrontLabelRefusalReason(issue.code)));
   }
 

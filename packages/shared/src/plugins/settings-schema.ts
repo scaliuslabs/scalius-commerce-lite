@@ -208,6 +208,30 @@ export const pluginSettingFieldSchema = z.discriminatedUnion("type", [
 ]);
 export type PluginSettingField = z.infer<typeof pluginSettingFieldSchema>;
 
+const ITEM_FIELD_TYPES: ReadonlySet<string> = new Set(pluginSettingItemFieldSchema.options.map((option) => option.shape.type.value));
+const isLaterType = (field: unknown, known: ReadonlySet<string>) =>
+  typeof field === "object" && field !== null && typeof (field as { type?: unknown }).type === "string" && !known.has((field as { type: string }).type);
+
+/**
+ * A settings schema another build of the platform sent (the API's layout
+ * read), without the fields of a type this build does not know (a later
+ * release's field type): this build cannot read such a field's value, and
+ * the surface draws without it, as with an unset optional value. A list item
+ * field of such a type is left out of its list, and a list left without
+ * fields with it. Everything else is the schema's to check.
+ */
+export function withoutLaterSettingTypes(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  const known: ReadonlySet<string> = new Set(PLUGIN_SETTING_TYPES);
+  return value.flatMap((field) => {
+    if (isLaterType(field, known)) return [];
+    const record = field as { type?: unknown; fields?: unknown };
+    if (record?.type !== "list" || !Array.isArray(record.fields) || !record.fields.some((item) => isLaterType(item, ITEM_FIELD_TYPES))) return [field];
+    const fields = record.fields.filter((item) => !isLaterType(item, ITEM_FIELD_TYPES));
+    return fields.length > 0 ? [{ ...record, fields }] : [];
+  });
+}
+
 /** The most fields one storefront section, block or skin declares. */
 export const PLUGIN_SURFACE_SETTINGS_MAX = 40;
 /**

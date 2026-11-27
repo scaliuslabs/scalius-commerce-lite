@@ -125,7 +125,7 @@ Proxies exist where the browser needs a same-origin cookie, the derived `API_TOK
 
 ## Theme and layout
 
-`Layout.astro` renders the published theme document, or the merchant's draft while the `stp_theme_preview` cookie is valid. The API's stored-theme reader upgrades older stored documents (`parseStoredStorefrontThemeDocument`). `src/lib/storefront-theme-context.ts` validates the current schema directly and falls back to `DEFAULT_STOREFRONT_THEME` for an invalid document. It resolves once per request and shares the result through `locals`. Default tokens are in `src/styles/theme-foundation.css`. Per-store tokens and font faces are inline. Components must not restyle the page canvas: imported component CSS also reaches routes that omit the component.
+`Layout.astro` renders the published theme document, or the merchant's draft while the `stp_theme_preview` cookie is valid. The API's stored-theme reader upgrades older stored documents (`parseStoredStorefrontThemeDocument`). `src/lib/storefront-theme-context.ts` reads what the API sends with the stored read's tolerance (`readSentStorefrontThemeDocument`): a key or list member this build does not know is left out or read as the default for that one value, and only a newer document version or a broken document falls back to `DEFAULT_STOREFRONT_THEME` (uncached). It resolves once per request and shares the result through `locals`. Default tokens are in `src/styles/theme-foundation.css`. Per-store tokens and font faces are inline. Components must not restyle the page canvas: imported component CSS also reaches routes that omit the component.
 
 ## Build
 

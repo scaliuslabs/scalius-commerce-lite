@@ -15,8 +15,9 @@ import {
   resolveStorefrontTheme,
   resolveDocumentBindings,
   hasSettingBindings,
-  storeShapeSchema,
+  readSentStoreShape,
   storefrontThemeDocumentSchema,
+  repairSentStorefrontThemeDocument,
   type ResolvedStorefrontTheme,
   type ResolvedStorefrontThemeLayout,
   type StoreShape,
@@ -88,40 +89,94 @@ export interface StorefrontThemeRead {
   theme: StorefrontThemeDocument;
   /**
    * The API sent a document this storefront cannot read (a newer theme
-   * version during an API-first deploy, or a bad document): the page renders
-   * the default theme, so it must never enter the shared page cache.
+   * version during an API-first deploy, or a broken document): the page
+   * renders the default theme, so it must never enter the shared page cache.
+   * A document read with repairs is not degraded: it is this build's drawing
+   * of it (the page cache keys on the Worker's version).
    */
   degraded: boolean;
 }
 
-/** The one failure signature this isolate last reported (a log dedupe hint only). */
-let reportedThemeFailure: string | null = null;
+/** Signatures this isolate already reported (a log dedupe hint only, bounded). */
+const reportedThemeReads = new Set<string>();
+const REPORTED_THEME_READS_MAX = 32;
+
+function reportThemeReadOnce(signature: string, report: () => void): void {
+  if (reportedThemeReads.has(signature)) return;
+  if (reportedThemeReads.size >= REPORTED_THEME_READS_MAX) reportedThemeReads.clear();
+  reportedThemeReads.add(signature);
+  report();
+}
+
+function deepFreeze<T>(value: T): T {
+  if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+  }
+  return value;
+}
+
+/** A schema path as the logs show it: indexes elided, each part cut short; never a value. */
+function maskedPath(path: readonly PropertyKey[]): string {
+  return path.map((part) => (typeof part === "number" || /^\d+$/.test(String(part)) ? "#" : String(part).slice(0, 40))).join(".") || "(root)";
+}
 
 /**
- * The theme document the storefront renders for a value from the API.
- * Anything invalid renders `DEFAULT_STOREFRONT_THEME` whole (a fail-safe,
- * never a per-field repair) and reads as degraded. The failure is logged
- * once per isolate and signature, masked: the document's declared version
- * and the failing schema paths (indexes elided), never a value.
+ * The theme document the storefront renders for a value from the API
+ * (`readSentStorefrontThemeDocument`): a document of this build's version
+ * that a newer API grew (a key, a list member this build does not know)
+ * draws as itself without what this build cannot read; one of an older
+ * version is upgraded. What does not read at all (a newer version, not a
+ * document) renders `DEFAULT_STOREFRONT_THEME` whole and reads as degraded.
+ * Either is logged once per isolate and signature, masked: the document's
+ * declared version and the schema paths (indexes elided), never a value.
  */
 export function readStorefrontThemeDocument(value: unknown): StorefrontThemeRead {
-  const result = storefrontThemeDocumentSchema.safeParse(value);
-  if (result.success) return { theme: result.data, degraded: false };
   if (value === undefined || value === null) return { theme: DEFAULT_STOREFRONT_THEME, degraded: false };
+  // The fast path: a document this build reads as it is.
+  const strict = storefrontThemeDocumentSchema.safeParse(value);
+  if (strict.success) return { theme: strict.data, degraded: false };
+  // A document read with repairs is read once per isolate while the API keeps sending it (keyed by its JSON).
+  let key: string | null;
+  try { key = JSON.stringify(value); } catch { key = null; }
+  const known = key === null ? undefined : repairedThemeReads.get(key);
+  if (known) return known;
+  const read = readRepaired(value);
+  if (key !== null && key.length <= REPAIRED_THEME_READ_KEY_MAX) {
+    if (repairedThemeReads.size >= REPAIRED_THEME_READS_MAX) repairedThemeReads.delete(repairedThemeReads.keys().next().value!);
+    repairedThemeReads.set(key, read);
+  }
+  return read;
+}
+
+/** Reads this isolate repaired, by the sent document's JSON (the published theme, a preview or two): bounded. */
+const repairedThemeReads = new Map<string, StorefrontThemeRead>();
+const REPAIRED_THEME_READS_MAX = 8;
+const REPAIRED_THEME_READ_KEY_MAX = 1_000_000;
+
+function readRepaired(value: unknown): StorefrontThemeRead {
+  const read = repairSentStorefrontThemeDocument(value);
   const version = (value as { version?: unknown }).version;
   const declared = typeof version === "number" && Number.isSafeInteger(version) ? version : null;
-  const paths = result.error.issues
-    .slice(0, 3)
-    .map((issue) => issue.path.map((part) => (typeof part === "number" ? "#" : String(part).slice(0, 40))).join(".") || "(root)");
-  const signature = `${declared}:${paths.join(",")}`;
-  if (signature !== reportedThemeFailure) {
-    reportedThemeFailure = signature;
-    console.warn("[theme] Unreadable theme document; rendering the default theme uncached.", {
-      version: declared,
-      expected: DEFAULT_STOREFRONT_THEME.version,
-      paths,
-    });
+  if (read.ok) {
+    if (read.repairs) {
+      const paths = [...new Set(read.repairs.map((repair) => maskedPath(repair.path.split("."))))].slice(0, 5);
+      const reasons = [...new Set(read.repairs.map((repair) => repair.reason))];
+      reportThemeReadOnce(`repaired:${declared}:${paths.join(",")}`, () => console.warn("[theme] Theme document read with repairs; drawing it without what this build cannot read.", {
+        version: declared,
+        expected: DEFAULT_STOREFRONT_THEME.version,
+        paths,
+        reasons,
+      }));
+    }
+    // Shared by every request that gets the same document: frozen, as the default theme is.
+    return { theme: deepFreeze(read.document), degraded: false };
   }
+  reportThemeReadOnce(`unreadable:${declared}:${read.reason}`, () => console.warn("[theme] Unreadable theme document; rendering the default theme uncached.", {
+    version: declared,
+    expected: DEFAULT_STOREFRONT_THEME.version,
+    paths: (storefrontThemeDocumentSchema.safeParse(value).error?.issues ?? []).slice(0, 3).map((issue) => maskedPath(issue.path)),
+  }));
   return { theme: DEFAULT_STOREFRONT_THEME, degraded: true };
 }
 
@@ -131,15 +186,21 @@ export function readStorefrontTheme(value: unknown): StorefrontThemeDocument {
 }
 
 /**
- * The store shape from the API, strictly. Anything else reads as an empty
- * store: every block then falls back to its always-fitting variant, the
- * same fail-safe as the theme itself.
+ * The store shape from the API, fact by fact (`readSentStoreShape`): a fact
+ * a newer API added is left out, and one an older API does not send (or one
+ * out of bounds) reads as an empty store's, so only the blocks whose fit
+ * reads that fact fall back to their always-fitting variant. Anything that
+ * is not a shape reads as an empty store. Logged once per isolate and
+ * signature, by fact names only.
  */
 export function readStoreShape(value: unknown): StoreShape {
-  const result = storeShapeSchema.safeParse(value);
-  if (result.success) return result.data;
-  if (value !== undefined && value !== null) console.warn("[theme] Invalid store shape; resolving for an empty store.");
-  return EMPTY_STORE_SHAPE;
+  if (value === undefined || value === null) return EMPTY_STORE_SHAPE;
+  const read = readSentStoreShape(value);
+  if (read.shape === EMPTY_STORE_SHAPE || read.repaired.length > 0 || read.unknown > 0) {
+    const facts = read.shape === EMPTY_STORE_SHAPE ? "(all)" : read.repaired.join(",");
+    reportThemeReadOnce(`shape:${facts}:${read.unknown}`, () => console.warn("[theme] Store shape read with repairs; those facts read as an empty store's.", { facts, unknown: read.unknown }));
+  }
+  return read.shape;
 }
 
 function readBrandAsset(value: unknown, id: string | null): StorefrontBrandAsset | null {
