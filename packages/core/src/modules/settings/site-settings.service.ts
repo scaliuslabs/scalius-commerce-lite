@@ -36,6 +36,7 @@ import {
   ValidationError,
 } from "@scalius/core/errors";
 import { urlsNotReadyFilesImages } from "../media-references";
+import { themeRefusal, themeRefusalDetails } from "./theme-refusal";
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import {
   DEFAULT_STOREFRONT_THEME,
@@ -43,12 +44,16 @@ import {
   compareThemeDocuments,
   checkStorefrontThemeSave,
   compileStorefrontPrivatePages,
-  privatePagesCompiledCurrent,
+  privatePagesPolicyCurrent,
+  storedRowWithCompiled,
   privatePagesContextOf,
   privateTokenApps,
   filledPrivatePages,
-  refusedPrivatePages,
   parseStoredStorefrontThemeDocument,
+  readStoredStorefrontThemeDocument,
+  upgradeStorefrontThemeDocument,
+  withHeldRefusals,
+  storefrontRenderPrivatePages,
   STOREFRONT_THEME_DOCUMENT_MAX_BYTES,
   storefrontThemeAppIssues,
   storefrontThemeAppProblems,
@@ -61,6 +66,8 @@ import {
   storefrontSectionSchema,
   switchStorefrontTemplate,
   themeDocumentChangeSchema,
+  type PrivatePageKey,
+  type PrivatePageRefusal,
   type StorefrontLandingPage,
   type StorefrontPageTemplate,
   type StorefrontSection,
@@ -68,6 +75,9 @@ import {
   type StorefrontTemplateSwitchPlan,
   type StorefrontThemeAppManifest,
   type StorefrontThemeDocument,
+  type StorefrontThemeSaveIssue,
+  type StorefrontThemeSaveReason,
+  type StorefrontThemeReadRepair,
   type ThemeDocumentChange,
 } from "@scalius/shared/storefront-theme";
 import type { StorefrontExtension } from "@scalius/shared/plugins/storefront-components";
@@ -191,6 +201,10 @@ export const THEME_PUBLISH_NOTE_MAX = 500;
 export interface ThemeSettingsDocument {
   theme: StorefrontThemeDocument;
   revision: number;
+  /** The stored live theme did not read, and why: the theme here is the default one shoppers see. */
+  unreadable?: string;
+  /** What the read of the stored live theme repaired (a link left out, an unknown member): shoppers see it repaired. */
+  repairs?: StorefrontThemeReadRepair[];
 }
 
 export interface ThemeDraftDocument {
@@ -198,6 +212,8 @@ export interface ThemeDraftDocument {
   revision: number;
   basePublishedRevision: number;
   updatedAt: Date | null;
+  /** The stored draft did not read: it opens as the live theme, never published as it is (the next save replaces it). */
+  unreadable?: boolean;
   /** Who saved the draft last (the editor's conflict notice names them). */
   updatedBy?: string | null;
   updatedByName?: string | null;
@@ -312,15 +328,14 @@ function assertNonnegativeRevision(value: number, label: string): void {
  * (`checkStorefrontThemeSave`: schema and contrast, translations, private
  * pages, size), the same one `scalius-plugin validate` runs on an app's templates.
  */
-function serializeThemeSettings(theme: StorefrontThemeDocument): {
+function serializeThemeSettings(theme: StorefrontThemeDocument, baseline?: StorefrontThemeDocument): {
   theme: StorefrontThemeDocument;
   serialized: string;
 } {
-  const checked = checkStorefrontThemeSave(theme);
+  // What the store already holds and this write does not touch is not refused (`baseline`).
+  const checked = checkStorefrontThemeSave(theme, baseline === undefined ? {} : { baseline });
   if (!checked.ok) {
-    const { message, reason, issues } = checked.refusal;
-    // A refusal that names its reason says it once, machine-readable.
-    throw new ValidationError(message, reason ? { reason, issues: issues.slice(0, 20) } : issues);
+    throw themeRefusal(checked.refusal.message, checked.refusal.issues);
   }
   return { theme: checked.theme, serialized: checked.serialized };
 }
@@ -408,35 +423,63 @@ export async function getThemeSettings(db: Database): Promise<ThemeSettingsDocum
     : unpublishedThemeSettings();
 }
 
+/** What the maintenance compile did; `refused` names the pages this compile refused (each now draws the store's default look). */
+export type PrivatePagesRecompile =
+  | { outcome: "none" | "current" | "recompiled" | "unreadable" | "raced" }
+  | { outcome: "refused"; pages: PrivatePageKey[]; reasons: string[] };
+
 /**
- * The published theme's private pages compiled by this build when an older
- * checker wrote them (the first maintenance run after a deploy; a buyer's
- * request never compiles, and serves the default look meanwhile). One read,
- * and one write only then, at the same revision (it is the same document):
- * the row's cache dependency moves with the write. A theme this checker no
- * longer passes keeps its source and serves no compiled look until the
- * merchant saves it again.
+ * The published theme's private pages compiled by this build when its
+ * compiler or its checks did not make them (the first maintenance run after
+ * a deploy; a buyer's request never compiles). Until then a compile an older
+ * compiler made serves the store's default look, and one only an older policy
+ * passed keeps being served (`PRIVATE_POLICY_VERSION`). One read, and one
+ * write only then, at the same revision (it is the same document): the
+ * row's cache dependency moves with the write. The compile reads the theme as
+ * the read gives it (repaired) and only `privatePages.compiled` is written,
+ * its fingerprint over the stored row (`storedRowWithCompiled`): no value the
+ * read repaired is ever written. A page this compile refuses keeps its source,
+ * draws the store's default look and records why (`compiled.refused`, the
+ * save's own issues, shown to the merchant on the theme page); so does a page
+ * a field a theme cannot set reached (`withHeldRefusals`). Every other page
+ * keeps the theme's look.
  */
-export async function recompilePublishedPrivatePages(db: Database): Promise<"none" | "current" | "recompiled" | "refused" | "unreadable" | "raced"> {
+export async function recompilePublishedPrivatePages(db: Database): Promise<PrivatePagesRecompile> {
   const row = (await selectThemeSettingsRows(db))[0];
-  if (!row) return "none";
+  if (!row) return { outcome: "none" };
   // A document this build cannot read is left as it is (the merchant re-saves it); nothing to compile.
-  const theme = parseStoredStorefrontThemeDocument(row.colors);
-  if (!theme) return "unreadable";
-  if (privatePagesCompiledCurrent(theme.privatePages)) return "current";
-  // Every path stores arrangements filled for this anatomy: a newly mandatory part is never missing.
-  const result = compileStorefrontPrivatePages(filledPrivatePages(theme.privatePages), privatePagesContextOf(theme));
-  const privatePages = result.ok ? result.value : refusedPrivatePages(theme.privatePages);
+  const read = readStoredStorefrontThemeDocument(row.colors);
+  if (!read.ok) return { outcome: "unreadable" };
+  const theme = read.document;
+  if (privatePagesPolicyCurrent(theme.privatePages)) return { outcome: "current" };
+  // Every path draws arrangements filled for this anatomy: a newly mandatory part is never missing.
+  const compiled = compileStorefrontPrivatePages(filledPrivatePages(theme.privatePages), privatePagesContextOf(theme)).value;
+  const privatePages = withHeldRefusals(compiled, read.held ?? []);
+  const stored = storedRowWithCompiled(upgradeStorefrontThemeDocument(JSON.parse(row.colors) as unknown), privatePages.compiled, privatePages);
   const written = await db.update(themeSettings)
-    .set({ colors: JSON.stringify({ ...theme, privatePages }), updatedAt: sql`unixepoch()` })
+    .set({ colors: JSON.stringify(stored), updatedAt: sql`unixepoch()` })
     .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)))
     .returning({ id: themeSettings.id });
   // A publish moved the revision in between: nothing was written, so the version is not settled (tried again next run).
-  if (written.length === 0) return "raced";
-  return result.ok ? "recompiled" : "refused";
+  if (written.length === 0) return { outcome: "raced" };
+  const refused = Object.entries(privatePages.compiled.refused ?? {}) as Array<[PrivatePageKey, PrivatePageRefusal[]]>;
+  if (refused.length === 0) return { outcome: "recompiled" };
+  return { outcome: "refused", pages: refused.map(([page]) => page), reasons: [...new Set(refused.flatMap(([, issues]) => issues.map((issue) => issue.reason)))] };
 }
 
 /** The live document, the shared draft (the live one until a draft is saved) and who published last. */
+/**
+ * The live theme as the dashboard opens it, never closed: what the read
+ * repaired (`repairs`), or, when the row does not read at all, the default
+ * theme with why (`unreadable`), which is what shoppers see; the merchant
+ * fixes it by saving (a template, or the editor) and publishing.
+ */
+function readPublishedTheme(row: { colors: string; revision: number }): ThemeSettingsDocument {
+  const read = readStoredStorefrontThemeDocument(row.colors);
+  if (!read.ok) return { theme: structuredClone(DEFAULT_STOREFRONT_THEME), revision: row.revision, unreadable: read.reason.slice(0, 500) };
+  return { theme: read.document, revision: row.revision, ...(read.repairs ? { repairs: read.repairs.slice(0, 50) } : {}) };
+}
+
 export async function getThemeWorkspace(db: Database): Promise<ThemeWorkspaceDocument> {
   const [publishedRows, draftRows, latestRows] = await safeBatch(db, [
     selectThemeSettingsRows(db),
@@ -444,13 +487,14 @@ export async function getThemeWorkspace(db: Database): Promise<ThemeWorkspaceDoc
     selectThemeVersionSummaries(db).orderBy(desc(themeSettingsVersions.publishedRevision)).limit(1),
   ]);
   const publishedRow = (publishedRows as Array<{ colors: string; revision: number }>)[0];
-  const published = publishedRow
-    ? { theme: parseAuthoritativeThemeSettings(publishedRow.colors), revision: publishedRow.revision }
-    : unpublishedThemeSettings();
+  const published = publishedRow ? readPublishedTheme(publishedRow) : unpublishedThemeSettings();
   const draftRow = (draftRows as ThemeDraftRow[])[0];
+  // A draft this build cannot read opens as the live theme: the merchant's next save replaces it.
+  const draftTheme = draftRow ? parseStoredStorefrontThemeDocument(draftRow.theme) : null;
   const draft: ThemeDraftDocument = draftRow
     ? {
-      theme: parseAuthoritativeThemeSettings(draftRow.theme),
+      theme: draftTheme ?? published.theme,
+      ...(draftTheme ? {} : { unreadable: true }),
       revision: draftRow.revision,
       basePublishedRevision: draftRow.basePublishedRevision,
       updatedAt: draftRow.updatedAt,
@@ -513,18 +557,19 @@ async function assertThemeReferences(db: Database, theme: StorefrontThemeDocumen
   const installed = new Set((appRows as Array<{ id: string }>).map((row) => row.id));
   const missing = apps.filter((app) => !installed.has(app));
   if (missing.length > 0) {
-    throw new ValidationError(`${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} not installed: a private page styles only installed apps' blocks. Remove the ui.*@${missing[0]} tokens or install the app.`, { reason: "unknown_app", apps: missing });
+    const message = `${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} not installed: a private page styles only installed apps' blocks. Remove the ui.*@${missing[0]} tokens or install the app.`;
+    throw themeRefusal(message, missing.map((app) => ({ path: "privatePages.tokens", message: `${app} is not installed.`, reason: "unknown_app" })), { apps: missing });
   }
   const images = new Set((mediaRows as Array<{ id: string; kind: string }>)
     .filter((row) => row.kind === "image")
     .map((row) => row.id));
   const issues = references
     .filter((reference) => !images.has(reference.mediaId))
-    .map((reference) => ({ path: reference.path, message: "That image is not in Files any more. Choose another image." }));
+    .map((reference): StorefrontThemeSaveIssue => ({ path: reference.path, message: "That image is not in Files any more. Choose another image.", reason: "media_missing" }));
   if (productId !== null && (productRows as unknown[]).length === 0) {
-    issues.push({ path: "pages.homeMode.productId", message: "That product is unavailable or in trash. Choose another product." });
+    issues.push({ path: "pages.homeMode.productId", message: "That product is unavailable or in trash. Choose another product.", reason: "home_product_unavailable" });
   }
-  if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues);
+  if (issues.length > 0) throw themeRefusal(issues[0]!.message, issues);
 }
 
 /** The images a theme names that are no longer (ready or trashed) images in Files. */
@@ -547,7 +592,7 @@ export const THEME_VERSION_IMAGES_MISSING = "theme_version_images_missing";
  * to the store's own design (`details.apps`: each app's id, name, reason and
  * parts; `details.moreParts`: parts left out of the list).
  */
-export const THEME_APPS_UNAVAILABLE = "theme_apps_unavailable";
+export const THEME_APPS_UNAVAILABLE = "theme_apps_unavailable" satisfies StorefrontThemeSaveReason;
 
 /**
  * What the store's apps draw, as the publishing route reads it: the active
@@ -580,10 +625,13 @@ function assertThemeApps(theme: StorefrontThemeDocument, apps: ThemePublishApps)
     ...(inactive.length > 0 ? [`This theme uses parts of ${englishList(inactive)}, which ${inactive.length === 1 ? "is" : "are"} not active. Activate ${englishList(inactive)} in Apps, or remove ${inactive.length === 1 ? "its" : "their"} parts from the theme.`] : []),
     ...(outdated.length > 0 ? [`${englishList(outdated)} no longer ${outdated.length === 1 ? "offers" : "offer"} some parts this theme uses. Remove those parts from the theme.`] : []),
   ];
-  throw new AppError(400, THEME_APPS_UNAVAILABLE, sentences.join(" "), problems);
+  throw new AppError(400, THEME_APPS_UNAVAILABLE, sentences.join(" "), {
+    ...themeRefusalDetails(problems.apps.map((app) => ({ path: "apps", message: `${app.name ?? app.pluginId}: ${app.reason === "not_declared" ? "no longer offers parts this theme uses" : "not active"}.`, reason: THEME_APPS_UNAVAILABLE }))),
+    ...problems,
+  });
 }
 
-export const THEME_APP_SETTINGS_MISSING = "theme_app_settings_missing";
+export const THEME_APP_SETTINGS_MISSING = "theme_app_settings_missing" satisfies StorefrontThemeSaveReason;
 
 /**
  * A theme going live shows no app part without a setting its app requires:
@@ -614,7 +662,7 @@ function assertThemeAppSettings(theme: StorefrontThemeDocument, apps: ThemePubli
     400,
     THEME_APP_SETTINGS_MISSING,
     `${missing.length === 1 ? "An app part in this theme needs a setting" : `${missing.length} app parts in this theme need settings`} before it can go live. Open the theme editor and fix ${missing.length === 1 ? "it" : "them"}, or remove ${missing.length === 1 ? "it" : "them"}.`,
-    { paths: missing.map((reference) => reference.path) },
+    { ...themeRefusalDetails(missing.map((reference) => ({ path: reference.path, message: "This app part needs a setting before it can go live.", reason: THEME_APP_SETTINGS_MISSING }))), paths: missing.map((reference) => reference.path) },
   );
 }
 
@@ -726,10 +774,12 @@ async function writeThemeDraft(
   restorePoint?: { previous: StorefrontThemeDocument; reason: ThemeRestorePointReason; template?: string },
   /** More writes that commit with the draft or not at all (a template switch remembers the design it leaves). */
   also: ReturnType<typeof rememberTemplateDesignStatements> = [],
+  /** What the store already holds here: issues it already had are not this write's to fix (`checkStorefrontThemeSave`). */
+  baseline?: StorefrontThemeDocument,
 ): Promise<{ theme: StorefrontThemeDocument; revision: number; updatedAt: Date }> {
   assertNonnegativeRevision(expectedDraftRevision, "draft");
   assertNonnegativeRevision(expectedBasePublishedRevision, "base published");
-  const normalized = serializeThemeSettings(theme);
+  const normalized = serializeThemeSettings(theme, baseline);
   await assertThemeReferences(db, normalized.theme);
   // A draft that was never saved has nothing to keep.
   const keep = [
@@ -764,9 +814,21 @@ export async function saveThemeDraft(
   expectedDraftRevision: number,
   basePublishedRevision: number,
   actorId: string | null = null,
+  /** The draft this replaces, when the caller already read it. */
+  current?: StorefrontThemeDocument,
 ): Promise<ThemeDraftDocument> {
-  const saved = await writeThemeDraft(db, theme, expectedDraftRevision, basePublishedRevision, basePublishedRevision, actorId);
+  // Only what this save changes is checked: what the draft already held is the merchant's to fix in their time.
+  const baseline = current ?? await currentDraftTheme(db);
+  const saved = await writeThemeDraft(db, theme, expectedDraftRevision, basePublishedRevision, basePublishedRevision, actorId, undefined, [], baseline ?? undefined);
   return { ...saved, basePublishedRevision };
+}
+
+/** The shared draft as stored (the live theme when no draft was saved), read leniently; null when neither reads. */
+async function currentDraftTheme(db: Database): Promise<StorefrontThemeDocument | null> {
+  const [draftRows, publishedRows] = await safeBatch(db, [selectThemeDraftRows(db), selectThemeSettingsRows(db)]);
+  const draft = (draftRows as ThemeDraftRow[])[0];
+  const published = (publishedRows as Array<{ colors: string }>)[0];
+  return parseStoredStorefrontThemeDocument(draft?.theme ?? published?.colors ?? null);
 }
 
 /** The page an agent edits on its own: the homepage sections, or one landing page (null removes it). */
@@ -790,7 +852,7 @@ export async function saveThemePageDraft(
   if (edit.page === "home") theme.pages.home = edit.value;
   else if (edit.value === null) delete theme.pages.landing[edit.slug];
   else theme.pages.landing[edit.slug] = edit.value;
-  return saveThemeDraft(db, theme, expectedDraftRevision, basePublishedRevision, actorId);
+  return saveThemeDraft(db, theme, expectedDraftRevision, basePublishedRevision, actorId, workspace.draft.theme);
 }
 
 /** Puts a published version in the draft (never live), on the current live revision. */
@@ -815,10 +877,11 @@ export async function restoreThemeVersion(
     throw new AppError(400, THEME_VERSION_IMAGES_MISSING, `This version uses ${missing.size === 1 ? "an image" : `${missing.size} images`} no longer in Files. Restore it without ${missing.size === 1 ? "it" : "them"}, or add ${missing.size === 1 ? "it" : "them"} back to Files first.`, { missingImages: missing.size });
   }
   const theme = storefrontThemeWithoutMedia(version.theme, missing);
+  // A published version the store holds, written back: what it already held is not refused.
   const saved = await writeThemeDraft(db, theme, expectedDraftRevision, workspace.draft.basePublishedRevision, basePublishedRevision, actorId, {
     previous: workspace.draft.theme,
     reason: "restore",
-  });
+  }, [], version.theme);
   return {
     ...themeStatus(workspace),
     draft: { revision: saved.revision, basePublishedRevision, updatedAt: saved.updatedAt },
@@ -835,10 +898,11 @@ export async function discardThemeDraft(
 ): Promise<ThemeStatus> {
   const workspace = await getThemeWorkspace(db);
   if (workspace.published.revision !== basePublishedRevision) throw themeConflict();
+  // The live theme written back as the draft: nothing changes, so nothing it already held is refused.
   const saved = await writeThemeDraft(db, workspace.published.theme, expectedDraftRevision, workspace.draft.basePublishedRevision, basePublishedRevision, actorId, {
     previous: workspace.draft.theme,
     reason: "discard",
-  });
+  }, [], workspace.published.theme);
   return {
     ...themeStatus(workspace),
     draft: { revision: saved.revision, basePublishedRevision, updatedAt: saved.updatedAt },
@@ -887,7 +951,9 @@ export async function publishThemeDraft(
     || workspace.draft.basePublishedRevision !== expectedPublishedRevision) {
     throw themeConflict();
   }
-  const normalized = serializeThemeSettings(workspace.draft.theme);
+  if (workspace.draft.unreadable) throw new ServiceUnavailableError("The storefront style draft is unreadable. Save the draft again before publishing.");
+  // Publishing changes the live theme from what is live to the draft: what the live theme already held is not refused.
+  const normalized = serializeThemeSettings(workspace.draft.theme, workspace.published.theme);
   await assertThemeReferences(db, normalized.theme);
   assertThemeApps(normalized.theme, apps);
   assertThemeAppSettings(normalized.theme, apps);
@@ -1070,10 +1136,11 @@ export async function restoreThemeRestorePoint(
     throw new AppError(400, THEME_VERSION_IMAGES_MISSING, `This restore point uses ${missing.size === 1 ? "an image" : `${missing.size} images`} no longer in Files. Restore it without ${missing.size === 1 ? "it" : "them"}, or add ${missing.size === 1 ? "it" : "them"} back to Files first.`, { missingImages: missing.size });
   }
   const theme = storefrontThemeWithoutMedia(point.theme, missing);
+  // A restore point the store holds, written back: what it already held is not refused.
   const saved = await writeThemeDraft(db, theme, expectedDraftRevision, workspace.draft.basePublishedRevision, basePublishedRevision, actorId, {
     previous: workspace.draft.theme,
     reason: "restore",
-  });
+  }, [], point.theme);
   return {
     ...themeStatus(workspace),
     draft: { revision: saved.revision, basePublishedRevision, updatedAt: saved.updatedAt },
@@ -1434,8 +1501,10 @@ export async function resolveThemePreviewSession(
   ]);
   const row = (results[1] as Array<{ theme: string; draftRevision: number; basePublishedRevision: number; expiresAt: Date }>)[0];
   if (!row) return null;
+  const theme = sourceRevision === null ? parseAuthoritativeThemeSettings(row.theme) : parseVersionRow(row.theme).theme;
   return {
-    theme: sourceRevision === null ? parseAuthoritativeThemeSettings(row.theme) : parseVersionRow(row.theme).theme,
+    // The storefront draws the preview: it is sent the pages it serves, as the live theme is.
+    theme: { ...theme, privatePages: storefrontRenderPrivatePages(theme.privatePages) },
     draftRevision: row.draftRevision,
     basePublishedRevision: row.basePublishedRevision,
     expiresAt: row.expiresAt,

@@ -386,7 +386,7 @@ const dialogLabels = Object.fromEntries(Object.entries(cartPlan.labels).filter((
   hideHeader
   hideFooter
   hideNavigationSidebar
-  privateHeader={{ copy, controls: privateControlsPlace(cartRequestTheme.theme.privatePages) }}
+  privateHeader={{ copy, controls: privateControlsPlace(cartRequestTheme.theme.privatePages, "cart") }}
   privateStyle={cartStyle}
   privateTokens={cartPlan.tokens}
 >

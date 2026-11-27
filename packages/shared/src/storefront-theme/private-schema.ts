@@ -38,14 +38,58 @@ export type PrivateTokens = Partial<Record<PrivatePageKey, Record<string, Partia
  * weight and contrast too, and no descriptive label holds a figure. Version 8:
  * the look is compiled per page, and a page is in token mode where it has one.
  * Version 9: a `size` scales with the page's width, not its column's.
- * Version 10: every filled button (`action`) is found by its fill or its edge;
- * the account's look has rows for every page it reaches (its conversations and
- * messages, its pills anywhere, a filled button that removes something).
+ * Version 10: a refusal is per page (that page draws the store's default
+ * look, the others keep theirs) and records why; a page joins token mode
+ * only when the theme names it (`pages.<page>` or `tokens.<page>`), a page
+ * paint alone no longer puts it there.
+ * Version 11: the look reaches every page its key covers (`PRIVATE_PAGE_ROUTES`)
+ * and writes rows for the parts a buyer reads there (conversations and their
+ * messages, review stars, an order's payment choices, the menu's count pill, a
+ * filled button that removes something), underlines hovered controls where a
+ * box has no hover surface, and gives `action` only to real buttons and links.
  */
-export const PRIVATE_CHECKER_VERSION = 10;
+export const PRIVATE_CHECKER_VERSION = 11;
+
+/**
+ * Two versions of the private pages' compile, because they fail differently:
+ *
+ * - `PRIVATE_CHECKER_VERSION` (stored as `sanitizer`), the compiler's: what
+ *   CSS it writes and how (the host's rules, token mode, the anatomy it reads).
+ *   A compile an older compiler made is never served: the pages draw the
+ *   store's default look until this build compiles them. Bump it only for a
+ *   change to what is written, or a safety fix to it.
+ * - `PRIVATE_POLICY_VERSION` (stored as `policy`), the checks': which values a
+ *   save refuses (a floor, a rank, a word rule, a new reason). A compile an
+ *   older policy passed keeps being served (it is still the host's own rules
+ *   from typed values, and it passed the policy of its day) until the
+ *   maintenance compile replaces it, refusing only the pages this policy no
+ *   longer passes. Bump it for a stricter or new check.
+ *
+ * Policy 2: the new account and receipt rows are checked (stars at 3:1, a
+ * chosen payment option apart from the others where the theme sets both
+ * colours, a box's muted and link words on its hover surface), and every
+ * control that starts a payment is a main action (its fill or its edge).
+ */
+export const PRIVATE_POLICY_VERSION = 2;
 
 /** The most compiled token CSS a page stores (each page serves only its own). */
 export const PRIVATE_COMPILED_CSS_MAX_BYTES = 64 * 1024;
+
+/** The most reasons a refused page records (the first ones a save would give). */
+export const PRIVATE_PAGE_REFUSALS_MAX = 8;
+
+/** Why a page's compile was refused: the save's own issue (its path in the document, reason code and words). */
+export interface PrivatePageRefusal {
+  path: string;
+  reason: string;
+  message: string;
+}
+
+const privatePageRefusalSchema = z.object({
+  path: z.string().max(240),
+  reason: z.string().regex(/^[a-z][a-z0-9_]{0,47}$/),
+  message: z.string().max(600),
+}).strict().meta({ id: "StorefrontPrivatePageRefusal" });
 
 /** Bounds of the theme's words on private pages. */
 export const PRIVATE_WORDS_LIMITS = { languages: 8, text: 500 } as const;
@@ -152,34 +196,43 @@ const HELD = {
 } as const;
 const heldFields = Object.fromEntries(Object.keys(HELD).map((key) => [key, z.unknown().optional()])) as Record<keyof typeof HELD, z.ZodOptional<z.ZodUnknown>>;
 
+/** What a stored document held that a theme cannot set: on one page (a content block in its arrangement), or theme-wide (null). */
+export interface PrivatePagesHeld {
+  page: PrivatePageKey | null;
+  label: string;
+}
+
 /**
  * A stored document's `privatePages` as this build reads it (the stored
  * document's path only: a save parses `storefrontPrivatePagesSchema` and
  * refuses each with `not_available`): what a theme cannot set here (`HELD`,
- * a content block anywhere in an arrangement) dropped, and `held` true when
- * any of it said something. The reader then marks the private pages' compile
- * refused (`refusedPrivatePages`): they draw the store's default look until
- * the next save, and the rest of the theme stays.
+ * a content block anywhere in an arrangement) dropped, and `held` naming
+ * each that said something. The reader then refuses the pages it reached
+ * (`refusedPrivatePages`): they draw the store's default look until the next
+ * save, and the rest of the theme stays.
  */
-export function readStoredPrivatePages(value: unknown): { value: unknown; held: boolean } {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return { value, held: false };
-  let held = false;
+export function readStoredPrivatePages(value: unknown): { value: unknown; held: PrivatePagesHeld[] } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return { value, held: [] };
+  const held: PrivatePagesHeld[] = [];
   const rest: Record<string, unknown> = { ...value };
   for (const [key, entry] of Object.entries(HELD)) {
     if (!(key in rest)) continue;
-    held ||= !entry.empty(rest[key]);
+    if (!entry.empty(rest[key])) held.push({ page: null, label: entry.label });
     delete rest[key];
   }
   const record = (each: unknown): each is Record<string, unknown> => typeof each === "object" && each !== null && !Array.isArray(each);
-  const nodes = (list: unknown): unknown => Array.isArray(list) ? list.flatMap((node) => {
-    if (record(node) && node.type === "content") { held = true; return []; }
-    return [record(node) && node.type === "layout" ? { ...node, children: nodes(node.children) } : node];
+  const nodes = (list: unknown, page: string): unknown => Array.isArray(list) ? list.flatMap((node) => {
+    if (record(node) && node.type === "content") {
+      if ((PRIVATE_PAGE_KEYS as readonly string[]).includes(page) && !held.some((each) => each.page === page)) held.push({ page: page as PrivatePageKey, label: "A content block" });
+      return [];
+    }
+    return [record(node) && node.type === "layout" ? { ...node, children: nodes(node.children, page) } : node];
   }) : list;
   if (record(rest.pages)) {
     rest.pages = Object.fromEntries(Object.entries(rest.pages).map(([page, arrangement]) => [page, record(arrangement) ? {
       ...arrangement,
-      ...("layout" in arrangement ? { layout: nodes(arrangement.layout) } : {}),
-      ...(record(arrangement.items) ? { items: Object.fromEntries(Object.entries(arrangement.items).map(([item, layout]) => [item, nodes(layout)])) } : {}),
+      ...("layout" in arrangement ? { layout: nodes(arrangement.layout, page) } : {}),
+      ...(record(arrangement.items) ? { items: Object.fromEntries(Object.entries(arrangement.items).map(([item, layout]) => [item, nodes(layout, page)])) } : {}),
     } : arrangement]));
   }
   return { value: rest, held };
@@ -211,37 +264,48 @@ export const storefrontPrivatePagesSchema = z.object({
      * set its tokens, or has a page paint); a page serves only its own entry.
      */
     css: z.partialRecord(z.enum(PRIVATE_PAGE_KEYS as [PrivatePageKey, ...PrivatePageKey[]]), z.string().max(PRIVATE_COMPILED_CSS_MAX_BYTES)),
-    /** The store's maintenance compile refused this source: the pages draw the default look until a save. */
-    refused: z.boolean().optional(),
+    /**
+     * The pages this source was refused on, each with why (the save's own issues: path, reason, words): each
+     * draws the store's default look until a save, the others serve theirs. The merchant is shown them.
+     */
+    refused: z.partialRecord(z.enum(PRIVATE_PAGE_KEYS as [PrivatePageKey, ...PrivatePageKey[]]), z.array(privatePageRefusalSchema).min(1).max(PRIVATE_PAGE_REFUSALS_MAX)).optional(),
+    /** The checks' version (`PRIVATE_POLICY_VERSION`; absent: before it was stored): an older one is still served, and maintenance compiles again. */
+    policy: z.number().int().min(0).optional(),
+    /**
+     * A fingerprint of the source and of this compile (`privatePagesDigest`): a read serves the compile only
+     * while it matches, so a stored look edited apart from its source (a row written by hand) is never served.
+     */
+    digest: z.string().regex(/^[a-z0-9]{1,32}$/).optional(),
   }).strict()),
 }).strict().superRefine(refuseHeld).transform(withoutHeld);
 
 /**
  * What a checker before version 7 wrote (one stylesheet for every page and a
- * token-mode flag): read as never compiled, so no page serves it and
- * maintenance compiles the published theme again.
+ * token-mode flag), or before version 10 (one refusal for every page, with no
+ * reason): read as never compiled, so no page serves it and maintenance
+ * compiles the published theme again.
  */
 function compiledOfAnEarlierChecker(value: unknown): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
-  const { css, tokenMode: _tokenMode, ...rest } = value as Record<string, unknown>;
-  return typeof css === "string" ? { ...rest, sanitizer: 0, css: {} } : value;
+  const { css, tokenMode: _tokenMode, refused, ...rest } = value as Record<string, unknown>;
+  return typeof css === "string" || typeof refused === "boolean" ? { ...rest, sanitizer: 0, css: {} } : value;
 }
 
 /** What an app template may set: any of it but the compiled output, which the store writes on save. */
 export const storefrontPrivatePagesTemplateSchema = z.object({ ...privatePagesFields, ...heldFields }).partial().strict().superRefine(refuseHeld).transform(withoutHeld);
 
 export interface StorefrontPrivatePages {
-  /** Where the store's controls sit (unset: the store's checkout header). */
+  /** Where the store's controls sit on the pages the theme names (unset: the store's checkout header). */
   controls?: PrivateControlPlace;
   pages: Partial<Record<PrivatePageKey, PrivatePageArrangement>>;
   tokens: PrivateTokens;
   labels: Partial<Record<string, PrivateWords | string>>;
   icons: Partial<Record<string, PrivateAssetRef>>;
-  compiled: { anatomy: number; sanitizer: number; css: Partial<Record<PrivatePageKey, string>>; refused?: boolean };
+  compiled: { anatomy: number; sanitizer: number; css: Partial<Record<PrivatePageKey, string>>; refused?: Partial<Record<PrivatePageKey, PrivatePageRefusal[]>>; policy?: number; digest?: string };
 }
 export type StorefrontPrivatePagesTemplate = Partial<Omit<StorefrontPrivatePages, "compiled">>;
 
 /** The private pages as the host draws them with no theme of its own. */
 export function storefrontPrivatePagesDefault(): StorefrontPrivatePages {
-  return { pages: {}, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: {} } };
+  return { pages: {}, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, policy: PRIVATE_POLICY_VERSION, css: {} } };
 }

@@ -2,7 +2,7 @@ import type { Database } from "@scalius/database/client";
 import { customFieldDefinitions, objectTypes, pluginInstallations } from "@scalius/database/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { ValidationError } from "@scalius/core/errors";
+import { themeRefusal } from "./theme-refusal";
 import { pluginSettingsSchemaSchema, type PluginSettingsSchema } from "@scalius/shared/plugins";
 import {
   bindingSettingType,
@@ -129,7 +129,7 @@ function assertObjectTypeLimit(theme: StorefrontThemeDocument, sites: BindingSit
   const global = pages.get("global") ?? [];
   for (const [path, types] of pages) {
     if (new Set([...global, ...types]).size > 4) {
-      throw new ValidationError("Connect at most four object types on one page.", [{ path, message: "Global block sources count toward the page's four object types." }]);
+      throw themeRefusal("Connect at most four object types on one page.", [{ path, message: "Global block sources count toward the page's four object types.", reason: "binding_object_types" }]);
     }
   }
 }
@@ -255,5 +255,5 @@ export async function assertThemeBindings(db: Database, theme: StorefrontThemeDo
       }
     }
   }
-  if (issues.length) throw new ValidationError(issues[0]!.message, issues);
+  if (issues.length) throw themeRefusal(issues[0]!.message, issues.map((issue) => ({ ...issue, reason: "binding_source" as const })));
 }

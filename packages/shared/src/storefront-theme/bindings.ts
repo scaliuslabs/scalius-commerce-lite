@@ -37,10 +37,13 @@ export function parseSettingSource(value: string): SettingSource | null {
   return null;
 }
 
+/** The most settings one part connects to data: a read bound, which only rises. */
+export const STOREFRONT_SETTING_BINDINGS_MAX = 20;
+
 export const storefrontSettingBindingsSchema = z.record(
   z.string().max(160).refine((path) => safeParts(path.split(".")), "Use a setting path."),
   z.object({ source: z.string().refine((source) => parseSettingSource(source) !== null, "Use a resource or object source.") }).strict(),
-).refine((bindings) => Object.keys(bindings).length <= 20, "At most 20 connected settings.");
+).refine((bindings) => Object.keys(bindings).length <= STOREFRONT_SETTING_BINDINGS_MAX, `At most ${STOREFRONT_SETTING_BINDINGS_MAX} connected settings.`);
 
 export function bindingSettingType(kind: string, key: string): BindingSettingType | null {
   const name = key.split(".").at(-1) ?? key;

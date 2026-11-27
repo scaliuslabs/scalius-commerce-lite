@@ -227,11 +227,11 @@ A template that leaves dark off (`light`, no switch) keeps the merchant's own sc
 **What the store refuses is what validate refuses.** The store checks a template by applying it to the default theme and running the save check every theme save and publish runs: readable text in every colour set the template shows (its `colors`, and its `darkColors` and `pagePaint` as you wrote them, never remade), helper text apart from the error colour, the private pages (arrangement, tokens, words, icons) and the homepage sections. A template that fails is not offered in the store's template library, and the app's page says why. `validate` runs the same function and prints each refused value with its place in your manifest, the store's words (what is wrong and what is allowed) and its reason when it has one:
 
 ```text
-✗ Theme templates: storefront.templates[0] (studio).theme.tokens.colors.destructive: destructive on card has contrast 4.28:1; it needs at least 4.5:1.
+✗ Theme templates: storefront.templates[0] (studio).theme.tokens.colors.destructive: destructive on card has contrast 4.28:1; it needs at least 4.5:1. [contrast]
 ✗ Theme templates: storefront.templates[0] (studio).theme.privatePages.labels.cart.summaryHeading.en: These words sit among the amounts: no digits or currency signs; the store writes every amount. [label_figures]
 ```
 
-A template that sets blocks but no tokens is checked against the default colours it keeps (`theme (the default theme's tokens.colors…, which this template keeps)`). A merchant's own blocks can still add a pair your palette fails; set the blocks your palette is made for.
+These colour checks (`contrast`, `semantic_color`, `dark_colors_missing`) run when a theme is written (saved, published, installed, applied, validated), never when a stored one is read: a store whose theme a later, stricter check refuses keeps drawing it as saved, and is told only when it saves again. A template that sets blocks but no tokens is checked against the default colours it keeps (`theme (the default theme's tokens.colors…, which this template keeps)`). A merchant's own blocks can still add a pair your palette fails; set the blocks your palette is made for.
 
 ```ts
 templates: [{

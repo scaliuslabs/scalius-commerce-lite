@@ -44,7 +44,8 @@ const fields = (properties: Record<string, unknown>, optional: readonly string[]
  * retyped one), and the code's `meaning` names each field an app reads.
  */
 const DETAILS = {
-  validation_error: fields({ issues: { type: "array", maxItems: 20, items: fields({ path: { type: "array", items: { anyOf: [{ type: "string" }, { type: "integer" }] } }, message: { type: "string" } }) } }, ["issues"]),
+  // A refusal that names a machine-readable reason (a theme's: the sealed STOREFRONT_THEME_SAVE_REASONS) says it once and on each issue.
+  validation_error: fields({ reason: { type: "string" }, issues: { type: "array", maxItems: 20, items: fields({ path: { type: "array", items: { anyOf: [{ type: "string" }, { type: "integer" }] } }, message: { type: "string" }, reason: { type: "string" } }, ["reason"]) } }, ["issues", "reason"]),
   admin_order_create_request_mismatch: fields({ state: { type: "string", enum: ["committed", "processing", "failed"] }, canRetryWithNewKey: { type: "boolean" }, orderId: id }, ["orderId"]),
   handle_unresolved: fields({ unresolved: { type: "array", maxItems: 20, items: fields({ kind: { type: "string" }, handle: { type: "string" } }) } }),
   payout_request_mismatch: fields({ payoutId: id }),
@@ -62,7 +63,7 @@ export const APP_ERROR_CODES = {
   // ── Any operation ──
   validation_error: {
     status: 400,
-    meaning: "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message). A path is into the operation's input; for an address it names the field within that address, and where the operation checks a normalised form of its input (products.create, orders.create), it is into that form.",
+    meaning: "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message). A refusal with a machine-readable reason (a theme's, one of STOREFRONT_THEME_SAVE_REASONS) carries it as details.reason and on each issue it applies to. A path is into the operation's input; for an address it names the field within that address, and where the operation checks a normalised form of its input (products.create, orders.create), it is into that form.",
     details: DETAILS.validation_error,
   },
   invalid_cursor: { status: 400, meaning: "The cursor is not one this list issued for this order; start again from the first page." },
