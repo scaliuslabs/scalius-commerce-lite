@@ -337,17 +337,20 @@ const record = (value: unknown): Record<string, unknown> => (value && typeof val
 /**
  * The fingerprint of a stored compile and everything it was made from: the
  * private pages' source as stored (the read's input, never a value the read
- * repaired), and what the compile was checked against (the palettes, the
+ * repaired) and as the read gives it (repaired), and what the compile was checked against (the palettes, the
  * scheme, the page paint, the theme's app, the payment step's block;
  * `privatePagesContextOf`'s inputs). A change to any of them makes the stored
  * compile not this source's.
  */
-export function privatePagesDigest(document: StorefrontPrivatePagesDigestInput): string {
+export function privatePagesDigest(document: StorefrontPrivatePagesDigestInput, read: Pick<StorefrontPrivatePages, "controls" | "pages" | "tokens" | "labels" | "icons">): string {
   const privatePages = record(document.privatePages);
   const tokens = record(document.tokens);
   const { digest: _digest, ...compiled } = record(privatePages.compiled);
   return storefrontFingerprint(storefrontCanonicalJson({
     source: { controls: privatePages.controls, pages: privatePages.pages, tokens: privatePages.tokens, labels: privatePages.labels, icons: privatePages.icons },
+    // The source as the read gives it (repaired) too: a later release whose repair gives another source never
+    // serves a compile made from the old one.
+    read: { controls: read.controls, pages: read.pages, tokens: read.tokens, labels: read.labels, icons: read.icons },
     compiled,
     context: {
       colors: tokens.colors, darkColors: tokens.darkColors, colorScheme: tokens.colorScheme, colorSchemeToggle: tokens.colorSchemeToggle,
@@ -371,7 +374,7 @@ export function withPrivatePagesDigest<Document extends StorefrontPrivatePagesDi
   const { digest: _digest, ...compiled } = document.privatePages.compiled;
   const without = { ...document, privatePages: { ...document.privatePages, compiled } };
   if (privatePagesEmpty(without.privatePages)) return without;
-  return { ...without, privatePages: { ...without.privatePages, compiled: { ...compiled, digest: privatePagesDigest(without) } } };
+  return { ...without, privatePages: { ...without.privatePages, compiled: { ...compiled, digest: privatePagesDigest(without, without.privatePages) } } };
 }
 
 /**
@@ -386,7 +389,7 @@ export function storedRowWithCompiled(row: Record<string, unknown>, compiled: St
   const { digest: _digest, ...without } = compiled;
   const next = { ...row, privatePages: { ...record(row.privatePages), compiled: without } };
   if (privatePagesEmpty({ ...read, compiled: without })) return next;
-  const digest = privatePagesDigest({ ...next, privatePages: readStoredPrivatePages(next.privatePages).value });
+  const digest = privatePagesDigest({ ...next, privatePages: readStoredPrivatePages(next.privatePages).value }, read);
   return { ...next, privatePages: { ...next.privatePages, compiled: { ...without, digest } } };
 }
 
@@ -397,7 +400,7 @@ export function storedRowWithCompiled(row: Record<string, unknown>, compiled: St
  * kept over a palette it was not checked on, is never served.
  */
 export function privatePagesCompiledIntact(stored: StorefrontPrivatePagesDigestInput, read: StorefrontPrivatePages): boolean {
-  if (read.compiled.digest !== undefined) return read.compiled.digest === privatePagesDigest(stored);
+  if (read.compiled.digest !== undefined) return read.compiled.digest === privatePagesDigest(stored, read);
   // A compile that serves nothing over a source that says nothing (the store's own pages) has nothing to protect.
   return privatePagesEmpty(read);
 }

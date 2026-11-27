@@ -1,0 +1,44 @@
+{
+ "checker": 10,
+ "policy": 1,
+ "css": {
+  "store's own pages": {},
+  "cart shape tokens": {
+   "cart": "127639b1jpud33"
+  },
+  "payment step tokens": {
+   "checkout": "1i0z0cj7ll69b"
+  },
+  "page paint, cart named": {
+   "cart": "15gp6n81ozc9ie"
+  },
+  "dark scheme cart tokens": {
+   "cart": "11bw694c2zb78"
+  },
+  "the reference cart, both schemes": {
+   "cart": "otx401xv0at1"
+  },
+  "refused: unreadable total": {},
+  "refused: a figure in a heading": {},
+  "refused: a missing part": {}
+ },
+ "verdicts": {
+  "store's own pages": [],
+  "cart shape tokens": [],
+  "payment step tokens": [],
+  "page paint, cart named": [],
+  "dark scheme cart tokens": [],
+  "the reference cart, both schemes": [],
+  "refused: unreadable total": [
+   "privatePages.tokens.cart.summary-total:contrast",
+   "privatePages.tokens.cart.summary-total:prominence"
+  ],
+  "refused: a figure in a heading": [
+   "privatePages.labels.cart.heading.en:label_figures"
+  ],
+  "refused: a missing part": [
+   "privatePages.pages.cart.layout:missing_part",
+   "privatePages.pages.cart.layout:missing_target"
+  ]
+ }
+}

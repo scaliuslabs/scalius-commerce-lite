@@ -12,7 +12,7 @@
  */
 import { z } from "zod";
 import {
-  PLUGIN_LINK,
+  isPluginLinkValue,
   PLUGIN_MEDIA_ID,
   PLUGIN_PRODUCT_ID,
   PLUGIN_PRODUCT_SOURCE,
@@ -183,7 +183,7 @@ export function appSettingProblem(field: ThemeAppSettingField, value: unknown): 
       return PLUGIN_PRODUCT_SOURCE.test(value) ? null : { kind: "invalid" };
     }
     case "link":
-      return typeof value === "string" && value.length <= LINK_MAX && PLUGIN_LINK.test(value) ? null : { kind: "link" };
+      return typeof value === "string" && value.length <= LINK_MAX && isPluginLinkValue(value) ? null : { kind: "link" };
     case "list": {
       if (!Array.isArray(value) || !value.every(isItem)) return { kind: "invalid" };
       // An item names only its declared fields (the app reads a list with others as unset).

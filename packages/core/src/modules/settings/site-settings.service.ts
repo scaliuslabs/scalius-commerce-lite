@@ -455,7 +455,7 @@ export async function recompilePublishedPrivatePages(db: Database): Promise<Priv
   // Every path draws arrangements filled for this anatomy: a newly mandatory part is never missing.
   const compiled = compileStorefrontPrivatePages(filledPrivatePages(theme.privatePages), privatePagesContextOf(theme)).value;
   const privatePages = withHeldRefusals(compiled, read.held ?? []);
-  const stored = storedRowWithCompiled(upgradeStorefrontThemeDocument(JSON.parse(row.colors) as unknown), privatePages.compiled, privatePages);
+  const stored = storedRowWithCompiled(upgradeStorefrontThemeDocument(JSON.parse(row.colors) as unknown), privatePages.compiled, theme.privatePages);
   const written = await db.update(themeSettings)
     .set({ colors: JSON.stringify(stored), updatedAt: sql`unixepoch()` })
     .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)))

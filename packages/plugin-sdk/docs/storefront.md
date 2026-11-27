@@ -181,7 +181,7 @@ Sections, components and skins use the app settings types (`text`, `textarea`, `
 | `image` | a media id | `StorefrontImage` (`url`, `width`, `height`, `alt`, `srcset`) or `null` |
 | `products` (`limit` up to 36) | a source: `newest`, `on-sale`, `popular`, `collection:<id>` or `category:<id>` | up to `limit` `StorefrontProductCard`s, priced in the buyer's market |
 | `product` | a product id | one card or `null` |
-| `link` | a store path or an `https://` URL | the string |
+| `link` | a page of this store (`/collections/new`, `/apps/<id>/…`; never `/api`, a `/_` or `/~` path or a backslash) or an `https://` URL | the string; a value or default an older release took that this rule refuses reads as none (a list item keeps its other fields) |
 | `list` (`fields` up to 12, `max` up to 24, `itemLabel`) | items of the fields above (no products, no lists) | items with their images resolved |
 
 - Values resolve against the schema as it is now: a removed setting drops, a new one takes its default, a deleted image or product resolves to `null`.
