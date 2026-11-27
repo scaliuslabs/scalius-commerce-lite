@@ -52,7 +52,11 @@ export function toStoredCustomizationSchema(
                 : { priceMinor: minor(field.price) ?? 0 }),
         })),
     });
-    if (!result.ok) throw new ValidationError(result.issues[0] ?? "The buyer inputs are invalid.", { issues: result.issues });
+    if (!result.ok) {
+        throw new ValidationError(result.issues[0] ?? "The buyer inputs are invalid.", {
+            issues: result.issues.map((message) => ({ path: ["customizationSchema"], message })),
+        });
+    }
     return result.schema ? serializeCustomizationSchema(result.schema) : null;
 }
 

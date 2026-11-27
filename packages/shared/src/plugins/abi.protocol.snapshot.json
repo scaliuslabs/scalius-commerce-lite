@@ -19,6 +19,11 @@
         "minimum": 0,
         "maximum": 4
        },
+       "priceIncrementMinor": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       },
        "storeCurrency": {
         "type": "object",
         "properties": {
@@ -242,6 +247,30 @@
                  "type": "null"
                 }
                ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "perUnit": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -256,6 +285,11 @@
              "type": "null"
             }
            ]
+          },
+          "addOnStepMinor": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 9007199254740991
           },
           "requiresShipping": {
            "default": true,
@@ -297,23 +331,65 @@
             "type": "object",
             "properties": {
              "appId": {
-              "type": "string",
-              "maxLength": 128
+              "anyOf": [
+               {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+               },
+               {
+                "type": "null"
+               }
+              ]
              },
              "title": {
               "type": "string",
               "maxLength": 80
              },
-             "amountMinor": {
+             "totalMinor": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
+             },
+             "amountMinor": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "per": {
+              "type": "string",
+              "enum": [
+               "unit",
+               "bundle"
+              ]
+             },
+             "units": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
              }
             },
             "required": [
              "appId",
              "title",
-             "amountMinor"
+             "totalMinor",
+             "amountMinor",
+             "per",
+             "units"
             ],
             "additionalProperties": false
            }
@@ -767,6 +843,11 @@
         "minimum": 0,
         "maximum": 4
        },
+       "priceIncrementMinor": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       },
        "storeCurrency": {
         "type": "object",
         "properties": {
@@ -990,6 +1071,30 @@
                  "type": "null"
                 }
                ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "perUnit": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -1004,6 +1109,11 @@
              "type": "null"
             }
            ]
+          },
+          "addOnStepMinor": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 9007199254740991
           },
           "requiresShipping": {
            "default": true,
@@ -1045,23 +1155,65 @@
             "type": "object",
             "properties": {
              "appId": {
-              "type": "string",
-              "maxLength": 128
+              "anyOf": [
+               {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+               },
+               {
+                "type": "null"
+               }
+              ]
              },
              "title": {
               "type": "string",
               "maxLength": 80
              },
-             "amountMinor": {
+             "totalMinor": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
+             },
+             "amountMinor": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "per": {
+              "type": "string",
+              "enum": [
+               "unit",
+               "bundle"
+              ]
+             },
+             "units": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
              }
             },
             "required": [
              "appId",
              "title",
-             "amountMinor"
+             "totalMinor",
+             "amountMinor",
+             "per",
+             "units"
             ],
             "additionalProperties": false
            }
@@ -1552,7 +1704,7 @@
        "additionalProperties": false
       }
      },
-     "adjustments": {
+     "addOns": {
       "default": [],
       "maxItems": 250,
       "type": "array",
@@ -1708,7 +1860,7 @@
     },
     "required": [
      "prices",
-     "adjustments"
+     "addOns"
     ],
     "additionalProperties": false
    }
@@ -1730,6 +1882,11 @@
         "type": "integer",
         "minimum": 0,
         "maximum": 4
+       },
+       "priceIncrementMinor": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
        },
        "storeCurrency": {
         "type": "object",
@@ -1954,6 +2111,30 @@
                  "type": "null"
                 }
                ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "perUnit": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -1968,6 +2149,11 @@
              "type": "null"
             }
            ]
+          },
+          "addOnStepMinor": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 9007199254740991
           },
           "requiresShipping": {
            "default": true,
@@ -2009,23 +2195,65 @@
             "type": "object",
             "properties": {
              "appId": {
-              "type": "string",
-              "maxLength": 128
+              "anyOf": [
+               {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+               },
+               {
+                "type": "null"
+               }
+              ]
              },
              "title": {
               "type": "string",
               "maxLength": 80
              },
-             "amountMinor": {
+             "totalMinor": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
+             },
+             "amountMinor": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "per": {
+              "type": "string",
+              "enum": [
+               "unit",
+               "bundle"
+              ]
+             },
+             "units": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
              }
             },
             "required": [
              "appId",
              "title",
-             "amountMinor"
+             "totalMinor",
+             "amountMinor",
+             "per",
+             "units"
             ],
             "additionalProperties": false
            }
@@ -2552,6 +2780,11 @@
         "minimum": 0,
         "maximum": 4
        },
+       "priceIncrementMinor": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       },
        "storeCurrency": {
         "type": "object",
         "properties": {
@@ -2775,6 +3008,30 @@
                  "type": "null"
                 }
                ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "perUnit": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -2789,6 +3046,11 @@
              "type": "null"
             }
            ]
+          },
+          "addOnStepMinor": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 9007199254740991
           },
           "requiresShipping": {
            "default": true,
@@ -2830,23 +3092,65 @@
             "type": "object",
             "properties": {
              "appId": {
-              "type": "string",
-              "maxLength": 128
+              "anyOf": [
+               {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+               },
+               {
+                "type": "null"
+               }
+              ]
              },
              "title": {
               "type": "string",
               "maxLength": 80
              },
-             "amountMinor": {
+             "totalMinor": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
+             },
+             "amountMinor": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "per": {
+              "type": "string",
+              "enum": [
+               "unit",
+               "bundle"
+              ]
+             },
+             "units": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
              }
             },
             "required": [
              "appId",
              "title",
-             "amountMinor"
+             "totalMinor",
+             "amountMinor",
+             "per",
+             "units"
             ],
             "additionalProperties": false
            }
@@ -3377,6 +3681,11 @@
         "minimum": 0,
         "maximum": 4
        },
+       "priceIncrementMinor": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       },
        "storeCurrency": {
         "type": "object",
         "properties": {
@@ -3600,6 +3909,30 @@
                  "type": "null"
                 }
                ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "perUnit": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -3614,6 +3947,11 @@
              "type": "null"
             }
            ]
+          },
+          "addOnStepMinor": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 9007199254740991
           },
           "requiresShipping": {
            "default": true,
@@ -3655,23 +3993,65 @@
             "type": "object",
             "properties": {
              "appId": {
-              "type": "string",
-              "maxLength": 128
+              "anyOf": [
+               {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+               },
+               {
+                "type": "null"
+               }
+              ]
              },
              "title": {
               "type": "string",
               "maxLength": 80
              },
-             "amountMinor": {
+             "totalMinor": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
+             },
+             "amountMinor": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "per": {
+              "type": "string",
+              "enum": [
+               "unit",
+               "bundle"
+              ]
+             },
+             "units": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
              }
             },
             "required": [
              "appId",
              "title",
-             "amountMinor"
+             "totalMinor",
+             "amountMinor",
+             "per",
+             "units"
             ],
             "additionalProperties": false
            }
@@ -4182,6 +4562,11 @@
         "minimum": 0,
         "maximum": 4
        },
+       "priceIncrementMinor": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       },
        "storeCurrency": {
         "type": "object",
         "properties": {
@@ -4405,6 +4790,30 @@
                  "type": "null"
                 }
                ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "perUnit": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -4419,6 +4828,11 @@
              "type": "null"
             }
            ]
+          },
+          "addOnStepMinor": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 9007199254740991
           },
           "requiresShipping": {
            "default": true,
@@ -4460,23 +4874,65 @@
             "type": "object",
             "properties": {
              "appId": {
-              "type": "string",
-              "maxLength": 128
+              "anyOf": [
+               {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+               },
+               {
+                "type": "null"
+               }
+              ]
              },
              "title": {
               "type": "string",
               "maxLength": 80
              },
-             "amountMinor": {
+             "totalMinor": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
+             },
+             "amountMinor": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "per": {
+              "type": "string",
+              "enum": [
+               "unit",
+               "bundle"
+              ]
+             },
+             "units": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
              }
             },
             "required": [
              "appId",
              "title",
-             "amountMinor"
+             "totalMinor",
+             "amountMinor",
+             "per",
+             "units"
             ],
             "additionalProperties": false
            }
@@ -5003,6 +5459,11 @@
          "minimum": 0,
          "maximum": 4
         },
+        "priceIncrementMinor": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 9007199254740991
+        },
         "storeCurrency": {
          "type": "object",
          "properties": {
@@ -5226,6 +5687,30 @@
                   "type": "null"
                  }
                 ]
+               },
+               "units": {
+                "anyOf": [
+                 {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                 },
+                 {
+                  "type": "null"
+                 }
+                ]
+               },
+               "perUnit": {
+                "anyOf": [
+                 {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                 },
+                 {
+                  "type": "null"
+                 }
+                ]
                }
               },
               "required": [
@@ -5240,6 +5725,11 @@
               "type": "null"
              }
             ]
+           },
+           "addOnStepMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
            },
            "requiresShipping": {
             "default": true,
@@ -5281,23 +5771,65 @@
              "type": "object",
              "properties": {
               "appId": {
-               "type": "string",
-               "maxLength": 128
+               "anyOf": [
+                {
+                 "type": "string",
+                 "minLength": 1,
+                 "maxLength": 128
+                },
+                {
+                 "type": "null"
+                }
+               ]
               },
               "title": {
                "type": "string",
                "maxLength": 80
               },
-              "amountMinor": {
+              "totalMinor": {
                "type": "integer",
-               "minimum": -9007199254740991,
+               "minimum": 0,
                "maximum": 9007199254740991
+              },
+              "amountMinor": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 0,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "per": {
+               "type": "string",
+               "enum": [
+                "unit",
+                "bundle"
+               ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
               "appId",
               "title",
-              "amountMinor"
+              "totalMinor",
+              "amountMinor",
+              "per",
+              "units"
              ],
              "additionalProperties": false
             }
@@ -5575,23 +6107,65 @@
          "type": "object",
          "properties": {
           "appId": {
-           "type": "string",
-           "maxLength": 128
+           "anyOf": [
+            {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 128
+            },
+            {
+             "type": "null"
+            }
+           ]
           },
           "title": {
            "type": "string",
            "maxLength": 80
           },
-          "amountMinor": {
+          "totalMinor": {
            "type": "integer",
-           "minimum": -9007199254740991,
+           "minimum": 0,
            "maximum": 9007199254740991
+          },
+          "amountMinor": {
+           "anyOf": [
+            {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 9007199254740991
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "per": {
+           "type": "string",
+           "enum": [
+            "unit",
+            "bundle"
+           ]
+          },
+          "units": {
+           "anyOf": [
+            {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 9007199254740991
+            },
+            {
+             "type": "null"
+            }
+           ]
           }
          },
          "required": [
           "appId",
           "title",
-          "amountMinor"
+          "totalMinor",
+          "amountMinor",
+          "per",
+          "units"
          ],
          "additionalProperties": false
         }
@@ -5792,6 +6366,7 @@
            "anyOf": [
             {
              "type": "string",
+             "minLength": 1,
              "maxLength": 128
             },
             {
@@ -5826,6 +6401,18 @@
             "unit",
             "bundle"
            ]
+          },
+          "units": {
+           "anyOf": [
+            {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 9007199254740991
+            },
+            {
+             "type": "null"
+            }
+           ]
           }
          },
          "required": [
@@ -5833,7 +6420,8 @@
           "title",
           "totalMinor",
           "amountMinor",
-          "per"
+          "per",
+          "units"
          ],
          "additionalProperties": false
         }
@@ -7073,8 +7661,134 @@
          "const": "text"
         },
         "text": {
-         "type": "string",
-         "maxLength": 2000
+         "anyOf": [
+          {
+           "type": "string",
+           "maxLength": 2000
+          },
+          {
+           "minItems": 1,
+           "maxItems": 20,
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+             },
+             "to": {
+              "oneOf": [
+               {
+                "type": "object",
+                "properties": {
+                 "kind": {
+                  "type": "string",
+                  "const": "app-page"
+                 },
+                 "page": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                 },
+                 "query": {
+                  "type": "object",
+                  "propertyNames": {
+                   "type": "string",
+                   "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+                  },
+                  "additionalProperties": {
+                   "type": "string",
+                   "maxLength": 512
+                  }
+                 }
+                },
+                "required": [
+                 "kind",
+                 "page"
+                ],
+                "additionalProperties": false
+               },
+               {
+                "type": "object",
+                "properties": {
+                 "kind": {
+                  "type": "string",
+                  "const": "resource"
+                 },
+                 "resource": {
+                  "type": "string",
+                  "enum": [
+                   "product",
+                   "order",
+                   "customer",
+                   "category",
+                   "collection",
+                   "brand",
+                   "page"
+                  ]
+                 },
+                 "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                 }
+                },
+                "required": [
+                 "kind",
+                 "resource",
+                 "id"
+                ],
+                "additionalProperties": false
+               },
+               {
+                "type": "object",
+                "properties": {
+                 "kind": {
+                  "type": "string",
+                  "const": "external"
+                 },
+                 "href": {
+                  "type": "string",
+                  "maxLength": 2048,
+                  "format": "uri"
+                 }
+                },
+                "required": [
+                 "kind",
+                 "href"
+                ],
+                "additionalProperties": false
+               },
+               {
+                "type": "object",
+                "properties": {
+                 "kind": {
+                  "type": "string",
+                  "const": "store"
+                 },
+                 "path": {
+                  "type": "string",
+                  "maxLength": 2048,
+                  "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                 }
+                },
+                "required": [
+                 "kind",
+                 "path"
+                ],
+                "additionalProperties": false
+               }
+              ]
+             }
+            },
+            "required": [
+             "text"
+            ],
+            "additionalProperties": false
+           }
+          }
+         ]
         },
         "tone": {
          "type": "string",
@@ -15530,8 +16244,134 @@
          "const": "text"
         },
         "text": {
-         "type": "string",
-         "maxLength": 2000
+         "anyOf": [
+          {
+           "type": "string",
+           "maxLength": 2000
+          },
+          {
+           "minItems": 1,
+           "maxItems": 20,
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+             },
+             "to": {
+              "oneOf": [
+               {
+                "type": "object",
+                "properties": {
+                 "kind": {
+                  "type": "string",
+                  "const": "app-page"
+                 },
+                 "page": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                 },
+                 "query": {
+                  "type": "object",
+                  "propertyNames": {
+                   "type": "string",
+                   "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+                  },
+                  "additionalProperties": {
+                   "type": "string",
+                   "maxLength": 512
+                  }
+                 }
+                },
+                "required": [
+                 "kind",
+                 "page"
+                ],
+                "additionalProperties": false
+               },
+               {
+                "type": "object",
+                "properties": {
+                 "kind": {
+                  "type": "string",
+                  "const": "resource"
+                 },
+                 "resource": {
+                  "type": "string",
+                  "enum": [
+                   "product",
+                   "order",
+                   "customer",
+                   "category",
+                   "collection",
+                   "brand",
+                   "page"
+                  ]
+                 },
+                 "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                 }
+                },
+                "required": [
+                 "kind",
+                 "resource",
+                 "id"
+                ],
+                "additionalProperties": false
+               },
+               {
+                "type": "object",
+                "properties": {
+                 "kind": {
+                  "type": "string",
+                  "const": "external"
+                 },
+                 "href": {
+                  "type": "string",
+                  "maxLength": 2048,
+                  "format": "uri"
+                 }
+                },
+                "required": [
+                 "kind",
+                 "href"
+                ],
+                "additionalProperties": false
+               },
+               {
+                "type": "object",
+                "properties": {
+                 "kind": {
+                  "type": "string",
+                  "const": "store"
+                 },
+                 "path": {
+                  "type": "string",
+                  "maxLength": 2048,
+                  "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                 }
+                },
+                "required": [
+                 "kind",
+                 "path"
+                ],
+                "additionalProperties": false
+               }
+              ]
+             }
+            },
+            "required": [
+             "text"
+            ],
+            "additionalProperties": false
+           }
+          }
+         ]
         },
         "tone": {
          "type": "string",
@@ -18511,7 +19351,42 @@
  "errors": {
   "validation_error": {
    "status": 400,
-   "meaning": "A path, query or body value the operation's schema refuses; details.issues names the fields."
+   "meaning": "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message). A path is into the operation's input; for an address it names the field within that address, and where the operation checks a normalised form of its input (products.create, orders.create), it is into that form.",
+   "details": {
+    "type": "object",
+    "properties": {
+     "issues": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+       "type": "object",
+       "properties": {
+        "path": {
+         "type": "array",
+         "items": {
+          "anyOf": [
+           {
+            "type": "string"
+           },
+           {
+            "type": "integer"
+           }
+          ]
+         }
+        },
+        "message": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "path",
+        "message"
+       ]
+      }
+     }
+    },
+    "required": []
+   }
   },
   "invalid_cursor": {
    "status": 400,
@@ -18539,7 +19414,7 @@
   },
   "rate_limited": {
    "status": 429,
-   "meaning": "Too many calls; retry after details.retryAfterSeconds."
+   "meaning": "Too many calls; retry later. An app's limits are per minute; an HTTP answer's Retry-After header says when."
   },
   "internal_error": {
    "status": 500,
@@ -18691,7 +19566,30 @@
   },
   "admin_order_create_request_mismatch": {
    "status": 409,
-   "meaning": "The order request's key already belongs to another request: details.state is committed (details.orderId is the order it placed: read it, never place it again), processing (retry shortly) or failed (details.canRetryWithNewKey)."
+   "meaning": "The order request's key already belongs to another request: details.state is committed (details.orderId is the order it placed: read it, never place it again), processing (retry shortly) or failed (details.canRetryWithNewKey).",
+   "details": {
+    "type": "object",
+    "properties": {
+     "state": {
+      "type": "string",
+      "enum": [
+       "committed",
+       "processing",
+       "failed"
+      ]
+     },
+     "canRetryWithNewKey": {
+      "type": "boolean"
+     },
+     "orderId": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "state",
+     "canRetryWithNewKey"
+    ]
+   }
   },
   "return_revision_conflict": {
    "status": 409,
@@ -18771,7 +19669,34 @@
   },
   "handle_unresolved": {
    "status": 422,
-   "meaning": "No category or collection has the handle; details.unresolved lists them."
+   "meaning": "No category or collection has the handle; details.unresolved lists them (the first 20, each its kind and handle).",
+   "details": {
+    "type": "object",
+    "properties": {
+     "unresolved": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+       "type": "object",
+       "properties": {
+        "kind": {
+         "type": "string"
+        },
+        "handle": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "kind",
+        "handle"
+       ]
+      }
+     }
+    },
+    "required": [
+     "unresolved"
+    ]
+   }
   },
   "section_not_found": {
    "status": 404,
@@ -18827,7 +19752,18 @@
   },
   "payout_request_mismatch": {
    "status": 409,
-   "meaning": "The Idempotency-Key already sent a different payout (details.payoutId); use a new key for a new payout."
+   "meaning": "The Idempotency-Key already sent a different payout (details.payoutId); use a new key for a new payout.",
+   "details": {
+    "type": "object",
+    "properties": {
+     "payoutId": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "payoutId"
+    ]
+   }
   },
   "payout_reversal_unsupported": {
    "status": 422,
@@ -18835,27 +19771,114 @@
   },
   "payout_not_reversible": {
    "status": 409,
-   "meaning": "Only a paid payout can be reversed (details.status is the payout's)."
+   "meaning": "Only a paid payout can be reversed (details.status is the payout's).",
+   "details": {
+    "type": "object",
+    "properties": {
+     "payoutId": {
+      "type": "string"
+     },
+     "status": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "payoutId",
+     "status"
+    ]
+   }
   },
   "payout_reversal_exceeds_payout": {
    "status": 409,
-   "meaning": "The reversal takes back more than the payout has left to give back (details.reversibleMinor), or the payout already has 20 reversals."
+   "meaning": "The reversal takes back more than the payout has left to give back (details.reversibleMinor), or the payout already has 20 reversals.",
+   "details": {
+    "type": "object",
+    "properties": {
+     "payoutId": {
+      "type": "string"
+     },
+     "reversibleMinor": {
+      "type": "integer",
+      "minimum": 0
+     }
+    },
+    "required": [
+     "payoutId",
+     "reversibleMinor"
+    ]
+   }
   },
   "payout_reversal_currency_mismatch": {
    "status": 422,
-   "meaning": "A reversal is in its payout's currency (details.currency)."
+   "meaning": "A reversal is in its payout's currency (details.currency).",
+   "details": {
+    "type": "object",
+    "properties": {
+     "payoutId": {
+      "type": "string"
+     },
+     "currency": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "payoutId",
+     "currency"
+    ]
+   }
   },
   "payout_reversal_request_mismatch": {
    "status": 409,
-   "meaning": "The Idempotency-Key already reversed another amount or payout (details.reversalId); use a new key for a new reversal."
+   "meaning": "The Idempotency-Key already reversed another amount or payout (details.reversalId); use a new key for a new reversal.",
+   "details": {
+    "type": "object",
+    "properties": {
+     "reversalId": {
+      "type": "string"
+     },
+     "payoutId": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "reversalId",
+     "payoutId"
+    ]
+   }
   },
   "payout_reversal_outcome_unknown": {
    "status": 503,
-   "meaning": "The reversal is recorded (details.reversalId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resume it, never applied twice."
+   "meaning": "The reversal is recorded (details.reversalId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resume it, never applied twice.",
+   "details": {
+    "type": "object",
+    "properties": {
+     "payoutId": {
+      "type": "string"
+     },
+     "reversalId": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "payoutId",
+     "reversalId"
+    ]
+   }
   },
   "payout_outcome_unknown": {
    "status": 503,
-   "meaning": "The payout is recorded (details.payoutId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resubmit it, never sent twice."
+   "meaning": "The payout is recorded (details.payoutId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resubmit it, never sent twice.",
+   "details": {
+    "type": "object",
+    "properties": {
+     "payoutId": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "payoutId"
+    ]
+   }
   },
   "conversation_channel_unavailable": {
    "status": 422,
@@ -18863,7 +19886,25 @@
   },
   "sales_channel_product_unpublished": {
    "status": 422,
-   "meaning": "An order or quote on an app's sales channel names a product not published to it (details.productIds); publish it to the channel first. Nothing was written."
+   "meaning": "An order or quote on an app's sales channel names a product not published to it (details.productIds); publish it to the channel first. Nothing was written.",
+   "details": {
+    "type": "object",
+    "properties": {
+     "salesChannelId": {
+      "type": "string"
+     },
+     "productIds": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [
+     "salesChannelId",
+     "productIds"
+    ]
+   }
   },
   "pos_sales_channel_not_owned": {
    "status": 403,
@@ -18931,7 +19972,18 @@
   },
   "review_exists": {
    "status": 409,
-   "meaning": "The buyer already has a live review of the product, or the order line has its review; details.reviewId names it."
+   "meaning": "The buyer already has a live review of the product, or the order line has its review; details.reviewId names it.",
+   "details": {
+    "type": "object",
+    "properties": {
+     "reviewId": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "reviewId"
+    ]
+   }
   },
   "review_not_eligible": {
    "status": 409,
@@ -21536,6 +22588,46 @@
    "idle",
    "visible",
    "interaction"
+  ],
+  "STOREFRONT_STYLE_FUNCTIONS": [
+   "var",
+   "calc",
+   "min",
+   "max",
+   "clamp",
+   "rgb",
+   "rgba",
+   "hsl",
+   "hsla",
+   "hwb",
+   "lab",
+   "lch",
+   "oklab",
+   "oklch",
+   "color-mix",
+   "linear-gradient",
+   "radial-gradient",
+   "conic-gradient",
+   "repeating-linear-gradient",
+   "repeating-radial-gradient",
+   "repeating-conic-gradient",
+   "translate",
+   "translatex",
+   "translatey",
+   "translate3d",
+   "rotate",
+   "scale",
+   "scalex",
+   "scaley",
+   "skew",
+   "skewx",
+   "skewy",
+   "matrix",
+   "cubic-bezier",
+   "steps",
+   "minmax",
+   "repeat",
+   "fit-content"
   ],
   "STOREFRONT_COMPONENT_LIMITS": {
    "moduleBytes": 524288,

@@ -71,7 +71,7 @@ export interface PluginInvocationResult {
 
 /** The bridge methods the runtime calls (an RPC stub sandboxed, the host class bundled). */
 export interface PluginRuntimeBridge {
-  apiCall(operationId: string, input?: unknown): Promise<unknown>;
+  apiCall(operation: string, input?: unknown): Promise<unknown>;
   /** `{ data, revision }` or null. */
   objectsGet(object: string, id: string): Promise<unknown>;
   objectsGetByHandle(object: string, handle: string): Promise<unknown>;
@@ -256,7 +256,7 @@ function createContext(seed: PluginContextSeed, bridge: PluginRuntimeBridge, log
     settings: Object.freeze({ ...seed.settings }),
     features: Object.freeze([...(seed.features ?? [])]),
     api: Object.freeze({
-      call: (operationId: string, input?: unknown) => call(() => bridge.apiCall(operationId, input)),
+      call: (operation: string, input?: unknown) => call(() => bridge.apiCall(operation, input)),
     }),
     objects: Object.freeze(objects),
     kv: Object.freeze({

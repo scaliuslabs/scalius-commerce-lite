@@ -110,7 +110,7 @@ export function buyerUiOrderLines(rows: readonly BuyerUiOrderRow[]): BuyerUiOrde
                 ? { id: row.bundle.id, title: row.bundle.title.slice(0, 300), kind: row.bundle.kind, anchor: row.bundle.anchor, units: row.bundle.units, perUnit: row.bundle.perUnit }
                 : null,
             // Within the bounds one app's facts keep (a line's add-ons), as the cart's line facts are.
-            addOns: row.addOns.slice(0, LINE_ADD_ONS_MAX).map(({ appId, title, totalMinor, amountMinor, per }) => ({ appId, title: title.slice(0, 80), totalMinor, amountMinor, per })),
+            addOns: row.addOns.slice(0, LINE_ADD_ONS_MAX).map(({ appId, title, totalMinor, amountMinor, per, units }) => ({ appId, title: title.slice(0, 80), totalMinor, amountMinor, per, units })),
             // Every app's answers on the row (each app's run keeps its own), at most a line's entries.
             inputs: row.properties
                 .filter((property) => isAppScopedKey(property.key) && isLineInputEntry(property.key))

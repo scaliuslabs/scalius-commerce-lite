@@ -162,7 +162,7 @@ export type ProductCardFacts = {
     } | {
         free: false;
         feeFrom: number;
-    } | unknown;
+    } | null;
 };
 
 export type StorefrontHomepageSections = {
@@ -910,8 +910,8 @@ export type StorefrontSettingBindings = {
 
 export type StorefrontAppSettingValues = {
     [key: string]: string | number | boolean | Array<string> | Array<{
-        [key: string]: string | number | boolean | unknown;
-    }> | unknown;
+        [key: string]: string | number | boolean | null;
+    }> | null;
 };
 
 export type StorefrontSkinRef = {
@@ -1599,9 +1599,9 @@ export type BuyerOrderView = {
 
 export type NullableTimestamp = string | number | null;
 
-export type PluginUiJson = string | number | boolean | unknown | Array<PluginUiJson & unknown> | {
+export type PluginUiJson = string | number | boolean | Array<PluginUiJson & unknown> | {
     [key: string]: PluginUiJson & unknown;
-};
+} | null;
 
 export type PluginUiNode = {
     type: 'page';
@@ -1755,7 +1755,26 @@ export type PluginUiNode = {
     level?: 2 | 3 | 4;
 } | {
     type: 'text';
-    text: string;
+    text: string | Array<{
+        text: string;
+        to?: {
+            kind: 'app-page';
+            page: string;
+            query?: {
+                [key: string]: string;
+            };
+        } | {
+            kind: 'resource';
+            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+            id: string;
+        } | {
+            kind: 'external';
+            href: string;
+        } | {
+            kind: 'store';
+            path: string;
+        };
+    }>;
     tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
     size?: 'sm' | 'md';
     emphasis?: 'strong' | 'mono';
@@ -1833,7 +1852,7 @@ export type PluginUiNode = {
     type: 'key-value';
     items: Array<{
         label: string;
-        value: string | number | boolean | unknown;
+        value: string | number | boolean | null;
         tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
     }>;
 } | {
@@ -1852,7 +1871,7 @@ export type PluginUiNode = {
     rows: Array<{
         id?: string;
         cells: {
-            [key: string]: string | number | boolean | unknown | {
+            [key: string]: string | number | boolean | {
                 badge: string;
                 tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
             } | {
@@ -1879,7 +1898,7 @@ export type PluginUiNode = {
                 currency: string;
             } | {
                 date: string;
-            };
+            } | null;
         };
         to?: {
             kind: 'app-page';
@@ -2381,6 +2400,10 @@ export type BuyerLineAddOn = {
      * From what the line froze: `bundle` for a kit's or an expanded bundle's add-on (on its anchor item's row), else `unit`.
      */
     per: 'unit' | 'bundle';
+    /**
+     * How many units (`per: unit`) or bundle units (`per: bundle`) the row holds; null when no longer known. `totalMinor = amountMinor × units` whenever `amountMinor` is a number.
+     */
+    units: number | null;
     details?: Array<string>;
 };
 
@@ -2601,7 +2624,26 @@ export type CustomerAccountSummary = {
             level?: 2 | 3 | 4;
         } | {
             type: 'text';
-            text: string;
+            text: string | Array<{
+                text: string;
+                to?: {
+                    kind: 'app-page';
+                    page: string;
+                    query?: {
+                        [key: string]: string;
+                    };
+                } | {
+                    kind: 'resource';
+                    resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                    id: string;
+                } | {
+                    kind: 'external';
+                    href: string;
+                } | {
+                    kind: 'store';
+                    path: string;
+                };
+            }>;
             tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
             size?: 'sm' | 'md';
             emphasis?: 'strong' | 'mono';
@@ -2679,7 +2721,7 @@ export type CustomerAccountSummary = {
             type: 'key-value';
             items: Array<{
                 label: string;
-                value: string | number | boolean | unknown;
+                value: string | number | boolean | null;
                 tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
             }>;
         } | {
@@ -2698,7 +2740,7 @@ export type CustomerAccountSummary = {
             rows: Array<{
                 id?: string;
                 cells: {
-                    [key: string]: string | number | boolean | unknown | {
+                    [key: string]: string | number | boolean | {
                         badge: string;
                         tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     } | {
@@ -2725,7 +2767,7 @@ export type CustomerAccountSummary = {
                         currency: string;
                     } | {
                         date: string;
-                    };
+                    } | null;
                 };
                 to?: {
                     kind: 'app-page';
@@ -3837,10 +3879,13 @@ export type OrderResource = {
                 revision: string | null;
             } | null;
         }>;
-        adjustments: Array<{
+        addOns: Array<{
             appId: string | null;
             title: string;
-            amountMinor: number;
+            totalMinor: number;
+            amountMinor: number | null;
+            per: 'unit' | 'bundle';
+            units: number | null;
         }>;
         bundle?: {
             id: string;
@@ -4236,7 +4281,7 @@ export type BulkRun = {
      * Before and after of the first 50 changes: prices (variantId, sku, beforeMinor, afterMinor), stock (variantId, locationId, beforeOnHand, afterOnHand), tags (customerId), status and publishing (productId).
      */
     sample: Array<{
-        [key: string]: string | number | boolean | unknown;
+        [key: string]: string | number | boolean | null;
     }>;
     failures: Array<{
         id: string;
@@ -4769,7 +4814,7 @@ export type ShippingZoneResource = {
         postalPrefix: string | null;
     }>;
     /**
-     * Bangladesh delivery places (city, thana, area) the zone serves. A place belongs to one zone.
+     * The store's own delivery places the zone serves, each at one of up to three levels (`city`, `zone`, `area`) whose meaning a regional pack defines; empty for a store with none. A place belongs to one zone.
      */
     places: Array<{
         id: string;
@@ -4841,7 +4886,7 @@ export type TaxRegionResource = {
     adminArea: string | null;
     postalPrefix: string | null;
     /**
-     * A Bangladesh delivery place (kind `place`).
+     * One of the store's own delivery places (kind `place`).
      */
     place: {
         id: string;
@@ -5341,8 +5386,8 @@ export type ObjectField = {
     required?: boolean;
     description?: string;
     validations?: {
-        min?: string | number | unknown;
-        max?: string | number | unknown;
+        min?: string | number | null;
+        max?: string | number | null;
         regex?: string | null;
         choices?: Array<string> | null;
     };
@@ -6293,8 +6338,8 @@ export type AppSettingField = {
         label: string;
     }> | null;
     default: string | number | boolean | Array<string> | Array<{
-        [key: string]: string | number | boolean | unknown;
-    }> | unknown;
+        [key: string]: string | number | boolean | null;
+    }> | null;
     min: number | null;
     max: number | null;
     integer: boolean;
@@ -6339,7 +6384,7 @@ export type AppSettingItemField = {
         value: string;
         label: string;
     }> | null;
-    default: string | number | boolean | unknown;
+    default: string | number | boolean | null;
     min: number | null;
     max: number | null;
     integer: boolean;
@@ -7440,8 +7485,8 @@ export type AppDetail = AppSummary & {
         fields: Array<AppSettingField>;
         values: {
             [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
+                [key: string]: string | number | boolean | null;
+            }> | null;
         };
         /**
          * Whether each secret is set; secret values are never returned.
@@ -7974,8 +8019,8 @@ export type AdminCustomFieldDefinition = {
     type: 'single_line_text' | 'multi_line_text' | 'integer' | 'decimal' | 'boolean' | 'date' | 'date_time' | 'url' | 'color' | 'json' | 'money' | 'product_reference' | 'variant_reference' | 'collection_reference' | 'media_reference' | 'object_reference' | 'list.single_line_text' | 'list.multi_line_text' | 'list.integer' | 'list.decimal' | 'list.date' | 'list.date_time' | 'list.url' | 'list.color' | 'list.money' | 'list.product_reference' | 'list.variant_reference' | 'list.collection_reference' | 'list.media_reference' | 'list.object_reference';
     validations: {
         to?: string | null;
-        min?: string | number | unknown;
-        max?: string | number | unknown;
+        min?: string | number | null;
+        max?: string | number | null;
         regex?: string | null;
         choices?: Array<string> | null;
     };
@@ -11044,7 +11089,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 protectedData: Array<'name' | 'email' | 'phone' | 'address'>;
                 connect: Array<string>;
                 settings: {
-                    [key: string]: string | number | boolean | unknown;
+                    [key: string]: string | number | boolean | null;
                 };
             }>;
             /**
@@ -11099,7 +11144,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                  * The app's own settings it declares public, in the page's language: what its components read as `context.app.settings`.
                  */
                 settings?: {
-                    [key: string]: string | number | boolean | Array<string> | unknown;
+                    [key: string]: string | number | boolean | Array<string> | null;
                 };
             }>;
             /**
@@ -15497,7 +15542,26 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     level?: 2 | 3 | 4;
                 } | {
                     type: 'text';
-                    text: string;
+                    text: string | Array<{
+                        text: string;
+                        to?: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
+                    }>;
                     tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     size?: 'sm' | 'md';
                     emphasis?: 'strong' | 'mono';
@@ -15575,7 +15639,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     type: 'key-value';
                     items: Array<{
                         label: string;
-                        value: string | number | boolean | unknown;
+                        value: string | number | boolean | null;
                         tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     }>;
                 } | {
@@ -15594,7 +15658,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     rows: Array<{
                         id?: string;
                         cells: {
-                            [key: string]: string | number | boolean | unknown | {
+                            [key: string]: string | number | boolean | {
                                 badge: string;
                                 tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                             } | {
@@ -15621,7 +15685,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                                 currency: string;
                             } | {
                                 date: string;
-                            };
+                            } | null;
                         };
                         to?: {
                             kind: 'app-page';
@@ -24585,7 +24649,26 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         level?: 2 | 3 | 4;
                     } | {
                         type: 'text';
-                        text: string;
+                        text: string | Array<{
+                            text: string;
+                            to?: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        }>;
                         tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                         size?: 'sm' | 'md';
                         emphasis?: 'strong' | 'mono';
@@ -24663,7 +24746,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         type: 'key-value';
                         items: Array<{
                             label: string;
-                            value: string | number | boolean | unknown;
+                            value: string | number | boolean | null;
                             tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                         }>;
                     } | {
@@ -24682,7 +24765,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         rows: Array<{
                             id?: string;
                             cells: {
-                                [key: string]: string | number | boolean | unknown | {
+                                [key: string]: string | number | boolean | {
                                     badge: string;
                                     tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                                 } | {
@@ -24709,7 +24792,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                                     currency: string;
                                 } | {
                                     date: string;
-                                };
+                                } | null;
                             };
                             to?: {
                                 kind: 'app-page';
@@ -25741,7 +25824,26 @@ export type PostApiV1OrdersCartValidationResponses = {
                     level?: 2 | 3 | 4;
                 } | {
                     type: 'text';
-                    text: string;
+                    text: string | Array<{
+                        text: string;
+                        to?: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
+                    }>;
                     tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     size?: 'sm' | 'md';
                     emphasis?: 'strong' | 'mono';
@@ -25819,7 +25921,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                     type: 'key-value';
                     items: Array<{
                         label: string;
-                        value: string | number | boolean | unknown;
+                        value: string | number | boolean | null;
                         tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     }>;
                 } | {
@@ -25838,7 +25940,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                     rows: Array<{
                         id?: string;
                         cells: {
-                            [key: string]: string | number | boolean | unknown | {
+                            [key: string]: string | number | boolean | {
                                 badge: string;
                                 tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                             } | {
@@ -25865,7 +25967,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                                 currency: string;
                             } | {
                                 date: string;
-                            };
+                            } | null;
                         };
                         to?: {
                             kind: 'app-page';
@@ -26346,6 +26448,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                  * A kit line's items, in the kit's order: each one's name and option values in the page's language, its units in one kit and its picture. Null on any other line.
                  */
                 kitItems: Array<KitItem> | null;
+                /**
+                 * A kit or an app's bundle sold as one line: its quantity is bundle units and its `adjustments` are each once per bundle unit.
+                 */
+                bundle: boolean;
             }>;
             subtotal: number;
             /**
@@ -26786,7 +26892,26 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     level?: 2 | 3 | 4;
                 } | {
                     type: 'text';
-                    text: string;
+                    text: string | Array<{
+                        text: string;
+                        to?: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
+                    }>;
                     tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     size?: 'sm' | 'md';
                     emphasis?: 'strong' | 'mono';
@@ -26864,7 +26989,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     type: 'key-value';
                     items: Array<{
                         label: string;
-                        value: string | number | boolean | unknown;
+                        value: string | number | boolean | null;
                         tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     }>;
                 } | {
@@ -26883,7 +27008,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     rows: Array<{
                         id?: string;
                         cells: {
-                            [key: string]: string | number | boolean | unknown | {
+                            [key: string]: string | number | boolean | {
                                 badge: string;
                                 tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                             } | {
@@ -26910,7 +27035,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                                 currency: string;
                             } | {
                                 date: string;
-                            };
+                            } | null;
                         };
                         to?: {
                             kind: 'app-page';
@@ -29981,7 +30106,7 @@ export type PostApiV1AdminResourcesOrdersData = {
             adminArea?: string | null;
             postalCode?: string | null;
             /**
-             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             * The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none.
              */
             placeIds?: {
                 city?: string | null;
@@ -30005,7 +30130,7 @@ export type PostApiV1AdminResourcesOrdersData = {
             adminArea?: string | null;
             postalCode?: string | null;
             /**
-             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             * The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none.
              */
             placeIds?: {
                 city?: string | null;
@@ -30023,7 +30148,7 @@ export type PostApiV1AdminResourcesOrdersData = {
          */
         discountMinor?: number;
         /**
-         * How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create).
+         * How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with payments.create).
          */
         paymentMethod?: 'cod' | 'net_terms';
         /**
@@ -30246,7 +30371,7 @@ export type PostApiV1AdminResourcesOrdersQuoteData = {
             adminArea?: string | null;
             postalCode?: string | null;
             /**
-             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             * The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none.
              */
             placeIds?: {
                 city?: string | null;
@@ -30270,7 +30395,7 @@ export type PostApiV1AdminResourcesOrdersQuoteData = {
             adminArea?: string | null;
             postalCode?: string | null;
             /**
-             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             * The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none.
              */
             placeIds?: {
                 city?: string | null;
@@ -30288,7 +30413,7 @@ export type PostApiV1AdminResourcesOrdersQuoteData = {
          */
         discountMinor?: number;
         /**
-         * How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create).
+         * How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with payments.create).
          */
         paymentMethod?: 'cod' | 'net_terms';
         /**
@@ -31438,7 +31563,7 @@ export type PostApiV1AdminResourcesProductsData = {
             weightGrams?: number | null;
         }>;
         /**
-         * Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured.
+         * Ready media library files (`media.import_url`), in gallery order; the first is featured.
          */
         mediaIds?: Array<string>;
         /**
@@ -33620,7 +33745,7 @@ export type PostApiV1AdminResourcesProductsBatchData = {
                 weightGrams?: number | null;
             }>;
             /**
-             * Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured.
+             * Ready media library files (`media.import_url`), in gallery order; the first is featured.
              */
             mediaIds?: Array<string>;
             /**
@@ -43784,7 +43909,7 @@ export type GetApiV1AdminCustomersResponses = {
              */
             appValues?: {
                 [key: string]: {
-                    [key: string]: string | number | boolean | unknown;
+                    [key: string]: string | number | boolean | null;
                 };
             };
         };
@@ -43814,7 +43939,7 @@ export type PostApiV1AdminCustomersData = {
             adminArea?: string | null;
             postalCode?: string | null;
             /**
-             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             * The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none.
              */
             placeIds?: {
                 city?: string | null;
@@ -50523,7 +50648,7 @@ export type PostApiV1AdminInventorySuppliersData = {
         name: string;
         contactName?: string | null;
         phone?: string | null;
-        email?: string | '' | unknown;
+        email?: string | '' | null;
         notes?: string | null;
     };
     path?: never;
@@ -50628,7 +50753,7 @@ export type PatchApiV1AdminInventorySuppliersBySupplierIdData = {
         name: string;
         contactName?: string | null;
         phone?: string | null;
-        email?: string | '' | unknown;
+        email?: string | '' | null;
         notes?: string | null;
         expectedVersion: number;
     };
@@ -57973,11 +58098,11 @@ export type GetApiV1AdminReportsByReportIdResponses = {
                 id: string;
                 productId?: string | null;
                 values: {
-                    [key: string]: number | string | unknown;
+                    [key: string]: number | string | null;
                 };
             }>;
             totals: {
-                [key: string]: number | string | unknown;
+                [key: string]: number | string | null;
             };
             notes: Array<string>;
         };
@@ -66188,8 +66313,8 @@ export type GetApiV1AdminSettingsMetaConversionsLogsResponses = {
                 requestPayload: string | null;
                 responsePayload: string | null;
                 errorMessage: string | null;
-                eventTime: string | number | unknown;
-                createdAt: string | number | unknown;
+                eventTime: string | number | null;
+                createdAt: string | number | null;
             }>;
             pagination: {
                 page: number;
@@ -68512,7 +68637,7 @@ export type PutApiV1AdminOrdersByIdStatusData = {
          */
         notifyCustomer?: boolean;
         /**
-         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since.
+         * The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to change it whatever happened since.
          */
         expectedRevision?: number;
     };
@@ -68644,7 +68769,7 @@ export type PostApiV1AdminOrdersByIdRefundKeptResponse = PostApiV1AdminOrdersByI
 export type PostApiV1AdminOrdersByIdMarkDeliveredData = {
     body: {
         /**
-         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409. Omit to mark it whatever happened since.
+         * The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409. Omit to mark it whatever happened since.
          */
         expectedRevision?: number;
     };
@@ -68731,7 +68856,7 @@ export type GetApiV1AdminOrdersByIdCodResponses = {
                 id: string;
                 orderId: string;
                 deliveryAttempts: number;
-                lastAttemptAt: string | number | unknown;
+                lastAttemptAt: string | number | null;
                 codStatus: string;
                 failureReason: string | null;
                 failureNote: string | null;
@@ -68741,7 +68866,7 @@ export type GetApiV1AdminOrdersByIdCodResponses = {
                  */
                 collectedAmountMinor: number | null;
                 currency: string;
-                collectedAt: string | number | unknown;
+                collectedAt: string | number | null;
                 receiptUrl: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -71333,7 +71458,7 @@ export type GetApiV1AdminOrdersResponses = {
              */
             appValues?: {
                 [key: string]: {
-                    [key: string]: string | number | boolean | unknown;
+                    [key: string]: string | number | boolean | null;
                 };
             };
         };
@@ -73144,7 +73269,7 @@ export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses = {
         data: {
             orderId: string;
             url: string;
-            expiresAt: string | number | unknown;
+            expiresAt: string | number | null;
             accessMode: 'buyer_verified_receipt';
             note: string;
             gateway: string;
@@ -73275,7 +73400,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 appName: string;
                 reason: string;
                 placedAt: string | number;
-                releasedAt: string | number | unknown;
+                releasedAt: string | number | null;
             }>;
             status: string;
             paymentStatus: string | null;
@@ -73820,7 +73945,7 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 providerRef: string | null;
                 providerSecondaryRef: string | null;
                 codCollectedBy: string | null;
-                codCollectedAt: string | number | unknown;
+                codCollectedAt: string | number | null;
                 codReceiptUrl: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -73846,8 +73971,8 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 depositAmount: number;
                 balanceDue: number;
                 paidAmount: number;
-                depositPaidAt: string | number | unknown;
-                balancePaidAt: string | number | unknown;
+                depositPaidAt: string | number | null;
+                balancePaidAt: string | number | null;
                 balanceDueDate: string | null;
                 status: string;
                 createdAt: string | number;
@@ -73953,7 +74078,7 @@ export type GetApiV1AdminOrdersByIdNotificationsResponses = {
                 attempts: number;
                 nextAttemptAt: string | number;
                 lastError: string | null;
-                sentAt: string | number | unknown;
+                sentAt: string | number | null;
                 createdAt: string | number;
                 updatedAt: string | number;
                 receipts: Array<{
@@ -73966,13 +74091,13 @@ export type GetApiV1AdminOrdersByIdNotificationsResponses = {
                     providerMessageId: string | null;
                     providerStatus: string | null;
                     attempts: number;
-                    nextAttemptAt: string | number | unknown;
-                    lastAttemptAt: string | number | unknown;
+                    nextAttemptAt: string | number | null;
+                    lastAttemptAt: string | number | null;
                     lastError: string | null;
-                    acceptedAt: string | number | unknown;
-                    deliveredAt: string | number | unknown;
-                    failedAt: string | number | unknown;
-                    skippedAt: string | number | unknown;
+                    acceptedAt: string | number | null;
+                    deliveredAt: string | number | null;
+                    failedAt: string | number | null;
+                    skippedAt: string | number | null;
                     createdAt: string | number;
                     updatedAt: string | number;
                 }>;
@@ -74463,7 +74588,7 @@ export type PostApiV1AdminOrdersByIdFulfillmentsResponse = PostApiV1AdminOrdersB
 export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidData = {
     body: {
         /**
-         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
+         * The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
          */
         expectedRevision?: number;
     };
@@ -74543,7 +74668,7 @@ export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidResponse = Po
 export type PostApiV1AdminOrdersByIdPickupReadyData = {
     body: {
         /**
-         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
+         * The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
          */
         expectedRevision?: number;
     };
@@ -77459,7 +77584,7 @@ export type GetApiV1AdminProductsResponses = {
              */
             appValues?: {
                 [key: string]: {
-                    [key: string]: string | number | boolean | unknown;
+                    [key: string]: string | number | boolean | null;
                 };
             };
         };
@@ -78813,7 +78938,7 @@ export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
                 pageTemplate: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
-                deletedAt: string | number | unknown;
+                deletedAt: string | number | null;
                 textLengths: {
                     description: number;
                     metaTitle: number;
@@ -83282,7 +83407,7 @@ export type GetApiV1AdminAttributesSummariesResponses = {
                 keySpec: boolean;
                 highlight: boolean;
                 facetDisplay: 'checkbox' | 'range' | 'swatch' | 'search_list';
-                deletedAt: string | number | unknown;
+                deletedAt: string | number | null;
             }>;
             pagination: {
                 page: number;
@@ -84146,8 +84271,8 @@ export type GetApiV1AdminTaxesResponses = {
                 displayLabel: string;
                 providerId: string;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             };
             classes: Array<{
                 id: string;
@@ -84155,9 +84280,9 @@ export type GetApiV1AdminTaxesResponses = {
                 description: string | null;
                 isExempt: boolean;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
             }>;
             regions: Array<{
                 id: string;
@@ -84177,8 +84302,8 @@ export type GetApiV1AdminTaxesResponses = {
                 providerId: string | null;
                 rateCount: number;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             }>;
             rates: Array<{
                 id: string;
@@ -84197,8 +84322,8 @@ export type GetApiV1AdminTaxesResponses = {
                 combinable: boolean;
                 isActive: boolean;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             }>;
             jurisdictions: Array<{
                 id: string;
@@ -84264,8 +84389,8 @@ export type GetApiV1AdminTaxesSettingsResponses = {
                 displayLabel: string;
                 providerId: string;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             };
         };
     };
@@ -84339,8 +84464,8 @@ export type PutApiV1AdminTaxesSettingsResponses = {
                 displayLabel: string;
                 providerId: string;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             };
         };
     };
@@ -84401,9 +84526,9 @@ export type GetApiV1AdminTaxesClassesResponses = {
                 description: string | null;
                 isExempt: boolean;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
             }>;
             total: number;
             page: number;
@@ -84470,9 +84595,9 @@ export type PostApiV1AdminTaxesClassesResponses = {
                 description: string | null;
                 isExempt: boolean;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
             };
         };
     };
@@ -84525,9 +84650,9 @@ export type DeleteApiV1AdminTaxesClassesByIdResponses = {
                 description: string | null;
                 isExempt: boolean;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
             };
         };
     };
@@ -84598,9 +84723,9 @@ export type PutApiV1AdminTaxesClassesByIdResponses = {
                 description: string | null;
                 isExempt: boolean;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
             };
         };
     };
@@ -84674,8 +84799,8 @@ export type GetApiV1AdminTaxesRatesResponses = {
                 combinable: boolean;
                 isActive: boolean;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             }>;
             total: number;
             page: number;
@@ -84758,8 +84883,8 @@ export type PostApiV1AdminTaxesRatesResponses = {
                 combinable: boolean;
                 isActive: boolean;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             };
         };
     };
@@ -84823,8 +84948,8 @@ export type DeleteApiV1AdminTaxesRatesByIdResponses = {
                 combinable: boolean;
                 isActive: boolean;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             };
         };
     };
@@ -84911,8 +85036,8 @@ export type PutApiV1AdminTaxesRatesByIdResponses = {
                 combinable: boolean;
                 isActive: boolean;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             };
         };
     };
@@ -84983,8 +85108,8 @@ export type GetApiV1AdminTaxesRegionsResponses = {
                 providerId: string | null;
                 rateCount: number;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             }>;
         };
     };
@@ -85068,8 +85193,8 @@ export type PostApiV1AdminTaxesRegionsResponses = {
                 providerId: string | null;
                 rateCount: number;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             };
         };
     };
@@ -85187,8 +85312,8 @@ export type GetApiV1AdminTaxesRegionsByIdResponses = {
                 providerId: string | null;
                 rateCount: number;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             };
             subRegions: Array<{
                 id: string;
@@ -85208,8 +85333,8 @@ export type GetApiV1AdminTaxesRegionsByIdResponses = {
                 providerId: string | null;
                 rateCount: number;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             }>;
             rates: Array<{
                 id: string;
@@ -85228,8 +85353,8 @@ export type GetApiV1AdminTaxesRegionsByIdResponses = {
                 combinable: boolean;
                 isActive: boolean;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             }>;
         };
     };
@@ -85313,8 +85438,8 @@ export type PutApiV1AdminTaxesRegionsByIdResponses = {
                 providerId: string | null;
                 rateCount: number;
                 version: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             };
         };
     };
@@ -86783,7 +86908,7 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
                 text: string;
                 amount?: string;
                 currency?: string | null;
-                values?: Array<string | number | boolean | unknown>;
+                values?: Array<string | number | boolean | null>;
                 type?: 'enum' | 'text' | 'number' | 'boolean' | 'id' | 'empty' | 'masked';
                 code?: 'money_field' | 'step_reference' | 'body_not_shown';
                 count?: number;
@@ -88833,8 +88958,8 @@ export type PutApiV1AdminAppsByIdSettingsData = {
         expectedRevision: number;
         values: {
             [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
+                [key: string]: string | number | boolean | null;
+            }> | null;
         };
         /**
          * Translatable settings in the store's other languages (code → key → text; empty or null: that language falls back).
@@ -89254,11 +89379,11 @@ export type PostApiV1AdminCustomFieldDefinitionsData = {
             /**
              * Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency).
              */
-            min?: string | number | unknown;
+            min?: string | number | null;
             /**
              * Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency).
              */
-            max?: string | number | unknown;
+            max?: string | number | null;
             /**
              * Single- and multi-line text: a pattern the whole value must match.
              */
@@ -89460,11 +89585,11 @@ export type PatchApiV1AdminCustomFieldDefinitionsByIdData = {
             /**
              * Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency).
              */
-            min?: string | number | unknown;
+            min?: string | number | null;
             /**
              * Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency).
              */
-            max?: string | number | unknown;
+            max?: string | number | null;
             /**
              * Single- and multi-line text: a pattern the whole value must match.
              */

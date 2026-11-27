@@ -55,7 +55,10 @@ export interface ResolvedBillingAddress extends PostalAddress {
 export class BillingAddressValidationError extends ValidationError {
     readonly issues: AddressProblem[];
     constructor(issues: AddressProblem[]) {
-        super(`Billing address: ${addressProblemMessage(issues[0]!)}`, { reason: BILLING_ADDRESS_INVALID_REASON, issues });
+        super(`Billing address: ${addressProblemMessage(issues[0]!)}`, {
+            reason: BILLING_ADDRESS_INVALID_REASON,
+            issues: issues.map((issue) => ({ ...issue, path: [issue.field], message: addressProblemMessage(issue) })),
+        });
         this.issues = issues;
     }
 }

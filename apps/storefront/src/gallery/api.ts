@@ -315,7 +315,7 @@ const customerBlock = (target: string, ui: unknown, lineKey?: string) => ({
 /**
  * The customer's protection app (private-look.md S1 and S4), drawn with the
  * general pieces any app has: under the eligible line not yet protected, an
- * amber row (its mark, the offer with Learn more, the price, Add Now); in the
+ * amber row (its mark, the offer with Learn more inside its sentence, the price, Add Now); in the
  * summary, an amber "recommended" box, or once protected a green one with
  * Remove, and a success badge under the protected line. The redeem key
  * takes nothing.
@@ -335,7 +335,8 @@ export function customerBlocks(protectedAccount: boolean) {
   return [
     customerBlock("cart.line.after", { type: "stack", direction: "horizontal", tone: "warning", children: [
       { type: "mark", tone: "warning" },
-      { type: "stack", gap: "sm", children: [{ type: "text", text: "Add Arcade Protection to get lifetime warranty and support." }, CUSTOMER_LEARN_MORE] },
+      // The offer's sentence with Learn more inside it (a text's link piece), in the column that takes the row's room.
+      { type: "stack", gap: "sm", children: [{ type: "text", text: [{ text: "Add Arcade Protection to get lifetime warranty and support. " }, { text: CUSTOMER_LEARN_MORE.text, to: CUSTOMER_LEARN_MORE.to }] }] },
       { type: "text", text: "\u09F3350", tone: "success", emphasis: "strong" },
       { type: "button", label: "Add Now", tone: "primary", action: { kind: "cart", op: "set_line_input", key: inputKey, value: "lifetime", lineKeys: [account.key] } },
     ] }, account.key),

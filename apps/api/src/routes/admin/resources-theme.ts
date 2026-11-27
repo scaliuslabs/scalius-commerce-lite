@@ -82,7 +82,7 @@ const sectionSchema = z.object({
 function issuesError(error: z.ZodError, prefix: string): ValidationError {
   const issue = error.issues[0];
   return new ValidationError(`${prefix}${issue?.path.length ? ` (${issue.path.join(".")})` : ""}: ${issue?.message ?? "invalid"}`, {
-    issues: error.issues.slice(0, 20).map((each) => ({ path: each.path.join("."), message: each.message })),
+    issues: error.issues.slice(0, 20).map((each) => ({ path: each.path.filter((key) => typeof key !== "symbol"), message: each.message })),
   });
 }
 
