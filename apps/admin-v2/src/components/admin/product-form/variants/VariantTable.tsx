@@ -692,10 +692,11 @@ const VariantRow = React.memo(function VariantRow({
             data-variant-more
             onClick={() => onToggleExpand(variant.id)}
             aria-expanded={expanded}
-            aria-label={t(expanded ? "lessFieldsFor" : "moreFieldsFor", { name })}
             className="inline-flex min-h-11 shrink-0 items-center gap-0.5 rounded-sm sm:pointer-fine:min-h-0 font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {t(expanded ? "less" : "more")}
+            {/* The visible word starts the name (WCAG 2.5.3); aria-expanded alone says open or closed. */}
+            {t("more")}
+            <span className="sr-only"> {name}</span>
             <ChevronDown aria-hidden="true" className={cn("size-3.5 shrink-0 transition-transform", expanded && "rotate-180")} />
           </button>
         </div>
