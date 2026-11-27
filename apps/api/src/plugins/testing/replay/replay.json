@@ -1,0 +1,23 @@
+{
+  "$comment": "Neutral released bundles, frozen as built (tests/replay/bundles.test.ts replays them against every build). One folder per platform release; never edit, rebuild or remove a ZIP. Freeze the current tree's with node tests/replay/freeze.mjs fixtures.",
+  "bundles": [
+    {
+      "file": "2.0.0-beta.8/acme.delivery-slots-0.2.0.zip",
+      "id": "acme.delivery-slots",
+      "version": "0.2.0",
+      "sha256": "d9bbccba206a3ab4ebe0ba31532bd578f99e19e33ba6f2bb122d8d2bf4d71b5d",
+      "builtAgainst": "2.0.0-beta.8",
+      "sdk": "2.0.0-beta.8",
+      "note": "the SDK's delivery-slots example in a scaffolded app, built at cf32c0969d"
+    },
+    {
+      "file": "2.0.0-beta.8/acme.starter-theme-0.1.0.zip",
+      "id": "acme.starter-theme",
+      "version": "0.1.0",
+      "sha256": "7b689dc1f4fd51fab407efb67abc85caf6fa6c197160b3a1934abe1ce8ed7c46",
+      "builtAgainst": "2.0.0-beta.8",
+      "sdk": "2.0.0-beta.8",
+      "note": "the theme starter (pnpm plugin create --theme), built at cf32c0969d"
+    }
+  ]
+}

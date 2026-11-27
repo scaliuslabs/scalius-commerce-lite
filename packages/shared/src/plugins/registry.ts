@@ -206,20 +206,5 @@ export function sealedAssetDigests(code: string): Record<string, string> {
   }
 }
 
-/** Whether `candidate` is a newer semantic version than `current` (pre-releases sort before their release). */
-export function isNewerPluginVersion(candidate: string, current: string): boolean {
-  const parse = (value: string) => {
-    const [core = "", pre] = value.split("-", 2) as [string, string | undefined];
-    return { parts: core.split(".").map((part) => Number(part)), pre: pre ?? null };
-  };
-  const left = parse(candidate);
-  const right = parse(current);
-  for (let index = 0; index < 3; index += 1) {
-    const difference = (left.parts[index] ?? 0) - (right.parts[index] ?? 0);
-    if (difference !== 0) return difference > 0;
-  }
-  if (left.pre === right.pre) return false;
-  if (left.pre === null) return true;
-  if (right.pre === null) return false;
-  return left.pre > right.pre;
-}
+/** Release order for the registry: the one comparison (versions.ts). */
+export { comparePluginVersions } from "./versions";

@@ -20,7 +20,7 @@ export const orderResourceSchema = z.object({ order: OrderResource });
  * page read calls the same number `version`.
  */
 export function orderExpectedRevisionDescription(refusal: string): string {
-  return `The order's revision you read: \`revision\` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, \`version\` in dashboard.orders.get; ${refusal}`;
+  return `The order's revision you read: \`revision\` in the order orders.get and every order write answer (the dashboard's order page calls it \`version\`); ${refusal}`;
 }
 
 /** The order's sealed representation, read after a write (not found once it is gone). */

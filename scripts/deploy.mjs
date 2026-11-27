@@ -18,30 +18,22 @@
  *     (sandboxed plugins, Workers Paid, implies --plan paid); `pnpm plugin sandbox on` makes it the default
  *   node scripts/deploy.mjs --only api --wrangler-config path/to/wrangler.jsonc
  *     --health-only # isolated custom config: verify deployment + /health, not production bindings
- *   node scripts/deploy.mjs --migrate-only   # apply remote D1 migrations
+ *   node scripts/deploy.mjs --migrate-only   # apply remote D1 migrations (pre-flight and recovery point, no freeze)
  *   node scripts/deploy.mjs --migrate-only --local  # apply local D1 migrations only
+ *   node scripts/deploy.mjs --check-upgrade  # read-only: the D1 upgrade pre-flight against the live store, then stop
+ *   node scripts/deploy.mjs --help           # this text; an unknown flag refuses instead of deploying
  *
- * Post-deploy verification URLs (Wrangler configs carry no vars):
- *   --storefront-url <origin> / SCALIUS_STOREFRONT_URL
- *       Public storefront origin. Defaults to https://<pattern> of the
- *       custom_domain route in apps/storefront/wrangler.jsonc, then to the
- *       dashboard Platform setting read from ${apiUrl}/api/v1/platform.
- *   --api-url <origin> / SCALIUS_API_URL
- *       Public API origin. Without it, live API verification and the
- *       API-driven storefront warm paths are skipped with a notice.
- *   # External provider upgrades are an explicit frozen control-plane step:
- *   pnpm --filter @scalius/database upgrade:schema --provider <provider> ...
- *
- * Runs in order (full deploy):
- *   1. turbo build       — builds all workspaces, then fails if dist/ carries
- *                          any local env value (check-dist-secrets.mjs) or a
- *                          canary build leaks one (check-build-canaries.mjs),
- *                          or a bundle breaks its budget (the API Worker size,
- *                          the dashboard routes, the storefront's buyer pages)
- *   2. D1 migration, or read-only external schema compatibility preflight
- *   3. wrangler deploy   — deploys the API Worker (which also serves the
- *                          dashboard SPA from its ASSETS binding) and the
- *                          Storefront Worker
+ * A remote D1 API deploy is a guarded upgrade (scripts/deploy-upgrade.mjs):
+ * a read-only pre-flight first (the API's /meta, both migration ledgers, the
+ * freeze state as the API answers it; it refuses a diverged or newer
+ * database), then, when migrations are pending on a store with data and
+ * --api-url is given: DATABASE_MIGRATION_FREEZE on the API Worker, watched
+ * until the API refuses requests for a minute, a D1 Time Travel bookmark and a
+ * receipt in ~/.scalius/deploy-receipts/ (SCALIUS_DEPLOY_RECEIPTS), the
+ * migrations (once), the API deploy and its verification, and the release,
+ * watched until the API serves. A failure after the schema changed leaves the
+ * store frozen and prints the restore and the rollback; `--resume-frozen`
+ * acknowledges a freeze a failed deploy on another machine left.
  *
  * The database name is read from apps/api/wrangler.jsonc (API worker owns D1);
  * with --local, from apps/api/wrangler.local.jsonc, the config the dev stack uses.
@@ -58,11 +50,95 @@ import { apiWranglerConfig, pluginSandboxEnabled, withPluginSandbox } from "./pl
 import { resolvePlan, withStorefrontPlanProfile } from "./plan.mjs";
 import { readHiddenLine } from "./demo-store/credentials.mjs";
 import { readinessChecksOf, readinessHeaders, readinessOperatorToken, readinessSummary } from "./readiness-operator.mjs";
+import {
+  FREEZE_SECRET,
+  GuardedUpgradeError,
+  awaitObservedFreeze,
+  awaitObservedRelease,
+  createReceipt,
+  decideUpgrade,
+  decideWorkerVersions,
+  describeUpgradeDecision,
+  latestReceipt,
+  parseD1ExecuteRows,
+  readFreezeState,
+  readMeta,
+  readRemoteLedgers,
+  readSeenServing,
+  recordSeenServing,
+  releaseCommand,
+  readTreeMigrations,
+  receiptPath,
+  receiptsDirectory,
+  rollbackCommands,
+  runGuardedUpgrade,
+  writeReceipt,
+} from "./deploy-upgrade.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const apiDir = resolve(root, "apps", "api");
-const args = process.argv.slice(2);
+const DEPLOY_FLAGS = new Set([
+  "--migrate-only", "--local", "--dry-run", "--skip-verified", "--health-only", "--plugin-sandbox",
+  "--resume-frozen", "--check-upgrade", "--help", "-h",
+]);
+const DEPLOY_VALUE_FLAGS = new Set([
+  "--only", "--wrangler-config", "--database-target-host", "--database-provider", "--storefront-url", "--api-url", "--plan",
+]);
+
+/**
+ * The script's one argument parser. A deploy is the default action, so every
+ * spelling it accepts is honoured and every other is refused: `--only=api`
+ * and `--only api` are the same; `--hlep`, `--dry-run=1` or a flag given twice
+ * (`--only api --only storefront`) refuse rather than deploy. `args` is the canonical form every later read uses (each value flag
+ * followed by its value; pnpm's `--` separator dropped).
+ */
+export function parseDeployArgs(inputArgs) {
+  const parsed = [];
+  const errors = [];
+  const seen = new Set();
+  for (let index = 0; index < inputArgs.length; index += 1) {
+    const arg = inputArgs[index];
+    if (arg === "--") continue;
+    const equals = arg.indexOf("=");
+    const name = arg.startsWith("--") && equals !== -1 ? arg.slice(0, equals) : arg;
+    if ((DEPLOY_VALUE_FLAGS.has(name) || DEPLOY_FLAGS.has(name)) && seen.has(name)) {
+      errors.push(`${name} given more than once`);
+      if (DEPLOY_VALUE_FLAGS.has(name) && name === arg) index += 1;
+      continue;
+    }
+    seen.add(name);
+    if (DEPLOY_VALUE_FLAGS.has(name)) {
+      const value = equals !== -1 && name !== arg ? arg.slice(equals + 1) : inputArgs[++index];
+      if (value === undefined || value === "" || (name === arg && value.startsWith("--"))) {
+        errors.push(`${name} needs a value`);
+        continue;
+      }
+      parsed.push(name, value);
+    } else if (DEPLOY_FLAGS.has(name)) {
+      if (name !== arg) errors.push(`${name} takes no value (got ${arg})`);
+      else parsed.push(arg);
+    } else {
+      errors.push(`unknown argument ${arg}`);
+    }
+  }
+  return { args: parsed, errors };
+}
+
+const parsedArgs = parseDeployArgs(process.argv.slice(2));
+const args = parsedArgs.args;
+
+/** The usage text: this file's header comment. */
+export function deployUsage() {
+  return readFileSync(fileURLToPath(import.meta.url), "utf8")
+    .split("\n")
+    .slice(2)
+    .filter((line, index, lines) => lines.slice(0, index + 1).every((previous) => !previous.startsWith(" */")))
+    .map((line) => line.replace(/^ \*\/?\s?/, ""))
+    .join("\n")
+    .trim();
+}
+
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
 const dryRun = args.includes("--dry-run");
@@ -1354,6 +1430,14 @@ function checkDistSecrets(targets = deployTargets, options = {}) {
 
 // ── Main
 export async function main() {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(deployUsage());
+    return;
+  }
+  if (parsedArgs.errors.length > 0) {
+    console.error(`✗ ${parsedArgs.errors.join("; ")}. Nothing was deployed; see node scripts/deploy.mjs --help.`);
+    process.exit(1);
+  }
   if (wranglerConfigArgIndex !== -1 && !args[wranglerConfigArgIndex + 1]) {
     console.error("✗ --wrangler-config requires a path.");
     process.exit(1);
@@ -1491,24 +1575,241 @@ export async function main() {
     return false;
   };
 
+  // ── The guarded upgrade of a remote D1 store (scripts/deploy-upgrade.mjs).
+  const guardsRemoteD1 = databaseProvider === "d1" && !local
+    && (migrateOnly || requestedTarget === null || requestedTarget === "api");
+  const d1Target = customWranglerConfigPath ? "DB" : dbName;
+  const d1ConfigFlag = customWranglerConfigPath ? ` --config ${shellQuote(customWranglerConfigPath)}` : "";
+  const apiConfigFlag = apiDeployConfigPath ? ` --config ${shellQuote(apiDeployConfigPath)}` : "";
+  const receiptDatabase = d1Target ?? "DB";
+  const migrationsDirectory = resolve(
+    dirname(customWranglerConfigPath ?? resolve(apiDir, "wrangler.jsonc")),
+    d1?.migrations_dir ?? "migrations",
+  );
+  const apiUrl = deploymentUrls.apiUrl;
+  const queryRemoteD1 = (sql) => parseD1ExecuteRows(execSync(
+    `${pnpm} exec wrangler d1 execute ${d1Target} --remote --json --command ${shellQuote(sql)}${d1ConfigFlag}`,
+    { cwd: apiDir, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] },
+  ));
+  // Only a guarded D1 upgrade keeps receipts (and resolving the folder refuses under a test runner without one named).
+  const receipts = guardsRemoteD1 && !dryRun ? receiptsDirectory() : null;
+  const upgradeCommands = {
+    rollback: (receipt) => rollbackCommands(receipt, { d1ConfigFlag, workerConfigFlag: apiConfigFlag, apiUrl }),
+    release: () => releaseCommand({ workerConfigFlag: apiConfigFlag }),
+  };
+  const probeFreeze = () => (apiUrl ? readFreezeState(apiUrl) : Promise.resolve(null));
+
+  /** Read-only. A dry run reads nothing remote: the decision then only names the tree's chain. */
+  const preflightUpgrade = async ({ readRemote }) => {
+    const tree = readTreeMigrations(migrationsDirectory);
+    if (!readRemote) {
+      const decision = decideUpgrade({ tree });
+      for (const line of describeUpgradeDecision(decision)) console.log(line);
+      return decision;
+    }
+    console.log(`\n▶ Upgrade pre-flight → D1 "${d1Target}" (read-only)`);
+    let meta = null;
+    if (apiUrl) {
+      meta = await readMeta(apiUrl);
+      if (!meta) console.warn(`⚠ Could not read ${apiUrl}/api/v1/meta: the running code's schema and release are not checked.`);
+    } else {
+      console.warn(`⚠ The public API origin is unknown: the running code's schema and release and the freeze state are not checked. To check them, ${API_URL_HINT}.`);
+    }
+    // Only what the API answers counts as frozen; a receipt says who froze it, never whether it still is.
+    const frozen = await probeFreeze();
+    let remote;
+    try {
+      remote = await readRemoteLedgers(queryRemoteD1);
+    } catch (error) {
+      console.error(`✗ Could not read the D1 migration ledgers of "${d1Target}": ${errorMessage(error)}. Nothing was changed.`);
+      process.exit(1);
+    }
+    // The platform release: the root package version, equal to SCALIUS_PLATFORM_VERSION (manifest.test.ts).
+    const treeRelease = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).version;
+    const decision = decideUpgrade({
+      tree, remote, meta, frozen, treeRelease,
+      previous: latestReceipt(receipts, receiptDatabase),
+      seenServingAt: readSeenServing(receipts, receiptDatabase),
+      resumeFrozen: args.includes("--resume-frozen"),
+      freezes: !migrateOnly,
+    });
+    for (const line of describeUpgradeDecision(decision)) (decision.ok ? console.log : console.error)(line);
+    if (!decision.ok) {
+      console.error("  Nothing was changed.");
+      process.exit(1);
+    }
+    // Seen serving: a held receipt from before now is closed, and a later resume cannot reuse its bookmark.
+    if (frozen === false) {
+      const closed = recordSeenServing(receipts, receiptDatabase, new Date().toISOString());
+      if (closed) console.log(`  Closed the receipt of ${closed.startedAt}: the store serves, so its freeze ended outside that deploy.`);
+    }
+    if (migrateOnly) return decision;
+    // The Worker's versions: the one serving 100% is the way back; the latest uploaded one is what secret put edits and wrangler deploy inherits.
+    const versions = readWorkerVersions();
+    const verdict = decideWorkerVersions({ ...versions, setsFreeze: decision.freeze, workerConfigFlag: apiConfigFlag });
+    if (!verdict.ok) {
+      console.error(`✗ Upgrade pre-flight refused (${verdict.code}): ${verdict.message}`);
+      process.exit(1);
+    }
+    console.log(`  API Worker: ${versions.serving ?? "no version"} serves 100%; the latest uploaded version is ${versions.latest === versions.serving ? "the same" : versions.latest ?? "unknown"}.`);
+    if (verdict.clearLatestFreeze) console.log(`  The latest version carries ${FREEZE_SECRET} (a rollback left it): it is cleared before the deploy.`);
+    return { ...decision, apiVersionBefore: versions.serving, clearLatestFreeze: verdict.clearLatestFreeze };
+  };
+
+  /** The version serving 100%, the newest uploaded one, and whether that one carries the freeze (read-only). */
+  const readWorkerVersions = () => {
+    const serving = readApiVersion();
+    let latest = null;
+    try {
+      const list = JSON.parse(execSync(`${pnpm} exec wrangler versions list --json${apiConfigFlag}`, {
+        cwd: apiDir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+      }));
+      latest = [...list].sort((left, right) => String(left?.metadata?.created_on).localeCompare(String(right?.metadata?.created_on))).at(-1)?.id ?? null;
+    } catch {
+      latest = null;
+    }
+    let latestHoldsFreeze = false;
+    if (latest && latest !== serving) {
+      try {
+        const version = JSON.parse(execSync(`${pnpm} exec wrangler versions view ${latest} --json${apiConfigFlag}`, {
+          cwd: apiDir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+        }));
+        latestHoldsFreeze = (version?.resources?.bindings ?? []).some((binding) => binding?.type === "secret_text" && binding?.name === FREEZE_SECRET);
+      } catch {
+        // Unreadable: clear it anyway (clearing a secret the version lacks changes nothing that serves).
+        latestHoldsFreeze = true;
+      }
+    }
+    return { serving, latest, latestHoldsFreeze };
+  };
+
+  /** The version serving 100% of the API Worker's traffic, or null when Wrangler cannot say (one is never guessed). */
+  const readApiVersion = () => {
+    try {
+      const list = JSON.parse(execSync(`${pnpm} exec wrangler deployments list --json${apiConfigFlag}`, {
+        cwd: apiDir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+      }));
+      return getFullyServedVersion(getLatestDeployment(list))?.version_id ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * Pre-flight again (the authoritative read, right before anything changes),
+   * then freeze, recovery point, migrate, deploy and verify the API, release.
+   * `--migrate-only` runs the same pre-flight and recovery point but neither
+   * freezes nor deploys: the running code then serves the new schema.
+   */
+  const guardedApiDeploy = async ({ migrateOnlyRun = false } = {}) => {
+    const decision = await preflightUpgrade({ readRemote: true });
+    const effective = migrateOnlyRun ? { ...decision, freeze: false, resume: false } : decision;
+    const migrationsApplied = (decision.pending?.length ?? 0) > 0 || decision.resume === true;
+    const apiVersionBefore = migrateOnlyRun ? null : decision.apiVersionBefore ?? null;
+    const receipt = createReceipt({
+      database: receiptDatabase,
+      worker: config.name ?? null,
+      decision: effective,
+      startedAt: new Date().toISOString(),
+      apiVersionBefore,
+      resumes: effective.resume ? decision.previous : null,
+    });
+    const path = receiptPath(receipts, receipt);
+    console.log(`  Receipt: ${path}`);
+    const clock = { sleep, now: () => Date.now() };
+    try {
+      await runGuardedUpgrade({
+        decision: effective,
+        receipt,
+        migrateOnly: migrateOnlyRun,
+        commands: upgradeCommands,
+        steps: {
+          now: () => new Date().toISOString(),
+          saveReceipt: (next) => writeReceipt(receipts, next),
+          setFreeze: () => {
+            console.log(`\n▶ Freeze writes: ${FREEZE_SECRET} on the API Worker`);
+            execSync(`${pnpm} exec wrangler secret put ${FREEZE_SECRET}${apiConfigFlag}`, {
+              cwd: apiDir, input: "1\n", stdio: ["pipe", "inherit", "inherit"],
+            });
+          },
+          awaitFreeze: () => awaitObservedFreeze({ probe: probeFreeze, ...clock, log: console.log }),
+          freezeState: probeFreeze,
+          bookmark: async () => {
+            const output = execSync(`${pnpm} exec wrangler d1 time-travel info ${d1Target} --json${d1ConfigFlag}`, {
+              cwd: apiDir, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"],
+            });
+            const parsed = JSON.parse(output);
+            if (typeof parsed?.bookmark !== "string" || !parsed.bookmark) throw new Error("Wrangler did not return a D1 bookmark.");
+            return { bookmark: parsed.bookmark, takenAt: new Date().toISOString() };
+          },
+          // Once: a guarded upgrade stops at the first failure and hands it to the operator.
+          migrate: () => run(
+            `${pnpm} exec wrangler d1 migrations apply ${d1Target} --remote${d1ConfigFlag}`,
+            `Apply D1 migrations → ${d1Target} (remote)`,
+            apiDir,
+          ),
+          appliedCount: () => Number(queryRemoteD1("SELECT count(*) AS n FROM d1_migrations")[0]?.n),
+          clearLatestFreeze: () => run(
+            `${pnpm} exec wrangler versions secret delete ${FREEZE_SECRET} --message "Clear a freeze a rollback left on the latest version"${apiConfigFlag}`,
+            "Clear the freeze from the latest (not serving) API Worker version; nothing is deployed",
+            apiDir,
+          ),
+          deployApi: () => deployTarget("api", apiDeployConfigPath, plan, pluginSandbox),
+          verifyApi: () => verifyPostDeployTarget("api", config, apiDeployConfigPath, {
+            healthOnly, deploymentUrls, migrationsApplied, databaseProvider,
+          }),
+          releaseFreeze: async () => {
+            console.log(`\n▶ Release the freeze: delete ${FREEZE_SECRET} on the API Worker`);
+            execSync(`${pnpm} exec wrangler secret delete ${FREEZE_SECRET}${apiConfigFlag}`, {
+              cwd: apiDir, stdio: ["ignore", "inherit", "inherit"],
+            });
+            await awaitObservedRelease({ probe: probeFreeze, ...clock });
+            console.log("✓ The API serves ordinary requests again.");
+          },
+        },
+      });
+    } finally {
+      console.log(`  Receipt (${receipt.outcome}): ${path}`);
+    }
+    if (migrateOnlyRun && migrationsApplied) {
+      console.warn("⚠ --migrate-only: the running API now serves the new schema. `pnpm run deploy` keeps code and schema together under the freeze.");
+    }
+    return migrationsApplied;
+  };
+
+  if (args.includes("--check-upgrade")) {
+    if (!guardsRemoteD1 || dryRun) {
+      console.error("✗ --check-upgrade reads a remote D1 store: it applies to a D1 deploy of the API, without --local or --dry-run.");
+      process.exit(1);
+    }
+    await preflightUpgrade({ readRemote: true });
+    console.log("\n✓ Upgrade check complete: nothing was changed.");
+    return;
+  }
+
   if (migrateOnly) {
     console.log(`\n🗄  Applying D1 schema migrations → "${dbName}" (${target})\n`);
     if (dryRun) {
+      if (!local) await preflightUpgrade({ readRemote: false });
       console.log("DRY RUN: would apply D1 schema migrations.");
       console.log("\n✓ Migration dry run complete.");
       return;
     }
 
     try {
-      const migrationTarget = dbName;
-      runWithRetry(
-        `${pnpm} exec wrangler d1 migrations apply ${migrationTarget} --${target}${persistFlag}${local ? " --config wrangler.local.jsonc" : ""}`,
-        `Apply D1 migrations → ${migrationTarget} (${target})`,
-        apiDir,
-      );
+      if (local) {
+        runWithRetry(
+          `${pnpm} exec wrangler d1 migrations apply ${dbName} --local${persistFlag} --config wrangler.local.jsonc`,
+          `Apply D1 migrations → ${dbName} (local)`,
+          apiDir,
+        );
+      } else {
+        await guardedApiDeploy({ migrateOnlyRun: true });
+      }
       console.log("\n✓ Migrations applied.");
-    } catch {
-      console.error("\n✗ Migration failed after retries. See errors above.");
+    } catch (error) {
+      if (error instanceof GuardedUpgradeError) console.error(`\n✗ ${error.message}`);
+      console.error("\n✗ Migration failed. See errors above.");
       process.exit(1);
     }
     return;
@@ -1520,6 +1821,10 @@ export async function main() {
     + "\n",
   );
   console.log("=".repeat(60));
+
+  // 0. Before anything is built or changed: the upgrade pre-flight. A dry run
+  // reads nothing remote; a real deploy refuses here on a diverged database.
+  if (guardsRemoteD1) await preflightUpgrade({ readRemote: !dryRun });
 
   try {
     // 1. Typecheck first — catches type mismatches esbuild ignores
@@ -1558,18 +1863,22 @@ export async function main() {
         return;
       }
 
-      const migrationsApplied = requestedTarget === "api"
-        ? prepareSelectedProviderSchema()
-        : false;
+      if (requestedTarget === "api" && guardsRemoteD1) {
+        await guardedApiDeploy();
+      } else {
+        const migrationsApplied = requestedTarget === "api"
+          ? prepareSelectedProviderSchema()
+          : false;
 
-      const targetConfigPath = requestedTarget === "api" ? apiDeployConfigPath : null;
-      deployTarget(requestedTarget, targetConfigPath, plan, pluginSandbox);
-      await verifyPostDeployTarget(requestedTarget, config, targetConfigPath, {
-        healthOnly,
-        deploymentUrls,
-        migrationsApplied,
-        databaseProvider,
-      });
+        const targetConfigPath = requestedTarget === "api" ? apiDeployConfigPath : null;
+        deployTarget(requestedTarget, targetConfigPath, plan, pluginSandbox);
+        await verifyPostDeployTarget(requestedTarget, config, targetConfigPath, {
+          healthOnly,
+          deploymentUrls,
+          migrationsApplied,
+          databaseProvider,
+        });
+      }
       if (requestedTarget === "api") await reportFirstAdminSetupKey(deploymentUrls?.apiUrl ?? null);
       console.log(`\n✓ Deploy complete (${requestedTarget}).`);
       return;
@@ -1586,22 +1895,28 @@ export async function main() {
       return;
     }
 
-    // 3. D1 is upgraded locally by Wrangler. External authorities are upgraded
+    // 3. A remote D1 store is upgraded under the freeze with the API deploy
+    // (migrate, deploy, verify, release). External authorities are upgraded
     // only by the frozen control-plane workflow; ordinary deploys prove they
     // are already current without mutating them.
-    const migrationsApplied = prepareSelectedProviderSchema();
-
-    // 4. Deploy both workers
-    for (const targetName of deployTargets) {
-      const targetConfigPath = targetName === "api" ? apiDeployConfigPath : null;
-      deployTarget(targetName, targetConfigPath, plan, pluginSandbox);
-      await verifyPostDeployTarget(targetName, config, targetConfigPath, { deploymentUrls, migrationsApplied, databaseProvider });
+    let migrationsApplied = false;
+    if (guardsRemoteD1) {
+      migrationsApplied = await guardedApiDeploy();
+    } else {
+      migrationsApplied = prepareSelectedProviderSchema();
+      deployTarget("api", apiDeployConfigPath, plan, pluginSandbox);
+      await verifyPostDeployTarget("api", config, apiDeployConfigPath, { deploymentUrls, migrationsApplied, databaseProvider });
     }
-    if (deployTargets.includes("api")) await reportFirstAdminSetupKey(deploymentUrls?.apiUrl ?? null);
+
+    // 4. The storefront, after the API is verified and released
+    deployTarget("storefront", null, plan, pluginSandbox);
+    await verifyPostDeployTarget("storefront", config, null, { deploymentUrls, migrationsApplied, databaseProvider });
+    await reportFirstAdminSetupKey(deploymentUrls?.apiUrl ?? null);
 
     console.log(`\n✓ Deploy complete (${deployTargets.join(" + ")}).`);
-  } catch {
-    console.error("\n✗ Deploy failed after retries. See errors above.");
+  } catch (error) {
+    if (error instanceof GuardedUpgradeError) console.error(`\n✗ ${error.message}`);
+    console.error("\n✗ Deploy failed. See errors above.");
     process.exit(1);
   }
 }

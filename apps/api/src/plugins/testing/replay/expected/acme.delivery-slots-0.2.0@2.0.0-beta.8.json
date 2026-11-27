@@ -1,0 +1,8 @@
+{
+  "bundle": "2.0.0-beta.8/acme.delivery-slots-0.2.0.zip",
+  "builtAgainst": "2.0.0-beta.8",
+  "install": "accepted (signed)",
+  "buyerUi": {
+    "checkout.contact.after": "valid buyer.ui answer (a buyer UI document)"
+  }
+}

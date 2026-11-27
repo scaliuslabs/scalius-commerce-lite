@@ -24,6 +24,7 @@ import type {
   PluginUiImageSource,
   PluginUiNode,
   PluginUiRouteAction,
+  PluginUiSpan,
   PluginUiTarget,
   PluginUiTone,
 } from "@scalius/shared/plugins";
@@ -53,7 +54,13 @@ export const ui = {
   stack: (children: PluginUiNode[], options: Options<"stack", "children"> = {}): PluginUiNode => ({ type: "stack", ...options, children }),
   columns: (children: PluginUiNode[]): PluginUiNode => ({ type: "columns", children }),
   heading: (text: string, level: 2 | 3 | 4 = 2): PluginUiNode => ({ type: "heading", text, level }),
-  text: (text: string, options: Options<"text", "text"> = {}): PluginUiNode => ({ type: "text", text, ...options }),
+  /**
+   * Words, or a sentence of pieces whose links are drawn inside it:
+   * `ui.text([{ text: "Covers repairs. " }, { text: "Read the terms", to: ui.to.store("/pages/protection") }])`.
+   * Plain pieces keep their spaces; a link's words are a link's (1 to 120 characters).
+   */
+  text: (text: string | readonly PluginUiSpan[], options: Options<"text", "text"> = {}): PluginUiNode =>
+    ({ type: "text", text: typeof text === "string" ? text : [...text], ...options }),
   badge: (text: string, tone: PluginUiTone = "neutral"): PluginUiNode => ({ type: "badge", text, tone }),
   banner: (tone: PluginUiTone, text: string, options: Options<"banner", "tone" | "text"> = {}): PluginUiNode => ({ type: "banner", tone, text, ...options }),
   keyValue: (items: NodeOf<"key-value">["items"]): PluginUiNode => ({ type: "key-value", items }),

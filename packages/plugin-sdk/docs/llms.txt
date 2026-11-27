@@ -1,6 +1,6 @@
 # Scalius app SDK (@scalius/plugin-sdk)
 
-> Build apps and themes for Scalius Commerce stores. An app is an npm package with a manifest (`defineManifest`) and handlers (`definePlugin`); a theme is an app whose manifest declares storefront parts. One app runs in many merchants' stores, so it must work on a store its author has never seen. Plugin API version 2026-10; within a version the API only grows.
+> Build apps and themes for Scalius Commerce stores. An app is an npm package with a manifest (`defineManifest`) and handlers (`definePlugin`); a theme is an app whose manifest declares storefront parts. One app runs in many merchants' stores, so it must work on a store its author has never seen. Contract version 2026-10; within a version the contract only grows ([What we promise](promise.md)).
 
 Rules an AI agent must follow in an app or theme:
 
@@ -11,7 +11,7 @@ Rules an AI agent must follow in an app or theme:
 - Expect an empty store (no products, menu, logo, policies): return `null` for a part with nothing to show.
 - Ship only artwork you hold redistribution rights to; neutral placeholders; images under 200 KiB.
 - Real `<a href>` and `<button>` controls that work without JavaScript; buy through `<BuyForm />`; islands only enhance.
-- Every word through `t(context, { en, bn })`; SDK formatters for numbers, money and dates; logical CSS (`margin-inline-start`, `inset-inline-start`, `text-align: start`).
+- Every word through `t(context, { en, … })`, English plus each language you ship; SDK formatters for numbers, money and dates; logical CSS (`margin-inline-start`, `inset-inline-start`, `text-align: start`).
 - An app's buyer and staff words have their translations: the manifest's `translations.<tag>` (pages, settings, checkout attributes, line inputs, purchase options, objects, custom fields, jobs), admin screens through `adminContext(request).locale`, and checkout functions answer in `input.language` with `textFor(input.language, { en, bn })`.
 - Money is integer minor units (`amountMinor`) with an ISO `currency`.
 - Before packing: `npm test`, `npx scalius-plugin validate` and `npx scalius-plugin preview` (a sample, an empty and another store); fix every failure and warning.
@@ -25,6 +25,7 @@ Rules an AI agent must follow in an app or theme:
 - [Commerce hooks](commerce-hooks.md): scopes, event payloads, provider ports, checkout functions, the stable app API (`ctx.api.call`), payments, discounts.
 - [Stable app API reference](operations.md): every `ctx.api.call` operation with its scopes, request and response (generated from the contract).
 - [Event reference](events.md): every event topic and its facts (generated from the event catalogue).
+- [What we promise](promise.md): what stays the same across releases and what does not, the security exception, contract versions, and how fresh what an app reads is.
 - [Examples](../examples/README.md): complete apps on the public SDK (point of sale, reviews import, cart recovery, delivery slots, a pixel, a chat channel provider, a marketplace with payouts).
 - [SDK README](../README.md): quick start, a minimal app, the test harness, providers.
 
