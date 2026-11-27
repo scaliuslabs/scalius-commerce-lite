@@ -12,6 +12,8 @@
 import { STOREFRONT_THEME_DOCUMENT_VERSION, storefrontThemeDocumentSchema, type StorefrontThemeDocument } from "./document";
 import { STOREFRONT_SECTION_REGISTRY, type StorefrontSectionSettingsUpgrade } from "./sections";
 import { storefrontPrivatePageDefaults } from "./private-pages";
+import { STOREFRONT_MOBILE_DEFAULT_TABS, STOREFRONT_MOBILE_TAB_LIMITS } from "./blocks";
+import { isStorefrontStorePath } from "./links";
 import { privateCartPresetArrangement, privateDrawerWith, type PrivatePageArrangement } from "./private-arrangement";
 import { PRIVATE_ANATOMY_VERSION } from "./private-anatomy";
 import { readStoredPrivatePages, refusedPrivatePages } from "./private-layout";
@@ -385,6 +387,25 @@ function withoutPrivatePageTemplates(document: Json): Json {
   return { ...document, pages: { ...pages, templates } };
 }
 
+/**
+ * A stored document without a link a later, stricter store-path check refuses
+ * (`isStorefrontStorePath`, a security check: such a link is never drawn as
+ * a working one): a bottom bar link tab whose page fails it is left out, and
+ * when that leaves fewer tabs than a bar holds, the bar is the store's own
+ * (`STOREFRONT_MOBILE_DEFAULT_TABS`). The rest of the document reads as it
+ * was; a save that names such a link is refused (`tab_link_external`).
+ */
+function withoutUnsafeStoreLinks(document: Json): Json {
+  const blocks = document.blocks;
+  if (!isRecord(blocks) || !isRecord(blocks.mobileNav) || !isRecord(blocks.mobileNav.settings)) return document;
+  const { settings } = blocks.mobileNav;
+  if (!Array.isArray(settings.tabs)) return document;
+  const kept = settings.tabs.filter((tab) => !(isRecord(tab) && tab.kind === "link" && typeof tab.href === "string" && !isStorefrontStorePath(tab.href)));
+  if (kept.length === settings.tabs.length) return document;
+  const tabs = kept.length >= STOREFRONT_MOBILE_TAB_LIMITS.min ? kept : STOREFRONT_MOBILE_DEFAULT_TABS.map((tab) => ({ ...tab }));
+  return { ...document, blocks: { ...blocks, mobileNav: { ...blocks.mobileNav, settings: { ...settings, tabs } } } };
+}
+
 /** A stored document read through the chain: the current document and the version it was stored at. */
 export type StoredStorefrontThemeRead =
   | { ok: true; document: StorefrontThemeDocument; storedVersion: number }
@@ -395,7 +416,9 @@ export type StoredStorefrontThemeRead =
  * parsed strictly for its structure. A read never runs the write policy
  * (`storefrontThemeDocumentPolicyIssues`): a document a later build's policy
  * refuses still reads and draws as it was saved, and is refused only when it
- * is saved again. What a theme cannot set on a private page (a stylesheet,
+ * is saved again. A bottom bar link tab a stricter store-path check refuses
+ * is left out (`withoutUnsafeStoreLinks`), never drawn as a working link.
+ * What a theme cannot set on a private page (a stylesheet,
  * its chrome, its search, files, a content block) is dropped first, as the
  * stored path alone does, and the pages it reached are then refused: the
  * theme reads, those pages draw the store's default look until the next
@@ -416,7 +439,7 @@ export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefr
   } catch (error) {
     return { ok: false, reason: error instanceof StorefrontThemeUpgradeError ? error.message : "The stored theme did not upgrade." };
   }
-  upgraded = withoutPrivatePageTemplates(upgraded);
+  upgraded = withoutUnsafeStoreLinks(withoutPrivatePageTemplates(upgraded));
   const released = readStoredPrivatePages(upgraded.privatePages);
   const result = storefrontThemeDocumentSchema.safeParse("privatePages" in upgraded ? { ...upgraded, privatePages: released.value } : upgraded);
   if (!result.success) {
