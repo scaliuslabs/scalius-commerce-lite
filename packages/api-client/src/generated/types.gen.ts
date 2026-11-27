@@ -69240,7 +69240,9 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses = {
 export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponse = PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses];
 
 export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileData = {
-    body?: never;
+    body: {
+        courierReport?: 'apply' | 'keep';
+    };
     path: {
         id: string;
         shipmentId: string;
@@ -69270,6 +69272,17 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Service unavailable
      */
@@ -71328,6 +71341,11 @@ export type GetApiV1AdminOrdersResponses = {
                     canRetryCreate: boolean;
                     canRepair: boolean;
                     unknownOutcome: boolean;
+                    courierReport?: {
+                        previousStatus: string;
+                        reportedStatus: string;
+                        rawStatus: string;
+                    } | null;
                     updatedAt: NullableTimestamp;
                 };
                 paymentRecovery: {
@@ -71870,6 +71888,11 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     canRetryCreate: boolean;
                     canRepair: boolean;
                     unknownOutcome: boolean;
+                    courierReport?: {
+                        previousStatus: string;
+                        reportedStatus: string;
+                        rawStatus: string;
+                    } | null;
                     updatedAt: NullableTimestamp;
                 };
                 paymentRecovery: {
@@ -73485,6 +73508,11 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 canRetryCreate: boolean;
                 canRepair: boolean;
                 unknownOutcome: boolean;
+                courierReport?: {
+                    previousStatus: string;
+                    reportedStatus: string;
+                    rawStatus: string;
+                } | null;
                 updatedAt: NullableTimestamp;
             };
             paymentRecovery: {

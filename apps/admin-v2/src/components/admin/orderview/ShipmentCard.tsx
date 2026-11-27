@@ -44,6 +44,7 @@ import { Field } from "~/components/ui/field";
 import { isSettledShipment } from "@scalius/shared/shipment-state";
 
 // The courier check: its form loads when the merchant first opens it.
+const ConfirmDialog = lazy(() => import("~/components/admin/shared/ConfirmDialog").then((module) => ({ default: module.ConfirmDialog })));
 const CourierCheckDialog = lazy(() => import("./CourierCheckDialog").then((module) => ({ default: module.CourierCheckDialog })));
 
 /** The courier's name for a shipment's provider type, from the store's couriers. */
@@ -132,6 +133,56 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
             </Button>
           ) : null}
         </div>
+      ) : null}
+      {canManage && blocking && recovery.reason === "courier_report" && recovery.courierReport ? (
+        <CourierReportDecision
+          report={recovery.courierReport}
+          pending={repairMutation.isPending}
+          decide={(courierReport) => repairMutation.mutate({ orderId: order.id, shipmentId, courierReport })}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A courier's report the shipment is held for: staff apply it (after a
+ * confirmation that names what it does to the order and its stock) or keep
+ * the shipment as it was.
+ */
+function CourierReportDecision({ report, pending, decide }: {
+  report: { previousStatus: string; reportedStatus: string; rawStatus: string };
+  pending: boolean;
+  decide: (courierReport: "apply" | "keep") => void;
+}) {
+  const t = useMessages(orderDetailMessages);
+  const [confirming, setConfirming] = useState(false);
+  const opened = useOpenedOnce(confirming);
+  const reported = orderDetailLabel(t, "courierReport.state.", report.reportedStatus);
+  const previous = orderDetailLabel(t, "courierReport.state.", report.previousStatus);
+  return (
+    <div className="space-y-2">
+      <p className="text-muted-foreground">{t("courierReport.saw", { reported, previous, words: report.rawStatus })}</p>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" variant="outline" loading={pending} onClick={() => setConfirming(true)}>
+          {t("courierReport.apply", { reported })}
+        </Button>
+        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => decide("keep")}>
+          {t("courierReport.keep", { previous })}
+        </Button>
+      </div>
+      {opened ? (
+        <Suspense fallback={null}>
+          <ConfirmDialog
+            open={confirming}
+            onOpenChange={setConfirming}
+            title={t("courierReport.confirmTitle", { reported })}
+            description={orderDetailLabel(t, "courierReport.effect.", report.reportedStatus)}
+            confirmLabel={t("courierReport.apply", { reported })}
+            isLoading={pending}
+            onConfirm={() => { decide("apply"); setConfirming(false); }}
+          />
+        </Suspense>
       ) : null}
     </div>
   );

@@ -242389,6 +242389,26 @@
             "in": "path"
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "courierReport": {
+                    "type": "string",
+                    "enum": [
+                      "apply",
+                      "keep"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Shipment reconciliation repaired",
@@ -242509,6 +242529,44 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -249556,6 +249614,26 @@
                                   "unknownOutcome": {
                                     "type": "boolean"
                                   },
+                                  "courierReport": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "previousStatus": {
+                                        "type": "string"
+                                      },
+                                      "reportedStatus": {
+                                        "type": "string"
+                                      },
+                                      "rawStatus": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "previousStatus",
+                                      "reportedStatus",
+                                      "rawStatus"
+                                    ]
+                                  },
                                   "updatedAt": {
                                     "$ref": "#/components/schemas/NullableTimestamp"
                                   }
@@ -251464,6 +251542,26 @@
                                   },
                                   "unknownOutcome": {
                                     "type": "boolean"
+                                  },
+                                  "courierReport": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "previousStatus": {
+                                        "type": "string"
+                                      },
+                                      "reportedStatus": {
+                                        "type": "string"
+                                      },
+                                      "rawStatus": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "previousStatus",
+                                      "reportedStatus",
+                                      "rawStatus"
+                                    ]
                                   },
                                   "updatedAt": {
                                     "$ref": "#/components/schemas/NullableTimestamp"
@@ -257025,6 +257123,26 @@
                             },
                             "unknownOutcome": {
                               "type": "boolean"
+                            },
+                            "courierReport": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "previousStatus": {
+                                  "type": "string"
+                                },
+                                "reportedStatus": {
+                                  "type": "string"
+                                },
+                                "rawStatus": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "previousStatus",
+                                "reportedStatus",
+                                "rawStatus"
+                              ]
                             },
                             "updatedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"

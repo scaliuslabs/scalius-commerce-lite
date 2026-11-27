@@ -12,9 +12,11 @@
 //   themselves. Two corrections are moves: a delivered parcel the buyer
 //   refused at the door comes back `returned`, and a cancelled booking the
 //   rider picked up anyway goes on (to any open state, and from there as any
-//   open shipment). Every other report naming another state over a settled
-//   shipment is no move: the writer holds the shipment for staff with the
-//   courier's report (`holdForCourierReport` in core), never drops it.
+//   open shipment). Any other report over a settled shipment is no move
+//   (`courierReportOutcome`): a late or vague one (an open state, `unknown`,
+//   or `delivered` over a partial delivery) is recorded and acknowledged; one
+//   naming another settled state holds the shipment for staff, who apply it
+//   or keep the shipment as it was (`applyCourierReport` in core).
 // - The store holds any shipment for staff (`reconcile_required`: a booking
 //   whose outcome is unknown, an order or stock update that failed after the
 //   courier's word, a courier's report the settled shipment takes no move
@@ -144,10 +146,23 @@ export function isCourierShipmentStatus(value: string | null | undefined): value
 }
 
 /**
- * Whether a courier's report of `to` over a shipment in `from` holds it for
- * staff: the shipment is settled, the report names another state, and no
- * correction moves it there.
+ * What a courier's report of `to` does to a shipment in `from`:
+ * - `move`: a declared move (an open shipment, a correction, a re-report);
+ * - `record`: a late or vague report over a settled shipment (an open state,
+ *   `unknown`, or `delivered` over a partial delivery, which Pathao's
+ *   `order.paid` sends): its words are kept, nothing moves, nothing waits;
+ * - `hold`: another settled state no correction allows (`returned` over a
+ *   partial delivery, `cancelled` over a delivered one): staff decide.
  */
+export type CourierReportOutcome = "move" | "record" | "hold";
+
+export function courierReportOutcome(from: string, to: string): CourierReportOutcome {
+  if (canWriteShipmentStatus(from, to, "courier") || !isSettledShipment(from) || !isCourierShipmentStatus(to)) return "move";
+  if (!isSettledShipment(to) || (from === "partial_delivered" && to === "delivered")) return "record";
+  return "hold";
+}
+
+/** Whether a courier's report of `to` holds a shipment in `from` for staff (`courierReportOutcome` is `hold`). */
 export function courierReportHolds(from: string, to: string): boolean {
-  return isSettledShipment(from) && from !== to && isCourierShipmentStatus(to) && !canWriteShipmentStatus(from, to, "courier");
+  return courierReportOutcome(from, to) === "hold";
 }

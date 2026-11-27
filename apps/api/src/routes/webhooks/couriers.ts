@@ -271,6 +271,11 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
       await markWebhookEventFailed(db, held, { error: "courier_webhook_shipment_held" });
       return retryLater(c);
     }
+    if (applied.outcome === "recorded") {
+      // A late or vague report over a settled shipment: its words are kept, nothing moved, nothing waits.
+      await markWebhookEventProcessed(db, held, { externalId, status: applied.status, rawStatus: tracking.rawStatus, recorded: true });
+      return accepted(c, reply, { received: true, status: applied.status });
+    }
     if (applied.outcome === "held") {
       // A settled shipment takes no move to this report: it now waits for
       // staff with it (the order shows it, its timeline says what the courier

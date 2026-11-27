@@ -474,9 +474,11 @@ export function useReconcileRefundAttempt() {
 export function useReconcileShipment() {
   const queryClient = useQueryClient();
   return useOrderCommand({
-    mutationFn: ({ orderId, shipmentId }: OrderShipmentRef) =>
+    // `courierReport`: staff's decision on a courier's report the shipment is held for.
+    mutationFn: ({ orderId, shipmentId, courierReport }: OrderShipmentRef & { courierReport?: "apply" | "keep" }) =>
       apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile({
         path: { id: orderId, shipmentId },
+        body: courierReport ? { courierReport } : {},
       })),
     onSuccess: () => {
       invalidateOrderInventoryQueries(queryClient);

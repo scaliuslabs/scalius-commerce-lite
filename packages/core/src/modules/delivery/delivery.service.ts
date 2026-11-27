@@ -17,6 +17,7 @@ import {
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import {
+  COURIER_REPORT_HELD,
   PROVIDER_OUTCOME_UNKNOWN,
   type MerchantOrderShipmentLookup,
   type ShipmentOptions,
@@ -786,7 +787,9 @@ export async function checkShipmentStatus(
   if (orderClaim) assertNoActiveShipmentClaim(orderClaim);
   // A reconciliation waits for staff, as a courier push does: only its own
   // commands move the shipment on (they re-check the courier themselves).
-  if (shipment.status === ShipmentStatus.RECONCILE_REQUIRED) {
+  // A shipment held for a courier's report may be refreshed: what the courier
+  // says now is kept with the hold, so staff decide on its latest word.
+  if (shipment.status === ShipmentStatus.RECONCILE_REQUIRED && shipment.rawStatus !== COURIER_REPORT_HELD) {
     throw new ConflictError("This shipment waits for staff to reconcile it. Use Reconcile on its order; a refresh changes nothing until then.");
   }
 

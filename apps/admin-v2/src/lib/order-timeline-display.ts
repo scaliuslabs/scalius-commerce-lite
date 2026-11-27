@@ -180,15 +180,17 @@ export function describeTimelineEvent(
           : t("timeline.parcelReturnedMany", { count: count(data.quantity) }),
         detail: null,
       };
-    case "courier_report":
-      // A courier's report over a settled parcel, held for staff (its words are the courier's own).
-      return {
-        text: t("timeline.courierReport", {
-          courier: text(data.courierName) ?? t("fulfill.defaultCourier"),
-          words: text(data.rawStatus) ?? text(data.reportedStatus) ?? "",
-        }),
-        detail: t("timeline.courierReportDetail"),
+    case "courier_report": {
+      // A courier's report over a settled parcel (its words are the courier's own): held for staff, recorded, or set aside.
+      const vars = {
+        courier: text(data.courierName) ?? t("fulfill.defaultCourier"),
+        words: text(data.rawStatus) ?? text(data.reportedStatus) ?? "",
       };
+      const outcome = text(data.outcome);
+      if (outcome === "recorded") return { text: t("timeline.courierReportLate", vars), detail: null };
+      if (outcome === "dismissed") return { text: t("timeline.courierReportDismissed", vars), detail: null };
+      return { text: t("timeline.courierReport", vars), detail: t("timeline.courierReportDetail") };
+    }
     case "request_submitted": {
       const type = text(data.type);
       return {

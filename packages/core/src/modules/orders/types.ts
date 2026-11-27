@@ -40,6 +40,13 @@ export interface OrderSupportRequestView {
 // Admin types
 // ─────────────────────────────────────────
 
+/** A courier's report a shipment is held for: the state it was in, what the courier reported, in its words. */
+export interface HeldCourierReport {
+    previousStatus: string;
+    reportedStatus: string;
+    rawStatus: string;
+}
+
 export interface OrderShipmentSummary {
     id: string;
     providerId: string | null;
@@ -47,6 +54,8 @@ export interface OrderShipmentSummary {
     providerName: string | null;
     status: string;
     rawStatus: string | null;
+    /** Only on a shipment held for a courier's report (the order page reads it). */
+    courierReport?: HeldCourierReport | null;
     externalId: string | null;
     trackingId: string | null;
     lastChecked: Date | null;
@@ -87,6 +96,8 @@ export interface OrderShipmentRecoverySummary {
     canRetryCreate: boolean;
     canRepair: boolean;
     unknownOutcome: boolean;
+    /** Reason `courier_report`: the report staff apply or set aside. */
+    courierReport?: HeldCourierReport | null;
     updatedAt: Date | null;
 }
 

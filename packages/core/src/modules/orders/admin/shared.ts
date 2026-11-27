@@ -41,6 +41,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/utils";
 import type { OrderChannel } from "@scalius/shared/order-channel";
 import type {
+    HeldCourierReport,
     OrderListItem,
     OrderPaymentRecoverySummary,
     OrderShipmentRecoverySummary,
@@ -118,6 +119,7 @@ type OrderRecoverySourceRow = {
     status: string;
     paymentStatus: string;
     paymentMethod: string | null;
+    /** 1: the order's payment recovery applies; 2: and a provider's payment event waits for staff (manual reconciliation). */
     paymentRecoveryApplicable?: number | boolean;
     shipmentClaimId?: string | null;
     shipmentClaimExpiresAt?: Date | number | string | null;
@@ -171,7 +173,15 @@ export function paymentRecoveryLifecycleCondition() {
     // Open, unsettled orders retain their existing recovery policy. Closed or
     // settled (paid/refunded) orders surface only current provider/money work,
     // never an old failed attempt the buyer already paid past.
+    // 2 (still applicable) when a provider's payment event waits for staff: money the store could not apply on its own.
     return sql<number>`CASE
+        WHEN EXISTS (
+            SELECT 1 FROM ${webhookEvents}
+            WHERE ${webhookEvents.orderId} = ${orderIdSql}
+              AND ${onlinePaymentMethodCondition(webhookEvents.provider)}
+              AND ${webhookEvents.eventType} NOT LIKE 'courier.%'
+              AND ${webhookEvents.status} = 'manual_reconciliation'
+        ) THEN 2
         WHEN NOT ${inArray(orders.status, [...PAYMENT_BLOCKED_ORDER_STATUSES])}
             AND NOT ${inArray(orders.paymentStatus, [...SETTLED_PAYMENT_STATUSES])} THEN 1
         WHEN ${inArray(orders.status, [OrderStatus.CANCELLED, OrderStatus.RETURNED])}
@@ -246,6 +256,21 @@ export function buildPaymentRecoverySummary(
     if (isClosed && !order.paymentRecoveryApplicable && !staleAttempt) {
         return { ...DEFAULT_PAYMENT_RECOVERY_SUMMARY };
     }
+    // A provider's event the store could not apply (money taken after a cancel): staff check it, open order or not.
+    if (Number(order.paymentRecoveryApplicable) === 2) {
+        return {
+            state: "needs_attention",
+            label: "Payment needs attention",
+            message: "A payment provider reported money the store could not apply on its own. Check the payment with the provider, and refund it if it was taken.",
+            gateway: order.paymentMethod,
+            paymentType: null,
+            status: order.paymentStatus,
+            attempts: 0,
+            activeProcessing: false,
+            staleProcessing: false,
+            updatedAt: null,
+        };
+    }
     const attentionAttempt = failedAttempt ?? staleAttempt;
     if (attentionAttempt || (isHostedPaymentMethod(order.paymentMethod) && order.paymentStatus === PaymentStatus.FAILED)) {
         return {
@@ -291,6 +316,20 @@ export function buildPaymentRecoverySummary(
     return { ...DEFAULT_PAYMENT_RECOVERY_SUMMARY };
 }
 
+/** The courier's report a shipment row is held for, from its recorded facts; null for any other row. */
+export function heldCourierReport(row: { rawStatus: string | null; metadata: string | null }): HeldCourierReport | null {
+    if (row.rawStatus !== COURIER_REPORT_HELD) return null;
+    let held: Record<string, unknown> = {};
+    try {
+        const metadata = JSON.parse(row.metadata ?? "{}") as { reconciliation?: Record<string, unknown> };
+        held = metadata.reconciliation ?? {};
+    } catch {
+        return null;
+    }
+    const text = (value: unknown) => (typeof value === "string" ? value : "");
+    return { previousStatus: text(held.previousStatus), reportedStatus: text(held.providerStatus), rawStatus: text(held.rawProviderStatus) };
+}
+
 export function buildShipmentRecoverySummary(
     order: OrderRecoverySourceRow,
     latestShipment: OrderShipmentSummary | null,
@@ -330,14 +369,16 @@ export function buildShipmentRecoverySummary(
             severity: "danger",
             activeLock: true,
             label: "The courier reported another outcome",
-            message: "The courier reported a different state for a parcel that was already settled. The timeline says what it reported; Repair applies the report to the shipment and the order.",
+            message: "The courier reported a different settled state for this parcel. Apply the report (the order and its stock follow it) or keep the shipment as it was.",
             shipmentId,
             status,
             providerType,
-            canRefresh: false,
+            // A refresh keeps the courier's latest word with the hold; the decision is apply or keep, never a plain Repair.
+            canRefresh: true,
             canRetryCreate: false,
-            canRepair: true,
+            canRepair: false,
             unknownOutcome: false,
+            courierReport: latestShipment.courierReport ?? null,
             updatedAt: latestShipment.updatedAt,
         };
     }
