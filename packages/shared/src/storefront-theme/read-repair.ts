@@ -89,7 +89,13 @@ const SAVE_REASON_TAB = /^tab_/;
  * The document with every refused value repaired, and what was repaired; null
  * when an issue is not one a read repairs. Pure: the document is not changed.
  */
-export function repairStoredStorefrontTheme(document: Json, issues: readonly StorefrontThemeReadIssue[]): { document: Json; repairs: StorefrontThemeReadRepair[] } | null {
+export function repairStoredStorefrontTheme(
+  document: Json,
+  issues: readonly StorefrontThemeReadIssue[],
+  /** What earlier rounds repaired: a link nulled where null is not allowed is repaired one level up. */
+  earlier: readonly StorefrontThemeReadRepair[] = [],
+): { document: Json; repairs: StorefrontThemeReadRepair[] } | null {
+  const nulledLinks = new Set(earlier.filter((repair) => repair.reason === "invalid_link").map((repair) => repair.path));
   const next = structuredClone(document);
   const repairs: StorefrontThemeReadRepair[] = [];
   const set = (path: readonly PropertyKey[], value: unknown) => {
@@ -124,6 +130,16 @@ export function repairStoredStorefrontTheme(document: Json, issues: readonly Sto
     const tab = path[0] === "blocks" && path[1] === "mobileNav" ? listEntry(path, "tabs") : null;
     if (reason === "invalid_link" || reason === "slide_products_over_limit") {
       done = set(path, null);
+    } else if (issue.code === "invalid_type" && nulledLinks.has(path.map(String).join("."))) {
+      // A link refused where the field takes no null (a card's, a call to action's): one level up, the card is
+      // left out of its list, or the call to action reads as none; never a working link.
+      const index = path.length - 2;
+      const card = typeof path[index] === "number" ? { list: path.slice(0, index), index: path[index] as number } : null;
+      done = card ? drop(card) : set(path.slice(0, -1), null);
+      if (done) {
+        repairs.push({ path: (card ? path.slice(0, index + 1) : path.slice(0, -1)).map(String).join("."), reason: "invalid_link" });
+        continue;
+      }
     } else if (reason && SAVE_REASON_TAB.test(reason) && tab) {
       done = drop(tab);
     } else if (reason === "too_deep" && path[0] === "privatePages" && path[1] === "pages" && path.length === 3) {

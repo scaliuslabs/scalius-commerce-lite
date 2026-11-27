@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { storefrontAppKeySchema, storefrontAppValuesSchema, storefrontSkinRefSchema } from "./apps";
 import { atLeast, type FitCondition } from "./fit";
-import { STOREFRONT_INVALID_LINK, isStorefrontStorePath, storefrontLinkSchema } from "./links";
+import { STOREFRONT_INVALID_LINK, isStorefrontThemeLinkPath, storefrontLinkSchema } from "./links";
 import { storefrontSettingBindingsSchema } from "./bindings";
 import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-field-keys";
 import { parseNavigationHref } from "../navigation-href";
@@ -47,8 +47,8 @@ const mediaId = recordId.nullable();
 const HREF_SHAPE = /^(\/(?!\/)\S*|https:\/\/\S+)$/;
 const href = z.string().trim().max(300)
   // One check with its reason (a read of a stored one reads it as no link); the shape still reads as the JSON Schema's pattern.
-  .refine((value) => HREF_SHAPE.test(value) && parseNavigationHref(value).ok && (!value.startsWith("/") || isStorefrontStorePath(value.split(/[?#]/)[0]!)), {
-    message: "Use a page of this store or an https:// link, without credentials or backslashes.",
+  .refine((value) => HREF_SHAPE.test(value) && parseNavigationHref(value).ok && (!value.startsWith("/") || isStorefrontThemeLinkPath(value.split(/[?#]/)[0]!)), {
+    message: "Use a page of this store, an app's page (/apps/…) or an https:// link, without credentials or backslashes: never /api or /_ paths.",
     params: { reason: STOREFRONT_INVALID_LINK },
   })
   .meta({ pattern: HREF_SHAPE.source });

@@ -21,23 +21,36 @@ export function canonicalStorefrontLink(value: unknown): string | null {
 export const STOREFRONT_INVALID_LINK = "invalid_link";
 
 /**
- * A link a theme draws (an announcement, a hero slide, a section's banner):
- * navigation-safe and canonical, and when it is a path, a page of this store
- * (`isStorefrontStorePath`: never the store's API, app routes or files). It
- * may leave for another site over https: these are the merchant's own links.
- * The bottom bar's tabs are stricter: the store's own navigation opens only
- * the store's pages (`storefrontStorePathSchema`).
+ * A link a theme draws (an announcement, a hero slide, a section's banner or
+ * cards): navigation-safe and canonical, and when it is a path, a page a
+ * buyer can open on this store (`isStorefrontThemeLinkPath`): a store page or
+ * an app's page (`/apps/<id>/…`, drawn inside the store's layout, as
+ * navigation menus link to it), never the store's API, its files or build
+ * assets. It may leave for another site over https: these are the merchant's
+ * own links. The bottom bar's tabs are stricter: the store's own navigation
+ * opens only the store's pages (`storefrontStorePathSchema`).
  */
 export function isStorefrontThemeLink(value: string): boolean {
   if (canonicalStorefrontLink(value) !== value) return false;
-  const path = value.split(/[?#]/)[0]!;
-  return !value.startsWith("/") || isStorefrontStorePath(path);
+  return !value.startsWith("/") || isStorefrontThemeLinkPath(value.split(/[?#]/)[0]!);
+}
+
+/**
+ * What a theme link's path may never open: the store's API and every `_` or
+ * `~` first segment (the app file gateway `/_x/…`, build assets, islands,
+ * Partytown). An app's page (`/apps/<id>/…`) is a buyer destination here.
+ */
+export const STOREFRONT_THEME_LINK_RESERVED = /^\/(?:api|[_~][^/]*)(?:\/|$)/i;
+
+/** A path a theme link may open: a store page or an app's page, by the store-path rule otherwise (`isStorefrontStorePath`). */
+export function isStorefrontThemeLinkPath(path: string): boolean {
+  return storePathPasses(path, STOREFRONT_THEME_LINK_RESERVED);
 }
 
 /** A theme link (`isStorefrontThemeLink`), already canonical. */
 export const storefrontLinkSchema = z.string().max(STOREFRONT_LINK_MAX_LENGTH).refine(
   isStorefrontThemeLink,
-  { message: "Use a page of this store such as /collections/new, or an https:// link.", params: { reason: STOREFRONT_INVALID_LINK } },
+  { message: "Use a page of this store such as /collections/new, an app's page (/apps/…), or an https:// link: never /api or /_ paths.", params: { reason: STOREFRONT_INVALID_LINK } },
 );
 
 /**
@@ -65,11 +78,16 @@ const ESCAPE_AFTER_DECODING = /%[0-9a-f]{2}/i;
  * predicate: it never throws.
  */
 export function isStorefrontStorePath(path: string): boolean {
+  return storePathPasses(path, STOREFRONT_STORE_PATH_RESERVED);
+}
+
+/** The store-path rule with its set of reserved first segments. */
+function storePathPasses(path: string, reserved: RegExp): boolean {
   if (!STORE_PATH_SHAPE.test(path) || NEEDLESS_ESCAPE.test(path)) return false;
   let decoded: string;
   try { decoded = decodeURIComponent(path); } catch { return false; }
   if (ESCAPE_AFTER_DECODING.test(decoded)) return false;
-  return [path, decoded].every((each) => !each.split("/").some((part) => part === "." || part === "..") && !STOREFRONT_STORE_PATH_RESERVED.test(each));
+  return [path, decoded].every((each) => !each.split("/").some((part) => part === "." || part === "..") && !reserved.test(each));
 }
 
 /** The one schema of a page path on this store (a buyer link an app draws, a bottom bar link tab): one refusal, with the caller's reason. */

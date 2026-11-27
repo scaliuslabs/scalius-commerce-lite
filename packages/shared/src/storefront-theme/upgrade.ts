@@ -449,7 +449,7 @@ export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefr
         : result.data;
       return { ok: true, document, storedVersion: (parsed as Json).version as number, ...(repairs.length > 0 ? { repairs } : {}), ...(released.held.length > 0 ? { held: released.held } : {}) };
     }
-    const repaired = round < READ_REPAIR_ROUNDS ? repairStoredStorefrontTheme(candidate, result.error.issues) : null;
+    const repaired = round < READ_REPAIR_ROUNDS ? repairStoredStorefrontTheme(candidate, result.error.issues, repairs) : null;
     if (!repaired) {
       const issue = result.error.issues[0];
       return { ok: false, reason: `${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}` };
