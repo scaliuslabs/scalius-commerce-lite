@@ -11,7 +11,7 @@ import {
 } from "@scalius/database/schema";
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { ConflictError, NotFoundError, OrderRevisionConflictError, ValidationError } from "@scalius/core/errors";
 import {
   buildOrderReadyForPickupNotificationDedupeKey,
   createOrderNotificationOutboxInsertValues,
@@ -66,7 +66,7 @@ export async function markOrderReadyForPickup(
         return { orderId, pickupReadyAt: epochIso(order.pickupReadyAt), replayed: true, notificationOutboxId: null };
     }
     if (options.expectedVersion !== undefined && order.version !== options.expectedVersion) {
-        throw new ConflictError("This order changed. Reload to see the latest.");
+        throw new OrderRevisionConflictError();
     }
     if (!(OPEN_PICKUP_STATUSES as readonly string[]).includes(order.status)) {
         throw new ValidationError(order.status === OrderStatus.CANCELLED

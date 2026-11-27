@@ -21,7 +21,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, desc, eq, ne, notInArray, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { isFulfillmentType, type FulfillmentType } from "@scalius/shared/fulfilment";
-import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, OrderRevisionConflictError, ValidationError } from "@scalius/core/errors";
 import {
     recordCODCollection,
     resolveOrderCurrencySnapshot,
@@ -697,7 +697,7 @@ export async function voidOrderFulfilment(
     }
     const order = await readOrderForFulfilment(db, orderId);
     if (options.expectedVersion !== undefined && order.version !== options.expectedVersion) {
-        throw new ConflictError("This order changed. Reload to see the latest.");
+        throw new OrderRevisionConflictError();
     }
     // The same rule the dashboard shows as `canVoid`.
     switch (fulfilmentVoidBlockedReason({

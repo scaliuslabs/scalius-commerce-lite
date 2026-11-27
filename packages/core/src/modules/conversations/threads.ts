@@ -45,6 +45,7 @@ import { containsText } from "../../utils/text-match";
 import { staffUnreadMessageCondition } from "../../utils/conversation-unread";
 import { nanoid } from "nanoid";
 import {
+  AppError,
   ConflictError,
   ForbiddenError,
   NotFoundError,
@@ -626,7 +627,7 @@ export async function replayConversationPost(
   if (!actorMatches || existing.body !== body || existing.visibility !== visibility
     || JSON.stringify(refs(storedProducts)) !== JSON.stringify(refs(input.products ?? []))
     || JSON.stringify(attachments.map(({ id }) => id).sort()) !== JSON.stringify([...(input.attachmentIds ?? [])].sort())) {
-    throw new ConflictError("This message request was already used for different content. Review the conversation before sending again.");
+    throw new AppError(422, "idempotency_key_reused", "This message request was already used for different content. Review the conversation before sending again.");
   }
   return { conversationId, messageId: existing.id, seq: existing.seq, created: false };
 }

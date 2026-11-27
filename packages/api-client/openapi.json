@@ -115830,7 +115830,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order `revision` you read; a different one is refused with 409."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "required": [
@@ -116932,15 +116932,22 @@
                   "options": {
                     "type": "object",
                     "properties": {
-                      "deliveryType": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1000000
-                      },
-                      "itemType": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1000000
+                      "bookingOptions": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            }
+                          ]
+                        }
                       },
                       "itemWeight": {
                         "type": "number",
@@ -127486,7 +127493,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order `revision` you read; a different one is refused with 409 before the provider is called."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "required": [
@@ -128433,7 +128440,7 @@
           "App API - Payouts"
         ],
         "summary": "Send a payout to a payee",
-        "description": "Records the payout (pending) and sends it through the payout provider, which applies it once per payout id. Answers 201 with the payout: processing, paid, or failed with its `failureCode` (a decline). An unknown provider answer is 503 `payout_outcome_unknown` with `details.payoutId`: repeat the same request with the same Idempotency-Key to resubmit it; it is never sent twice. A repeat of an answered payout answers it without calling the provider. The key with another request is refused: 422 `idempotency_key_reused` within the key's 24 hours, then 409 `payout_request_mismatch` for good; a provider that is not an installed, active, set-up payout provider is 422 `payout_provider_unavailable`, with nothing recorded. Only an app sends payouts.",
+        "description": "Records the payout (pending) and sends it through the payout provider, which applies it once per payout id. Answers 201 with the payout: processing, paid, or failed with its `failureCode` (a decline). An unknown provider answer is 503 `payout_outcome_unknown` with `details.payoutId`: repeat the same request with the same Idempotency-Key to resubmit it; it is never sent twice. A repeat of an answered payout answers it without calling the provider. The key with another request is refused for good: 422 `idempotency_key_reused` (after the key's 24 hours with `details.payoutId`); a provider that is not an installed, active, set-up payout provider is 422 `payout_provider_unavailable`, with nothing recorded. Only an app sends payouts.",
         "parameters": [
           {
             "schema": {
@@ -128887,7 +128894,7 @@
           "App API - Payouts"
         ],
         "summary": "Take money back from a paid payout",
-        "description": "Records a reversal of one of the app's paid payouts (pending) and sends it through the payout's provider, which applies it once per reversal id. Partial reversals are allowed; together the reversals that have not failed never take back more than the payout. Answers 201 with the payout and `reversalId`, the reversal's entry in its `reversals`: processing, reversed, or failed with its `failureCode` (a decline). An unknown provider answer is 503 `payout_reversal_outcome_unknown` with `details.reversalId`: repeat the same request with the same Idempotency-Key to resume it; it is never applied twice. A repeat of an answered reversal answers it without calling the provider. Refused with nothing recorded: another app's payout (404), a payout that is not paid (409 `payout_not_reversible`), more than it has left (409 `payout_reversal_exceeds_payout`, `details.reversibleMinor`), another currency (422 `payout_reversal_currency_mismatch`), a provider that cannot reverse (422 `payout_reversal_unsupported`). The key with another request: 422 `idempotency_key_reused` within 24 hours, then 409 `payout_reversal_request_mismatch`.",
+        "description": "Records a reversal of one of the app's paid payouts (pending) and sends it through the payout's provider, which applies it once per reversal id. Partial reversals are allowed; together the reversals that have not failed never take back more than the payout. Answers 201 with the payout and `reversalId`, the reversal's entry in its `reversals`: processing, reversed, or failed with its `failureCode` (a decline). An unknown provider answer is 503 `payout_reversal_outcome_unknown` with `details.reversalId`: repeat the same request with the same Idempotency-Key to resume it; it is never applied twice. A repeat of an answered reversal answers it without calling the provider. Refused with nothing recorded: another app's payout (404), a payout that is not paid (409 `payout_not_reversible`), more than it has left (409 `payout_reversal_exceeds_payout`, `details.reversibleMinor`), another currency (422 `payout_reversal_currency_mismatch`), a provider that cannot reverse (422 `payout_reversal_unsupported`). The key with another request is refused for good: 422 `idempotency_key_reused` (after the key's 24 hours with `details.reversalId`).",
         "parameters": [
           {
             "schema": {
@@ -130298,8 +130305,6 @@
                         "object.created",
                         "object.updated",
                         "object.deleted",
-                        "customer.redact_requested",
-                        "customer.data_requested",
                         "customer.erased",
                         "conversation.message_received",
                         "payout.created",
@@ -130311,7 +130316,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
                     },
                     "minItems": 1,
-                    "maxItems": 66
+                    "maxItems": 64
                   },
                   "description": {
                     "type": "string",
@@ -130638,8 +130643,6 @@
                         "object.created",
                         "object.updated",
                         "object.deleted",
-                        "customer.redact_requested",
-                        "customer.data_requested",
                         "customer.erased",
                         "conversation.message_received",
                         "payout.created",
@@ -130651,7 +130654,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
                     },
                     "minItems": 1,
-                    "maxItems": 66
+                    "maxItems": 64
                   },
                   "description": {
                     "type": "string",
@@ -184555,7 +184558,7 @@
                   "expectedStockVersion": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to apply whatever happened since."
+                    "description": "The SKU's stockVersion you read. Any stock change since is refused with 409 `stock_version_conflict` and nothing changes. Omit it to act on the stock as it is."
                   }
                 },
                 "required": [
@@ -185528,7 +185531,7 @@
                   "expectedStockVersion": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to set the count whatever happened since."
+                    "description": "The SKU's stockVersion you read. Any stock change since is refused with 409 `stock_version_conflict` and nothing changes. Omit it to act on the stock as it is."
                   }
                 },
                 "required": [
@@ -239449,7 +239452,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "required": [
@@ -239853,7 +239856,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409. Omit to mark it whatever happened since."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "additionalProperties": false
@@ -240685,15 +240688,22 @@
                   "options": {
                     "type": "object",
                     "properties": {
-                      "deliveryType": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1000000
-                      },
-                      "itemType": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1000000
+                      "bookingOptions": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            }
+                          ]
+                        }
                       },
                       "itemWeight": {
                         "type": "number",
@@ -253745,15 +253755,22 @@
                   "options": {
                     "type": "object",
                     "properties": {
-                      "deliveryType": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1000000
-                      },
-                      "itemType": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1000000
+                      "bookingOptions": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            }
+                          ]
+                        }
                       },
                       "itemWeight": {
                         "type": "number",
@@ -260678,7 +260695,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "additionalProperties": false
@@ -260914,7 +260931,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "additionalProperties": false
@@ -303129,8 +303146,6 @@
                         "object.created",
                         "object.updated",
                         "object.deleted",
-                        "customer.redact_requested",
-                        "customer.data_requested",
                         "customer.erased",
                         "conversation.message_received",
                         "payout.created",
@@ -303142,7 +303157,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 66
+                    "maxItems": 64
                   },
                   "description": {
                     "type": "string",
@@ -303562,8 +303577,6 @@
                         "object.created",
                         "object.updated",
                         "object.deleted",
-                        "customer.redact_requested",
-                        "customer.data_requested",
                         "customer.erased",
                         "conversation.message_received",
                         "payout.created",
@@ -303575,7 +303588,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 66
+                    "maxItems": 64
                   },
                   "description": {
                     "type": "string",
@@ -304677,8 +304690,6 @@
                 "object.created",
                 "object.updated",
                 "object.deleted",
-                "customer.redact_requested",
-                "customer.data_requested",
                 "customer.erased",
                 "conversation.message_received",
                 "payout.created",

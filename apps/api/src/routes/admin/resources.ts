@@ -64,6 +64,7 @@ import { assertContactFilterAllowed } from "./contact-access";
 import { handOverOrderLines } from "./orders/fulfilments";
 import { bookOrderShipment, createShipmentBodySchema } from "./orders-status";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
+import { optionalOrderRevisionSchema } from "./order-resource";
 import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
 import { requestStaffId } from "./request-actor";
 import { minorMoney } from "@scalius/shared/money-field";
@@ -596,7 +597,7 @@ const recordPaymentBody = z.object({
   via: z.enum(RECORDED_PAYMENT_VIAS).openapi({ description: "How it was received." }),
   reference: z.string().trim().max(120).nullable().optional().openapi({ description: "The bank, cheque or transfer reference." }),
   note: z.string().trim().max(500).nullable().optional(),
-  expectedRevision: z.number().int().min(1).optional().openapi({ description: "The order `revision` you read; a different one is refused with 409." }),
+  expectedRevision: optionalOrderRevisionSchema,
 }).strict();
 
 app.openapi(createRoute({

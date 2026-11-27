@@ -41,7 +41,7 @@ import {
   shipmentClaimShipmentStatusSql,
 } from "../../order-kernel";
 import { sql, eq, and, inArray, type SQL } from "drizzle-orm";
-import { AppError, NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
+import { AppError, NotFoundError, ValidationError, ConflictError, OrderRevisionConflictError } from "@scalius/core/errors";
 import {
     canProcessOrderCodAction,
     normalizeOrderStatus,
@@ -510,7 +510,7 @@ async function attemptOrderStatusChange(
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
     if (data?.expectedVersion !== undefined && existingOrder.version !== data.expectedVersion) {
-        throw new ConflictError(ORDER_CHANGED_MESSAGE);
+        throw new OrderRevisionConflictError(ORDER_CHANGED_MESSAGE);
     }
     const currentStatus = normalizeOrderStatus(existingOrder.status);
     if (!currentStatus) {
@@ -701,7 +701,7 @@ async function attemptOrderStatusChange(
             throw new ConflictError(ORDER_CHANGED_MESSAGE);
         }
         if (data?.expectedVersion !== undefined && now[0].version !== data.expectedVersion) {
-            throw new ConflictError(ORDER_CHANGED_MESSAGE);
+            throw new OrderRevisionConflictError(ORDER_CHANGED_MESSAGE);
         }
         throw new StockMovedDuringStatusChange();
     }

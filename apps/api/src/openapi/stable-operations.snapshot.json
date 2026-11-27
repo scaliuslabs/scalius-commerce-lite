@@ -6932,7 +6932,7 @@
          "expectedStockVersion": {
           "type": "integer",
           "minimum": 0,
-          "description": "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to apply whatever happened since."
+          "description": "The SKU's stockVersion you read. Any stock change since is refused with 409 `stock_version_conflict` and nothing changes. Omit it to act on the stock as it is."
          }
         },
         "required": [
@@ -7056,7 +7056,7 @@
          "expectedStockVersion": {
           "type": "integer",
           "minimum": 0,
-          "description": "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to set the count whatever happened since."
+          "description": "The SKU's stockVersion you read. Any stock change since is refused with 409 `stock_version_conflict` and nothing changes. Omit it to act on the stock as it is."
          }
         },
         "required": [
@@ -8337,7 +8337,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
          }
         },
         "additionalProperties": false
@@ -8436,7 +8436,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409. Omit to mark it whatever happened since."
+          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
          }
         },
         "additionalProperties": false
@@ -8515,7 +8515,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
          }
         },
         "additionalProperties": false
@@ -8792,7 +8792,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
+          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
          }
         },
         "required": [
@@ -15706,7 +15706,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order `revision` you read; a different one is refused with 409 before the provider is called."
+          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
          }
         },
         "required": [
@@ -15870,7 +15870,7 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order `revision` you read; a different one is refused with 409."
+          "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
          }
         },
         "required": [
@@ -20770,15 +20770,22 @@
          "options": {
           "type": "object",
           "properties": {
-           "deliveryType": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 1000000
-           },
-           "itemType": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 1000000
+           "bookingOptions": {
+            "type": "object",
+            "additionalProperties": {
+             "anyOf": [
+              {
+               "type": "string",
+               "maxLength": 200
+              },
+              {
+               "type": "number"
+              },
+              {
+               "type": "boolean"
+              }
+             ]
+            }
            },
            "itemWeight": {
             "type": "number",
@@ -23403,8 +23410,6 @@
             "object.created",
             "object.updated",
             "object.deleted",
-            "customer.redact_requested",
-            "customer.data_requested",
             "customer.erased",
             "conversation.message_received",
             "payout.created",
@@ -23416,7 +23421,7 @@
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 66
+          "maxItems": 64
          },
          "description": {
           "type": "string",
@@ -23750,8 +23755,6 @@
             "object.created",
             "object.updated",
             "object.deleted",
-            "customer.redact_requested",
-            "customer.data_requested",
             "customer.erased",
             "conversation.message_received",
             "payout.created",
@@ -23763,7 +23766,7 @@
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 66
+          "maxItems": 64
          },
          "description": {
           "type": "string",

@@ -19,7 +19,7 @@ import {
   PaymentRecordStatus,
 } from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, OrderRevisionConflictError, ValidationError } from "@scalius/core/errors";
 import { sha256Hex } from "@scalius/shared/hash";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { RECORDED_PAYMENT_METHOD, RECORDED_PAYMENT_VIAS, type RecordedPaymentVia } from "@scalius/shared/payment-terms";
@@ -155,7 +155,7 @@ export async function recordOrderPayment(
   if (existing) {
     const recorded = readMetadata(existing.metadata);
     if (existing.amountMinor !== input.amountMinor || recorded.via !== input.via) {
-      throw new ConflictError("This retry key already recorded a different payment.");
+      throw new AppError(422, "idempotency_key_reused", "This retry key already recorded a different payment. Use a new key.");
     }
     return {
       paymentId,
@@ -167,7 +167,7 @@ export async function recordOrderPayment(
   }
 
   if (input.expectedVersion !== undefined && input.expectedVersion !== order.version) {
-    throw new ConflictError("This order changed. Reload it and record the payment again.");
+    throw new OrderRevisionConflictError("This order changed. Reload it and record the payment again.");
   }
   if (order.paymentTermsDays === null && order.paymentMethod !== RECORDED_PAYMENT_METHOD) {
     throw new ValidationError("Payments are recorded here only for invoice (net terms) orders and orders paid as they were placed. Record cash on delivery with Collect cash.");

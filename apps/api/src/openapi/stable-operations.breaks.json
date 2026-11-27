@@ -3250,5 +3250,41 @@
   "from": "ba34897af1af3b8a",
   "change": "orders.set_status input body.status: no longer accepts \"processing\", \"shipped\", \"delivered\", \"returned\", \"refunded\", \"incomplete\".",
   "reason": "Pre-lock contract fix (state-machine audit, Nov 22): the generic status editor refuses each of these in every state, so the request offered values no call could use; it now offers the statuses it sets (pending, confirmed, completed, cancelled) and a refusal names the operation that records the others."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "shipments.create input body.options.deliveryType: the field is no longer accepted.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): no stable schema names one courier's fields. Pathao's `deliveryType` and `itemType` integers leave `options`; a courier's own choices go in `options.bookingOptions` by the keys its manifest declares (`bookingOptions`), and an undeclared key or a value outside the declaration refuses the booking before anything is written. Pathao (Bangladesh pack) declares the same two keys, so `{ bookingOptions: { deliveryType: 48 } }` books as before."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "shipments.create input body.options.itemType: the field is no longer accepted.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): no stable schema names one courier's fields. Pathao's `deliveryType` and `itemType` integers leave `options`; a courier's own choices go in `options.bookingOptions` by the keys its manifest declares (`bookingOptions`), and an undeclared key or a value outside the declaration refuses the booking before anything is written. Pathao (Bangladesh pack) declares the same two keys, so `{ bookingOptions: { deliveryType: 48 } }` books as before."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "webhook_subscriptions.create input body.topics: maxItems tightened to 64.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue because nothing emits them; a subscription could never have received one. The topics list's cap is the catalogue's filter count, so it falls by the same two."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "webhook_subscriptions.create input body.topics[]: no longer accepts \"customer.redact_requested\", \"customer.data_requested\".",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue because nothing emits them; a subscription could never have received one. The topics list's cap is the catalogue's filter count, so it falls by the same two."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "webhook_subscriptions.update input body.topics: maxItems tightened to 64.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue because nothing emits them; a subscription could never have received one. The topics list's cap is the catalogue's filter count, so it falls by the same two."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "webhook_subscriptions.update input body.topics[]: no longer accepts \"customer.redact_requested\", \"customer.data_requested\".",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue because nothing emits them; a subscription could never have received one. The topics list's cap is the catalogue's filter count, so it falls by the same two."
  }
 ]

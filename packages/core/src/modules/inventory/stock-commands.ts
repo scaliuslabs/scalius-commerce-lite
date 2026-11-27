@@ -279,7 +279,7 @@ async function readCommand(db: Database, operationKey: string): Promise<StoredCo
 
 function replay<R>(row: StoredCommand, commandType: string, subjectId: string, requestHash: string): R {
   if (row.commandType !== commandType || row.subjectId !== subjectId || row.requestHash !== requestHash) {
-    throw new ConflictError("This operation key was already used for a different inventory request.");
+    throw new AppError(422, "idempotency_key_reused", "This request key was already used for a different stock command. Use a new key.");
   }
   try {
     return JSON.parse(row.resultPayload) as R;

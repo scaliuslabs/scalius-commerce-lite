@@ -1954,5 +1954,77 @@
   "from": "43d11be555c837a3",
   "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
   "reason": "Pre-release (private pages, beta 8): buyer UI gains a `mark` node (a tone's glyph) and an optional `tone` on `stack` (a toned row: an offer row, a status box), drawn on buyer pages only; the SDK gains `ui.mark`. An added union arm and an optional field; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/events.d.ts#variable:EVENT_FACT_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/events.d.ts#variable:EVENT_TOPICS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopic: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopicFilter: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): one code per fact. `stock_version_conflict` is added (a stale `expectedStockVersion` on inventory.adjust and inventory.set_stock, which answered a plain `conflict`); `payout_request_mismatch` and `payout_reversal_request_mismatch` are removed, since a payout or reversal key reused for another request now answers `idempotency_key_reused` (422, `details.payoutId` / `details.reversalId`) whether the key layer or the payout record refuses it; `order_revision_conflict`'s meaning names every order write's `expectedRevision`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): one code per fact. `stock_version_conflict` is added (a stale `expectedStockVersion` on inventory.adjust and inventory.set_stock, which answered a plain `conflict`); `payout_request_mismatch` and `payout_reversal_request_mismatch` are removed, since a payout or reversal key reused for another request now answers `idempotency_key_reused` (422, `details.payoutId` / `details.reversalId`) whether the key layer or the payout record refuses it; `order_revision_conflict`'s meaning names every order write's `expectedRevision`."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "errors.payout_request_mismatch: the error code was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): one code per fact. A payout or reversal key reused for another request answers 422 `idempotency_key_reused` (`details.payoutId` / `details.reversalId`) whether the key layer (within 24 hours) or the payout record (after) refuses it, so an app branches on one code; before, the record answered 409 with these payout codes."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "errors.payout_reversal_request_mismatch: the error code was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): one code per fact. A payout or reversal key reused for another request answers 422 `idempotency_key_reused` (`details.payoutId` / `details.reversalId`) whether the key layer (within 24 hours) or the payout record (after) refuses it, so an app branches on one code; before, the record answered 409 with these payout codes."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "events.customer.redact_requested: the topic was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics leave the event catalogue because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "events.customer.data_requested: the topic was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics leave the event catalogue because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "events.facts.customer.redact_requested: the facts schema was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics leave the event catalogue because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "events.facts.customer.data_requested: the facts schema was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics leave the event catalogue because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
  }
 ]

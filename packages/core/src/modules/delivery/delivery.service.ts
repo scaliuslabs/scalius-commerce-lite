@@ -5,7 +5,7 @@
 import { deliveryProviders, deliveryShipments, orders, orderItems, products, ShipmentStatus, type Order } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
 import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
-import { providerServesCountry } from "@scalius/shared/plugins/providers";
+import { declaredCourierBookingOptions, providerServesCountry } from "@scalius/shared/plugins/providers";
 import {
   providerErrorOf,
   type CourierFind,
@@ -547,6 +547,12 @@ export async function createShipment(
   if (!providerServesCountry(courier.countries, recipient.countryCode)) {
     return { success: false, message: courierCountryMessage(courier.label, recipient.countryCode) };
   }
+  // Only the booking options the courier declares, each within its declaration.
+  const bookingOptions = declaredCourierBookingOptions(courier.bookingOptions, options?.bookingOptions);
+  const refusedOptions = Object.keys(options?.bookingOptions ?? {}).filter((key) => !(key in bookingOptions));
+  if (refusedOptions.length > 0) {
+    return { success: false, message: `${courier.label} does not take ${refusedOptions.map((key) => `"${key}"`).join(", ")} as given. Choose only the booking options it offers.` };
+  }
   const preflightFailure = await courier.preflight?.(recipient, db);
   if (preflightFailure) return { success: false, message: preflightFailure };
 
@@ -568,9 +574,6 @@ export async function createShipment(
   // Provider money and contents are order authority, never browser/provider-
   // form authority. Keep only genuine merchant choices from the caller and
   // overwrite every commerce fact with the fresh saved order projection.
-  // The staff's booking choices are courier options; the courier's adapter
-  // keeps only the ones it declares (`bookingOptions`).
-  const bookingChoices = { deliveryType: options?.deliveryType, itemType: options?.itemType };
   const input: CourierShipmentInput = {
     idempotencyKey: shipmentId,
     orderId: order.id,
@@ -584,7 +587,7 @@ export async function createShipment(
     itemCount: totalItemCount > 0 ? totalItemCount : null,
     itemDescription: itemDescription || null,
     parcel: { weightGrams: options?.itemWeight === undefined ? null : Math.round(options.itemWeight * 1000), dimensionsCm: null },
-    options: Object.fromEntries(Object.entries(bookingChoices).filter(([, value]) => value !== undefined)) as CourierShipmentInput["options"],
+    options: bookingOptions,
   };
 
   // 1. Insert a "creating" placeholder shipment FIRST

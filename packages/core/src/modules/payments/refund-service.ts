@@ -388,21 +388,26 @@ async function findRefundRequestReplay(
         sql`substr(${refundAttempts.attemptKey}, 1, ${prefix.length}) = ${prefix}`,
     )).all();
     if (rows.length === 0) return null;
+    // Another request under the key: once money moved or may move under it, the key is used
+    // (422 idempotency_key_reused); a key whose every attempt failed moved nothing.
+    const keyReused = (message: string) => rows.some((row) => row.status !== "failed")
+        ? new AppError(422, "idempotency_key_reused", message)
+        : new ConflictError(message);
     const amountMinor = rows.reduce((sum, row) => sum + row.amountMinor, 0);
     const requestedMinor = params.amountMinor;
     if (requestedMinor !== undefined && requestedMinor !== amountMinor) {
-        throw new ConflictError("This refund request was already used for a different amount. Reload and try again.");
+        throw keyReused("This refund request key was already used for a different amount. Use a new key.");
     }
     const settlement: RefundSettlement = rows.some((row) =>
         parseRefundMetadata(row.metadata).settlementMode === "store_credit") ? "store_credit" : "original";
     if ((params.settlement ?? "original") !== settlement) {
-        throw new ConflictError("This refund request was already used for a different refund. Reload and try again.");
+        throw keyReused("This refund request key was already used for a different refund. Use a new key.");
     }
     const orderRefundId = rows[0]!.refundGroupId;
     const recordedLines = await db.select({ orderItemId: orderRefundLines.orderItemId, quantity: orderRefundLines.quantity })
         .from(orderRefundLines).where(eq(orderRefundLines.refundId, orderRefundId)).all();
     if (!sameRefundLines(normalizeRefundLines(params.lines), normalizeRefundLines(recordedLines))) {
-        throw new ConflictError("This refund request was already used for different order lines. Reload and try again.");
+        throw keyReused("This refund request key was already used for different order lines. Use a new key.");
     }
     // A replay answers what the request did: while any money moved or may still move
     // under this key it repeats that answer, never a refusal (which invites a second refund).

@@ -38,7 +38,7 @@ import {
   PaymentRecordStatus,
 } from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
-import { AppError, ConflictError, NotFoundError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, OrderRevisionConflictError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { sha256Hex } from "@scalius/shared/hash";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import type { PaymentType } from "./types";
@@ -470,7 +470,7 @@ export async function chargeSavedPaymentMethod(
   } else {
     if (method.status !== "active") throw new NotFoundError("Saved payment method not found");
     if (input.expectedVersion !== undefined && input.expectedVersion !== order.version) {
-      throw new ConflictError("This order changed. Read it again before charging it.");
+      throw new OrderRevisionConflictError("This order changed. Read it again before charging it.");
     }
     if (hasActiveShipmentClaim(order)) throw new AppError(409, "conflict", SHIPMENT_CLAIM_CONFLICT_MESSAGE);
     const unpayable = getUnpayableOrderReason(order);

@@ -76,9 +76,31 @@ export class MethodNotAllowedError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(message: string, details?: unknown) {
-    super(409, "conflict", message, details);
+  constructor(message: string, details?: unknown, code = "conflict") {
+    super(409, code, message, details);
     this.name = "ConflictError";
+  }
+}
+
+/**
+ * The order revision a write was based on (`expectedRevision`) is stale: 409
+ * `order_revision_conflict`, and nothing changed. Read the order again.
+ */
+export class OrderRevisionConflictError extends ConflictError {
+  constructor(message = "This order changed. Reload to see the latest.") {
+    super(message, undefined, "order_revision_conflict");
+    this.name = "OrderRevisionConflictError";
+  }
+}
+
+/**
+ * The SKU stock version a stock write was based on (`expectedStockVersion`)
+ * is stale: 409 `stock_version_conflict`, and nothing changed.
+ */
+export class StockVersionConflictError extends ConflictError {
+  constructor(message = "This SKU's stock changed since you read it. Read it again, then retry.") {
+    super(message, undefined, "stock_version_conflict");
+    this.name = "StockVersionConflictError";
   }
 }
 
