@@ -20,7 +20,6 @@
  */
 
 import { resolveComponentSchemaRef, type ComponentSchemas } from "./openapi-schema-refs";
-import { patternWidens } from "./contract/patterns";
 
 export type SchemaDirection = "request" | "response";
 
@@ -173,10 +172,8 @@ function compare(before: Side, after: Side, direction: SchemaDirection, path: st
     for (const exclusive of ["exclusiveMinimum", "exclusiveMaximum"] as const) {
       if (a[exclusive] === true && b[exclusive] !== true) out.push(`${at}: ${exclusive} added.`);
     }
-    // A pattern may change only by a widening the reader proves (contract/patterns.ts).
-    if (a.pattern !== undefined && a.pattern !== b.pattern && !(typeof b.pattern === "string" && typeof a.pattern === "string" && patternWidens(b.pattern, a.pattern))) {
-      out.push(`${at}: pattern changed.`);
-    }
+    // Any changed pattern is a line: whether it widens is not proven here.
+    if (a.pattern !== undefined && a.pattern !== b.pattern) out.push(`${at}: pattern changed.`);
     if (a.format !== undefined && a.format !== b.format) out.push(`${at}: format changed to ${String(a.format)}.`);
     if (a.additionalProperties === false && b.additionalProperties !== false && b.type === "object") {
       out.push(`${at}: additional properties are no longer accepted.`);

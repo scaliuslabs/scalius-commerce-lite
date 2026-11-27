@@ -16,15 +16,24 @@
 //       at this release). Refuses at any other release and over a lock. There
 //       is no relock: rewriting a lock arrives with the first new contract
 //       version, with its per-version snapshots and host adapter.
+//   node scripts/contract-lock.mjs anchor
+//       right after tagging the freeze commit: write contract.anchor.json (the
+//       freeze tag's name, its commit id and the lock's sha256) for the owner
+//       to commit. Refuses unless the tag is the trusted freeze tag carrying
+//       this tree's lock, and once the file exists.
 //   node scripts/contract-lock.mjs judge [--run <id>] [--freeze-commit]
-//       the release and CI command: checks out the anchor (the newest trusted
-//       release tag carrying a lock: annotated, named v<semver> at or past the
-//       freeze, its commit at that platform version, reachable from HEAD) into
-//       a temporary folder and runs THAT tag's script, seal registry, frozen
-//       list and rules against this tree (`verify --root <this tree>`). With no
-//       anchor at or past the freeze it refuses, except on the freeze commit
-//       before its tag when asked (`--freeze-commit`: "not yet anchored").
-//   node scripts/contract-lock.mjs verify [--run <id>] [--verify-signatures] [--freeze-commit]
+//       the release and CI command. The anchor is the freeze tag v2.0.0-rc.1,
+//       always (annotated, its commit at that version, carrying the lock,
+//       reachable from HEAD, and once pinned exactly the tag, commit and lock
+//       contract.anchor.json names). The judge checks the tag's scripts and
+//       rules out into a temporary folder and runs THAT script against this
+//       tree (`verify --root <this tree> --verdict <file>`) in a clean
+//       environment, and reads its verdict from the file it writes after
+//       deciding. With no anchor it refuses whenever the freeze is known here
+//       (the tag reachable, the pin committed, or a version at or past it),
+//       except with `--freeze-commit` on the one commit that adds the lock,
+//       before the tag and its pin exist ("not yet anchored").
+//   node scripts/contract-lock.mjs verify [--run <id>] [--verify-signatures] [--freeze-commit] [--verdict <file>]
 //       judge this tree with this script: the lock is the anchor's byte for
 //       byte, every seal of the registry and of the lock is there, each
 //       snapshot differs from the locked one only as the ledgers allow, by the
@@ -33,7 +42,19 @@
 //       exactly the committed snapshot. Exits 1 on any refusal.
 //   node scripts/contract-lock.mjs notes <release notes file>
 //       refuse release notes that do not name the advisory of every security
-//       entry added since the anchor.
+//       entry, and the error code of every wording entry, added since the last
+//       release tag.
+//
+// Threat model. In scope: an honest but hurried author, human or agent, who
+// wants a green run. The easy road to green must never be a break: no entry
+// type that waves a change through, no lock that can be dropped or rewritten
+// casually, no rule that can be weakened in the same change, no prover whose
+// mistake is silent, no flag that turns the check off. Out of scope: a
+// maintainer who forges or moves release tags, patches a dependency (the
+// TypeScript the SDK seal parses with is this checkout's; dependency pinning
+// is not built here), or fakes the tests' run records. Protection for those:
+// only the owner can create or move `v*` tags (a repository ruleset), release
+// tags are signed, and the release is judged by the command in the runbook.
 //
 // Every command takes `--root <dir>` (default: this checkout).
 
@@ -91,7 +112,9 @@ export function frozenFiles(root = DEFAULT_ROOT) {
     if (!existsSync(listed)) continue;
     for (const bundle of JSON.parse(readFileSync(listed, "utf8")).bundles ?? []) {
       if (comparePluginVersions(bundle.builtAgainst, FREEZE) < 0) continue;
-      files.push(`${set}/${bundle.file}`, `${set}/expected/${bundle.id}-${bundle.version}@${bundle.builtAgainst}.json`);
+      const expectation = `${bundle.id}-${bundle.version}@${bundle.builtAgainst}`;
+      const refreezes = existsSync(join(root, set, "expected")) ? readdirSync(join(root, set, "expected")).filter((name) => name.startsWith(`${expectation}.runtime-`)).sort() : [];
+      files.push(`${set}/${bundle.file}`, `${set}/expected/${expectation}.json`, ...refreezes.map((name) => `${set}/expected/${name}`));
     }
   }
   return files;
@@ -244,13 +267,75 @@ export function trustedReleaseTags(root = DEFAULT_ROOT, { verifySignatures } = {
   }).sort((left, right) => comparePluginVersions(right.version, left.version));
 }
 
-/** The anchor: the newest trusted release tag that carries a lock, with that lock's text. */
-export function anchorTag(root = DEFAULT_ROOT, options = {}) {
-  for (const { tag, version } of trustedReleaseTags(root, options)) {
-    const text = gitText(root, `${tag}^{commit}`, LOCK_FILE);
-    if (text !== null) return { tag, version, text };
+/** The freeze release's tag: the one anchor, for good (there is no relock, so the lock never changes). */
+export const FREEZE_TAG = `v${FREEZE}`;
+/** Committed right after the freeze tag: its name, its commit and the lock's digest, so a moved or re-created tag fails everywhere. */
+export const ANCHOR_FILE = "contract.anchor.json";
+
+export function readAnchorPin(root = DEFAULT_ROOT) {
+  const file = join(root, ANCHOR_FILE);
+  return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null;
+}
+
+function gitOk(root, args) {
+  try {
+    return git(root, args).trim();
+  } catch {
+    return null;
   }
-  return null;
+}
+
+/**
+ * The anchor: the freeze tag, annotated, reachable from HEAD, made on a commit
+ * that states the freeze version and carries a lock (with a good signature when
+ * asked), and, once `contract.anchor.json` is committed, exactly the tag, commit
+ * and lock it names. `expected` says an anchor must exist (the tag is known here,
+ * or the pin is committed); `problems` say why the one there is not trusted.
+ */
+export async function resolveAnchor(root = DEFAULT_ROOT, { verifySignatures } = {}) {
+  const pin = readAnchorPin(root);
+  const commit = gitOk(root, ["rev-parse", "--verify", "--quiet", `refs/tags/${FREEZE_TAG}^{commit}`]) || null;
+  const reachable = commit !== null && gitOk(root, ["merge-base", "--is-ancestor", commit, "HEAD"]) !== null;
+  // A tree from before the freeze (the tag exists elsewhere in history, no pin here) is judged as before.
+  const expected = pin !== null || reachable;
+  if (!expected) return { anchor: null, expected, problems: [] };
+  const problems = [];
+  if (commit === null) {
+    problems.push(`${ANCHOR_FILE} names ${pin.tag}, which is not here: fetch tags and full history (git fetch --tags --unshallow).`);
+    return { anchor: null, expected, problems };
+  }
+  if (!reachable) problems.push(`${FREEZE_TAG} is not reachable from HEAD.`);
+  if (gitOk(root, ["cat-file", "-t", `refs/tags/${FREEZE_TAG}`]) !== "tag") problems.push(`${FREEZE_TAG} is not an annotated tag.`);
+  if (platformIn(gitText(root, commit, "packages/shared/src/plugins/api-version.ts")) !== FREEZE) problems.push(`${FREEZE_TAG}'s commit does not state ${FREEZE}.`);
+  const text = gitText(root, commit, LOCK_FILE);
+  if (text === null) problems.push(`${FREEZE_TAG}'s commit carries no ${LOCK_FILE}.`);
+  if (signaturesWanted(root, verifySignatures) && gitOk(root, ["verify-tag", FREEZE_TAG]) === null) problems.push(`${FREEZE_TAG}'s signature does not verify.`);
+  if (pin !== null) {
+    if (pin.tag !== FREEZE_TAG || pin.commit !== commit) problems.push(`${FREEZE_TAG} is not the tag ${ANCHOR_FILE} pins (${pin.tag} at ${String(pin.commit).slice(0, 12)}): it was moved or made again.`);
+    if (text !== null && await sha256Hex(text) !== pin.lockSha256) problems.push(`The lock ${FREEZE_TAG} carries is not the one ${ANCHOR_FILE} pins.`);
+  }
+  return { anchor: problems.length === 0 ? { tag: FREEZE_TAG, commit, text } : null, expected, problems };
+}
+
+/**
+ * Writes `contract.anchor.json` from the freeze tag, right after tagging (the
+ * runbook's release steps): the tag must be the trusted freeze tag carrying
+ * exactly this tree's lock. The owner commits the file and records its three
+ * values in the release notes.
+ */
+export async function writeAnchorPin(root = DEFAULT_ROOT, { verifySignatures } = {}) {
+  if (existsSync(join(root, ANCHOR_FILE))) return { problems: [`${ANCHOR_FILE} is already committed: the anchor is pinned once, for good.`] };
+  const { anchor, problems } = await resolveAnchor(root, { verifySignatures });
+  if (!anchor) return { problems: problems.length ? problems : [`No ${FREEZE_TAG} tag reachable from HEAD: tag the freeze commit first.`] };
+  if (!existsSync(join(root, LOCK_FILE)) || readFileSync(join(root, LOCK_FILE), "utf8") !== anchor.text) return { problems: [`${LOCK_FILE} here is not the lock ${FREEZE_TAG} carries.`] };
+  const pin = { tag: anchor.tag, commit: anchor.commit, lockSha256: await sha256Hex(anchor.text) };
+  writeFileSync(join(root, ANCHOR_FILE), `${JSON.stringify(pin, null, 1)}\n`);
+  return { problems: [], pin };
+}
+
+/** Whether HEAD is the commit that adds the lock (its first parent has none). */
+function headAddsLock(root) {
+  return gitOk(root, ["cat-file", "-e", `HEAD:${LOCK_FILE}`]) !== null && gitOk(root, ["cat-file", "-e", `HEAD^1:${LOCK_FILE}`]) === null;
 }
 
 function shallow(root) {
@@ -275,13 +360,13 @@ export async function loadJudge(root, ref) {
   const read = (path) => (ref ? gitText(root, ref, path) : existsSync(join(root, path)) ? readFileSync(join(root, path), "utf8") : null);
   // The TypeScript the SDK seal parses declarations with: the judged tree's, else this script's checkout's
   // (a release tag's script runs from a folder with no node_modules).
-  const found = [process.env.SCALIUS_CONTRACT_TYPESCRIPT ?? null, ...[root, DEFAULT_ROOT].map((base) => {
+  const found = [root, DEFAULT_ROOT].map((base) => {
     try {
       return createRequire(join(base, "packages/shared/package.json")).resolve("typescript");
     } catch {
       return null;
     }
-  })].find(Boolean);
+  }).find(Boolean);
   if (!found) throw new Error("The judge needs TypeScript: run it from a checkout with its dependencies installed.");
   const typescript = pathToFileURL(found).href;
   const dir = mkdtempSync(join(tmpdir(), "scalius-contract-judge-"));
@@ -330,7 +415,16 @@ function frozenFilesAt(root, ref) {
   const bundles = REPLAY_SETS.flatMap((set) => {
     const text = gitText(root, ref, `${set}/replay.json`);
     return text === null ? [] : (JSON.parse(text).bundles ?? []).filter((bundle) => comparePluginVersions(bundle.builtAgainst, FREEZE) >= 0)
-      .flatMap((bundle) => [`${set}/${bundle.file}`, `${set}/expected/${bundle.id}-${bundle.version}@${bundle.builtAgainst}.json`]);
+      .flatMap((bundle) => {
+        const expectation = `${bundle.id}-${bundle.version}@${bundle.builtAgainst}`;
+        let refreezes = [];
+        try {
+          refreezes = git(root, ["ls-tree", "--name-only", ref, "--", `${set}/expected/`]).split("\n").filter((path) => path.startsWith(`${set}/expected/${expectation}.runtime-`));
+        } catch {
+          refreezes = [];
+        }
+        return [`${set}/${bundle.file}`, `${set}/expected/${expectation}.json`, ...refreezes];
+      });
   });
   return [...goldens, ...bundles];
 }
@@ -366,36 +460,38 @@ export async function verifyLock(root = DEFAULT_ROOT, { platform = platformOf(ro
   const lock = readLock(root);
   const lines = [];
   const problems = [];
+  const { anchor, expected, problems: anchorProblems } = await resolveAnchor(root, { verifySignatures });
   const atOrPastFreeze = comparePluginVersions(platform, FREEZE) >= 0;
-  if (!atOrPastFreeze) {
-    if (!lock) {
-      lines.push(`No ${LOCK_FILE}: ${platform} is before the ${FREEZE} freeze; every seal follows its ledger as before.`);
-      if (run !== null) problems.push(...await runProblems(root, run, lines));
-      return { lock, lines, problems };
-    }
+  // Before the freeze, with no freeze tag and no pin here, nothing is locked yet.
+  if (!expected && !atOrPastFreeze && !lock) {
+    lines.push(`No ${LOCK_FILE}: ${platform} is before the ${FREEZE} freeze; every seal follows its ledger as before.`);
+    if (run !== null) problems.push(...await runProblems(root, run, lines));
+    return { lock, lines, problems };
   }
-  if (atOrPastFreeze && shallow(root)) {
+  // Once the freeze is known here (its tag, its pin, or a version at or past it), the lock is required whatever version the tree claims.
+  if (shallow(root)) {
     problems.push("This is a shallow clone: the anchor tag and the locked snapshots need full history (git fetch --tags --unshallow).");
     return { lock, lines, problems };
   }
-  const anchor = anchorTag(root, { verifySignatures });
+  if (expected && !atOrPastFreeze) problems.push(`This tree states ${platform}, below the freeze ${FREEZE} its history holds: a version never goes back.`);
+  problems.push(...anchorProblems);
   if (!lock) {
-    problems.push(`This is ${platform}, at or past the ${FREEZE} freeze, and ${LOCK_FILE} is missing${anchor ? ` (${anchor.tag} carries it)` : ""}.`);
+    problems.push(`The contract is locked at ${FREEZE} and ${LOCK_FILE} is missing${anchor ? ` (${anchor.tag} carries it)` : ""}.`);
     return { lock, lines, problems };
   }
   if (anchor) {
     lines.push(`Locked at ${lock.platform}, contract ${lock.contractVersion}. Anchored to ${anchor.tag}; judged by ${anchor.tag}'s rules.`);
     if (readFileSync(join(root, LOCK_FILE), "utf8") !== anchor.text) problems.push(`${LOCK_FILE} is not the lock ${anchor.tag} carries, byte for byte.`);
-  } else if (platform === FREEZE && freezeCommit) {
-    // The one lock trusted with no tag behind it: the freeze commit's, when the release command says so.
-    lines.push(`Locked at ${lock.platform}, contract ${lock.contractVersion}. Not yet anchored: no trusted ${FREEZE} tag yet, so judged by this tree's own lock and rules (tag this commit as an annotated v${FREEZE}).`);
+  } else if (!expected && freezeCommit && platform === FREEZE && headAddsLock(root) && !existsSync(join(root, ANCHOR_FILE))) {
+    // The one lock trusted with no tag behind it: on the commit that adds it, when the release command says so.
+    lines.push(`Locked at ${lock.platform}, contract ${lock.contractVersion}. Not yet anchored: this commit adds the lock and ${FREEZE_TAG} does not exist yet, so judged by this tree's own lock and rules (tag this commit as an annotated, signed ${FREEZE_TAG}).`);
   } else {
-    problems.push(`No trusted release tag is reachable (an annotated v<version> at or past ${FREEZE}, its commit at that platform version, carrying ${LOCK_FILE}): fetch tags and full history (git fetch --tags --unshallow) and judge again.${platform === FREEZE ? ` On the ${FREEZE} commit before its tag, judge with --freeze-commit.` : ""}`);
+    if (!expected) problems.push(`No ${FREEZE_TAG} tag is here to anchor the lock: fetch tags and full history (git fetch --tags --unshallow).${freezeCommit ? ` --freeze-commit holds only on the commit that adds ${LOCK_FILE}, before ${ANCHOR_FILE} exists.` : ""}`);
     return { lock, lines, problems };
   }
   let judge;
   try {
-    judge = await loadJudge(root, anchor ? `${anchor.tag}^{commit}` : null);
+    judge = await loadJudge(root, anchor ? anchor.commit : null);
   } catch (error) {
     problems.push(String(error?.message ?? error));
     return { lock, lines, problems };
@@ -451,20 +547,25 @@ export async function verifyLock(root = DEFAULT_ROOT, { platform = platformOf(ro
       problems.push(`${key}: a frozen file changed.`);
     }
   }
-  if (anchor) {
-    for (const path of frozenFilesAt(root, `${anchor.tag}^{commit}`)) {
+  // The set grows release by release: what the anchor holds, and what each later release tag froze (a theme golden, a bundle, a replay re-freeze).
+  const releases = anchor ? [{ tag: anchor.tag, commit: anchor.commit }, ...trustedReleaseTags(root, { verifySignatures }).filter(({ tag }) => tag !== anchor.tag).map(({ tag }) => ({ tag, commit: `${tag}^{commit}` }))] : [];
+  const judged = new Set();
+  for (const release of releases) {
+    for (const path of frozenFilesAt(root, release.commit)) {
+      if (judged.has(path)) continue;
+      judged.add(path);
       if (!existsSync(join(root, path))) {
-        if (!path.startsWith("internal/")) problems.push(`${path}: a file frozen at ${anchor.tag} was removed.`);
+        if (!path.startsWith("internal/")) problems.push(`${path}: a file frozen at ${release.tag} was removed.`);
         continue;
       }
-      const blob = git(root, ["rev-parse", `${anchor.tag}^{commit}:${path}`]).trim();
+      const blob = git(root, ["rev-parse", `${release.commit}:${path}`]).trim();
       if (git(root, ["hash-object", "--", path]).trim() !== blob) {
         frozenChanged += 1;
-        problems.push(`${path}: a file frozen at ${anchor.tag} changed.`);
+        problems.push(`${path}: a file frozen at ${release.tag} changed.`);
       }
     }
   }
-  lines.push(`  frozen  ${Object.keys(lock.frozen).length} files in the lock${anchor ? ` and the anchor's own` : ""}${frozenChanged ? `, ${frozenChanged} changed` : ", none changed"}`);
+  lines.push(`  frozen  ${Object.keys(lock.frozen).length} files in the lock${anchor ? `, ${judged.size} frozen at ${releases.map(({ tag }) => tag).join(", ")}` : ""}${frozenChanged ? `, ${frozenChanged} changed` : ", none changed"}`);
   for (const [path, atLock] of Object.entries(lock.ledgers)) {
     const entries = readLedger(root, path);
     if (!entries) {
@@ -488,48 +589,54 @@ export async function verifyLock(root = DEFAULT_ROOT, { platform = platformOf(ro
  * freeze, and says "not yet anchored" on the freeze commit).
  */
 export async function judgeWithAnchor(root = DEFAULT_ROOT, { run = null, verifySignatures, freezeCommit = false } = {}) {
-  const platform = platformOf(root);
-  const atOrPastFreeze = comparePluginVersions(platform, FREEZE) >= 0;
-  const anchor = atOrPastFreeze && !shallow(root) ? anchorTag(root, { verifySignatures }) : null;
+  const { anchor } = shallow(root) ? { anchor: null } : await resolveAnchor(root, { verifySignatures });
   if (!anchor) {
-    // A lock with no trusted tag behind it is trusted as written only on the freeze commit, when the release
-    // command says so (`--freeze-commit`): anywhere else it could be a rewritten lock with its tag deleted.
+    // No trusted freeze tag: this tree's verify refuses (only the commit that adds the lock may claim --freeze-commit).
     const verdict = await verifyLock(root, { run, verifySignatures, freezeCommit });
     return { ...verdict, anchored: false, code: verdict.problems.length === 0 ? 0 : 1 };
   }
   // The real path (a temporary folder behind a symlink would not run as the main module).
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "scalius-contract-anchor-")));
   try {
-    const archive = execFileSync("git", ["archive", `${anchor.tag}^{commit}`, "scripts", "packages/shared/src"], { cwd: root, maxBuffer: 512 * 1024 * 1024 });
+    const archive = execFileSync("git", ["archive", anchor.commit, "scripts", "packages/shared/src"], { cwd: root, maxBuffer: 512 * 1024 * 1024 });
     const untar = spawnSync("tar", ["-x", "-C", dir], { input: archive });
     if (untar.status !== 0) return { lock: null, lines: [], problems: [`Could not check out ${anchor.tag}'s judge.`], anchored: true, code: 1 };
-    const args = [join(dir, "scripts/contract-lock.mjs"), "verify", "--root", root, ...(run ? ["--run", run] : []), ...(verifySignatures ? ["--verify-signatures"] : [])];
-    const result = spawnSync(process.execPath, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    const verdictFile = join(dir, "verdict.json");
+    const args = [join(dir, "scripts/contract-lock.mjs"), "verify", "--root", root, "--verdict", verdictFile, ...(run ? ["--run", run] : []), ...(signaturesWanted(root, verifySignatures) ? ["--verify-signatures"] : [])];
+    // A clean environment: the tag's judge reads nothing this shell set but where its tools, home (git and gpg config) and temporary folder are.
+    const env = Object.fromEntries(["PATH", "HOME", "TMPDIR"].flatMap((name) => (process.env[name] ? [[name, process.env[name]]] : [])));
+    const result = spawnSync(process.execPath, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env });
     const lines = [`Judged by ${anchor.tag}'s own script and rules, checked out from the tag.`, ...result.stdout.split("\n").filter(Boolean)];
-    const problems = result.stderr.split("\n").filter((line) => line.startsWith("refused: ")).map((line) => line.slice(9));
-    if (result.status !== 0 && problems.length === 0) problems.push(`${anchor.tag}'s judge failed: ${result.stderr.trim() || `exit ${result.status}`}`);
-    // Silence is never a pass: the tag's judge says what it judged.
-    if (result.status === 0 && !result.stdout.includes(`Anchored to ${anchor.tag}`)) problems.push(`${anchor.tag}'s judge gave no verdict: ${result.stderr.trim() || "no output"}`);
-    return { lock: readLock(root), lines, problems, anchored: true, code: result.status ?? 1 };
+    // The verdict is the file the tag's judge writes after it decides, never the exit code or the output alone.
+    const verdict = existsSync(verdictFile) ? JSON.parse(readFileSync(verdictFile, "utf8")) : null;
+    if (!verdict || typeof verdict.ok !== "boolean" || !Array.isArray(verdict.problems)) {
+      return { lock: readLock(root), lines, problems: [`${anchor.tag}'s judge gave no verdict: ${result.stderr.trim() || `exit ${result.status}`}`], anchored: true, code: 1 };
+    }
+    const problems = verdict.ok && verdict.problems.length === 0 && result.status === 0 ? [] : verdict.problems.length > 0 ? verdict.problems : [`${anchor.tag}'s judge refused (exit ${result.status}).`];
+    return { lock: readLock(root), lines, problems, anchored: true, code: problems.length === 0 ? 0 : 1 };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }
 
-/** The security entries added to the ledgers since the newest trusted release tag. */
+/** The security and wording entries added to the ledgers since the newest trusted release tag: each is named in the release notes. */
 export function securityEntriesSince(root = DEFAULT_ROOT) {
   const tag = trustedReleaseTags(root)[0]?.tag ?? null;
   return LEDGERS.flatMap((path) => {
     const before = new Set((JSON.parse((tag && gitText(root, `${tag}^{commit}`, path)) || "[]")).map((entry) => JSON.stringify(entry)));
-    return (readLedger(root, path) ?? []).filter((entry) => entry.type === "security" && !before.has(JSON.stringify(entry)));
+    return (readLedger(root, path) ?? []).filter((entry) => (entry.type === "security" || entry.type === "wording") && !before.has(JSON.stringify(entry)));
   });
 }
 
-/** Release notes refuse to stand unless they name the advisory of each security entry since the last release tag. */
+/** Release notes stand only when they name the advisory of each security entry and the error code of each reworded meaning since the last release. */
 export function notesProblems(notes, entries) {
-  return [...new Set(entries.map((entry) => entry.advisory?.id ?? "(no advisory)"))]
+  const security = [...new Set(entries.filter((entry) => entry.type !== "wording").map((entry) => entry.advisory?.id ?? "(no advisory)"))]
     .filter((id) => !notes.includes(id))
     .map((id) => `The release notes do not name ${id}, a security change to the contract since the last release (${CONTRACT_ADVISORIES_DIR}/${id}.md).`);
+  const wording = [...new Set(entries.filter((entry) => entry.type === "wording").map((entry) => entry.change.match(/^errors\.([a-z0-9_]+):/)?.[1] ?? entry.change))]
+    .filter((code) => !notes.includes(code))
+    .map((code) => `The release notes do not name ${code}, whose meaning was reworded since the last release.`);
+  return [...security, ...wording];
 }
 
 function flag(args, name) {
@@ -543,7 +650,7 @@ async function main(args) {
     let refused = 0;
     for (const result of classifyLedgers(root)) {
       console.log(`${result.path}: ${result.entries} entries; typed now ${result.growth} growth, ${result["pre-lock"]} pre-lock; ${result.already} already typed.`);
-      for (const entry of result.refused) console.error(`  untyped after the lock (type it by hand: growth for a changed pattern with accepts, or security with its advisory): ${entry.snapshot} ${entry.change}`);
+      for (const entry of result.refused) console.error(`  untyped after the lock (type it by hand: security with its advisory, or wording for a reworded error meaning): ${entry.snapshot} ${entry.change}`);
       refused += result.refused.length;
     }
     return refused === 0 ? 0 : 1;
@@ -561,12 +668,22 @@ async function main(args) {
   }
   const run = flag(args, "--run");
   const verifySignatures = args.includes("--verify-signatures") ? true : undefined;
+  if (args.includes("anchor")) {
+    const { problems, pin } = await writeAnchorPin(root, { verifySignatures });
+    for (const problem of problems) console.error(`refused: ${problem}`);
+    if (!pin) return 1;
+    console.log(`Wrote ${ANCHOR_FILE}: tag ${pin.tag}, commit ${pin.commit}, lock sha256 ${pin.lockSha256}. Commit it, and put these three values in the release notes.`);
+    return 0;
+  }
   if (args.includes("judge") || args.includes("verify") || args.includes("status")) {
     const { lines, problems } = args.includes("judge")
       ? await judgeWithAnchor(root, { run, verifySignatures, freezeCommit: args.includes("--freeze-commit") })
       : await verifyLock(root, { run, verifySignatures, freezeCommit: args.includes("--freeze-commit") });
     for (const line of lines) console.log(line);
     for (const problem of problems) console.error(`refused: ${problem}`);
+    // Written after deciding: the judge that started this one reads its verdict here.
+    const verdictFile = flag(args, "--verdict");
+    if (verdictFile) writeFileSync(verdictFile, JSON.stringify({ ok: problems.length === 0, lines, problems }));
     return problems.length === 0 ? 0 : 1;
   }
   if (args.includes("notes")) {
@@ -581,7 +698,7 @@ async function main(args) {
     if (problems.length === 0) console.log(`The release notes name every advisory since the last release tag (${entries.length} security entries).`);
     return problems.length === 0 ? 0 : 1;
   }
-  console.error("Usage: node scripts/contract-lock.mjs classify | --write [--allow-no-replay] | judge [--run <id>] | verify [--run <id>] [--verify-signatures] | notes <file>   [--root <dir>]");
+  console.error("Usage: node scripts/contract-lock.mjs classify | --write [--allow-no-replay] | anchor | judge [--run <id>] [--freeze-commit] | verify [--run <id>] [--verify-signatures] [--freeze-commit] | notes <file>   [--root <dir>]");
   return 2;
 }
 

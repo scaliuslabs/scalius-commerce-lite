@@ -81,10 +81,22 @@ export async function committedSnapshot(file: string | URL): Promise<string | nu
   return existsSync(path) ? readFileSync(path, "utf8") : null;
 }
 
-/** From the freeze release on, a missing lock is itself a refusal: the seals never fall back to the rules before it. */
-export function missingLockProblem(lock: ContractLock | null, platform: string = SCALIUS_PLATFORM_VERSION): string | null {
-  return lock === null && comparePluginVersions(platform, CONTRACT_FREEZE_RELEASE) >= 0
-    ? `This is ${platform}, at or past the ${CONTRACT_FREEZE_RELEASE} freeze, and contract.lock.json is missing: restore it (git show <release tag>:contract.lock.json).`
+/** Whether the tree pins the freeze tag (contract.anchor.json, committed right after tagging). */
+export async function anchorPinned(root?: string): Promise<boolean> {
+  const { existsSync, resolve } = await node();
+  return existsSync(resolve(root ?? await repositoryRoot(), "contract.anchor.json"));
+}
+
+/**
+ * From the freeze on, a missing lock is itself a refusal: the seals never fall back to the rules
+ * before it. The freeze is known by the version the tree states, or by the committed anchor pin,
+ * whatever version the tree claims.
+ */
+export function missingLockProblem(lock: ContractLock | null, platform: string = SCALIUS_PLATFORM_VERSION, pinned = false): string | null {
+  if (lock !== null) return null;
+  if (pinned) return `contract.anchor.json pins the ${CONTRACT_FREEZE_RELEASE} freeze and contract.lock.json is missing: restore it (git show v${CONTRACT_FREEZE_RELEASE}:contract.lock.json).`;
+  return comparePluginVersions(platform, CONTRACT_FREEZE_RELEASE) >= 0
+    ? `This is ${platform}, at or past the ${CONTRACT_FREEZE_RELEASE} freeze, and contract.lock.json is missing: restore it (git show v${CONTRACT_FREEZE_RELEASE}:contract.lock.json).`
     : null;
 }
 
@@ -111,7 +123,7 @@ export async function openContractBreaks(seal: SealedSnapshot, committed?: strin
   await recordGenerated(relative(root, await filePath(seal.file)), seal.current);
   const lock = await readContractLock(root);
   const path = relative(root, await filePath(seal.file));
-  const missing = missingLockProblem(lock);
+  const missing = missingLockProblem(lock, SCALIUS_PLATFORM_VERSION, await anchorPinned(root));
   if (missing) return [{ snapshot: seal.snapshot, from: "", change: `${path}: no contract lock.`, reason: "", refused: missing }];
   return contractOpenBreaks({
     snapshot: seal.snapshot,
@@ -144,10 +156,10 @@ export async function sealCompatibly(seal: SealedSnapshot & { beforeLock?: "ledg
   const lock = await readContractLock();
   const { relative: relativePath } = await node();
   await recordGenerated(relativePath(await repositoryRoot(), await filePath(seal.file)), seal.current);
-  if (lock || missingLockProblem(lock) || seal.beforeLock !== "review") {
+  if (lock || missingLockProblem(lock, SCALIUS_PLATFORM_VERSION, await anchorPinned()) || seal.beforeLock !== "review") {
     const { relative } = await node();
     const name = relative(await repositoryRoot(), await filePath(seal.ledgerFile));
-    expect(await openContractBreaks(seal), seal.message ?? `Breaking changes in ${seal.snapshot}. Keep the old shape, or add these entries with a reason${lock ? " and a type (growth, security with its advisory, or new-version)" : ""} to ${name}.`).toEqual([]);
+    expect(await openContractBreaks(seal), seal.message ?? `Breaking changes in ${seal.snapshot}. Keep the old shape, or add these entries with a reason${lock ? " and a type (after the lock: security with its advisory, or wording for a reworded error meaning)" : ""} to ${name}.`).toEqual([]);
   }
   await expect(seal.current).toMatchFileSnapshot(await filePath(seal.file));
 }

@@ -9,9 +9,10 @@
 // one sealed snapshot, from the snapshot whose fingerprint is `from`. `type`:
 //
 //   growth       additive: nothing that worked stops working. Real growth makes
-//                no change line at all (every rule lets growth pass, a pattern
-//                too when its change is a widening the rule proves: patterns.ts),
-//                so after the lock no `growth` entry is accepted.
+//                no change line at all (every rule lets growth pass), so after
+//                the lock no `growth` entry is accepted. A changed pattern is
+//                always a line: a needed one is a security fix or waits for the
+//                next contract version.
 //   wording      a reworded meaning or description (`WORDING_LINES`): the code,
 //                status and details hold. Accepted after the lock.
 //   pre-lock     a real break made before the freeze. None is accepted after it.
@@ -166,7 +167,7 @@ export function postLockEntryProblem(entry: LedgerEntry, lock: Pick<ContractLock
     return `No new contract version can ship yet: per-version snapshots and the host adapter that keeps ${lock.contractVersion}'s shapes come first (promise.md, Versions).`;
   }
   if (VERSION_CHANGE.test(entry.change)) return "A contract version change ships only as a new version, which needs per-version snapshots and the host adapter first.";
-  if (entry.type === "growth") return "Every line a compat rule writes is a break: growth makes no line (a widened pattern neither, when the rule proves it). A break after the lock ships only as a security fix.";
+  if (entry.type === "growth") return "Every line a compat rule writes is a break: growth makes no line. A break after the lock ships only as a security fix.";
   if (entry.type === "wording") return WORDING_LINES.some((line) => line.test(entry.change)) ? null : "A wording entry is for a reworded meaning or description only (WORDING_LINES).";
   return advisoryProblem(entry, context.advisory?.(entry.advisory?.id ?? "") ?? null, context.today ?? new Date().toISOString().slice(0, 10));
 }
