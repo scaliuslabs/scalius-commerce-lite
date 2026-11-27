@@ -41,13 +41,13 @@ export type StorefrontThemeSaveReason = (typeof STOREFRONT_THEME_SAVE_REASONS)[n
 export const STOREFRONT_THEME_SAVE_REFUSALS = { checker: PRIVATE_CHECKER_VERSION, reasons: STOREFRONT_THEME_SAVE_REASONS } as const;
 
 /** Compiles only while every check's reasons are in the list (a new reason is added there, and the snapshot shows it). */
-type Unlisted =
-  | Exclude<PrivatePagesReason, StorefrontThemeSaveReason>
-  | Exclude<StorefrontThemePolicyReason, StorefrontThemeSaveReason>
-  | Exclude<(typeof STOREFRONT_MOBILE_TAB_REFUSALS)[keyof typeof STOREFRONT_MOBILE_TAB_REFUSALS], StorefrontThemeSaveReason>
-  | Exclude<typeof STOREFRONT_PRIVATE_TEMPLATE_REASON | typeof STOREFRONT_PAGE_SLIDE_PRODUCTS_REFUSAL | typeof STOREFRONT_FOREIGN_ASSET, StorefrontThemeSaveReason>;
 type Listed<Missing extends never> = Missing;
-export type StorefrontThemeSaveReasonsListed = Listed<Unlisted>;
+export type StorefrontThemeSaveReasonsListed = [
+  Listed<Exclude<PrivatePagesReason, StorefrontThemeSaveReason>>,
+  Listed<Exclude<StorefrontThemePolicyReason, StorefrontThemeSaveReason>>,
+  Listed<Exclude<(typeof STOREFRONT_MOBILE_TAB_REFUSALS)[keyof typeof STOREFRONT_MOBILE_TAB_REFUSALS], StorefrontThemeSaveReason>>,
+  Listed<Exclude<typeof STOREFRONT_PRIVATE_TEMPLATE_REASON | typeof STOREFRONT_PAGE_SLIDE_PRODUCTS_REFUSAL | typeof STOREFRONT_FOREIGN_ASSET, StorefrontThemeSaveReason>>,
+];
 
 /** One refused value: where it sits in the document, what is wrong and what is allowed, and its machine-readable reason when it has one. */
 export interface StorefrontThemeSaveIssue {

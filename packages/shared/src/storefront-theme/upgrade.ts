@@ -14,7 +14,7 @@ import { STOREFRONT_SECTION_REGISTRY, type StorefrontSectionSettingsUpgrade } fr
 import { storefrontPrivatePageDefaults } from "./private-pages";
 import { privateCartPresetArrangement, privateDrawerWith, type PrivatePageArrangement } from "./private-arrangement";
 import { PRIVATE_ANATOMY_VERSION } from "./private-anatomy";
-import { PRIVATE_CHECKER_VERSION, readStoredPrivatePages, refusedPrivatePages } from "./private-layout";
+import { readStoredPrivatePages, refusedPrivatePages } from "./private-layout";
 
 /**
  * The oldest stored version that still reads. Migration 0155 reset every

@@ -33,32 +33,25 @@
 // (`readStoredPrivatePages`): they are dropped and its private pages draw
 // the store's default look until the next save; nothing on the render path
 // draws one.
-import { z } from "zod";
-import { PLUGIN_ID_PATTERN } from "../plugins/ids";
 import { STORE_ACTION_AND_AMOUNT_WORDS, foldStoreWords } from "../store-words";
 import { parsePluginSurfaceKey } from "../plugins/storefront";
 import { storefrontDarkPalette, type StorefrontThemeTokens } from "./tokens";
 import {
   PRIVATE_ANATOMY_VERSION,
-  PRIVATE_CONTROL_PLACES,
-  PRIVATE_HOOK_MAX,
-  PRIVATE_LAYOUT_KINDS,
   PRIVATE_PAGE_KEYS,
   PRIVATE_PAGE_WORDS,
-  privateIconKeys,
   privateLabelKeys,
   type PrivateControlPlace,
   type PrivateLabelSpec,
   type PrivatePageKey,
 } from "./private-keys";
-import { PRIVATE_PAGES, type PrivateAssetRef, type PrivatePageSpec, type PrivateWords } from "./private-anatomy";
+import { PRIVATE_PAGES, type PrivatePageSpec, type PrivateWords } from "./private-anatomy";
 import {
   PRIVATE_CHECKER_VERSION,
   PRIVATE_COMPILED_CSS_MAX_BYTES,
   PRIVATE_LOOK_ONLY_PAGES,
   PRIVATE_NOT_AVAILABLE,
   PRIVATE_PAGE_REFUSALS_MAX,
-  PRIVATE_WORDS_LIMITS,
   privateNotAvailable,
   storefrontPrivatePagesDefault,
   type PrivatePageRefusal,
@@ -96,10 +89,8 @@ import {
 import {
   compilePrivateTokens,
   privatePalettes,
-  privateTokensSchema,
   type PrivatePalette,
   type PrivateTokenReason,
-  type PrivateTokens,
 } from "./private-tokens";
 
 /**
