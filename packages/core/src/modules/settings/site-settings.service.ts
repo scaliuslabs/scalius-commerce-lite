@@ -47,7 +47,6 @@ import {
   privatePagesContextOf,
   privateTokenApps,
   filledPrivatePages,
-  refusedPrivatePages,
   parseStoredStorefrontThemeDocument,
   STOREFRONT_THEME_DOCUMENT_MAX_BYTES,
   storefrontThemeAppIssues,
@@ -61,6 +60,8 @@ import {
   storefrontSectionSchema,
   switchStorefrontTemplate,
   themeDocumentChangeSchema,
+  type PrivatePageKey,
+  type PrivatePageRefusal,
   type StorefrontLandingPage,
   type StorefrontPageTemplate,
   type StorefrontSection,
@@ -408,32 +409,40 @@ export async function getThemeSettings(db: Database): Promise<ThemeSettingsDocum
     : unpublishedThemeSettings();
 }
 
+/** What the maintenance compile did; `refused` names the pages this checker refused (each now draws the store's default look). */
+export type PrivatePagesRecompile =
+  | { outcome: "none" | "current" | "recompiled" | "unreadable" | "raced" }
+  | { outcome: "refused"; pages: PrivatePageKey[]; reasons: string[] };
+
 /**
  * The published theme's private pages compiled by this build when an older
  * checker wrote them (the first maintenance run after a deploy; a buyer's
  * request never compiles, and serves the default look meanwhile). One read,
  * and one write only then, at the same revision (it is the same document):
- * the row's cache dependency moves with the write. A theme this checker no
- * longer passes keeps its source and serves no compiled look until the
- * merchant saves it again.
+ * the row's cache dependency moves with the write. A page this checker no
+ * longer passes keeps its source, draws the store's default look and records
+ * why (`compiled.refused`, the save's own issues, shown to the merchant on
+ * the theme page) until the merchant saves again; every other page keeps the
+ * theme's look.
  */
-export async function recompilePublishedPrivatePages(db: Database): Promise<"none" | "current" | "recompiled" | "refused" | "unreadable" | "raced"> {
+export async function recompilePublishedPrivatePages(db: Database): Promise<PrivatePagesRecompile> {
   const row = (await selectThemeSettingsRows(db))[0];
-  if (!row) return "none";
+  if (!row) return { outcome: "none" };
   // A document this build cannot read is left as it is (the merchant re-saves it); nothing to compile.
   const theme = parseStoredStorefrontThemeDocument(row.colors);
-  if (!theme) return "unreadable";
-  if (privatePagesCompiledCurrent(theme.privatePages)) return "current";
+  if (!theme) return { outcome: "unreadable" };
+  if (privatePagesCompiledCurrent(theme.privatePages)) return { outcome: "current" };
   // Every path stores arrangements filled for this anatomy: a newly mandatory part is never missing.
-  const result = compileStorefrontPrivatePages(filledPrivatePages(theme.privatePages), privatePagesContextOf(theme));
-  const privatePages = result.ok ? result.value : refusedPrivatePages(theme.privatePages);
+  const { value: privatePages } = compileStorefrontPrivatePages(filledPrivatePages(theme.privatePages), privatePagesContextOf(theme));
   const written = await db.update(themeSettings)
     .set({ colors: JSON.stringify({ ...theme, privatePages }), updatedAt: sql`unixepoch()` })
     .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)))
     .returning({ id: themeSettings.id });
   // A publish moved the revision in between: nothing was written, so the version is not settled (tried again next run).
-  if (written.length === 0) return "raced";
-  return result.ok ? "recompiled" : "refused";
+  if (written.length === 0) return { outcome: "raced" };
+  const refused = Object.entries(privatePages.compiled.refused ?? {}) as Array<[PrivatePageKey, PrivatePageRefusal[]]>;
+  if (refused.length === 0) return { outcome: "recompiled" };
+  return { outcome: "refused", pages: refused.map(([page]) => page), reasons: [...new Set(refused.flatMap(([, issues]) => issues.map((issue) => issue.reason)))] };
 }
 
 /** The live document, the shared draft (the live one until a draft is saved) and who published last. */

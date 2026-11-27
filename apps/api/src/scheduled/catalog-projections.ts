@@ -72,13 +72,16 @@ export async function requestPostDeployProjectionRebuild(env: Env): Promise<bool
   }
   // The theme's private pages, compiled by this version's checker, independent of the rebuild above:
   // a transient failure is tried again next tick (the version stays pending); a theme that cannot be
-  // read is settled with one log line for this version.
+  // read is settled with one log line for this version. A page this checker refuses is recorded in the
+  // published document with why (`compiled.refused`), which the theme page shows the merchant; the log
+  // line names only the pages and reason codes.
   try {
     const { recompilePublishedPrivatePages } = await import("@scalius/core/modules/settings");
-    const outcome = await recompilePublishedPrivatePages(db);
-    if (outcome !== "none" && outcome !== "current") console.log(`[scheduled] Private pages for this version: ${outcome}`);
+    const result = await recompilePublishedPrivatePages(db);
+    if (result.outcome === "refused") console.warn(`[scheduled] Private pages for this version: refused on ${result.pages.join(", ")} (${result.reasons.join(", ")}); each draws the store's default look until the merchant saves`);
+    else if (result.outcome !== "none" && result.outcome !== "current") console.log(`[scheduled] Private pages for this version: ${result.outcome}`);
     // A compile a publish raced wrote nothing: the version stays pending and the next run compiles again.
-    if (outcome !== "raced") await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version);
+    if (result.outcome !== "raced") await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version);
   } catch (error) {
     // A compile that keeps throwing (a theme that costs more than a run) is tried a bounded number of times, then
     // settled for the version: its pages keep serving the default look until the merchant saves.

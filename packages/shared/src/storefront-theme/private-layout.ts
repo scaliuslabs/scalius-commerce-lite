@@ -6,20 +6,25 @@
 //   targets; an absent page draws as the host does.
 // - `tokens`: the look of the host parts, as typed values per style target
 //   (private-tokens.ts); any token puts the page in token mode, where every
-//   colour comes from one table the host writes and checks.
-// - `controls`: where the store's controls sit (the light or dark switch, the
-//   market and language forms): the store's checkout header, a strip at the
-//   page's end, or none (unset: the header).
+//   colour comes from one table the host writes and checks. A page the theme
+//   names (`pages.<page>` or `tokens.<page>`, `privatePageNamed`) is drawn in
+//   token mode on the theme's page paint too; a page it does not name never
+//   takes a theme-wide field.
+// - `controls`: where the store's controls sit on the pages the theme names
+//   (the light or dark switch, the market and language forms): the store's
+//   checkout header, a strip at the page's end, or none (unset: the header).
 // - `labels`, `icons`: host labels the theme changes (a host variant for an
 //   action or an amount, its own words per language for the rest), host
 //   icons it replaces with its own files.
 // - `compiled`: written by the store on every save and publish, never by
 //   hand: each page's token CSS (a page with an entry is in token mode), the
-//   checker's version and the anatomy version the arrangements were checked
-//   against. A page reads it as it is, so a custom
-//   look costs no query and no parse beyond the document's; one an older
-//   checker wrote serves nothing until the store compiles it again (a save,
-//   or maintenance after a deploy).
+//   pages refused on their own with why (`refused`), the checker's version
+//   and the anatomy version the arrangements were checked against. A page
+//   reads it as it is, so a custom look costs no query and no parse beyond
+//   the document's; one an older checker wrote serves nothing until the
+//   store compiles it again (a save, or maintenance after a deploy, which
+//   refuses only the pages this checker no longer passes and records why for
+//   the merchant).
 //
 // A theme writes no markup and no CSS on these pages in this release: a
 // save of a document with a stylesheet, its own chrome, its own search or
@@ -52,9 +57,12 @@ import {
   PRIVATE_COMPILED_CSS_MAX_BYTES,
   PRIVATE_LOOK_ONLY_PAGES,
   PRIVATE_NOT_AVAILABLE,
+  PRIVATE_PAGE_REFUSALS_MAX,
   PRIVATE_WORDS_LIMITS,
   privateNotAvailable,
   storefrontPrivatePagesDefault,
+  type PrivatePageRefusal,
+  type PrivatePagesHeld,
   type StorefrontPrivatePages,
 } from "./private-schema";
 
@@ -64,6 +72,7 @@ export {
   PRIVATE_LAYOUT_MAX_DEPTH,
   PRIVATE_LOOK_ONLY_PAGES,
   PRIVATE_NOT_AVAILABLE,
+  PRIVATE_PAGE_REFUSALS_MAX,
   PRIVATE_WORDS_LIMITS,
   privateAssetRefSchema,
   privateNodeSchema,
@@ -72,6 +81,8 @@ export {
   storefrontPrivatePagesDefault,
   storefrontPrivatePagesSchema,
   storefrontPrivatePagesTemplateSchema,
+  type PrivatePageRefusal,
+  type PrivatePagesHeld,
   type StorefrontPrivatePages,
   type StorefrontPrivatePagesTemplate,
 } from "./private-schema";
@@ -100,11 +111,25 @@ const HIDDEN_CHARACTERS = /(?![\t\n‌‍\p{Variation_Selector}\u{E0020}-\u{E007
 
 /**
  * Where the store's controls sit on a private page as served: the theme's
- * place (unset: the store's checkout header), or none when the served look
- * is the store's default.
+ * place on a page the theme names and serves (`privatePageNamed`), else the
+ * store's checkout header. A page that joins the model later keeps the
+ * header until the theme names it.
  */
-export function privateControlsPlace(privatePages: StorefrontPrivatePages): PrivateControlPlace {
-  return servedPrivatePages(privatePages).controls ?? "header";
+export function privateControlsPlace(privatePages: StorefrontPrivatePages, page: PrivatePageKey): PrivateControlPlace {
+  const served = servedPrivatePages(privatePages);
+  return privatePageNamed(served, page) ? served.controls ?? "header" : "header";
+}
+
+/**
+ * The theme names this page: it arranges it (other than the store's own
+ * arrangement, which stores nothing) or gives it tokens (`tokens.<page>`,
+ * an empty set included). Only a page the theme names takes its theme-wide
+ * fields (the page paint's token mode, where the controls sit), so a page
+ * that joins the model later draws as before under every theme until its
+ * author names it.
+ */
+export function privatePageNamed(privatePages: Pick<StorefrontPrivatePages, "pages" | "tokens">, page: PrivatePageKey): boolean {
+  return privatePages.pages[page] !== undefined || privatePages.tokens[page] !== undefined;
 }
 
 // ─── Compiling on save ────────────────────────────────────────────────────
@@ -195,16 +220,39 @@ export function privatePagesContextOf(theme: {
   };
 }
 
+/** The page each label and icon key belongs to (keys are per page: `cart.heading`, `drawer.empty`). */
+const KEY_PAGES: ReadonlyMap<string, PrivatePageKey> = /* @__PURE__ */ (() => new Map([
+  ...privateLabelKeys().map(({ key, page }) => [key, page] as const),
+  ...PRIVATE_PAGE_KEYS.flatMap((page) => PRIVATE_PAGE_WORDS[page].icons.map((key) => [key as string, page] as const)),
+]))();
+
+/** A compile's issues as a page records them (`compiled.refused`): the first few, in the save's own shape. */
+function pageRefusals(issues: readonly PrivatePagesIssue[]): PrivatePageRefusal[] {
+  return issues.slice(0, PRIVATE_PAGE_REFUSALS_MAX).map((issue) => ({ path: issue.path.map(String).join(".").slice(0, 240), reason: issue.reason, message: issue.message.slice(0, 600) }));
+}
+
 /**
- * Checks and compiles `privatePages` as a save or a publish does: every
- * arrangement against its page's anatomy, every token by type and against
- * the contrast floor, every label against its bound, plain text everywhere
- * and icons from the theme's own app only. Defaults are dropped from the
- * arrangements, so a default page stores nothing. The compiled CSS is the
- * host's token rules only: no theme writes CSS here.
+ * Checks and compiles `privatePages` as a save or a publish does, page by
+ * page: every arrangement against its page's anatomy, every token by type
+ * and against the contrast floor, every label against its bound, plain text
+ * everywhere and icons from the theme's own app only. Defaults are dropped
+ * from the arrangements, so a default page stores nothing. The compiled CSS
+ * is the host's token rules only: no theme writes CSS here.
+ *
+ * Every issue belongs to one page. A save refuses on any issue (`ok: false`);
+ * `value` is always the compiled source, each page with an issue refused on
+ * its own (`compiled.refused`, with its reasons): what the maintenance
+ * compile stores when a newer checker refuses a published theme, so only
+ * that page draws the store's default look.
  */
-export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, context: PrivatePagesCompileContext): { ok: true; value: StorefrontPrivatePages } | { ok: false; issues: PrivatePagesIssue[] } {
+export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, context: PrivatePagesCompileContext): { ok: true; value: StorefrontPrivatePages } | { ok: false; issues: PrivatePagesIssue[]; value: StorefrontPrivatePages } {
   const issues: PrivatePagesIssue[] = [];
+  const byPage = new Map<PrivatePageKey, PrivatePagesIssue[]>();
+  const report = (page: PrivatePageKey, found: readonly PrivatePagesIssue[]) => {
+    if (found.length === 0) return;
+    issues.push(...found);
+    byPage.set(page, [...byPage.get(page) ?? [], ...found]);
+  };
   const pages: StorefrontPrivatePages["pages"] = {};
   for (const page of PRIVATE_PAGE_KEYS) {
     const arrangement = value.pages[page];
@@ -212,24 +260,25 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
     const base = ["privatePages", "pages", page];
     // The receipt and the account take their look from tokens; their parts are not arranged by a theme yet.
     if (PRIVATE_LOOK_ONLY_PAGES.includes(page) && compactPrivateArrangement(page, arrangement)) {
-      issues.push({ path: base, reason: PRIVATE_NOT_AVAILABLE, message: privateNotAvailable(`Arranging the ${page} page`) });
+      report(page, [{ path: base, reason: PRIVATE_NOT_AVAILABLE, message: privateNotAvailable(`Arranging the ${page} page`) }]);
       continue;
     }
-    issues.push(...privateArrangementIssues(page, arrangement).map((issue) => ({ ...issue, path: [...base, ...issue.path] })));
+    report(page, privateArrangementIssues(page, arrangement).map((issue) => ({ ...issue, path: [...base, ...issue.path] })));
     const compact = compactPrivateArrangement(page, arrangement);
     if (compact) pages[page] = compact;
   }
-  const files = Object.entries(value.icons).flatMap(([key, ref]): Array<[Array<string | number>, PrivateAssetRef]> => ref ? [[["privatePages", "icons", key], ref]] : []);
-  for (const [path, ref] of files) {
-    if (ref.app !== context.themeApp) issues.push({ path, reason: "foreign_asset", message: `${ref.app}/${ref.file}: a private page names only the theme's own files${context.themeApp ? ` (${context.themeApp})` : ""}.` });
+  for (const [key, ref] of Object.entries(value.icons)) {
+    if (ref && ref.app !== context.themeApp) report(KEY_PAGES.get(key)!, [{ path: ["privatePages", "icons", key], reason: "foreign_asset", message: `${ref.app}/${ref.file}: a private page names only the theme's own files${context.themeApp ? ` (${context.themeApp})` : ""}.` }]);
   }
   const tokenCss: Partial<Record<PrivatePageKey, string>> = {};
-  // A theme's page paint shows behind every private page: a page with no tokens is drawn in token mode
-  // anyway, its rows the defaults computed from the paint, so what stands on the paint is checked on it
-  // (the drawer has no page of its own: it opens over public pages and takes their look).
+  // A theme's page paint shows behind a private page it names: such a page with no tokens is drawn in token mode
+  // anyway, its rows the defaults computed from the paint, so what stands on the paint is checked on it (the
+  // drawer has no page of its own: it opens over public pages and takes their look). A page it does not name
+  // draws as the store does, on the page colour.
   const painted = context.palettes.some((palette) => palette.pagePaint);
   for (const page of PRIVATE_PAGE_KEYS) {
-    const tokens = Object.keys(value.tokens[page] ?? {}).length > 0 ? value.tokens[page]! : painted && privatePageHasOwnPage(page) ? {} : null;
+    const own = value.tokens[page];
+    const tokens = Object.keys(own ?? {}).length > 0 ? own! : painted && privatePageHasOwnPage(page) && privatePageNamed({ pages, tokens: value.tokens }, page) ? {} : null;
     if (!tokens) continue;
     const arrangement = privatePageArrangement({ ...value, pages, compiled: { ...value.compiled, anatomy: PRIVATE_ANATOMY_VERSION } }, page) ?? context.defaults?.[page];
     const spec: PrivatePageSpec = PRIVATE_PAGES[page];
@@ -238,7 +287,7 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
       items: Object.fromEntries(Object.keys(spec.items).map((item) => [item, arrangement?.items?.[item] ?? spec.items[item]!.layout])),
       palettes: context.palettes,
     });
-    issues.push(...compiled.issues);
+    report(page, compiled.issues);
     // A page of its own is drawn in token mode wherever its table was written (an empty look included).
     if (privatePageHasOwnPage(page) && compiled.issues.length === 0) tokenCss[page] = compiled.css;
   }
@@ -246,22 +295,27 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
   const labels = Object.fromEntries(Object.entries(value.labels).flatMap(([key, words]) => words ? [[key, typeof words === "string" ? words : plainPrivateWords(words)]] : []));
   for (const [key, label] of Object.entries(labels)) {
     const spec = specs.get(key)!;
+    const page = KEY_PAGES.get(key)!;
     const path = ["privatePages", "labels", key];
     if (spec.variants) {
-      if (typeof label !== "string" || !spec.variants.includes(label)) issues.push({ path, reason: "label_variant", message: `${key} names an action or an amount: choose one of ${spec.variants.join(", ")}; the store words it in every language.` });
+      if (typeof label !== "string" || !spec.variants.includes(label)) report(page, [{ path, reason: "label_variant", message: `${key} names an action or an amount: choose one of ${spec.variants.join(", ")}; the store words it in every language.` }]);
     } else if (typeof label === "string") {
-      issues.push({ path, reason: "label_variant", message: `${key} is the theme's own words, per language: { "en": "…", "bn": "…" }.` });
+      report(page, [{ path, reason: "label_variant", message: `${key} is the theme's own words, per language: { "en": "…", "bn": "…" }.` }]);
     } else {
-      issues.push(...wordsIssues(label, path, spec.max, spec.figures === true));
+      report(page, wordsIssues(label, path, spec.max, spec.figures === true));
     }
   }
-  if (issues.length > 0) return { ok: false, issues };
   // Each page serves only its own look, so each has its own bound: a large cart never costs the payment step its look.
-  const large = (Object.entries(tokenCss) as Array<[PrivatePageKey, string]>).filter(([, css]) => new TextEncoder().encode(css).byteLength > PRIVATE_COMPILED_CSS_MAX_BYTES);
-  if (large.length > 0) {
-    return { ok: false, issues: large.map(([page]) => ({ path: ["privatePages", "tokens", page], reason: "too_large" as const, message: `The ${page} page's compiled look is over ${PRIVATE_COMPILED_CSS_MAX_BYTES / 1024} KiB; set fewer tokens there.` })) };
+  for (const [page, css] of Object.entries(tokenCss) as Array<[PrivatePageKey, string]>) {
+    if (new TextEncoder().encode(css).byteLength > PRIVATE_COMPILED_CSS_MAX_BYTES) {
+      report(page, [{ path: ["privatePages", "tokens", page], reason: "too_large", message: `The ${page} page's compiled look is over ${PRIVATE_COMPILED_CSS_MAX_BYTES / 1024} KiB; set fewer tokens there.` }]);
+    }
   }
-  return { ok: true, value: { ...value, pages, labels, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: tokenCss } } };
+  const refused = Object.fromEntries([...byPage].map(([page, found]) => [page, pageRefusals(found)])) as NonNullable<StorefrontPrivatePages["compiled"]["refused"]>;
+  const css = Object.fromEntries(Object.entries(tokenCss).filter(([page]) => !byPage.has(page as PrivatePageKey)));
+  const compiled = { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css, ...(byPage.size > 0 ? { refused } : {}) };
+  const out: StorefrontPrivatePages = { ...value, pages, labels, compiled };
+  return issues.length > 0 ? { ok: false, issues, value: out } : { ok: true, value: out };
 }
 
 /** Each page's arrangement as this build draws it (`privatePageArrangement`): what every write stores, so a newly mandatory part is never missing. */
@@ -276,14 +330,26 @@ export function filledPrivatePages(privatePages: StorefrontPrivatePages): Storef
 }
 
 /**
- * The private pages with their compile refused at this build's versions:
- * their source kept (filled for this anatomy), no look served, the store's
- * default look drawn until the next save compiles them. What the maintenance
- * compile writes for a theme this checker refuses, and what a read gives a
- * stored document that held what a theme cannot set.
+ * The private pages of a stored document that held what a theme cannot set
+ * (`readStoredPrivatePages`), refused at this build's versions: their source
+ * kept (filled for this anatomy), no look served on a page it reached, each
+ * such page drawing the store's default look until the next save compiles
+ * them. A content block reaches its own page; a theme-wide field (a
+ * stylesheet, the theme's chrome) every page the theme names, and the cart,
+ * the page those fields were written for.
  */
-export function refusedPrivatePages(privatePages: StorefrontPrivatePages): StorefrontPrivatePages {
-  return { ...filledPrivatePages(privatePages), compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: {}, refused: true } };
+export function refusedPrivatePages(privatePages: StorefrontPrivatePages, held: readonly PrivatePagesHeld[]): StorefrontPrivatePages {
+  const filled = filledPrivatePages(privatePages);
+  const named = PRIVATE_PAGE_KEYS.filter((page) => page === "cart" || privatePageNamed(filled, page));
+  const refused: Partial<Record<PrivatePageKey, PrivatePageRefusal[]>> = {};
+  for (const { page, label } of held) {
+    for (const each of page ? [page] : named) {
+      const path = page ? `privatePages.pages.${page}` : "privatePages";
+      refused[each] = [...refused[each] ?? [], { path, reason: PRIVATE_NOT_AVAILABLE, message: privateNotAvailable(label) }].slice(0, PRIVATE_PAGE_REFUSALS_MAX);
+    }
+  }
+  const css = Object.fromEntries(Object.entries(privatePagesCompiledCurrent(filled) ? filled.compiled.css : {}).filter(([page]) => !refused[page as PrivatePageKey]));
+  return { ...filled, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css, refused: { ...filled.compiled.refused, ...refused } } };
 }
 
 /** Whether `compiled` was written by this build's checker and anatomy (else maintenance compiles it again). */
@@ -291,13 +357,33 @@ export function privatePagesCompiledCurrent(privatePages: Pick<StorefrontPrivate
   return privatePages.compiled.sanitizer === PRIVATE_CHECKER_VERSION && privatePages.compiled.anatomy === PRIVATE_ANATOMY_VERSION;
 }
 
+/** The pages this build's compile refused, each with why (none while the compile is not this build's). */
+export function privatePagesRefused(privatePages: Pick<StorefrontPrivatePages, "compiled">): Partial<Record<PrivatePageKey, PrivatePageRefusal[]>> {
+  return privatePagesCompiledCurrent(privatePages) ? privatePages.compiled.refused ?? {} : {};
+}
+
 /**
  * The private pages a buyer's page draws: the theme's when this build
- * compiled them and they passed, else the store's default look entirely
- * (arrangement, controls, words, icons and look), never a half of the theme.
+ * compiled them, page by page: a refused page draws the store's default look
+ * (its arrangement, words, icons and look), never a half of the theme's
+ * design, and every other page keeps the theme's. A compile that is not this
+ * build's serves the default look everywhere until maintenance compiles it.
  */
 export function servedPrivatePages(privatePages: StorefrontPrivatePages): StorefrontPrivatePages {
-  return privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused ? privatePages : storefrontPrivatePagesDefault();
+  if (!privatePagesCompiledCurrent(privatePages)) return storefrontPrivatePagesDefault();
+  const refused = privatePages.compiled.refused;
+  if (!refused) return privatePages;
+  const kept = (page: string) => !refused[page as PrivatePageKey];
+  const keptKey = (key: string) => kept(KEY_PAGES.get(key) ?? "");
+  const only = <Entry>(record: Partial<Record<string, Entry>>, keep: (key: string) => boolean) => Object.fromEntries(Object.entries(record).filter(([key]) => keep(key)));
+  return {
+    ...privatePages,
+    pages: only(privatePages.pages, kept),
+    tokens: only(privatePages.tokens, kept),
+    labels: only(privatePages.labels, keptKey),
+    icons: only(privatePages.icons, keptKey),
+    compiled: { ...privatePages.compiled, css: only(privatePages.compiled.css, kept) },
+  };
 }
 
 // ─── Reading on the page ──────────────────────────────────────────────────
@@ -318,17 +404,18 @@ export function privatePagesCss(privatePages: Pick<StorefrontPrivatePages, "comp
   // The page writes it into a <style>: the compiler never emits `<`, so a stored look holding one (a row edited by
   // hand, `</style>`) serves nothing, whatever its version says.
   const css = privatePages.compiled.css[page] ?? "";
-  return privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused && !css.includes("<") ? css : "";
+  return privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused?.[page] && !css.includes("<") ? css : "";
 }
 
 /**
  * The page is in token mode (the compile wrote its table: the theme set its
- * tokens, or has a page paint): its colours come from its compiled table, the
- * host's palette classes read it. Another page's tokens never put it there.
+ * tokens, or names it and has a page paint): its colours come from its
+ * compiled table, the host's palette classes read it. Another page's tokens
+ * never put it there, and a page refused on its own is never in it.
  */
 export function privatePageTokenMode(privatePages: Pick<StorefrontPrivatePages, "compiled">, page: PrivatePageKey): boolean {
   // A look that serves nothing (a `<` in it) puts no page in token mode: its palette classes would read no rows.
-  return privatePageHasOwnPage(page) && privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused && privatePages.compiled.css[page] !== undefined && !privatePages.compiled.css[page]!.includes("<");
+  return privatePageHasOwnPage(page) && privatePagesCompiledCurrent(privatePages) && !privatePages.compiled.refused?.[page] && privatePages.compiled.css[page] !== undefined && !privatePages.compiled.css[page]!.includes("<");
 }
 
 /** A page of its own (a `page` style target: the cart), not one drawn over public pages (the drawer, which takes their look). */

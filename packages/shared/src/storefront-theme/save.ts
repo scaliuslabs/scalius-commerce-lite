@@ -4,7 +4,7 @@
 // calls it (app-templates.ts), and so `scalius-plugin validate` refuses
 // exactly what the store would.
 
-import { storefrontThemeDocumentSchema, type StorefrontThemeDocument } from "./document";
+import { storefrontThemeDocumentPolicyIssues, storefrontThemeDocumentSchema, type StorefrontThemeDocument } from "./document";
 import { compileStorefrontPrivatePages, privatePagesContextOf } from "./private-layout";
 import { storefrontThemeAssetIssues } from "./theme-assets";
 import { storefrontThemeTranslationProblems } from "./translate";
@@ -38,7 +38,8 @@ function refused(issues: StorefrontThemeSaveIssue[], fallback: string): Storefro
 
 /**
  * Every check a save runs on a theme document, in order: the strict schema
- * (palette contrast for each colour set buyers can see, the muted and error
+ * (structure), the write policy (`storefrontThemeDocumentPolicyIssues`:
+ * palette contrast for each colour set buyers can see, the muted and error
  * colours, the page paint, dark colours where a scheme shows them), the
  * translations against their places' limits, the app files it names (its own
  * app's only), the private pages compiled
@@ -55,6 +56,9 @@ export function checkStorefrontThemeSave(theme: unknown): StorefrontThemeSaveChe
       reason: issue.code === "custom" && typeof issue.params?.reason === "string" ? issue.params.reason : null,
     })), "The storefront style is not a valid theme document.");
   }
+  // The write policy: checked here, where a document is written, never where one is read.
+  const policy = storefrontThemeDocumentPolicyIssues(result.data);
+  if (policy.length > 0) return refused(policy.map((issue) => ({ path: issue.path.map(String).join("."), message: issue.message, reason: issue.reason })), "The storefront style's colours do not read.");
   const translations = storefrontThemeTranslationProblems(result.data);
   if (translations.length > 0) return refused(translations.map((problem) => ({ ...problem, reason: null })), "A translation does not fit.");
   // Every app file the theme names (private page icons, tab icons) is its own app's.

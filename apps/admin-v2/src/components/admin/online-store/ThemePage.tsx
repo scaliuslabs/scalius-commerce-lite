@@ -52,6 +52,7 @@ import { appSectionsByKey } from "./theme-editor/editor-state";
 import { useSectionName } from "./theme-editor/use-editor-tree";
 import { useTemplateName } from "./use-template-name";
 import { ThemeAppsUnavailableAlert } from "~/components/admin/apps/ThemeAppParts";
+import { PrivatePagesFallbackAlert } from "./PrivatePagesFallbackAlert";
 import { themeAppsUnavailable, type ThemeAppsProblem } from "~/components/admin/apps/theme-app-parts";
 
 type Theme = StorefrontThemeDocument;
@@ -257,6 +258,8 @@ function ThemeOverview({ workspace, refetch }: {
               <p className="text-body text-muted-foreground">{editor("customizeHelp")}</p>
             </div>
             {appsProblem ? <ThemeAppsUnavailableAlert apps={appsProblem.apps} moreParts={appsProblem.moreParts} /> : null}
+            {/* What shoppers see now: a page of the live theme a store update refused shows the store's own design. */}
+            <PrivatePagesFallbackAlert theme={workspace.published.theme as Theme} />
             <div className="flex flex-wrap gap-2">
               <Button asChild>
                 <Link to="/admin/online-store/theme/editor">{editor("customize")}</Link>

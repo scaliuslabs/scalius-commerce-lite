@@ -392,11 +392,14 @@ export type StoredStorefrontThemeRead =
 
 /**
  * Reads a stored document (JSON text or a parsed value): upgraded, then
- * strictly parsed. What a theme cannot set on a private page (a stylesheet,
+ * parsed strictly for its structure. A read never runs the write policy
+ * (`storefrontThemeDocumentPolicyIssues`): a document a later build's policy
+ * refuses still reads and draws as it was saved, and is refused only when it
+ * is saved again. What a theme cannot set on a private page (a stylesheet,
  * its chrome, its search, files, a content block) is dropped first, as the
- * stored path alone does, and the private pages' compile is then refused: the
- * theme reads, its private pages draw the store's default look until the
- * next save (which refuses those fields with `not_available`).
+ * stored path alone does, and the pages it reached are then refused: the
+ * theme reads, those pages draw the store's default look until the next
+ * save (which refuses those fields with `not_available`).
  */
 export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefrontThemeRead {
   let parsed: unknown = value;
@@ -420,7 +423,7 @@ export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefr
     const issue = result.error.issues[0];
     return { ok: false, reason: `${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}` };
   }
-  const document = released.held ? { ...result.data, privatePages: refusedPrivatePages(result.data.privatePages) } : result.data;
+  const document = released.held.length > 0 ? { ...result.data, privatePages: refusedPrivatePages(result.data.privatePages, released.held) } : result.data;
   return { ok: true, document, storedVersion: (parsed as Json).version as number };
 }
 
