@@ -7,7 +7,7 @@ import {
   getLayoutData,
   checkoutTakesOrders,
   paidOnlineOnlyHere,
-  takesOnlinePayment,
+  sellsPaidOnlineOnly,
   getProductBySlugResult,
   getShippingMethods,
 } from "@/lib/api";
@@ -470,11 +470,13 @@ const deliveryFacts = buildDeliveryFacts({
 });
 const fulfilmentBadge =
   pageFulfilment === "service" ? productPageCopy.noDeliveryNeededBadgeText : null;
-// Digital items, gift cards and kits holding one are paid online, never in
-// cash (core's `paidOnlineOnly`): on a store whose checkout takes no online
-// payment the page says so instead of starting a purchase checkout must
-// refuse. A product with a SKU cash can pay stays buyable; a cart that also
-// holds a paid-online item is refused cash at checkout.
+// Digital items, gift cards and kits holding one are never paid in cash
+// (core's `paidOnlineOnly`): on a store that lists no other way to pay (no
+// gateway and no invoice) the page says so instead of starting a purchase
+// checkout must refuse. A store with the invoice keeps the buttons: this page
+// is shared by every buyer, and the cart refuses the buyer it doesn't reach.
+// A product with a SKU cash can pay stays buyable; a cart that also holds a
+// paid-online item is refused cash at checkout.
 const onlinePaymentUnavailable = paidOnlineOnlyHere(buyerVariants, checkoutConfig);
 // A physical product no delivery or pickup option can bring to this page's
 // buyers can't be ordered: the facts above claim neither delivery nor cash on
@@ -535,8 +537,8 @@ const productPageProjection = (): StorefrontProductPage => pageProjection ??= pr
   price: { current: buyerDisplayedPrice, regular: buyerPricePresentation.pricing.originalPrice, from: buyerPricePresentation.isStartingAt },
   variantPrice: getVariantSchemaPrice,
   page: { currencyCode, currencySymbol },
-  // A placed offer paid only online is off where checkout takes no online payment, as on its own page.
-  takesOnlinePayment: takesOnlinePayment(checkoutConfig),
+  // A placed offer paid only online is off where nothing but cash pays, as on its own page.
+  sellsPaidOnlineOnly: sellsPaidOnlineOnly(checkoutConfig),
   warrantyCopy: productPageCopy,
   // The form's inputs: the product's, then the apps' line inputs shown on it.
   buyerInputs: productBuyerInputFields(product, layoutData.lineInputs, productPageCopy),

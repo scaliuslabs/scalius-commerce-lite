@@ -8,6 +8,7 @@ import { and, sql, eq, inArray, isNull } from "drizzle-orm";
 import {
     isAutoFulfillmentType,
     isFulfillmentKind,
+    paymentMethodFits,
     resolveCheckoutFulfilment,
     type DeliveryMethodKind,
     type FulfillmentKind,
@@ -539,7 +540,7 @@ export async function prepareManualOrderQuote(
     // as it is placed, gets paid before that; cash on delivery is
     // collected at a door they never reach: the one line rule
     // (`allowsCashOnDelivery`) refuses cash, and names each such line.
-    const cashRefused = (data.paymentMethod ?? "cod") === COD_PAYMENT_METHOD && !plan.allowsCashOnDelivery;
+    const cashRefused = !paymentMethodFits(data.paymentMethod ?? COD_PAYMENT_METHOD, plan.allowsCashOnDelivery);
     const unavailable: AdminOrderSkuIssue[] = [];
     plan.lineTypes.forEach((type, index) => {
         if (cashRefused && isAutoFulfillmentType(type)) {

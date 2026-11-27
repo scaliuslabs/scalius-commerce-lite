@@ -135,6 +135,7 @@ export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS =/* @__PURE__ */ new Set<CheckoutL
   "checkoutDetailsUnreadableText",
   "noPaymentMethodsText",
   "cartOnlinePaymentRequiredText",
+  "cartPayLaterOnlyText",
   "cartDeliveryUnavailableText",
   "totalUpdatedForChoiceText",
   "onlinePaymentRequiredText",

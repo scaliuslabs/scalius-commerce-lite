@@ -16,6 +16,7 @@ import { ONLINE_STORE_CHANNEL_ID } from "@scalius/shared/sales-channels";
 import {
     isFulfillmentKind,
     allowsCashOnDelivery,
+    paymentMethodFits,
     resolveLineFulfillmentType,
     type FulfillmentKind,
     type FulfillmentType,
@@ -1826,7 +1827,7 @@ export function resolveCartPaymentMethods(
 ): string[] {
     return enabledMethods.filter((method) =>
         (!providers.isDeferred(method) || deferredOffered.has(method))
-        && (method !== "cod" || summary.allowsCashOnDelivery)
+        && paymentMethodFits(method, summary.allowsCashOnDelivery)
         && providers.countryIssue(method, paymentCountryCode) === null
         && (currencyCode === null || providers.currencyIssue(method, currencyCode) === null));
 }

@@ -61,6 +61,8 @@ import { cartLineCopy } from "@/lib/cart-line-copy";
 import { cartLineStockText } from "@/lib/cart-line-stock-copy";
 import { longAnswerWords } from "@/lib/long-answer";
 import { shippingCountryName } from "@/lib/checkout/shipping-country";
+import { offersDeferredPayment } from "@/lib/checkout/contact-need";
+import { readStoredGiftCards } from "@/lib/checkout/gift-card-storage";
 import { pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
 import { applyCheckoutButtonState, storeNotDeliveringMessage } from "./checkout-button-state";
@@ -1085,7 +1087,35 @@ function codRefusedForCart(): boolean {
   return codOnly && latestAllowedPaymentMethods !== null && !latestAllowedPaymentMethods.includes("cod");
 }
 
-/** The lines nothing but an online payment can pay for (digital items and gift cards). */
+/** Whether the store lists a way to pay later (the invoice, an app's pay-later method), from the page's gateways. */
+function storeOffersPayLater(): boolean {
+  try {
+    const gateways = JSON.parse(document.getElementById("checkout-meta")?.dataset.gateways ?? "[]") as unknown;
+    return Array.isArray(gateways) && offersDeferredPayment(gateways as Array<{ id?: string; flow?: string }>);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A store whose ways to pay are cash and paying later (no gateway) sells a
+ * key only to a buyer the invoice reaches. The product page, shared by every
+ * buyer, keeps its buttons; here the cart check knows the buyer and names no
+ * method this cart can use, so the cart stops and says what to do. A gift
+ * card already applied may pay it: the payment step prices that.
+ */
+function payLaterRefusedForCart(): boolean {
+  if (typeof document === "undefined") return false;
+  return latestAllowedPaymentMethods !== null && latestAllowedPaymentMethods.length === 0
+    && latestOnlineOnlyLines.names.length > 0 && storeOffersPayLater() && readStoredGiftCards().length === 0;
+}
+
+/** Whether no way to pay this store offers can take this cart for this buyer. */
+function paymentRefusedForCart(): boolean {
+  return codRefusedForCart() || payLaterRefusedForCart();
+}
+
+/** The lines cash can't pay for (digital items and gift cards: `paidOnlineOnly`). */
 function onlineOnlyLines(items: readonly CartValidationItem[]): { names: string[] } {
   const online = items.filter((item) => item.fulfillmentType === "digital" || item.fulfillmentType === "gift_card");
   return {
@@ -1094,12 +1124,13 @@ function onlineOnlyLines(items: readonly CartValidationItem[]): { names: string[
 }
 
 /**
- * Why a cash-on-delivery-only store refuses this cart, in words that name the
- * reason: its digital items and gift cards are paid only online. Any other
- * refusal (a delivery country cash on delivery doesn't serve) keeps the
- * general wording.
+ * Why the store refuses this cart, in words that name the reason and what to
+ * do: its digital items and gift cards are never paid in cash, and the store
+ * takes nothing else (or only the invoice, which doesn't reach this buyer).
+ * Any other refusal (a delivery country cash on delivery doesn't serve) keeps
+ * the general wording.
  */
-function codRefusedMessage(): string {
+function paymentRefusedMessage(): string {
   const copy = activeCheckoutCopy();
   // One online-only line refuses cash for the whole order: name those lines.
   const { names } = latestOnlineOnlyLines;
@@ -1110,7 +1141,8 @@ function codRefusedMessage(): string {
     const country = formStringValue("shippingCountryCode")?.toUpperCase() ?? "";
     return country && country !== "BD" ? words.codCountry(shippingCountryName(country, language)) : words.noPaymentMethods;
   }
-  return checkoutText(copy.cartOnlinePaymentRequiredText, {
+  // A store with the invoice: it reaches signed-in buyers the store approves.
+  return checkoutText(payLaterRefusedForCart() ? copy.cartPayLaterOnlyText : copy.cartOnlinePaymentRequiredText, {
     items: formatList(names, numberLocale(language || "en", storeRegion())),
   });
 }
@@ -1124,7 +1156,7 @@ function hasCartRuleErrors(): boolean {
 }
 
 function hasBlockingCartIssues(): boolean {
-  return Boolean(cartValidationGlobalError) || cartIssueCount() > 0 || hasCartRuleErrors() || codRefusedForCart();
+  return Boolean(cartValidationGlobalError) || cartIssueCount() > 0 || hasCartRuleErrors() || paymentRefusedForCart();
 }
 
 /** The banner above the checkout action, repainted only when what it says changes. */
@@ -1143,7 +1175,7 @@ function renderCartRuleBanner(): boolean {
 function cartBlockedMessage(): string {
   if (cartValidationGlobalError) return cartValidationGlobalError;
   if (cartIssueCount() === 0 && hasCartRuleErrors()) return activeCheckoutCopy().cartRulesBlockedText;
-  if (cartIssueCount() === 0 && codRefusedForCart()) return codRefusedMessage();
+  if (cartIssueCount() === 0 && paymentRefusedForCart()) return paymentRefusedMessage();
   const count = Object.keys(cartValidationIssues).length;
   if (count <= 0) return "";
   if (cartValidationSummaryMessage) return cartValidationSummaryMessage;
@@ -1166,7 +1198,7 @@ let revealedRepairs = "";
  */
 function revealCartRepairs(): void {
   if (Object.keys(cartStore.get().items).length === 0 || !hasBlockingCartIssues()) return;
-  const needs = JSON.stringify([Object.keys(cartValidationIssues).sort(), cartValidationGlobalError, cartRuleErrors().length, codRefusedForCart()]);
+  const needs = JSON.stringify([Object.keys(cartValidationIssues).sort(), cartValidationGlobalError, cartRuleErrors().length, paymentRefusedForCart()]);
   const root = document.getElementById("cartPageRoot");
   if (!root || needs === revealedRepairs) return;
   revealedRepairs = needs;
@@ -1194,7 +1226,7 @@ function paintCartValidationMessage() {
   if (!message) return;
 
   // Rules alone are said once, by the banner above the checkout action.
-  const rulesOnly = ruleBannerShown && !cartValidationGlobalError && cartIssueCount() === 0 && !codRefusedForCart();
+  const rulesOnly = ruleBannerShown && !cartValidationGlobalError && cartIssueCount() === 0 && !paymentRefusedForCart();
   if (hasBlockingCartIssues() && !rulesOnly) {
     message.textContent = cartBlockedMessage();
     if (cartValidationGlobalError && cartValidationRetryable) {

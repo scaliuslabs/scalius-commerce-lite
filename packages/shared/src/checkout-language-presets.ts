@@ -418,6 +418,8 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   cartRulesBlockedText: "This order can't be placed yet.",
   // A cart of digital items or gift cards on a store that takes only cash on delivery.
   cartOnlinePaymentRequiredText: "{items} can only be paid for online, and this store doesn't take online payments yet. This order can't be placed.",
+  // The same cart on a store that takes cash and the invoice, for a buyer the invoice doesn't reach.
+  cartPayLaterOnlyText: "{items} can't be paid for in cash. This store takes them by invoice, for customers it approves: sign in with an approved account, or remove them to order the rest.",
   cartDeliveryUnavailableText: "This store isn't delivering yet, so items that need delivery can't be ordered right now. Remove them to order the rest.",
   orderPlacedSuccessText: "Your order was placed successfully. Order ID: {orderId}",
   checkingAccountText: "Checking account…",
@@ -1209,6 +1211,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   cartItemsNeedAttentionText: "চেকআউটের আগে কার্টের {count}টি পণ্য যাচাই করা দরকার।",
   cartRulesBlockedText: "এই অর্ডারটি এখনো দেওয়া যাচ্ছে না।",
   cartOnlinePaymentRequiredText: "{items}-এর দাম শুধু অনলাইনে দেওয়া যায়, কিন্তু এই স্টোর এখনো অনলাইন পেমেন্ট নেয় না। তাই এই অর্ডারটি দেওয়া যাচ্ছে না।",
+  cartPayLaterOnlyText: "{items}-এর দাম ক্যাশে দেওয়া যায় না। এই স্টোর এগুলোর দাম ইনভয়েসে নেয়, শুধু অনুমোদিত গ্রাহকদের কাছ থেকে: অনুমোদিত অ্যাকাউন্টে সাইন ইন করুন, অথবা বাকিগুলো অর্ডার করতে এগুলো সরিয়ে দিন।",
   cartDeliveryUnavailableText: "এই স্টোর এখনো ডেলিভারি দিচ্ছে না, তাই ডেলিভারি লাগে এমন পণ্য এখন অর্ডার করা যাবে না। বাকিগুলো অর্ডার করতে সেগুলো সরিয়ে দিন।",
   orderPlacedSuccessText: "আপনার অর্ডারটি সফলভাবে দেওয়া হয়েছে। অর্ডার আইডি: {orderId}",
   checkingAccountText: "অ্যাকাউন্ট যাচাই করা হচ্ছে…",

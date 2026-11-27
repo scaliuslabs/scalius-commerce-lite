@@ -7,6 +7,7 @@ import { unwrapData } from "./unwrap";
 import { getApiV1CheckoutConfig } from "@scalius/api-client/sdk";
 import type { CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
 import type { Readiness } from "@scalius/shared/readiness";
+import { paymentMethodFits } from "@scalius/shared/fulfilment";
 
 export interface GatewayConfig {
   /** A registered gateway id or "cod". */
@@ -123,28 +124,30 @@ export function checkoutTakesOrders(config: CheckoutConfig | null | undefined): 
 }
 
 /**
- * Whether checkout takes some online payment (card or hosted gateway). A
- * digital item or gift card is never paid in cash, so a store whose checkout
- * offers only cash on delivery can't sell one on its own. An unavailable
+ * Whether a SKU paid only online (core's `paidOnlineOnly`: a key, a download,
+ * a gift card, a kit holding one) can be bought here by someone: the store
+ * lists a way to pay that is not cash (`paymentMethodFits`, the server's one
+ * rule), a card, a hosted gateway or the invoice. The invoice reaches only
+ * the signed-in buyers it names, and this answer is for a cached page every
+ * buyer shares, so it counts: the cart and checkout, where the buyer is
+ * known, refuse the buyer it does not reach. An unavailable or unread
  * checkout answers true: it refuses every order and says so itself.
  */
-export function takesOnlinePayment(config: CheckoutConfig | null | undefined): boolean {
+export function sellsPaidOnlineOnly(config: CheckoutConfig | null | undefined): boolean {
   if (!config || config.unavailable) return true;
-  // Paying later by invoice is not paying online: it reaches only some signed-in buyers.
-  return config.gateways.some((gateway) => gateway.id !== "cod" && gateway.flow !== "cod" && gateway.flow !== "deferred");
+  return config.gateways.some((gateway) => paymentMethodFits(gateway.id, false));
 }
 
 /**
- * Whether nothing these SKUs sell can be bought here: every one is paid only
- * online (core's `paidOnlineOnly`: a key, a download, a gift card, a kit
- * holding one) and checkout takes no online payment. The server decides the
- * same at checkout; the page only says so first.
+ * Whether nobody can buy what these SKUs sell: every one is paid only online
+ * and the store lists no way to pay but cash (`sellsPaidOnlineOnly`). The
+ * server refuses the same at checkout; the page only says so first.
  */
 export function paidOnlineOnlyHere(
   variants: ReadonlyArray<{ paidOnlineOnly?: boolean | null }>,
   config: CheckoutConfig | null | undefined,
 ): boolean {
-  return variants.length > 0 && variants.every((variant) => variant.paidOnlineOnly === true) && !takesOnlinePayment(config);
+  return variants.length > 0 && variants.every((variant) => variant.paidOnlineOnly === true) && !sellsPaidOnlineOnly(config);
 }
 
 /**

@@ -71,8 +71,23 @@ export function allowsCashOnDelivery(lineTypes: readonly (FulfillmentType | null
 }
 
 /**
+ * Whether a payment method may pay for an order: cash (`cod`: on delivery, at
+ * the pickup counter, at the service) only where cash fits every line
+ * (`allowsCashOnDelivery`); any other way to pay (a card, a hosted gateway,
+ * the invoice or an app's pay-later method) pays for anything. What is sent
+ * once paid (a key, a download, a gift card) waits for that payment: automatic
+ * fulfilment hands it over only on a settled payment, an invoice's included.
+ * The one answer for checkout, the cart check, the staff quote and the
+ * product page (`paidOnlineOnly` means exactly "not cash").
+ */
+export function paymentMethodFits(methodId: string, cashFits: boolean): boolean {
+  return methodId !== "cod" || cashFits;
+}
+
+/**
  * Whether a SKU is paid only online: a download, a key or a gift card is sent
- * once the order is paid, so no cash promise buys it (`allowsCashOnDelivery`).
+ * once the order is paid, so no cash promise buys it (`allowsCashOnDelivery`);
+ * every other way to pay does (`paymentMethodFits`), the invoice included.
  * A kit is paid only online when any of its items is.
  */
 export function paidOnlineOnly(source: { fulfillmentKind: string | null | undefined; isGiftCard?: boolean | null }): boolean {
