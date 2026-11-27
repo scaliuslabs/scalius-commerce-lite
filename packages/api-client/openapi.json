@@ -6607,6 +6607,9 @@
               },
               "account": {
                 "$ref": "#/components/schemas/StorefrontPrivateArrangement"
+              },
+              "tabBar": {
+                "$ref": "#/components/schemas/StorefrontPrivateArrangement"
               }
             },
             "additionalProperties": false
@@ -6769,6 +6772,10 @@
                   "account": {
                     "type": "string",
                     "maxLength": 65536
+                  },
+                  "tabBar": {
+                    "type": "string",
+                    "maxLength": 65536
                   }
                 }
               },
@@ -6808,6 +6815,14 @@
                     "maxItems": 8
                   },
                   "account": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/StorefrontPrivatePageRefusal"
+                    },
+                    "minItems": 1,
+                    "maxItems": 8
+                  },
+                  "tabBar": {
                     "type": "array",
                     "items": {
                       "$ref": "#/components/schemas/StorefrontPrivatePageRefusal"
