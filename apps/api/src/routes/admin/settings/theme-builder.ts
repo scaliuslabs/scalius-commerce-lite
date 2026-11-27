@@ -199,7 +199,7 @@ app.openapi(createRoute({
   operationId: "dashboard.theme.template_update_get",
   request: { query: templateUpdateQuerySchema },
   responses: {
-    200: { description: "The update, or null", content: { "application/json": { schema: successEnvelope(z.object({ update: templateUpdateSchema.nullable() })) } } },
+    200: { description: "The update, or null", content: { "application/json": { schema: successEnvelope(z.object({ update: z.union([templateUpdateSchema, z.null()]) })) } } },
     ...errorResponses,
   },
 }), async (c) => {

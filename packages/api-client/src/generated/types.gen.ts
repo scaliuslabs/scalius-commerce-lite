@@ -6483,7 +6483,7 @@ export type ThemeTemplateUpdate = {
         revision: number;
         basePublishedRevision: number;
     };
-} | null;
+};
 
 export type ThemeTemplateUpdateItem = {
     id: string;
@@ -61424,7 +61424,7 @@ export type GetApiV1AdminSettingsThemeTemplateUpdateResponses = {
     200: {
         success: true;
         data: {
-            update: ThemeTemplateUpdate;
+            update: ThemeTemplateUpdate | null;
         };
     };
 };

@@ -237,7 +237,7 @@ export const APPROVAL_PART_IDS: ReadonlySet<string> = new Set([
  */
 export const APPROVAL_VALUE_IDS: ReadonlySet<string> = new Set([
   "tracking.trackingId", "ga4.measurementId", "pixelId", "whatsappPhoneNumberId", "registryId", "path.section",
-  "path.kind", "path.type", "path.locale", "path.commandId", "path.contextId", "providerId", "apps.registry_install:id",
+  "path.kind", "path.type", "path.locale", "path.point", "path.commandId", "path.contextId", "providerId", "apps.registry_install:id",
 ]);
 
 /** What an id-like input is to the approval page: a record of a kind, a part of one, a typed value, or unknown. */

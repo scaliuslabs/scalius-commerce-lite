@@ -29483,7 +29483,6 @@
       },
       "ThemeTemplateUpdate": {
         "type": "object",
-        "nullable": true,
         "properties": {
           "template": {
             "type": "string",
@@ -215520,7 +215519,12 @@
                       "type": "object",
                       "properties": {
                         "update": {
-                          "$ref": "#/components/schemas/ThemeTemplateUpdate"
+                          "nullable": true,
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ThemeTemplateUpdate"
+                            }
+                          ]
                         }
                       },
                       "required": [
