@@ -20,10 +20,24 @@ export function canonicalStorefrontLink(value: unknown): string | null {
  */
 export const STOREFRONT_INVALID_LINK = "invalid_link";
 
-/** A navigation-safe href, already canonical (`canonicalStorefrontLink(value) === value`). */
+/**
+ * A link a theme draws (an announcement, a hero slide, a section's banner):
+ * navigation-safe and canonical, and when it is a path, a page of this store
+ * (`isStorefrontStorePath`: never the store's API, app routes or files). It
+ * may leave for another site over https: these are the merchant's own links.
+ * The bottom bar's tabs are stricter: the store's own navigation opens only
+ * the store's pages (`storefrontStorePathSchema`).
+ */
+export function isStorefrontThemeLink(value: string): boolean {
+  if (canonicalStorefrontLink(value) !== value) return false;
+  const path = value.split(/[?#]/)[0]!;
+  return !value.startsWith("/") || isStorefrontStorePath(path);
+}
+
+/** A theme link (`isStorefrontThemeLink`), already canonical. */
 export const storefrontLinkSchema = z.string().max(STOREFRONT_LINK_MAX_LENGTH).refine(
-  (value) => canonicalStorefrontLink(value) === value,
-  { message: "Use a store path such as /collections/new or an https:// link.", params: { reason: STOREFRONT_INVALID_LINK } },
+  isStorefrontThemeLink,
+  { message: "Use a page of this store such as /collections/new, or an https:// link.", params: { reason: STOREFRONT_INVALID_LINK } },
 );
 
 /**

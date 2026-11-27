@@ -36,6 +36,7 @@
 import { STORE_ACTION_AND_AMOUNT_WORDS, foldStoreWords } from "../store-words";
 import { parsePluginSurfaceKey } from "../plugins/storefront";
 import { storefrontDarkPalette, type StorefrontThemeTokens } from "./tokens";
+import { storefrontCanonicalJson, storefrontFingerprint } from "./fingerprint";
 import {
   PRIVATE_ANATOMY_VERSION,
   PRIVATE_PAGE_KEYS,
@@ -305,7 +306,7 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
   const refused = Object.fromEntries([...byPage].map(([page, found]) => [page, pageRefusals(found)])) as NonNullable<StorefrontPrivatePages["compiled"]["refused"]>;
   const css = Object.fromEntries(Object.entries(tokenCss).filter(([page]) => !byPage.has(page as PrivatePageKey)));
   const compiled = { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css, ...(byPage.size > 0 ? { refused } : {}) };
-  const out: StorefrontPrivatePages = { ...value, pages, labels, compiled };
+  const out = withPrivatePagesDigest({ ...value, pages, labels, compiled });
   return issues.length > 0 ? { ok: false, issues, value: out } : { ok: true, value: out };
 }
 
@@ -320,27 +321,88 @@ export function filledPrivatePages(privatePages: StorefrontPrivatePages): Storef
   };
 }
 
+/** The fingerprint of the private pages' source and compile (everything but the fingerprint itself). */
+export function privatePagesDigest(privatePages: StorefrontPrivatePages): string {
+  const { digest: _digest, ...compiled } = privatePages.compiled;
+  return storefrontFingerprint(storefrontCanonicalJson({
+    controls: privatePages.controls, pages: privatePages.pages, tokens: privatePages.tokens,
+    labels: privatePages.labels, icons: privatePages.icons, compiled,
+  }));
+}
+
+/** The source says nothing and the compile serves nothing: the store's own pages, with nothing to protect. */
+function privatePagesEmpty(privatePages: StorefrontPrivatePages): boolean {
+  const { pages, tokens, labels, icons, controls, compiled } = privatePages;
+  return controls === undefined && [pages, tokens, labels, icons, compiled.css].every((record) => Object.keys(record).length === 0) && compiled.refused === undefined;
+}
+
+function withPrivatePagesDigest(privatePages: StorefrontPrivatePages): StorefrontPrivatePages {
+  const { digest: _digest, ...compiled } = privatePages.compiled;
+  if (privatePagesEmpty(privatePages)) return { ...privatePages, compiled };
+  return { ...privatePages, compiled: { ...compiled, digest: privatePagesDigest(privatePages) } };
+}
+
 /**
- * The private pages of a stored document that held what a theme cannot set
- * (`readStoredPrivatePages`), refused at this build's versions: their source
- * kept (filled for this anatomy), no look served on a page it reached, each
- * such page drawing the store's default look until the next save compiles
- * them. A content block reaches its own page; a theme-wide field (a
- * stylesheet, the theme's chrome) every page the theme names, and the cart,
- * the page those fields were written for.
+ * Whether the stored compile still belongs to the stored source (its
+ * fingerprint matches): a read treats any other as never compiled, so a look
+ * edited apart from its source is never served.
  */
-export function refusedPrivatePages(privatePages: StorefrontPrivatePages, held: readonly PrivatePagesHeld[]): StorefrontPrivatePages {
-  const filled = filledPrivatePages(privatePages);
-  const named = PRIVATE_PAGE_KEYS.filter((page) => page === "cart" || privatePageNamed(filled, page));
-  const refused: Partial<Record<PrivatePageKey, PrivatePageRefusal[]>> = {};
+export function privatePagesCompiledIntact(privatePages: StorefrontPrivatePages): boolean {
+  if (privatePages.compiled.digest !== undefined) return privatePages.compiled.digest === privatePagesDigest(privatePages);
+  // A compile that serves nothing over a source that says nothing (the store's own pages) has nothing to protect.
+  return privatePagesEmpty(privatePages);
+}
+
+/** The private pages marked never compiled (no page serves a look until this build compiles them). */
+export function uncompiledPrivatePages(privatePages: StorefrontPrivatePages): StorefrontPrivatePages {
+  return { ...privatePages, compiled: { anatomy: privatePages.compiled.anatomy, sanitizer: 0, css: {} } };
+}
+
+/**
+ * A compile made by this build, with the pages a stored document's held fields
+ * reached (`readStoredPrivatePages`) refused on their own: a content block its
+ * own page; a stylesheet, files, chrome or search every page the theme names
+ * and the cart, the page they were written for. What the maintenance compile
+ * stores for such a document: the read drops the held fields, so the compile
+ * alone cannot see them.
+ */
+export function withHeldRefusals(privatePages: StorefrontPrivatePages, held: readonly PrivatePagesHeld[]): StorefrontPrivatePages {
+  if (held.length === 0) return privatePages;
+  const named = PRIVATE_PAGE_KEYS.filter((page) => page === "cart" || privatePageNamed(privatePages, page));
+  const refused: Partial<Record<PrivatePageKey, PrivatePageRefusal[]>> = { ...privatePages.compiled.refused };
   for (const { page, label } of held) {
     for (const each of page ? [page] : named) {
       const path = page ? `privatePages.pages.${page}` : "privatePages";
-      refused[each] = [...refused[each] ?? [], { path, reason: PRIVATE_NOT_AVAILABLE, message: privateNotAvailable(label) }].slice(0, PRIVATE_PAGE_REFUSALS_MAX);
+      refused[each] = [{ path, reason: PRIVATE_NOT_AVAILABLE, message: privateNotAvailable(label) }, ...refused[each] ?? []].slice(0, PRIVATE_PAGE_REFUSALS_MAX);
     }
   }
-  const css = Object.fromEntries(Object.entries(privatePagesCompiledCurrent(filled) ? filled.compiled.css : {}).filter(([page]) => !refused[page as PrivatePageKey]));
-  return { ...filled, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css, refused: { ...filled.compiled.refused, ...refused } } };
+  const css = Object.fromEntries(Object.entries(privatePages.compiled.css).filter(([page]) => !refused[page as PrivatePageKey]));
+  return withPrivatePagesDigest({ ...privatePages, compiled: { ...privatePages.compiled, css, refused } });
+}
+
+/**
+ * The pages that show the store's default look because this build has not
+ * compiled the theme's source yet (between a deploy and the maintenance
+ * compile, or while it keeps failing): each page the source says something
+ * about. None once the compile is this build's.
+ */
+export function privatePagesPending(privatePages: StorefrontPrivatePages): PrivatePageKey[] {
+  if (privatePagesCompiledCurrent(privatePages)) return [];
+  return PRIVATE_PAGE_KEYS.filter((page) => privatePageNamed(privatePages, page)
+    || Object.keys(privatePages.labels).some((key) => KEY_PAGES.get(key) === page)
+    || Object.keys(privatePages.icons).some((key) => KEY_PAGES.get(key) === page));
+}
+
+/**
+ * What a buyer's page is sent (the storefront's own read): the served pages
+ * only (`servedPrivatePages`) and their compiled look, without the refusals
+ * and the fingerprint the dashboard reads. A storefront one release older
+ * reads it too: the shape it knows, its checker version newer than its own,
+ * so it draws the store's default private pages and the rest of the theme.
+ */
+export function storefrontRenderPrivatePages(privatePages: StorefrontPrivatePages): StorefrontPrivatePages {
+  const served = servedPrivatePages(privatePages);
+  return { ...served, compiled: { anatomy: served.compiled.anatomy, sanitizer: served.compiled.sanitizer, css: served.compiled.css } };
 }
 
 /** Whether `compiled` was written by this build's checker and anatomy (else maintenance compiles it again). */

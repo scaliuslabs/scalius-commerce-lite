@@ -242,6 +242,11 @@ export const storefrontPrivatePagesSchema = z.object({
      * draws the store's default look until a save, the others serve theirs. The merchant is shown them.
      */
     refused: z.partialRecord(z.enum(PRIVATE_PAGE_KEYS as [PrivatePageKey, ...PrivatePageKey[]]), z.array(privatePageRefusalSchema).min(1).max(PRIVATE_PAGE_REFUSALS_MAX)).optional(),
+    /**
+     * A fingerprint of the source and of this compile (`privatePagesDigest`): a read serves the compile only
+     * while it matches, so a stored look edited apart from its source (a row written by hand) is never served.
+     */
+    digest: z.string().regex(/^[a-z0-9]{1,32}$/).optional(),
   }).strict()),
 }).strict().superRefine(refuseHeld).transform(withoutHeld);
 
@@ -267,7 +272,7 @@ export interface StorefrontPrivatePages {
   tokens: PrivateTokens;
   labels: Partial<Record<string, PrivateWords | string>>;
   icons: Partial<Record<string, PrivateAssetRef>>;
-  compiled: { anatomy: number; sanitizer: number; css: Partial<Record<PrivatePageKey, string>>; refused?: Partial<Record<PrivatePageKey, PrivatePageRefusal[]>> };
+  compiled: { anatomy: number; sanitizer: number; css: Partial<Record<PrivatePageKey, string>>; refused?: Partial<Record<PrivatePageKey, PrivatePageRefusal[]>>; digest?: string };
 }
 export type StorefrontPrivatePagesTemplate = Partial<Omit<StorefrontPrivatePages, "compiled">>;
 

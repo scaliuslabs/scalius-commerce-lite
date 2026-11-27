@@ -15,7 +15,7 @@ import { storefrontPrivatePageDefaults } from "./private-pages";
 import { repairStoredStorefrontTheme, type StorefrontThemeReadRepair } from "./read-repair";
 import { privateCartPresetArrangement, privateDrawerWith, type PrivatePageArrangement } from "./private-arrangement";
 import { PRIVATE_ANATOMY_VERSION } from "./private-anatomy";
-import { readStoredPrivatePages, refusedPrivatePages } from "./private-layout";
+import { privatePagesCompiledCurrent, privatePagesCompiledIntact, readStoredPrivatePages, uncompiledPrivatePages, type PrivatePagesHeld } from "./private-layout";
 
 /**
  * The oldest stored version that still reads. Migration 0155 reset every
@@ -391,7 +391,15 @@ const READ_REPAIR_ROUNDS = 4;
 
 /** A stored document read through the chain: the current document, the version it was stored at, and what the read repaired. */
 export type StoredStorefrontThemeRead =
-  | { ok: true; document: StorefrontThemeDocument; storedVersion: number; repairs?: StorefrontThemeReadRepair[] }
+  | {
+    ok: true;
+    document: StorefrontThemeDocument;
+    storedVersion: number;
+    /** Values the read repaired (read-repair.ts); absent when none. */
+    repairs?: StorefrontThemeReadRepair[];
+    /** What the stored document held that a theme cannot set (dropped here); the maintenance compile refuses the pages it reached. */
+    held?: PrivatePagesHeld[];
+  }
   | { ok: false; reason: string };
 
 /**
@@ -404,9 +412,11 @@ export type StoredStorefrontThemeRead =
  * (read-repair.ts: never drawn as a working link) and listed in `repairs`.
  * What a theme cannot set on a private page (a stylesheet,
  * its chrome, its search, files, a content block) is dropped first, as the
- * stored path alone does, and the pages it reached are then refused: the
- * theme reads, those pages draw the store's default look until the next
- * save (which refuses those fields with `not_available`).
+ * stored path alone does (`held`): the theme reads, and its private pages
+ * draw the store's default look until the maintenance compile compiles the
+ * rest and refuses the pages those fields reached. A compile is served only
+ * while this build made it and its fingerprint matches the source; any other
+ * reads as never compiled (never half a look).
  */
 export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefrontThemeRead {
   let parsed: unknown = value;
@@ -431,8 +441,13 @@ export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefr
   for (let round = 0; ; round += 1) {
     const result = storefrontThemeDocumentSchema.safeParse(candidate);
     if (result.success) {
-      const document = released.held.length > 0 ? { ...result.data, privatePages: refusedPrivatePages(result.data.privatePages, released.held) } : result.data;
-      return { ok: true, document, storedVersion: (parsed as Json).version as number, ...(repairs.length > 0 ? { repairs } : {}) };
+      // A compile is served only while it belongs to this source (its fingerprint) and this build made it; a
+      // stored document holding what a theme cannot set is compiled by maintenance, its held pages refused there.
+      const privatePages = result.data.privatePages;
+      const document = privatePagesCompiledCurrent(privatePages) && !privatePagesCompiledIntact(privatePages)
+        ? { ...result.data, privatePages: uncompiledPrivatePages(privatePages) }
+        : result.data;
+      return { ok: true, document, storedVersion: (parsed as Json).version as number, ...(repairs.length > 0 ? { repairs } : {}), ...(released.held.length > 0 ? { held: released.held } : {}) };
     }
     const repaired = round < READ_REPAIR_ROUNDS ? repairStoredStorefrontTheme(candidate, result.error.issues) : null;
     if (!repaired) {

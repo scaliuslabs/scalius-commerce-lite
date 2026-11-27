@@ -6816,6 +6816,10 @@
                     "maxItems": 8
                   }
                 }
+              },
+              "digest": {
+                "type": "string",
+                "pattern": "^[a-z0-9]{1,32}$"
               }
             },
             "required": [
@@ -208160,11 +208164,39 @@
                             "revision": {
                               "type": "integer",
                               "minimum": 0
+                            },
+                            "unreadable": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 500
+                            },
+                            "repairs": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "path": {
+                                    "type": "string",
+                                    "maxLength": 240
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "maxLength": 48
+                                  }
+                                },
+                                "required": [
+                                  "path",
+                                  "reason"
+                                ]
+                              },
+                              "maxItems": 50
                             }
                           },
                           "required": [
                             "theme",
-                            "revision"
+                            "revision",
+                            "unreadable",
+                            "repairs"
                           ]
                         },
                         "draft": {

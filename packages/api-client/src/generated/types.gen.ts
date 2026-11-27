@@ -1427,6 +1427,7 @@ export type StorefrontPrivatePages = {
             receipt?: Array<StorefrontPrivatePageRefusal>;
             account?: Array<StorefrontPrivatePageRefusal>;
         };
+        digest?: string;
     };
 };
 
@@ -59378,6 +59379,11 @@ export type GetApiV1AdminSettingsThemeEditorResponses = {
             published: {
                 theme: StorefrontThemeDocument;
                 revision: number;
+                unreadable: string | null;
+                repairs: Array<{
+                    path: string;
+                    reason: string;
+                }>;
             };
             draft: {
                 revision: number;

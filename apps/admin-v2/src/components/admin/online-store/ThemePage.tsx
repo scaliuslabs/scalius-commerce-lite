@@ -259,7 +259,7 @@ function ThemeOverview({ workspace, refetch }: {
             </div>
             {appsProblem ? <ThemeAppsUnavailableAlert apps={appsProblem.apps} moreParts={appsProblem.moreParts} /> : null}
             {/* What shoppers see now: a page of the live theme a store update refused shows the store's own design. */}
-            <PrivatePagesFallbackAlert theme={workspace.published.theme as Theme} />
+            <PrivatePagesFallbackAlert theme={workspace.published.theme as Theme} unreadable={workspace.published.unreadable} repairs={workspace.published.repairs} />
             <div className="flex flex-wrap gap-2">
               <Button asChild>
                 <Link to="/admin/online-store/theme/editor">{editor("customize")}</Link>

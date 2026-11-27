@@ -423,7 +423,14 @@ const getThemeEditorRoute = createRoute({
       content: {
         "application/json": {
           schema: successEnvelope(themeStatusSchema.extend({
-            published: z.object({ theme: storefrontThemeDocumentApiSchema, revision: revisionSchema }),
+            published: z.object({
+              theme: storefrontThemeDocumentApiSchema,
+              revision: revisionSchema,
+              /** The stored live theme did not read, and why: `theme` is the default one shoppers see. */
+              unreadable: z.string().max(500).nullable(),
+              /** What the read of the stored live theme repaired (a link or a tab left out, an unknown member): shoppers see it repaired. */
+              repairs: z.array(z.object({ path: z.string().max(240), reason: z.string().max(48) })).max(50),
+            }),
             /**
              * The shared draft, and who saved it last (the editor's conflict notice names them):
              * the staff member's name, or the plugin id of the app that saved it. A staff id is never sent.
@@ -476,6 +483,12 @@ app.openapi(getThemeEditorRoute, async (c) => {
   const { updatedBy, updatedByName, ...draft } = workspace.draft;
   return ok(c, {
     ...workspace,
+    published: {
+      theme: workspace.published.theme,
+      revision: workspace.published.revision,
+      unreadable: workspace.published.unreadable ?? null,
+      repairs: (workspace.published.repairs ?? []).map((repair) => ({ path: repair.path.slice(0, 240), reason: repair.reason.slice(0, 48) })),
+    },
     draft: {
       ...draftReceipt(draft),
       updatedByName: updatedByName?.slice(0, 200) ?? null,

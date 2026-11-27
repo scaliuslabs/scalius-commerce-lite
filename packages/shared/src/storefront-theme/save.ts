@@ -22,7 +22,7 @@ export const STOREFRONT_THEME_DOCUMENT_MAX_BYTES = 512 * 1024;
  * structural refusal that names none gives its words only), sorted: the
  * document's structure, the write policy, translations, files, the private
  * pages' compile, the size, and the two the store adds against its installed
- * apps (`unknown_app` at save, `theme_apps_unavailable` at publish). A reason
+ * apps (`unknown_app` at save, `theme_apps_unavailable` and `theme_app_settings_missing` at publish). A reason
  * a theme can meet is part of the theme contract: a new one is a new refusal
  * at save, so it and the private pages' checker version are sealed by a
  * snapshot (save-reasons.test.ts), and the types below fail to compile when a
@@ -33,7 +33,7 @@ export const STOREFRONT_THEME_SAVE_REASONS = [
   "foreign_asset", "invalid_hook", "invalid_link", "label_figures", "label_too_long", "label_variant", "layout_holds", "layout_once",
   "lead_order", "markup", "missing_part", "missing_target", "no_row", "not_available", "part_order", "private_page_template",
   "prominence", "semantic_color", "slide_products_over_limit", "tab_label", "tab_link_external", "tab_repeated",
-  "theme_apps_unavailable", "token_value", "too_deep", "too_large", "too_many_nodes", "translation", "unknown_app",
+  "theme_app_settings_missing", "theme_apps_unavailable", "token_value", "too_deep", "too_large", "too_many_nodes", "translation", "unknown_app",
   "unknown_frame", "unknown_item", "unknown_layout", "unknown_part", "unknown_style", "unknown_target", "unknown_token",
   "unknown_variant",
 ] as const;
@@ -55,24 +55,72 @@ export type StorefrontThemeSaveReasonsListed = [
 export interface StorefrontThemeSaveIssue {
   path: string;
   message: string;
-  reason: string | null;
+  reason: StorefrontThemeSaveReason | null;
 }
 
 /** Why a save is refused: the first issue's words and reason, and every issue (`issues`). */
 export interface StorefrontThemeSaveRefusal {
   message: string;
-  reason: string | null;
+  reason: StorefrontThemeSaveReason | null;
   issues: StorefrontThemeSaveIssue[];
 }
 
 export type StorefrontThemeSaveCheck =
-  | { ok: true; theme: StorefrontThemeDocument; serialized: string }
+  | {
+    ok: true;
+    theme: StorefrontThemeDocument;
+    serialized: string;
+    /** What the baseline already broke and this write does not touch: stored as it is, never refused (each page's compile refusals are in `compiled.refused`). */
+    warnings: StorefrontThemeSaveIssue[];
+  }
   | { ok: false; refusal: StorefrontThemeSaveRefusal };
+
+/** A sealed reason, or null: a `params.reason` outside the sealed list is never passed on as one. */
+export function storefrontThemeSaveReason(value: unknown): StorefrontThemeSaveReason | null {
+  return typeof value === "string" && (STOREFRONT_THEME_SAVE_REASONS as readonly string[]).includes(value) ? value as StorefrontThemeSaveReason : null;
+}
 
 function refused(issues: StorefrontThemeSaveIssue[], fallback: string): StorefrontThemeSaveCheck {
   // A refusal that names its reason (a private page's `not_available`) leads with it.
   const first = issues.find((issue) => issue.reason !== null) ?? issues[0];
   return { ok: false, refusal: { message: first?.message ?? fallback, reason: first?.reason ?? null, issues } };
+}
+
+const issueKey = (issue: StorefrontThemeSaveIssue) => `${issue.path}\u0000${issue.reason ?? ""}\u0000${issue.message}`;
+
+/**
+ * Every write check's issues of a well-formed document, by stage, and its
+ * private pages as compiled (a page with an issue refused on its own). The
+ * write policy runs here, where a document is written, never where one is
+ * read. What a request said was compiled is never kept: the page reads only
+ * what the compile wrote.
+ */
+function writeIssues(document: StorefrontThemeDocument) {
+  const path = (segments: ReadonlyArray<string | number>) => segments.map(String).join(".");
+  const privatePages = compileStorefrontPrivatePages(document.privatePages, privatePagesContextOf(document));
+  return {
+    privatePages: privatePages.value,
+    issues: {
+      policy: storefrontThemeDocumentPolicyIssues(document).map((issue): StorefrontThemeSaveIssue => ({ path: path(issue.path), message: issue.message, reason: issue.reason })),
+      translations: storefrontThemeTranslationProblems(document).map((problem): StorefrontThemeSaveIssue => ({ ...problem, reason: "translation" })),
+      // Every app file the theme names (private page icons, tab icons) is its own app's.
+      foreign: storefrontThemeAssetIssues(document).map((issue): StorefrontThemeSaveIssue => ({ path: path(issue.path), message: issue.message, reason: issue.reason })),
+      privatePages: privatePages.ok ? [] : privatePages.issues.map((issue): StorefrontThemeSaveIssue => ({ path: path(issue.path), message: issue.message, reason: issue.reason })),
+    },
+  };
+}
+
+/** Options of a save check. */
+export interface StorefrontThemeSaveOptions {
+  /**
+   * The document the store already holds where this one is written (the draft
+   * it replaces, the live theme a discard writes back): an issue it already
+   * had, at the same place with the same reason and words, is not this
+   * write's to fix, so it is a warning, never a refusal. Writing back what the
+   * store holds unchanged is not a save for policy; only what the request
+   * changes is checked. Structure and size are always checked.
+   */
+  baseline?: unknown;
 }
 
 /**
@@ -84,37 +132,44 @@ function refused(issues: StorefrontThemeSaveIssue[], fallback: string): Storefro
  * app's only), the private pages compiled
  * against the document's palettes and its own app (arrangements, tokens,
  * words, icons), and the stored size. Returns the document as it is stored
- * (private pages compiled) or the refusal.
+ * (private pages compiled, a page refused on its own for a baseline issue) or
+ * the refusal.
  */
-export function checkStorefrontThemeSave(theme: unknown): StorefrontThemeSaveCheck {
+export function checkStorefrontThemeSave(theme: unknown, options: StorefrontThemeSaveOptions = {}): StorefrontThemeSaveCheck {
   const result = storefrontThemeDocumentSchema.safeParse(theme);
   if (!result.success) {
     return refused(result.error.issues.map((issue) => ({
       path: issue.path.map(String).join("."),
       message: issue.message,
-      reason: issue.code === "custom" && typeof issue.params?.reason === "string" ? issue.params.reason
+      reason: issue.code === "custom" && issue.params?.reason !== undefined ? storefrontThemeSaveReason(issue.params.reason)
         // A label's value the schema refuses names the label check's reason (a read keeps the store's words there).
         : issue.path[0] === "privatePages" && issue.path[1] === "labels" && issue.path.length >= 3 ? storefrontLabelRefusalReason(issue.code)
           : null,
     })), "The storefront style is not a valid theme document.");
   }
-  // The write policy: checked here, where a document is written, never where one is read.
-  const policy = storefrontThemeDocumentPolicyIssues(result.data);
-  if (policy.length > 0) return refused(policy.map((issue) => ({ path: issue.path.map(String).join("."), message: issue.message, reason: issue.reason })), "The storefront style's colours do not read.");
-  const translations = storefrontThemeTranslationProblems(result.data);
-  if (translations.length > 0) return refused(translations.map((problem) => ({ ...problem, reason: "translation" })), "A translation does not fit.");
-  // Every app file the theme names (private page icons, tab icons) is its own app's.
-  const foreign = storefrontThemeAssetIssues(result.data);
-  if (foreign.length > 0) return refused(foreign.map((issue) => ({ path: issue.path.map(String).join("."), message: issue.message, reason: issue.reason })), "A theme names only its own app's files.");
-  // What the request said was compiled is never kept: the page reads only what this wrote.
-  const privatePages = compileStorefrontPrivatePages(result.data.privatePages, privatePagesContextOf(result.data));
-  if (!privatePages.ok) {
-    return refused(privatePages.issues.map((issue) => ({ path: issue.path.map(String).join("."), message: issue.message, reason: issue.reason })), "The private pages do not compile.");
-  }
-  const stored = { ...result.data, privatePages: privatePages.value };
+  const document = result.data;
+  const stages = writeIssues(document);
+  const baseline = options.baseline === undefined ? null : storefrontThemeDocumentSchema.safeParse(options.baseline);
+  const known = new Set(baseline?.success ? Object.values(writeIssues(baseline.data).issues).flat().map(issueKey) : []);
+  const warnings: StorefrontThemeSaveIssue[] = [];
+  /** This write's own issues of one stage; the baseline's go to the warnings. */
+  const own = (issues: StorefrontThemeSaveIssue[]) => issues.filter((issue) => {
+    if (!known.has(issueKey(issue))) return true;
+    warnings.push(issue);
+    return false;
+  });
+  const policy = own(stages.issues.policy);
+  if (policy.length > 0) return refused(policy, "The storefront style's colours do not read.");
+  const translations = own(stages.issues.translations);
+  if (translations.length > 0) return refused(translations, "A translation does not fit.");
+  const foreign = own(stages.issues.foreign);
+  if (foreign.length > 0) return refused(foreign, "A theme names only its own app's files.");
+  const compiled = own(stages.issues.privatePages);
+  if (compiled.length > 0) return refused(compiled, "The private pages do not compile.");
+  const stored = { ...document, privatePages: stages.privatePages };
   const serialized = JSON.stringify(stored);
   if (new TextEncoder().encode(serialized).byteLength > STOREFRONT_THEME_DOCUMENT_MAX_BYTES) {
     return refused([{ path: "", message: "Storefront style is too large. Shorten page content or remove unused landing pages.", reason: "document_too_large" }], "");
   }
-  return { ok: true, theme: stored, serialized };
+  return { ok: true, theme: stored, serialized, warnings };
 }

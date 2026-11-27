@@ -3,7 +3,7 @@
 // reads the rest, never failing the whole document (which would draw the
 // default theme). Only a write refuses (save.ts, with the same reason).
 //
-// A check with a save reason is repaired, the narrowest way that never draws
+// Two kinds of refusal are repaired, each the narrowest way that never draws
 // an unchecked value:
 //
 // - A check with a save reason (`params.reason`): a link a stricter link
@@ -14,19 +14,34 @@
 //   product; an arrangement nested past the bound is left out (that page
 //   draws the store's own arrangement); a label a save refuses
 //   (`label_variant`, `label_too_long`) reads as the store's own words.
+// - A member of a closed list this build does not know
+//   (`STOREFRONT_READ_UNKNOWN_MEMBER`): the store's default for it, or it is
+//   left out (a section, a tab, a page's tokens or arrangement).
 //
 // Anything else (a wrong type, a missing field, a bound the renderer relies
 // on) is not repaired: the document does not read.
 
 import { STOREFRONT_MOBILE_DEFAULT_TABS, STOREFRONT_MOBILE_TAB_LIMITS } from "./blocks";
+import { PRIVATE_PAGE_KEYS } from "./private-keys";
+import { DEFAULT_STOREFRONT_THEME } from "./templates";
 
 type Json = Record<string, unknown>;
 
-/** A value a read repaired: where it was and why (its save reason). */
+/** A value a read repaired: where it was and why (its save reason, or `unknown_member`). */
 export interface StorefrontThemeReadRepair {
   path: string;
   reason: string;
 }
+
+/**
+ * The reason recorded for a member of a closed list this build does not know.
+ * The theme document's closed lists (label keys and variants, icon keys, the
+ * controls' places, layout kinds and part names, token values such as fonts,
+ * block variants and their choices, section types, tab destinations and
+ * icons) only grow: a member is never removed or renamed once released. This
+ * repair is the guard against a removal by mistake, never a licence for one.
+ */
+export const STOREFRONT_READ_UNKNOWN_MEMBER = "unknown_member";
 
 /** The structural issue fields a repair reads (a Zod issue). */
 export interface StorefrontThemeReadIssue {
@@ -59,6 +74,15 @@ function listEntry(path: readonly PropertyKey[], name: string): { list: readonly
   return at_ >= 0 && typeof index === "number" ? { list: path.slice(0, at_ + 1), index } : null;
 }
 
+/** A section list's entry: the homepage, a landing page's or a page template's. */
+function sectionEntry(path: readonly PropertyKey[]): { list: readonly PropertyKey[]; index: number } | null {
+  if (path[0] !== "pages") return null;
+  const list = path[1] === "home" ? path.slice(0, 2) : (path[1] === "landing" || path[1] === "templates") && path[3] === "sections" ? path.slice(0, 4) : null;
+  if (!list) return null;
+  const index = path[list.length];
+  return typeof index === "number" ? { list, index } : null;
+}
+
 const SAVE_REASON_TAB = /^tab_/;
 
 /**
@@ -82,6 +106,7 @@ export function repairStoredStorefrontTheme(document: Json, issues: readonly Sto
   };
   // Entries left out of a list, applied from the last so earlier indexes stay right.
   const drops = new Map<string, { list: readonly PropertyKey[]; indexes: Set<number> }>();
+  const defaultAt = (path: readonly PropertyKey[]) => at(DEFAULT_STOREFRONT_THEME, path);
   const drop = (entry: { list: readonly PropertyKey[]; index: number }) => {
     const key = JSON.stringify(entry.list);
     const known = drops.get(key) ?? { list: entry.list, indexes: new Set<number>() };
@@ -95,6 +120,7 @@ export function repairStoredStorefrontTheme(document: Json, issues: readonly Sto
     const reason = typeof issue.params?.reason === "string" ? issue.params.reason : null;
     const record = (why: string) => repairs.push({ path: path.map(String).join("."), reason: why });
     let done = false;
+    let unknown = false;
     const tab = path[0] === "blocks" && path[1] === "mobileNav" ? listEntry(path, "tabs") : null;
     if (reason === "invalid_link" || reason === "slide_products_over_limit") {
       done = set(path, null);
@@ -105,9 +131,45 @@ export function repairStoredStorefrontTheme(document: Json, issues: readonly Sto
     } else if (!reason && path[0] === "privatePages" && path[1] === "labels" && path.length >= 3) {
       // A label a save refuses (`label_variant`, `label_too_long`): the store's own words there.
       done = remove(path.slice(0, 3));
+    } else if (issue.code === "unrecognized_keys" && path.length === 2 && path[0] === "privatePages" && (path[1] === "labels" || path[1] === "icons")) {
+      // A label or icon key this build does not know: the store's own.
+      unknown = true;
+      done = (issue.keys ?? []).every((key) => remove([...path, key]));
+    } else if (path[0] === "privatePages" && path[1] === "icons" && path.length >= 3) {
+      unknown = true;
+      done = remove(path.slice(0, 3));
+    } else if (path.length === 2 && path[0] === "privatePages" && path[1] === "controls") {
+      // A place for the controls this build does not know: the store's header.
+      unknown = true;
+      done = remove(path);
+    } else if (path.length === 2 && path[0] === "privatePages" && path[1] === "tokens") {
+      // Tokens for a page this build does not know: left out.
+      unknown = true;
+      const tokens = at(next, path);
+      done = isRecord(tokens) && Object.keys(tokens).every((page) => (PRIVATE_PAGE_KEYS as readonly string[]).includes(page) || remove([...path, page]));
+    } else if (path[0] === "privatePages" && path[1] === "pages" && typeof path[2] === "string" && path.length > 3) {
+      // An arrangement naming a layout or a node this build does not know: that page draws the store's own.
+      unknown = true;
+      done = remove(path.slice(0, 3));
+    } else if (issue.code === "invalid_value" && path.length === 2 && path[0] === "tokens" && typeof at(next, path) === "string" && defaultAt(path) !== undefined) {
+      // A token value (a font, a density) this build does not know: the default theme's.
+      unknown = true;
+      done = set(path, structuredClone(defaultAt(path)));
+    } else if (tab && (issue.code === "invalid_union" || issue.code === "invalid_value")) {
+      // A destination this build does not know: the tab is left out; a store icon it does not know: the link icon.
+      unknown = true;
+      done = path.at(-1) === "name" && path.at(-2) === "icon" ? set(path, "link") : drop(tab);
+    } else if ((issue.code === "invalid_union" || issue.code === "invalid_value") && path[0] === "blocks" && typeof path[1] === "string" && defaultAt(path.slice(0, 2)) !== undefined) {
+      // A block variant (or one of its choices) this build does not know: the default theme's block there.
+      unknown = true;
+      done = set(path.slice(0, 2), structuredClone(defaultAt(path.slice(0, 2))));
+    } else if ((issue.code === "invalid_union" || issue.code === "invalid_value") && sectionEntry(path) !== null) {
+      // A section type, or a choice of its settings, this build does not know: the section is left out.
+      unknown = true;
+      done = drop(sectionEntry(path)!);
     }
     if (!done) return null;
-    record(reason ?? (path[0] === "privatePages" && path[1] === "labels" ? storefrontLabelRefusalReason(issue.code) : "invalid"));
+    record(reason ?? (unknown ? STOREFRONT_READ_UNKNOWN_MEMBER : storefrontLabelRefusalReason(issue.code)));
   }
 
   for (const { list, indexes } of drops.values()) {

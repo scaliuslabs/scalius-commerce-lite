@@ -19,12 +19,13 @@ import { parsePluginSurfaceKey } from "../plugins/storefront";
 import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBlocksSchema } from "./blocks";
 import { storefrontPrivatePagesDefault, storefrontPrivatePagesTemplateSchema, type StorefrontPrivatePages } from "./private-schema";
-import { checkStorefrontThemeSave, type StorefrontThemeSaveIssue } from "./save";
+import { checkStorefrontThemeSave, storefrontThemeSaveReason, type StorefrontThemeSaveIssue } from "./save";
 import { storefrontSectionListSchema, type StorefrontSection } from "./sections";
 import { storefrontDarkColorsMissing, storefrontThemeShowsDarkColors, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";
 import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { StorefrontThemeUpgradeError, upgradeStorefrontThemeDocument } from "./upgrade";
 import { DEFAULT_STOREFRONT_THEME } from "./templates";
+import { storefrontFingerprint } from "./fingerprint";
 import { carryStorefrontHome, storefrontTemplateHome, storefrontThemeTemplateKey, type StorefrontHomeCarry } from "./content";
 import type { StorefrontThemeSkins } from "./apps";
 import {
@@ -79,7 +80,7 @@ function schemaUnfit(error: z.ZodError, prefix: string) {
   return unfit(issueText(error), error.issues.map((issue) => ({
     path: [prefix, ...issue.path.map(String)].filter(Boolean).join("."),
     message: issue.message,
-    reason: issue.code === "custom" && typeof issue.params?.reason === "string" ? issue.params.reason : null,
+    reason: issue.code === "custom" ? storefrontThemeSaveReason(issue.params?.reason) : null,
   })));
 }
 
@@ -241,7 +242,7 @@ function templateSaveIssues(template: StorefrontAppTemplateTheme, key: string): 
   // The verdict depends only on the key and the template, so an isolate checks each once:
   // the editor, the app page, the library and an apply read the same templates again and again.
   const json = JSON.stringify(template);
-  const cacheKey = `${key}|${json.length}|${fingerprint(json)}`;
+  const cacheKey = `${key}|${json.length}|${storefrontFingerprint(json)}`;
   const known = TEMPLATE_VERDICTS.get(cacheKey);
   if (known) return known;
   const issues = uncachedTemplateSaveIssues(template, key);
@@ -253,18 +254,6 @@ function templateSaveIssues(template: StorefrontAppTemplateTheme, key: string): 
 /** Templates' verdicts this isolate has reached, oldest first (bounded: five templates an app, a few apps a store). */
 const TEMPLATE_VERDICTS = new Map<string, StorefrontThemeSaveIssue[]>();
 const TEMPLATE_VERDICTS_MAX = 64;
-
-/** A 53-bit FNV-1a-style fingerprint of `text` (two 32-bit lanes): a cache key, not a security boundary. */
-function fingerprint(text: string): string {
-  let a = 0x811c9dc5;
-  let b = 0x01000193;
-  for (let index = 0; index < text.length; index += 1) {
-    const code = text.charCodeAt(index);
-    a = Math.imul(a ^ code, 0x01000193);
-    b = Math.imul(b ^ code, 0x5bd1e995);
-  }
-  return `${(a >>> 0).toString(36)}${(b >>> 0).toString(36)}`;
-}
 
 function uncachedTemplateSaveIssues(template: StorefrontAppTemplateTheme, key: string): StorefrontThemeSaveIssue[] {
   const applied = applyStorefrontAppTemplate(DEFAULT_STOREFRONT_THEME, key, template);
