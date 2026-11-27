@@ -1427,6 +1427,7 @@ export type StorefrontPrivatePages = {
             receipt?: Array<StorefrontPrivatePageRefusal>;
             account?: Array<StorefrontPrivatePageRefusal>;
         };
+        policy?: number;
         digest?: string;
     };
 };
