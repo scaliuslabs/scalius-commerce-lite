@@ -71,7 +71,7 @@ export function installGalleryChromeApps(): void {
     bundled[app.pluginId] ??= {
       release: app.release,
       module: () => import("./chrome-app") as ReturnType<BundledStorefrontExtension["module"]>,
-      files: async () => ({ FILES: { "styles.css": { text: sheet } } }) as Awaited<ReturnType<BundledStorefrontExtension["files"]>>,
+      files: async () => ({ FILES: { "styles.css": { type: "text/css; charset=utf-8", text: sheet } } }),
     };
   }
 }
