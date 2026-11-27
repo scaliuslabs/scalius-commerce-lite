@@ -60,6 +60,8 @@ export const giftCards = sqliteTable("gift_cards", {
         .on(table.customerId, sql`${table.createdAt} DESC`)
         .where(sql`${table.customerId} IS NOT NULL`),
     index("gift_cards_status_created_idx").on(table.status, sql`${table.createdAt} DESC`, table.id),
+    // The live cards (0228): checkout configuration's probe, on a store that takes only cash.
+    index("gift_cards_live_idx").on(table.currencyCode, table.expiresAt).where(sql`${table.status} = 'active' AND ${table.balanceMinor} > 0`),
     index("gift_cards_last4_idx").on(table.codeLast4),
     index("gift_cards_source_order_idx")
         .on(table.sourceOrderId)

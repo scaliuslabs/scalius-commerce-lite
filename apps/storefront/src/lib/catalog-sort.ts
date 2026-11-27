@@ -51,7 +51,6 @@ export function setupCatalogSorts(): void {
             [sortSelect.name === "limit" ? "limit" : "sortBy"]: sortSelect.value,
             page: 1,
           },
-          defaultSort: sortSelect.dataset.defaultSort === "relevance" ? "relevance" : "newest",
         });
       });
     });

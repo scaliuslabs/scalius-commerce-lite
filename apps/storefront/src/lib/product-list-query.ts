@@ -7,7 +7,7 @@ import { normalizeSearchQuery } from "./search-query";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { formatList } from "@scalius/shared/locale-words";
 import { FACET_FILTER_KEY_PATTERN, FACET_RANGE_KEY_PATTERN } from "@scalius/shared/catalog-filter-keys";
-import { STOREFRONT_SEARCH_SORTS } from "@scalius/shared/listing-sorts";
+import { DEFAULT_LISTING_SORT, STOREFRONT_SEARCH_SORTS } from "@scalius/shared/listing-sorts";
 import { catalogCopy } from "./catalog-copy";
 import { storefrontLanguage } from "./storefront-language";
 import { pageLanguage } from "./store-time-zone";
@@ -90,7 +90,11 @@ export interface ProductListQueryState {
   /** Products per page (PRODUCT_LIST_PAGE_SIZES). */
   limit: ProductListPageSize;
   sortBy: ProductListSort;
-  /** The sort that stays out of URLs: "relevance" for search results, else "newest". */
+  /**
+   * The order the listing opens in when its URL names none: "relevance" for
+   * search results that rank by it, else the order its read reported
+   * (`readSort`: the store's default, or a collection's own order).
+   */
   defaultSort: ProductListSort;
   query: string;
   options: ProductListOptions;
@@ -163,16 +167,21 @@ export function productListCanonicalUrl(resourceUrl: string | null, page: number
   return url.toString();
 }
 
+/**
+ * A listing link from the canonical filters. A sort the filters name stays in
+ * the link, even one equal to today's default: the default is the store's
+ * setting, so a buyer's choice (and a bookmark of it) keeps its meaning when
+ * the merchant changes it. Only best match on a search with words, which no
+ * setting moves, is left out.
+ */
 export function buildProductListHref({
   pathname,
   currentFilters,
   overrides = {},
-  defaultSort = "newest",
 }: {
   pathname: string;
   currentFilters: ProductListFilterState;
   overrides?: Record<string, string | number | string[] | null | undefined>;
-  defaultSort?: ProductListSort;
 }): string {
   const nextFilters: Record<string, string | number | string[]> = {
     ...currentFilters,
@@ -188,11 +197,14 @@ export function buildProductListHref({
   if (Number(nextFilters.page ?? 1) <= 1) {
     delete nextFilters.page;
   }
+  // Best match is a search's fixed first order (no store setting moves it), so it stays out.
+  if (nextFilters.sortBy === "relevance" && nextFilters.q) {
+    delete nextFilters.sortBy;
+  }
 
   const queryString = buildCanonicalQueryString(nextFilters, {
     defaultParams: {
       page: 1,
-      sortBy: defaultSort,
       limit: DEFAULT_PRODUCT_LIST_PAGE_SIZE,
     },
   });
@@ -222,18 +234,19 @@ function normalizePageSize(value: string | null): { limit: ProductListPageSize; 
   return { limit, changed: false };
 }
 
+/** The sort the URL names, when it is one this listing takes ("relevance" only for search results). */
 function normalizeSort(
   value: string | null,
-  defaultSort: ProductListSort,
+  ranksByRelevance: boolean,
 ): {
-  sortBy: ProductListSort;
+  sort: ProductListSort | null;
   changed: boolean;
 } {
-  if (!value) return { sortBy: defaultSort, changed: false };
-  if (SORT_VALUE_SET.has(value) && (value !== "relevance" || defaultSort === "relevance")) {
-    return { sortBy: value as ProductListSort, changed: false };
+  if (!value) return { sort: null, changed: false };
+  if (SORT_VALUE_SET.has(value) && (value !== "relevance" || ranksByRelevance)) {
+    return { sort: value as ProductListSort, changed: false };
   }
-  return { sortBy: defaultSort, changed: true };
+  return { sort: null, changed: true };
 }
 
 /** Bangla and Arabic digits typed into price inputs become Latin digits. */
@@ -302,30 +315,44 @@ function knownFacetValue(allowed: ReadonlySet<string>, candidate: string): strin
 
 /**
  * Validates a listing URL into API options and canonical filter state.
- * `rankByRelevance` (the /search page) makes "relevance" the default sort
- * whenever there is a query; other listings default to "newest".
+ * `rankByRelevance` (the search page, a collection) opens results with a
+ * query in "relevance". Otherwise a URL that names no order sends no `sort`:
+ * the read applies the store's default (or a collection's own order) and
+ * says which (`readSort`, from the response), so the page shows what it read.
+ *
+ * A sort the URL names is kept as named, in the API options, the filters,
+ * any redirect and every link, whatever the default: `?sortBy=newest` is a
+ * real choice where the store opens on another order, and a redirect decided
+ * before any read (the middleware's) gives the same answer.
  */
 export function resolveProductListQueryState({
   url,
   facets = [],
   allowUnknownAttributes = false,
   rankByRelevance = false,
+  readSort,
 }: {
   url: URL;
   facets?: readonly ProductFacet[];
   allowUnknownAttributes?: boolean;
   rankByRelevance?: boolean;
+  /** The order the listing's read reported (its response's `sort`). */
+  readSort?: ProductListSort | null;
 }): ProductListQueryState {
   const params = url.searchParams;
   const rawQuery = getLastParam(params, "q");
   const query = normalizeSearchQuery(rawQuery);
-  const defaultSort: ProductListSort = rankByRelevance && query ? "relevance" : "newest";
+  const ranksByRelevance = rankByRelevance && Boolean(query);
+  const { sort: namedSort, changed: sortChanged } = normalizeSort(
+    getLastParam(params, "sortBy"),
+    ranksByRelevance,
+  );
+  const defaultSort: ProductListSort = ranksByRelevance
+    ? "relevance"
+    : (!namedSort && readSort) || DEFAULT_LISTING_SORT;
+  const sortBy = namedSort ?? readSort ?? defaultSort;
   const { page, changed: pageChanged } = normalizePage(
     getLastParam(params, "page"),
-  );
-  const { sortBy, changed: sortChanged } = normalizeSort(
-    getLastParam(params, "sortBy"),
-    defaultSort,
   );
   const { limit, changed: limitChanged } = normalizePageSize(getLastParam(params, "limit"));
   const renderParams = collectRenderableParams(params);
@@ -335,7 +362,7 @@ export function resolveProductListQueryState({
   const options: ProductListOptions = {
     page,
     limit,
-    sort: sortBy,
+    ...(namedSort ? { sort: namedSort } : {}),
   };
   const currentFilters: ProductListFilterState = {};
   let shouldRedirect =
@@ -350,8 +377,8 @@ export function resolveProductListQueryState({
   if (page > 1) {
     currentFilters.page = String(page);
   }
-  if (sortBy !== defaultSort) {
-    currentFilters.sortBy = sortBy;
+  if (namedSort) {
+    currentFilters.sortBy = namedSort;
   }
   if (limit !== DEFAULT_PRODUCT_LIST_PAGE_SIZE) {
     currentFilters.limit = String(limit);
@@ -503,6 +530,6 @@ export function resolveProductListQueryState({
     query,
     options,
     currentFilters,
-    redirectPath: buildProductListHref({ pathname: url.pathname, currentFilters, defaultSort }),
+    redirectPath: buildProductListHref({ pathname: url.pathname, currentFilters }),
   };
 }

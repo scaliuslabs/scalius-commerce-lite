@@ -71,18 +71,42 @@ export function allowsCashOnDelivery(lineTypes: readonly (FulfillmentType | null
 }
 
 /**
- * Whether a SKU is paid only online: a download, a key or a gift card is sent
- * once the order is paid, so no cash promise buys it (`allowsCashOnDelivery`).
- * A kit is paid only online when any of its items is.
+ * Whether a payment method may pay for an order, by how its money reaches
+ * the store (its kind, never its id): cash collected where goods change hands
+ * (`cash_on_delivery`: the built-in method, or an app's deferred method that
+ * declares it) only where cash fits every line (`allowsCashOnDelivery`); every
+ * other kind (online, an invoice, a payment to the store, a gift card) pays
+ * for anything. What is sent once paid (a key, a download, a gift card) waits
+ * for that payment: automatic fulfilment hands it over only on a settled
+ * payment, an invoice's included. The one answer for checkout, the cart
+ * check, the staff quote and the storefront (`cashPayable` is its SKU side).
+ * An unknown kind fails closed: only a known non-cash kind pays where cash
+ * doesn't fit.
  */
-export function paidOnlineOnly(source: { fulfillmentKind: string | null | undefined; isGiftCard?: boolean | null }): boolean {
-  return source.isGiftCard === true || source.fulfillmentKind === "digital";
+export function paymentMethodFits(kind: string | null | undefined, cashFits: boolean): boolean {
+  // Fails closed: a kind no surface knows (null, a typo) is treated as cash.
+  if (cashFits) return true;
+  return typeof kind === "string" && (NON_CASH_PAYMENT_KINDS as readonly string[]).includes(kind);
+}
+
+/** The payment kinds that are not cash at hand-over (`ORDER_PAYMENT_KINDS` less `cash_on_delivery`). */
+export const NON_CASH_PAYMENT_KINDS = ["invoice", "paid_to_store", "gift_card", "online"] as const;
+
+/**
+ * Whether cash may pay for a SKU: not for a download, a key or a gift card,
+ * which is sent once the order is paid, so no cash promise collected at a
+ * door it never reaches buys it (`allowsCashOnDelivery`); every other way to
+ * pay does (`paymentMethodFits`), the invoice and a gift card included. A kit
+ * is cash payable only when every one of its items is.
+ */
+export function cashPayable(source: { fulfillmentKind: string | null | undefined; isGiftCard?: boolean | null }): boolean {
+  return source.isGiftCard !== true && source.fulfillmentKind !== "digital";
 }
 
 /**
  * What a kit sells, from its items (a kit has no fulfilment of its own): it
  * ships when any item ships, else it is digital when any item is, else a
- * service. Whether it is paid only online is `paidOnlineOnly` of any item.
+ * service. It is cash payable only when every item is (`cashPayable`).
  */
 export function kitFulfillmentKind(itemKinds: readonly (string | null | undefined)[]): FulfillmentKind {
   if (itemKinds.length === 0 || itemKinds.some((kind) => kind !== "digital" && kind !== "service")) return "physical";

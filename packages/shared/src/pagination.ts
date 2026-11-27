@@ -140,6 +140,21 @@ function matchesKind(value: CursorValue, kind: CursorValueKind, nullable: boolea
 }
 
 /**
+ * The sort a list cursor was issued for, or null when the token is not a
+ * cursor: a request that names no sort continues in its cursor's order
+ * (`decodeListCursor` still checks the whole token against that order).
+ */
+export function listCursorSort(token: string): string | null {
+  if (token.length === 0 || token.length > MAX_CURSOR_LENGTH || !BASE64URL.test(token)) return null;
+  try {
+    const parsed = cursorEnvelope.safeParse(JSON.parse(fromBase64Url(token)));
+    return parsed.success ? parsed.data.s : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Reads a cursor token for the sort and direction the request asked for.
  * Throws `InvalidCursorError` for anything else: bad characters, bad JSON,
  * an unknown version, another sort or direction, wrong value types.

@@ -9,7 +9,6 @@ import { formatPageNumber } from "@/lib/store-time-zone";
 import {
   PRODUCT_LIST_PAGE_SIZES,
   type ProductListFilterState,
-  type ProductListSort,
 } from "@/lib/product-list-query";
 
 interface Props {
@@ -20,13 +19,12 @@ interface Props {
   options?: Array<{ value: string; label: string }>;
   selected: string;
   pathname: string;
-  defaultSort: ProductListSort;
   currentFilters: ProductListFilterState;
   /** A labelled select without its own row (it sits in the caller's). */
   bare?: boolean;
 }
 
-const { id, name, variant, options: sortOptions, selected, pathname, defaultSort, currentFilters, bare = false } = Astro.props;
+const { id, name, variant, options: sortOptions, selected, pathname, currentFilters, bare = false } = Astro.props;
 const sort = name === "sortBy";
 const { language } = await currentRequestTheme(Astro.locals);
 const copy = catalogCopy(language).sort;
@@ -39,7 +37,6 @@ const attributes = {
   name,
   "data-catalog-sort": true,
   "data-list-pathname": pathname,
-  "data-default-sort": defaultSort,
   "data-current-filters": JSON.stringify(currentFilters),
 };
 ---

@@ -102,6 +102,8 @@ Inside core, import `deps` from the `cache-deps` folder (`../../cache-deps` in a
    | Any availability band | `deps.inventoryBands()` (`set:inventory:document`) as well as the product keys |
    | A manual collection | `deps.collection(id)` plus `deps.products(memberIds)` |
    | A list or search that found no product | its membership or order key; `declareProductCards([])` (or `declareNoProductRow()`) adds `p:~`, `m:~` and `sold:~`, keys no row advances, for the card tables its statements still name |
+   | A lookup by slug or id that found nothing, where "found" is decided live (a join, an `EXISTS`: the product page and its sections) | run the lookup in `withLookupScope(lookup, { nothingFound })`: a negative answer then depends on every registered table the lookup's statements read, by its coarse keys, so it cannot miss a table its positive decision reads. Readers whose miss is decided by one table with an "any row" key (`c:*`, `b:*`, `pg:*`, `col:<id>`, `rd`) or by the buyer-state projection (`lm:all`) declare that key instead |
+   | A row joined by id that is gone (a placed or component SKU soft-deleted) | the key its return would advance: the SKU's own product, `deps.product(skuProductId)` |
    | A dynamic collection | `deps.collection(id)` plus `deps.listMembership(categoryScope(...))`, plus `deps.listOrder(...)` when sorted |
    | Custom field values | `deps.customFieldDefinitions(ownerType)` plus the owner's own keys |
    | The store-shape counts | `deps.key(cacheDep.storeShape())` (`lm:shape`) plus the "any row" keys the read uses |

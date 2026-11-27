@@ -91,6 +91,7 @@ export const GIFT_CARD_TEXT_FIELDS = [
   "paidWithGiftCardDescriptionText",
   "giftCardPayOnDeliveryText",
   "giftCardCheckoutStepText",
+  "giftCardPaysText",
 ] as const;
 /** Apps at checkout: an app the store relies on can't answer (checkout pauses), or an app's offer changed. */
 export const APP_TEXT_FIELDS = ["checkoutAppUnavailableText", "checkoutAppOfferChangedText"] as const;
@@ -121,6 +122,9 @@ export const ORDER_PROBLEM_TEXT_FIELDS = [
   "cashOnDeliveryUnavailableText",
   "deliveryUnavailableText",
   "cartDeliveryUnavailableText",
+  "cartPayLaterSignInText",
+  "cartPayLaterNotOpenText",
+  "paymentGiftCardOnlyText",
   "totalUpdatedForChoiceText",
 ] as const;
 /** Delivery by shipping profile: a line that ships free, and a cart its options can't take (a weight or value limit). */

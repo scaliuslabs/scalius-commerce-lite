@@ -101,7 +101,7 @@ export const listingPageInfoSchema = z.object({
 /** The `cursor` query parameter shared by every buyer-facing product listing. */
 export const listingCursorQuerySchema = {
   cursor: z.string().max(1024).optional().openapi({
-    description: "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
+    description: "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc, price-desc and popular only, not with `page` beyond 1. Walks a large catalogue without OFFSET. Without `sort` the cursor continues in its own order (a changed store default does not break it); a cursor for another `sort` is rejected with invalid_cursor.",
   }),
 };
 
@@ -110,7 +110,14 @@ export const listingSortSchema = z.enum(STOREFRONT_LISTING_SORTS);
 /** A search's orders: `relevance`, then every listing order. */
 export const searchSortSchema = z.enum(STOREFRONT_SEARCH_SORTS);
 /** What each listing order means, for the `sort` parameter's description. */
-export const LISTING_SORT_DESCRIPTION = "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.";
+export const LISTING_SORT_DESCRIPTION = "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: a `cursor` continues in its own order; otherwise the listing's own order (a collection with picked products) or the store's default listing order (`newest` or `popular`, Online store -> Preferences). The response's `sort` says which.";
+
+/** Every listing response's one name for the order it was read in. */
+export const listingReadSortField = {
+  sort: searchSortSchema.openapi({
+    description: "The order this page was read in: the `sort` asked for, a cursor's own order, best match (`relevance`) for a search with words where the listing ranks by it, the listing's own order, else the store's default listing order.",
+  }),
+};
 
 /** The `after`/`before` query parameters shared by every keyset-paged list. */
 export const keysetQuerySchema = {
