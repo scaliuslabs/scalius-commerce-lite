@@ -16,6 +16,7 @@ import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { POINT_OF_SALE_TENDER_VIAS, POINT_OF_SALE_TENDERS_MAX, RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
 import { PAYMENT_TERMS_MAX_DAYS } from "@scalius/shared/payment-terms";
 import { minorMoney } from "@scalius/shared/money-field";
+import { courierBookingOptionKeySchema, courierBookingOptionValueSchema } from "@scalius/shared/plugins/providers/courier";
 
 /** The one order line limit (`@scalius/shared/order-limits`). */
 export const MAX_ORDER_LINE_ITEMS = MAX_ORDER_LINES;
@@ -433,9 +434,22 @@ const shipmentResourceIdSchema = z.string().trim().min(1).max(180);
  * item description are deliberately absent: those facts are derived from the
  * current order immediately before the provider call.
  */
+/**
+ * Staff choices on a booking. `bookingOptions` are the courier's own, by the
+ * keys its manifest declares (`bookingOptions`: a select, a number or a
+ * boolean each); a key the courier does not declare, or a value outside its
+ * declaration, refuses the booking before anything is written. `itemWeight`
+ * is the parcel's weight in kilograms; `note` reaches the rider.
+ */
 export const shipmentCreationOptionsSchema = z.object({
-    deliveryType: z.number().int().min(0).max(1_000_000).optional(),
-    itemType: z.number().int().min(0).max(1_000_000).optional(),
+    bookingOptions: z.record(courierBookingOptionKeySchema, courierBookingOptionValueSchema)
+        .refine((options) => Object.keys(options).length <= 10, "At most 10 booking options.")
+        .meta({
+            maxProperties: 10,
+            propertyNames: { type: "string", pattern: "^[a-z][a-zA-Z0-9]{0,31}$" },
+            description: "The courier's own booking choices, by the keys its manifest declares (`bookingOptions`): at most 10, each a string, number or boolean within the declaration. A key it does not declare, or a value outside it, refuses the booking before anything is written.",
+        })
+        .optional(),
     itemWeight: z.number().finite().positive().max(10_000).optional(),
     note: z.string().trim().max(500).optional(),
 }).strict();

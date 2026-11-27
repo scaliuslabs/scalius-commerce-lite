@@ -25,7 +25,6 @@ import { payoutFailureCode, payoutFailureMessage } from "./payouts";
 export type { PayoutReversal, PayoutReversalStatus };
 export { PAYOUT_REVERSALS_MAX };
 
-export const PAYOUT_REVERSAL_REQUEST_MISMATCH_CODE = "payout_reversal_request_mismatch";
 export const PAYOUT_NOT_REVERSIBLE_CODE = "payout_not_reversible";
 export const PAYOUT_REVERSAL_EXCEEDS_PAYOUT_CODE = "payout_reversal_exceeds_payout";
 export const PAYOUT_REVERSAL_CURRENCY_MISMATCH_CODE = "payout_reversal_currency_mismatch";
@@ -59,13 +58,13 @@ export function payoutReversalRequestDigest(request: PayoutReversalRequest): Pro
     return sha256Hex(JSON.stringify(["reversal", request.payoutId, request.amountMinor, request.currency, request.reason]));
 }
 
-/** The app's reversal under a key, or null; another request under the key is refused (409). */
+/** The app's reversal under a key, or null; another request under the key is refused (422 `idempotency_key_reused`, `details.reversalId`). */
 export async function findPayoutReversalByKey(db: Database, request: PayoutReversalRequest): Promise<PayoutReversal | null> {
     const row = await db.select().from(payoutReversals)
         .where(and(eq(payoutReversals.appId, request.appId), eq(payoutReversals.idempotencyKey, request.idempotencyKey))).get();
     if (!row) return null;
     if (row.requestHash !== await payoutReversalRequestDigest(request)) {
-        throw new AppError(409, PAYOUT_REVERSAL_REQUEST_MISMATCH_CODE,
+        throw new AppError(422, "idempotency_key_reused",
             "This Idempotency-Key already reversed a different amount or payout. Use a new key for a new reversal.", { reversalId: row.id, payoutId: row.payoutId });
     }
     return row;

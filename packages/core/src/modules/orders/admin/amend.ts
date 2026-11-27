@@ -49,7 +49,7 @@ import type {
     ConfirmManualOrderAmendmentInput,
     PreviewManualOrderAmendmentInput,
 } from "../validation";
-import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
+import { AppError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import { buildOrderEventInsert, newOrderEventId, recordOrderEvent } from "../timeline";
 import { currentWarrantyRevisionSql } from "../commit-order";
 import { resolveOrderCurrencySnapshot } from "../../payments";
@@ -345,7 +345,7 @@ async function resolveManualOrderAmendmentReplay(
         .get();
     if (!row) return null;
     if (row.requestHash !== requestHash) {
-        throw new ConflictError("This amendment request key was already used for different changes.");
+        throw new AppError(422, "idempotency_key_reused", "This amendment request key was already used for different changes. Use a new key.");
     }
     try {
         return JSON.parse(row.responsePayload) as ManualOrderAmendmentResult;

@@ -200,6 +200,7 @@ export function appCourier(
     label: declaration.name,
     countries: declaration.kind === "courier" ? declaration.countries : "any",
     ...(declaration.locations ? { requiredLocations: declaration.locations.required } : {}),
+    ...(declaration.bookingOptions ? { bookingOptions: declaration.bookingOptions } : {}),
 
     // Read once per request and key: readiness, settings pages and every call share it.
     async setup(provider, encryptionKey) {

@@ -6,7 +6,6 @@
 // (apps/api/src/plugins/providers/payout.ts), which owns the plugin host.
 export {
     PAYOUT_LIST_MAX,
-    PAYOUT_REQUEST_MISMATCH_CODE,
     applyPayoutAnswer,
     applyPayoutCallback,
     findPayoutByKey,
@@ -32,7 +31,6 @@ export {
     PAYOUT_REVERSALS_MAX,
     PAYOUT_REVERSAL_CURRENCY_MISMATCH_CODE,
     PAYOUT_REVERSAL_EXCEEDS_PAYOUT_CODE,
-    PAYOUT_REVERSAL_REQUEST_MISMATCH_CODE,
     applyPayoutReversalAnswer,
     applyPayoutReversalCallback,
     findPayoutReversalByKey,

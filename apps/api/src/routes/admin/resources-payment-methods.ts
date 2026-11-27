@@ -49,6 +49,7 @@ import { requestPaymentProviders } from "../../plugins/providers/payment";
 import { claimAndApplyPaymentEventNow } from "../payment/payment-events";
 import { executionContextOf } from "../../background/after-response";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
+import { optionalOrderRevisionSchema } from "./order-resource";
 import { minorMoney } from "@scalius/shared/money-field";
 
 const app = adminRouter();
@@ -225,7 +226,7 @@ const chargeBody = z.object({
   capture: z.enum(["automatic", "manual"]).default("automatic").openapi({
     description: "`manual` only authorizes (money held): capture it with payments.capture or release it with payments.void. Needs a provider that authorizes.",
   }),
-  expectedRevision: z.number().int().min(1).optional().openapi({ description: "The order `revision` you read; a different one is refused with 409 before the provider is called." }),
+  expectedRevision: optionalOrderRevisionSchema,
 }).strict();
 
 app.openapi(createRoute({

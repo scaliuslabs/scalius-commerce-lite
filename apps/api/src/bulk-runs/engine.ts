@@ -340,7 +340,7 @@ function planStock(rows: readonly StockRow[], location: InventoryLocationRef) {
       : row.deletedAt ? "retired"
         : row.fulfillmentKind && isDigitalKind(row.fulfillmentKind) ? "digital_stock"
           : row.fulfillmentKind !== "physical" ? "not_physical"
-            : row.expectedStockVersion !== undefined && row.expectedStockVersion !== row.stockVersion ? "stock_changed"
+            : row.expectedStockVersion !== undefined && row.expectedStockVersion !== row.stockVersion ? "stock_version_conflict"
               : null;
     if (refusal) {
       plan.failures.push({ id: row.id, code: refusal });
@@ -380,7 +380,7 @@ function planStatus(rows: readonly ProductRow[], input: BulkSetProductStatusInpu
   for (const row of rows) {
     const wanted = expected.get(row.id);
     if (wanted !== undefined && wanted !== row.aggregateRevision) {
-      plan.failures.push({ id: row.id, code: "revision_changed" });
+      plan.failures.push({ id: row.id, code: "product_revision_conflict" });
     } else if (row.isActive === active) {
       plan.unchanged += 1;
     } else {
