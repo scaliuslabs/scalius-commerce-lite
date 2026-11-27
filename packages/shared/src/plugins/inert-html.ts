@@ -348,7 +348,12 @@ function walk(nodes: ChildNode[], options: InertChromeOptions, drawers: Readonly
 export const INERT_MARKUP = {
   tags: [...KEEP],
   attributes: [...GENERAL, "class", "id", "style", ...ID_REFERENCES, ...Object.keys(VALUES), ...Object.keys(INERT_BEHAVIOURS)],
-  byTag: { ...Object.fromEntries(Object.entries(BY_TAG).map(([tag, list]) => [tag, [...list]])), button: [...BY_TAG.button!, "type"], div: ["popover"], nav: ["popover"], aside: ["popover"], section: ["popover"] } as Record<string, string[]>,
+  byTag: {
+    ...Object.fromEntries(Object.entries(BY_TAG).map(([tag, list]) => [tag, [...list]])),
+    button: [...BY_TAG.button!, "type"], div: ["popover"], nav: ["popover"], aside: ["popover"], section: ["popover"],
+    // The host's own state on a drawn page: the cart count marks itself empty (scripts/buyer-chrome.ts).
+    span: [...BY_TAG.span!, "data-empty"],
+  } as Record<string, string[]>,
   svgTags: [...SVG_TAGS],
   svg: [...SVG],
   values: { ...VALUES, popover: ["auto"], type: ["button"], "aria-live": ["polite"], "data-scalius-when": ["signed-in", "signed-out"] } as Record<string, readonly string[]>,

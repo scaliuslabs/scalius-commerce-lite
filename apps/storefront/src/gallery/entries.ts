@@ -54,7 +54,9 @@ import { NOOR_SECTION_FIXTURES, NOOR_REPEATED_FIXTURES, repeatedNoorValues } fro
 export type GalleryPage =
   | "home" | "landing" | "product" | "category" | "collection" | "brand" | "search" | "cart" | "page"
   /** The theme editor's sample pages (the entry's theme as a live preview's draft). */
-  | "sample-checkout" | "sample-receipt" | "sample-account";
+  | "sample-checkout" | "sample-receipt" | "sample-account"
+  /** The buyer's own account page (signed out: its sign-in view), where a theme's chrome may draw. */
+  | "account";
 
 /** The part of the page an entry is about: axe and the harness checks look only here. */
 export interface GalleryFocus {
@@ -111,6 +113,11 @@ export interface GalleryScenario {
    * the account line offered protection (`offer`), or two accounts protected (`protected`). Its blocks replace the other apps'.
    */
   customer?: "offer" | "protected";
+  /**
+   * The gallery's theme app for buyer pages is installed (chrome-app.ts), its header and footer skins asking
+   * to draw there: with the stylesheet a theme writes (`theme`) or a hostile one (`forged`).
+   */
+  buyerChrome?: "theme" | "forged";
 }
 
 /** Required state setup: a closed drawer is not evidence of an open drawer. */
@@ -1002,6 +1009,25 @@ export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocu
     ...(state === "bn" ? { locale: "bn" as const, product: "bangla" as const } : state === "ar" ? { locale: "ar" as const } : {}),
   };
   const entry: GalleryEntry = { ...base, id, family: "private-pages:property", title: `Private pages property ${id} (${state})`, theme, scenario, ...(options.page ? { page: options.page } : {}) };
+  registered.set(id, entry);
+  return entry;
+}
+
+/**
+ * Registers the account page drawn under a theme whose header and footer are
+ * the gallery's theme app for buyer pages (chrome-app.ts: `chrome` names its
+ * stylesheet, a theme's or a hostile one), or the store's own chrome
+ * (`none`), with the light or dark switch offered and the device's scheme.
+ */
+export function registerBuyerChromeEntry(id: string, chrome: "theme" | "forged" | "none"): GalleryEntry {
+  const base = galleryEntry(entryId("app", "buyer-ui"))!;
+  const theme = clone(base.theme);
+  const colors = theme.tokens.colors;
+  theme.tokens = { ...theme.tokens, colorScheme: "system", colorSchemeToggle: true, darkColors: storefrontDarkPalette(colors) };
+  const app = chrome === "forged" ? "forged.chrome" : "gallery.chrome";
+  if (chrome !== "none") theme.apps = { ...theme.apps, skins: { ...theme.apps?.skins, header: { app: `${app}/gallery_header`, values: {} }, footer: { app: `${app}/gallery_footer`, values: {} } } };
+  const scenario: GalleryScenario = { menu: "compact", ...(chrome !== "none" ? { buyerChrome: chrome } : {}) };
+  const entry: GalleryEntry = { id, family: "buyer-chrome", title: `A theme's chrome on the account (${chrome})`, page: "account", theme, focus: WHOLE_PAGE, scenario };
   registered.set(id, entry);
   return entry;
 }

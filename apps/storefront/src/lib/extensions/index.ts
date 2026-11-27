@@ -217,15 +217,12 @@ export async function buyerChromeMarkup(locals: object, url: URL, target: "heade
   if (!markup) return null;
   // A link is kept as written only to a URL the skin was handed: by the store (its projection) or by the merchant.
   const links = handedStrings([projection, values]);
-  let html = "";
-  for (const part of markup.parts) {
-    if (part.kind !== "html") continue;
-    const inert = inertHtml(part.html, links);
-    if (inert === null) {
-      warnOnce(`buyer-chrome-size:${extension.pluginId}:${target}`, `${extension.pluginId} ${target} skin draws over ${INERT_MARKUP_MAX_BYTES / 1024} KiB on a buyer page: the store draws its own ${target} there.`);
-      return null;
-    }
-    html += inert;
+  // Its embeds (its slots) draw nothing here: the markup around them is rebuilt as one document, so an element
+  // that opens before a slot and closes after it stays one element, and a button still finds its drawer.
+  const html = inertHtml(markup.parts.map((part) => (part.kind === "html" ? part.html : "")).join(""), links);
+  if (html === null) {
+    warnOnce(`buyer-chrome-size:${extension.pluginId}:${target}`, `${extension.pluginId} ${target} skin draws over ${INERT_MARKUP_MAX_BYTES / 1024} KiB on a buyer page: the store draws its own ${target} there.`);
+    return null;
   }
   return html.trim() === "" ? null : { html, stylesheet };
 }

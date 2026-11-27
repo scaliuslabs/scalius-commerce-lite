@@ -400,9 +400,49 @@ export const MUTATIONS = {
  * the modules it serves, and which files it rewrote and which it could not
  * (the gate asks, and a mutation that tests nothing fails the run).
  */
+// ─── A theme's chrome on the buyer's own pages (buyer-chrome.browser.mjs `--mutations`) ───
+const CHROME = "apps/storefront/src/components/private/PrivateChrome.astro";
+const SHADOW = '<scalius-chrome data-chrome={target}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome>';
+/** Each names the check of buyer-chrome.browser.mjs that must fail under it. */
+export const CHROME_MUTATIONS = {
+  "C1 no shadow root": {
+    why: "the chrome is drawn in the page itself: its sheet and its layers reach the page",
+    rewrites: [rewrite(CHROME, SHADOW, '<scalius-chrome data-chrome={target}><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></scalius-chrome>')],
+    expect: /^shadow: the (?:header|footer) is drawn without a shadow root|^style: |^covered: /,
+  },
+  "C2 a form kept": {
+    why: "the rebuild keeps a theme's forms and fields",
+    rewrites: [rewrite("packages/shared/src/plugins/inert-html.ts", '"noscript", "video", "audio", "canvas", "math", "foreignobject", "use", "image", "portal", "form", "input", "select",', '"noscript", "video", "audio", "canvas", "math", "foreignobject", "use", "image", "portal", "select",')],
+    expect: /^markup: /,
+  },
+  "C3 no paint containment": {
+    why: "the guard keeps the host in the flow but no longer holds what the theme draws to its box",
+    rewrites: [rewrite("apps/storefront/src/lib/private-pages/chrome-style.ts", "max-inline-size:100%!important;contain:paint!important;", "max-inline-size:100%!important;")],
+    expect: /^covered: |^containment: /,
+  },
+  "C4 the theme's sheet unlayered": {
+    why: "the theme's sheet is imported outside its layer, so its important rules outrank the guard",
+    rewrites: [rewrite("apps/storefront/src/lib/private-pages/chrome-style.ts", "theme ? `@import ${cssUrl(theme)} layer(theme);` : \"\",", "theme ? `@import ${cssUrl(theme)};` : \"\",")],
+    expect: /^covered: |^containment: /,
+  },
+};
+
+/** Each chrome mutation names the check it must fail, and each rewrite's text is in its file exactly once. */
+export async function chromeMutationsHold(read) {
+  const problems = [];
+  for (const [name, mutation] of Object.entries(CHROME_MUTATIONS)) {
+    for (const { file, find } of mutation.rewrites) {
+      const source = await read(file);
+      const at = source.indexOf(find);
+      if (at < 0 || source.indexOf(find, at + find.length) >= 0) problems.push(`${name}: ${file} does not hold its text exactly once`);
+    }
+  }
+  return problems;
+}
+
 export function galleryMutation(name) {
-  const mutation = MUTATIONS[name];
-  if (!mutation) throw new Error(`Unknown mutation ${name}: one of ${Object.keys(MUTATIONS).join(", ")}.`);
+  const mutation = MUTATIONS[name] ?? CHROME_MUTATIONS[name];
+  if (!mutation) throw new Error(`Unknown mutation ${name}: one of ${[...Object.keys(MUTATIONS), ...Object.keys(CHROME_MUTATIONS)].join(", ")}.`);
   const applied = new Set();
   const missed = new Set();
   // The source is rewritten as it is read from disk, before any compiler (TypeScript, Astro) sees it.

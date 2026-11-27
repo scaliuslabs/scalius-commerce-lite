@@ -11,9 +11,11 @@ import { answerFixtureApi, entryTheme, galleryApiBase, galleryStoreShape, GALLER
 import { galleryEntries, galleryEntry, type GalleryEntry, type GalleryPage } from "./entries";
 import { galleryCartSeed } from "./cart-seed";
 import { installGalleryListingApp } from "./listing-app-extension";
+import { installGalleryChromeApps } from "./chrome-app-extension";
 
-// The gallery's own listing app answers as a bundled app (listing-app.tsx).
+// The gallery's own listing app answers as a bundled app (listing-app.tsx), and its theme app for buyer pages (chrome-app.ts).
 installGalleryListingApp();
+installGalleryChromeApps();
 import { PRODUCT_SCENARIO_SLUGS, mediaShape, setFixtureOrigin } from "./fixtures";
 
 if (import.meta.env.PROD) {
@@ -45,6 +47,7 @@ const PAGES: Record<GalleryPage, { module: string; path: (entry: GalleryEntry) =
   "sample-checkout": { module: SAMPLE_PAGE, path: () => "/theme-preview/sample/checkout", params: () => ({ page: "checkout" }) },
   "sample-receipt": { module: SAMPLE_PAGE, path: () => "/theme-preview/sample/receipt", params: () => ({ page: "receipt" }) },
   "sample-account": { module: SAMPLE_PAGE, path: () => "/theme-preview/sample/account", params: () => ({ page: "account" }) },
+  account: { module: "/src/pages/account.astro", path: () => "/account", params: () => ({}) },
 };
 
 /** The theme editor's sample pages answer only under a live preview: the fixture API resolves this one to the entry's theme. */

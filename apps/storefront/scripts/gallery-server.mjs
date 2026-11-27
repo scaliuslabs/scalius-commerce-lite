@@ -362,6 +362,18 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const tables = shared.privatePageTokenMode(served.privatePages, drawnPage) ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served), drawnPage) : [];
         return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: served.privatePages.compiled.refused === true });
       }
+      // A theme's chrome on the buyer's account (test-support/buyer-chrome.browser.mjs): the gallery's theme app for
+      // buyer pages with a theme's stylesheet (`theme`) or a hostile one (`forged`), or the store's own chrome (`none`).
+      if (url.pathname === `${GALLERY_PREFIX}/buyer-chrome` && request.method === "GET") {
+        const { INERT_MARKUP, inertMarkupProblems } = await vite.ssrLoadModule("@scalius/shared/plugins/inert-html");
+        return sendJson(response, 200, { problems: inertMarkupProblems.toString(), markup: INERT_MARKUP });
+      }
+      if (url.pathname === `${GALLERY_PREFIX}/buyer-chrome` && request.method === "POST") {
+        const body = JSON.parse(await readBody(request) || "{}");
+        const { registerBuyerChromeEntry } = await vite.ssrLoadModule("/src/gallery/entries.ts");
+        const chrome = ["theme", "forged", "none"].includes(body.chrome) ? body.chrome : "none";
+        return sendJson(response, 200, { id: registerBuyerChromeEntry(String(body.id), chrome).id });
+      }
       // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens), and the
       // app node kinds that have rows (their selectors inside a block).
       if (url.pathname === `${GALLERY_PREFIX}/private-anatomy`) {
