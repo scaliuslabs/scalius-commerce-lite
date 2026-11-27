@@ -314,6 +314,14 @@
  * subscriber and webhook cases keep their 2 calls and 4 statements of headroom
  * (concurrent deliveries vary by up to 2 calls between runs).
  *
+ * Merged rc.1 wave (2026-11-27): the buyer-page sheet check after a deploy was a sweep of its own: every
+ * Paid sweep tick read its settled mark (+1 call, +3 on the first) and the longer Free rotation moved which
+ * job each minute runs (cron-idle mean rows read 1.6 -> 1.7 Free, 2.2 -> 2.34 Paid; drain-busy 8 -> 11
+ * calls Free). It is now a stage of the post-deploy settle (`requestPostDeployProjectionRebuild`), so a
+ * settled version costs the one read it always did and every idle and drain case is back to v2.0.0-beta.8.
+ * The idle payment pages end in the batch that reads the due cancel commands, not a call of their own:
+ * drain-idle-pages 11 -> 10 calls Free, 75 -> 74 Paid (the same statements).
+ *
  * Disputes (2026-11-13): a refund reads the order's disputes beside its payment
  * ledger, in the batch that reads the ledger (no new call): the request's read
  * and the settlement's read, +2 statements; a refund of a gift-card purchase
@@ -403,7 +411,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "cron-idle": { d1Calls: 10, d1Statements: 14, externalFetches: 0, rowsWritten: 92, rowsRead: 7020, fullScans: 7, meanRowsWritten: 0, meanRowsRead: 1.6 },
     "cron-nightly": { d1Calls: 26, d1Statements: 61, externalFetches: 0, rowsWritten: 194, rowsRead: 20323, fullScans: 61 },
     "drain-busy": { d1Calls: 8, d1Statements: 18, externalFetches: 0, rowsWritten: 13, rowsRead: 629, fullScans: 14 },
-    "drain-idle-pages": { d1Calls: 11, d1Statements: 12, externalFetches: 0, rowsWritten: 3, rowsRead: 5, fullScans: 0 },
+    "drain-idle-pages": { d1Calls: 10, d1Statements: 12, externalFetches: 0, rowsWritten: 3, rowsRead: 5, fullScans: 0 },
     "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 54, rowsRead: 57, fullScans: 16 },
     "order-lifecycle": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 54, rowsRead: 57, fullScans: 16 },
     "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1086, rowsRead: 275, fullScans: 2 },
@@ -490,7 +498,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "cron-idle": { d1Calls: 60, d1Statements: 70, externalFetches: 0, rowsWritten: 96, rowsRead: 7038, fullScans: 16, meanRowsWritten: 0, meanRowsRead: 2.2 },
     "cron-nightly": { d1Calls: 120, d1Statements: 766, externalFetches: 0, rowsWritten: 194, rowsRead: 23190, fullScans: 437 },
     "drain-busy": { d1Calls: 9, d1Statements: 24, externalFetches: 0, rowsWritten: 15, rowsRead: 632, fullScans: 15 },
-    "drain-idle-pages": { d1Calls: 75, d1Statements: 86, externalFetches: 0, rowsWritten: 126, rowsRead: 7638, fullScans: 16 },
+    "drain-idle-pages": { d1Calls: 74, d1Statements: 86, externalFetches: 0, rowsWritten: 126, rowsRead: 7638, fullScans: 16 },
     "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 54, rowsRead: 57, fullScans: 16 },
     "order-lifecycle": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 54, rowsRead: 57, fullScans: 16 },
     "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1086, rowsRead: 275, fullScans: 2 },

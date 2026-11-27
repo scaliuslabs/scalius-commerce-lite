@@ -17,7 +17,6 @@ import {
   isRefundChangeWaitingForRefundError,
   listObservedRefunds,
   cancelDueSessions,
-  expireIdleSessions,
   isDisputeWaitingForRefundError,
   listDuePaymentCommands,
   markSessionProcessing,
@@ -117,7 +116,8 @@ export async function applyClaimedPaymentEvent(
  * The tick's drain: due retries and attempts whose invocation died, then
  * the off-session commands (charge, capture, void) still open past their
  * next look, then the payment sessions to close at their provider (an
- * unpaid checkout's hold ended, or a newer session replaced them), each
+ * unpaid checkout's hold ended, a newer session replaced them, or a placed
+ * order's page sat idle past its bound), each
  * within the plan's limit. A command is settled from the ledger, looked up
  * at its gateway, or expired (core saved-method-charges.ts); a session is
  * closed through the port, or locally when its provider cannot
@@ -126,8 +126,7 @@ export async function applyClaimedPaymentEvent(
 export async function drainPaymentEvents(db: Database, env: Env, ctx: ExecutionContext): Promise<{ scanned: number; processed: number }> {
   const events = await drainDuePaymentEvents(db, env, ctx);
   const commands = await reconcileDuePaymentCommands(db, env, ctx);
-  // A placed order's payment page the buyer left idle is closed like a replaced one.
-  await expireIdleSessions(db, planLimits().background.paymentEventsPerDrain);
+  // A placed order's payment page the buyer left idle is closed like a replaced one (in the same read batch).
   const sessions = await cancelDueSessions(db, paymentCommandDeps(db, env, ctx), planLimits().background.paymentEventsPerDrain);
   return {
     scanned: events.scanned + commands.scanned + sessions.scanned,
