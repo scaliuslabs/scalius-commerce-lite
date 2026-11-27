@@ -52,11 +52,15 @@ export function colorSchemeBootScript(colorScheme: ThemeColorScheme | null, reme
     "(function(){try{",
     'var r=document.documentElement,t=r.getAttribute("data-color-scheme"),m=window.matchMedia("(prefers-color-scheme: dark)"),c=null;',
     'function v(x){return x==="light"||x==="dark"?x:null}',
+    // A buyer page's theme chrome (components/private/PrivateChrome.astro): its shadow hosts follow the page.
+    'function h(){return document.querySelectorAll("scalius-chrome")}',
     toggle
-      ? 'function p(){var d=r.getAttribute("data-color-scheme")==="dark"?"true":"false";'
-        + 'document.querySelectorAll("[data-color-scheme-toggle]").forEach(function(b){b.setAttribute("aria-pressed",d)})}'
+      ? 'function p(){var d=r.getAttribute("data-color-scheme")==="dark"?"true":"false",f=function(b){b.setAttribute("aria-pressed",d)};'
+        + 'document.querySelectorAll("[data-color-scheme-toggle]").forEach(f);'
+        + 'h().forEach(function(x){if(x.shadowRoot)x.shadowRoot.querySelectorAll("[data-color-scheme-toggle]").forEach(f)})}'
       : "",
-    `function a(){r.setAttribute("data-color-scheme",c||(t==="system"?(m.matches?"dark":"light"):t))${toggle ? ";p()" : ""}}`,
+    'function a(){var s=c||(t==="system"?(m.matches?"dark":"light"):t);r.setAttribute("data-color-scheme",s);'
+      + `h().forEach(function(x){x.setAttribute("data-color-scheme",s)})${toggle ? ";p()" : ""}}`,
     stored ? `function s(){try{c=v(localStorage.getItem(${key}))}catch(e){}}s();` : "",
     "a();",
     remember ? 'if(t==="system")m.addEventListener("change",a);' : "",
@@ -65,7 +69,8 @@ export function colorSchemeBootScript(colorScheme: ThemeColorScheme | null, reme
     // or footer skin drew: the CSS rule's fallback without :has()), and the store's sits in the header's landmark.
     toggle
       ? 'document.addEventListener("DOMContentLoaded",function(){p();'
-        + `var o=document.querySelector(${serializeJsonForInlineScript(SKIN_DRAWN_SWITCH)});`
+        + `var o=document.querySelector(${serializeJsonForInlineScript(SKIN_DRAWN_SWITCH)})`
+        + '||Array.prototype.some.call(h(),function(x){return x.shadowRoot&&x.shadowRoot.querySelector("[data-color-scheme-toggle]")});'
         + 'if(o)r.setAttribute("data-color-scheme-switch-yields","");'
         + 'document.querySelectorAll("[data-sx-host-color-scheme-toggle]").forEach(function(h){'
         + 'if(o){h.hidden=true;return}var d=h.closest("[data-storefront-header]");if(!d)return;'
@@ -76,7 +81,7 @@ export function colorSchemeBootScript(colorScheme: ThemeColorScheme | null, reme
         + 'var l=d.querySelector("header,[role=banner]");if(l&&!l.contains(h))l.appendChild(h);h.setAttribute("data-sx-placed","")})});'
       : "",
     toggle
-      ? 'document.addEventListener("click",function(e){var b=e.target instanceof Element?e.target.closest("[data-color-scheme-toggle]"):null;'
+      ? 'document.addEventListener("click",function(e){var g=e.composedPath?e.composedPath()[0]:e.target,b=g instanceof Element?g.closest("[data-color-scheme-toggle]"):null;'
         + 'if(!b||e.defaultPrevented)return;c=r.getAttribute("data-color-scheme")==="dark"?"light":"dark";a();'
         + (stored ? `try{localStorage.setItem(${key},c)}catch(e){}` : "")
         + "});"

@@ -39,6 +39,7 @@ import {
 import { fixtureObject, objectMediaIds } from "./objects";
 import { NOOR_EXTENSION, noorSectionSurfaces } from "./noor";
 import { GALLERY_LISTING_EXTENSION } from "./listing-app-extension";
+import { GALLERY_CHROME_EXTENSION, GALLERY_FORGED_CHROME_EXTENSION, galleryProbeChromeApp } from "./chrome-app-extension";
 
 /**
  * The fixture API lives on the gallery server under the entry's id, so the
@@ -130,8 +131,13 @@ function layout(entry: GalleryEntry) {
     currency: { code: "BDT", symbol: "৳", decimalPlaces: 2, priceIncrementMinor: 100 },
     ...(markets(entry) ? { markets: markets(entry) } : {}),
     theme,
-    ...(entry.scenario.noor || entry.scenario.listingApp
-      ? { appExtensions: [...(entry.scenario.noor === "active" ? [NOOR_EXTENSION] : []), ...(entry.scenario.listingApp ? [GALLERY_LISTING_EXTENSION] : [])] }
+    ...(entry.scenario.noor || entry.scenario.listingApp || entry.scenario.buyerChrome
+      ? { appExtensions: [
+        ...(entry.scenario.noor === "active" ? [NOOR_EXTENSION] : []),
+        ...(entry.scenario.listingApp ? [GALLERY_LISTING_EXTENSION] : []),
+        ...(entry.scenario.buyerChromeApp ? [galleryProbeChromeApp(entry.scenario.buyerChromeApp)].filter((app) => app !== null)
+          : entry.scenario.buyerChrome ? [entry.scenario.buyerChrome === "forged" ? GALLERY_FORGED_CHROME_EXTENSION : GALLERY_CHROME_EXTENSION] : []),
+      ] }
       : {}),
     brand: { logo: theme.brand.logo ? mediaAsset(GALLERY_LOGO_ID, `${STORE_NAME} logo`) : null, darkLogo: null, footerLogo: null, favicon: null },
     storeShape: galleryStoreShape(entry),

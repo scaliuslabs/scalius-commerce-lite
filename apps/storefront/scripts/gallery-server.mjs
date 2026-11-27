@@ -265,7 +265,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
     try {
       // Production's gateway owns this route before Astro. Use its real
       // bundled-file handler so packed CSS and islands run in the gallery.
-      if (url.pathname.startsWith("/_x/")) {
+      if (url.pathname.startsWith("/_x/") || url.pathname.startsWith("/_buyer-chrome/")) {
         // The private pages' rendered tests name theme files (an icon): the gallery draws them.
         const fixture = /^\/_x\/[a-z0-9.-]+\/[A-Za-z0-9_-]+\/public\/pp\/([a-z0-9-]+)\.svg$/.exec(url.pathname);
         if (fixture) {
@@ -370,6 +370,29 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, terms: body.terms === true, ...(body.page === "home" || drawnPage !== "cart" ? { page: body.page } : {}) });
         const tables = shared.privatePageTokenMode(served.privatePages, drawnPage) ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served), drawnPage) : [];
         return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: Boolean(served.privatePages.compiled.refused?.[drawnPage]) || (shared.privatePagesCompiledCurrent(compiled.value) && !shared.privatePagesCompiledCurrent(served.privatePages)) });
+      }
+      // A theme's chrome on the buyer's account (test-support/buyer-chrome.browser.mjs): the gallery's theme app for
+      // buyer pages with a theme's stylesheet (`theme`) or a hostile one (`forged`), or the store's own chrome (`none`).
+      if (url.pathname === `${GALLERY_PREFIX}/buyer-chrome` && request.method === "GET") {
+        const { INERT_MARKUP, inertMarkupProblems } = await vite.ssrLoadModule("@scalius/shared/plugins/inert-html");
+        const probes = await vite.ssrLoadModule("/src/gallery/chrome-app-extension.ts");
+        return sendJson(response, 200, {
+          problems: inertMarkupProblems.toString(), markup: INERT_MARKUP,
+          refused: probes.GALLERY_REFUSED_SHEETS, drawn: probes.GALLERY_DRAWN_PROBES, colours: probes.GALLERY_FORGED_COLOURS,
+          utf16: Buffer.from(probes.galleryUtf16Sheet(":host-context(body) .gc-logo{background-image:url(/apps/forged.chrome/leak?utf16)}")).toString("base64"),
+        });
+      }
+      if (url.pathname === `${GALLERY_PREFIX}/buyer-chrome` && request.method === "POST") {
+        const body = JSON.parse(await readBody(request) || "{}");
+        const { registerBuyerChromeEntry } = await vite.ssrLoadModule("/src/gallery/entries.ts");
+        const chrome = ["theme", "forged", "none"].includes(body.chrome) ? body.chrome : "none";
+        // A probe sheet of its own (`sheet`: text, or `sheetBase64`: bytes), drawn by a theme app installed for it.
+        let probe = null;
+        if (typeof body.sheet === "string" || typeof body.sheetBase64 === "string") {
+          const { installGalleryProbeChromeApp } = await vite.ssrLoadModule("/src/gallery/chrome-app-extension.ts");
+          probe = installGalleryProbeChromeApp(String(body.id), typeof body.sheet === "string" ? body.sheet : new Uint8Array(Buffer.from(body.sheetBase64, "base64"))).pluginId;
+        }
+        return sendJson(response, 200, { id: registerBuyerChromeEntry(String(body.id), probe ? "forged" : chrome, probe).id });
       }
       // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens), and the
       // app node kinds that have rows (their selectors inside a block).

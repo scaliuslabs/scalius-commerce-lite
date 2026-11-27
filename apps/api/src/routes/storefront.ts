@@ -7,6 +7,7 @@ import { parseBindingResourceSelector } from "@scalius/shared/storefront-theme/b
 // All query logic lives in src/modules/storefront/storefront.service.ts.
 
 import { STOREFRONT_COMPONENT_TARGETS } from "@scalius/shared/plugins/storefront-protocol";
+import { BUYER_CHROME_CHECKER_HEADER } from "@scalius/shared/plugins/buyer-chrome-mark";
 import { PLUGIN_STOREFRONT_SCRIPT_PAGES } from "@scalius/shared/plugins/manifest";
 import { PIXEL_CONSENT_CATEGORIES, PIXEL_EVENT_NAMES } from "@scalius/shared/plugins/buyer-events";
 import { PROTECTED_CUSTOMER_DATA } from "@scalius/shared/plugins/protected-data";
@@ -660,6 +661,8 @@ app.openapi(extensionFileRoute, async (c) => {
       "Cache-Control": "public, max-age=31536000, immutable",
       "X-Content-Type-Options": "nosniff",
       ...(file.contentType === "image/svg+xml" ? { "Content-Security-Policy": "sandbox" } : {}),
+      // The store's reading of the app's sheet for buyer pages: the checker version that allows it.
+      ...(file.checker !== undefined ? { [BUYER_CHROME_CHECKER_HEADER]: String(file.checker) } : {}),
     },
   }) as never;
 });
