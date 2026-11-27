@@ -659,7 +659,7 @@ export function toReviewListMarkup(lines: readonly ReviewableLine[], options: Ac
       open: index === 0,
       editHref: (reviewId) => `/account/reviews#written-${reviewId}`,
     });
-    return `<li class="rounded-xl border border-border bg-card p-4">`
+    return `<li data-part="card" class="rounded-xl border border-border bg-card p-4">`
       + productHeader({ name: line.productName, slug: line.productSlug, variantLabel: line.variantLabel, image: options.imageUrl(line.imageUrl) }, meta)
       + form
       + `</li>`;
@@ -687,7 +687,7 @@ export function writtenReviewListMarkup(reviews: readonly BuyerReview[], options
         + reviewWithdrawFormMarkup(review, { access: { kind: "account" }, returnTo: RETURN_TO_ACCOUNT_REVIEWS, copy })
         + `</details>`
       : "";
-    return `<li class="rounded-xl border border-border bg-card p-4" id="${reviewAnchor(review.orderItemId)}">`
+    return `<li data-part="card" class="rounded-xl border border-border bg-card p-4" id="${reviewAnchor(review.orderItemId)}">`
       + `<span id="written-${escapeHtml(review.id)}" class="block scroll-mt-24" aria-hidden="true"></span>`
       + noticeHere
       + productHeader({ name: review.productName, slug: review.productSlug, variantLabel: review.variantLabel }, meta)

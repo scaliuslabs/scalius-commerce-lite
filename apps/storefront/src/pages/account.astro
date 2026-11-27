@@ -19,7 +19,7 @@ import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
 import { accountUi as ui } from "@/lib/account-ui";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
-import { privatePageLook } from "@/lib/private-pages/look";
+import { privateRouteLook } from "@/lib/private-pages/look";
 
 export const prerender = false;
 
@@ -48,7 +48,7 @@ const countText = page && !stats ? words.count(formatCount(page.totalOrders), pa
 
 const cards = accountOrderCards(orders, copy, checkoutCopy);
 // The theme's look for the account, only when it set tokens for it: else the page draws as without a theme.
-const look = privatePageLook((await resolveRequestTheme(Astro, layoutData)).theme, "account");
+const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutData)).theme);
 ---
 
 <Layout title={words.title} layoutData={layoutData} {...look}>

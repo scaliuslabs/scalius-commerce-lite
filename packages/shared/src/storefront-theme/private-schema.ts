@@ -38,8 +38,11 @@ export type PrivateTokens = Partial<Record<PrivatePageKey, Record<string, Partia
  * weight and contrast too, and no descriptive label holds a figure. Version 8:
  * the look is compiled per page, and a page is in token mode where it has one.
  * Version 9: a `size` scales with the page's width, not its column's.
+ * Version 10: every filled button (`action`) is found by its fill or its edge;
+ * the account's look has rows for every page it reaches (its conversations and
+ * messages, its pills anywhere, a filled button that removes something).
  */
-export const PRIVATE_CHECKER_VERSION = 9;
+export const PRIVATE_CHECKER_VERSION = 10;
 
 /** The most compiled token CSS a page stores (each page serves only its own). */
 export const PRIVATE_COMPILED_CSS_MAX_BYTES = 64 * 1024;

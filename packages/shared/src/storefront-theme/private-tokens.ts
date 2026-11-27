@@ -521,6 +521,12 @@ export interface PrivateTokenRow {
    */
   boundary: "fill" | "edge" | null;
   bordered: boolean;
+  /**
+   * A filled button found by its fill on some of what is around it and by its drawn edge on the rest (a yellow
+   * button with a dark edge on a light card and in a dark dialog): the surfaces around it where its edge finds it.
+   * Absent where one way finds it everywhere (its boundary says which).
+   */
+  edgeOn?: string[];
   /** The theme key that set each cell, for a refusal's path. */
   from: Partial<Record<PrivateRowColour | "surface", string>>;
   /**
@@ -604,6 +610,8 @@ interface Place {
   share?: PrivateTokenRow["share"];
   /** private-anatomy.ts `boundary` (a field's row: `edge`). */
   boundary?: "fill" | "edge";
+  /** private-anatomy.ts `bare`: a box of words only, never one a control drawn anywhere stands on. */
+  bare?: true;
 }
 
 /** Every row of the page as the arrangement places it, in the order the CSS writes them (an inner row after the rows it can share an element with). */
@@ -613,7 +621,7 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
   const styles = Object.entries(spec.styles);
   const selectorOf = (style: PrivateStyleSpec) => style.absolute ? style.selector : style.selector ? `${root} ${style.selector}` : root;
   const place = (key: string, style: PrivateStyleSpec, parent: Place["parent"]) => {
-    places.push({ key, selector: selectorOf(style), kind: style.kind, surface: style.surface, ink: style.ink, parent, nested: parent !== "boxes" && parent !== null && !style.absolute, base: null, sources: [key], ...(style.boundary ? { boundary: style.boundary } : {}) });
+    places.push({ key, selector: selectorOf(style), kind: style.kind, surface: style.surface, ink: style.ink, parent, nested: parent !== "boxes" && parent !== null && !style.absolute, base: null, sources: [key], ...(style.boundary ? { boundary: style.boundary } : {}), ...(style.bare ? { bare: true as const } : {}) });
   };
   // The rows that hold fields: a part that draws them (on its box, else on what it sits on), a dialog, an app's target.
   const holders = new Set<string>();
@@ -804,9 +812,12 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     return HEX.test(String(one)) ? String(one) : colors[one as keyof StorefrontThemeColors];
   };
   const byKey = new Map<string, PrivateTokenRow>();
-  // Every box of the page, gathered once: the rows drawn anywhere are resolved after all of them.
+  // Every box of the page a store's control drawn anywhere may stand on, gathered once (the rows drawn anywhere are
+  // resolved after all of them): never an app's box (an app draws its own buttons there, rows of their own), nor a
+  // box of words only (a message, an add-on's lines: `bare`).
+  const bare = new Set(places.filter((place) => place.bare).map((place) => place.key));
   let allBoxes: PrivateTokenRow[] | null = null;
-  const boxes = () => (allBoxes ??= [...byKey.values()].filter((row) => row.kind === "box"));
+  const boxes = () => (allBoxes ??= [...byKey.values()].filter((row) => row.kind === "box" && !row.key.startsWith("ui.") && !bare.has(row.key)));
   const resolve = (place: Place): PrivateTokenRow => {
     const { values, from: set } = merged(tokens, place.sources);
     const parents = place.parent === "boxes" ? boxes() : place.parent ? [place.parent, ...place.more ?? []].map((key) => byKey.get(key)!) : [];
@@ -868,14 +879,18 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     const ring = take("ring", "ring", [under?.ring, storefrontThemeFocusRing(colors), text, colors.foreground, colors.background], marked ? around : surface, PRIVATE_MARK_CONTRAST_FLOOR);
     // A field's and an outlined control's border is how a buyer finds it: it reads on what is around it.
     const edgeBorder = () => take("border", "border", [colors.input, colors.border, muted, text], around, PRIVATE_MARK_CONTRAST_FLOOR);
-    // A filled button is found by its fill, or by a drawn edge: a solid border the theme sets at least
-    // PRIVATE_EDGE_MIN_WIDTH wide, reading on every point around it, over a fill still clearly a colour of its own.
+    // A filled button is found, on each surface around it, by its fill where that reads there, else by a drawn edge:
+    // a solid border the theme sets at least PRIVATE_EDGE_MIN_WIDTH wide, reading on that surface, over a fill still
+    // clearly a colour of its own there. Found by its edge everywhere, it is an edge; on some surfaces only, its fill
+    // is read on the rest (`edgeOn`).
     const width = values["border-width"];
-    const edged = place.boundary === "fill" && typeof width === "number" && width >= PRIVATE_EDGE_MIN_WIDTH && (values["border-style"] ?? "solid") === "solid"
-      && ((drawn: string) => around.every((back) => storefrontThemeContrast(drawn, back) >= PRIVATE_MARK_CONTRAST_FLOOR))(edgeBorder())
-      && surface.every((point) => around.every((back) => storefrontThemeColorDistance(point, back) >= PRIVATE_EDGE_FILL_DISTANCE));
+    const solidEdge = place.boundary === "fill" && typeof width === "number" && width >= PRIVATE_EDGE_MIN_WIDTH && (values["border-style"] ?? "solid") === "solid";
+    const drawnEdge = solidEdge ? edgeBorder() : null;
+    const edgeOn = drawnEdge === null ? [] : [...new Set(around)].filter((back) => !surface.every((point) => storefrontThemeContrast(point, back) >= PRIVATE_MARK_CONTRAST_FLOOR)
+      && storefrontThemeContrast(drawnEdge, back) >= PRIVATE_MARK_CONTRAST_FLOOR && surface.every((point) => storefrontThemeColorDistance(point, back) >= PRIVATE_EDGE_FILL_DISTANCE));
+    const edged = edgeOn.length > 0 && edgeOn.length === new Set(around).size;
     const boundary = place.kind === "field" || edged ? "edge" : place.boundary ?? null;
-    const border = boundary === "edge" ? edgeBorder() : take("border", "border", [under?.border ?? colors.border], surface, 1);
+    const border = boundary === "edge" ? edgeBorder() : drawnEdge ?? take("border", "border", [under?.border ?? colors.border], surface, 1);
     const field = place.kind === "field" || place.parent === null;
     const placeholder = field ? take("placeholder", "placeholder", [colors["muted-foreground"], muted, text], surface, PRIVATE_CONTRAST_FLOOR) : null;
     const invalid = field ? take("invalid", "invalid", [colors.destructive, error, text], around, PRIVATE_MARK_CONTRAST_FLOOR) : null;
@@ -883,7 +898,7 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     const row: PrivateTokenRow = {
       key: place.key, sources: place.sources, selector: place.selector, kind: place.kind, parents: parents.map((each) => each.key), nested: place.nested, base: place.base,
       paint, gradient, surface, ink: cells[cell], inkCell: cell, text, muted, link, error, border, ring, hover: storefrontThemeHoverSurface(paint !== null && !gradient ? [paint] : surface, [text, cells[cell]]), placeholder, invalid,
-      boundary, bordered: values["border-width"] !== 0 && values["border-style"] !== "none", from,
+      boundary, bordered: values["border-width"] !== 0 && values["border-style"] !== "none", ...(boundary === "fill" && edgeOn.length > 0 ? { edgeOn } : {}), from,
       writes: null, ...(place.share ? { share: place.share } : {}),
     };
     return place.writes ? readsBeneath(row, place.writes, cell, parent, Boolean(fill || values.background)) : row;
@@ -939,9 +954,11 @@ export function privateTablePairs(table: PrivateTokenTable): PrivateTokenPair[] 
     // where it draws a solid edge of its own over a fill clearly apart, as an edge (WCAG 1.4.11): a pair the check
     // reads is a pair the CSS draws.
     if (row.boundary === "edge" && row.bordered) add("border", row.border, around, PRIVATE_MARK_CONTRAST_FLOOR);
+    else if (row.edgeOn) add("border", row.border, row.edgeOn, PRIVATE_MARK_CONTRAST_FLOOR);
     else add("border", row.border, row.surface, 1);
     if (row.boundary === "fill" || (row.boundary === "edge" && !row.bordered)) {
-      for (const fore of new Set(row.surface)) for (const back of new Set(around)) pairs.push({ key: row.key, what: "fill", fore, back, floor: PRIVATE_MARK_CONTRAST_FLOOR });
+      // A filled button found by its edge on some surfaces is read by its fill on the others.
+      for (const fore of new Set(row.surface)) for (const back of new Set(around)) if (!row.edgeOn?.includes(back)) pairs.push({ key: row.key, what: "fill", fore, back, floor: PRIVATE_MARK_CONTRAST_FLOOR });
     }
     add("invalid", row.invalid, around, PRIVATE_MARK_CONTRAST_FLOOR);
     // A hovered control paints the hover surface under its words.
@@ -1285,7 +1302,7 @@ export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [decla
   // A hover surface is the nearest row's: visibly not its surface, its words readable on it.
   ...["hover:bg-background/70", "hover:bg-muted", "hover:bg-muted/40", "hover:bg-muted/50", "hover:bg-primary-hover", "sm:hover:bg-muted/60"].map((name) => [name, ["background-color:var(--pt-h)", ":hover"]] as const),
   ...["text-foreground", "text-card-foreground", "text-primary-foreground"].map((name) => [name, ["color:var(--pt-t)"]] as const),
-  ...["text-muted-foreground", "text-muted-foreground/60"].map((name) => [name, ["color:var(--pt-m)"]] as const),
+  ...["text-muted-foreground", "text-muted-foreground/60", "text-muted-foreground/40"].map((name) => [name, ["color:var(--pt-m)"]] as const),
   ...["text-primary", "text-primary-ink"].map((name) => [name, ["color:var(--pt-l)"]] as const),
   ...["text-destructive", "text-destructive-foreground"].map((name) => [name, ["color:var(--pt-e)"]] as const),
   ["hover:text-foreground", ["color:var(--pt-t)", ":hover"]],
@@ -1331,6 +1348,13 @@ export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [decla
   ["focus-visible:after:ring-ring", ["--tw-ring-color:var(--pt-r)", ":focus-visible"]],
   ["focus:border-primary", ["border-color:var(--pt-r)", ":focus"]],
   ["focus:ring-primary/20", ["--tw-ring-color:var(--pt-r)", ":focus"]],
+  // Every page of the account (its profile, inbox, warranties, reviews, gift cards and downloads): a tint paints
+  // nothing, a hover is the row's, a rule line its border, a faint star its muted words, a ring its focus ring.
+  ["bg-muted/30", ["background-color:transparent"]],
+  ...["hover:bg-destructive/10", "hover:bg-destructive/90"].map((name) => [name, ["background-color:var(--pt-h)", ":hover"]] as const),
+  ["bg-primary/30", ["background-color:var(--pt-b)"]],
+  ["focus-visible:ring-primary", ["--tw-ring-color:var(--pt-r)", ":focus-visible"]],
+  ["focus:ring-primary/30", ["--tw-ring-color:var(--pt-r)", ":focus"]],
 ]))();
 
 const classSelector = (name: string) => `.${name.replace(/[^a-zA-Z0-9_-]/g, (character) => `\\${character}`)}`;

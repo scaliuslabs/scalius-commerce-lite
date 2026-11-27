@@ -8,6 +8,8 @@
 // comes back with the outcome flag. Ids and a flag only in the URL.
 import { checkoutText, pageDigits, pageOrderNumber } from "@/lib/checkout-text";
 import Layout from "@/layouts/Layout.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { privateRouteLook } from "@/lib/private-pages/look";
 import AccountShell from "@/components/account/AccountShell.astro";
 import WarrantyClaimForm from "@/components/warranty/WarrantyClaimForm.astro";
 import { getActiveCheckoutLanguage, getLayoutData } from "@/lib/api";
@@ -38,6 +40,8 @@ const [layoutData, language, warranties, summary] = await Promise.all([
   readAccountWarranties(Astro.request),
   readAccountSummaryForRequest(Astro.request),
 ]);
+// The account's look (`PRIVATE_PAGE_ROUTES`), only where the theme set it: else the page draws as without a theme.
+const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutData)).theme);
 Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
 if (!warranties.ok && warranties.reason !== "signed_out") Astro.response.status = 503;
 const copy = pickWarrantyCopy(language?.languageData, getCheckoutLanguagePreset(language?.code));
@@ -53,7 +57,7 @@ const sections: Array<{ id: string; title: string; items: BuyerWarranty[] }> = [
 ].filter((section) => section.items.length > 0);
 ---
 
-<Layout title={copy.warrantiesTitleText} layoutData={layoutData}>
+<Layout title={copy.warrantiesTitleText} layoutData={layoutData} {...look}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <AccountShell
     current="warranties"
@@ -83,7 +87,7 @@ const sections: Array<{ id: string; title: string; items: BuyerWarranty[] }> = [
                   const orderHref = `/account/orders/${encodeURIComponent(warranty.orderId)}`;
                   const isNoticed = notice?.warrantyId === warranty.warrantyId;
                   return (
-                    <li id={`warranty-${warranty.warrantyId}`} class={`${ui.card} ${ui.cardBody} scroll-mt-24`}>
+                    <li id={`warranty-${warranty.warrantyId}`} data-part="card" class={`${ui.card} ${ui.cardBody} scroll-mt-24`}>
                       <article aria-labelledby={headingId}>
                         <div class="flex items-start gap-3">
                           {warranty.imageUrl && (
@@ -91,11 +95,11 @@ const sections: Array<{ id: string; title: string; items: BuyerWarranty[] }> = [
                           )}
                           <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
-                              <h3 id={headingId} class="min-w-0 text-base font-semibold text-foreground">
+                              <h3 id={headingId} data-part="card-title" class="min-w-0 text-base font-semibold text-foreground">
                                 {warranty.productName ?? warranty.policyName}
                                 {warranty.variantLabel && <span class="font-normal text-muted-foreground"> · {warranty.variantLabel}</span>}
                               </h3>
-                              <span class={accountPill(badge.tone)}>{badge.text}</span>
+                              <span data-part="status-badge" class={accountPill(badge.tone)}>{badge.text}</span>
                             </div>
                             <p class="mt-1 text-sm text-foreground">{warrantyHeadline(warranty, copy)}</p>
                             {warranty.code && <p class="text-sm text-muted-foreground" data-warranty-code>{warrantyCodeText(warranty.code, copy)}</p>}

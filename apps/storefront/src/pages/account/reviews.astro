@@ -6,6 +6,8 @@
 // JavaScript: every form is a plain POST to /api/reviews/submit and comes
 // back here with only an outcome flag and the line's anchor.
 import Layout from "@/layouts/Layout.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { privateRouteLook } from "@/lib/private-pages/look";
 import AccountShell from "@/components/account/AccountShell.astro";
 import { getLayoutData } from "@/lib/api";
 import {
@@ -32,6 +34,8 @@ const [layoutData, reviews, summary] = await Promise.all([
   readBuyerReviewsForRequest(Astro.request, { kind: "account" }),
   readAccountSummaryForRequest(Astro.request),
 ]);
+// The account's look (`PRIVATE_PAGE_ROUTES`), only where the theme set it: else the page draws as without a theme.
+const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutData)).theme);
 Astro.response.headers.set("Cache-Control", "private, no-store");
 if (!reviews.ok && reviews.reason !== "signed_out") Astro.response.status = 503;
 
@@ -55,7 +59,7 @@ const topNotice = notice && !placed ? reviewNoticeMarkup(notice, copy) : "";
 const shellState = reviews.ok ? "ok" : reviews.reason === "signed_out" ? "signed_out" : "unavailable";
 ---
 
-<Layout title={copy.reviewsAccountTitleText} layoutData={layoutData}>
+<Layout title={copy.reviewsAccountTitleText} layoutData={layoutData} {...look}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <AccountShell
     current="reviews"

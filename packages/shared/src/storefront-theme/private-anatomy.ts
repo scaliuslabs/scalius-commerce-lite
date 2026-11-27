@@ -34,9 +34,14 @@ export {
   PRIVATE_HOOK_MAX,
   PRIVATE_LAYOUT_KINDS,
   PRIVATE_PAGE_KEYS,
+  PRIVATE_PAGE_ROUTES,
+  PRIVATE_STORE_LOOK_ROUTES,
+  PRIVATE_UNTHEMED_ROUTES,
   privateIconKeys,
   privateLabelKeys,
   privateLabelVariants,
+  privatePageOfRoute,
+  privatePageRouteLines,
   type PrivateControlPlace,
   type PrivateLabelSpec,
   type PrivateLayoutKind,
@@ -163,6 +168,11 @@ export interface PrivateStyleSpec {
    * `border-style: none`).
    */
   readonly boundary?: "fill" | "edge";
+  /**
+   * A box of words only (a message, an add-on's lines, what a buyer agrees to): it never holds one of the store's
+   * controls, so a filled button or a focus ring drawn anywhere (`action`) is not checked on it.
+   */
+  readonly bare?: true;
   /**
    * Its words' size (px) and weight with no token of their own (the least
    * any of its elements draws as the side that must outrank, the most as the
@@ -323,7 +333,7 @@ export function privatePageStyles(root: string, options: { dialogs?: boolean; ch
     dialog: { selector: '[data-private="dialog"]', absolute: true, tokens: ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "shadow"], kind: "box", surface: "card", ink: "foreground", on: "page", fields: true },
     "dialog-title": { selector: '[data-private="dialog"] [data-part="dialog-title"]', absolute: true, tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "dialog" },
     // What the buyer agrees to, and the tick box saying so: boxes side by side in the dialog, neither inside the other.
-    "dialog-text": { selector: '[data-private="dialog"] [data-part="dialog-text"]', absolute: true, tokens: ["background", "text", "muted", "border", "border-width", "radius", "padding"], kind: "box", surface: "under", ink: "foreground", on: "dialog" },
+    "dialog-text": { selector: '[data-private="dialog"] [data-part="dialog-text"]', absolute: true, tokens: ["background", "text", "muted", "border", "border-width", "radius", "padding"], kind: "box", surface: "under", ink: "foreground", on: "dialog", bare: true },
     "dialog-agree": { selector: '[data-private="dialog"] [data-part="dialog-agree"]', absolute: true, tokens: ["background", "text", "border", "border-width", "radius", "padding"], kind: "box", surface: "under", ink: "foreground", on: "dialog" },
     // The decision's two buttons never swap looks: Go back is outlined, never filled (no surface of its own); Confirm
     // is filled, its fill read at 3:1 on the dialog, and never smaller or lighter than Go back.
@@ -382,7 +392,7 @@ export function privateSummaryStyles(options: {
     // An add-on row that opens to the app's lines (a money row: it stands in the row's element): its bar is a control
     // (a focus ring on the summary), each line under it a box.
     "summary-add-on": { selector: '[data-part="add-on-details"] > summary', tokens: ["text", "ring", "radius"], kind: "control", surface: "under", ink: "muted-foreground", on: "summary-rows" },
-    "summary-add-on-detail": { selector: '[data-part="add-on-details"] [data-part="add-on-detail"]', tokens: ["background", "text", "muted", "border", "border-width", "radius", "padding", "font", "size"], kind: "box", surface: "under", ink: "foreground", on: "summary-rows", hostSize: 14 },
+    "summary-add-on-detail": { selector: '[data-part="add-on-details"] [data-part="add-on-detail"]', tokens: ["background", "text", "muted", "border", "border-width", "radius", "padding", "font", "size"], kind: "box", surface: "under", ink: "foreground", on: "summary-rows", hostSize: 14, bare: true },
   };
 }
 
@@ -644,6 +654,21 @@ const afterOrderLineStyles = (on: string, { imageBox }: { imageBox: boolean }): 
 /** An order's or a request's state as a pill: words on a surface of their own (the receipt's order and payment states, the account's). */
 const STATUS_BADGE_TOKENS = ["background", "text", "border", "border-width", "radius"] as const satisfies readonly PrivateTokenName[];
 
+/** A message's tokens: a box of words (its photos and product cards inside), never a gradient or a shadow. */
+const MESSAGE_TOKENS = ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "padding"] as const satisfies readonly PrivateTokenName[];
+
+/**
+ * A conversation with the store, the same on every page that draws one (the receipt's, the account's order page and
+ * inbox thread, a guest's claim thread): its box, which holds the reply form, and in it each message as a box of its
+ * own: the store's (`message`) and the buyer's (`message-own`), told apart by side and by surface. The day and the
+ * store's status lines stand on the conversation.
+ */
+const conversationStyles = (where: { part: string } | { on: string }): Record<string, PrivateStyleSpec> => ({
+  conversation: { selector: '[data-part="conversation"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", ...where, fields: true },
+  message: { selector: '[data-part="message"]', tokens: [...MESSAGE_TOKENS], kind: "box", surface: "muted", ink: "foreground", on: "conversation", bare: true },
+  "message-own": { selector: '[data-part="message-own"]', tokens: [...MESSAGE_TOKENS], kind: "box", surface: "primary", ink: "primary-foreground", on: "conversation", bare: true },
+});
+
 /**
  * The receipt (`/order-success`, the confirmation and the order's status
  * view, and the theme editor's sample receipt): the order's state, its
@@ -677,8 +702,8 @@ const RECEIPT_STYLES: Record<string, PrivateStyleSpec> = {
   lines: { selector: '[data-part="lines"]', tokens: [...BOX_TOKENS], kind: "box", surface: "background", ink: "foreground", part: "lines" },
   "lines-heading": { selector: '[data-part="lines-heading"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "lines" },
   ...afterOrderLineStyles("lines", { imageBox: false }),
-  // The order's conversation with the store (it holds the reply form).
-  conversation: { selector: '[data-part="conversation"]', tokens: [...BOX_TOKENS], kind: "box", surface: "card", ink: "foreground", part: "conversation", fields: true },
+  // The order's conversation with the store (it holds the reply form) and its messages.
+  ...conversationStyles({ part: "conversation" }),
   ...RECEIPT_PAGE_STYLES.tail,
 };
 
@@ -697,7 +722,7 @@ const RECEIPT_PAGE: PrivatePageSpec = {
     lines: part(true, ["lines", "lines-heading", "line", "line-image", "line-title", "line-details", "line-price", "line-extras"]),
     // The account and support actions (an account to make, a request to send): fields and buttons.
     actions: part(true, ["actions"], "fields"),
-    conversation: part(true, ["conversation"], "fields"),
+    conversation: part(true, ["conversation", "message", "message-own"], "fields"),
     recommendations: part(false, ["recommendations"]),
   },
   // The confirmation draws `order.confirmation`, the status view `account.order`: each at its node.
@@ -721,14 +746,18 @@ const RECEIPT_PAGE: PrivatePageSpec = {
 };
 
 /**
- * The account (every page under `/account`): one shell (its navigation with
+ * The account (every route `PRIVATE_PAGE_ROUTES.account` names: each page
+ * under `/account` and a guest's claim thread): one shell (its navigation with
  * Sign out, the page's heading) around the page's content. The content's
- * elements a theme styles are the same on every account page: its cards, a
- * state's pill, an order's lines and totals, a line's delivery message and
- * its reveal, a conversation and its messages.
+ * elements a theme styles are the same on every account page: its cards (an
+ * edit dialog is a card over the page), a state's pill, an order's lines and
+ * totals, a line's delivery message and its reveal, a conversation and its
+ * messages, and every filled button (one that removes something included).
  */
 const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
   ...withoutNotices(ACCOUNT_PAGE_STYLES.head),
+  // Every filled button that removes something (Remove address, Remove a saved card): found by its fill, as `action` is.
+  "action-critical": { ...ACCOUNT_PAGE_STYLES.head.action!, selector: ACCOUNT_PAGE_STYLES.head.action!.selector.replace(/\.bg-primary$/, ".bg-destructive"), surface: "destructive", ink: "destructive-foreground", hostWeight: 500 },
   // The shell: the navigation (each page, the current one, Sign out) and the page's heading.
   navigation: { selector: '[data-part="navigation"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", part: "navigation" },
   "nav-item": { selector: '[data-part="nav-item"]:not([aria-current="page"])', tokens: ["text", "size", "weight", "radius", "ring"], kind: "control", surface: "under", ink: "muted-foreground", on: "navigation" },
@@ -743,7 +772,9 @@ const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
   content: { selector: '[data-part="content"]', tokens: [], kind: "box", surface: "under", ink: "foreground", part: "content", targets: ["account.overview", "account.order", "account.profile"] },
   card: { selector: '[data-part="card"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", on: "content", fields: true },
   "card-title": { selector: '[data-part="card-title"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "card" },
-  "status-badge": { selector: '[data-part="status-badge"]', tokens: [...STATUS_BADGE_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "card" },
+  // A state's pill, wherever the account draws one (in a card, beside an order's heading, on a saved address): words
+  // on a surface of their own, so they read wherever it stands.
+  "status-badge": { selector: '[data-part="status-badge"]', tokens: [...STATUS_BADGE_TOKENS], kind: "text", surface: "muted", ink: "foreground" },
   // An order's totals inside its card, drawn at the card's 14px; what is left to pay (`due`) ranks with the total.
   ...privateSummaryStyles({ on: "card", rows: { size: 14, weight: 400 }, total: { size: 14, weight: 600 }, label: { size: 14, weight: 600 }, due: true, over: { "line-price": ["size"] } }),
   ...afterOrderLineStyles("card", { imageBox: true }),
@@ -751,6 +782,8 @@ const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
   "delivery-message": { selector: '[data-part="delivery-message"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", on: "line" },
   // An outlined control: with its border drawn its edge reads 3:1 on the box around it, without one its fill does.
   "delivery-reveal": { selector: '[data-part="delivery-reveal"]', tokens: [...BUTTON_TOKENS], kind: "control", surface: "background", ink: "foreground", on: "delivery-message", boundary: "edge" },
+  // An order's conversation, an inbox thread and a guest's claim thread, as on the receipt.
+  ...conversationStyles({ on: "content" }),
   ...ACCOUNT_PAGE_STYLES.tail,
 };
 
@@ -760,7 +793,7 @@ const ACCOUNT_PAGE: PrivatePageSpec = {
     // `tabs`: a strip over the page; `sidebar`: a list beside it on a wide screen (the strip on phones).
     navigation: part(true, ["navigation", "nav-item", "nav-badge", "sign-out"], null, ["tabs", "sidebar"]),
     heading: part(true, ["heading", "heading-title", "heading-intro", "heading-back"]),
-    content: part(true, ["content", "card", "card-title", "status-badge", "summary", "summary-total-label", "add-on-details", "add-on-detail", "line", "line-image", "line-title", "line-details", "line-price", "delivery-message", "delivery-reveal"], "fields"),
+    content: part(true, ["content", "card", "card-title", "status-badge", "summary", "summary-total-label", "add-on-details", "add-on-detail", "line", "line-image", "line-title", "line-details", "line-price", "delivery-message", "delivery-reveal", "conversation", "message", "message-own"], "fields"),
   },
   targets: [],
   lead: ["heading", "content"],
@@ -832,7 +865,7 @@ export function privatePageAnatomy(): string[] {
     unit(page, spec);
     for (const [kind, hooks] of Object.entries(spec.layoutHooks ?? {})) lines.push(`${page} layout ${kind} hooks=${hooks.join(",")}`);
     for (const [kind, names] of Object.entries(spec.layoutContents ?? {})) lines.push(`${page} layout ${kind} holds=${names.join(",")}`);
-    for (const [name, style] of Object.entries(spec.styles)) lines.push(`${page} style ${name} ${style.absolute ? "" : "<root> "}${style.selector || "<root>"} tokens=${style.tokens.join(",")}${style.fields ? " fields" : ""}${style.targets ? ` targets=${style.targets.join(",")}` : ""}${style.outside ? ` outside-when=${style.outside.join("|")}` : ""}${style.boundary ? ` boundary=${style.boundary}` : ""}${style.outranks ? ` outranks=${[...Object.entries(style.outranks.over).map(([other, by]) => `${other}:${by.join("+")}`), ...(style.outranks.apps ?? []).map((target) => `ui/${target}:size`)].join(",")}` : ""}`);
+    for (const [name, style] of Object.entries(spec.styles)) lines.push(`${page} style ${name} ${style.absolute ? "" : "<root> "}${style.selector || "<root>"} tokens=${style.tokens.join(",")}${style.fields ? " fields" : ""}${style.targets ? ` targets=${style.targets.join(",")}` : ""}${style.outside ? ` outside-when=${style.outside.join("|")}` : ""}${style.boundary ? ` boundary=${style.boundary}` : ""}${style.bare ? " bare" : ""}${style.outranks ? ` outranks=${[...Object.entries(style.outranks.over).map(([other, by]) => `${other}:${by.join("+")}`), ...(style.outranks.apps ?? []).map((target) => `ui/${target}:size`)].join(",")}` : ""}`);
     for (const [name, item] of Object.entries(spec.items)) {
       lines.push(`${page}.${name} root ${PRIVATE_PART_ATTRIBUTE}=${PRIVATE_LINE_HOOK}`);
       unit(`${page}.${name}`, item);

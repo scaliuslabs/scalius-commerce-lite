@@ -54,6 +54,65 @@ export type PrivatePageKey = keyof typeof PRIVATE_PAGE_WORDS;
 export const PRIVATE_PAGE_KEYS = Object.keys(PRIVATE_PAGE_WORDS) as PrivatePageKey[];
 
 /**
+ * Which of the buyer's routes each page key's look reaches (the storefront's
+ * route patterns), sealed: the pages read it (a page applies the key its
+ * route has here), the theme authors' reference prints it, and a test holds
+ * every page file of the storefront to it. A key's tokens reach exactly these
+ * routes, never more: pointing a key at another route would change what a
+ * written theme looks like there. A route that should take a look of its own
+ * later takes a new key. The drawer opens over public pages, so it has no
+ * route of its own.
+ */
+export const PRIVATE_PAGE_ROUTES = {
+  cart: ["/cart"],
+  cartDrawer: [],
+  checkout: ["/checkout"],
+  // The confirmation and the order's status view (the theme editor's sample receipt draws the same parts).
+  receipt: ["/order-success"],
+  // Every page of the account, and the claim thread a guest reaches from the receipt (the account's inbox thread, by its receipt proof).
+  account: [
+    "/account", "/account/orders/[id]", "/account/profile", "/account/inbox", "/account/inbox/[id]",
+    "/account/warranties", "/account/reviews", "/account/gift-cards", "/account/downloads",
+    "/warranty-claims/[orderId]/[claimId]",
+  ],
+} as const satisfies Record<PrivatePageKey, readonly string[]>;
+
+/**
+ * The buyer's own routes no page key reaches: they take the store's look (the
+ * palette and the store's own markup), and any may gain a page key of its own
+ * later. Order tracking is not the receipt: its lookup and code forms are not
+ * the receipt's parts, and its status view shows none of the buyer's contact,
+ * conversation or actions the receipt's key promises.
+ */
+export const PRIVATE_STORE_LOOK_ROUTES = [
+  "/track-order", "/checkout/quick", "/checkout/continue/[continuationId]", "/cart/recover/[token]",
+  "/payment-recovery", "/gift-card-balance", "/newsletter", "/newsletter/confirm", "/newsletter/unsubscribe",
+] as const;
+
+/**
+ * The account's routes that draw no theme at all (no palette, no fonts, no
+ * page key): they show one secret (a licence key, a delivery message) with
+ * nothing else on the page, so no theme's or merchant's code or look is
+ * beside it.
+ */
+export const PRIVATE_UNTHEMED_ROUTES = ["/account/licence-key", "/account/delivery-message"] as const;
+
+/** The page key whose look a route takes (`PRIVATE_PAGE_ROUTES`), or null: the store's look, or no theme at all. */
+export function privatePageOfRoute(route: string): PrivatePageKey | null {
+  for (const page of PRIVATE_PAGE_KEYS) if ((PRIVATE_PAGE_ROUTES[page] as readonly string[]).includes(route)) return page;
+  return null;
+}
+
+/** The coverage as lines (`<key> <route>…`), as the theme authors' reference prints it. */
+export function privatePageRouteLines(): string[] {
+  return [
+    ...PRIVATE_PAGE_KEYS.map((page) => `${page} ${PRIVATE_PAGE_ROUTES[page].length > 0 ? PRIVATE_PAGE_ROUTES[page].join(" ") : "(over public pages: no route of its own)"}`),
+    `store-look ${PRIVATE_STORE_LOOK_ROUTES.join(" ")}`,
+    `no-theme ${PRIVATE_UNTHEMED_ROUTES.join(" ")}`,
+  ];
+}
+
+/**
  * The host's layout nodes. `stack`: one column. `columns`: one column on
  * phones, side by side from 64rem. `grid`: a grid the theme
  * shapes by its hook's `columns` tokens. `group`: a box with no layout of its own. `fold` (the cart page):
