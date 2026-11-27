@@ -33,7 +33,7 @@ import { openPaymentAttemptCondition, readOpenPaymentAttempt, requestSessionCanc
 function openAttemptRefusal(attempt: { id: string; status: string; running: boolean }): AppError {
   return new AppError(409, "payment_in_progress", attempt.running
     ? "A payment for this order is being set up or charged right now. Try again shortly."
-    : "The buyer has a payment page open for this order, and it could still be paid. Wait for it, or record the payment anyway (allowOpenAttempt) to close that page; money it still takes is refunded.",
+    : "The buyer has a payment page open for this order that could still be paid. Wait for it, or record the payment anyway: the page is closed, and money it still takes is refunded.",
   { paymentAttemptId: attempt.id, status: attempt.status });
 }
 
@@ -191,6 +191,11 @@ export async function recordOrderPayment(
   }
   const openAttempt = await readOpenPaymentAttempt(db, input.orderId);
   if (openAttempt && (openAttempt.running || !input.allowOpenAttempt)) throw openAttemptRefusal(openAttempt);
+  // Recording anyway settles the whole order: a settlement the closed page still brings is then
+  // money the order cannot take, refunded whole (late-payment.ts), never matched against a remainder.
+  if (input.allowOpenAttempt && input.amountMinor !== order.balanceDueMinor) {
+    throw new ValidationError("Recording a payment anyway takes the whole balance due.");
+  }
   if (order.paymentTermsDays === null && order.paymentMethod !== RECORDED_PAYMENT_METHOD) {
     throw new ValidationError("Payments are recorded here only for invoice (net terms) orders and orders paid as they were placed. Record cash on delivery with Collect cash.");
   }
@@ -286,7 +291,8 @@ export async function recordOrderPayment(
     ...(timelineLine ? [timelineLine as SQLiteBatchItem] : []),
     ...(reviewHold ? [reviewHold as SQLiteBatchItem] : []),
     // Recording anyway: the buyer's open sessions become cancel commands the drain closes at their provider.
-    ...(input.allowOpenAttempt && openAttempt ? [requestSessionCancelStatement(db, order.id, landed) as unknown as SQLiteBatchItem] : []),
+    // Always, not only for a page seen at the read: one handed out since is closed too.
+    ...(input.allowOpenAttempt ? [requestSessionCancelStatement(db, order.id, landed) as unknown as SQLiteBatchItem] : []),
     buildBatchGuard(db, landed, RECORDED_PAYMENT_BATCH_GUARD) as SQLiteBatchItem,
   ];
 

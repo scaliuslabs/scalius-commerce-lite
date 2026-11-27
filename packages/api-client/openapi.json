@@ -507,10 +507,10 @@
                   "free",
                   "feeFrom"
                 ]
-              },
-              {}
+              }
             ],
-            "description": "Free when the product ships free, else the cheapest active delivery rate; null without a rate."
+            "description": "Free when the product ships free, else the cheapest active delivery rate; null without a rate.",
+            "nullable": true
           }
         },
         "required": [
@@ -1699,12 +1699,12 @@
                 ]
               },
               "darkColors": {
+                "nullable": true,
                 "allOf": [
                   {
                     "$ref": "#/components/schemas/StorefrontThemeColors"
                   }
-                ],
-                "nullable": true
+                ]
               },
               "colorSchemeToggle": {
                 "type": "boolean"
@@ -4020,15 +4020,15 @@
                     },
                     {
                       "type": "boolean"
-                    },
-                    {}
-                  ]
+                    }
+                  ],
+                  "nullable": true
                 }
               },
               "maxItems": 24
-            },
-            {}
-          ]
+            }
+          ],
+          "nullable": true
         }
       },
       "StorefrontSkinRef": {
@@ -7549,7 +7549,6 @@
           {
             "type": "boolean"
           },
-          {},
           {
             "type": "array",
             "items": {
@@ -7573,7 +7572,8 @@
               ]
             }
           }
-        ]
+        ],
+        "nullable": true
       },
       "PluginUiNode": {
         "oneOf": [
@@ -8541,8 +8541,138 @@
                 ]
               },
               "text": {
-                "type": "string",
-                "maxLength": 2000
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "to": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "app-page"
+                                  ]
+                                },
+                                "page": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                },
+                                "query": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string",
+                                    "maxLength": 512
+                                  }
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "page"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "resource"
+                                  ]
+                                },
+                                "resource": {
+                                  "type": "string",
+                                  "enum": [
+                                    "product",
+                                    "order",
+                                    "customer",
+                                    "category",
+                                    "collection",
+                                    "brand",
+                                    "page"
+                                  ]
+                                },
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 128
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "resource",
+                                "id"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "external"
+                                  ]
+                                },
+                                "href": {
+                                  "type": "string",
+                                  "maxLength": 2048,
+                                  "format": "uri"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "href"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "store"
+                                  ]
+                                },
+                                "path": {
+                                  "type": "string",
+                                  "maxLength": 2048,
+                                  "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "path"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "text"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 20
+                  }
+                ]
               },
               "tone": {
                 "type": "string",
@@ -9043,9 +9173,9 @@
                         },
                         {
                           "type": "boolean"
-                        },
-                        {}
-                      ]
+                        }
+                      ],
+                      "nullable": true
                     },
                     "tone": {
                       "type": "string",
@@ -9177,7 +9307,6 @@
                           {
                             "type": "boolean"
                           },
-                          {},
                           {
                             "type": "object",
                             "properties": {
@@ -9352,7 +9481,8 @@
                             ],
                             "additionalProperties": false
                           }
-                        ]
+                        ],
+                        "nullable": true
                       }
                     },
                     "to": {
@@ -12904,8 +13034,138 @@
                           ]
                         },
                         "text": {
-                          "type": "string",
-                          "maxLength": 2000
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 2000
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "text": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 2000
+                                  },
+                                  "to": {
+                                    "oneOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "enum": [
+                                              "app-page"
+                                            ]
+                                          },
+                                          "page": {
+                                            "type": "string",
+                                            "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                          },
+                                          "query": {
+                                            "type": "object",
+                                            "additionalProperties": {
+                                              "type": "string",
+                                              "maxLength": 512
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "kind",
+                                          "page"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "enum": [
+                                              "resource"
+                                            ]
+                                          },
+                                          "resource": {
+                                            "type": "string",
+                                            "enum": [
+                                              "product",
+                                              "order",
+                                              "customer",
+                                              "category",
+                                              "collection",
+                                              "brand",
+                                              "page"
+                                            ]
+                                          },
+                                          "id": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 128
+                                          }
+                                        },
+                                        "required": [
+                                          "kind",
+                                          "resource",
+                                          "id"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "enum": [
+                                              "external"
+                                            ]
+                                          },
+                                          "href": {
+                                            "type": "string",
+                                            "maxLength": 2048,
+                                            "format": "uri"
+                                          }
+                                        },
+                                        "required": [
+                                          "kind",
+                                          "href"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "enum": [
+                                              "store"
+                                            ]
+                                          },
+                                          "path": {
+                                            "type": "string",
+                                            "maxLength": 2048,
+                                            "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                                          }
+                                        },
+                                        "required": [
+                                          "kind",
+                                          "path"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "text"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "minItems": 1,
+                              "maxItems": 20
+                            }
+                          ]
                         },
                         "tone": {
                           "type": "string",
@@ -13406,9 +13666,9 @@
                                   },
                                   {
                                     "type": "boolean"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "tone": {
                                 "type": "string",
@@ -13540,7 +13800,6 @@
                                     {
                                       "type": "boolean"
                                     },
-                                    {},
                                     {
                                       "type": "object",
                                       "properties": {
@@ -13715,7 +13974,8 @@
                                       ],
                                       "additionalProperties": false
                                     }
-                                  ]
+                                  ],
+                                  "nullable": true
                                 }
                               },
                               "to": {
@@ -17798,12 +18058,12 @@
             ]
           },
           "kit": {
+            "nullable": true,
             "allOf": [
               {
                 "$ref": "#/components/schemas/StorefrontKit"
               }
-            ],
-            "nullable": true
+            ]
           },
           "customFields": {
             "type": "array",
@@ -20696,9 +20956,9 @@
                   },
                   {
                     "type": "boolean"
-                  },
-                  {}
-                ]
+                  }
+                ],
+                "nullable": true
               }
             },
             "description": "Before and after of the first 50 changes: prices (variantId, sku, beforeMinor, afterMinor), stock (variantId, locationId, beforeOnHand, afterOnHand), tags (customerId), status and publishing (productId)."
@@ -23109,7 +23369,7 @@
                 "parentName"
               ]
             },
-            "description": "Bangladesh delivery places (city, thana, area) the zone serves. A place belongs to one zone."
+            "description": "The store's own delivery places the zone serves, each at one of up to three levels (`city`, `zone`, `area`) whose meaning a regional pack defines; empty for a store with none. A place belongs to one zone."
           },
           "rates": {
             "type": "array",
@@ -23301,7 +23561,7 @@
               "type",
               "name"
             ],
-            "description": "A Bangladesh delivery place (kind `place`)."
+            "description": "One of the store's own delivery places (kind `place`)."
           },
           "providerId": {
             "type": "string",
@@ -24914,9 +25174,9 @@
                   },
                   {
                     "type": "number"
-                  },
-                  {}
-                ]
+                  }
+                ],
+                "nullable": true
               },
               "max": {
                 "anyOf": [
@@ -24925,9 +25185,9 @@
                   },
                   {
                     "type": "number"
-                  },
-                  {}
-                ]
+                  }
+                ],
+                "nullable": true
               },
               "regex": {
                 "type": "string",
@@ -28596,14 +28856,14 @@
                       },
                       {
                         "type": "boolean"
-                      },
-                      {}
-                    ]
+                      }
+                    ],
+                    "nullable": true
                   }
                 }
-              },
-              {}
-            ]
+              }
+            ],
+            "nullable": true
           },
           "min": {
             "type": "number",
@@ -28731,9 +28991,9 @@
               },
               {
                 "type": "boolean"
-              },
-              {}
-            ]
+              }
+            ],
+            "nullable": true
           },
           "min": {
             "type": "number",
@@ -32372,14 +32632,14 @@
                                 },
                                 {
                                   "type": "boolean"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           }
-                        },
-                        {}
-                      ]
+                        }
+                      ],
+                      "nullable": true
                     }
                   },
                   "secrets": {
@@ -34075,9 +34335,9 @@
                   },
                   {
                     "type": "number"
-                  },
-                  {}
-                ]
+                  }
+                ],
+                "nullable": true
               },
               "max": {
                 "anyOf": [
@@ -34086,9 +34346,9 @@
                   },
                   {
                     "type": "number"
-                  },
-                  {}
-                ]
+                  }
+                ],
+                "nullable": true
               },
               "regex": {
                 "type": "string",
@@ -43676,36 +43936,36 @@
                           "type": "object",
                           "properties": {
                             "logo": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             },
                             "darkLogo": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             },
                             "footerLogo": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             },
                             "favicon": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             }
                           },
                           "required": [
@@ -44311,9 +44571,9 @@
                                     },
                                     {
                                       "type": "boolean"
-                                    },
-                                    {}
-                                  ]
+                                    }
+                                  ],
+                                  "nullable": true
                                 }
                               }
                             },
@@ -44482,9 +44742,9 @@
                                       "items": {
                                         "type": "string"
                                       }
-                                    },
-                                    {}
-                                  ]
+                                    }
+                                  ],
+                                  "nullable": true
                                 },
                                 "description": "The app's own settings it declares public, in the page's language: what its components read as `context.app.settings`."
                               }
@@ -45265,36 +45525,36 @@
                           "type": "object",
                           "properties": {
                             "logo": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             },
                             "darkLogo": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             },
                             "footerLogo": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             },
                             "favicon": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             }
                           },
                           "required": [
@@ -59122,8 +59382,138 @@
                                         ]
                                       },
                                       "text": {
-                                        "type": "string",
-                                        "maxLength": 2000
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "maxLength": 2000
+                                          },
+                                          {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "text": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 2000
+                                                },
+                                                "to": {
+                                                  "oneOf": [
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "app-page"
+                                                          ]
+                                                        },
+                                                        "page": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                                        },
+                                                        "query": {
+                                                          "type": "object",
+                                                          "additionalProperties": {
+                                                            "type": "string",
+                                                            "maxLength": 512
+                                                          }
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "page"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "resource"
+                                                          ]
+                                                        },
+                                                        "resource": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "product",
+                                                            "order",
+                                                            "customer",
+                                                            "category",
+                                                            "collection",
+                                                            "brand",
+                                                            "page"
+                                                          ]
+                                                        },
+                                                        "id": {
+                                                          "type": "string",
+                                                          "minLength": 1,
+                                                          "maxLength": 128
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "resource",
+                                                        "id"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "external"
+                                                          ]
+                                                        },
+                                                        "href": {
+                                                          "type": "string",
+                                                          "maxLength": 2048,
+                                                          "format": "uri"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "href"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "store"
+                                                          ]
+                                                        },
+                                                        "path": {
+                                                          "type": "string",
+                                                          "maxLength": 2048,
+                                                          "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "path"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  ]
+                                                }
+                                              },
+                                              "required": [
+                                                "text"
+                                              ],
+                                              "additionalProperties": false
+                                            },
+                                            "minItems": 1,
+                                            "maxItems": 20
+                                          }
+                                        ]
                                       },
                                       "tone": {
                                         "type": "string",
@@ -59624,9 +60014,9 @@
                                                 },
                                                 {
                                                   "type": "boolean"
-                                                },
-                                                {}
-                                              ]
+                                                }
+                                              ],
+                                              "nullable": true
                                             },
                                             "tone": {
                                               "type": "string",
@@ -59758,7 +60148,6 @@
                                                   {
                                                     "type": "boolean"
                                                   },
-                                                  {},
                                                   {
                                                     "type": "object",
                                                     "properties": {
@@ -59933,7 +60322,8 @@
                                                     ],
                                                     "additionalProperties": false
                                                   }
-                                                ]
+                                                ],
+                                                "nullable": true
                                               }
                                             },
                                             "to": {
@@ -84442,12 +84832,12 @@
                                         },
                                         "swatch": {
                                           "description": "The value's swatch (a colour, an image from Files) for a swatch picker; null without one.",
+                                          "nullable": true,
                                           "allOf": [
                                             {
                                               "$ref": "#/components/schemas/ProductOptionValueSwatch"
                                             }
-                                          ],
-                                          "nullable": true
+                                          ]
                                         }
                                       },
                                       "required": [
@@ -85314,12 +85704,12 @@
                                 "nullable": true
                               },
                               "kit": {
+                                "nullable": true,
                                 "allOf": [
                                   {
                                     "$ref": "#/components/schemas/StorefrontKit"
                                   }
-                                ],
-                                "nullable": true
+                                ]
                               }
                             },
                             "required": [
@@ -91665,8 +92055,138 @@
                                             ]
                                           },
                                           "text": {
-                                            "type": "string",
-                                            "maxLength": 2000
+                                            "anyOf": [
+                                              {
+                                                "type": "string",
+                                                "maxLength": 2000
+                                              },
+                                              {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "text": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "maxLength": 2000
+                                                    },
+                                                    "to": {
+                                                      "oneOf": [
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "kind": {
+                                                              "type": "string",
+                                                              "enum": [
+                                                                "app-page"
+                                                              ]
+                                                            },
+                                                            "page": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                                            },
+                                                            "query": {
+                                                              "type": "object",
+                                                              "additionalProperties": {
+                                                                "type": "string",
+                                                                "maxLength": 512
+                                                              }
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "kind",
+                                                            "page"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "kind": {
+                                                              "type": "string",
+                                                              "enum": [
+                                                                "resource"
+                                                              ]
+                                                            },
+                                                            "resource": {
+                                                              "type": "string",
+                                                              "enum": [
+                                                                "product",
+                                                                "order",
+                                                                "customer",
+                                                                "category",
+                                                                "collection",
+                                                                "brand",
+                                                                "page"
+                                                              ]
+                                                            },
+                                                            "id": {
+                                                              "type": "string",
+                                                              "minLength": 1,
+                                                              "maxLength": 128
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "kind",
+                                                            "resource",
+                                                            "id"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "kind": {
+                                                              "type": "string",
+                                                              "enum": [
+                                                                "external"
+                                                              ]
+                                                            },
+                                                            "href": {
+                                                              "type": "string",
+                                                              "maxLength": 2048,
+                                                              "format": "uri"
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "kind",
+                                                            "href"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "kind": {
+                                                              "type": "string",
+                                                              "enum": [
+                                                                "store"
+                                                              ]
+                                                            },
+                                                            "path": {
+                                                              "type": "string",
+                                                              "maxLength": 2048,
+                                                              "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "kind",
+                                                            "path"
+                                                          ],
+                                                          "additionalProperties": false
+                                                        }
+                                                      ]
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "text"
+                                                  ],
+                                                  "additionalProperties": false
+                                                },
+                                                "minItems": 1,
+                                                "maxItems": 20
+                                              }
+                                            ]
                                           },
                                           "tone": {
                                             "type": "string",
@@ -92167,9 +92687,9 @@
                                                     },
                                                     {
                                                       "type": "boolean"
-                                                    },
-                                                    {}
-                                                  ]
+                                                    }
+                                                  ],
+                                                  "nullable": true
                                                 },
                                                 "tone": {
                                                   "type": "string",
@@ -92301,7 +92821,6 @@
                                                       {
                                                         "type": "boolean"
                                                       },
-                                                      {},
                                                       {
                                                         "type": "object",
                                                         "properties": {
@@ -92476,7 +92995,8 @@
                                                         ],
                                                         "additionalProperties": false
                                                       }
-                                                    ]
+                                                    ],
+                                                    "nullable": true
                                                   }
                                                 },
                                                 "to": {
@@ -97366,8 +97886,138 @@
                                         ]
                                       },
                                       "text": {
-                                        "type": "string",
-                                        "maxLength": 2000
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "maxLength": 2000
+                                          },
+                                          {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "text": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 2000
+                                                },
+                                                "to": {
+                                                  "oneOf": [
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "app-page"
+                                                          ]
+                                                        },
+                                                        "page": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                                        },
+                                                        "query": {
+                                                          "type": "object",
+                                                          "additionalProperties": {
+                                                            "type": "string",
+                                                            "maxLength": 512
+                                                          }
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "page"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "resource"
+                                                          ]
+                                                        },
+                                                        "resource": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "product",
+                                                            "order",
+                                                            "customer",
+                                                            "category",
+                                                            "collection",
+                                                            "brand",
+                                                            "page"
+                                                          ]
+                                                        },
+                                                        "id": {
+                                                          "type": "string",
+                                                          "minLength": 1,
+                                                          "maxLength": 128
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "resource",
+                                                        "id"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "external"
+                                                          ]
+                                                        },
+                                                        "href": {
+                                                          "type": "string",
+                                                          "maxLength": 2048,
+                                                          "format": "uri"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "href"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "store"
+                                                          ]
+                                                        },
+                                                        "path": {
+                                                          "type": "string",
+                                                          "maxLength": 2048,
+                                                          "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "path"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  ]
+                                                }
+                                              },
+                                              "required": [
+                                                "text"
+                                              ],
+                                              "additionalProperties": false
+                                            },
+                                            "minItems": 1,
+                                            "maxItems": 20
+                                          }
+                                        ]
                                       },
                                       "tone": {
                                         "type": "string",
@@ -97868,9 +98518,9 @@
                                                 },
                                                 {
                                                   "type": "boolean"
-                                                },
-                                                {}
-                                              ]
+                                                }
+                                              ],
+                                              "nullable": true
                                             },
                                             "tone": {
                                               "type": "string",
@@ -98002,7 +98652,6 @@
                                                   {
                                                     "type": "boolean"
                                                   },
-                                                  {},
                                                   {
                                                     "type": "object",
                                                     "properties": {
@@ -98177,7 +98826,8 @@
                                                     ],
                                                     "additionalProperties": false
                                                   }
-                                                ]
+                                                ],
+                                                "nullable": true
                                               }
                                             },
                                             "to": {
@@ -102502,8 +103152,138 @@
                                         ]
                                       },
                                       "text": {
-                                        "type": "string",
-                                        "maxLength": 2000
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "maxLength": 2000
+                                          },
+                                          {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "text": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "maxLength": 2000
+                                                },
+                                                "to": {
+                                                  "oneOf": [
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "app-page"
+                                                          ]
+                                                        },
+                                                        "page": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                                        },
+                                                        "query": {
+                                                          "type": "object",
+                                                          "additionalProperties": {
+                                                            "type": "string",
+                                                            "maxLength": 512
+                                                          }
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "page"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "resource"
+                                                          ]
+                                                        },
+                                                        "resource": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "product",
+                                                            "order",
+                                                            "customer",
+                                                            "category",
+                                                            "collection",
+                                                            "brand",
+                                                            "page"
+                                                          ]
+                                                        },
+                                                        "id": {
+                                                          "type": "string",
+                                                          "minLength": 1,
+                                                          "maxLength": 128
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "resource",
+                                                        "id"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "external"
+                                                          ]
+                                                        },
+                                                        "href": {
+                                                          "type": "string",
+                                                          "maxLength": 2048,
+                                                          "format": "uri"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "href"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "kind": {
+                                                          "type": "string",
+                                                          "enum": [
+                                                            "store"
+                                                          ]
+                                                        },
+                                                        "path": {
+                                                          "type": "string",
+                                                          "maxLength": 2048,
+                                                          "pattern": "^\\/(?!\\/)[^\\\\\\s?#]*$"
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "kind",
+                                                        "path"
+                                                      ],
+                                                      "additionalProperties": false
+                                                    }
+                                                  ]
+                                                }
+                                              },
+                                              "required": [
+                                                "text"
+                                              ],
+                                              "additionalProperties": false
+                                            },
+                                            "minItems": 1,
+                                            "maxItems": 20
+                                          }
+                                        ]
                                       },
                                       "tone": {
                                         "type": "string",
@@ -103004,9 +103784,9 @@
                                                 },
                                                 {
                                                   "type": "boolean"
-                                                },
-                                                {}
-                                              ]
+                                                }
+                                              ],
+                                              "nullable": true
                                             },
                                             "tone": {
                                               "type": "string",
@@ -103138,7 +103918,6 @@
                                                   {
                                                     "type": "boolean"
                                                   },
-                                                  {},
                                                   {
                                                     "type": "object",
                                                     "properties": {
@@ -103313,7 +104092,8 @@
                                                     ],
                                                     "additionalProperties": false
                                                   }
-                                                ]
+                                                ],
+                                                "nullable": true
                                               }
                                             },
                                             "to": {
@@ -114325,7 +115105,7 @@
                           }
                         },
                         "additionalProperties": false,
-                        "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+                        "description": "The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none."
                       }
                     },
                     "required": [
@@ -114403,7 +115183,7 @@
                           }
                         },
                         "additionalProperties": false,
-                        "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+                        "description": "The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none."
                       },
                       "name": {
                         "type": "string",
@@ -114444,7 +115224,7 @@
                       "net_terms"
                     ],
                     "default": "cod",
-                    "description": "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create)."
+                    "description": "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with payments.create)."
                   },
                   "paymentTerms": {
                     "type": "object",
@@ -115091,7 +115871,7 @@
                           }
                         },
                         "additionalProperties": false,
-                        "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+                        "description": "The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none."
                       }
                     },
                     "required": [
@@ -115169,7 +115949,7 @@
                           }
                         },
                         "additionalProperties": false,
-                        "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+                        "description": "The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none."
                       },
                       "name": {
                         "type": "string",
@@ -115210,7 +115990,7 @@
                       "net_terms"
                     ],
                     "default": "cod",
-                    "description": "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create)."
+                    "description": "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with payments.create)."
                   },
                   "paymentTerms": {
                     "type": "object",
@@ -115830,11 +116610,11 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   },
                   "allowOpenAttempt": {
                     "type": "boolean",
-                    "description": "Record it even though the buyer has a payment page open for the order that could still be paid: that page is closed at its provider in the same write, and money it still takes is refunded automatically (a late payment). Without it, an open page, or a payment being set up or charged right now, refuses the payment with 409 `payment_in_progress` (`details.paymentAttemptId`). One being set up or charged is refused either way."
+                    "description": "Record it even though the buyer has a payment page open for the order that could still be paid. Only for the whole balance due (any other amount is refused with 400). The order's open payment pages are cancelled at their provider in the same write, whether or not one was open when you read the order. A payment such a page still takes, or one that settles for an amount a recorded payment has since changed, is recorded on the order as received, marked late with a timeline line for staff, and refunded automatically; the paid amount includes it until the refund lands. Without it, an open page (one the buyer touched within the last 24 hours, or a provider still processing a payment on one), or a payment being set up or charged right now, refuses the payment with 409 `payment_in_progress` (`details.paymentAttemptId`, `details.status`); one being set up or charged is refused either way."
                   }
                 },
                 "required": [
@@ -118633,7 +119413,7 @@
                     },
                     "maxItems": 50,
                     "default": [],
-                    "description": "Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured."
+                    "description": "Ready media library files (`media.import_url`), in gallery order; the first is featured."
                   },
                   "salesChannelIds": {
                     "type": "array",
@@ -125116,7 +125896,7 @@
                           },
                           "maxItems": 50,
                           "default": [],
-                          "description": "Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured."
+                          "description": "Ready media library files (`media.import_url`), in gallery order; the first is featured."
                         },
                         "salesChannelIds": {
                           "type": "array",
@@ -127503,7 +128283,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "required": [
@@ -156327,9 +157107,9 @@
                                 },
                                 {
                                   "type": "boolean"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id> (money in major units of the store currency). Absent when no app column was asked for."
@@ -156542,7 +157322,7 @@
                           }
                         },
                         "additionalProperties": false,
-                        "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+                        "description": "The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none."
                       },
                       "name": {
                         "type": "string",
@@ -178145,9 +178925,9 @@
                         "enum": [
                           ""
                         ]
-                      },
-                      {}
-                    ]
+                      }
+                    ],
+                    "nullable": true
                   },
                   "notes": {
                     "type": "string",
@@ -178559,9 +179339,9 @@
                         "enum": [
                           ""
                         ]
-                      },
-                      {}
-                    ]
+                      }
+                    ],
+                    "nullable": true
                   },
                   "notes": {
                     "type": "string",
@@ -203202,9 +203982,9 @@
                                     {
                                       "type": "string",
                                       "maxLength": 300
-                                    },
-                                    {}
-                                  ]
+                                    }
+                                  ],
+                                  "nullable": true
                                 }
                               }
                             },
@@ -203225,9 +204005,9 @@
                               {
                                 "type": "string",
                                 "maxLength": 300
-                              },
-                              {}
-                            ]
+                              }
+                            ],
+                            "nullable": true
                           }
                         },
                         "notes": {
@@ -209264,12 +210044,12 @@
                         "maxLength": 100
                       },
                       "value": {
+                        "nullable": true,
                         "allOf": [
                           {
                             "$ref": "#/components/schemas/StorefrontLandingPage"
                           }
-                        ],
-                        "nullable": true
+                        ]
                       }
                     },
                     "required": [
@@ -230776,9 +231556,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "createdAt": {
                                 "anyOf": [
@@ -230787,9 +231567,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -239462,7 +240242,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "required": [
@@ -239866,7 +240646,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "additionalProperties": false
@@ -240087,9 +240867,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "codStatus": {
                               "type": "string"
@@ -240125,9 +240905,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "receiptUrl": {
                               "type": "string",
@@ -249145,9 +249925,9 @@
                                 },
                                 {
                                   "type": "boolean"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id> (money in major units of the store currency). Absent when no app column was asked for."
@@ -255282,9 +256062,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {}
-                          ]
+                            }
+                          ],
+                          "nullable": true
                         },
                         "accessMode": {
                           "type": "string",
@@ -255896,9 +256676,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -258058,9 +258838,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "codReceiptUrl": {
                                 "type": "string",
@@ -258170,9 +258950,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "balancePaidAt": {
                               "anyOf": [
@@ -258181,9 +258961,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "balanceDueDate": {
                               "type": "string",
@@ -258667,9 +259447,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "createdAt": {
                                 "anyOf": [
@@ -258733,9 +259513,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                        }
+                                      ],
+                                      "nullable": true
                                     },
                                     "lastAttemptAt": {
                                       "anyOf": [
@@ -258744,9 +259524,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                        }
+                                      ],
+                                      "nullable": true
                                     },
                                     "lastError": {
                                       "type": "string",
@@ -258759,9 +259539,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                        }
+                                      ],
+                                      "nullable": true
                                     },
                                     "deliveredAt": {
                                       "anyOf": [
@@ -258770,9 +259550,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                        }
+                                      ],
+                                      "nullable": true
                                     },
                                     "failedAt": {
                                       "anyOf": [
@@ -258781,9 +259561,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                        }
+                                      ],
+                                      "nullable": true
                                     },
                                     "skippedAt": {
                                       "anyOf": [
@@ -258792,9 +259572,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                        }
+                                      ],
+                                      "nullable": true
                                     },
                                     "createdAt": {
                                       "anyOf": [
@@ -260717,7 +261497,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "additionalProperties": false
@@ -260953,7 +261733,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "additionalProperties": false
@@ -270753,9 +271533,9 @@
                                 },
                                 {
                                   "type": "boolean"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id> (money in major units of the store currency). Absent when no app column was asked for."
@@ -275087,9 +275867,9 @@
                                     },
                                     {
                                       "type": "number"
-                                    },
-                                    {}
-                                  ]
+                                    }
+                                  ],
+                                  "nullable": true
                                 },
                                 "textLengths": {
                                   "type": "object",
@@ -276125,12 +276905,12 @@
                                           "type": "integer"
                                         },
                                         "swatch": {
+                                          "nullable": true,
                                           "allOf": [
                                             {
                                               "$ref": "#/components/schemas/ProductOptionValueSwatch"
                                             }
-                                          ],
-                                          "nullable": true
+                                          ]
                                         }
                                       },
                                       "required": [
@@ -277574,12 +278354,12 @@
                                     },
                                     "swatch": {
                                       "description": "The value's swatch for a swatch picker; null without one.",
+                                      "nullable": true,
                                       "allOf": [
                                         {
                                           "$ref": "#/components/schemas/ProductOptionValueSwatch"
                                         }
-                                      ],
-                                      "nullable": true
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -282281,12 +283061,12 @@
                           "$ref": "#/components/schemas/DigitalAsset"
                         },
                         "upload": {
+                          "nullable": true,
                           "allOf": [
                             {
                               "$ref": "#/components/schemas/DigitalUploadSession"
                             }
-                          ],
-                          "nullable": true
+                          ]
                         }
                       },
                       "required": [
@@ -290770,9 +291550,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -293440,9 +294220,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -293451,9 +294231,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -293500,9 +294280,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -293511,9 +294291,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -293522,9 +294302,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -293613,9 +294393,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -293624,9 +294404,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -293694,9 +294474,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -293705,9 +294485,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -293938,9 +294718,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -293949,9 +294729,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -294193,9 +294973,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -294204,9 +294984,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -294438,9 +295218,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -294449,9 +295229,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -294460,9 +295240,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -294687,9 +295467,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -294698,9 +295478,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "deletedAt": {
                               "anyOf": [
@@ -294709,9 +295489,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -294953,9 +295733,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -294964,9 +295744,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "deletedAt": {
                               "anyOf": [
@@ -294975,9 +295755,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -295202,9 +295982,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -295213,9 +295993,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "deletedAt": {
                               "anyOf": [
@@ -295224,9 +296004,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -295455,9 +296235,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -295466,9 +296246,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -295741,9 +296521,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -295752,9 +296532,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -296037,9 +296817,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -296048,9 +296828,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -296296,9 +297076,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -296307,9 +297087,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -296528,9 +297308,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -296539,9 +297319,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -296812,9 +297592,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -296823,9 +297603,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -297081,9 +297861,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -297092,9 +297872,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -297187,9 +297967,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -297198,9 +297978,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -297268,9 +298048,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -297279,9 +298059,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -297547,9 +298327,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -297558,9 +298338,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -302381,9 +303161,9 @@
                                     },
                                     {
                                       "type": "boolean"
-                                    },
-                                    {}
-                                  ]
+                                    }
+                                  ],
+                                  "nullable": true
                                 }
                               },
                               "type": {
@@ -309190,14 +309970,14 @@
                                 },
                                 {
                                   "type": "boolean"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           }
-                        },
-                        {}
-                      ]
+                        }
+                      ],
+                      "nullable": true
                     }
                   },
                   "translations": {
@@ -310440,10 +311220,10 @@
                           },
                           {
                             "type": "number"
-                          },
-                          {}
+                          }
                         ],
-                        "description": "Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency)."
+                        "description": "Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency).",
+                        "nullable": true
                       },
                       "max": {
                         "anyOf": [
@@ -310452,10 +311232,10 @@
                           },
                           {
                             "type": "number"
-                          },
-                          {}
+                          }
                         ],
-                        "description": "Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency)."
+                        "description": "Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency).",
+                        "nullable": true
                       },
                       "regex": {
                         "type": "string",
@@ -310875,10 +311655,10 @@
                           },
                           {
                             "type": "number"
-                          },
-                          {}
+                          }
                         ],
-                        "description": "Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency)."
+                        "description": "Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency).",
+                        "nullable": true
                       },
                       "max": {
                         "anyOf": [
@@ -310887,10 +311667,10 @@
                           },
                           {
                             "type": "number"
-                          },
-                          {}
+                          }
                         ],
-                        "description": "Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency)."
+                        "description": "Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency).",
+                        "nullable": true
                       },
                       "regex": {
                         "type": "string",

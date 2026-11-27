@@ -28,6 +28,7 @@ import { isEventTopicFilter } from "@scalius/shared/events";
 import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placeholder-credentials";
 import { currentProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import { pluginObjectPatternIssues } from "@scalius/shared/plugins/object-patterns";
+import { pluginManifestPolicyIssues } from "@scalius/shared/plugins/manifest-policy";
 import {
   PLUGIN_EXTENSION_RUN,
   PLUGIN_FUNCTION_POINTS,
@@ -454,7 +455,14 @@ export function requireInstallableManifest(value: unknown, source: PluginInstall
     });
   }
   const manifest = parsed.manifest;
-  requireSupportedObjectPatterns(manifest);
+  // A release's policy (object patterns, buyer words) is checked here, where it changes what the store
+  // runs; a stored manifest's read checks its structure only (manifest-policy.ts).
+  const policy = pluginManifestPolicyIssues(manifest);
+  if (policy.length > 0) {
+    throw new PluginError("manifest_invalid", `The plugin manifest is invalid: ${policy[0]!.path} ${policy[0]!.message}`, {
+      issues: policy, ...(policy[0]!.reason ? { reason: policy[0]!.reason } : {}),
+    });
+  }
   // Only code compiled into the deployment may use the first-party id space,
   // whatever path it arrives by (audit R2 F6): first-party standing (beta
   // operations, surviving the emergency stop) goes by this prefix.

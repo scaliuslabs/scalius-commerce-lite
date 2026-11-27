@@ -8,7 +8,7 @@
 // page header), a resource card or home widget, or an action's answer in a
 // dialog. Inside a card, the app's own `card` nodes become sections, so a
 // card is never drawn inside a card.
-import { createContext, useContext, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { createContext, Fragment, useContext, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, ExternalLink, Info, TriangleAlert, type LucideIcon } from "lucide-react";
@@ -724,7 +724,11 @@ function CardNode({ node }: { node: Extract<PluginUiNode, { type: "card" }> }) {
 function TextNode({ node }: { node: Extract<PluginUiNode, { type: "text" }> }) {
   const tone = node.tone ? TEXT_TONE[node.tone] : "";
   const emphasis = node.emphasis === "strong" ? "font-medium" : node.emphasis === "mono" ? "font-mono" : "";
-  return <p className={`whitespace-pre-wrap break-words text-body ${tone} ${emphasis}`.trim()}>{node.text}</p>;
+  // A sentence's links are inside its running text, so they keep their underline (C8), their words isolated from its direction.
+  const words = typeof node.text === "string" ? node.text : node.text.map((span, index) => (span.to
+    ? <PluginLink key={index} to={span.to} className="text-link underline underline-offset-2 [unicode-bidi:isolate]">{span.text}</PluginLink>
+    : <Fragment key={index}>{span.text}</Fragment>));
+  return <p className={`whitespace-pre-wrap break-words text-body ${tone} ${emphasis}`.trim()}>{words}</p>;
 }
 
 function BannerNode({ node }: { node: Extract<PluginUiNode, { type: "banner" }> }) {

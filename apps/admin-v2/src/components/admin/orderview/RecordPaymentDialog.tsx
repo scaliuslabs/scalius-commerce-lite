@@ -20,8 +20,20 @@ import { orderDetailLabel } from "~/i18n/order-detail";
 import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
 import { isOrderConflict, orderErrorMessage, useRecordOrderPayment } from "~/lib/api-mutations/orders";
+import { readAdminApiError } from "~/lib/admin-api-error";
 import { MoneyInput } from "../shared/MoneyInput";
 import { CommandKeyNotice } from "~/components/admin/shared/CommandKeyNotice";
+
+/**
+ * What a `payment_in_progress` refusal says about the order's other payment:
+ * one being set up or charged now (wait), or a payment page the buyer could
+ * still pay (wait, or record the whole balance anyway); null for any other error.
+ */
+function openPaymentOf(error: unknown): "running" | "page" | null {
+  const refusal = readAdminApiError(error);
+  if (refusal?.code !== "payment_in_progress") return null;
+  return (refusal.details as { status?: unknown } | undefined)?.status === "processing" ? "running" : "page";
+}
 
 /**
  * Money received against an invoice (net terms). Each opening mounts it fresh
@@ -61,6 +73,25 @@ export function RecordPaymentDialog({
     return null;
   };
 
+  const openPayment = mutation.isError ? openPaymentOf(mutation.error) : null;
+
+  function send(anyway: boolean) {
+    mutation.mutate({
+      orderId,
+      // Recording anyway settles the whole balance: the closed page can then take nothing that counts.
+      amountMinor: typedMinor(anyway ? balanceDue : amount!, currencyCode),
+      via,
+      ...(reference.trim() ? { reference: reference.trim() } : {}),
+      ...(note.trim() ? { note: note.trim() } : {}),
+      expectedRevision: orderVersion,
+      ...(anyway ? { allowOpenAttempt: true } : {}),
+    }, {
+      onSuccess: onClose,
+      // Changed in another tab: close; the page banner shows the latest. Another payment open: stay and say so.
+      onError: (error) => { if (isOrderConflict(error) && !openPaymentOf(error)) onClose(); },
+    });
+  }
+
   function submit(event: FormEvent) {
     event.preventDefault();
     const issue = problem(amount);
@@ -69,18 +100,7 @@ export function RecordPaymentDialog({
       document.getElementById("recordPaymentAmount")?.focus();
       return;
     }
-    mutation.mutate({
-      orderId,
-      amountMinor: typedMinor(amount!, currencyCode),
-      via,
-      ...(reference.trim() ? { reference: reference.trim() } : {}),
-      ...(note.trim() ? { note: note.trim() } : {}),
-      expectedRevision: orderVersion,
-    }, {
-      onSuccess: onClose,
-      // Changed in another tab: close; the page banner shows the latest.
-      onError: (error) => { if (isOrderConflict(error)) onClose(); },
-    });
+    send(false);
   }
 
   return (
@@ -92,7 +112,21 @@ export function RecordPaymentDialog({
         </DialogHeader>
         <form id="order-record-payment" method="post" className="space-y-4" onSubmit={submit} noValidate>
           <CommandKeyNotice notice={mutation.notice({ orderId })} target="order" startOver={{ kind: "payment", onClick: () => mutation.forget({ orderId }) }} />
-          {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
+          {openPayment === "running" ? <Alert variant="destructive"><AlertDescription>{t("netTerms.paymentRunning")}</AlertDescription></Alert> : null}
+          {openPayment === "page" ? (
+            <Alert variant="destructive">
+              <AlertDescription>
+                <div className="flex flex-col items-start gap-2">
+                  <p>{t("netTerms.pageOpen", { amount: money(balanceDue) })}</p>
+                  <p>{t("netTerms.recordAnywayHelp")}</p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => send(true)} loading={mutation.isPending}>
+                    {t("netTerms.recordAnyway", { amount: money(balanceDue) })}
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {mutation.isError && !openPayment ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <Field
             id="recordPaymentAmount"
             label={t("netTerms.amount")}

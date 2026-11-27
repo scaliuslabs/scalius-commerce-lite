@@ -7,6 +7,7 @@
  */
 
 import { machineRefusal, type AnyMachine } from "@scalius/shared/machine";
+import { checkDeclaredDetails } from "@scalius/shared/plugins/app-error-details-check";
 
 export class AppError extends Error {
   constructor(
@@ -17,6 +18,8 @@ export class AppError extends Error {
   ) {
     super(message);
     this.name = "AppError";
+    // A code whose details apps read (APP_ERROR_CODES): its producers send the declared shape.
+    checkDeclaredDetails(code, details);
   }
 }
 

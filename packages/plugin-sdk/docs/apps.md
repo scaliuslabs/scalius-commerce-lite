@@ -285,7 +285,7 @@ The plan sets each app's ceilings. Your manifest's `limits` apply inside them.
 | Job steps per drain | 3 | 12 |
 | Held events while not running | 7 days, 2,000 | 30 days, 50,000 |
 
-- A run over a limit fails and the app's log records a breach. A function the merchant approved as blocking (`onError: "block"`) is the exception: its run over a limit, like its throw, refuses that checkout and is logged, but never counts as a breach, so a failing blocking app is never stopped for it.
+- A run over a limit fails and the app's log records a breach. A function the merchant approved as blocking (`onError: "block"`) is the exception: its run over a limit, like its throw, refuses that checkout and is logged, but never counts as a breach, so a failing blocking app is never stopped for it; staff get a notice about it at most once an hour per app and function point.
 - Storage is measured once a day. Above the limit, writes that add data fail with `quota_storage`; deletes still work.
 - Checkout functions, provider operations and storefront output are paced by the platform and do not count against runs per minute.
 - `ctx.api.call` allows 60 calls a minute. `ctx.http.fetch` allows 60 requests a minute; a provider operation's calls to its own provider do not count.
@@ -365,7 +365,7 @@ Admin pages, cards, actions and widgets are drawn by the dashboard from a declar
 - **Widgets** (5) appear on the dashboard home.
 - **The dashboard's language.** `adminLocale(request)` is `en` or `bn`; write your words for both, and numbers in your text with `adminNumber(value, locale)` ("1,250", "১,২৫০"), never `Intl` directly. Money and date cells of a `ui.table` are formatted by the dashboard.
 - **List columns** add a column (and optional filter) to the orders, products or customers list from an object record or your custom field.
-- Answer pages, cards and widgets with `ui.page(...)` or `ui.view(...)`, and buttons and forms with `ui.result(...)`. The builder covers layout (`stack`, `columns`, `section`, `card`, `divider`), text (`heading`, `text`, `badge`, `banner`), data (`keyValue`, `stat`, `table`, `progress`, `empty`, `image`, `link`), and forms (`form`, `textField`, `textarea`, `numberField`, `select`, `checkbox`, `dateField`, `button`). `adminContext(request)` reads the request, including the dashboard language.
+- Answer pages, cards and widgets with `ui.page(...)` or `ui.view(...)`, and buttons and forms with `ui.result(...)`. The builder covers layout (`stack`, `columns`, `section`, `card`, `divider`), text (`heading`, `text`, `badge`, `banner`; `ui.text([{ text: "Synced. " }, { text: "Open the log", to: ui.to.page("log") }])` draws a link inside a sentence, underlined), data (`keyValue`, `stat`, `table`, `progress`, `empty`, `image`, `link`), and forms (`form`, `textField`, `textarea`, `numberField`, `select`, `checkbox`, `dateField`, `button`). `adminContext(request)` reads the request, including the dashboard language.
 
 ## Translations
 
@@ -476,7 +476,7 @@ With the Sensitive `write_webhooks` scope, an app keeps up to 5 webhook endpoint
 - Deliveries are the store's own: the body is `{ id, topic, apiVersion, occurredAt, resource: { type, id }, facts, data }`, where `data` is the resource's sealed representation, projected through the endpoint's customer data.
 - Headers: `Scalius-Event-Id` (your idempotency key), `Scalius-Topic`, `Scalius-Api-Version` and `Scalius-Signature: t=<unix seconds>,v1=<hex>`, where the hex is HMAC-SHA256 keyed by the whole secret (`whsec_…`) over `<t>.<raw body>`. Reject signatures older than 5 minutes. `signWebhookPayload` and `verifyWebhookSignature` in `@scalius/plugin-sdk/manifest` compute and check it.
 - 10 s timeout, https only, no redirects followed. 8 attempts over about 23 hours. An endpoint with 8 or more failures over a day is disabled and staff are told.
-- A body above 512 KiB carries `data: { truncated: true, id, fetch: { appOperation, operationId, method: "GET", path } }`: a stable read whose answer carries the same representation, the resource itself (`gift_cards.get` answers `giftCard`) or the list it is in, by `id` (`refunds.list`, a card's `transactions`, `discounts.list?ids=<id>`). `data: null` only means the resource no longer exists.
+- A body above 512 KiB carries `data: { truncated: true, id, fetch: { appOperation, method: "GET", path } }`: a stable read whose answer carries the same representation, the resource itself (`gift_cards.get` answers `giftCard`) or the list it is in, by `id` (`refunds.list`, a card's `transactions`, `discounts.list?ids=<id>`). `data: null` only means the resource no longer exists.
 - Every delivery re-checks the app's live grant: a narrowed grant or an inactive app sends nothing. Uninstalling deletes the endpoints.
 
 ## Failure behaviour
@@ -495,7 +495,7 @@ With the Sensitive `write_webhooks` scope, an app keeps up to 5 webhook endpoint
 | Storage over quota | Adding writes fail with `quota_storage`; deletes work |
 | Theme draws with an inactive app's parts | Publishing is refused with `theme_apps_unavailable` |
 
-A refusal of a `ctx.*` call throws an error with a stable `code` from `APP_ERROR_CODES` (`object_conflict`, `http_not_allowed`, `rate_limited`). A refused `ctx.api.call` answers `{ ok: false, status, data: null, error: { code, message } }`.
+A refusal of a `ctx.*` call throws an error with a stable `code` from `APP_ERROR_CODES` (`object_conflict`, `http_not_allowed`, `rate_limited`). A refused `ctx.api.call` answers `{ ok: false, status, data: null, error: { code, message, details? } }`. `details` is there only for a code that declares it (`APP_ERROR_CODES[code].details`, a JSON Schema: `payout_outcome_unknown` carries `payoutId`, `validation_error` the first 20 `issues` as `path` and `message`), with exactly the declared fields; every other code carries none.
 
 ## Testing
 
@@ -511,8 +511,8 @@ A new field the platform adds then needs no change to your tests: a nullable fie
 
 ## Versioning
 
-- `apiVersion` names the plugin API version an app was built for. `SUPPORTED_PLUGIN_API_VERSIONS` lists the versions a store runs.
-- Within one version, changes are additive only: new optional manifest fields, new `ctx` methods, new events, new function points and provider operations. Existing fields, types, error codes and behaviour do not change.
-- A breaking change makes a new `apiVersion`. The platform then runs the old and the new side by side for at least 12 months, and the changelog marks each deprecation with the version that removes it.
+- `apiVersion` names the contract version an app was built for. `SUPPORTED_PLUGIN_API_VERSIONS` lists the versions a store runs.
+- Within one version, changes are additive only: new optional manifest fields, new `ctx` methods, new events, new function points, provider operations and stable operations.
+- A break needs a new contract version, at most once a year, with a host adapter for the old one; the old version keeps working for at least 24 months after its successor ships. [What we promise](promise.md) has the whole policy and what it does not cover.
 
 See [The contract seal](commerce-hooks.md#8-the-contract-seal) for exactly what is sealed.

@@ -25,7 +25,7 @@ export const orderResourceSchema = z.object({ order: OrderResource });
  * move either way.
  */
 export const optionalOrderRevisionSchema = z.number().int().min(1).optional().openapi({
-  description: "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get. A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is.",
+  description: "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is.",
 });
 
 /** The order's sealed representation, read after a write (not found once it is gone). */

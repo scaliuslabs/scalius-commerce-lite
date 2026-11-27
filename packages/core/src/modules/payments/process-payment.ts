@@ -66,6 +66,7 @@ import {
   orderCreatedNotificationOutboxId,
 } from "../notifications";
 import { fromMinor } from "@scalius/shared/money";
+import { RECORDED_PAYMENT_METHOD } from "@scalius/shared/payment-terms";
 import { sha256Hex } from "@scalius/shared/hash";
 
 const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
@@ -451,6 +452,13 @@ async function providerPaymentRefusal(
   return opened ? null : `${label} ${provider} payment names no payment this store opened with that provider for the order`;
 }
 
+/** Money recorded by hand on the order (`recordOrderPayment`): what makes a provider's settlement for the old amount unappliable. */
+async function hasRecordedPayment(db: Database, orderId: string): Promise<boolean> {
+  return Boolean(await db.select({ id: orderPayments.id }).from(orderPayments)
+    .where(and(eq(orderPayments.orderId, orderId), eq(orderPayments.paymentMethod, RECORDED_PAYMENT_METHOD), eq(orderPayments.status, PaymentRecordStatus.SUCCEEDED)))
+    .limit(1).get());
+}
+
 /** The order is the provider's, or the store opened a payment with that provider for it. */
 async function storeOpenedPaymentWith(db: Database, order: { id: string; paymentMethod: string }, provider: string): Promise<boolean> {
   if (order.paymentMethod === provider) return true;
@@ -809,24 +817,30 @@ export async function processPaymentConfirmed(
         reason: initialUnpayableReason,
       });
     }
+    // A provider the order's payment method does not take changes nothing (provider authority).
     const initialProviderRefusal = await providerPaymentRefusal(db, initialOrder, params.provider, "Confirmed");
     if (initialProviderRefusal) {
       return { success: false, retryable: false, error: initialProviderRefusal };
     }
 
     const paymentType = params.paymentType ?? await inferPaymentType(db, initialOrder, incomingAmountMinor);
-    if (!paymentType) {
-      return { success: false, retryable: false, error: "Confirmed payment amount does not match any payable amount on the order" };
-    }
-
-    const initialPaymentStateError = await validateIncomingPaymentState(
-      db,
-      initialOrder,
-      paymentType,
-      incomingAmountMinor,
-    );
-    if (initialPaymentStateError) {
-      return { success: false, error: initialPaymentStateError, retryable: false };
+    const initialPaymentStateError = paymentType
+      ? await validateIncomingPaymentState(db, initialOrder, paymentType, incomingAmountMinor)
+      : "Confirmed payment amount does not match any payable amount on the order";
+    if (initialPaymentStateError || !paymentType) {
+      // Money the order's own provider took that the order cannot apply because a payment recorded
+      // by hand changed what is due (a page that settled for the old amount): recorded as received,
+      // marked late and refunded (late-payment.ts), never dropped and never applied to the wrong
+      // amount. Any other mismatch is refused as before, for reconciliation.
+      if (incomingAmountMinor > 0 && await storeOpenedPaymentWith(db, initialOrder, params.provider) && await hasRecordedPayment(db, params.orderId)) {
+        return await landLatePayment(db, params, {
+          paymentId,
+          currency: currency.code,
+          settlement: paymentSettlement({ amountMinor: incomingAmountMinor, currency: currency.code, settlement: params.settlement, order: initialOrder }),
+          reason: initialPaymentStateError!,
+        });
+      }
+      return { success: false, error: initialPaymentStateError!, retryable: false };
     }
     let inventoryShortfall = false;
     // A balance with no plan is a gift-card remainder (validated above): it
@@ -920,13 +934,12 @@ export async function processPaymentConfirmed(
         if (providerRefusal) {
           return { success: false, retryable: false, error: providerRefusal };
         }
-        const paymentStateError = await validateIncomingPaymentState(
-          db,
-          order,
-          paymentType,
-          incomingAmountMinor,
-        );
+        const paymentStateError = await validateIncomingPaymentState(db, order, paymentType, incomingAmountMinor);
         if (paymentStateError) {
+          // The order moved under this payment so it no longer applies: recorded and refunded, as above.
+          if (incomingAmountMinor > 0 && await storeOpenedPaymentWith(db, { id: params.orderId, paymentMethod: order.paymentMethod }, params.provider) && await hasRecordedPayment(db, params.orderId)) {
+            return await landLatePayment(db, params, { paymentId, currency: currency.code, settlement, reason: paymentStateError });
+          }
           return { success: false, error: paymentStateError, retryable: false };
         }
       }

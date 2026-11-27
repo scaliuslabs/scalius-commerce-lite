@@ -248,24 +248,47 @@ export function openProviderSessionCondition(orderId: SQL): SQL {
 }
 
 /**
+ * How long a hosted session on a placed order (an invoice's payment page, a
+ * receipt's pay-now link) stays open after the buyer last acted on it: past
+ * it, the drain cancels the session at its provider (`expireIdleSessions`)
+ * and it no longer counts as open. An unpaid checkout's own hold is shorter
+ * (`PAYMENT_HOLD_MAX_SECONDS`, the stale-checkout sweep).
+ */
+export const PLACED_ORDER_SESSION_IDLE_SECONDS = 24 * 60 * 60;
+
+/**
+ * A hosted session the buyer could still pay, within its bound: `created`
+ * or `failed` (a declined card can be paid again on the same session) last
+ * touched within `PLACED_ORDER_SESSION_IDLE_SECONDS`, `provider_processing`
+ * within `PROVIDER_PROCESSING_HOLD_SECONDS` of its opening, or `cancelling`
+ * (being closed: the drain ends it within `SESSION_CANCEL_MAX_TRIES` ticks).
+ */
+const payableWithinBound = sql`(${hostedSession}
+    AND ${paymentSessionAttempts.providerSessionId} IS NOT NULL
+    AND (
+      (${paymentSessionAttempts.status} IN ('created', 'failed')
+        AND ${paymentSessionAttempts.updatedAt} > unixepoch() - ${PLACED_ORDER_SESSION_IDLE_SECONDS})
+      OR (${paymentSessionAttempts.status} = 'provider_processing'
+        AND ${paymentSessionAttempts.createdAt} > unixepoch() - ${PROVIDER_PROCESSING_HOLD_SECONDS})
+      OR ${paymentSessionAttempts.status} = 'cancelling'
+    ))`;
+const runningClaim = sql`(${paymentSessionAttempts.status} = 'processing'
+    AND ${paymentSessionAttempts.claimExpiresAt} IS NOT NULL
+    AND ${paymentSessionAttempts.claimExpiresAt} > unixepoch())`;
+
+/**
  * A payment attempt of the order that may still take money or is being set
  * up right now: a claim under a live lease (a hosted session being opened, an
  * off-session charge running), or a hosted session the buyer could still pay
- * (`SESSION_HOLD[status].payable`, with a provider session). A payment
- * recorded by hand beside one could be counted twice.
+ * within its bound (`payableWithinBound`). A payment recorded by hand beside
+ * one could be counted twice. "Open" always ends: an idle page is closed by
+ * the drain, a provider's processing is bounded, a close is bounded.
  */
 export function openPaymentAttemptCondition(orderId: SQL): SQL {
     return sql`EXISTS (
         SELECT 1 FROM ${paymentSessionAttempts}
         WHERE ${paymentSessionAttempts.orderId} = ${orderId}
-          AND (
-            (${paymentSessionAttempts.status} = 'processing'
-              AND ${paymentSessionAttempts.claimExpiresAt} IS NOT NULL
-              AND ${paymentSessionAttempts.claimExpiresAt} > unixepoch())
-            OR (${hostedSession}
-              AND ${paymentSessionAttempts.status} IN (${statusList(PAYABLE_STATUSES)})
-              AND ${paymentSessionAttempts.providerSessionId} IS NOT NULL)
-          )
+          AND (${runningClaim} OR ${payableWithinBound})
     )`;
 }
 
@@ -274,14 +297,29 @@ export async function readOpenPaymentAttempt(db: Database, orderId: string): Pro
     const running = sql<number>`CASE WHEN ${paymentSessionAttempts.status} = 'processing' THEN 1 ELSE 0 END`.mapWith(Number);
     const row = await db.select({ id: paymentSessionAttempts.id, status: paymentSessionAttempts.status, running })
         .from(paymentSessionAttempts)
-        .where(and(eq(paymentSessionAttempts.orderId, orderId), or(
-            and(eq(paymentSessionAttempts.status, "processing"), sql`${paymentSessionAttempts.claimExpiresAt} > unixepoch()`),
-            and(hostedSession, inArray(paymentSessionAttempts.status, [...PAYABLE_STATUSES]), isNotNull(paymentSessionAttempts.providerSessionId)),
-        )))
+        .where(and(eq(paymentSessionAttempts.orderId, orderId), sql`(${runningClaim} OR ${payableWithinBound})`))
         .orderBy(sql`${running} DESC`, sql`${paymentSessionAttempts.createdAt} DESC`)
         .limit(1)
         .get();
     return row ? { id: row.id, status: row.status, running: row.running === 1 } : null;
+}
+
+/**
+ * The drain's first step: every hosted session on a placed order (not an
+ * unpaid checkout, which the stale-checkout sweep owns) that the buyer left
+ * idle past `PLACED_ORDER_SESSION_IDLE_SECONDS` becomes a cancel command
+ * (`hold_ended`), which `cancelDueSessions` then closes at its provider. A
+ * provider's `processing` is left to its own bound: closing it would only
+ * come back `in_flight`.
+ */
+export async function expireIdleSessions(db: Database): Promise<number> {
+    const rows = await sessionTransition(db, "hold_ended", and(
+        inArray(paymentSessionAttempts.status, ["created", "failed"]),
+        isNotNull(paymentSessionAttempts.providerSessionId),
+        sql`${paymentSessionAttempts.updatedAt} <= unixepoch() - ${PLACED_ORDER_SESSION_IDLE_SECONDS}`,
+        sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${paymentSessionAttempts.orderId} AND ${orders.status} <> 'incomplete')`,
+    )).returning({ id: paymentSessionAttempts.id });
+    return rows.length;
 }
 
 /**

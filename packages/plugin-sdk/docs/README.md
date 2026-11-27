@@ -14,6 +14,7 @@ Start with the SDK's [quick start](../README.md). It shows how to scaffold an ap
 | [Event reference](events.md) | Generated from the event catalogue: every topic, the resource it is about, its facts and the stable read for the rest. |
 | [Storefront](storefront.md) | Drawing on the storefront: sections, components, skins, templates, page presets, slots, settings, bindings, islands, `Deferred`, core embeds, testing, the packer and the budgets. |
 | [Build a theme](themes.md) | A theme that works on any store, not only yours: the mental model, the portability rules (store identity, links, merchant fields, empty stores, artwork rights, no-JavaScript controls, languages and logical CSS) with right and wrong examples, testing on three stores, and a release checklist. |
+| [What we promise](promise.md) | What stays the same across releases and what does not, the security exception, contract versions and their support window, and how fresh the data an app reads is. |
 | [llms.txt](llms.txt) | A one-page index of these guides and the rules, for AI coding tools. |
 
 ## Reading order
@@ -35,4 +36,4 @@ The code is the truth. When a page and the code disagree, the code wins. The ver
 - `@scalius/plugin-sdk/storefront`, `@scalius/plugin-sdk/storefront/testing`, `@scalius/plugin-sdk/island` and `@scalius/plugin-sdk/pixel`: storefront modules, their tests, client islands and pixels (buyer events, [storefront.md](storefront.md#buyer-events)).
 - The generated [stable app API reference](operations.md) and [event reference](events.md).
 
-Plugin API version: `2026-10` (`PLUGIN_API_VERSION`). Within one version the contract only grows. See [The contract seal](commerce-hooks.md#8-the-contract-seal).
+Contract version: `2026-10` (`PLUGIN_API_VERSION`). Within one version the contract only grows. See [What we promise](promise.md) for the policy and [The contract seal](commerce-hooks.md#8-the-contract-seal) for what the tests seal.
