@@ -15,13 +15,10 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { crc32, deflateRawSync, inflateRawSync } from "node:zlib";
 import { loadPluginContract, packPlugin, pluginPackageDir, readLockfile } from "./plugin-build.mjs";
 import { CLI, loadRegistryContract } from "./plugin-host.mjs";
+// A package's sizes and file count are the store's own (readPluginPackageZip): a package that packs is one a store accepts.
+import { PLUGIN_PACKAGE_FILE_MAX_BYTES, PLUGIN_PACKAGE_MAX_BYTES, PLUGIN_PACKAGE_MAX_ENTRIES } from "../packages/shared/src/plugins/package-limits.ts";
 
 export { loadRegistryContract };
-
-/** The most files a package may hold (the API reader's limit) and the largest bundle a registry lists. */
-export const PACKAGE_MAX_ENTRIES = 64;
-export const PACKAGE_MAX_BYTES = 20 * 1024 * 1024;
-export const BUNDLE_MAX_BYTES = 16 * 1024 * 1024;
 
 // ── Arguments ────────────────────────────────────────────────────────────
 
@@ -134,7 +131,7 @@ const ZIP_DATE = (1 << 5) | 1; // 1980-01-01, so the same files always make the 
  * reads.
  */
 export function writeZip(files) {
-  if (files.length > PACKAGE_MAX_ENTRIES) throw new Error(`A package holds at most ${PACKAGE_MAX_ENTRIES} files; this one has ${files.length}.`);
+  if (files.length > PLUGIN_PACKAGE_MAX_ENTRIES) throw new Error(`A package holds at most ${PLUGIN_PACKAGE_MAX_ENTRIES} files; this one has ${files.length}.`);
   const locals = [];
   const central = [];
   let offset = 0;
@@ -183,7 +180,7 @@ export function writeZip(files) {
   end.writeUInt32LE(directory.length, 12);
   end.writeUInt32LE(offset, 16);
   const zip = Buffer.concat([...locals, directory, end]);
-  if (zip.length > PACKAGE_MAX_BYTES) throw new Error("The package is larger than 20 MiB, the most a store accepts.");
+  if (zip.length > PLUGIN_PACKAGE_MAX_BYTES) throw new Error("The package is larger than 20 MiB, the most a store accepts.");
   return zip;
 }
 
@@ -202,7 +199,7 @@ export async function packSigned(source, { key = null, developer = null } = {}) 
   const manifest = JSON.parse(manifestText);
   const code = readFileSync(join(dist, "plugin.js"));
   const sha256 = sha256Of(code);
-  if (code.length > BUNDLE_MAX_BYTES) throw new Error(`The bundle is ${(code.length / 1024 / 1024).toFixed(1)} MiB; a registry lists at most 16 MiB.`);
+  if (code.length > PLUGIN_PACKAGE_FILE_MAX_BYTES) throw new Error(`The bundle is ${(code.length / 1024 / 1024).toFixed(1)} MiB; a store accepts at most 16 MiB for one file of a package.`);
   const files = [
     ["manifest.json", Buffer.from(manifestText)],
     ["plugin.js", code],
@@ -277,7 +274,7 @@ export async function buildRegistry(distDirs, { out, name = null }) {
     const signature = { keyId: packageSignature.data.keyId, value: packageSignature.data.value };
     const check = await registry.verifyPluginSignature({ id: manifest.id, version: manifest.version, sha256, manifest }, signature, [key]);
     if (!check.ok) throw new Error(`${dist}: the signature does not match plugin.js and manifest.json. Pack and sign it again.`);
-    if (code.length < 1 || code.length > BUNDLE_MAX_BYTES) throw new Error(`${dist}: plugin.js must be between 1 byte and 16 MiB.`);
+    if (code.length < 1 || code.length > PLUGIN_PACKAGE_FILE_MAX_BYTES) throw new Error(`${dist}: plugin.js must be between 1 byte and 16 MiB.`);
     const sealed = registry.sealedAssetDigests(code.toString("utf8"));
     const assetFiles = listFiles(join(dist, "assets"));
     for (const [path, digest] of Object.entries(sealed)) {
@@ -489,7 +486,7 @@ function writeReleasePackage(pluginsDir, { id, version, code, manifest, assets, 
 
 /** The files of a ZIP that `writeZip` (or an archiver) wrote: stored or deflated entries, no ZIP64. */
 export function readZip(bytes) {
-  if (bytes.length > PACKAGE_MAX_BYTES) throw new Error("The package is larger than 20 MiB, the most a store accepts.");
+  if (bytes.length > PLUGIN_PACKAGE_MAX_BYTES) throw new Error("The package is larger than 20 MiB, the most a store accepts.");
   let end = -1;
   for (let at = bytes.length - 22; at >= Math.max(0, bytes.length - 65_557); at -= 1) {
     if (bytes.readUInt32LE(at) === 0x06054b50) {
@@ -499,7 +496,7 @@ export function readZip(bytes) {
   }
   if (end < 0) throw new Error("The file is not a ZIP package.");
   const count = bytes.readUInt16LE(end + 10);
-  if (count > PACKAGE_MAX_ENTRIES) throw new Error(`A package holds at most ${PACKAGE_MAX_ENTRIES} files.`);
+  if (count > PLUGIN_PACKAGE_MAX_ENTRIES) throw new Error(`A package holds at most ${PLUGIN_PACKAGE_MAX_ENTRIES} files.`);
   const files = new Map();
   let at = bytes.readUInt32LE(end + 16);
   for (let index = 0; index < count; index += 1) {
@@ -564,7 +561,7 @@ export async function readPackedRelease(path) {
   const code = files.get("plugin.js");
   const manifestBytes = files.get("manifest.json");
   if (!code || !manifestBytes) throw new Error(`${path} is not a packed app: it needs plugin.js and manifest.json (what ${CLI} pack writes).`);
-  if (code.length > BUNDLE_MAX_BYTES) throw new Error("plugin.js is larger than 16 MiB.");
+  if (code.length > PLUGIN_PACKAGE_FILE_MAX_BYTES) throw new Error("plugin.js is larger than 16 MiB.");
   let manifest;
   try {
     manifest = JSON.parse(manifestBytes.toString("utf8"));

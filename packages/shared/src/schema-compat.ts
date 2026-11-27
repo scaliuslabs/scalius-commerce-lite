@@ -164,14 +164,44 @@ function compare(before: Side, after: Side, direction: SchemaDirection, path: st
       const now = a[bound];
       if (typeof now === "number" && (typeof was !== "number" || now > was)) out.push(`${at}: ${bound} tightened to ${now}.`);
     }
+    // A bound that leaves the schema may have moved into a refinement the schema cannot show (a zod
+    // `.refine`): it reads as a loosening, so it is a line a reviewer answers.
+    for (const bound of [...BOUND_KEYS.upper, ...BOUND_KEYS.lower, "pattern", "format", "multipleOf"]) {
+      if (b[bound] !== undefined && a[bound] === undefined) out.push(`${at}: ${bound} ${JSON.stringify(b[bound])} left the schema (a refinement may hold it now).`);
+    }
     for (const exclusive of ["exclusiveMinimum", "exclusiveMaximum"] as const) {
       if (a[exclusive] === true && b[exclusive] !== true) out.push(`${at}: ${exclusive} added.`);
     }
+    // Any changed pattern is a line: whether it widens is not proven here.
     if (a.pattern !== undefined && a.pattern !== b.pattern) out.push(`${at}: pattern changed.`);
     if (a.format !== undefined && a.format !== b.format) out.push(`${at}: format changed to ${String(a.format)}.`);
     if (a.additionalProperties === false && b.additionalProperties !== false && b.type === "object") {
       out.push(`${at}: additional properties are no longer accepted.`);
     }
+    // A record whose values were open (absent, `true` or `{}`) and are now typed accepts less.
+    const open = (value: unknown) => value === undefined || value === true || (isRecord(value) && Object.keys(value).length === 0);
+    if (open(b.additionalProperties) && isRecord(a.additionalProperties) && !open(a.additionalProperties) && (b.type === "object" || a.type === "object")) {
+      out.push(`${at}{*}: the values are now typed.`);
+    }
+    // What an omitted field becomes, and the other keywords a value is held to.
+    if (JSON.stringify(a.default) !== JSON.stringify(b.default) && (b.default !== undefined || a.default !== undefined)) {
+      out.push(`${at}: the default changed from ${JSON.stringify(b.default) ?? "none"} to ${JSON.stringify(a.default) ?? "none"}.`);
+    }
+    if (a.multipleOf !== undefined && a.multipleOf !== b.multipleOf) out.push(`${at}: multipleOf tightened to ${String(a.multipleOf)}.`);
+    if (a.not !== undefined && JSON.stringify(a.not) !== JSON.stringify(b.not)) out.push(`${at}: a not was added or changed.`);
+  } else {
+    // A response no longer promises its format, or the pattern its values matched (any change: a
+    // widening is not proven).
+    if (b.format !== undefined && a.format !== b.format) out.push(`${at}: the format ${String(b.format)} is no longer promised.`);
+    if (b.pattern !== undefined && a.pattern !== b.pattern) out.push(`${at}: the pattern ${String(b.pattern)} is no longer promised.`);
+  }
+  if (Array.isArray(b.prefixItems) || Array.isArray(a.prefixItems)) {
+    const was = Array.isArray(b.prefixItems) ? b.prefixItems : [];
+    const now = Array.isArray(a.prefixItems) ? a.prefixItems : [];
+    if (now.length !== was.length) out.push(`${at}: the tuple's length changed from ${was.length} to ${now.length}.`);
+    was.forEach((item, index) => {
+      if (index < now.length) compare({ schema: item, components: before.components }, { schema: now[index], components: after.components }, direction, `${path}[${index}]`, out, seen);
+    });
   }
 
   const bProps = isRecord(b.properties) ? b.properties : {};

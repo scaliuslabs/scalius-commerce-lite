@@ -1,0 +1,211 @@
+{
+ "themeSave": {
+  "at": "a theme saved or published (checkStorefrontThemeSave), its private pages compiled",
+  "reasons": [
+   "binding_object_types",
+   "binding_source",
+   "contrast",
+   "dark_colors_missing",
+   "document_too_large",
+   "duplicate_part",
+   "duplicate_target",
+   "empty_layout",
+   "foreign_asset",
+   "home_product_unavailable",
+   "invalid_hook",
+   "invalid_link",
+   "label_figures",
+   "label_too_long",
+   "label_variant",
+   "layout_holds",
+   "layout_once",
+   "lead_order",
+   "markup",
+   "media_missing",
+   "missing_part",
+   "missing_target",
+   "no_row",
+   "not_available",
+   "part_order",
+   "private_page_template",
+   "prominence",
+   "semantic_color",
+   "slide_products_over_limit",
+   "tab_label",
+   "tab_link_external",
+   "tab_repeated",
+   "theme_app_settings_missing",
+   "theme_apps_unavailable",
+   "token_value",
+   "too_deep",
+   "too_large",
+   "too_many_nodes",
+   "translation",
+   "unknown_app",
+   "unknown_frame",
+   "unknown_item",
+   "unknown_layout",
+   "unknown_part",
+   "unknown_style",
+   "unknown_target",
+   "unknown_token",
+   "unknown_variant"
+  ],
+  "governedBy": [
+   "private-anatomy.snapshot.txt",
+   "private-compile.golden.json",
+   "read-bounds.snapshot.json",
+   "save-reasons.snapshot.json",
+   "tables.landingHandlesNeverValid",
+   "tables.limits",
+   "tables.marketSubfolderPattern",
+   "tables.themeLabelAmountWords"
+  ]
+ },
+ "appTemplates": {
+  "at": "an app's templates and page presets at install, in the theme library and when applied (checkStorefrontAppTemplateTheme, then the theme save)",
+  "reasons": [
+   "binding_object_types",
+   "binding_source",
+   "contrast",
+   "dark_colors_missing",
+   "document_too_large",
+   "duplicate_part",
+   "duplicate_target",
+   "empty_layout",
+   "foreign_asset",
+   "home_product_unavailable",
+   "invalid_hook",
+   "invalid_link",
+   "label_figures",
+   "label_too_long",
+   "label_variant",
+   "layout_holds",
+   "layout_once",
+   "lead_order",
+   "markup",
+   "media_missing",
+   "missing_part",
+   "missing_target",
+   "no_row",
+   "not_available",
+   "part_order",
+   "private_page_template",
+   "prominence",
+   "semantic_color",
+   "slide_products_over_limit",
+   "tab_label",
+   "tab_link_external",
+   "tab_repeated",
+   "theme_app_settings_missing",
+   "theme_apps_unavailable",
+   "token_value",
+   "too_deep",
+   "too_large",
+   "too_many_nodes",
+   "translation",
+   "unknown_app",
+   "unknown_frame",
+   "unknown_item",
+   "unknown_layout",
+   "unknown_part",
+   "unknown_style",
+   "unknown_target",
+   "unknown_token",
+   "unknown_variant"
+  ],
+  "governedBy": [
+   "compat.snapshot.json",
+   "save-reasons.snapshot.json",
+   "tables.limits"
+  ]
+ },
+ "manifestPolicy": {
+  "at": "an app release installed, updated, packed or validated (pluginManifestPolicyIssues)",
+  "reasons": [
+   "store_words"
+  ],
+  "governedBy": [
+   "abi.manifest.snapshot.json",
+   "tables.storeWordKinds",
+   "tables.storeWordOwn",
+   "tables.storeWordSlots",
+   "tables.storeWords"
+  ]
+ },
+ "buyerUi": {
+  "at": "each buyer UI extension's answer (parsePluginUiDocument on the buyer surface: a refused answer draws nothing)",
+  "reasons": [
+   "invalid",
+   "store_words",
+   "too_large",
+   "version"
+  ],
+  "governedBy": [
+   "abi.protocol.snapshot.json",
+   "tables.limits",
+   "tables.storeWordKinds",
+   "tables.storeWordOwn",
+   "tables.storeWordSlots",
+   "tables.storeWords"
+  ]
+ },
+ "functionOutput": {
+  "at": "each function's answer (its sealed output schema, then the store's words give way: function-words.ts)",
+  "reasons": [],
+  "governedBy": [
+   "abi.protocol.snapshot.json",
+   "tables.limits",
+   "tables.neutralWords",
+   "tables.storeWordKinds",
+   "tables.storeWordOwn",
+   "tables.storeWordSlots",
+   "tables.storeWords"
+  ]
+ },
+ "buyerChrome": {
+  "at": "a theme's header and footer on a buyer's own page: its stylesheet checked and written again (buyer-chrome-css.ts), its markup rebuilt inert (inert-html.ts)",
+  "reasons": [],
+  "governedBy": [
+   "buyer-chrome-css.verdicts.json",
+   "buyer-chrome-css.version.json",
+   "tables.buyerChromeCssAtRules",
+   "tables.buyerChromePanels",
+   "tables.inertBehaviours",
+   "tables.inertMarkup",
+   "tables.limits"
+  ]
+ },
+ "storefrontOutput": {
+  "at": "each storefront render's markup (sanitizePluginHtml) and its bundle at upload",
+  "reasons": [
+   "too_complex",
+   "too_large"
+  ],
+  "governedBy": [
+   "storefront.STOREFRONT_COMPONENT_LIMITS",
+   "storefront.STOREFRONT_STYLE_FUNCTIONS",
+   "tables.limits",
+   "tables.skinHtml"
+  ]
+ },
+ "pack": {
+  "at": "scalius-plugin validate and pnpm plugin pack (scripts/plugin-validate.mjs, plugin-build.mjs)",
+  "reasons": [
+   "Bundle size",
+   "Bundles",
+   "Compatibility",
+   "Handlers",
+   "Listing images",
+   "Loads",
+   "Manifest",
+   "Plugin definition",
+   "Plugin entry",
+   "Storefront",
+   "Theme templates"
+  ],
+  "governedBy": [
+   "tables.limits"
+  ]
+ }
+}

@@ -258,12 +258,13 @@ function compatibleTypeLists(
 }
 
 /**
- * A union keeps every member (each may grow, in any order) and gains none,
- * because a host that returns the type would hand apps a member they never
- * handled. One exception: a member discriminated by a string literal union
- * (`{ kind: "a" | "b" } & rest`) may be split into members that partition
- * those literals exactly, each keeping `rest` (and so able to grow it): every
- * old value still belongs to exactly one new member.
+ * A union keeps every member (each may grow, in any order) and, when it is an
+ * open list (string or number literals, or one discriminated union), may gain
+ * members of its kind: a value it does not know is handled as the reference
+ * says, never by an exhaustive switch. A member discriminated by a
+ * string literal union (`{ kind: "a" | "b" } & rest`) may also be split into
+ * members that partition those literals exactly, each keeping `rest` (and so
+ * able to grow it): every old value still belongs to exactly one new member.
  */
 function compatibleUnion(
   before: readonly ts.TypeNode[], after: readonly ts.TypeNode[], oldSource: ts.SourceFile, newSource: ts.SourceFile,
@@ -284,7 +285,21 @@ function compatibleUnion(
     if (covered.length !== was.values.length || new Set(covered).size !== was.values.length) return false;
     for (const part of parts) claimed.add(part);
   }
-  return unmatchedAfter.every((next) => claimed.has(next));
+  // A gained member is growth only in an open list: a union of string or number literals gaining
+  // literals, or a union discriminated by one key gaining a member of that key. A scalar or an object
+  // becoming a union (`boolean | string`) retypes a value every reader holds: a break.
+  const gained = unmatchedAfter.filter((next) => !claimed.has(next));
+  if (gained.length === 0) return true;
+  if (before.every(isListLiteral)) return gained.every(isListLiteral);
+  const keys = before.map((node) => discriminated(node, oldSource)?.key ?? null);
+  const key = keys[0];
+  return key !== null && key !== undefined && keys.every((each) => each === key) && gained.every((node) => discriminated(node, newSource)?.key === key);
+}
+
+/** A string or number literal type (`"a"`, `3`): a member of an open list. */
+function isListLiteral(node: ts.TypeNode): boolean {
+  const inner = unparenthesized(node);
+  return ts.isLiteralTypeNode(inner) && (ts.isStringLiteral(inner.literal) || ts.isNumericLiteral(inner.literal));
 }
 
 /**
@@ -325,6 +340,8 @@ function compatibleType(
   const nowList = listOf(now);
   if (wasList && nowList && wasList.readonly === nowList.readonly) return compatibleType(wasList.element, nowList.element, oldSource, newSource);
   if (ts.isUnionTypeNode(was) && ts.isUnionTypeNode(now)) return compatibleUnion(was.types, now.types, oldSource, newSource);
+  // A type that becomes a union holding it gained members, nothing else.
+  if (!ts.isUnionTypeNode(was) && ts.isUnionTypeNode(now)) return compatibleUnion([was], now.types, oldSource, newSource);
   if (ts.isIntersectionTypeNode(was) && ts.isIntersectionTypeNode(now)) {
     return compatibleTypeLists(was.types, now.types, oldSource, newSource)
       && !gainedKeyCollides(was.types, now.types, newSource);

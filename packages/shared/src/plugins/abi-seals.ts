@@ -12,6 +12,7 @@ import { PLUGIN_SCOPES } from "./scopes";
 import { APP_ERROR_CODES } from "./app-errors";
 import * as protocol from "./storefront-protocol";
 import { PLUGIN_UI_SURFACES, pluginUiDocumentSchema } from "./ui";
+import { contractTables } from "./contract-tables";
 import type { AnyMachine } from "../machine";
 import { COD_MACHINE, ORDER_MACHINE } from "../order-state";
 import { REVIEW_MACHINE } from "../reviews";
@@ -66,7 +67,7 @@ export function manifestSeal() {
   return { apiVersion: PLUGIN_API_VERSION, schema: schema(pluginManifestSchema) };
 }
 
-/** Functions, stable provider ports, UI, scopes, error codes, events and storefront protocol constants. */
+/** Functions, stable provider ports, UI, scopes, error codes, events, storefront protocol constants and the contract tables. */
 export function protocolSeal() {
   return {
     apiVersion: PLUGIN_API_VERSION,
@@ -85,6 +86,8 @@ export function protocolSeal() {
     },
     storefront: Object.fromEntries(Object.entries(protocol).filter(([name, value]) => name === name.toUpperCase() && typeof value !== "function")
       .map(([name, value]) => [name, value instanceof RegExp ? value.source : value])),
+    // Host CSS variables and hooks, the skin HTML allow-list, app limits, store words, delivery (contract-tables.ts).
+    tables: contractTables(),
     machines: Object.fromEntries(Object.entries(APP_MACHINES).map(([name, machine]) => [name, machineSeal(machine)])),
   };
 }

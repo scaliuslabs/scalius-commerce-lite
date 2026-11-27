@@ -6,7 +6,8 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join, relative } from "node:path";
 import { bundlePlugin, componentJobs, installedSdk, loadPluginContract, packStorefront, pluginPackageDir, resolvePluginEntry, sdkBuildStamp, SDK_DIR, sealBundle, smokeSettings } from "./plugin-build.mjs";
 import { sdkReference } from "./plugin-host.mjs";
-import { BUNDLE_MAX_BYTES, shownPath } from "./plugin-registry.mjs";
+import { shownPath } from "./plugin-registry.mjs";
+import { PLUGIN_PACKAGE_FILE_MAX_BYTES } from "../packages/shared/src/plugins/package-limits.ts";
 
 export const BUNDLE_WARN_BYTES = 1024 * 1024;
 
@@ -159,7 +160,7 @@ export async function validatePlugin(directory) {
 
   // The packed bundle also carries the image digests; their size is fixed, so measure with placeholders.
   const size = Buffer.byteLength(sealBundle(bundled, assets));
-  if (size > BUNDLE_MAX_BYTES) add("fail", "Bundle size", `${mib(size)} is over the 16 MiB a registry lists.`);
+  if (size > PLUGIN_PACKAGE_FILE_MAX_BYTES) add("fail", "Bundle size", `${mib(size)} is over the 16 MiB a store accepts for one file of a package.`);
   else if (size > BUNDLE_WARN_BYTES) add("warn", "Bundle size", `${mib(size)} is large; the sandbox loads it on every cold start. Keep it under 1 MiB.`);
   else add("pass", "Bundle size", mib(size));
 
