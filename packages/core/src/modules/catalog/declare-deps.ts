@@ -10,9 +10,9 @@ import {
   type ProductMediaProjection,
   type StorefrontProductFilterInput,
 } from "../products";
-import { deps } from "../../cache-deps";
+import { deps, withLookupScope } from "../../cache-deps";
 
-export { brandScope, categoryScope, deps };
+export { brandScope, categoryScope, deps, withLookupScope };
 
 /**
  * A product without a gallery depends on no media row: a file joins it only

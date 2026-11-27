@@ -26,6 +26,7 @@ import {
   storefrontProductSectionQuerySchema,
   storefrontProductSectionSchema,
   resolvePublicAttributeFilters,
+  storefrontListingSort,
   getStorefrontProductComparison,
   normalizeCompareIds,
   MAX_COMPARE_PRODUCTS,
@@ -53,6 +54,7 @@ import {
   listingPageInfoSchema,
   listingCursorQuerySchema,
   searchSortSchema,
+  listingReadSortField,
   LISTING_SORT_DESCRIPTION,
   errorResponses,
 } from "../schemas/responses";
@@ -123,7 +125,7 @@ const productFilterSchema = z.object({
   ...listingCursorQuerySchema,
   sort: searchSortSchema
     .optional()
-    .openapi({ description: `${LISTING_SORT_DESCRIPTION} Defaults to relevance when \`search\` is set, otherwise newest.` }),
+    .openapi({ description: `${LISTING_SORT_DESCRIPTION} With \`search\` set, best match (relevance) instead.` }),
   minRating: minRatingQuerySchema,
   minPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
   maxPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
@@ -434,8 +436,8 @@ const productDetailVariantSchema = z.object({
   discountAmount: z.number().nullable(),
   /** physical (shipped or picked up), digital, or service (performed, no delivery); a kit's from its items. */
   fulfillmentKind: fulfillmentKindSchema,
-  paidOnlineOnly: z.boolean().openapi({
-    description: "Paid only online (a key, a download, a gift card, or a kit holding one): no cash on delivery or at the service buys it.",
+  cashPayable: z.boolean().openapi({
+    description: "Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. The storefront turns buying it off only where nothing else can pay (a store that takes only cash and holds no live gift card, checkout config `giftCardsLive`).",
   }),
   customFields: storefrontCustomFieldsSchema,
   /** This SKU's effective warranty: an id in the product's `warranties`, or null without one. */
@@ -671,6 +673,7 @@ const listProductsRoute = createRoute({
         correctedQuery: z.string().nullable().openapi({
           description: "Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction).",
         }),
+        ...listingReadSortField,
       })) } },
     },
     400: errorResponses[400],
@@ -684,14 +687,18 @@ app.openapi(listProductsRoute, async (c) => {
   const queryParams = readRepeatedPublicQueryValues(c.req.url);
   const search = normalizePublicListingSearchParam(params.search);
 
-  const attributeFilters = await resolvePublicAttributeFilters(
-    db,
-    queryParams,
-    Object.keys(params),
-  );
+  // The order (the store's default when none is asked for) is read beside the filters: no round trip of its own.
+  const [attributeFilters, sort] = await Promise.all([
+    resolvePublicAttributeFilters(
+      db,
+      queryParams,
+      Object.keys(params),
+    ),
+    storefrontListingSort(db, { sort: params.sort, search, ids: params.ids, cursor: params.cursor }, { searchRanks: true }),
+  ]);
 
   const { presence: _presence, ...filters } = params;
-  const result = await getStorefrontProducts(db, { ...filters, search, attributeFilters }, publicMarketPricing(c));
+  const result = await getStorefrontProducts(db, { ...filters, sort, search, attributeFilters }, publicMarketPricing(c));
   // The HTTP schema keeps custom JSON opaque instead of recursively expanding the codec type.
   const response: z.infer<typeof listProductsRoute.responses[200]["content"]["application/json"]["schema"]>["data"] = result;
   return ok(c, response);

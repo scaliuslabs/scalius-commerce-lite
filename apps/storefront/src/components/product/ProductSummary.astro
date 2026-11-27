@@ -71,10 +71,13 @@ interface Props {
   priceIncrementMinor?: number;
   quickBuyNotice?: string | null;
   /**
-   * What the page sells is paid only online (digital items, gift cards) and
-   * checkout takes no online payment: the buttons are off and a note says why.
+   * Cash pays for nothing the page sells (digital items, gift cards), the
+   * store lists no way to pay but cash and holds no live gift card
+   * (`cashUnpayableHere` "stopped"): the buttons are off and a note says why.
    */
   onlinePaymentUnavailable?: boolean;
+  /** The same with a live gift card (`"gift_card"`): the buttons stay on and a note says a gift card pays. */
+  giftCardOnly?: boolean;
   /**
    * The product needs delivery and no delivery or pickup option reaches this
    * page's buyers (`physicalDeliveryOffered`): the buttons are off and a note says why.
@@ -132,6 +135,7 @@ const {
   priceIncrementMinor,
   quickBuyNotice = null,
   onlinePaymentUnavailable = false,
+  giftCardOnly = false,
   deliveryUnavailable = false,
   deliveryPreviewHint = false,
   actionCopy: providedCopy = {},
@@ -521,6 +525,8 @@ function optionAriaLabel(
           {pageCopy.deliveryUnavailableText}
           {deliveryPreviewHint && <span class="mt-1 block font-normal text-muted-foreground" data-merchant-hint>{catalogCopy(language).delivery.setupHint}</span>}
         </p>
+      ) : giftCardOnly ? (
+        <p id="product-gift-card-only" class="rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground" role="status">{pageCopy.giftCardPaysText}</p>
       ) : null}
 
       {showPart("inputs") && <BuyFormInputs {...formInputs} />}

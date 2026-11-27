@@ -11,6 +11,7 @@ import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import { withoutShortcodes } from "@/lib/shortcodes";
 import { formatCount, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
 import { pagesCopy } from "@/lib/pages-copy";
+import { menuLabelFor } from "@/lib/menu-label";
 
 const pageParam = Number(Astro.url.searchParams.get("page") ?? "1");
 const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1;
@@ -39,8 +40,10 @@ const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/blog");
 const isFilteredView = page > 1 || Boolean(tag);
 const language = pageLanguage();
 const copy = pagesCopy(language).blog;
+// The store's own name for the page: its menu link's words ("News"), else the catalogue's.
+const blogName = menuLabelFor(layoutData, "/blog") ?? copy.title;
 const description = tag ? copy.taggedDescription(tag) : copy.description;
-const title = tag ? copy.tagged(tag) : copy.title;
+const title = tag ? copy.tagged(tag) : blogName;
 // The newest post image previews the blog when shared.
 const firstFeaturedImage = articles
   .map((article) => article.featuredImage?.url)
@@ -54,7 +57,7 @@ const blogJsonLd =
     ? serializeJsonForInlineScript({
         "@context": "https://schema.org",
         "@type": "Blog",
-        name: copy.title,
+        name: blogName,
         url: canonicalUrl,
         description,
         blogPost: articles
@@ -184,7 +187,7 @@ function pageHref(nextPage: number): string {
                 {image && (
                   <a
                     href={`/blog/${article.slug}`}
-                    class="block overflow-hidden rounded-xl bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    class="block overflow-hidden rounded-[var(--radius)] bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
                     <img
                       src={image}

@@ -243,6 +243,11 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
+  // Online store -> Preferences, beside the SEO settings: the same people save the page.
+  "/api/v1/admin/settings/catalog": {
+    GET: { anyOf: ANY_STAFF },
+    POST: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
+  },
   "/api/v1/admin/settings/seo": {
     GET: { anyOf: ANY_STAFF },
     PUT: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },

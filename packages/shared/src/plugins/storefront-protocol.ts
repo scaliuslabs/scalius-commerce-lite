@@ -825,8 +825,11 @@ export interface StorefrontPlacedOffer {
   compareAt: StorefrontMoney | null;
   /**
    * Its buy action works here, judged as on its own page: in stock, and
-   * payable (one paid only online, a key or a kit holding one, is off where
-   * checkout takes no online payment). `availability` is its stock band.
+   * payable. One cash can't pay for (a key, a download, a gift card, or a
+   * kit holding one) is off only where nothing else can pay: the store lists
+   * no way to pay but cash and holds no live gift card. Any other method, or
+   * a live gift card, keeps it on, and checkout says what pays.
+   * `availability` is its stock band.
    */
   available: boolean;
   /**

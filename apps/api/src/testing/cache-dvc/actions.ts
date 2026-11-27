@@ -19,7 +19,8 @@ import { bulkUpdateProducts, deleteProduct, restoreProduct } from "@scalius/core
 import { adjustStock } from "@scalius/core/modules/inventory";
 import { moveCategory } from "@scalius/core/modules/categories";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
-import { getThemeWorkspace, publishThemeDraft, saveThemeDraft, saveThemePageDraft } from "@scalius/core/modules/settings";
+import { catalogDocument, getThemeWorkspace, publishThemeDraft, saveThemeDraft, saveThemePageDraft } from "@scalius/core/modules/settings";
+import { STOREFRONT_DEFAULT_LISTING_SORTS } from "@scalius/shared/listing-sorts";
 import { setProductChannels, setProductPublications, updateSalesChannel } from "@scalius/core/modules/sales-channels";
 import { updatePage } from "@scalius/core/modules/pages";
 import { backfillSearchText, reindexFts5Slice } from "@scalius/core/search";
@@ -59,6 +60,18 @@ function richTextWith(rng: Rng): string {
 }
 
 export const CURATED_ACTIONS: readonly CuratedAction[] = [
+  {
+    // Online store -> Preferences: the order bare listings open in. Every cached listing that
+    // took the default (category, collection, brand, browse-all) must be read again; one that
+    // named its order, or a picked collection with its own, must not change.
+    name: "default-listing-sort",
+    weight: 3,
+    async run({ db, rng }) {
+      const defaultListingSort = rng.pick(STOREFRONT_DEFAULT_LISTING_SORTS);
+      const written = await catalogDocument.write(db, { defaultListingSort });
+      return `catalogDocument.write defaultListingSort=${defaultListingSort} revision=${written.revision}`;
+    },
+  },
   {
     // The scheduled search-text backfill's tick (search-text-backfill.ts): a bounded slice of
     // rows whose search text is missing, each filled (a word inside markup stops matching).

@@ -38,9 +38,11 @@ if (!id) {
   return new Response(null, { status: 404 });
 }
 
+// A collection's search ranks by relevance, as its read does.
 let queryState = resolveProductListQueryState({
   url: Astro.url,
   allowUnknownAttributes: true,
+  rankByRelevance: true,
 });
 if (queryState.redirectPath) {
   const redirect = canonicalRedirect(Astro.url, queryState.redirectPath);
@@ -66,6 +68,9 @@ const collection = collectionResult.data;
 queryState = resolveProductListQueryState({
   url: Astro.url,
   facets: collection.facets ?? [],
+  rankByRelevance: true,
+  // The order shown is the one the read reports (its own, or the store's default, when the URL named none).
+  readSort: collection.sort,
 });
 if (queryState.redirectPath) {
   const redirect = canonicalRedirect(Astro.url, queryState.redirectPath);

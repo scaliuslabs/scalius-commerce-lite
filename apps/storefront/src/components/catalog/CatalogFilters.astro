@@ -32,7 +32,6 @@ import {
   buildProductListHref,
   productListRangeKey,
   type ProductListFilterState,
-  type ProductListSort,
 } from "@/lib/product-list-query";
 import {
   catalogApplyButton,
@@ -59,8 +58,6 @@ interface Props {
   priceRange?: BuyerPriceRange;
   currentFilters: ProductListFilterState;
   query: string;
-  sortBy: ProductListSort;
-  defaultSort: ProductListSort;
   total: number;
   /** `total` is a lower bound ("Show 1,000+ products"). */
   totalIsCapped?: boolean;
@@ -86,8 +83,6 @@ const {
   priceRange,
   currentFilters,
   query,
-  sortBy,
-  defaultSort,
   total,
   totalIsCapped = false,
   pathname,
@@ -193,7 +188,6 @@ const showAllHref = (key: string | null) => `${buildProductListHref({
   pathname,
   currentFilters,
   overrides: { [PRODUCT_LIST_SHOW_ALL_PARAM]: key, page: null },
-  defaultSort,
 })}`;
 const priceStep = priceRange && priceRange.max > 0 ? Math.max(1, 10 ** Math.max(0, Math.floor(Math.log10(priceRange.max)) - 2)) : 1;
 const priceSlider = priceRange && priceRange.max > priceRange.min
@@ -215,7 +209,8 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
   data-inline={inline ? "" : undefined}
   class="catalog-filter-form grow overflow-y-auto"
 >
-  {sortBy !== defaultSort && <input type="hidden" name="sortBy" value={sortBy} />}
+  {/* A named order stays named, even today's default (the store may change the default). */}
+  {typeof currentFilters.sortBy === "string" && <input type="hidden" name="sortBy" value={currentFilters.sortBy} />}
   {pageSize && <input type="hidden" name="limit" value={pageSize} />}
   {!searchField && query && <input type="hidden" name="q" value={query} />}
   <div class="catalog-filter-groups">

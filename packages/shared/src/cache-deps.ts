@@ -128,6 +128,13 @@ export const CACHE_DEP_KINDS = [
   "obj",
   /** `rd`: URL redirects (any change); read only on the storefront's 404 path. */
   "rd",
+  /**
+   * `gc`: whether the store holds a live gift card (active, unexpired, with
+   * a balance): checkout configuration's `giftCardsLive`. Only a card's
+   * issue, removal, status, expiry, or balance reaching or leaving zero
+   * advances it; a partial redemption does not.
+   */
+  "gc",
   /** `t:<table>`: coarse fallback, any buyer-visible change of the table. */
   "t",
   /** `store`: everything (dashboard "clear cache", catalogue-wide rebuilds). */
@@ -230,6 +237,8 @@ export const cacheDep = {
   objectRecordsLedBy: (typeId: string, leadHex: string) => `obj:${typeId}:${leadHex}`,
   /** URL redirects: which old address leads where. */
   redirects: () => "rd",
+  /** Whether the store holds a live gift card. */
+  giftCardsLive: () => "gc",
   table: (table: string) => `t:${table}`,
   store: () => "store",
 } as const;
@@ -251,7 +260,7 @@ export function isCacheDep(dep: string): boolean {
   const kind = cacheDepKind(dep);
   if (kind === null || !KEY_PATTERN.test(dep)) return false;
   const constant = kind === "srch" || kind === "theme" || kind === "ship"
-    || kind === "loc" || kind === "tax" || kind === "lang" || kind === "an" || kind === "rd" || kind === "store"
+    || kind === "loc" || kind === "tax" || kind === "lang" || kind === "an" || kind === "rd" || kind === "gc" || kind === "store"
     || kind === "popular";
   return constant ? dep === kind : dep.length > kind.length + 1;
 }
@@ -797,6 +806,22 @@ const CACHE_DEP_TABLE_RULES = {
     rules: everyChange([{ prefix: "nav:", columns: ["menu_id"] }, { dep: "nav:*" }]),
   },
   analytics: { kinds: ["an"], noise: ["revision", "updated_at"], rules: everyChange([{ dep: "an" }]) },
+  gift_cards: {
+    kinds: ["gc"],
+    noise: [
+      "code_hash", "code_ciphertext", "code_last4", "currency_code", "initial_amount_minor", "source", "source_order_id",
+      "source_order_item_id", "source_unit_index", "source_refund_attempt_id", "customer_id", "recipient_name",
+      "recipient_email", "recipient_phone", "message", "note", "issued_by_user_id", "version", "created_at", "updated_at",
+    ],
+    note: "Private rows: a public read sees only whether one live card exists (checkout configuration's giftCardsLive, 0228). A partial redemption changes nothing it shows.",
+    rules: [
+      { name: "ins", event: "insert", image: "new", keys: [{ dep: "gc" }] },
+      { name: "del", event: "delete", image: "old", keys: [{ dep: "gc" }] },
+      { name: "upd", event: "update", image: "new", changed: ["status", "expires_at"], keys: [{ dep: "gc" }] },
+      // A balance that reaches zero; its old-image companion, a balance that leaves zero.
+      { name: "upd_balance", event: "update", image: "new", changed: ["balance_minor"], where: { equals: { balance_minor: 0 } }, keys: [{ dep: "gc" }] },
+    ],
+  },
   url_redirects: {
     kinds: ["rd"],
     noise: ["created_at", "updated_at"],
@@ -1334,7 +1359,6 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   digital_entitlements: PRIVATE,
   digital_licence_keys: PRIVATE,
   order_line_messages: PRIVATE,
-  gift_cards: PRIVATE,
   gift_card_transactions: PRIVATE,
   payouts: PRIVATE,
   payout_reversals: PRIVATE,

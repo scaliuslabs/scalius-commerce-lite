@@ -7,6 +7,7 @@ export {
   activeDependencyScope,
   CacheDepCoverageError,
   withDependencyScope,
+  withLookupScope,
   type CacheDependencies,
   type DependencyScopeOptions,
   type DependencyScopeResult,

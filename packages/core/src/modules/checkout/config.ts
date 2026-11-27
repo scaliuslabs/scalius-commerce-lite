@@ -2,6 +2,9 @@
 // Assembles the public checkout configuration from DB + gateway registry.
 
 import type { Database } from "@scalius/database/client";
+import { giftCards } from "@scalius/database/schema";
+import { sql, type SQL } from "drizzle-orm";
+import { deps } from "../../cache-deps";
 import {
     getDecimalPlaces,
     normalizeSupportedCurrencyCode,
@@ -27,7 +30,7 @@ import {
     CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
     type CheckoutReadiness,
 } from "@scalius/shared/checkout-readiness";
-import { getCheckoutReadiness } from "./readiness";
+import { getCheckoutReadinessAlongside } from "./readiness";
 import { getOfferedCustomerIdentity } from "../customers";
 import {
   acceptedCustomerCountries,
@@ -85,6 +88,46 @@ export interface CheckoutConfig {
     };
     /** The market of the requested presence (MARKETS-DESIGN D4); absent when none was asked for. */
     market?: PresenceMarket;
+    /**
+     * Whether the store holds a live gift card (active, unexpired, with a
+     * balance, in a currency this page sells in). A store that takes only cash
+     * sells a key only to a buyer with a gift card: without one live, nobody
+     * can pay for it. Read only there (every enabled method the built-in cash);
+     * false on any other store, where nothing uses it.
+     */
+    giftCardsLive: boolean;
+}
+
+/**
+ * Until when a live gift card exists (active, a balance above zero, not
+ * expired, in one of `currencies`): null when none does, 0 when one never
+ * expires, else the latest expiry among the live cards, the instant the answer
+ * turns false with no write. Both probes walk only the live cards' partial
+ * index (`gift_cards_live_idx`, 0228). The `gc` key follows a card's issue,
+ * removal, status, expiry and balance reaching or leaving zero.
+ */
+function giftCardsLiveUntilSql(nowSeconds: number, currencies: readonly string[]): SQL<number | null> {
+    const live = sql`${giftCards.status} = 'active' AND ${giftCards.balanceMinor} > 0
+        AND ${giftCards.currencyCode} IN (${sql.join(currencies.map((code) => sql`${code}`), sql`, `)})`;
+    return sql<number | null>`CASE WHEN EXISTS (SELECT 1 FROM ${giftCards} WHERE ${live} AND ${giftCards.expiresAt} IS NULL) THEN 0
+        ELSE (SELECT MAX(${giftCards.expiresAt}) FROM ${giftCards} WHERE ${live} AND ${giftCards.expiresAt} > ${nowSeconds}) END`;
+}
+
+function liveUntilOf(value: unknown): number | null {
+    return value === null || value === undefined || !Number.isFinite(Number(value)) ? null : Number(value);
+}
+
+/**
+ * Every method the merchant enabled is the built-in cash method (no saved
+ * methods: cash alone, the default). The only store whose pages read gift
+ * card liveness: elsewhere a method that is not cash pays what cash can't,
+ * and nothing reads or depends on whether a card is live.
+ */
+async function enablesCashAlone(rows: readonly SettingsDocumentRow[]): Promise<boolean> {
+    const read = await paymentMethodsDocument.fromRows(rows);
+    if (read.invalid) return false;
+    const enabled = read.value.enabledMethods ?? [COD_PAYMENT_METHOD];
+    return enabled.length > 0 && enabled.every((method) => method === COD_PAYMENT_METHOD);
 }
 
 /**
@@ -158,12 +201,25 @@ export async function getCheckoutConfig(
     const currencyDecimalPlaces = getDecimalPlaces(localCurrencyCode);
     const { checkoutMode, partialPaymentAmount } = checkout;
     const partialPaymentEnabled = checkout.partialPaymentEnabled && foreignCurrency === null;
-    const [customerIdentity, checkoutReadiness] = await Promise.all([
+    // Gift card liveness, only on a store whose every method is cash (the one
+    // case a page uses it): read beside readiness, in the wave it already waits
+    // for, and declared (`gc`) only there. A store with any other method neither
+    // reads nor depends on it, so a gift card sale there invalidates no page.
+    const cashAlone = await enablesCashAlone(rows);
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const [customerIdentity, { readiness: checkoutReadiness, alongside: liveRead }] = await Promise.all([
         getOfferedCustomerIdentity(db, customerAuth, { encryptionKey, runtimeEnv, appProviders }),
         // This projection has no cart. Physical carts validate their chosen
         // option and destination in delivery preflight, for both quote and order.
-        getCheckoutReadiness(db, { encryptionKey, runtimeEnv, appProviders, requireDeliverySetup: false }),
+        // The live gift cards ride its shipping statement: no D1 call of their own.
+        getCheckoutReadinessAlongside(db, { encryptionKey, runtimeEnv, appProviders, requireDeliverySetup: false },
+            cashAlone ? giftCardsLiveUntilSql(nowSeconds, [...new Set([localCurrencyCode, currency.currencyCode])]) : undefined),
     ]);
+    const liveUntil = cashAlone ? liveUntilOf(liveRead) : null;
+    if (cashAlone) deps.giftCardsLive();
+    const giftCardsLive = liveUntil !== null;
+    // The last live card's expiry passes with no write: the answer is never served at or after it.
+    if (liveUntil !== null && liveUntil > 0) deps.validUntil(liveUntil * 1000);
 
     if (!isReady(checkoutReadiness)) {
         return {
@@ -187,6 +243,7 @@ export async function getCheckoutConfig(
             unavailableMessage: CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
             marketingConsent,
             ...(market === undefined ? {} : { market }),
+            giftCardsLive,
         };
     }
 
@@ -205,7 +262,7 @@ export async function getCheckoutConfig(
         const countries = providers.countries(methodId);
         const served = countries === "any" ? {} : { countries: [...countries] };
         if (methodId === COD_PAYMENT_METHOD) {
-            gateways.push({ id: methodId, name: COD_LABEL, flow: "cod", currencies: [localCurrencyCode], ...served });
+            gateways.push({ id: methodId, name: COD_LABEL, flow: "cod", paymentKind: "cash_on_delivery", currencies: [localCurrencyCode], ...served });
             continue;
         }
         // The invoice is listed with its terms; a buyer's quote says whether
@@ -215,6 +272,7 @@ export async function getCheckoutConfig(
                 id: methodId,
                 name: NET_TERMS_LABEL,
                 flow: "deferred",
+                paymentKind: "invoice",
                 dueInDays: activePaymentMethods.netTerms.dueInDays,
                 currencies: [localCurrencyCode],
             });
@@ -231,6 +289,7 @@ export async function getCheckoutConfig(
             id: gateway.id,
             name: gateway.checkoutName,
             flow: gateway.flow,
+            paymentKind: providers.paymentKind(gateway.id) ?? "online",
             ...(gateway.flow === "deferred" && gateway.dueInDays ? { dueInDays: gateway.dueInDays } : {}),
             currencies: [localCurrencyCode],
             ...served,
@@ -278,5 +337,6 @@ export async function getCheckoutConfig(
             : undefined,
         marketingConsent,
         ...(market === undefined ? {} : { market }),
+        giftCardsLive,
     };
 }

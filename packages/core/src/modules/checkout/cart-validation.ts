@@ -16,6 +16,7 @@ import { ONLINE_STORE_CHANNEL_ID } from "@scalius/shared/sales-channels";
 import {
     isFulfillmentKind,
     allowsCashOnDelivery,
+    paymentMethodFits,
     resolveLineFulfillmentType,
     type FulfillmentKind,
     type FulfillmentType,
@@ -1823,7 +1824,7 @@ export function resolveCartPaymentMethods(
     summary: Pick<StorefrontCartFulfilmentSummary, "allowsCashOnDelivery">,
     /** `paymentCountryOf()`; null: not known yet, no country filter. */
     paymentCountryCode: string | null = null,
-    providers: Pick<PaymentProviders, "countryIssue" | "currencyIssue" | "isDeferred"> = BUILT_IN_PAYMENT_PROVIDERS,
+    providers: Pick<PaymentProviders, "countryIssue" | "currencyIssue" | "isDeferred" | "paymentKind"> = BUILT_IN_PAYMENT_PROVIDERS,
     /**
      * The order's currency (its market's, MARKETS-DESIGN step 6): a gateway
      * that cannot charge it is not offered (`chargeCurrencies`). Absent: no
@@ -1835,7 +1836,7 @@ export function resolveCartPaymentMethods(
 ): string[] {
     return enabledMethods.filter((method) =>
         (!providers.isDeferred(method) || deferredOffered.has(method))
-        && (method !== "cod" || summary.allowsCashOnDelivery)
+        && paymentMethodFits(providers.paymentKind(method), summary.allowsCashOnDelivery)
         && providers.countryIssue(method, paymentCountryCode) === null
         && (currencyCode === null || providers.currencyIssue(method, currencyCode) === null));
 }

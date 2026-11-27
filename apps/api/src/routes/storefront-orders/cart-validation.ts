@@ -19,9 +19,11 @@ import {
   type StorefrontCartFulfilmentSummary,
   presentStorefrontCartValidation,
   presentStorefrontDeliveryPreflight,
+  offeredDeferredMethods,
   paymentCountryIsStore,
   paymentCountryOf,
   resolveCartPaymentMethods,
+  resolveDeferredPaymentEligibility,
   storefrontLinePropertiesHashes,
   summarizeStorefrontCartFulfilment,
   validateStorefrontDeliveryPreflight,
@@ -430,21 +432,35 @@ app.openapi(cartValidationRoute, async (c) => {
   // The methods the cart may use where it is handed over (paymentCountryOf):
   // a pickup or a cart that ships nothing is handed over in the store's own
   // country, read only then and only when an enabled method serves some
-  // countries alone (cash on delivery: Bangladesh).
+  // countries alone (cash on delivery: Bangladesh). The invoice (or an app's
+  // pay-later method) is listed for the signed-in buyer it may reach, as the
+  // quote lists it, so a cart of keys the buyer pays by invoice is never
+  // refused here (read only when such a method is enabled and a buyer is signed in).
   const allowedPaymentMethods = async (
     fulfilment: StorefrontCartFulfilmentSummary,
     deliveryCountryCode: string | null,
   ) => {
-    const storeCountry = paymentCountryIsStore(fulfilment)
-      && paymentMethods.enabledMethods.some((method) => paymentProviders.countries(method) !== "any")
-      ? await readStoreOriginCountry(db)
-      : null;
+    const [storeCountry, deferred] = await Promise.all([
+      paymentCountryIsStore(fulfilment)
+        && paymentMethods.enabledMethods.some((method) => paymentProviders.countries(method) !== "any")
+        ? readStoreOriginCountry(db)
+        : null,
+      paymentMethods.enabledMethods.some((method) => paymentProviders.isDeferred(method))
+        ? sessionCustomerId.then((customerId) => resolveDeferredPaymentEligibility(db, {
+          enabledMethods: paymentMethods.enabledMethods,
+          netTerms: paymentMethods.netTerms,
+          customerId,
+          providers: paymentProviders,
+        }))
+        : null,
+    ]);
     return resolveCartPaymentMethods(
       paymentMethods.enabledMethods,
       fulfilment,
       paymentCountryOf(fulfilment, deliveryCountryCode, storeCountry),
       paymentProviders,
       money.currencyCode,
+      deferred ? offeredDeferredMethods(deferred) : undefined,
     );
   };
   const cartOnly = summarizeStorefrontCartFulfilment(result, null);

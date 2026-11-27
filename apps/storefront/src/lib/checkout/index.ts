@@ -8,7 +8,10 @@ import { codHandler } from "./handlers/cod";
 import { resetStripePaymentElement, stripeHandler } from "./handlers/stripe";
 import { createHostedGatewayHandler } from "./handlers/hosted";
 import { createDeferredGatewayHandler } from "./handlers/deferred";
-import { formatPageNumber, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
+import { formatPageNumber, formatStoreDateTime, pageLanguage, storeRegion } from "@/lib/store-time-zone";
+import { numberLocale } from "@scalius/shared/locale-format";
+import { formatList } from "@scalius/shared/locale-words";
+import { cashUnpayableNames, pageBuyerSignedIn, whatCanPayText } from "./what-can-pay";
 import { formatMoney, DEFAULT_CURRENCY } from "@/lib/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { printedLineAnswers } from "@scalius/shared/line-input-surfaces";
@@ -1053,6 +1056,23 @@ function drawPaymentChoices(
   });
 }
 
+/**
+ * What can pay for this order when no method this buyer has can: cash can't
+ * pay for its keys, downloads and gift cards, so say what can
+ * (`whatCanPayText`, the cart's words); otherwise (no such line, or a listed
+ * gateway refuses this order, its amount limits) the neutral words.
+ */
+function whatCanPayHere(config: CheckoutConfig, quote: CheckoutTaxQuote): string {
+  const names = cashUnpayableNames(quote.items);
+  if (names.length === 0) return checkoutCopy.noPaymentMethodsText;
+  return whatCanPayText(checkoutCopy, {
+    items: formatList(names, numberLocale(pageLanguage() || "en", storeRegion())),
+    gateways: config.gateways,
+    signedIn: pageBuyerSignedIn(),
+    giftCardsLive: config.giftCardsLive === true,
+  }) ?? checkoutCopy.noPaymentMethodsText;
+}
+
 async function renderGateways(): Promise<void> {
   if (!checkoutConfig || !checkoutData || !authoritativeTaxQuote) return;
   const container = document.getElementById("paymentMethods");
@@ -1070,8 +1090,9 @@ async function renderGateways(): Promise<void> {
   if (checkoutConfig.unavailable || eligibleGateways.length === 0) {
     container.setAttribute("aria-busy", "false");
     showError(
-      checkoutConfig.unavailableMessage ||
-        checkoutCopy.noPaymentMethodsText,
+      checkoutConfig.unavailable
+        ? checkoutConfig.unavailableMessage || checkoutCopy.noPaymentMethodsText
+        : whatCanPayHere(checkoutConfig, authoritativeTaxQuote),
     );
     setPayButton(checkoutCopy.checkoutUnavailableText, true);
     return;

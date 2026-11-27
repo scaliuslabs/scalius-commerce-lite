@@ -147,13 +147,15 @@ function getHtmlPathDefaults(
       Object.entries(discovery).filter((entry): entry is [string, string] => entry[1] !== null),
     );
   }
+  // A product listing's default order is the store's setting
+  // (`defaultListingSort`), so a named `sortBy` is always its own page.
+  if (/^\/blog\/?$/.test(pathname)) return { page: 1, sortBy: "newest" };
   if (
     /^\/categories\/[^/]+$/.test(pathname) ||
     /^\/collections\/[^/]+$/.test(pathname) ||
-    /^\/blog\/?$/.test(pathname) ||
     /^\/search\/?$/.test(pathname)
   ) {
-    return { page: 1, sortBy: "newest" };
+    return { page: 1 };
   }
   return {};
 }
