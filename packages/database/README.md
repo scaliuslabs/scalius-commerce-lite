@@ -147,6 +147,7 @@ The API `/readyz` route reads the whole ledger and fails closed on a missing, ex
 6. If you register a new table for DVC or add an event trigger, put the generated statements in the new migration (see "Generated triggers").
 7. Declare every table whose existing rows the file rewrites, one line each, with the basis of the estimate: `-- rewrites orders: one row per order still 'processing', bounded by the store's order count`. A rewrite is a top-level `UPDATE`, `DELETE`, `INSERT ... SELECT` (a backfill or a rebuild's copy, declared under the table it writes), `CREATE TABLE ... AS SELECT`, or an index on a table the file did not create. D1 applies a file all or nothing and bills every row and index entry against the plan's daily write quota (100,000 on Free), so work that grows with the store belongs in a chunked drain instead. Deployed migrations (through `0226`) are exempt by number (`scripts/migration-writes.mjs`).
 8. Run `pnpm --filter @scalius/database check:migrations`. It also refuses a trigger body that embeds `SELECT CASE WHEN`.
+9. Run `apps/api/src/release-upgrade.test.ts`: it applies every migration after the last release to a store holding that release's data (`apps/api/src/testing/release-stores/`, loaded by `src/testing/release-image.ts`) and requires readiness, the theme, the app's records, an order's totals and a new checkout to still work.
 
 ### Apply migrations
 
