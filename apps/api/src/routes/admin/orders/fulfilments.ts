@@ -28,7 +28,7 @@ import {
     orderFulfilmentLineSchema,
 } from "../../../schemas/order-lines";
 import { adminOrderResourceMutationErrorResponses } from "./shared";
-import { orderExpectedRevisionDescription, orderResourceSchema, readOrderResource } from "../order-resource";
+import { optionalOrderRevisionSchema, orderResourceSchema, readOrderResource } from "../order-resource";
 import { readFulfillmentRepresentation } from "../../../events/representations";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import { NotFoundError } from "../../../utils/api-error";
@@ -52,9 +52,7 @@ const requestKeySchema = z.string().uuid().openapi({
 
 /** A repeat is safe (the first result comes back); the revision, when sent, must still be the order's. */
 const orderRevisionBodySchema = z.object({
-    expectedRevision: z.number().int().min(1).optional().openapi({
-        description: orderExpectedRevisionDescription("a change since is refused with 409 and nothing changes. Omit to act whatever happened since."),
-    }),
+    expectedRevision: optionalOrderRevisionSchema,
 }).strict();
 
 const fulfilmentLinesInputSchema = z.array(z.object({

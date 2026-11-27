@@ -52,12 +52,19 @@ export const adjustInventorySchema = z.object({
 }).superRefine(validateAdjustmentReason);
 
 /**
+ * The optional precondition of a stock write: given, a stale one is refused
+ * with 409 `stock_version_conflict` and nothing changes; omitted, the write
+ * acts on the stock as it is (a sale between read and write still counts).
+ */
+export const optionalStockVersionSchema = z.number().int().min(0).optional()
+    .describe("The SKU's stockVersion you read. Any stock change since is refused with 409 `stock_version_conflict` and nothing changes. Omit it to act on the stock as it is.");
+
+/**
  * The stable app API's adjustment (`dashboard.inventory.adjust`): its retry
  * key is the Idempotency-Key header, from which the ledger's operation key
  * is derived.
  */
 export const adjustInventoryRequestSchema = z.object({
     ...adjustInventoryFields,
-    expectedStockVersion: z.number().int().min(0).optional()
-        .describe("The SKU's stockVersion you read; any stock change since is refused with 409. Omit to apply whatever happened since."),
+    expectedStockVersion: optionalStockVersionSchema,
 }).superRefine(validateAdjustmentReason);

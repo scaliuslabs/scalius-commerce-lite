@@ -1,3 +1,5 @@
+import type { CourierBookingOptionValue } from "@scalius/shared/plugins/providers";
+
 export const PROVIDER_OUTCOME_UNKNOWN = "provider_outcome_unknown";
 
 // Common interfaces
@@ -37,13 +39,12 @@ export type MerchantOrderShipmentLookup =
 
 /**
  * Staff choices on the booking form. Money, item count and contents always
- * come from the saved order, never from the caller. `itemWeight` (kg) is the
- * parcel weight; the rest are booking options a courier may declare
- * (`bookingOptions`: Pathao's `deliveryType` and `itemType`).
+ * come from the saved order, never from the caller. `bookingOptions` are the
+ * courier's own, by the keys it declares (`bookingOptions` in its manifest
+ * entry); `itemWeight` (kg) is the parcel weight.
  */
 export interface ShipmentOptions {
-  deliveryType?: number;
-  itemType?: number;
+  bookingOptions?: Readonly<Record<string, CourierBookingOptionValue>>;
   itemWeight?: number;
   note?: string;
 }

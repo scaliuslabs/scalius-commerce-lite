@@ -19,6 +19,7 @@ import {
   EVENTS_API_VERSION,
   EVENT_TOPIC_RESOURCE,
   WEBHOOK_SECRET_PREFIX,
+  isEventTopicFilter,
   normalizeEventTopicFilters,
   type EventResourceType,
   type EventTopic,
@@ -124,10 +125,16 @@ export interface WebhookSubscriptionView {
   updatedAt: number;
 }
 
+/**
+ * A stored topic list, normalized. A topic the catalogue no longer has (one
+ * the platform removed, such as the reserved privacy-request names) is
+ * dropped on its own and the others keep delivering; a write still refuses
+ * an unknown topic (`validateWebhookTopics`).
+ */
 export function parseStoredTopicFilters(value: string): EventTopicFilter[] {
   try {
     const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) ? normalizeEventTopicFilters(parsed.filter((item) => typeof item === "string")) ?? [] : [];
+    return Array.isArray(parsed) ? normalizeEventTopicFilters(parsed.filter(isEventTopicFilter)) ?? [] : [];
   } catch {
     return [];
   }
