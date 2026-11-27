@@ -405,6 +405,7 @@ const CHROME = "apps/storefront/src/components/private/PrivateChrome.astro";
 const CHROME_STYLE = "apps/storefront/src/lib/private-pages/chrome-style.ts";
 const SHADOW = '<scalius-chrome data-chrome={target}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome>';
 const CSS = "packages/shared/src/plugins/buyer-chrome-css.ts";
+const REBUILD = "packages/shared/src/plugins/inert-html.ts";
 /** Each names the check of buyer-chrome.browser.mjs that must fail under it. */
 export const CHROME_MUTATIONS = {
   "C1 no shadow root": {
@@ -425,9 +426,9 @@ export const CHROME_MUTATIONS = {
     rewrites: [rewrite(CHROME_STYLE, "max-inline-size:100%!important;contain:paint!important;", "max-inline-size:100%!important;")],
     expect: /^containment: /,
   },
-  "C4 the theme's text unlayered": {
-    why: "the theme's checked text is written outside its layer, so its important rules in a layer it names outrank the guard",
-    rewrites: [rewrite(CHROME_STYLE, "theme ? `@layer theme{${theme}}` : \"\",", "theme ?? \"\",")],
+  "C4 the theme's sheet unlayered": {
+    why: "the store's reading of the theme's sheet is imported outside its layer, so its important rules in a layer it names outrank the guard",
+    rewrites: [rewrite(CHROME_STYLE, "theme ? `@import ${cssUrl(theme)} layer(theme);` : \"\",", "theme ? `@import ${cssUrl(theme)};` : \"\",")],
     expect: /^containment: /,
   },
   "C5 no store frame": {
@@ -435,15 +436,24 @@ export const CHROME_MUTATIONS = {
     rewrites: [rewrite(CHROME, "<div data-buyer-chrome-frame={target} style={BUYER_CHROME_FRAME_STYLE[target]}>", "<div data-buyer-chrome-frame={target}>")],
     expect: /^covered: |^containment: /,
   },
-  "C6 :host unchecked": {
-    why: "the check lets :host() hold, or :host chain, a selector that matches the page around the host",
-    rewrites: [rewrite(CSS, '|| lower(name.value) !== "host") continue;', "|| true) continue;")],
+  "C6 selectors unchecked": {
+    why: "the check lets :host hold, chain or nest under a selector that matches the page around the host",
+    rewrites: [rewrite(CSS, "function checkSelector(values: CssComponent[]): void {\n", "function checkSelector(values: CssComponent[]): void {\n  if (values.length > 0) return;\n")],
     expect: /^refusal: /,
   },
-  "C7 no popover cap": {
-    why: "the guard no longer holds an open popover narrower than the screen",
-    rewrites: [rewrite(CHROME_STYLE, "max-inline-size:calc(100vw - 48px)!important;", "")],
-    expect: /^popover: /,
+  "C7 URLs unchecked": {
+    why: "the check lets a sheet's URL reach outside the app's own public files",
+    rewrites: [rewrite(CSS, "  if (url.origin !== \"https://store.invalid\" || !url.pathname.startsWith(`${RELEASE}public/`) || url.hash) {", "  if (url.protocol === \"never:\") {")],
+    expect: /^refusal: /,
+  },
+  "C8 a theme popover kept": {
+    why: "the rebuild keeps a theme's popover in the theme's region, so a theme element reaches the top layer",
+    rewrites: [
+      rewrite(REBUILD, '    if (name === "popover" || name === "popovertarget" || name === "popovertargetaction" || name === "data-panel") continue;', '    if (name === "popover" || name === "popovertarget") { out.push([name, name === "popover" ? "auto" : value]); continue; }\n    if (name === "popovertargetaction" || name === "data-panel") continue;'),
+      rewrite(REBUILD, '    const panel = POPOVER_TAGS.has(tag) && "popover" in node.attribs ? rebuild.panels.get(node.attribs.id ?? "") : undefined;', "    const panel = undefined as number | undefined;"),
+    ],
+    // The panel check, or the markup check's own finding: a region's markup that names a popover.
+    expect: /^panel: |^covered: |^markup: .*\bpopover(?:target)?>/,
   },
 };
 

@@ -525,10 +525,11 @@ export async function packStorefront(contract, manifest, source) {
       logLevel: "silent",
     });
     const css = result.outputFiles[0].text.replace(/url\(\s*(["']?)\.\.\/public\//g, "url($1public/");
-    checkBuyerChromeCss(contract, manifest, Buffer.from(css), fail);
+    const derived = checkBuyerChromeCss(contract, manifest, Buffer.from(css), fail);
     const bytes = Buffer.byteLength(css);
     if (bytes > limits.stylesheetBytes) fail(`styles.css is ${bytes} bytes; the limit is ${limits.stylesheetBytes}.`);
     files.push(storefrontFile(contract, contract.STOREFRONT_STYLESHEET_FILE, Buffer.from(css)));
+    if (derived !== null) files.push(storefrontFile(contract, contract.STOREFRONT_BUYER_CHROME_FILE, Buffer.from(derived)));
   }
 
   // Public files.
@@ -569,7 +570,11 @@ function prebuiltStorefront(contract, directory, manifest, fail) {
   for (const island of manifest.storefront.islands) if (!has(contract.storefrontIslandFile(island.name))) fail(`storefront/islands/${island.name}.js is missing.`);
   if (Boolean(manifest.storefront.pixel) !== has(contract.STOREFRONT_PIXEL_FILE)) fail("storefront/pixel.js does not match the manifest's pixel.");
   const sheet = files.find((file) => file.path === contract.STOREFRONT_STYLESHEET_FILE);
-  if (sheet) checkBuyerChromeCss(contract, manifest, sheet.bytes, fail);
+  const derived = sheet ? checkBuyerChromeCss(contract, manifest, sheet.bytes, fail) : null;
+  const shipped = files.find((file) => file.path === contract.STOREFRONT_BUYER_CHROME_FILE);
+  if ((derived === null) !== (shipped === undefined) || (shipped && Buffer.from(shipped.bytes).toString("utf8") !== derived)) {
+    fail(`storefront/${contract.STOREFRONT_BUYER_CHROME_FILE} must be the store's reading of styles.css for a theme whose skins draw on buyer pages (pack from source to write it).`);
+  }
   for (const file of files) {
     if (file.path.startsWith("public/")) {
       const problem = contract.checkStorefrontPublicFile(file.path.slice("public/".length), file.bytes);
@@ -582,15 +587,18 @@ function prebuiltStorefront(contract, directory, manifest, fail) {
 /**
  * Every stylesheet is UTF-8 (one decoder reads it), and a header or footer
  * skin that draws on buyer pages (`buyerPages`) is styled there by the store's
- * checked copy of it inside a shadow root: the pack refuses a sheet the store
- * would not use there (`checkedBuyerChromeSheet`), as the upload does.
+ * own reading of it (`checkedBuyerChromeSheet`), which the pack writes beside
+ * it as `buyer-chrome.css` (the upload checks it is exactly that): the pack
+ * refuses a sheet the store would not use there. Returns the written text, or
+ * null for a theme that does not ask.
  */
 function checkBuyerChromeCss(contract, manifest, bytes, fail) {
   const encoding = contract.buyerChromeSheetBytesProblem(bytes);
   if (encoding && /UTF-8|UTF-16/.test(encoding)) fail(`storefront/styles.css: ${encoding}.`);
-  if (!manifest.storefront.skins.some((skin) => skin.buyerPages === true)) return;
-  const checked = contract.checkedBuyerChromeSheet(bytes, "/");
+  if (!manifest.storefront.skins.some((skin) => skin.buyerPages === true)) return null;
+  const checked = contract.checkedBuyerChromeSheet(bytes);
   if (!checked.ok) fail(`a skin draws on buyer pages (buyerPages), and ${checked.problem}: remove it from the stylesheet (fonts come from the store's theme; packages/plugin-sdk/docs/private-pages.md).`);
+  return checked.text;
 }
 
 /** The packed bundle with its storefront files' digests (only when it has some). */

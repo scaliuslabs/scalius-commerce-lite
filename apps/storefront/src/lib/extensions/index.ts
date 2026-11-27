@@ -29,8 +29,7 @@ import {
 import { splitStorefrontEmbeds, type StorefrontMarkupPart } from "@scalius/shared/plugins/storefront-embeds";
 import { getLayoutData } from "@/lib/api/storefront";
 import { getRuntime, getRuntimePresence, getRuntimePrivateImageOrigins, getRuntimeStorefrontUrl, getWorkerEnv } from "@/lib/api/runtime";
-import { INERT_MARKUP_MAX_BYTES, inertChromeHtml } from "@scalius/shared/plugins/inert-html";
-import { checkedBuyerChromeSheet } from "@scalius/shared/plugins/buyer-chrome-css";
+import { INERT_MARKUP_MAX_BYTES, inertChrome, type InertChrome, type InertPanel } from "@scalius/shared/plugins/inert-html";
 import { cspSourcesAllowImage } from "@scalius/shared/security-csp";
 import { buyerChromeRoot } from "@/lib/cache-policy";
 import { layoutPageLanguage } from "@/lib/market-selector";
@@ -43,7 +42,7 @@ import { dateLocale } from "@scalius/shared/locale-format";
 import { markRenderDegraded } from "@/lib/page-dependencies";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { ExtensionHost, warnOnce } from "./host";
-import { readExtensionFile } from "./files";
+import { buyerChromeSheetPath, readBuyerChromeSheet } from "./files";
 import { storefrontIncidentReporter } from "./incidents";
 import { storeLogo, storefrontImageOf } from "./data";
 import type { ExtensionRuntime } from "./loaders";
@@ -178,9 +177,10 @@ function buildExtensions(
   })();
 }
 
-/** A theme's header or footer on a buyer page: its inert markup and the checked text of its stylesheet (null: it ships none). */
+/** A theme's header or footer on a buyer page: its inert markup, the panels lifted from it, and its derived stylesheet's store path (null: it ships none). */
 export interface BuyerChrome {
   html: string;
+  panels: InertPanel[];
   sheet: string | null;
 }
 
@@ -229,12 +229,12 @@ export async function buyerPageChrome(locals: object, url: URL, ask: BuyerChrome
     if (!markup) return null;
     // Its embeds (its slots) draw nothing here: the markup around them is rebuilt as one document, so an element
     // that opens before a slot and closes after it stays one element, and a button still finds its drawer.
-    const html = inertHtml(markup.parts.map((part) => (part.kind === "html" ? part.html : "")).join(""), handedLinks(projection));
-    if (html === null) {
+    const rebuilt = inertHtml(markup.parts.map((part) => (part.kind === "html" ? part.html : "")).join(""), handedLinks(projection));
+    if (rebuilt === null) {
       warnOnce(`buyer-chrome-size:${extension.pluginId}:${target}`, `${extension.pluginId} ${target} skin draws over ${INERT_MARKUP_MAX_BYTES / 1024} KiB on a buyer page: the store draws its own header and footer there.`);
       return null;
     }
-    return html.trim() === "" ? null : { html, sheet };
+    return rebuilt.html.trim() === "" ? null : { html: rebuilt.html, panels: rebuilt.panels, sheet };
   };
   const [header, footer] = await Promise.all([
     ask.header ? region("header", ask.header) : "store" as const,
@@ -277,25 +277,27 @@ export function handedLinks(projection: unknown): Set<string> {
   return out;
 }
 
-/** Checked sheet texts this isolate keeps, by store and app release (a release's files never change). */
+/** Derived sheet paths this isolate keeps, by store and app release (a release's files never change). */
 const checkedSheets = new Map<string, string | false>();
 const CHECKED_SHEETS_MAX = 8;
 
 /**
- * The app's stylesheet as a buyer page's shadow root may hold it: its bytes
- * read once per isolate and release, checked and rebased
- * (`checkedBuyerChromeSheet`), the text the store writes. False when it does
- * not pass (kept) or cannot be read now (not kept: the next page reads it again).
+ * Where a buyer page's shadow root imports the app's stylesheet from: the
+ * store's own path for the store's reading of it, which the release ships as
+ * `buyer-chrome.css` (the upload accepted it only as exactly what the store
+ * writes from `styles.css`), named by its SHA-256 (`buyerChromeSheetPath`).
+ * No parse here: the page reads the file and hashes it. False when the
+ * release ships none or it is not plain ASCII (kept), or it cannot be read
+ * now (not kept: the next page reads it again).
  */
 async function buyerChromeSheet(extension: StorefrontExtension, store: string): Promise<string | false> {
   const key = `${store} ${extension.pluginId}/${extension.release}`;
   const known = checkedSheets.get(key);
   if (known !== undefined) return known;
-  const file = await readExtensionFile((getWorkerEnv() ?? {}) as { BACKEND_API?: Fetcher }, store, extension.pluginId, extension.release, STOREFRONT_STYLESHEET_FILE).catch(() => null);
-  if (!file) return false;
-  const checked = checkedBuyerChromeSheet(file.bytes, storefrontExtensionBase(extension.pluginId, extension.release));
-  if (!checked.ok) warnOnce(`buyer-chrome-css:${extension.pluginId}:${extension.release}`, `${extension.pluginId}: ${checked.problem}, so the store draws its own header and footer on buyer pages.`);
-  const value = checked.ok ? checked.text : false;
+  const file = await readBuyerChromeSheet((getWorkerEnv() ?? {}) as { BACKEND_API?: Fetcher }, store, extension.pluginId, extension.release).catch(() => undefined);
+  if (file === undefined) return false;
+  const value = file === null ? false : buyerChromeSheetPath(extension.pluginId, extension.release, file.sha256);
+  if (file === null) warnOnce(`buyer-chrome-css:${extension.pluginId}:${extension.release}`, `${extension.pluginId} ships no store reading of its stylesheet (buyer-chrome.css), so the store draws its own header and footer on buyer pages.`);
   if (checkedSheets.size >= CHECKED_SHEETS_MAX) checkedSheets.delete(checkedSheets.keys().next().value!);
   checkedSheets.set(key, value);
   return value;
@@ -306,10 +308,6 @@ export function clearBuyerChromeMemo(): void {
   checkedSheets.clear();
   inertMemo.clear();
 }
-
-/** Rebuilt markup this isolate keeps, by its content, the links it was handed and the page's image origins (a skin's markup repeats on every page). */
-const INERT_MEMO_MAX = 64;
-const inertMemo = new Map<string, string | null>();
 
 /** An image URL on this store under an app's proxy or the API: a request there reaches an app or acts, never draws a picture. */
 function storeEndpointImage(src: string, origin: string): boolean {
@@ -322,19 +320,24 @@ function storeEndpointImage(src: string, origin: string): boolean {
   }
 }
 
+/** Rebuilt markup this isolate keeps, by its content, the links it was handed and the page's image origins (a skin's markup repeats on every page). */
+const INERT_MEMO_MAX = 64;
+const inertMemo = new Map<string, InertChrome | null>();
+
 /**
- * Checked app markup rebuilt for a buyer page (`inertChromeHtml`, an allow-list): no island,
- * script, style, frame or form; links only to store paths and to the URLs it was handed;
- * images only from the page's allowed origins. Null when it is over the rebuild's bound
- * (`INERT_MARKUP_MAX_BYTES`). The same markup is rebuilt once per isolate.
+ * Checked app markup rebuilt for a buyer page (`inertChrome`, an allow-list): no island,
+ * script, style, frame, form or top-layer element (its popovers lifted out as the store's
+ * panels); links only to store paths and the store's own URLs; images only from the page's
+ * allowed origins. Null when it is over the rebuild's bound (`INERT_MARKUP_MAX_BYTES`). The
+ * same markup is rebuilt once per isolate.
  */
-export function inertHtml(html: string, links: ReadonlySet<string> = new Set()): string | null {
+export function inertHtml(html: string, links: ReadonlySet<string> = new Set()): InertChrome | null {
   const allowed = getRuntimePrivateImageOrigins() ?? [];
   const origin = getRuntimeStorefrontUrl();
   const key = `${origin} ${allowed.join(" ")}\u0000${[...links].sort().join("\u0001")}\u0000${html}`;
   const known = inertMemo.get(key);
   if (known !== undefined) return known;
-  const rebuilt = inertChromeHtml(html, { imageAllowed: (src) => cspSourcesAllowImage(src, allowed, origin) && !storeEndpointImage(src, origin), links });
+  const rebuilt = inertChrome(html, { imageAllowed: (src) => cspSourcesAllowImage(src, allowed, origin) && !storeEndpointImage(src, origin), links });
   if (inertMemo.size >= INERT_MEMO_MAX) inertMemo.delete(inertMemo.keys().next().value!);
   inertMemo.set(key, rebuilt);
   return rebuilt;

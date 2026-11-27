@@ -9584,6 +9584,7 @@ export declare const STOREFRONT_PUBLIC_FILE_TYPES: Readonly<Record<string, strin
 export declare const STOREFRONT_PACKAGE_DIR = "storefront";
 export declare const STOREFRONT_MODULE_FILE = "storefront.js";
 export declare const STOREFRONT_STYLESHEET_FILE = "styles.css";
+export declare const STOREFRONT_BUYER_CHROME_FILE = "buyer-chrome.css";
 export declare const storefrontIslandFile: (name: string) => string;
 export declare const storefrontPublicFile: (path: string) => string;
 export declare const STOREFRONT_FILE_PATH: RegExp;

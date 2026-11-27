@@ -1966,5 +1966,11 @@
   "from": "73274f81298e2d40",
   "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontRenderContext: an existing signature changed or gained a required member.",
   "reason": "Pre-release (rc.1, a theme's chrome on buyer pages): a header or footer skin may declare `buyerPages: true` to draw on the account, the receipt, order tracking, warranty claims, the gift-card balance and the newsletter pages, rebuilt inert inside a shadow root; the grant gains a `storefrontBuyerPages` flag a Super Admin approves (absent reads false, so no stored grant key changes) and the render context's page kind gains `buyer`. An added flag and an added union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "storefront.STOREFRONT_FILE_PATH: the constant value changed.",
+  "reason": "Pre-release (rc.1, second review of a theme's chrome on buyer pages): an app's storefront files may hold `buyer-chrome.css` (STOREFRONT_BUYER_CHROME_FILE), the store's own reading of `styles.css` that `scalius-plugin pack` writes for a skin with `buyerPages: true` and the upload checks byte for byte. The pattern accepts one more file name; every name it accepted before is still accepted."
  }
 ]

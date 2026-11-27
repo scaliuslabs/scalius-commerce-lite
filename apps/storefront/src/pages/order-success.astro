@@ -166,6 +166,8 @@ if (!orderId || !receiptToken) {
       })()
     : undefined;
   recoveryState = receiptLinkRecoveryState({ requestedOrderId, recoveryUrl }, copy);
+  // A receipt with no order that offers a way to finish paying holds a payment step too (second review, rc.1).
+  if (recoveryUrl) markBuyerPaymentStep(Astro.locals);
 } else {
   try {
     order = await getOrderReceipt(orderId, receiptToken);

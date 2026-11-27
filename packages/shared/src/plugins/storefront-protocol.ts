@@ -366,11 +366,21 @@ export const STOREFRONT_PUBLIC_FILE_TYPES: Readonly<Record<string, string>> = {
 export const STOREFRONT_PACKAGE_DIR = "storefront";
 export const STOREFRONT_MODULE_FILE = "storefront.js";
 export const STOREFRONT_STYLESHEET_FILE = "styles.css";
+/**
+ * A theme whose header or footer draws on buyer pages (`buyerPages`) ships
+ * the store's own reading of its stylesheet beside it: `styles.css` parsed,
+ * checked and written again in ASCII (buyer-chrome-css.ts
+ * `checkedBuyerChromeSheet`), its URLs relative to the release's files. The
+ * pack writes it; the upload accepts it only when it is byte for byte what the
+ * store writes from `styles.css`. Buyer pages import it from the store's own
+ * path (`/_buyer-chrome/...`), never from the app's.
+ */
+export const STOREFRONT_BUYER_CHROME_FILE = "buyer-chrome.css";
 export const storefrontIslandFile = (name: string) => `islands/${name}.js`;
 export const storefrontPublicFile = (path: string) => `public/${path}`;
 
 /** A file path inside the storefront part of a package: lower case, no `..`. */
-export const STOREFRONT_FILE_PATH = /^(?:storefront\.js|styles\.css|pixel\.js|islands\/[a-z][a-z0-9_-]{0,47}\.js|public\/(?:[a-z0-9][a-z0-9_-]{0,63}\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$/;
+export const STOREFRONT_FILE_PATH = /^(?:storefront\.js|styles\.css|buyer-chrome\.css|pixel\.js|islands\/[a-z][a-z0-9_-]{0,47}\.js|public\/(?:[a-z0-9][a-z0-9_-]{0,63}\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$/;
 
 /** The content type a storefront file is served with; null for a path that is not one. */
 export function storefrontFileContentType(path: string): string | null {

@@ -5,26 +5,29 @@
 // shadow tree can select or style: it is paint-contained and clips its
 // overflow, so nothing the host or its shadow tree paints (an outline, a
 // shadow, a filter, a reflection, a fixed or absolute layer, a clip margin)
-// shows outside the frame's box, and the header's frame is at most half the
-// screen tall, so the page's own content starts on the first screen. The one
-// way out is the top layer: a popover the buyer's press opens.
+// shows outside the frame's box. The header's frame is at most half the
+// screen tall, so the page's own content starts on the first screen, and the
+// footer's at most one screen. Nothing the theme styles is ever in the top
+// layer: its popovers are lifted out as the store's own panels (`[data-buyer-chrome-panel]`,
+// components/private/PrivateChrome.astro), each a frame of its own inside a
+// top-layer element the store alone styles.
 //
-// Inside, one style element orders three cascade layers:
-// - `scalius-guard`, declared first, every rule `!important`: for important
-//   declarations the first layer wins, and the theme's text sits in a later
-//   layer (`theme`), where even a layer of the same name nests
-//   (`theme.scalius-guard`). It keeps the host a plain block in the flow,
-//   paint-contained, its open popovers clipped and narrower than the screen
-//   (a strip stays to dismiss them), and follows the sign-in hint.
+// Inside, one style element of the store's own text orders three cascade
+// layers and imports the two sheets into them; no theme text is ever written
+// beside the store's:
+// - `scalius-guard`, declared first, every rule `!important`: it keeps the
+//   host a plain block in the flow, paint-contained, and follows the sign-in
+//   hint (defence in depth: the frame is the boundary).
 // - `scalius-base`: the store's base (styles/buyer-chrome.css).
-// - `theme`: the app's stylesheet as the store checked it
-//   (`checkedBuyerChromeSheet`), written here as text: the browser never
-//   fetches the app's file, so it reads exactly what was checked.
+// - `theme`: the store's reading of the app's stylesheet, a separate file at
+//   the store's own path (lib/extensions files.ts `/_buyer-chrome/...`): a
+//   sheet ends where it ends, so nothing at its end reaches the guard.
 
 /** The store-owned frame around each shadow host, by region: the boundary, written as the frame's own style attribute. */
-export const BUYER_CHROME_FRAME_STYLE: Readonly<Record<"header" | "footer", string>> = {
+export const BUYER_CHROME_FRAME_STYLE: Readonly<Record<"header" | "footer" | "panel", string>> = {
   header: "display:block;contain:paint;overflow:clip;overflow-clip-margin:0px;margin:0;padding:0;max-block-size:50svh",
-  footer: "display:block;contain:paint;overflow:clip;overflow-clip-margin:0px;margin:0;padding:0;max-block-size:300svh",
+  footer: "display:block;contain:paint;overflow:clip;overflow-clip-margin:0px;margin:0;padding:0;max-block-size:100svh",
+  panel: "display:block;contain:paint;overflow:auto;overflow-clip-margin:0px;margin:0;padding:0;flex:1 1 auto;min-block-size:0",
 };
 
 /** The host's rules (see above). */
@@ -33,19 +36,16 @@ export const BUYER_CHROME_GUARD = [
   "z-index:auto!important;transform:none!important;translate:none!important;rotate:none!important;scale:none!important;",
   "offset-path:none!important;order:0!important;max-inline-size:100%!important;contain:paint!important;overflow-clip-margin:0px!important;content-visibility:visible!important}",
   ':host(:not([data-scalius-signed-in])) [data-scalius-when="signed-in"],:host([data-scalius-signed-in]) [data-scalius-when="signed-out"]{display:none!important}',
-  // An open popover (a buyer's press opened it) draws in the top layer, outside the frame: held to its own box, no wider
-  // than the screen less a strip a press dismisses it on, unmoved and unscaled.
-  "[popover]:popover-open{contain:paint!important;overflow:clip!important;overflow-clip-margin:0px!important;max-inline-size:calc(100vw - 48px)!important;",
-  "transform:none!important;translate:none!important;rotate:none!important;scale:none!important;zoom:1!important;",
-  "outline:none!important;box-shadow:none!important;filter:none!important;-webkit-box-reflect:none!important;border-image:none!important}",
 ].join("");
 
-/** The shadow root's style element text: the layer order, the store's base, the theme's checked text (when it ships one) and the guard. */
+const cssUrl = (url: string) => `url("${url.replace(/["\\\n<>]/g, (character) => `\\${character.codePointAt(0)!.toString(16)} `)}")`;
+
+/** The shadow root's style element text, all the store's own: the layer order, the store's base, the theme's derived sheet (when it ships one), the guard. */
 export function buyerChromeShadowStyle(base: string, theme: string | null): string {
   return [
     "@layer scalius-guard,scalius-base,theme;",
-    `@import url("${base.replace(/["\\\n<>]/g, (character) => `\\${character.codePointAt(0)!.toString(16)} `)}") layer(scalius-base);`,
-    theme ? `@layer theme{${theme}}` : "",
+    `@import ${cssUrl(base)} layer(scalius-base);`,
+    theme ? `@import ${cssUrl(theme)} layer(theme);` : "",
     `@layer scalius-guard{${BUYER_CHROME_GUARD}}`,
   ].join("");
 }

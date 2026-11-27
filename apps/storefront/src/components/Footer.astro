@@ -39,7 +39,7 @@ const data = async () => footerData({
 
 {buyerChrome ? (
 <div class="contents" data-storefront-footer data-buyer-chrome>
-  <PrivateChrome target="footer" chrome={buyerChrome} />
+  <PrivateChrome target="footer" chrome={buyerChrome} storeName={props.storeName ?? null} />
 </div>
 ) : (
 <div class="contents" data-storefront-footer>

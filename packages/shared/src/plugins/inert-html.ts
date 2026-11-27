@@ -13,9 +13,13 @@
 // - a button only as `type="button"`, and only with a host behaviour (the
 //   store's light or dark switch, cart or search) or a `popovertarget` naming
 //   one of the region's own popovers; any other button goes with its content;
-// - `popover` only on an element with an id some kept button targets (a menu
-//   drawer, `data-menu-drawer`, or a dropdown), always `auto`: it opens on a
-//   buyer's press alone and closes on a press outside it or Escape;
+// - nothing in the top layer: no `popover`, `popovertarget` or dialog. A
+//   popover a kept button targets (a menu drawer, a dropdown) is lifted out of
+//   the region whole, as a panel (`InertPanel`: its kind, `data-menu-drawer`
+//   or `data-panel="drawer"` a drawer, else a menu) the store draws inside a
+//   top-layer element of its own; the button that opened it opens the store's
+//   panel instead (`data-buyer-panel-open`), and one that hid it closes it
+//   (`data-buyer-panel-close`);
 // - host behaviours only from a closed list (`INERT_BEHAVIOURS`), each on the
 //   elements it belongs to; no other data attribute but the buyer UI's style
 //   words; no handler, tab stop, access key, role description or live region
@@ -87,14 +91,14 @@ const ID_REFERENCES = new Set(["aria-labelledby", "aria-describedby", "aria-deta
  * on the menu drawer), and the buyer UI's style words.
  */
 const VALUES: Record<string, readonly string[]> = {
-  role: ["none", "presentation", "img", "note", "group", "list", "listitem", "navigation", "banner", "contentinfo", "region", "figure", "separator", "heading", "term", "definition", "paragraph", "dialog"],
+  role: ["none", "presentation", "img", "note", "group", "list", "listitem", "navigation", "banner", "contentinfo", "region", "figure", "separator", "heading", "term", "definition", "paragraph"],
   "aria-current": ["page", "step", "location", "date", "time", "true", "false"],
   "data-ui": ["banner", "badge", "text", "heading", "link", "image", "disclosure", "divider", "stack", "columns"],
   "data-tone": ["neutral", "info", "success", "warning", "critical"],
 };
 const BY_TAG: Record<string, ReadonlySet<string>> = {
   a: new Set(["href", "rel", "hreflang", "target"]),
-  button: new Set(["popovertarget", "popovertargetaction", "aria-expanded", "aria-pressed"]),
+  button: new Set(["aria-expanded", "aria-pressed"]),
   summary: new Set(["aria-expanded"]),
   img: new Set(["src", "srcset", "sizes", "alt", "width", "height", "loading", "decoding", "fetchpriority"]),
   source: new Set(["srcset", "sizes", "media", "type", "width", "height"]),
@@ -189,16 +193,32 @@ const behaviourAllowed = (name: string, tag: string) => {
   return rule !== undefined && (rule.tags === "any" || rule.tags.includes(tag));
 };
 
-/** The elements a popover may be drawn on (a drawer, a dropdown panel, a list). */
+/** The elements a panel may be lifted from (a drawer, a dropdown panel, a list). */
 const POPOVER_TAGS = new Set(["div", "nav", "aside", "section", "ul", "ol"]);
 
+/** A theme's popover lifted out of its region: the store draws it in a top-layer element of its own. */
+export interface InertPanel {
+  /** A side sheet (`drawer`) or a panel under the button that opens it (`menu`). */
+  kind: "drawer" | "menu";
+  /** The theme's name for it (`aria-label`), or null. */
+  label: string | null;
+  /** The panel's own markup, rebuilt as the region's is. */
+  html: string;
+}
+
+/** A region rebuilt: its markup, and the panels lifted out of it (in document order: `data-buyer-panel-open` names one by index). */
+export interface InertChrome {
+  html: string;
+  panels: InertPanel[];
+}
+
 /**
- * The popovers the markup keeps: an element with `popover` and an id on one
- * of `POPOVER_TAGS` that a button of the same markup targets (`popovertarget`).
- * Only those open, and only on a buyer's press.
+ * The panels the markup holds: an element with `popover` and an id on one of
+ * `POPOVER_TAGS` that a button of the same markup targets (`popovertarget`),
+ * each with its index in document order.
  */
-function popoverIds(nodes: ChildNode[]): Set<string> {
-  const declared = new Set<string>();
+function panelIds(nodes: ChildNode[]): Map<string, number> {
+  const declared: string[] = [];
   const targeted = new Set<string>();
   const visit = (list: ChildNode[]) => {
     for (const node of list) {
@@ -206,14 +226,14 @@ function popoverIds(nodes: ChildNode[]): Set<string> {
       const tag = node.name.toLowerCase();
       if (DROP.has(tag)) continue;
       const id = node.attribs.id ?? "";
-      if (POPOVER_TAGS.has(tag) && "popover" in node.attribs && NAME.test(id)) declared.add(id);
+      if (POPOVER_TAGS.has(tag) && "popover" in node.attribs && NAME.test(id) && !declared.includes(id)) declared.push(id);
       if (tag === "button" && typeof node.attribs.popovertarget === "string") targeted.add(node.attribs.popovertarget);
       visit(UNWRAP.has(tag) ? node.children.flatMap((child) => isTag(child) && child.name.toLowerCase() === "template"
         ? ((child as Element & { content?: { children: ChildNode[] } }).content?.children ?? child.children) : [child]) : node.children);
     }
   };
   visit(nodes);
-  return new Set([...declared].filter((id) => targeted.has(id)));
+  return new Map(declared.filter((id) => targeted.has(id)).map((id, index) => [id, index]));
 }
 
 /** A same-store path under an app's proxy or the API (as the router decodes it): a request there reaches an app or acts, never draws a picture. */
@@ -228,16 +248,17 @@ function storeEndpoint(url: string): boolean {
   return /^\/+(?:apps|api)(?:[/\\]|$)/i.test(path);
 }
 
-function attributes(tag: string, input: Record<string, string>, options: InertChromeOptions, popovers: ReadonlySet<string>): Array<[string, string]> | null {
+function attributes(tag: string, input: Record<string, string>, options: InertChromeOptions, panels: ReadonlyMap<string, number>): Array<[string, string]> | null {
   const out: Array<[string, string]> = [];
   const has = (name: string) => Object.prototype.hasOwnProperty.call(input, name);
   if (tag === "button") {
-    const target = input.popovertarget ?? "";
-    if (!popovers.has(target) && !BUTTON_BEHAVIOURS.some((name) => has(name))) return null;
+    const panel = panels.get(input.popovertarget ?? "");
+    if (panel === undefined && !BUTTON_BEHAVIOURS.some((name) => has(name))) return null;
     out.push(["type", "button"]);
+    // The store's panel, never the theme's popover: a button that hid it closes it, any other opens it.
+    if (panel !== undefined) out.push(input.popovertargetaction === "hide" ? ["data-buyer-panel-close", ""] : ["data-buyer-panel-open", String(panel)]);
   }
-  const popover = has("popover") && POPOVER_TAGS.has(tag) && popovers.has(input.id ?? "");
-  const drawer = popover && has("data-menu-drawer") && behaviourAllowed("data-menu-drawer", tag);
+  const drawer = has("data-menu-drawer") && behaviourAllowed("data-menu-drawer", tag) && panels.has(input.id ?? "");
   for (const [rawName, rawValue] of Object.entries(input)) {
     const name = rawName.toLowerCase();
     const value = String(rawValue ?? "");
@@ -261,10 +282,8 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
       if (kept) out.push([name, kept]);
       continue;
     }
-    if (name === "popover") {
-      if (popover) out.push([name, "auto"]);
-      continue;
-    }
+    // Nothing a theme styles is ever in the top layer: its panels are the store's (`InertPanel`).
+    if (name === "popover" || name === "popovertarget" || name === "popovertargetaction" || name === "data-panel") continue;
     if (name in INERT_BEHAVIOURS) {
       if (name === "data-menu-drawer") {
         if (drawer) out.push([name, ""]);
@@ -279,7 +298,7 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
     }
     if (name === "role") {
       const word = value.trim().toLowerCase();
-      if (VALUES.role!.includes(word) && (word !== "dialog" || drawer)) out.push([name, word]);
+      if (VALUES.role!.includes(word)) out.push([name, word]);
       continue;
     }
     if (VALUES[name]) {
@@ -294,14 +313,6 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
       continue;
     }
     if (name === "rel" || name === "target") continue; // written below, from the link kept
-    if (name === "popovertarget") {
-      if (tag === "button" && popovers.has(value)) out.push([name, value]);
-      continue;
-    }
-    if (name === "popovertargetaction") {
-      if (["show", "hide", "toggle"].includes(value)) out.push([name, value]);
-      continue;
-    }
     if (name === "aria-expanded" || name === "aria-pressed") {
       if (BY_TAG[tag]?.has(name) && ["true", "false"].includes(value)) out.push([name, value]);
       continue;
@@ -341,7 +352,13 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
   return out;
 }
 
-function walk(nodes: ChildNode[], options: InertChromeOptions, popovers: ReadonlySet<string>, out: string[]): void {
+interface Rebuild {
+  options: InertChromeOptions;
+  panels: ReadonlyMap<string, number>;
+  lifted: InertPanel[];
+}
+
+function walk(nodes: ChildNode[], rebuild: Rebuild, out: string[]): void {
   for (const node of nodes) {
     if (isText(node)) { out.push(escapeHtmlText(node.data)); continue; }
     if (!isTag(node)) continue;
@@ -352,19 +369,28 @@ function walk(nodes: ChildNode[], options: InertChromeOptions, popovers: Readonl
       const children = node.children.flatMap((child) => isTag(child) && child.name.toLowerCase() === "template"
         ? ((child as Element & { content?: { children: ChildNode[] } }).content?.children ?? child.children)
         : [child]);
-      walk(children, options, popovers, out);
+      walk(children, rebuild, out);
       continue;
     }
     if (!KEEP.has(tag)) {
-      walk(node.children, options, popovers, out);
+      walk(node.children, rebuild, out);
       continue;
     }
-    const kept = attributes(tag, node.attribs, options, popovers);
+    const kept = attributes(tag, node.attribs, rebuild.options, rebuild.panels);
     if (!kept) continue;
-    out.push(writeStartTag(tag, kept));
-    if (VOID_ELEMENTS.has(tag)) continue;
-    walk(node.children, options, popovers, out);
-    out.push(`</${tag}>`);
+    // A panel leaves the region whole: the store draws it in its own top-layer element.
+    const panel = POPOVER_TAGS.has(tag) && "popover" in node.attribs ? rebuild.panels.get(node.attribs.id ?? "") : undefined;
+    const target = panel === undefined ? out : [] as string[];
+    target.push(writeStartTag(tag, kept));
+    if (!VOID_ELEMENTS.has(tag)) {
+      walk(node.children, rebuild, target);
+      target.push(`</${tag}>`);
+    }
+    if (panel !== undefined) {
+      const kind = "data-menu-drawer" in node.attribs || node.attribs["data-panel"] === "drawer" ? "drawer" : "menu";
+      const label = (node.attribs["aria-label"] ?? "").trim().slice(0, 80) || null;
+      rebuild.lifted[panel] = { kind, label, html: target.join("") };
+    }
   }
 }
 
@@ -378,13 +404,14 @@ export const INERT_MARKUP = {
   attributes: [...GENERAL, "class", "id", "style", ...ID_REFERENCES, ...Object.keys(VALUES), ...Object.keys(INERT_BEHAVIOURS)],
   byTag: {
     ...Object.fromEntries(Object.entries(BY_TAG).map(([tag, list]) => [tag, [...list]])),
-    button: [...BY_TAG.button!, "type"], div: ["popover"], nav: ["popover"], aside: ["popover"], section: ["popover"], ul: ["popover"], ol: ["popover", ...BY_TAG.ol!],
+    // The store's panel behaviours the rebuild writes from a theme's `popovertarget` (never kept from markup).
+    button: [...BY_TAG.button!, "type", "data-buyer-panel-open", "data-buyer-panel-close"],
     // The host's own state on a drawn page: the cart count marks itself empty (scripts/buyer-chrome.ts).
     span: [...BY_TAG.span!, "data-empty"],
   } as Record<string, string[]>,
   svgTags: [...SVG_TAGS],
   svg: [...SVG],
-  values: { ...VALUES, popover: ["auto"], type: ["button"], "aria-live": ["polite"], "data-scalius-when": ["signed-in", "signed-out"] } as Record<string, readonly string[]>,
+  values: { ...VALUES, type: ["button"], "aria-live": ["polite"], "data-scalius-when": ["signed-in", "signed-out"], "data-buyer-panel-close": [""] } as Record<string, readonly string[]>,
 };
 
 interface InertRegion {
@@ -423,11 +450,21 @@ export function inertMarkupProblems(root: InertRegion, markup: typeof INERT_MARK
  */
 export const INERT_MARKUP_MAX_BYTES = 64 * 1024;
 
-/** Checked skin markup rebuilt with nothing left that runs, loads, frames, posts, collects or acts outside it; null when it is over `INERT_MARKUP_MAX_BYTES`. */
-export function inertChromeHtml(html: string, options: InertChromeOptions): string | null {
+/**
+ * Checked skin markup rebuilt with nothing left that runs, loads, frames,
+ * posts, collects or acts outside it, its panels lifted out; null when it is
+ * over `INERT_MARKUP_MAX_BYTES`.
+ */
+export function inertChrome(html: string, options: InertChromeOptions): InertChrome | null {
   if (html.length > INERT_MARKUP_MAX_BYTES / 3 && new TextEncoder().encode(html).byteLength > INERT_MARKUP_MAX_BYTES) return null;
   const document = parseDocument(untrustedHtml(html), { ...UNTRUSTED_HTML_PARSING, recognizeSelfClosing: true });
+  const rebuild: Rebuild = { options, panels: panelIds(document.children), lifted: [] };
   const out: string[] = [];
-  walk(document.children, options, popoverIds(document.children), out);
-  return out.join("");
+  walk(document.children, rebuild, out);
+  return { html: out.join(""), panels: rebuild.lifted.filter(Boolean) };
+}
+
+/** The region's own markup alone (its panels left out), or null over the bound. */
+export function inertChromeHtml(html: string, options: InertChromeOptions): string | null {
+  return inertChrome(html, options)?.html ?? null;
 }

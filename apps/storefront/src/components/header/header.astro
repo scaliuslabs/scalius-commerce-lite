@@ -65,7 +65,7 @@ const data = async () => {
 
 {buyerChrome ? (
 <div class="contents" data-storefront-header data-buyer-chrome>
-  <PrivateChrome target="header" chrome={buyerChrome} />
+  <PrivateChrome target="header" chrome={buyerChrome} storeName={props.storeName ?? null} />
   {tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}
 </div>
 ) : (

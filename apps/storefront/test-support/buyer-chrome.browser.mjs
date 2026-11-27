@@ -15,10 +15,14 @@
 //   a forged colour) and taking a press at its centre, and the header's frame at
 //   most half the screen with the account's first control on the first screen;
 // - each of those effects alone (`drawn` probes, at 390 and 1280 px) holds the
-//   same, and an open popover a theme styles to cover the screen leaves a
-//   strip a press closes it on; each sheet the store refuses (`refused` probes:
-//   a url token holding `/*`, `@import`, `:host(:is(...))`, a UTF-16 sheet, ...)
-//   draws the store's own header and sends no request it names;
+//   same; with a theme's worst panel sheets (a covering, transitioned content)
+//   every panel is the store's own top-layer element, leaves its margin and
+//   close button the store's, closes on each, and leaves nothing over the page;
+//   each sheet the store refuses (`refused` probes: a url token holding `/*`,
+//   an unclosed end, nesting, a URL outside the app's files, a UTF-16 sheet, ...)
+//   draws the store's own header and sends no request it names; the theme's
+//   sheet is the store's derived file on the store's path, which refuses a
+//   wrong hash;
 // - each shadow root holds only what the inert rebuild writes: no form, field,
 //   label, submit button, handler or tab stop;
 // - under a theme's sheet the chrome follows the page's scheme on its host, its
@@ -192,6 +196,53 @@ async function coveredControls(page) {
   return covered;
 }
 
+/**
+ * The store's panels for the theme's drawer and dropdown: each opens from the
+ * theme's own button as the store's top-layer element (never a theme
+ * element), leaves the page's margin unpainted and pressable (a press there
+ * closes it), shows the store's close button, which closes it, and closes on
+ * Escape; nothing of the theme's is in the top layer at any point.
+ */
+async function panelProblems(page, width) {
+  const problems = [];
+  const themeTopLayer = () => page.evaluate(() => Array.from(document.querySelectorAll("scalius-chrome")).some((host) => Array.from(host.shadowRoot?.querySelectorAll("*") ?? []).some((element) => element.matches(":popover-open, :modal"))));
+  for (const [kind, opener] of [["drawer", ".gc-menu-button"], ["menu", ".gc-more"]]) {
+    for (const close of ["margin", "button", "escape"]) {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      const pressed = await page.locator(`scalius-chrome[data-chrome="header"] ${opener}`).click({ timeout: 3000 }).then(() => true, () => false);
+      if (!pressed) { problems.push(`panel: the theme's button for the ${kind} cannot be pressed (something of the theme's covers it)`); break; }
+      await page.waitForTimeout(100);
+      const panel = await page.evaluate((kind) => {
+        const element = document.querySelector(`[data-buyer-chrome-panel="${kind}"]`);
+        if (!element) return null;
+        const box = element.getBoundingClientRect();
+        const button = element.querySelector(".buyer-chrome-panel-bar button").getBoundingClientRect();
+        return { open: element.matches(":popover-open"), left: box.left, top: box.top, width: box.width, height: box.height, screen: [innerWidth, innerHeight], close: [button.left + button.width / 2, button.top + button.height / 2] };
+      }, kind);
+      if (!panel?.open) { problems.push(`panel: the store's ${kind} panel does not open from the theme's button`); continue; }
+      if (await themeTopLayer()) problems.push(`panel: a theme element is in the top layer with the ${kind} open`);
+      const margin = kind === "drawer" ? [panel.screen[0] - 16, panel.screen[1] / 2] : [panel.screen[0] / 2, panel.screen[1] - 8];
+      if (kind === "drawer" && panel.width > panel.screen[0] - 64 + 1) problems.push(`panel: the drawer leaves no 4rem margin (${Math.round(panel.width)}px of ${panel.screen[0]})`);
+      if (kind === "menu" && (panel.width > panel.screen[0] - 32 + 1 || panel.height > panel.screen[1] * 0.7 + 1 || panel.left < 15)) problems.push(`panel: the menu is not held inside the screen with a margin (${JSON.stringify(panel)})`);
+      const marginPixel = await pixelAt(page, margin[0], margin[1]);
+      if (forgedPixel(marginPixel)) problems.push(`panel: the page's margin beside the ${kind} is painted over (rgb ${marginPixel.join(", ")})`);
+      const closePixel = await pixelAt(page, panel.close[0], panel.close[1]);
+      if (forgedPixel(closePixel)) problems.push(`panel: the store's close button on the ${kind} is painted over`);
+      const takes = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest(".buyer-chrome-panel-bar button") !== null, panel.close);
+      if (!takes) problems.push(`panel: the store's close button on the ${kind} does not take a press`);
+      if (close === "margin") await page.mouse.click(margin[0], margin[1]);
+      else if (close === "button") await page.mouse.click(panel.close[0], panel.close[1]);
+      else await page.keyboard.press("Escape");
+      await page.waitForTimeout(100);
+      const still = await page.evaluate((kind) => document.querySelector(`[data-buyer-chrome-panel="${kind}"]`).matches(":popover-open"), kind);
+      if (still) problems.push(`panel: a press on the ${close === "margin" ? "page's margin" : close === "button" ? "store's close button" : "Escape key"} leaves the ${kind} open`);
+    }
+  }
+  if (await themeTopLayer()) problems.push("panel: a theme element stays in the top layer after the panels closed");
+  void width;
+  return problems;
+}
+
 /** The header frame's height and where the account's first control starts, against the screen. */
 const firstScreen = (page) => page.evaluate((selector) => {
   const frame = document.querySelector('[data-buyer-chrome-frame="header"]');
@@ -247,7 +298,7 @@ for (const width of WIDTHS) {
     const forged = await open(ids.forged, width, scheme);
     draws += 1;
     const shapes = await chromeShape(forged.page);
-    if (shapes.length !== 2) problems.push(`shadow: the forged theme draws ${shapes.length} chrome regions, not its header and footer`);
+    if (shapes.filter((shape) => shape.target !== "panel").length !== 2) problems.push(`shadow: the forged theme draws ${shapes.length} chrome regions, not its header and footer`);
     for (const shape of shapes) {
       if (!shape.shadow) problems.push(`shadow: the ${shape.target} is drawn without a shadow root`);
       if (shape.light !== 0) problems.push(`shadow: the ${shape.target}'s host holds ${shape.light} children of its own`);
@@ -255,7 +306,7 @@ for (const width of WIDTHS) {
       for (const problem of shape.problems) problems.push(`markup: the ${shape.target}: ${problem}`);
       if (shape.position !== "static") problems.push(`containment: the ${shape.target}'s host is ${shape.position}, not in the page's flow`);
       if (!/paint/.test(shape.contain)) problems.push(`containment: the ${shape.target}'s host is not paint-contained (${shape.contain})`);
-      if (!shape.frame || !/paint/.test(shape.frame) || !/clip/.test(shape.frame)) problems.push(`containment: the ${shape.target} has no store frame that clips it (${shape.frame})`);
+      if (!shape.frame || !/paint/.test(shape.frame) || (shape.target !== "panel" && !/clip/.test(shape.frame))) problems.push(`containment: the ${shape.target} has no store frame that clips it (${shape.frame})`);
     }
     const header = shapes.find((shape) => shape.target === "header");
     if (header && header.top > 4) problems.push(`containment: the header's host starts ${Math.round(header.top)}px down the page`);
@@ -318,32 +369,23 @@ for (const width of WIDTHS) {
       await page.reload({ waitUntil: "load" });
       await page.waitForTimeout(200);
       if (await inside(".gc-sign-in", "visible") !== false || await inside(".gc-account", "visible") !== true) problems.push("signed in: a signed-in buyer does not see the signed-in version alone");
-      // The menu drawer on a phone: opens over the page on a press, closes with Escape.
-      if (width < 1024) {
-        await page.evaluate(() => window.scrollTo(0, 0));
-        await page.locator('scalius-chrome[data-chrome="header"] .gc-menu-button').click();
-        const drawer = await page.evaluate(() => {
-          const element = document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector("[data-menu-drawer]");
-          const box = element.getBoundingClientRect();
-          const hit = element.getRootNode().elementFromPoint(box.left + box.width / 2, box.top + 20);
-          return { open: element.matches(":popover-open"), width: box.width, height: box.height, onTop: element.contains(hit) };
-        });
-        if (!drawer.open || drawer.width < 100 || drawer.height < 100) problems.push(`drawer: the menu drawer does not open on a press (${JSON.stringify(drawer)})`);
-        else if (!drawer.onTop) problems.push("drawer: the open menu drawer is held under the page");
-        await page.keyboard.press("Escape");
-        if (await page.evaluate(() => document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector("[data-menu-drawer]").matches(":popover-open"))) problems.push("drawer: Escape leaves the menu drawer open");
-      }
-      // A dropdown (any popover a theme's button targets) opens on a press and closes on a press outside it.
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.locator('scalius-chrome[data-chrome="header"] .gc-more').click();
-    const more = () => page.evaluate(() => document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector("#chrome-more").matches(":popover-open"));
-    if (!(await more())) problems.push("dropdown: the theme's dropdown does not open on a press");
-    await page.mouse.click(width - 10, 790);
-    if (await more()) problems.push("dropdown: a press outside the theme's dropdown leaves it open");
+      // The theme's drawer and dropdown open as the store's own panels and close on the store's margin, its close
+      // button and Escape (second review, rc.1).
+      await page.evaluate(() => window.scrollTo(0, 0));
+      problems.push(...await panelProblems(page, width));
     // The store's base under the theme's sheet loads (the shadow root's first import).
       const base = await page.evaluate(() => /@import url\("([^"]+)"\) layer\(scalius-base\)/.exec(document.querySelector("scalius-chrome").shadowRoot.querySelector("style")?.textContent ?? "")?.[1] ?? null);
       const baseText = base ? await page.evaluate(async (href) => (await fetch(href, { headers: { accept: "text/css" } })).text(), base) : "";
       if (!/box-sizing/.test(baseText) || /--theme\(/.test(baseText)) problems.push(`base: the store's base sheet does not load compiled (${base})`);
+      // The theme's sheet: the store's reading of it, from the store's own path, as CSS in ASCII (second review, rc.1).
+      const themed = await page.evaluate(async () => {
+        const href = /@import url\("([^"]+)"\) layer\(theme\)/.exec(document.querySelector("scalius-chrome").shadowRoot.querySelector("style")?.textContent ?? "")?.[1] ?? null;
+        if (!href) return { href };
+        const answer = await fetch(href);
+        const text = await answer.text();
+        return { href, status: answer.status, type: answer.headers.get("content-type"), ascii: /^[\x20-\x7e]*$/.test(text), tampered: (await fetch(href.replace(/[0-9a-f]{64}\.css$/, `${"0".repeat(64)}.css`))).status };
+      });
+      if (!/^\/_buyer-chrome\/[^/]+\/[0-9a-f]{64}\/[0-9a-f]{64}\.css$/.test(themed.href ?? "") || themed.status !== 200 || themed.type !== "text/css; charset=utf-8" || !themed.ascii || themed.tampered !== 404) problems.push(`sheet: the theme's sheet is not the store's derived file (${JSON.stringify(themed)})`);
     if (width === WIDTHS[0] && scheme === SCHEMES[0]) console.log(`  base sheet: ${baseText.length} characters (dev, unminified)`);
       problems.push(...theme.errors.map((error) => `request: ${error}`));
     } catch (error) {
@@ -365,20 +407,13 @@ for (const [name, sheet] of Object.entries(DRAWN)) {
     const problems = [];
     try {
       const shapes = await chromeShape(probe.page);
-      if (shapes.length !== 2) problems.push(`shadow: the probe draws ${shapes.length} chrome regions`);
-      if (name === "popover-cover") {
-        await probe.page.locator('scalius-chrome[data-chrome="header"] .gc-more').click();
-        const strip = await pixelAt(probe.page, width - 12, 400);
-        if (forgedPixel(strip)) problems.push(`popover: the open popover paints the whole screen (rgb ${strip.join(", ")} at the strip)`);
-        await probe.page.mouse.click(width - 12, 400);
-        const open = await probe.page.evaluate(() => document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector("#chrome-more").matches(":popover-open"));
-        if (open) problems.push("popover: a press on the strip beside the open popover does not close it");
-      } else {
-        for (const covered of await coveredControls(probe.page)) problems.push(`covered: ${covered}`);
-        const screen = await firstScreen(probe.page);
-        if (screen.frame > screen.screen / 2 + 1) problems.push(`containment: the header's frame is ${Math.round(screen.frame)}px tall on a ${screen.screen}px screen`);
-        if (screen.first >= screen.screen) problems.push(`containment: the account's first control starts below the first screen (${Math.round(screen.first)}px)`);
-      }
+      if (shapes.filter((shape) => shape.target !== "panel").length !== 2) problems.push(`shadow: the probe draws ${shapes.length} chrome regions`);
+      // Every panel opened and closed first: a theme's styles on its content must leave nothing over the page after.
+      if (name.startsWith("panel-")) problems.push(...await panelProblems(probe.page, width));
+      for (const covered of await coveredControls(probe.page)) problems.push(`covered: ${covered}`);
+      const screen = await firstScreen(probe.page);
+      if (screen.frame > screen.screen / 2 + 1) problems.push(`containment: the header's frame is ${Math.round(screen.frame)}px tall on a ${screen.screen}px screen`);
+      if (screen.first >= screen.screen) problems.push(`containment: the account's first control starts below the first screen (${Math.round(screen.first)}px)`);
     } catch (error) {
       problems.push(`probe: could not be checked (${String(error?.message ?? error).split("\n")[0]})`);
     }

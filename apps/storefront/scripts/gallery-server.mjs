@@ -265,7 +265,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
     try {
       // Production's gateway owns this route before Astro. Use its real
       // bundled-file handler so packed CSS and islands run in the gallery.
-      if (url.pathname.startsWith("/_x/")) {
+      if (url.pathname.startsWith("/_x/") || url.pathname.startsWith("/_buyer-chrome/")) {
         // The private pages' rendered tests name theme files (an icon): the gallery draws them.
         const fixture = /^\/_x\/[a-z0-9.-]+\/[A-Za-z0-9_-]+\/public\/pp\/([a-z0-9-]+)\.svg$/.exec(url.pathname);
         if (fixture) {

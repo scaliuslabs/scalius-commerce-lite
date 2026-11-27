@@ -6,6 +6,7 @@
 // as an approved grant lists them. Never part of a build.
 import type { StorefrontExtension } from "@scalius/shared/plugins/storefront-components";
 import { BUNDLED_STOREFRONT_EXTENSIONS } from "../extensions/bundled.gen";
+import { checkedBuyerChromeSheet } from "@scalius/shared/plugins/buyer-chrome-css";
 import type { BundledStorefrontExtension } from "../lib/extensions/loaders";
 
 /** What a theme writes for its chrome on a buyer page: its own markup, its host, the page's scheme on the host. */
@@ -66,7 +67,9 @@ export const GALLERY_DRAWN_PROBES: Readonly<Record<string, string>> = {
   "clip-margin-absolute": ":host{overflow-clip-margin:2000px} .gc-cover2{display:block;position:absolute;top:0;left:0;width:100vw;height:2000px;background:rgb(0, 255, 0)}",
   "clip-margin-fixed": ":host{overflow-clip-margin:2000px} .gc-cover{display:block;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgb(0, 255, 0)}",
   tall: ":host{min-height:1200px;background:rgb(0, 255, 0)}",
-  "popover-cover": ".gc-more-panel:popover-open{inset:0;inline-size:100vw;max-inline-size:none;block-size:100vh;background:rgb(255, 0, 255);transform:scale(3);outline:3000px solid rgb(255, 0, 255);box-shadow:0 0 0 3000px rgb(255, 0, 255)}",
+  // The second review's worst popover sheets, now aimed at the theme's panel content inside the store's panel.
+  "panel-cover": ".gc-more-panel,.gc-drawer{position:fixed;inset:0;inline-size:100vw;min-inline-size:100vw;max-inline-size:none;block-size:100vh;margin:0;background:rgb(255, 0, 255);transform:scale(3);outline:3000px solid rgb(255, 0, 255);box-shadow:0 0 0 3000px rgb(255, 0, 255)}.gc-more-panel::backdrop,.gc-drawer::backdrop{background:rgb(255, 0, 255)}",
+  "panel-zombie": ".gc-more-panel,.gc-drawer{transition:display 100000s allow-discrete,overlay 100000s allow-discrete;position:fixed;inset:0;margin:0;width:100vw;height:100vh;max-width:none;max-height:none;background:rgb(0, 255, 0);border:0}",
 };
 
 /** Hostile sheets the store must not use at all (the review's probes, rc.1): each would reach past the shadow root. */
@@ -74,11 +77,20 @@ export const GALLERY_REFUSED_SHEETS: Readonly<Record<string, string>> = {
   "url-comment": "a{background:url(/*)}:host-context(body) .gc-logo{background-image:url(/apps/forged.chrome/leak?hostcontext)}/**/",
   "url-comment-import": "x url(/*){} @import url(/evil.css); /**/",
   "layer-import": "@layer a{b{c:url(/*)}} @import url(/evil.css);/**/",
-  "host-is": ":host(:is(body *)) .gc-logo{background-image:url(/apps/forged.chrome/leak?host-is)}",
-  "host-has-sibling": ":host(:has(~ *)) .gc-sign-in{background-image:url(/apps/forged.chrome/leak?host-has)}",
-  "host-chained-has": ":host:has(~ script) .gc-cart{background-image:url(/apps/forged.chrome/leak?host-chained)}",
+  "host-is": ":host(:is(body *)) .gc-logo{background-image:url(./public/x.png?host-is)}",
+  "host-has-sibling": ":host(:has(~ *)) .gc-sign-in{background-image:url(./public/x.png?host-has)}",
+  "host-chained-has": ":host:has(~ script) .gc-cart{background-image:url(./public/x.png?host-chained)}",
   "font-face": "@font-face{font-family:Probe;src:url(/apps/forged.chrome/leak?font)}.gc-logo{font-family:Probe}",
   "unbalanced": "} @layer scalius-guard{:host(:not(#a#b)){contain:none!important}} .x{",
+  "eof-comment": ".gc-logo{color:red} /*",
+  "eof-string": '.gc-logo{color:red} "x',
+  "eof-backslash": ".gc-logo{color:red}\\",
+  "nested-host": ":host{&:has(~ script) .gc-logo{background-image:url(./public/x.png?nested-has)}}",
+  "url-api": ".gc-logo{background-image:url(/api/leak?api)}",
+  "url-apps": ".gc-logo{background-image:url(/apps/forged.chrome/leak?apps)}",
+  "url-other-host": ".gc-logo{background-image:url(//evil.example/leak)}",
+  "url-data": ".gc-logo{background-image:url(data:image/gif;base64,R0lGODlhAQABAAAAACw=)}",
+  "image-set-up": ".gc-logo{background-image:image-set('../../../../apps/x/leak?imgset' 1x)}",
 };
 
 /** A UTF-16LE sheet with a byte-order mark: a store that decoded it as UTF-8 would see none of it. */
@@ -112,13 +124,16 @@ export const GALLERY_FORGED_CHROME_EXTENSION = extension("forged.chrome", `f0c0e
 
 function install(app: StorefrontExtension, sheet: string | Uint8Array): void {
   const bundled = BUNDLED_STOREFRONT_EXTENSIONS as Record<string, BundledStorefrontExtension>;
+  const bytes = typeof sheet === "string" ? new TextEncoder().encode(sheet) : sheet;
   const file = typeof sheet === "string"
     ? { type: "text/css; charset=utf-8", text: sheet }
     : { type: "text/css; charset=utf-8", base64: btoa(String.fromCharCode(...sheet)) };
+  // As the pack writes it and the upload checks it: the store's reading of the sheet, or none when the store refuses it.
+  const checked = checkedBuyerChromeSheet(bytes);
   bundled[app.pluginId] = {
     release: app.release,
     module: () => import("./chrome-app") as ReturnType<BundledStorefrontExtension["module"]>,
-    files: async () => ({ FILES: { "styles.css": file } }),
+    files: async () => ({ FILES: { "styles.css": file, ...(checked.ok ? { "buyer-chrome.css": { type: "text/css; charset=utf-8", text: checked.text } } : {}) } }),
   };
 }
 

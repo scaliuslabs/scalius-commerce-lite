@@ -9,7 +9,13 @@
 //   (the inline script after a host sets it before first paint);
 // - `[data-scalius-cart-count]` inside a shadow root: the cart's item count;
 // - `[data-cart-open]` inside a shadow root, and the store's phone tab bar
-//   under it: opens the cart drawer.
+//   under it: opens the cart drawer;
+// - `[data-buyer-panel-open]` (the rebuild wrote it for a theme's button that
+//   opened one of its popovers): opens the store's own panel for it
+//   (`#buyer-panel-<region>-<index>`, a top-layer element the store alone
+//   styles), a menu placed under the pressed button and held inside the
+//   screen; `[data-buyer-panel-close]` inside a panel closes it. Without this
+//   script the theme's buttons open nothing.
 import { formatCount } from "@/lib/store-time-zone";
 import { loadLazyScript } from "@/scripts/lazy-script";
 
@@ -67,6 +73,41 @@ function installCartOpeners(): void {
   });
 }
 
+/** Places a menu panel under the button that opens it, inside the screen with a margin; a drawer is placed by the store's CSS. */
+function placePanel(panel: HTMLElement, opener: Element): void {
+  if (panel.dataset.buyerChromePanel !== "menu") return;
+  const box = opener.getBoundingClientRect();
+  const margin = 16;
+  const width = Math.min(448, innerWidth - margin * 2);
+  const top = Math.min(Math.max(margin, box.bottom + 4), Math.round(innerHeight * 0.5));
+  const left = Math.min(Math.max(margin, box.left), innerWidth - width - margin);
+  panel.style.setProperty("--buyer-panel-top", `${Math.round(top)}px`);
+  panel.style.setProperty("--buyer-panel-left", `${Math.round(left)}px`);
+}
+
+function installPanels(): void {
+  document.addEventListener("click", (event) => {
+    const target = event.composedPath()[0];
+    if (!(target instanceof Element) || !inChrome(target)) return;
+    const host = (target.getRootNode() as ShadowRoot).host;
+    const opener = target.closest("[data-buyer-panel-open]");
+    if (opener) {
+      const panel = document.getElementById(`buyer-panel-${host.getAttribute("data-chrome")}-${opener.getAttribute("data-buyer-panel-open")}`);
+      if (!panel?.hasAttribute("data-buyer-chrome-panel") || typeof panel.showPopover !== "function") return;
+      event.preventDefault();
+      placePanel(panel, opener);
+      if (!panel.matches(":popover-open")) panel.showPopover();
+      opener.setAttribute("aria-expanded", "true");
+      panel.addEventListener("toggle", () => opener.setAttribute("aria-expanded", String(panel.matches(":popover-open"))), { once: true });
+      return;
+    }
+    if (target.closest("[data-buyer-panel-close]")) {
+      const panel = host.closest<HTMLElement>("[data-buyer-chrome-panel]");
+      if (panel?.matches(":popover-open")) panel.hidePopover();
+    }
+  });
+}
+
 let installed = false;
 
 export function installBuyerChrome(): void {
@@ -76,4 +117,5 @@ export function installBuyerChrome(): void {
   for (const name of ["customer-login", "customer-logout", "pageshow"]) window.addEventListener(name, syncSignedIn);
   installCartCount();
   installCartOpeners();
+  installPanels();
 }
