@@ -437,7 +437,7 @@ const productDetailVariantSchema = z.object({
   /** physical (shipped or picked up), digital, or service (performed, no delivery); a kit's from its items. */
   fulfillmentKind: fulfillmentKindSchema,
   cashPayable: z.boolean().openapi({
-    description: "Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. A product page or placed offer stays buyable either way: checkout says what can pay.",
+    description: "Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. The storefront turns buying it off only where nothing else can pay (a store that takes only cash and holds no live gift card, checkout config `giftCardsLive`).",
   }),
   customFields: storefrontCustomFieldsSchema,
   /** This SKU's effective warranty: an id in the product's `warranties`, or null without one. */

@@ -69,7 +69,7 @@ export const storefrontPlacedOfferSchema = z.object({
   imageAlt: z.string().nullable(),
   fulfillmentKind: z.string().openapi({ description: "What it sells; a kit's from its items." }),
   cashPayable: z.boolean().openapi({
-    description: "Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. A product page or placed offer stays buyable either way: checkout says what can pay.",
+    description: "Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. The storefront turns buying it off only where nothing else can pay (a store that takes only cash and holds no live gift card, checkout config `giftCardsLive`).",
   }),
   price: z.number().openapi({ description: "One unit's price in the page's currency (a kit's: its own price)." }),
   compareAtPrice: z.number().nullable().openapi({ description: "A kit's items summed, or a SKU's regular price while it is on sale; null otherwise." }),

@@ -3608,7 +3608,7 @@ export type StorefrontPlacedOffer = {
      */
     fulfillmentKind: string;
     /**
-     * Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. A product page or placed offer stays buyable either way: checkout says what can pay.
+     * Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. The storefront turns buying it off only where nothing else can pay (a store that takes only cash and holds no live gift card, checkout config `giftCardsLive`).
      */
     cashPayable: boolean;
     /**
@@ -22537,7 +22537,7 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
                 /**
-                 * Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. A product page or placed offer stays buyable either way: checkout says what can pay.
+                 * Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. The storefront turns buying it off only where nothing else can pay (a store that takes only cash and holds no live gift card, checkout config `giftCardsLive`).
                  */
                 cashPayable: boolean;
                 createdAt: string | null;
@@ -22888,7 +22888,7 @@ export type GetApiV1ProductsBySlugResponses = {
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
                 /**
-                 * Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. A product page or placed offer stays buyable either way: checkout says what can pay.
+                 * Cash may pay for it: false for a key, a download, a gift card, or a kit holding one, which are sent once paid; any other way to pay (online, an invoice, a gift card) buys those. The storefront turns buying it off only where nothing else can pay (a store that takes only cash and holds no live gift card, checkout config `giftCardsLive`).
                  */
                 cashPayable: boolean;
                 /**
