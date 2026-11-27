@@ -25,6 +25,7 @@ import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { orderListMessages, pluralKey } from "~/i18n/order-list";
+import { orderListDialogMessages, type OrderListDialogMessageKey } from "~/i18n/order-list-dialogs";
 import { planOrderBulkAction, type OrderBulkAction, type OrderBulkOutcome } from "./order-bulk-actions";
 import { Field } from "~/components/ui/field";
 
@@ -52,8 +53,10 @@ function useCouriers(enabled = true) {
   });
 }
 
+const dialogPluralKey = pluralKey<OrderListDialogMessageKey>;
+
 function CourierPicker({ value, onChange, disabled }: { value: string; onChange: (id: string) => void; disabled: boolean }) {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderListDialogMessages);
   const { data: providers = [], isLoading } = useCouriers();
   const selected = providers.find((provider) => provider.id === value);
   const readiness = selected ? resolveProviderReadiness(selected) : null;
@@ -106,7 +109,8 @@ export function BulkOrdersDialog({
   onOpenChange,
   onRun,
 }: BulkOrdersDialogProps) {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderListDialogMessages);
+  const tl = useMessages(orderListMessages);
   const tr = useMessages(resourceMessages);
   const to = useMessages(orderMessages);
   const [courierName, setCourierName] = useState("");
@@ -150,11 +154,11 @@ export function BulkOrdersDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t(pluralKey(`bulkTitle.${current}`, titleCount), { count: titleCount })}</DialogTitle>
+          <DialogTitle>{t(dialogPluralKey(`bulkTitle.${current}`, titleCount), { count: titleCount })}</DialogTitle>
           <DialogDescription>
             {plan
               ? eligibleCount > 0
-                ? t(pluralKey(`bulkWill.${current}`, eligibleCount), { count: eligibleCount })
+                ? t(dialogPluralKey(`bulkWill.${current}`, eligibleCount), { count: eligibleCount })
                 : t(`bulkNone.${current}`)
               : t("loadingOrders")}
           </DialogDescription>
@@ -166,11 +170,11 @@ export function BulkOrdersDialog({
             {plan.skipped.map((group) => (
               <li key={group.kind === "status" ? group.status : group.reason}>
                 {group.kind === "status"
-                  ? t(pluralKey("skipStatus", group.count), {
+                  ? t(dialogPluralKey("skipStatus", group.count), {
                       count: group.count,
                       status: orderStatusLabel(to, group.status).toLocaleLowerCase(),
                     })
-                  : `${t(pluralKey("skipBlocked", group.count), { count: group.count })} ${t(`block.${group.reason}`)}`}
+                  : `${t(dialogPluralKey("skipBlocked", group.count), { count: group.count })} ${tl(`block.${group.reason}`)}`}
               </li>
             ))}
           </ul>
@@ -212,7 +216,7 @@ export function BulkOrdersDialog({
             <p className="font-medium">
               {t("bulkResult", { done: outcome.succeeded.length, total: outcome.succeeded.length + outcome.failures.length })}
             </p>
-            <p className="text-muted-foreground">{t(pluralKey("bulkFailedStay", outcome.failures.length), { count: outcome.failures.length })}</p>
+            <p className="text-muted-foreground">{t(dialogPluralKey("bulkFailedStay", outcome.failures.length), { count: outcome.failures.length })}</p>
             <ul className="space-y-1 text-muted-foreground">
               {visibleFailures.map((failure) => (
                 <li key={failure.orderId} className="break-words">
@@ -236,7 +240,7 @@ export function BulkOrdersDialog({
               if (plan && !blocked && !running) onRun(plan.eligible, { courierName, note: sendNote, providerId });
             }}
           >
-            {t(pluralKey(`bulkRun.${current}`, titleCount))}
+            {t(dialogPluralKey(`bulkRun.${current}`, titleCount))}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -89,7 +89,6 @@ import {
 } from "./order-form/manual-order-discount";
 import { translate, useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
-import { orderDetailMessages } from "@/i18n/order-detail";
 import { orderToastMessages } from "@/i18n/order-toasts";
 import { resourceMessages } from "@/i18n/resource";
 import { matchesShortcut } from "./layout/shortcuts";
@@ -279,12 +278,11 @@ function toManualOrderAmendmentInput(values: OrderFormValues, id: string, curren
  */
 export function OrderForm(props: OrderFormProps) {
   const t = useMessages(orderFormMessages);
-  const d = useMessages(orderDetailMessages);
   const isEdit = props.mode === "amend";
   return (
     <SaveBarProvider
       unsavedLabel={isEdit ? undefined : t("unsavedOrder")}
-      savedMessage={isEdit ? translate(orderToastMessages, "toast.orderUpdated") : d("toast.orderCreated")}
+      savedMessage={translate(orderToastMessages, isEdit ? "toast.orderUpdated" : "toast.orderCreated")}
     >
       <OrderEditor {...props} />
     </SaveBarProvider>

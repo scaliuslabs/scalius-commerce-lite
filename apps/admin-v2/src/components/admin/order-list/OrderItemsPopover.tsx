@@ -7,10 +7,12 @@ import { getOrderItems } from "@/lib/api-query-options/orders";
 import { queryKeys } from "@/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { orderListMessages } from "~/i18n/order-list";
+import { orderListMoreMessages } from "~/i18n/order-list-more";
 
 /** The order's items in a small popover, opened from the list. */
 export function OrderItemsPopover({ orderId, trigger }: { orderId: string; trigger: ReactNode }) {
   const t = useMessages(orderListMessages);
+  const tm = useMessages(orderListMoreMessages);
   const { fmt } = useCurrency();
   const [open, setOpen] = useState(true);
   const { data: items, isLoading, isError } = useQuery({
@@ -28,13 +30,13 @@ export function OrderItemsPopover({ orderId, trigger }: { orderId: string; trigg
         {isLoading ? (
           <LoaderCircle className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
         ) : isError || !items?.length ? (
-          <p className="text-body text-muted-foreground">{t("itemsLoadFailed")}</p>
+          <p className="text-body text-muted-foreground">{tm("itemsLoadFailed")}</p>
         ) : (
           <ul className="max-h-60 space-y-2 overflow-y-auto">
             {items.map((item) => (
               <li key={item.id} className="flex items-start justify-between gap-2 text-body">
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{item.productName || t("unnamedItem")}</p>
+                  <p className="truncate font-medium">{item.productName || tm("unnamedItem")}</p>
                   {item.variantLabel ? (
                     <p className="truncate text-body text-muted-foreground">{item.variantLabel}</p>
                   ) : null}

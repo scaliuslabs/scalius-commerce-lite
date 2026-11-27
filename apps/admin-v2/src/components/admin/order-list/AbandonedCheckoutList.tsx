@@ -53,6 +53,7 @@ import { translate, useLocale, useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderListMessages, pluralKey } from "~/i18n/order-list";
+import { orderListAbandonedMessages, type OrderListAbandonedMessageKey } from "~/i18n/order-list-abandoned";
 import { buildOrderPrefill, checkoutReference, writeOrderPrefill } from "./abandoned-checkout-prefill";
 import { abandonedStage } from "./abandoned-stage";
 import { ListDate } from "~/components/admin/data-table/ListDate";
@@ -78,7 +79,7 @@ function Reference({ checkout }: { checkout: AbandonedCheckout }) {
 }
 
 function StageBadge({ checkout }: { checkout: AbandonedCheckout }) {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderListAbandonedMessages);
   const stage = abandonedStage(displayOf(checkout));
   return (
     <Badge
@@ -91,7 +92,7 @@ function StageBadge({ checkout }: { checkout: AbandonedCheckout }) {
 }
 
 function CustomerCell({ checkout }: { checkout: AbandonedCheckout }) {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderListAbandonedMessages);
   const { customerInfo } = displayOf(checkout);
   return (
     <div className="min-w-0">
@@ -110,8 +111,9 @@ function TotalCell({ checkout }: { checkout: AbandonedCheckout }) {
 }
 
 function Title({ k }: { k: "checkout" | "customer" | "progress" | "total" }) {
-  const t = useMessages(orderListMessages);
-  return <>{t(k)}</>;
+  const t = useMessages(orderListAbandonedMessages);
+  const tl = useMessages(orderListMessages);
+  return <>{k === "customer" || k === "total" ? tl(k) : t(k)}</>;
 }
 
 function CheckoutRowActions({
@@ -123,14 +125,15 @@ function CheckoutRowActions({
   canDelete: boolean;
   onDelete: (id: string) => void;
 }) {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderListAbandonedMessages);
+  const tl = useMessages(orderListMessages);
   const tr = useMessages(resourceMessages);
   const navigate = useNavigate();
   const orderId = displayOf(checkout).orderId;
   const actions = [
     ...(orderId
       ? [{
-          label: t("viewOrder"),
+          label: tl("viewOrder"),
           icon: ExternalLink,
           onClick: () => void navigate({ to: "/admin/orders/$orderId", params: { orderId } }),
         }]
@@ -175,7 +178,8 @@ function CheckoutSheet({
   canCreateOrder: boolean;
   onClose: () => void;
 }) {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderListAbandonedMessages);
+  const tl = useMessages(orderListMessages);
   const td = useMessages(orderDetailMessages);
   const { fmt } = useCurrency();
   const navigate = useNavigate();
@@ -258,7 +262,7 @@ function CheckoutSheet({
                               ? item.options.map((option) => `${option.name}: ${option.value}`)
                               // A line saved without its option labels: its SKU's, as the order form reads them.
                               : [variantLabels[index]].filter((label): label is string => Boolean(label))),
-                            t("qtyTimesPrice", { qty: item.quantity, price: fmt(item.price) }),
+                            tl("qtyTimesPrice", { qty: item.quantity, price: fmt(item.price) }),
                           ].join(" · ")}
                         </p>
                       </div>
@@ -274,7 +278,7 @@ function CheckoutSheet({
                 <p className="text-body text-muted-foreground">{t("emptyCart")}</p>
               ) : (
                 <p className="flex justify-between text-body font-medium">
-                  <span>{t("total")}</span>
+                  <span>{tl("total")}</span>
                   <span className="tabular-nums">{fmt(display.total)}</span>
                 </p>
               )}
@@ -286,12 +290,12 @@ function CheckoutSheet({
             {display?.orderId ? (
               <Button variant="outline" asChild>
                 <Link to="/admin/orders/$orderId" params={{ orderId: display.orderId }}>
-                  {t("viewOrder")}
+                  {tl("viewOrder")}
                 </Link>
               </Button>
             ) : null}
             {showCreate ? (
-              <Button onClick={createOrder}>{t("createOrder")}</Button>
+              <Button onClick={createOrder}>{tl("createOrder")}</Button>
             ) : null}
           </SheetFooter>
         ) : null}
@@ -311,7 +315,7 @@ export function AbandonedCheckoutList({
     options?: { replace?: boolean },
   ) => void;
 }) {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderListAbandonedMessages);
   const tr = useMessages(resourceMessages);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -323,7 +327,8 @@ export function AbandonedCheckoutList({
   const locale = useLocale();
 
   const columns = useMemo<ColumnDef<AbandonedCheckout, unknown>[]>(() => {
-    const label = (key: Parameters<typeof t>[0]) => translate(orderListMessages, key);
+    const label = (key: Parameters<typeof t>[0] | "customer" | "total") =>
+      key === "customer" || key === "total" ? translate(orderListMessages, key) : translate(orderListAbandonedMessages, key);
     const list: ColumnDef<AbandonedCheckout, unknown>[] = [
       {
         id: "checkout",
@@ -441,7 +446,7 @@ export function AbandonedCheckoutList({
     setDeleting(true);
     try {
       await apiData(deleteApiV1AdminAbandonedCheckouts({ body: { ids: deleteIds } }));
-      toast.success(t(pluralKey("checkoutsDeleted", deleteIds.length)));
+      toast.success(t(pluralKey<OrderListAbandonedMessageKey>("checkoutsDeleted", deleteIds.length)));
       clearSelection();
       void queryClient.invalidateQueries({ queryKey: queryKeys.abandonedCheckouts.all });
     } catch {
@@ -548,7 +553,7 @@ export function AbandonedCheckoutList({
         onOpenChange={(open) => {
           if (!open && !deleting) setDeleteIds(null);
         }}
-        title={t(pluralKey("deleteCheckoutsTitle", deleteCount), { count: deleteCount })}
+        title={t(pluralKey<OrderListAbandonedMessageKey>("deleteCheckoutsTitle", deleteCount), { count: deleteCount })}
         description={hostedInDelete > 0 ? `${tr("deleteBody")} ${t("hostedDeleteNote")}` : tr("deleteBody")}
         confirmLabel={t("delete")}
         cancelLabel={tr("cancel")}

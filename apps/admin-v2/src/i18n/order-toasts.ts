@@ -4,6 +4,7 @@ import { defineMessages } from "./index";
 export const orderToastMessages = defineMessages({
   en: {
     "toast.orderUpdated": "Order updated",
+    "toast.orderCreated": "Order created",
     "toast.orderRestored": "Order restored",
     "toast.courierBooked": "Courier booked",
     "toast.fulfilled": "Shipment created",
@@ -55,6 +56,7 @@ export const orderToastMessages = defineMessages({
   },
   bn: {
     "toast.orderUpdated": "অর্ডার আপডেট হয়েছে",
+    "toast.orderCreated": "অর্ডার তৈরি হয়েছে",
     "toast.orderRestored": "অর্ডার ফিরিয়ে আনা হয়েছে",
     "toast.courierBooked": "কুরিয়ার বুক হয়েছে",
     "toast.fulfilled": "শিপমেন্ট তৈরি হয়েছে",
