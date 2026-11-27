@@ -336,7 +336,7 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
     operationId: "dashboard.apps.update",
     tags: ["Admin - Apps"],
     summary: "Update an app from its registry (Workers Paid)",
-    description: "Verifies and stores the new release, then replaces the code. An update that asks for more access waits for a Super Admin's approval. An active app loads the new code and runs its data updates at once; when either fails, the previous version comes back (rolledBack) and the reason is reported.",
+    description: "Verifies and stores the new release, then replaces the code. An update runs with the access already approved; new access it asks for stays off until a Super Admin approves it (needsApproval). An active app loads the new code and runs its data updates at once; when either fails, the previous version comes back (rolledBack) and the reason is reported.",
     request: {
       params: idParams,
       body: {

@@ -77,7 +77,7 @@ export function AppStopAction({ app }: { app: AppDetail }) {
   );
 }
 
-/** A newer version in a registry, and the Update button. An update that asks for more access waits for approval. */
+/** A newer version in a registry, and the Update button. An update runs with the access already approved; new access waits for approval. */
 function UpdateNotice({ app }: { app: AppDetail }) {
   const t = useMessages(appsLifecycleMessages);
   const refresh = useRefreshApps();

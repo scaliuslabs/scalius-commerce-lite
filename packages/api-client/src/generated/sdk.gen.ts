@@ -8694,7 +8694,7 @@ export const postApiV1AdminAppsRegistryInstall = <ThrowOnError extends boolean =
 /**
  * Update an app from its registry (Workers Paid)
  *
- * Verifies and stores the new release, then replaces the code. An update that asks for more access waits for a Super Admin's approval. An active app loads the new code and runs its data updates at once; when either fails, the previous version comes back (rolledBack) and the reason is reported.
+ * Verifies and stores the new release, then replaces the code. An update runs with the access already approved; new access it asks for stays off until a Super Admin approves it (needsApproval). An active app loads the new code and runs its data updates at once; when either fails, the previous version comes back (rolledBack) and the reason is reported.
  */
 export const postApiV1AdminAppsByIdUpdate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAppsByIdUpdateData, ThrowOnError>): RequestResult<PostApiV1AdminAppsByIdUpdateResponses, PostApiV1AdminAppsByIdUpdateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAppsByIdUpdateResponses, PostApiV1AdminAppsByIdUpdateErrors, ThrowOnError>({
     url: '/api/v1/admin/apps/{id}/update',

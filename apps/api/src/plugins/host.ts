@@ -590,12 +590,12 @@ export class PluginHost {
         await this.overLimit(installation, invocation, "wall_time", `${source} ran longer than ${wallMs} ms`, lines);
       } else if (thrown instanceof PluginLoadError && thrown.outdated) {
         // The deployment carries a newer build: bring the installation in
-        // step (bundled-sync.ts); the next call runs the new version, or
-        // waits for approval when the update asks for more access.
+        // step (bundled-sync.ts); the next call runs the new version under
+        // the grant it had (new access waits for approval).
         const { syncBundledPlugin } = await import("./bundled-sync");
         const synced = await syncBundledPlugin(this.db, installation.pluginId).catch(() => null);
         error = synced
-          ? `${installation.pluginId} was updated to ${synced.version}${synced.status === "active" ? "" : " and waits for approval"}.`
+          ? `${installation.pluginId} was updated to ${synced.version}${synced.status === "active" ? "" : ` and is ${synced.status}`}.`
           : thrown.message;
         failure = synced ? "outdated" : "load_failed";
         if (!synced) await markPluginFailed(this.db, installation.pluginId, thrown.message);
