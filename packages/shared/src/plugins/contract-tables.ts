@@ -20,7 +20,7 @@
 import { WEBHOOK_API_VERSION_HEADER, WEBHOOK_EVENT_ID_HEADER, WEBHOOK_SECRET_PREFIX, WEBHOOK_SIGNATURE_HEADER, WEBHOOK_SIGNATURE_TOLERANCE_SECONDS, WEBHOOK_TOPIC_HEADER } from "../events";
 import { LINE_ENTRY_WORDS_BN, LINE_ENTRY_WORDS_EN } from "../line-entry-words";
 import { STORE_ACTION_AND_AMOUNT_WORDS, STORE_WORD_LABEL_KINDS, STORE_WORD_SLOT_PATTERNS, STORE_WORDS_REASON } from "../store-words";
-import { type ContractTable, type ContractTableRule } from "../contract/rules";
+import type { ContractTable, ContractTableRule } from "../contract/rules";
 import { PRIVATE_PAGE_ROUTES, PRIVATE_STORE_LOOK_ROUTES, PRIVATE_UNTHEMED_ROUTES } from "../storefront-theme/private-keys";
 import { STOREFRONT_HOST_CSS_VARIABLES, STOREFRONT_HOST_HOOKS } from "../storefront-theme/host-contract";
 import { PRIVATE_LABEL_AMOUNT_WORDS } from "../storefront-theme/private-layout";
