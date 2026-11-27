@@ -24,7 +24,7 @@
 //       list and rules against this tree (`verify --root <this tree>`). With no
 //       anchor at or past the freeze it refuses, except on the freeze commit
 //       before its tag when asked (`--freeze-commit`: "not yet anchored").
-//   node scripts/contract-lock.mjs verify [--run <id>] [--verify-signatures]
+//   node scripts/contract-lock.mjs verify [--run <id>] [--verify-signatures] [--freeze-commit]
 //       judge this tree with this script: the lock is the anchor's byte for
 //       byte, every seal of the registry and of the lock is there, each
 //       snapshot differs from the locked one only as the ledgers allow, by the
@@ -362,7 +362,7 @@ async function runProblems(root, run, lines) {
  * Judges this tree against its lock (see the header). `lines` say what was
  * judged; `problems` are refusals.
  */
-export async function verifyLock(root = DEFAULT_ROOT, { platform = platformOf(root), today = new Date().toISOString().slice(0, 10), run = null, verifySignatures } = {}) {
+export async function verifyLock(root = DEFAULT_ROOT, { platform = platformOf(root), today = new Date().toISOString().slice(0, 10), run = null, verifySignatures, freezeCommit = false } = {}) {
   const lock = readLock(root);
   const lines = [];
   const problems = [];
@@ -386,10 +386,11 @@ export async function verifyLock(root = DEFAULT_ROOT, { platform = platformOf(ro
   if (anchor) {
     lines.push(`Locked at ${lock.platform}, contract ${lock.contractVersion}. Anchored to ${anchor.tag}; judged by ${anchor.tag}'s rules.`);
     if (readFileSync(join(root, LOCK_FILE), "utf8") !== anchor.text) problems.push(`${LOCK_FILE} is not the lock ${anchor.tag} carries, byte for byte.`);
-  } else if (platform === FREEZE) {
+  } else if (platform === FREEZE && freezeCommit) {
+    // The one lock trusted with no tag behind it: the freeze commit's, when the release command says so.
     lines.push(`Locked at ${lock.platform}, contract ${lock.contractVersion}. Not yet anchored: no trusted ${FREEZE} tag yet, so judged by this tree's own lock and rules (tag this commit as an annotated v${FREEZE}).`);
   } else {
-    problems.push(`No trusted release tag is reachable (an annotated v<version> at or past ${FREEZE}, its commit at that platform version, carrying ${LOCK_FILE}): fetch tags and full history (git fetch --tags --unshallow) and judge again.`);
+    problems.push(`No trusted release tag is reachable (an annotated v<version> at or past ${FREEZE}, its commit at that platform version, carrying ${LOCK_FILE}): fetch tags and full history (git fetch --tags --unshallow) and judge again.${platform === FREEZE ? ` On the ${FREEZE} commit before its tag, judge with --freeze-commit.` : ""}`);
     return { lock, lines, problems };
   }
   let judge;
@@ -491,12 +492,9 @@ export async function judgeWithAnchor(root = DEFAULT_ROOT, { run = null, verifyS
   const atOrPastFreeze = comparePluginVersions(platform, FREEZE) >= 0;
   const anchor = atOrPastFreeze && !shallow(root) ? anchorTag(root, { verifySignatures }) : null;
   if (!anchor) {
-    const verdict = await verifyLock(root, { run, verifySignatures });
     // A lock with no trusted tag behind it is trusted as written only on the freeze commit, when the release
     // command says so (`--freeze-commit`): anywhere else it could be a rewritten lock with its tag deleted.
-    if (atOrPastFreeze && verdict.lock && !freezeCommit) {
-      verdict.problems.push(`No trusted release tag anchors this lock. On the ${FREEZE} commit before its tag, judge with --freeze-commit; anywhere else fetch tags and full history (git fetch --tags --unshallow).`);
-    }
+    const verdict = await verifyLock(root, { run, verifySignatures, freezeCommit });
     return { ...verdict, anchored: false, code: verdict.problems.length === 0 ? 0 : 1 };
   }
   // The real path (a temporary folder behind a symlink would not run as the main module).
@@ -566,7 +564,7 @@ async function main(args) {
   if (args.includes("judge") || args.includes("verify") || args.includes("status")) {
     const { lines, problems } = args.includes("judge")
       ? await judgeWithAnchor(root, { run, verifySignatures, freezeCommit: args.includes("--freeze-commit") })
-      : await verifyLock(root, { run, verifySignatures });
+      : await verifyLock(root, { run, verifySignatures, freezeCommit: args.includes("--freeze-commit") });
     for (const line of lines) console.log(line);
     for (const problem of problems) console.error(`refused: ${problem}`);
     return problems.length === 0 ? 0 : 1;
