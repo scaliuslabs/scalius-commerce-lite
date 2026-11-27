@@ -9,15 +9,17 @@
 // wrapper (`SANDBOX_RUNTIME_MODULE`) with the release's own bundle in a worker thread, behind a
 // structured clone each way, with no network (global fetch refuses), terminated at a deadline.
 //
-// The clock is fixed (`REPLAY_NOW`; every deadline the host computes from it stands still) and the
-// host's wall timers do not fire: a loaded machine cannot turn a recorded answer into a timeout.
+// The clock is fixed (`REPLAY_NOW`) on both sides of the boundary (every deadline the host computes
+// stands still, and the isolate's `Date`, `performance.now` and randomness are steady) and the host's
+// wall timers do not fire: a loaded machine cannot turn a recorded answer into a timeout. The isolate
+// has production's globals (no Node, no network: see `ISOLATE_SOURCE`).
 // The isolate's own deadline (`ISOLATE_DEADLINE_MS`, real time) stands in for the wall: past it the
 // run is recorded "timed out" and the worker is terminated, so a busy loop cannot hang the gate.
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import { OpenAPIHono } from "@hono/zod-openapi";
@@ -153,18 +155,79 @@ const sha256 = (text: string | Uint8Array) => createHash("sha256").update(text).
 const realSetTimeout = globalThis.setTimeout;
 const realClearTimeout = globalThis.clearTimeout;
 
-/** The isolate: a worker thread that imports the generated wrapper (with the bundle beside it) and answers its entrypoint's calls. */
+/**
+ * The isolate: a worker thread that imports the generated wrapper (with the bundle beside it) and
+ * answers its entrypoint's calls. Before any of the bundle's code loads, the thread is made what a
+ * production isolate is (no compatibility flags, so no Node): no `process`, `Buffer`, `global`,
+ * `setImmediate`, no network (`fetch` refuses; `WebSocket`, `EventSource`, `BroadcastChannel` are
+ * gone) and no Node modules (`node:*` and bare built-ins refuse to resolve for the isolate's
+ * modules). It is also made steady: `Date` and `performance.now` stand at the replay's instant, and
+ * `Math.random`, `crypto.getRandomValues` and `crypto.randomUUID` draw from a fixed seed, reset at
+ * every call, so a frozen bundle's answer cannot move with the wall clock or chance.
+ */
 const ISOLATE_SOURCE = `
 const { parentPort, workerData } = require("node:worker_threads");
 const { pathToFileURL } = require("node:url");
+const { builtinModules, registerHooks } = require("node:module");
+// The isolate's modules, by the path they load from (a symlinked folder resolves to its real one).
+const isolateDirs = [pathToFileURL(workerData.dir).href, pathToFileURL(require("node:fs").realpathSync(workerData.dir)).href].map((href) => href + "/");
+const builtins = new Set(builtinModules);
+registerHooks({
+  resolve(specifier, context, next) {
+    if (context.parentURL && isolateDirs.some((dir) => context.parentURL.startsWith(dir)) && (specifier.startsWith("node:") || builtins.has(specifier))) {
+      throw new Error("No such module " + JSON.stringify(specifier) + ": an isolate has no Node modules.");
+    }
+    return next(specifier, context);
+  },
+});
+const NOW = workerData.now;
+const RealDate = Date;
+function FixedDate(...args) {
+  if (!new.target) return new RealDate(NOW).toString();
+  return args.length === 0 ? new RealDate(NOW) : new RealDate(...args);
+}
+Object.setPrototypeOf(FixedDate, RealDate);
+FixedDate.prototype = RealDate.prototype;
+FixedDate.now = () => NOW;
+globalThis.Date = FixedDate;
+Object.defineProperty(performance, "now", { value: () => 0 });
+let state = 0;
+const reseed = () => { state = 0x5eed1234; };
+const random = () => {
+  state = (state + 0x6d2b79f5) | 0;
+  let t = Math.imul(state ^ (state >>> 15), 1 | state);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+Math.random = random;
+const subtle = globalThis.crypto.subtle;
+const getRandomValues = (array) => {
+  const bytes = new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
+  for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(random() * 256);
+  return array;
+};
+const randomUUID = () => {
+  const bytes = getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-" + hex.slice(12, 16) + "-" + hex.slice(16, 20) + "-" + hex.slice(20);
+};
+Object.defineProperty(globalThis, "crypto", { value: Object.freeze({ subtle, getRandomValues, randomUUID }), configurable: true, writable: false });
 globalThis.fetch = async () => { throw new Error("This isolate is not permitted to access the internet (globalOutbound: null)."); };
+for (const name of ["process", "Buffer", "global", "setImmediate", "clearImmediate", "WebSocket", "EventSource", "BroadcastChannel"]) {
+  try { delete globalThis[name]; } catch {}
+  if (name in globalThis) Object.defineProperty(globalThis, name, { value: undefined, configurable: true });
+}
+const post = (message) => parentPort.postMessage(message);
 let sandbox = null;
 parentPort.on("message", async ({ id, method, args }) => {
   try {
+    reseed();
     sandbox ??= import(pathToFileURL(workerData.wrapper).href).then((module) => new module.default({}, {}));
-    parentPort.postMessage({ id, ok: true, value: await (await sandbox)[method](...args) });
+    post({ id, ok: true, value: await (await sandbox)[method](...args) });
   } catch (error) {
-    parentPort.postMessage({ id, ok: false, error: { name: error && error.name || "Error", message: String(error && error.message || error) } });
+    post({ id, ok: false, error: { name: error && error.name || "Error", message: String(error && error.message || error) } });
   }
 });`;
 
@@ -183,7 +246,7 @@ export class Isolate {
   constructor(private readonly wrapper: string, private readonly deadlineMs = ISOLATE_DEADLINE_MS) {}
 
   private start(): Worker {
-    const worker = new Worker(ISOLATE_SOURCE, { eval: true, workerData: { wrapper: this.wrapper } });
+    const worker = new Worker(ISOLATE_SOURCE, { eval: true, workerData: { wrapper: this.wrapper, dir: dirname(this.wrapper), now: REPLAY_NOW } });
     worker.on("message", ({ id, ok, value, error }: { id: number; ok: boolean; value: unknown; error?: { name: string; message: string } }) => {
       const waiting = this.pending.get(id);
       this.pending.delete(id);
