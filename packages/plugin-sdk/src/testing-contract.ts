@@ -324,6 +324,15 @@ function isApiResult(value: unknown): value is PluginApiResult {
 
 const copy = <T>(value: T): T => (value === undefined ? value : structuredClone(value));
 
+/**
+ * The status a first, successful call answers: a create's `201` where the
+ * operation also answers `200` (that is a repeat under the same
+ * Idempotency-Key, which the harness replays itself), otherwise its first.
+ */
+function firstCallStatus(operation: StableContractOperation): number {
+  return operation.statuses.includes(201) ? 201 : operation.statuses[0] ?? 200;
+}
+
 const projectors = new WeakMap<StableContractOperation, SchemaProjector>();
 
 /** The answer's `data` with only the keys the operation's response schema declares (what the platform sends). */
@@ -434,7 +443,10 @@ export function createContractApi(options: ContractApiOptions = {}): ContractApi
       throw new Error(`createContractApi: the app called ${name} (a valid call), but no handler answers it. Add handlers["${name}"].`);
     }
     const answered = await handler(copy({ operation: name, contract: entry, path: input.path, query: input.query, body: input.body, idempotencyKey: input.idempotencyKey }));
-    let result: PluginApiResult = isApiResult(answered) ? answered : { ok: true, status: entry.statuses[0] ?? 200, data: answered ?? null, error: null };
+    let result: PluginApiResult = isApiResult(answered) ? answered : { ok: true, status: firstCallStatus(entry), data: answered ?? null, error: null };
+    if (result.ok && entry.statuses.length > 0 && !entry.statuses.includes(result.status)) {
+      throw new Error(`createContractApi: the handler for ${name} answered status ${result.status}, which the operation never answers (${entry.statuses.join(" or ")}).`);
+    }
     if (result.ok && options.checkOutput !== false && entry.output) {
       const issue = contractSchemaIssue(entry.output, { success: true, data: result.data }, contract);
       if (issue) {

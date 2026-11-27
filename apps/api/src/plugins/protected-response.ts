@@ -61,6 +61,23 @@ export function operationOutputProjector(operation: Pick<AgentOperationManifestE
   return projector;
 }
 
+/** Paths already logged by this isolate, and the most it logs: a leak is a signal, never a flood. */
+const loggedUndeclared = new Set<string>();
+const MAX_UNDECLARED_LOG_LINES = 100;
+
+/**
+ * One log line per operation and undeclared path per isolate (operation and
+ * path only, never a value), so a route answering a key its schema does not
+ * declare shows up in production as well as in its tests.
+ */
+function logUndeclared(operationId: string, paths: () => string[]): void {
+  if (loggedUndeclared.size >= MAX_UNDECLARED_LOG_LINES) return;
+  const fresh = [...new Set(paths())].filter((path) => !loggedUndeclared.has(`${operationId} ${path}`)).slice(0, MAX_UNDECLARED_LOG_LINES - loggedUndeclared.size);
+  if (fresh.length === 0) return;
+  for (const path of fresh) loggedUndeclared.add(`${operationId} ${path}`);
+  console.warn(JSON.stringify({ event: "app_api_undeclared_keys", operation: operationId, paths: fresh }));
+}
+
 const appOwnedPathsByOperation = new Map<string, readonly AppOwnedPath[]>();
 
 /** The app-owned fields of an operation's response body (`x-scalius-app-owned`). */
@@ -87,7 +104,19 @@ export function projectOperationResponse<T>(
   appId: string,
   undeclared?: string[],
 ): T {
-  const redacted = redactOperationResponse(operation, operationOutputProjector(operation)(body, undeclared), granted);
+  const project = operationOutputProjector(operation);
+  let declared: T;
+  if (undeclared) declared = project(body, undeclared);
+  else {
+    const counter = { count: 0 };
+    declared = project(body, counter);
+    if (counter.count > 0) logUndeclared(operation.operationId, () => {
+      const paths: string[] = [];
+      project(body, paths);
+      return paths;
+    });
+  }
+  const redacted = redactOperationResponse(operation, declared, granted);
   const paths = operationAppOwnedPaths(operation);
   return paths.length === 0 ? redacted : projectAppOwnedData(redacted, paths, appId);
 }

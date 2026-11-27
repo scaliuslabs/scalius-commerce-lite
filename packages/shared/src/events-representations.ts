@@ -1007,8 +1007,9 @@ export function eventDataTruncation(type: EventRepresentationType, resourceId: s
  * A copy of a sealed representation as one reader may see it (per
  * subscription): only the keys its schema declares (whatever built it), the
  * protected fields outside `customerData` as null, and, for an app's reader,
- * the app-owned answers narrowed to that app's own. The projection copies
- * every declared object, so the shared representation is never changed.
+ * the app-owned answers narrowed to that app's own. The projection answers a
+ * fresh copy (every object and array), so the representation one drain
+ * shares across endpoints is never changed by one endpoint's view.
  */
 export function projectEventRepresentation<T extends EventRepresentationType>(
   type: T,

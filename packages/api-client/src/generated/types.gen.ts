@@ -30019,7 +30019,7 @@ export type PostApiV1AdminResourcesOrdersData = {
          */
         discountMinor?: number;
         /**
-         * How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create).
+         * How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with payments.create).
          */
         paymentMethod?: 'cod' | 'net_terms';
         /**
@@ -30284,7 +30284,7 @@ export type PostApiV1AdminResourcesOrdersQuoteData = {
          */
         discountMinor?: number;
         /**
-         * How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create).
+         * How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with payments.create).
          */
         paymentMethod?: 'cod' | 'net_terms';
         /**
@@ -31434,7 +31434,7 @@ export type PostApiV1AdminResourcesProductsData = {
             weightGrams?: number | null;
         }>;
         /**
-         * Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured.
+         * Ready media library files (`media.import_url`), in gallery order; the first is featured.
          */
         mediaIds?: Array<string>;
         /**
@@ -33616,7 +33616,7 @@ export type PostApiV1AdminResourcesProductsBatchData = {
                 weightGrams?: number | null;
             }>;
             /**
-             * Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured.
+             * Ready media library files (`media.import_url`), in gallery order; the first is featured.
              */
             mediaIds?: Array<string>;
             /**
@@ -68508,7 +68508,7 @@ export type PutApiV1AdminOrdersByIdStatusData = {
          */
         notifyCustomer?: boolean;
         /**
-         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since.
+         * The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to change it whatever happened since.
          */
         expectedRevision?: number;
     };
@@ -68640,7 +68640,7 @@ export type PostApiV1AdminOrdersByIdRefundKeptResponse = PostApiV1AdminOrdersByI
 export type PostApiV1AdminOrdersByIdMarkDeliveredData = {
     body: {
         /**
-         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409. Omit to mark it whatever happened since.
+         * The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409. Omit to mark it whatever happened since.
          */
         expectedRevision?: number;
     };
@@ -74459,7 +74459,7 @@ export type PostApiV1AdminOrdersByIdFulfillmentsResponse = PostApiV1AdminOrdersB
 export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidData = {
     body: {
         /**
-         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
+         * The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
          */
         expectedRevision?: number;
     };
@@ -74539,7 +74539,7 @@ export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidResponse = Po
 export type PostApiV1AdminOrdersByIdPickupReadyData = {
     body: {
         /**
-         * The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
+         * The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
          */
         expectedRevision?: number;
     };

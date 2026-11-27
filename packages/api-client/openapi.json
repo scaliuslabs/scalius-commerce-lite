@@ -114444,7 +114444,7 @@
                       "net_terms"
                     ],
                     "default": "cod",
-                    "description": "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create)."
+                    "description": "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with payments.create)."
                   },
                   "paymentTerms": {
                     "type": "object",
@@ -115210,7 +115210,7 @@
                       "net_terms"
                     ],
                     "default": "cod",
-                    "description": "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create)."
+                    "description": "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with payments.create)."
                   },
                   "paymentTerms": {
                     "type": "object",
@@ -118616,7 +118616,7 @@
                     },
                     "maxItems": 50,
                     "default": [],
-                    "description": "Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured."
+                    "description": "Ready media library files (`media.import_url`), in gallery order; the first is featured."
                   },
                   "salesChannelIds": {
                     "type": "array",
@@ -125099,7 +125099,7 @@
                           },
                           "maxItems": 50,
                           "default": [],
-                          "description": "Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured."
+                          "description": "Ready media library files (`media.import_url`), in gallery order; the first is featured."
                         },
                         "salesChannelIds": {
                           "type": "array",
@@ -239449,7 +239449,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
                   }
                 },
                 "required": [
@@ -239853,7 +239853,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409. Omit to mark it whatever happened since."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409. Omit to mark it whatever happened since."
                   }
                 },
                 "additionalProperties": false
@@ -260678,7 +260678,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
                   }
                 },
                 "additionalProperties": false
@@ -260914,7 +260914,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in dashboard.resources.orders.get (an app's orders.get) and in the order a write answers, `version` in dashboard.orders.get; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
                   }
                 },
                 "additionalProperties": false
