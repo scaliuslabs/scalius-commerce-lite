@@ -15,12 +15,14 @@ export function readBoundsBreakingChanges(before: unknown, after: unknown): stri
   const released = (before ?? {}) as Record<string, Bound>;
   const now = (after ?? {}) as Record<string, Bound>;
   const fields = new Set(Object.keys(released).map(fieldOf));
-  return Object.entries(now).flatMap(([key, bound]) => {
+  // A bound that leaves may have moved into a refinement this list does not see: a reviewed line.
+  const gone = Object.keys(released).filter((key) => !(key in now)).map((key) => `${key}: the ${released[key]!.kind} of ${released[key]!.value} left the read (a refinement may hold it now).`);
+  return [...gone, ...Object.entries(now).flatMap(([key, bound]) => {
     const was = released[key];
     if (!was) return fields.has(fieldOf(key)) ? [`${key}: a new ${bound.kind} of ${bound.value} on a field read before: tightened.`] : [];
     if (was.kind !== bound.kind) return [`${key}: the bound changed from a ${was.kind} to a ${bound.kind}: tightened.`];
     if (bound.kind === "max" && bound.value < was.value) return [`${key}: the max tightened from ${was.value} to ${bound.value}.`];
     if (bound.kind === "min" && bound.value > was.value) return [`${key}: the min tightened from ${was.value} to ${bound.value}.`];
     return [];
-  });
+  })];
 }

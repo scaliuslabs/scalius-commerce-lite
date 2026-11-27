@@ -22864,7 +22864,8 @@
     "scripts": {
      "data-color-scheme": [
       "light",
-      "dark"
+      "dark",
+      "system"
      ],
      "data-scalius-when": [
       "signed-in",

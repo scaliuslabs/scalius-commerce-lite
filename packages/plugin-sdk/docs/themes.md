@@ -207,6 +207,7 @@ Right:
   <!-- /host-css-variables -->
   Any other custom property in the store's own CSS is internal and may change in any release; define your own under your app's prefix.
 - The tokens already follow the store's colour scheme: on dark pages they hold the theme's dark colours, on every page, private ones included. Don't ship a second palette or your own light/dark switch. For what tokens can't say (a dark logo, an image swap), select on `:root[data-color-scheme="dark"]`; for a switch, put `colorSchemeToggle()` on a native button.
+- `data-color-scheme` on `<html>` holds one of three sealed values. The server writes the theme's choice: `light`, `dark`, or `system` when the merchant picked System. Before the first paint the head script settles `system` to `light` or `dark` (the buyer's own choice from the switch first, else the device), and keeps following the device. With scripts off `system` stays, so a `system` page's dark look needs `@media (prefers-color-scheme: dark) { :root[data-color-scheme="system"] … }`. On the buyer's own pages your header and footer sit in a shadow host that carries the same attribute as `<html>`: select `:host([data-color-scheme="dark"])` there.
 - Prefix every class with your app's name (`studio-header`); an `id` must start with it.
 
 ## Templates

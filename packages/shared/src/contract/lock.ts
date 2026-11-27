@@ -9,10 +9,11 @@
 // one sealed snapshot, from the snapshot whose fingerprint is `from`. `type`:
 //
 //   growth       additive: nothing that worked stops working. Real growth makes
-//                no change line at all (every rule lets growth pass), so after
-//                the lock a `growth` entry stands only for the few lines a rule
-//                cannot judge (`UNJUDGED_LINES`: a changed pattern), and only
-//                with `accepts` samples the old and the new pattern are run on.
+//                no change line at all (every rule lets growth pass, a pattern
+//                too when its change is a widening the rule proves: patterns.ts),
+//                so after the lock no `growth` entry is accepted.
+//   wording      a reworded meaning or description (`WORDING_LINES`): the code,
+//                status and details hold. Accepted after the lock.
 //   pre-lock     a real break made before the freeze. None is accepted after it.
 //   security     a tightening that closes a hole; names its advisory, a file
 //                `packages/plugin-sdk/advisories/<id>.md` in the public tree
@@ -30,7 +31,7 @@
 // new-version. The entries before the lock are history: the lock holds their
 // digest, so editing or retyping one is refused.
 
-export const LEDGER_ENTRY_TYPES = ["growth", "pre-lock", "security", "new-version"] as const;
+export const LEDGER_ENTRY_TYPES = ["growth", "pre-lock", "security", "new-version", "wording"] as const;
 export type LedgerEntryType = (typeof LEDGER_ENTRY_TYPES)[number];
 
 /** The release the contract freezes at: from it on a lock must exist, and only it may write the first one. */
@@ -55,14 +56,6 @@ export interface LedgerEntry {
   advisory?: LedgerAdvisory;
   /** For `new-version`: the contract version the change belongs to. */
   version?: string;
-  /** For `growth` on a line a rule cannot judge: the old and the new pattern and values both are run on. */
-  accepts?: GrowthAccepts;
-}
-
-export interface GrowthAccepts {
-  before: string;
-  after: string;
-  samples: string[];
 }
 
 /** A change line no entry accepts (a template to fill in), or an entry the lock refuses (`refused` says why). */
@@ -80,13 +73,6 @@ export interface ContractLock {
   platform: string;
   /** The contract version at the lock (`PLUGIN_API_VERSION`). */
   contractVersion: string;
-  /**
-   * Every rewrite of the lock after the first: the contract version it was
-   * made for, its reason, the SHA-256 of the lock it replaced and the seals
-   * that moved, so a lock carried by a release tag stays provable from any
-   * later one.
-   */
-  relocks: Array<{ platform: string; reason: string; contractVersion?: string; replaced?: string; moved?: string[] }>;
   /** Compatibility-ruled snapshots by repository path: they may change after the lock only as their ledger allows. */
   seals: Record<string, LockedFile>;
   /** Files that never change after the lock (theme goldens, replay bundles frozen at the lock and their expectations). */
@@ -127,56 +113,17 @@ export async function ledgerDigest(entries: readonly unknown[]): Promise<string>
 }
 
 /**
- * The change lines a rule cannot judge, with the direction an `accepts`
- * proof is checked in: a changed pattern may accept more or less (`accepts`:
- * every sample the old one matched the new one matches) or refuse more or
- * less (`refuses`: the new one matches no sample the old one did not). Every
- * other line a rule writes is a break by construction.
+ * Lines that change only words a reader is told (an error code's meaning): a
+ * `wording` entry accepts them after the lock, since the code, its status and
+ * details hold.
  */
-export const UNJUDGED_LINES: ReadonlyArray<{ shape: RegExp; direction: "accepts" | "refuses" }> = [
-  { shape: /: pattern changed\.$/, direction: "accepts" },
-  { shape: /^tables\.skinHtml\.patterns\.[\w-]+: the value changed from /, direction: "accepts" },
-  // The paths a release may hold (storefront-protocol.ts): a wider pattern takes more files.
-  { shape: /^storefront\.STOREFRONT_FILE_PATH: the constant value changed\.$/, direction: "accepts" },
-  { shape: /^tables\.(?:storeWordSlots\.[\w-]+|marketSubfolderPattern): the value changed from .*: a new refusal\.$/, direction: "refuses" },
-];
+export const WORDING_LINES: readonly RegExp[] = [/^errors\.[a-z0-9_]+: the meaning changed\.$/];
 
 /** Lines that remove or tighten by their own words (the classifier of entries written before the lock reads them). */
 const NEVER_GROWTH = /was removed|no longer|tightened|newly required|a new required|may now be null|went back|changed from|is now required|a new refusal|moved from|type changed|a new limit|now names who may|a new contract version/;
 
 /** A change line that is a contract version change. */
 const VERSION_CHANGE = /: a new contract version\.$/;
-
-const compile = (source: string): RegExp | null => {
-  for (const flags of ["u", ""]) {
-    try {
-      return new RegExp(`^(?:${source})$`, flags);
-    } catch {
-      // the next flags
-    }
-  }
-  return null;
-};
-
-/** Why `accepts` does not show the pattern change is growth, or null. */
-export function acceptsProblem(change: string, accepts: GrowthAccepts | undefined, texts: { before: readonly string[]; after: string }): string | null {
-  const unjudged = UNJUDGED_LINES.find((line) => line.shape.test(change));
-  if (!unjudged) return "Every line a compat rule writes is a break: growth makes no line. Only a changed pattern (UNJUDGED_LINES) may be shown to be growth, with accepts samples.";
-  if (!accepts || typeof accepts.before !== "string" || typeof accepts.after !== "string" || !Array.isArray(accepts.samples)) {
-    return 'A growth entry for a changed pattern carries "accepts": { "before": "<old pattern>", "after": "<new pattern>", "samples": [ … ] }.';
-  }
-  if (!texts.before.some((text) => text.includes(JSON.stringify(accepts.before)))) return "accepts.before is not the pattern in the snapshot the change is from.";
-  if (!texts.after.includes(JSON.stringify(accepts.after))) return "accepts.after is not the pattern in the current snapshot.";
-  const before = compile(accepts.before);
-  const after = compile(accepts.after);
-  if (!before || !after) return "accepts.before and accepts.after must be regular expressions.";
-  if (accepts.samples.length < 3 || !accepts.samples.some((sample) => before.test(sample))) return "accepts.samples holds at least three values, one at least that the old pattern matches.";
-  for (const sample of accepts.samples) {
-    if (unjudged.direction === "accepts" && before.test(sample) && !after.test(sample)) return `The new pattern no longer accepts ${JSON.stringify(sample)}.`;
-    if (unjudged.direction === "refuses" && after.test(sample) && !before.test(sample)) return `The new pattern refuses ${JSON.stringify(sample)}, which the old did not.`;
-  }
-  return null;
-}
 
 /** Why an advisory file does not stand behind a security entry, or null. Its front matter: `id`, `date`, `changes: [{ "snapshot", "change" }]` (JSON). */
 export function advisoryProblem(entry: LedgerEntry, text: string | null, today: string): string | null {
@@ -202,25 +149,25 @@ export function advisoryProblem(entry: LedgerEntry, text: string | null, today: 
   return listed ? null : `${file} does not list this change: its "changes" names the snapshot ${entry.snapshot} and the exact line.`;
 }
 
-/** What else a post-lock entry is judged with: the versions this build runs, its advisory file, today, and the snapshot texts. */
+/** What else a post-lock entry is judged with: the versions this build runs, its advisory file and today. */
 export interface EntryContext {
   supportedVersions?: readonly string[];
   advisory?: (id: string) => string | null;
   today?: string;
-  texts?: { before: readonly string[]; after: string };
 }
 
 /** Why an entry written after the lock cannot accept a change, or null. */
 export function postLockEntryProblem(entry: LedgerEntry, lock: Pick<ContractLock, "contractVersion">, context: EntryContext = {}): string | null {
   if (!entry.reason?.trim()) return "An entry needs a reason.";
-  if (entry.type === undefined) return "An entry after the lock has a type: growth (a changed pattern, with accepts) or security (with its advisory).";
+  if (entry.type === undefined) return "An entry after the lock has a type: security (with its advisory), or wording for a reworded meaning.";
   if (!(LEDGER_ENTRY_TYPES as readonly string[]).includes(entry.type)) return `Unknown entry type ${JSON.stringify(entry.type)}.`;
   if (entry.type === "pre-lock") return "Pre-lock entries end at the lock: a break now is a security fix.";
   if (entry.type === "new-version") {
     return `No new contract version can ship yet: per-version snapshots and the host adapter that keeps ${lock.contractVersion}'s shapes come first (promise.md, Versions).`;
   }
   if (VERSION_CHANGE.test(entry.change)) return "A contract version change ships only as a new version, which needs per-version snapshots and the host adapter first.";
-  if (entry.type === "growth") return acceptsProblem(entry.change, entry.accepts, context.texts ?? { before: [], after: "" });
+  if (entry.type === "growth") return "Every line a compat rule writes is a break: growth makes no line (a widened pattern neither, when the rule proves it). A break after the lock ships only as a security fix.";
+  if (entry.type === "wording") return WORDING_LINES.some((line) => line.test(entry.change)) ? null : "A wording entry is for a reworded meaning or description only (WORDING_LINES).";
   return advisoryProblem(entry, context.advisory?.(entry.advisory?.id ?? "") ?? null, context.today ?? new Date().toISOString().slice(0, 10));
 }
 
@@ -284,10 +231,7 @@ export async function contractOpenBreaks(check: SealCheck): Promise<OpenBreak[]>
       refused: "The seal compares with the locked snapshot: fetch the history that holds it." });
     return open;
   }
-  const context: EntryContext = {
-    supportedVersions: check.supportedVersions, advisory: check.advisory, today: check.today,
-    texts: { before: [text, ...(committed === null ? [] : [committed])], after: current },
-  };
+  const context: EntryContext = { supportedVersions: check.supportedVersions, advisory: check.advisory, today: check.today };
   const accepted: LedgerEntry[] = [];
   for (const entry of check.ledger.slice(atLock.entries)) {
     if (entry.snapshot !== snapshot) continue;

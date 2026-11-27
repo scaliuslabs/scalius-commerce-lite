@@ -24,6 +24,8 @@ export function themeContractBreakingChanges(before: unknown, after: unknown): s
   const now = record(after);
   const problems: string[] = [];
   if (number(now.version) < number(was.version)) problems.push(`version: went back from ${String(was.version)} to ${String(now.version)}.`);
+  // A raised document version carries a new shape through an upgrade step: a reviewed change, never a silent one.
+  if (number(now.version) > number(was.version)) problems.push(`version: rose from ${String(was.version)} to ${String(now.version)}: stored themes go through a new upgrade step.`);
   if (number(now.oldestReadable) > number(was.oldestReadable)) {
     problems.push(`oldestReadable: rose from ${String(was.oldestReadable)} to ${String(now.oldestReadable)}: a stored theme of an older version is no longer read.`);
   }
@@ -37,6 +39,7 @@ export function themeContractBreakingChanges(before: unknown, after: unknown): s
     }
     const previous = record(entry);
     if (number(next.version) < number(previous.version)) problems.push(`sections.${type}.version: went back from ${String(previous.version)} to ${String(next.version)}.`);
+    if (number(next.version) > number(previous.version)) problems.push(`sections.${type}.version: rose from ${String(previous.version)} to ${String(next.version)}: stored sections go through a new upgrade step.`);
     if (next.version === previous.version && now.version === was.version) {
       problems.push(...jsonSchemaBreakingChanges(previous.settings, next.settings, "request").map((line) => `sections.${type} settings ${line}`));
     }

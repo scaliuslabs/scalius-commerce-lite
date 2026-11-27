@@ -27,6 +27,7 @@
 
 import { jsonSchemaBreakingChanges, type SchemaDirection } from "../schema-compat";
 import { contractTableBreaks } from "../contract/rules";
+import { patternWidens } from "../contract/patterns";
 
 type Json = Record<string, unknown>;
 
@@ -94,6 +95,8 @@ function constantValueBreaks(name: string, was: unknown, now: unknown): string[]
       ...(name.endsWith("_LIMITS") ? Object.keys(now).filter((key) => !(key in was)).map((key) => `${path}.${key}: a new limit was added.`) : []),
     ];
   }
+  // A pattern constant (`…_PATH`, `…_PATTERN`) may widen, as the reader proves it.
+  if (typeof was === "string" && typeof now === "string" && /_(?:PATH|PATTERN)$/.test(name) && patternWidens(was, now)) return [];
   return JSON.stringify(was) === JSON.stringify(now) ? [] : [`${path}: the constant value changed.`];
 }
 

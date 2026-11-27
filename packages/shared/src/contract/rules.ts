@@ -12,7 +12,12 @@
 //   fixed    a set per key (which routes a private page key reaches): a new
 //            key is growth, an existing key's set never gains or loses a member.
 
+import { patternWidens } from "./patterns";
+
 type Json = Record<string, unknown>;
+
+/** A path that names a pattern (`….patterns.class`, `storeWordSlots.amount`, `marketSubfolderPattern`). */
+const PATTERN_PATH = /\.patterns\.[\w-]+$|^tables\.storeWordSlots\.[\w-]+$|Pattern$/;
 
 const isObject = (value: unknown): value is Json => value !== null && typeof value === "object" && !Array.isArray(value);
 const text = (value: unknown) => JSON.stringify(value);
@@ -38,6 +43,7 @@ export function growOnlyBreaks(path: string, before: unknown, after: unknown): s
     if (!isObject(after)) return [`${path}: the table was removed or retyped.`];
     return Object.entries(before).flatMap(([key, value]) => key in after ? growOnlyBreaks(`${path}.${key}`, value, after[key]) : [`${path}.${key}: the key was removed.`]);
   }
+  if (typeof before === "string" && typeof after === "string" && PATTERN_PATH.test(path) && patternWidens(before, after)) return [];
   return text(before) === text(after) ? [] : [`${path}: the value changed from ${text(before)} to ${text(after)}.`];
 }
 
@@ -74,6 +80,8 @@ export function refusalListBreaks(path: string, before: unknown, after: unknown)
     const was = isObject(before) ? before : {};
     return Object.entries(after).flatMap(([key, value]) => key in was ? refusalListBreaks(`${path}.${key}`, was[key], value) : [`${path}.${key}: ${text(value)} was added: a new refusal.`]);
   }
+  // A refusing pattern that provably narrows refuses less.
+  if (typeof before === "string" && typeof after === "string" && PATTERN_PATH.test(path) && patternWidens(after, before)) return [];
   return text(before) === text(after) ? [] : [`${path}: the value changed from ${text(before)} to ${text(after)}: a new refusal.`];
 }
 

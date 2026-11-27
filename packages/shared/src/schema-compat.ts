@@ -20,6 +20,7 @@
  */
 
 import { resolveComponentSchemaRef, type ComponentSchemas } from "./openapi-schema-refs";
+import { patternWidens } from "./contract/patterns";
 
 export type SchemaDirection = "request" | "response";
 
@@ -164,10 +165,18 @@ function compare(before: Side, after: Side, direction: SchemaDirection, path: st
       const now = a[bound];
       if (typeof now === "number" && (typeof was !== "number" || now > was)) out.push(`${at}: ${bound} tightened to ${now}.`);
     }
+    // A bound that leaves the schema may have moved into a refinement the schema cannot show (a zod
+    // `.refine`): it reads as a loosening, so it is a line a reviewer answers.
+    for (const bound of [...BOUND_KEYS.upper, ...BOUND_KEYS.lower, "pattern", "format", "multipleOf"]) {
+      if (b[bound] !== undefined && a[bound] === undefined) out.push(`${at}: ${bound} ${JSON.stringify(b[bound])} left the schema (a refinement may hold it now).`);
+    }
     for (const exclusive of ["exclusiveMinimum", "exclusiveMaximum"] as const) {
       if (a[exclusive] === true && b[exclusive] !== true) out.push(`${at}: ${exclusive} added.`);
     }
-    if (a.pattern !== undefined && a.pattern !== b.pattern) out.push(`${at}: pattern changed.`);
+    // A pattern may change only by a widening the reader proves (contract/patterns.ts).
+    if (a.pattern !== undefined && a.pattern !== b.pattern && !(typeof b.pattern === "string" && typeof a.pattern === "string" && patternWidens(b.pattern, a.pattern))) {
+      out.push(`${at}: pattern changed.`);
+    }
     if (a.format !== undefined && a.format !== b.format) out.push(`${at}: format changed to ${String(a.format)}.`);
     if (a.additionalProperties === false && b.additionalProperties !== false && b.type === "object") {
       out.push(`${at}: additional properties are no longer accepted.`);

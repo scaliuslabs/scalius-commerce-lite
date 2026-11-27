@@ -44,6 +44,8 @@ export const CONTRACT_TESTS: readonly string[] = [
   "packages/shared/src/contract/lock.test.ts",
   "packages/shared/src/contract/seals.test.ts",
   "packages/shared/src/contract/review-probes.test.ts",
+  "packages/shared/src/contract/patterns.test.ts",
+  "tests/replay/replay-compat.test.ts",
   "packages/shared/src/storefront-theme/compat-rules.test.ts",
   "packages/shared/src/plugins/contract-tables.test.ts",
   "packages/shared/src/plugins/abi-compat.test.ts",

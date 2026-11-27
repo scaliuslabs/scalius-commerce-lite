@@ -14,7 +14,7 @@ import {
   runOpsCheck,
 } from "./ops-check.mjs";
 import { readinessOperatorToken } from "./readiness-operator.mjs";
-import { notesProblems, securityEntriesSince, verifyLock } from "./contract-lock.mjs";
+import { judgeWithAnchor, notesProblems, securityEntriesSince } from "./contract-lock.mjs";
 
 const execFileAsync = promisify(execFileCallback);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1637,12 +1637,13 @@ async function runStep(result, name, fn) {
 }
 
 /**
- * The theme and app contract (scripts/contract-lock.mjs): the tree's lock and
- * seals, judged by the latest locked release tag's rules, and release notes
- * that name the advisory of every security change since the last tag.
+ * The theme and app contract (scripts/contract-lock.mjs): the tree judged by
+ * the anchor release tag's own script and rules (a release after the freeze
+ * needs that anchor), and release notes that name the advisory of every
+ * security change since the last release tag.
  */
 export async function checkContract({ rootDir, notes = null, logger = null, readFile = (path) => readFileSync(path, "utf8") }) {
-  const verdict = await verifyLock(rootDir);
+  const verdict = await judgeWithAnchor(rootDir);
   if (verdict.problems.length > 0) throw new Error(`The contract lock refuses this tree: ${verdict.problems.join(" ")}`);
   const security = securityEntriesSince(rootDir);
   if (security.length > 0) {

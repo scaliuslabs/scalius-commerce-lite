@@ -258,10 +258,10 @@ function compatibleTypeLists(
 }
 
 /**
- * A union keeps every member (each may grow, in any order) and may gain
- * members: the lists an app reads are open (a value it does not know is
- * handled as the reference says, never by an exhaustive switch), and a value
- * an app writes that was valid stays valid. A member discriminated by a
+ * A union keeps every member (each may grow, in any order) and, when it is an
+ * open list (string or number literals, or one discriminated union), may gain
+ * members of its kind: a value it does not know is handled as the reference
+ * says, never by an exhaustive switch. A member discriminated by a
  * string literal union (`{ kind: "a" | "b" } & rest`) may also be split into
  * members that partition those literals exactly, each keeping `rest` (and so
  * able to grow it): every old value still belongs to exactly one new member.
@@ -285,12 +285,22 @@ function compatibleUnion(
     if (covered.length !== was.values.length || new Set(covered).size !== was.values.length) return false;
     for (const part of parts) claimed.add(part);
   }
-  // A gained member is growth, except one that makes every reader handle nothing (`null`, `undefined`) or anything (`any`, `unknown`).
-  return unmatchedAfter.every((next) => claimed.has(next) || !EMPTY_OR_ANY.has(unparenthesized(next).kind)
-    && !(ts.isLiteralTypeNode(unparenthesized(next)) && (unparenthesized(next) as ts.LiteralTypeNode).literal.kind === ts.SyntaxKind.NullKeyword));
+  // A gained member is growth only in an open list: a union of string or number literals gaining
+  // literals, or a union discriminated by one key gaining a member of that key. A scalar or an object
+  // becoming a union (`boolean | string`) retypes a value every reader holds: a break.
+  const gained = unmatchedAfter.filter((next) => !claimed.has(next));
+  if (gained.length === 0) return true;
+  if (before.every(isListLiteral)) return gained.every(isListLiteral);
+  const keys = before.map((node) => discriminated(node, oldSource)?.key ?? null);
+  const key = keys[0];
+  return key !== null && key !== undefined && keys.every((each) => each === key) && gained.every((node) => discriminated(node, newSource)?.key === key);
 }
 
-const EMPTY_OR_ANY = new Set<ts.SyntaxKind>([ts.SyntaxKind.UndefinedKeyword, ts.SyntaxKind.NullKeyword, ts.SyntaxKind.AnyKeyword, ts.SyntaxKind.UnknownKeyword, ts.SyntaxKind.VoidKeyword]);
+/** A string or number literal type (`"a"`, `3`): a member of an open list. */
+function isListLiteral(node: ts.TypeNode): boolean {
+  const inner = unparenthesized(node);
+  return ts.isLiteralTypeNode(inner) && (ts.isStringLiteral(inner.literal) || ts.isNumericLiteral(inner.literal));
+}
 
 /**
  * A list type's element, in either spelling: `T[]` or `Array<T>`, and

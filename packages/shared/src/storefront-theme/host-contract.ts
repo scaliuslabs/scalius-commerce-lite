@@ -93,7 +93,8 @@ export const STOREFRONT_HOST_HOOKS = {
    * `colorSchemeToggle()`, `<Island>` …) that the store's scripts act on.
    */
   scripts: {
-    "data-color-scheme": ["light", "dark"],
+    // The server writes the theme's scheme (`system` with no script yet or none at all); the head script settles it to `light` or `dark`.
+    "data-color-scheme": ["light", "dark", "system"],
     "data-scalius-when": ["signed-in", "signed-out"],
     "data-sticky-header": [],
     "data-menu-drawer": [],

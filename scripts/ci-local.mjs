@@ -51,7 +51,8 @@ export function ciSteps({ base, scripts }) {
     },
     { id: "impact", name: "Rule impact", cmd: `node rules/cli.mjs impact --base ${base} --enforce` },
     // The theme and app contract: every seal test, then the judge from the latest locked release tag. In --quick.
-    { id: "contract", name: "Contract seals and lock", cmd: `pnpm exec vitest run ${CONTRACT_TESTS.join(" ")} --maxWorkers=2 && node scripts/contract-lock.mjs verify` },
+    // Each seal test records what it generated (SCALIUS_CONTRACT_RUN); the judge (the anchor tag's own script) requires one record per seal.
+    { id: "contract", name: "Contract seals and lock", cmd: `SCALIUS_CONTRACT_RUN=ci-$$ pnpm exec vitest run ${CONTRACT_TESTS.join(" ")} --maxWorkers=2 && node scripts/contract-lock.mjs judge --run ci-$$` },
     { id: "suite", name: "Full test suite", cmd: "pnpm test:ci", broad: true, postgres: true },
     {
       id: "rulebook",

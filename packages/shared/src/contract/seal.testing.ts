@@ -5,10 +5,12 @@
 import { expect } from "vitest";
 import { SCALIUS_PLATFORM_VERSION, SUPPORTED_PLUGIN_API_VERSIONS } from "../plugins/api-version";
 import { comparePluginVersions } from "../plugins/versions";
-import { CONTRACT_ADVISORIES_DIR, CONTRACT_FREEZE_RELEASE, contractOpenBreaks, type ContractLock, type LedgerEntry, type OpenBreak } from "./lock";
+import { CONTRACT_ADVISORIES_DIR, CONTRACT_FREEZE_RELEASE, contractOpenBreaks, sha256Hex, type ContractLock, type LedgerEntry, type OpenBreak } from "./lock";
 
 interface NodeIo {
   readFileSync(path: string, encoding: "utf8"): string;
+  writeFileSync(path: string, text: string): void;
+  mkdirSync(path: string, options: { recursive: true }): unknown;
   existsSync(path: string): boolean;
   execFileSync(file: string, args: string[], options: { cwd: string; encoding: "utf8"; stdio: ["ignore", "pipe", "ignore"]; maxBuffer: number }): string;
   resolve(...paths: string[]): string;
@@ -20,7 +22,7 @@ let io: Promise<NodeIo> | null = null;
 
 function node(): Promise<NodeIo> {
   io ??= Promise.all(["node:fs", "node:child_process", "node:path", "node:url"].map((specifier) => import(/* @vite-ignore */ specifier)))
-    .then(([fs, child, path, url]) => ({ ...fs, ...child, ...path, ...url }) as NodeIo);
+    .then(([fs, child, path, url]) => ({ ...url, ...child, ...fs, ...path }) as NodeIo);
   return io;
 }
 
@@ -86,10 +88,27 @@ export function missingLockProblem(lock: ContractLock | null, platform: string =
     : null;
 }
 
+/**
+ * Records what a seal test generated for a snapshot in this run
+ * (`SCALIUS_CONTRACT_RUN`): the contract judge's `--run` then requires one
+ * record per registered seal, equal to the committed file, so a seal test that
+ * was skipped, never reached the helper, or sealed a file it read back from
+ * disk is caught. A no-op outside such a run.
+ */
+async function recordGenerated(path: string, current: string): Promise<void> {
+  const run = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.SCALIUS_CONTRACT_RUN;
+  if (!run || !/^[\w-]{1,64}$/.test(run)) return;
+  const { mkdirSync, writeFileSync, resolve } = await node();
+  const dir = resolve(await repositoryRoot(), "node_modules/.cache/contract-runs", run);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(resolve(dir, `${(await sha256Hex(path)).slice(0, 16)}.json`), JSON.stringify({ path, sha256: await sha256Hex(current) }));
+}
+
 /** What the ledger and the lock refuse in moving from the committed snapshot to the current one (empty: it may be sealed). */
 export async function openContractBreaks(seal: SealedSnapshot, committed?: string | null): Promise<OpenBreak[]> {
   const { relative, readFileSync, existsSync, resolve } = await node();
   const root = await repositoryRoot();
+  await recordGenerated(relative(root, await filePath(seal.file)), seal.current);
   const lock = await readContractLock(root);
   const path = relative(root, await filePath(seal.file));
   const missing = missingLockProblem(lock);
@@ -123,6 +142,8 @@ export async function openContractBreaks(seal: SealedSnapshot, committed?: strin
  */
 export async function sealCompatibly(seal: SealedSnapshot & { beforeLock?: "ledger" | "review"; message?: string }): Promise<void> {
   const lock = await readContractLock();
+  const { relative: relativePath } = await node();
+  await recordGenerated(relativePath(await repositoryRoot(), await filePath(seal.file)), seal.current);
   if (lock || missingLockProblem(lock) || seal.beforeLock !== "review") {
     const { relative } = await node();
     const name = relative(await repositoryRoot(), await filePath(seal.ledgerFile));
