@@ -218,11 +218,13 @@ export class PluginHost {
     const settingsLanguage = buyerLanguage ? { locale: buyerLanguage, defaultLocale: options.defaultLocale || buyerLanguage } : null;
     const outcome = await this.run(installation, { kind: "function", point, input }, source, wallMs, {}, settingsLanguage, options.deadline);
     if (!outcome.ok) return failed(outcome);
-    const checked = checkPluginFunctionOutput(point, outcome.value);
+    const checked = checkPluginFunctionOutput(point, outcome.value, { language: buyerLanguage });
     if (!checked.ok) {
       await this.incident(installation, source, checked.message);
       return { ok: false, value: null, error: checked.message, failure: "invalid" };
     }
+    // A label the store drew in its own neutral word instead: the answer stands, the app is told.
+    if (checked.notices) await this.notice(installation, source, checked.notices);
     return { ok: true, value: checked.value, error: null };
   }
 
@@ -623,6 +625,12 @@ export class PluginHost {
   async incident(installation: PluginInstallation, source: string, message: string): Promise<void> {
     const { secrets } = await this.seed(installation, false);
     await this.writeLogs(installation, [{ level: "error", source: "host", message: `${source}: ${message}` }], secrets);
+  }
+
+  /** What the store changed in an answer it kept (a label drawn in its own word), logged for the app as a warning. */
+  async notice(installation: PluginInstallation, source: string, messages: readonly string[]): Promise<void> {
+    const { secrets } = await this.seed(installation, false);
+    await this.writeLogs(installation, messages.map((message) => ({ level: "warn" as const, source: "host", message: `${source}: ${message}`.slice(0, 500) })), secrets);
   }
 
   private async writeLogs(installation: PluginInstallation, lines: PluginLogInput[], secrets: string[]): Promise<void> {

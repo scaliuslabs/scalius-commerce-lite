@@ -1,6 +1,6 @@
 import { OBJECT_HANDLE_PATTERN, prepareObjectData, objectDataWire } from "@scalius/shared/plugins/objects";
 import { customFieldsReadFields, FUNCTION_READ_JOIN_SEPARATOR, functionClock, functionReadHop, functionReadJoin, functionReadKey, isCustomFieldsRead, isListRead, isPerLineRead, type FunctionReadDeclaration, type FunctionReadRecord, type FunctionReads } from "@scalius/shared/plugins/function-reads";
-import { pluginObjectPatternIssues } from "@scalius/shared/plugins/object-patterns";
+import { pluginManifestPolicyIssues } from "@scalius/shared/plugins/manifest-policy";
 import { customFieldWireValue, isCustomFieldMoney, parseCustomFieldValidations, parseCustomFieldValue, type CustomFieldType } from "@scalius/shared/custom-fields";
 // `@scalius/plugin-sdk/testing`: run a plugin's handlers in a unit test with
 // the same runtime the platform uses (./runtime), over an in-memory bridge.
@@ -215,8 +215,9 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const definition = (module as { default?: { manifest?: unknown } })?.default ?? (module as { manifest?: unknown });
   const parsed = parsePluginManifest(definition?.manifest);
   if (!parsed.ok) throw new Error(`Invalid manifest: ${parsed.issues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
-  const patternIssues = pluginObjectPatternIssues(parsed.manifest);
-  if (patternIssues.length > 0) throw new Error(`Invalid manifest: ${patternIssues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
+  // What an install would refuse beyond the structure (manifest-policy.ts): object patterns, buyer words.
+  const policyIssues = pluginManifestPolicyIssues(parsed.manifest);
+  if (policyIssues.length > 0) throw new Error(`Invalid manifest: ${policyIssues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
   const declared: PluginManifest = parsed.manifest;
   const features = options.features ?? declared.features.map((feature) => feature.id);
   const manifest: PluginManifest = pluginManifestWithFeatures(declared, features);
@@ -977,9 +978,11 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
         throw new TypeError(`Invalid ${point} input at ${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}.`);
       }
       const result = await run({ kind: "function", point, input: checked.data });
-      const answer = result.ok ? checkPluginFunctionOutput(point, result.value) : null;
+      const answer = result.ok ? checkPluginFunctionOutput(point, result.value, { language: (checked.data as { language?: string }).language ?? null }) : null;
+      // A label the store draws in its own word instead is in the run's log, as production logs it.
+      const notices = answer?.ok && answer.notices ? answer.notices.map((message) => ({ level: "warn" as const, message: `function:${point}: ${message}` })) : [];
       const tested: PluginFunctionTestResult<P> = !answer ? { ...result, value: null }
-        : answer.ok ? { ...result, value: answer.value }
+        : answer.ok ? { ...result, value: answer.value, logs: [...result.logs, ...notices] }
           : { ...result, ok: false, value: null, error: { code: answer.code, message: answer.message } };
       commitTargets.set(tested, { point, targets });
       return tested;

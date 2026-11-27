@@ -410,7 +410,7 @@ export async function installFromRegistry({ id, indexUrl, version = null, plugin
 
   const parsed = contract.parsePluginManifest(entry.manifest);
   if (!parsed.ok) throw new Error(`The release's manifest is invalid: ${parsed.issues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
-  const patternIssues = contract.pluginObjectPatternIssues(parsed.manifest);
+  const patternIssues = contract.pluginManifestPolicyIssues(parsed.manifest);
   if (patternIssues.length > 0) throw new Error(`The release's manifest is invalid: ${patternIssues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
   if (parsed.manifest.id !== entry.id || parsed.manifest.version !== entry.version) throw new Error("The release's manifest names another app or version than its listing.");
   const compatible = contract.pluginCompatibility(entry.manifest);

@@ -348,7 +348,8 @@
 
 /* A link inside an app's sentence takes the sentence's size: a theme's `ui.link` size is a link on a line of its own
    (its colour and weight still reach both). Unlayered and more specific than a token rule
-   (`:root[data-private-tokens] :where(…)`), so no theme undoes it. */
+   (`:root[data-private-tokens] :where(…)`), so no theme TOKEN undoes it; a stylesheet with a more specific rule,
+   where a theme may write one (not on the private pages), could. */
 [data-buyer-ui-app] [data-ui="text"] > a[data-ui="link"] { font-size: inherit; }
 
 /* The store's controls on a private page drawn from parts, where the theme places them (privatePages.controls): the

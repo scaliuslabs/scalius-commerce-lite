@@ -25,7 +25,7 @@ import { PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_URL_NAME_PATTERN, PLUGIN_UR
 import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "./ids";
 import { ADMIN_UPLOAD_TYPES, BUYER_UPLOAD_DECLARATION_LIMITS } from "../buyer-uploads";
 import { LINE_INPUT_CHANGE_KEY_PATTERN, LINE_INPUT_CHANGE_LIMITS } from "./line-input-change";
-import { isBlankWords, isStoreActionOrAmountWord, STORE_WORDS_REASON } from "../store-words";
+import { isBlankWords, storeWordsIssues, type StoreWordsLabel } from "../store-words";
 import { cleanAppLine, cleanAppText, stripBidiMarks } from "./app-text";
 
 export const PLUGIN_UI_VERSION = 1 as const;
@@ -680,7 +680,7 @@ export function pluginUiNodes(root: PluginUiNode): PluginUiNode[] {
 
 const inputTypes = new Set<string>(PLUGIN_UI_INPUT_TYPES);
 
-type BuyerLabel = { text: string; at: (string | number)[] };
+type BuyerLabel = StoreWordsLabel;
 type BuyerNodeType = (typeof PLUGIN_UI_SURFACES.buyer.nodes)[number];
 const none = (): BuyerLabel[] => [];
 /**
@@ -690,10 +690,10 @@ const none = (): BuyerLabel[] => [];
  * "order" drawn as one underlined "Place order").
  */
 function sentenceLabels(pieces: string | readonly PluginUiSpan[], at: (string | number)[]): BuyerLabel[] {
-  if (typeof pieces === "string") return [{ text: pieces, at }];
-  const labels: BuyerLabel[] = [{ text: pieces.map((piece) => piece.text).join(""), at }];
+  if (typeof pieces === "string") return [{ text: pieces, at, kind: "sentence" }];
+  const labels: BuyerLabel[] = [{ text: pieces.map((piece) => piece.text).join(""), at, kind: "sentence" }];
   let run: { text: string; index: number; links: number } | null = null;
-  const close = () => { if (run && run.links > 0) labels.push({ text: run.text, at: [...at, run.index, "text"] }); run = null; };
+  const close = () => { if (run && run.links > 0) labels.push({ text: run.text, at: [...at, run.index, "text"], kind: "link" }); run = null; };
   pieces.forEach((piece, index) => {
     if (piece.to) {
       run = run ? { ...run, text: run.text + piece.text, links: run.links + 1 } : { text: piece.text, index, links: 1 };
@@ -708,25 +708,27 @@ function sentenceLabels(pieces: string | readonly PluginUiSpan[], at: (string | 
 }
 
 /**
- * The words each buyer node draws as a label, a link or a button: what may
- * never be the store's (`isStoreActionOrAmountWord`). Body words are not
- * labels, except a text's or a banner's words taken whole (`sentenceLabels`).
+ * The words each buyer node draws, each with its label kind: what may never
+ * pass for the store's words where that kind is held to them
+ * (store-words.ts `STORE_WORD_LABEL_KINDS`: a button or link to the action
+ * words, a heading, badge, banner title or key-value label to the amount
+ * words, a sentence or a description only as a whole fixed word).
  * Key-value values are values ("Paid" beside "Status"). Keyed by the buyer
  * surface's nodes, so a node the surface gains names its labels here.
  */
 const BUYER_LABELS: { [T in BuyerNodeType]: (node: Extract<PluginUiNode, { type: T }>) => BuyerLabel[] } = {
   stack: none, columns: none, divider: none, mark: none,
-  image: (node) => [{ text: node.alt, at: ["alt"] }],
-  heading: (node) => [{ text: node.text, at: ["text"] }],
-  badge: (node) => [{ text: node.text, at: ["text"] }],
-  link: (node) => [{ text: node.text, at: ["text"] }],
+  image: (node) => [{ text: node.alt, at: ["alt"], kind: "alt" }],
+  heading: (node) => [{ text: node.text, at: ["text"], kind: "heading" }],
+  badge: (node) => [{ text: node.text, at: ["text"], kind: "badge" }],
+  link: (node) => [{ text: node.text, at: ["text"], kind: "link" }],
   text: (node) => sentenceLabels(node.text, ["text"]),
-  banner: (node) => [...(node.title ? [{ text: node.title, at: ["title"] }] : []), ...(node.text ? sentenceLabels(node.text, ["text"]) : [])],
-  "key-value": (node) => node.items.map((item, index) => ({ text: item.label, at: ["items", index, "label"] })),
+  banner: (node) => [...(node.title ? [{ text: node.title, at: ["title"], kind: "banner-title" as const }] : []), ...(node.text ? sentenceLabels(node.text, ["text"]) : [])],
+  "key-value": (node) => node.items.map((item, index) => ({ text: item.label, at: ["items", index, "label"], kind: "key-value" as const })),
   // A buyer button asks nothing first (`confirm` is refused on the buyer surface).
-  button: (node) => [{ text: node.label, at: ["label"] }],
-  field: (node) => (node.choices ?? []).map((choice, index) => ({ text: choice.label, at: ["choices", index, "label"] })),
-  disclosure: (node) => [{ text: node.summary, at: ["summary"] }],
+  button: (node) => [{ text: node.label, at: ["label"], kind: "button" }],
+  field: (node) => (node.choices ?? []).map((choice, index) => ({ text: choice.label, at: ["choices", index, "label"], kind: "choice" as const })),
+  disclosure: (node) => [{ text: node.summary, at: ["summary"], kind: "disclosure" }],
 };
 
 function buyerLabels(node: PluginUiNode): BuyerLabel[] {
@@ -763,16 +765,12 @@ function checkTree(root: PluginUiNode, surface: PluginUiSurface, context: z.Refi
     if (node.type === "image" && (typeof node.src === "string") !== (rules.images === "url")) {
       return report([...path, "src"], surface === "admin" ? "Use an https:// image address." : "Use { media } or { app } for an image."), false;
     }
-    // On a buyer page an app's labels, links and buttons never read as the store's action or amount words (store-words.ts).
+    // On a buyer page an app's words never pass for the store's action or amount words where they could (store-words.ts):
+    // the block is refused, which costs the buyer one app block and never the checkout.
     if (surface === "buyer") {
-      const word = buyerLabels(node).find((entry) => isStoreActionOrAmountWord(entry.text));
+      const [word] = storeWordsIssues(buyerLabels(node), "say what your block does");
       if (word) {
-        if (!reported) context.addIssue({
-          code: "custom",
-          path: [...path, ...word.at],
-          message: `"${word.text}" is the store's own word for an action or an amount: say what your block does.`,
-          params: { reason: STORE_WORDS_REASON },
-        });
+        if (!reported) context.addIssue({ code: "custom", path: [...path, ...word.path], message: word.message, params: { reason: word.reason } });
         reported = true;
         return false;
       }
