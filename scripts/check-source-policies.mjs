@@ -300,6 +300,7 @@ export const policies = [
       "apps/storefront/src/components/apps/AppComponent.astro": "app markup written by sanitizePluginHtml (the shared HTML writer)",
       "apps/storefront/src/components/private/PrivateChrome.astro": "a theme's chrome on a buyer page: sanitizePluginHtml's markup rebuilt by inertChromeHtml (the shared HTML writer), its shadow root's style built by buyerChromeShadowStyle from two store URLs, and a constant inline script",
       "apps/storefront/src/layouts/Layout.astro": "the merchant's own head and body scripts (Settings, custom scripts), a deliberate feature; the theme's private-page look, host token rules compiled on save from typed values (compileStorefrontPrivatePages); its other sinks are script elements",
+      "apps/storefront/src/components/header/MobileTabBar.astro": "the phone tab bar's look: host token rules compiled on save from typed values (private-tab-bar.ts), served only through privatePagesCss, which refuses a look holding `<`",
       "apps/storefront/src/components/cart/CartPageLayout.astro": "the cart page's own parts (its rendered slots) in the theme's arrangement of host layouts (lib/private-pages/html.ts)",
       "apps/storefront/src/components/checkout/CheckoutPageLayout.astro": "the payment step's own parts (its rendered slots) in the theme's arrangement of host layouts (lib/private-pages/html.ts)",
       "apps/storefront/src/components/apps/AppHeadTags.astro": "apps' JSON-LD, each string written by serializeSchemaJsonLd (serializeJsonLd escapes `<`) when the API read the app's head",
