@@ -11,6 +11,7 @@ import { createDeferredGatewayHandler } from "./handlers/deferred";
 import { formatPageNumber, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
 import { formatMoney, DEFAULT_CURRENCY } from "@/lib/currency";
 import { fromMinor } from "@scalius/shared/money";
+import { printedLineAnswers } from "@scalius/shared/line-input-surfaces";
 import { addOnRowsOver } from "@scalius/shared/add-on-totals";
 import { addOnRowKey, appendAddOnRow, openAddOnKeys } from "@/lib/add-on-row";
 
@@ -525,8 +526,10 @@ function appendOrderItemRows(
       appendTextElement(itemCopy, "p", "break-words text-xs font-medium leading-5 text-foreground", option.title);
     }
     // Buyer inputs as the order will keep them: "Engraving: Anika (+৳200)",
-    // then the apps' add-ons: "Add-on: Gift wrap (+৳50)".
-    for (const property of [...item.properties, ...(item.adjustments ?? [])]) {
+    // then the apps' add-ons: "Add-on: Gift wrap (+৳50)"; an app-drawn choice
+    // its app's add-on states is not printed beside it (`printedLineAnswers`).
+    const adjustments = item.adjustments ?? [];
+    for (const property of [...printedLineAnswers(item.properties, adjustments.map((adjustment) => adjustment.appId)), ...adjustments]) {
       appendTextElement(
         itemCopy,
         "p",

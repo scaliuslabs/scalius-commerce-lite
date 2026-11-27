@@ -251,7 +251,9 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       return transformed?.code ?? "";
     }));
     const links = sheets.map((css) => `<style data-gallery-css>${css.replaceAll("</style", "<\\/style")}</style>`).join("");
-    html = html.includes("</head>") ? html.replace("</head>", `${links}</head>`) : `${links}${html}`;
+    // A gate mutation that undoes a rule of the store's stylesheet (`css`, test only): after the store's sheets, as its own.
+    const undone = mutation?.css ? `<style data-gallery-mutation>${mutation.css}</style>` : "";
+    html = html.includes("</head>") ? html.replace("</head>", `${links}${undone}</head>`) : `${links}${undone}${html}`;
     // The dev page is large (every component sheet inline, unminified), so the
     // browser may paint it half parsed: the footer grows as its markup arrives,
     // a layout shift no shopper sees. Hold the first paint until the whole page
@@ -317,7 +319,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const base = body.noor ? noorTheme(structuredClone(found)) : found;
         const colors = reference ? { ...reference.REFERENCE_LIGHT_PALETTE } : body.palette && shared.STOREFRONT_THEME_PALETTES[body.palette] ? { ...shared.STOREFRONT_THEME_PALETTES[body.palette] } : base.tokens.colors;
         const darkColors = reference ? { ...reference.REFERENCE_PALETTE } : shared.storefrontDarkPalette(colors);
-        let tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors, ...(body.paint ? { pagePaint: body.paint } : {}) };
+        // `style`: the theme's Style corners (Theme -> Style: `radius` for surfaces and fields, `buttonShape` for buttons).
+        let tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors, ...(body.paint ? { pagePaint: body.paint } : {}), ...(body.style?.radius ? { radius: body.style.radius } : {}), ...(body.style?.buttonShape ? { buttonShape: body.style.buttonShape } : {}) };
         // A colour set a store saved at version 14 (`saved`): its colours and made dark colours kept the action
         // colour as their focus ring. Read as the store reads a stored document.
         if (body.saved === true) {
@@ -367,7 +370,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         // step: the editor's sample checkout, drawn as buyers get it.
         // The account's own pages (`account-thread`, `account-profile`, …, `warranty-claim`): drawn as a signed-in buyer gets them.
         const drawnPage = { "sample-receipt": "receipt", "sample-account": "account", "sample-checkout": "checkout" }[body.page] ?? (/^account-|^warranty-claim$/.test(String(body.page)) ? "account" : "cart");
-        const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, terms: body.terms === true, ...(body.page === "home" || drawnPage !== "cart" ? { page: body.page } : {}) });
+        const entry = registerPrivatePagesEntry(String(body.id), served, body.state ?? "base", { noor: body.noor === true, localization: body.localization === true, terms: body.terms === true, ...(typeof body.slowCheckMs === "number" ? { slowCheckMs: body.slowCheckMs } : {}), ...(body.page === "home" || drawnPage !== "cart" ? { page: body.page } : {}) });
         const tables = shared.privatePageTokenMode(served.privatePages, drawnPage) ? galleryTables(shared, served.privatePages, shared.privatePagesContextOf(served), drawnPage) : [];
         return sendJson(response, 200, { id: entry.id, storage: entry.scenario.storage ?? {}, tables, degraded: !reread.ok, refused: Boolean(served.privatePages.compiled.refused?.[drawnPage]) || (shared.privatePagesCompiledCurrent(compiled.value) && !shared.privatePagesCompiledCurrent(served.privatePages)) });
       }

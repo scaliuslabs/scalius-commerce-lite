@@ -3,7 +3,7 @@
 // cursor) the scheduled tick also drains. It runs after the response in the
 // same invocation (`waitUntil`) and shares that invocation's limits, so every
 // drain is bounded by `planLimits().background` and leaves the rest due.
-import { getOptionalExecutionContext, type WaitUntilExecutionContext } from "../utils/execution-context";
+import { detachedExecutionContext, getOptionalExecutionContext, type WaitUntilExecutionContext } from "../utils/execution-context";
 
 export type BackgroundCaller = { executionCtx?: WaitUntilExecutionContext } | WaitUntilExecutionContext | undefined;
 
@@ -34,5 +34,5 @@ export async function afterResponse(caller: BackgroundCaller, label: string, wor
 export function executionContextOf(caller: BackgroundCaller): ExecutionContext {
   const ctx = contextOf(caller);
   if (ctx) return ctx as ExecutionContext;
-  return { waitUntil: () => undefined, passThroughOnException: () => undefined, props: {} } as unknown as ExecutionContext;
+  return detachedExecutionContext();
 }

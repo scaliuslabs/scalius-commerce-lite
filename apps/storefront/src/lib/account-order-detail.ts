@@ -632,7 +632,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
         : accountMoney(item.unitPrice, order.currencyCode);
       // Buyer inputs (display only, escaped), then what the apps charged on the row: its `addOns`, the one place a row says it.
       const properties = [
-        ...orderLinePropertyRows(item.properties, (property) => minor(property.priceMinor), copy),
+        ...orderLinePropertyRows(item.properties, (property) => minor(property.priceMinor), copy, (item as { addOns?: unknown }).addOns),
         ...addOnRowsOf([item]),
       ];
       const extras = extrasOf(item);
@@ -676,7 +676,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
             ${nameMarkup(item)}
             <div data-part="line-details">
               ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
-              ${rowsMarkup(orderLinePropertyRows(withoutBundleEntry(item.properties), (property) => minor(property.priceMinor), copy))}
+              ${rowsMarkup(orderLinePropertyRows(withoutBundleEntry(item.properties), (property) => minor(property.priceMinor), copy, rows.flatMap((row) => { const addOns = (row as { addOns?: unknown }).addOns; return Array.isArray(addOns) ? addOns : []; })))}
               <p class="text-muted-foreground">${escapeHtml([each, status].filter(Boolean).join(" · "))}</p>
             </div>
           </div>

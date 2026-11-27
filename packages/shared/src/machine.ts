@@ -53,7 +53,7 @@ export interface AnyMachine extends MachineSpec {
   reaches(from: string, to: string, actor?: string): boolean;
 }
 
-export function defineMachine<S extends string, const M extends MachineMoves<S>>(spec: MachineSpec<S, M>): Machine<S, M> {
+/* @__NO_SIDE_EFFECTS__ */ export function defineMachine<S extends string, const M extends MachineMoves<S>>(spec: MachineSpec<S, M>): Machine<S, M> {
   type E = keyof M & string;
   const events = Object.keys(spec.moves) as E[];
   const open = (event: E, state: string, actor?: string): MachineMove<S> | undefined => {

@@ -70,6 +70,8 @@ export function ciSteps({ base, scripts }) {
     // Both measure the build on disk, so they follow the build step.
     { id: "storefront-budgets", name: "Storefront size budgets", cmd: "pnpm check:storefront-budgets", broad: true },
     { id: "admin-budgets", name: "Dashboard bundle budgets", cmd: "pnpm check:admin-perf", broad: true },
+    // Builds the SDK and the apps itself, in seconds: a gate a quick run keeps.
+    { id: "sdk-budgets", name: "App SDK size budgets", cmd: "pnpm check:sdk-budgets" },
     // Not a CI job: the public repository is this one filtered (no tests, no rulebook), and a
     // gate that passes here can fail there (a policy that names a stripped file did, on beta 7).
     { id: "public-build", name: "Public copy builds", cmd: "node internal/export/export.mjs --check --build", broad: true },

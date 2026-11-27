@@ -293,6 +293,11 @@ export interface LayoutData {
    * `readStorefrontExtensions` checks it; absent from an older API.
    */
   appExtensions?: unknown;
+  /**
+   * The buyer UI slots where an active app draws a block (`activePluginBuyerUiSlots`); absent from an older API
+   * (then no slot is known to draw one).
+   */
+  buyerUiSlots?: string[];
 }
 
 export interface ThemePreviewData {

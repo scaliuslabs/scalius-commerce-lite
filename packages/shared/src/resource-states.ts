@@ -19,8 +19,7 @@
 // delivered order), and an app may rely on them as stages. A stage is not a
 // money or hand-over fact: `refunded` says the order's workflow ended in a
 // refund, `paymentStatus` says how much came back.
-import { COURIER_SHIPMENT_STATUSES } from "./plugins/providers/courier";
-import { STORE_SHIPMENT_STATUSES } from "./shipment-state";
+import { COURIER_SHIPMENT_STATUSES, STORE_SHIPMENT_STATUSES } from "./shipment-state";
 
 /** An order's workflow stage (`OrderResource.status`, moved by ORDER_MACHINE). The list may grow: treat an unknown status as a stage you do not act on. */
 export { ORDER_STATUSES } from "./order-state";

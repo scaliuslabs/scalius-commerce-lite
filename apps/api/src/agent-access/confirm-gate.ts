@@ -23,6 +23,7 @@
 // refused first, with the route's own answer, and nobody is asked (black-box
 // M7): an approval is only ever given for a request that would run, and the
 // replay, which must carry the same bytes, passes the same validation.
+import { detachedExecutionContext } from "../utils/execution-context";
 import type { Context } from "hono";
 import { AppError } from "@scalius/core/errors";
 import { getDb } from "@scalius/database/client";
@@ -38,7 +39,7 @@ function executionContextOf(c: Context): ExecutionContext {
   try {
     return c.executionCtx as unknown as ExecutionContext;
   } catch {
-    return { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext;
+    return detachedExecutionContext();
   }
 }
 
