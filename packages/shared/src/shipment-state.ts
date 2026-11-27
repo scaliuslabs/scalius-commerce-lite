@@ -29,7 +29,26 @@
 // reconciliation) obeys the same rule. A state added to SHIPMENT_STATUSES does
 // not compile until it has a row here.
 import { defineMachine, type MachineMove } from "./machine";
-import { COURIER_SHIPMENT_STATUSES, type CourierShipmentStatus } from "./plugins/providers/courier";
+// A type only: the courier port's schemas never reach code that imports this module.
+import type { CourierShipmentStatus } from "./plugins/providers/courier";
+
+/** The normalized shipment states every courier maps its own statuses to (the courier port's `status`, courierShipmentStatusSchema). */
+export const COURIER_SHIPMENT_STATUSES = [
+  "pending",
+  "pickup_assigned",
+  "picked_up",
+  "pickup_failed",
+  "in_transit",
+  "out_for_delivery",
+  "delivered",
+  "partial_delivered",
+  "delivery_failed",
+  "on_hold",
+  "failed",
+  "cancelled",
+  "returned",
+  "unknown",
+] as const;
 
 /** The store's own booking states: the row before the courier answered, and a shipment held for staff. */
 export const STORE_SHIPMENT_STATUSES = ["creating", "reconcile_required"] as const;

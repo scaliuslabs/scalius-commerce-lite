@@ -7,6 +7,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
 import { CHECKOUT as root, loadEsbuild, sdkSourceDigest } from "./plugin-host.mjs";
+import { sdkBundleOptions } from "./plugin-sdk-size.mjs";
 
 const directory = join(root, "packages/plugin-sdk");
 const packages = join(root, "packages");
@@ -90,20 +91,8 @@ for (const file of declarationReferences) {
 }
 
 const esbuild = await loadEsbuild();
-await esbuild.build({
-  entryPoints: entries,
-  outbase: join(directory, "src"),
-  outdir: dist,
-  bundle: true,
-  splitting: true,
-  format: "esm",
-  platform: "neutral",
-  mainFields: ["module", "main"],
-  conditions: ["workerd", "worker", "import"],
-  target: "es2022",
-  legalComments: "eof",
-  logLevel: "warning",
-});
+// The same options the SDK's size budgets measure (scripts/plugin-sdk-size.mjs).
+await esbuild.build(sdkBundleOptions(entries, dist));
 const staged = (path) => resolve(dist, relative("dist", path));
 for (const entry of Object.values(metadata.publishConfig.exports)) {
   if (!existsSync(staged(entry.types))) throw new Error(`Missing published types: ${entry.types}`);
