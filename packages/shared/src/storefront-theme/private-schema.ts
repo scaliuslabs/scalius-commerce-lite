@@ -47,8 +47,10 @@ export type PrivateTokens = Partial<Record<PrivatePageKey, Record<string, Partia
  * messages, review stars, an order's payment choices, the menu's count pill, a
  * filled button that removes something), underlines hovered controls where a
  * box has no hover surface, and gives `action` only to real buttons and links.
+ * Version 12: the phone tab bar's look (`tokens.tabBar`, private-tab-bar.ts), one
+ * look on every page that draws the bar.
  */
-export const PRIVATE_CHECKER_VERSION = 11;
+export const PRIVATE_CHECKER_VERSION = 12;
 
 /**
  * Two versions of the private pages' compile, because they fail differently:
@@ -171,7 +173,13 @@ export const privatePageArrangementSchema = z.preprocess(
 const labelsSchema = z.object(Object.fromEntries(privateLabelKeys().map(({ key, spec }) => [key, spec.variants ? z.enum(spec.variants) : wordsSchema]))).partial().strict();
 const iconKeys = privateIconKeys() as [string, ...string[]];
 
-const pagesShape = Object.fromEntries(PRIVATE_PAGE_KEYS.map((page) => [page, privatePageArrangementSchema.optional()])) as Record<PrivatePageKey, z.ZodOptional<typeof privatePageArrangementSchema>>;
+/** The pages a theme arranges: every page but the phone tab bar, whose look is tokens alone (any `pages.tabBar` is refused). */
+const ARRANGED_PAGES = PRIVATE_PAGE_KEYS.filter((page) => page !== "tabBar");
+const pagesShape = {
+  ...Object.fromEntries(ARRANGED_PAGES.map((page) => [page, privatePageArrangementSchema.optional()])) as Record<Exclude<PrivatePageKey, "tabBar">, z.ZodOptional<typeof privatePageArrangementSchema>>,
+  // Never an arrangement, whatever its value: a save refuses it (`not_available`, refuseHeld), a read drops it.
+  tabBar: z.unknown().optional() as unknown as z.ZodOptional<typeof privatePageArrangementSchema>,
+};
 
 const privatePagesFields = {
   controls: z.enum(PRIVATE_CONTROL_PLACES).optional(),
@@ -221,6 +229,11 @@ export function readStoredPrivatePages(value: unknown): { value: unknown; held: 
     delete rest[key];
   }
   const record = (each: unknown): each is Record<string, unknown> => typeof each === "object" && each !== null && !Array.isArray(each);
+  if (record(rest.pages) && "tabBar" in rest.pages) {
+    const { tabBar: _tabBar, ...pages } = rest.pages;
+    rest.pages = pages;
+    held.push({ page: "tabBar", label: TAB_BAR_HELD });
+  }
   const nodes = (list: unknown, page: string): unknown => Array.isArray(list) ? list.flatMap((node) => {
     if (record(node) && node.type === "content") {
       if ((PRIVATE_PAGE_KEYS as readonly string[]).includes(page) && !held.some((each) => each.page === page)) held.push({ page: page as PrivatePageKey, label: "A content block" });
@@ -238,14 +251,22 @@ export function readStoredPrivatePages(value: unknown): { value: unknown; held: 
   return { value: rest, held };
 }
 
-function refuseHeld(value: Partial<Record<keyof typeof HELD, unknown>>, context: z.RefinementCtx): void {
+/** The phone tab bar's look is tokens alone: an arrangement of it, any value, is held (allowing one later is growth). */
+const TAB_BAR_HELD = "An arrangement of the phone tab bar";
+
+function refuseHeld(value: Partial<Record<keyof typeof HELD, unknown>> & { pages?: unknown }, context: z.RefinementCtx): void {
   for (const [key, held] of Object.entries(HELD) as Array<[keyof typeof HELD, (typeof HELD)[keyof typeof HELD]]>) {
     if (key in value && !held.empty(value[key])) context.addIssue({ code: "custom", path: [key], message: privateNotAvailable(held.label), params: { reason: PRIVATE_NOT_AVAILABLE } });
   }
+  if (typeof value.pages === "object" && value.pages !== null && "tabBar" in value.pages) context.addIssue({ code: "custom", path: ["pages", "tabBar"], message: privateNotAvailable(TAB_BAR_HELD), params: { reason: PRIVATE_NOT_AVAILABLE } });
 }
 
-function withoutHeld<T extends Partial<Record<keyof typeof HELD, unknown>>>(value: T): Omit<T, keyof typeof HELD> {
+function withoutHeld<T extends Partial<Record<keyof typeof HELD, unknown>> & { pages?: unknown }>(value: T): Omit<T, keyof typeof HELD> {
   const { chrome: _chrome, search: _search, css: _css, assets: _assets, ...rest } = value;
+  if (typeof rest.pages === "object" && rest.pages !== null && "tabBar" in rest.pages) {
+    const { tabBar: _tabBar, ...pages } = rest.pages as Record<string, unknown>;
+    return { ...rest, pages } as Omit<T, keyof typeof HELD>;
+  }
   return rest;
 }
 

@@ -1,5 +1,5 @@
 {
- "checker": 11,
+ "checker": 12,
  "policy": 2,
  "css": {
   "store's own pages": {},
@@ -18,6 +18,10 @@
   "the reference cart, both schemes": {
    "cart": "1yejswg6kih0e"
   },
+  "phone tab bar tokens": {
+   "tabBar": "ca9den9cbxf9"
+  },
+  "refused: an 8px tab label": {},
   "refused: unreadable total": {},
   "refused: a figure in a heading": {},
   "refused: a missing part": {}
@@ -29,6 +33,10 @@
   "page paint, cart named": [],
   "dark scheme cart tokens": [],
   "the reference cart, both schemes": [],
+  "phone tab bar tokens": [],
+  "refused: an 8px tab label": [
+   "privatePages.tokens.tabBar.label.size:token_value"
+  ],
   "refused: unreadable total": [
    "privatePages.tokens.cart.summary-total:contrast",
    "privatePages.tokens.cart.summary-total:prominence"

@@ -26,16 +26,15 @@ import type { AddOnRowsShown } from "@/lib/add-on-row";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
 import { cartLineCopy, isLongAnswer } from "@/lib/cart-line-copy";
-import { cartLineStockText } from "@/lib/cart-line-stock-copy";
 import { buyerApiErrorTextNow, loadBuyerApiErrors } from "@/lib/buyer-api-error-text-later";
 import { lineEntryWords } from "@scalius/shared/line-entry-words";
 import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
 import { PRODUCT_IMAGE_FALLBACK, productImageSources, resolveProductImageUrl } from "@/lib/product-media";
 import type { ImageSlot } from "@/lib/responsive-image";
-import { readCartCheckDiscount } from "@/lib/cart/browser-api";
+import type { readCartCheckDiscount } from "@/lib/cart/browser-api";
 import { discountLineKey, type CheckoutDiscountFacts } from "@/lib/checkout/quote-facts";
-import type { CartRuleError, CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
-import { groupCartRuleErrors, parseCartRuleErrors } from "@/lib/cart/rule-errors";
+import type { CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
+import type { CartRuleErrorGroups } from "@/lib/cart/rule-errors";
 import { cartItemVariantLabel } from "@/lib/cart/item-options";
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import { currentPresence, pagePath } from "@/lib/presence-url";
@@ -61,15 +60,17 @@ export const cartOpenState = atom<boolean>(false);
  */
 const DRAWER_OVERLAY =
   "fixed inset-0 z-[var(--scalius-z-overlay,70)] bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0";
-/** Mobile: a bottom sheet of most of the screen (Shopify: room for the lines). From `sm`: a side sheet, its width the theme's. */
+/**
+ * Mobile: a bottom sheet of the screen but a 3rem strip above it (the page shows there, and a tap on it closes the
+ * sheet), so five real lines leave two whole on a 390x844 phone and one on a 320x568 one under the pinned total and
+ * Check out. From `sm`: a side sheet, its width the theme's.
+ */
 const DRAWER_SHEET =
   "z-[var(--scalius-z-overlay,70)] w-full flex flex-col p-0 bg-card shadow-2xl gap-0 transition-transform duration-300 ease-out border-s border-none focus:outline-none"
   + " data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500"
-  + " fixed inset-x-0 bottom-0 h-[85dvh] max-h-[85dvh] top-auto rounded-t-[20px] border-t-0"
+  + " fixed inset-x-0 bottom-0 h-[calc(100dvh-3rem)] max-h-[calc(100dvh-3rem)] top-auto rounded-t-[20px] border-t-0"
   + " sm:fixed sm:inset-y-0 sm:inset-e-0 sm:inset-s-auto sm:h-full sm:max-h-none sm:w-full sm:rounded-none sm:border-s";
 /** The drawer's filled buttons (the storefront button's look, flat in the primary colour). */
-/** The least share of the drawer's sheet its scrolling lines keep (the bottom group's other parts join them otherwise). */
-const LINES_SHARE = 0.45;
 
 const DRAWER_BUTTON =
   "whitespace-nowrap ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -112,6 +113,16 @@ interface Props {
 
 /** No buyer UI blocks (one array, so an unchanged answer redraws nothing). */
 const NO_BLOCKS: unknown[] = [];
+const NO_RULES: CartRuleErrorGroups = { lines: {}, cart: [] };
+
+/**
+ * A line's stock words ("Only 2 left", "Sold out"), from the check's facts: loaded with the first line that has any,
+ * never with the drawer's first frame (every line has none until the check answers).
+ */
+type StockWords = (typeof import("@/lib/cart-line-stock-copy"))["cartLineStockText"];
+let stockWords: StockWords | null = null;
+let stockWordsLoading: Promise<StockWords> | null = null;
+const loadStockWords = () => (stockWordsLoading ??= import("@/lib/cart-line-stock-copy").then((module) => (stockWords = module.cartLineStockText)));
 const NO_LINE_DISCOUNTS = new Map<string, CartLineDiscount>();
 
 /** The lines and codes the cart check prices the discounts for: when they change, the shown discounts are for another cart. */
@@ -154,7 +165,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   /** Units the store can sell of each line, as the check said (the cart page's limits): "+" stops there. */
   const [limits, setLimits] = useState<Record<string, number | null>>({});
   /** Store app rules that block checkout, in the app's own words. */
-  const [ruleErrors, setRuleErrors] = useState<CartRuleError[]>([]);
+  const [ruleErrors, setRuleErrors] = useState<CartRuleErrorGroups>(NO_RULES);
   /** The apps' add-on rows as the check folded them (the server's rows; the drawer never folds its own). */
   const [addOnRows, setAddOnRows] = useState<AddOnTotalRow[]>([]);
   /** The rows the drawer's checks showed last, across its openings (lib/add-on-row.ts). */
@@ -221,13 +232,20 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
             const key = line.cartKey ?? items[line.index]?.[0];
             return key ? [[key, typeof line.availableQuantity === "number" ? Math.max(0, Math.floor(line.availableQuantity)) : null]] : [];
           })));
-          setRuleErrors(parseCartRuleErrors(json?.data?.ruleErrors));
+          // An app's rule is rare: its reader loads with the first check that names one, not with the drawer.
+          const rules = json?.data?.ruleErrors;
+          if (Array.isArray(rules) && rules.length > 0) {
+            const { groupCartRuleErrors, parseCartRuleErrors } = await import("@/lib/cart/rule-errors");
+            setRuleErrors(groupCartRuleErrors(parseCartRuleErrors(rules), cart.items));
+          } else setRuleErrors(NO_RULES);
           setAddOnRows(addOnRows);
           // A refused check keeps no blocks: they belong to a cart the store read.
           const blocks = json?.data?.buyerUi;
           setBuyerUi(Array.isArray(blocks) && blocks.length > 0 ? blocks : NO_BLOCKS);
           setIssueLists(cartLineIssues(found, cart.items));
-          priceDiscounts(await readCartCheckDiscount(response, json, items.length));
+          // The check's discount reader loads with its first answer, not with the drawer's first frame.
+          const { readCartCheckDiscount: readDiscount } = await import("@/lib/cart/browser-api");
+          priceDiscounts(await readDiscount(response, json, items.length));
         })
         // A check that failed prices no discount.
         .catch(() => priceDiscounts({ ok: false, message: null }));
@@ -382,6 +400,8 @@ export default function CartFlyout({ onReady }: Props) {
     item.properties && item.properties.length > 0 ? `${inputsIdBase}-inputs-${index}` : undefined;
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
+  // Draws again once a line's stock words have loaded (`loadStockWords`).
+  const [, setStockWordsReady] = useState(stockWords !== null);
   const { discounts, discountsPending, lineDiscounts, issues, issueLists, limits, ruleErrors, buyerUi, lineInputs, addOnRows, addOnRowsShown, recheck } = useDrawerCartFacts(cart, isOpen);
   // Any other issue in the catalogue's words (never the API's English), which load with the first one.
   useRefusalWords(Object.keys(issues).length > 0);
@@ -398,7 +418,8 @@ export default function CartFlyout({ onReady }: Props) {
   // A line that can't be bought as is blocks Checkout here, like on the cart page,
   // and so does a store app's rule (on its line, or about the whole cart).
   const lineIssues = Object.entries(issues).filter(([key]) => cart.items[key]);
-  const rules = groupCartRuleErrors(ruleErrors, cart.items);
+  // Each line's rules while the line is still in the cart (the next check groups them again).
+  const rules = { cart: ruleErrors.cart, lines: Object.fromEntries(Object.entries(ruleErrors.lines).filter(([key]) => cart.items[key])) };
   const cartRuleMessages = rules.cart.map(({ message }) => message).filter(Boolean);
   const checkoutBlocked =
     lineIssues.length > 0 || Object.keys(rules.lines).length > 0 || rules.cart.length > 0;
@@ -464,42 +485,6 @@ export default function CartFlyout({ onReady }: Props) {
   // Scroll & Swipe Logic
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollMore, setCanScrollMore] = useState(false);
-  // The lines keep a share of the sheet (`LINES_SHARE`): where the bottom group's money rows and the apps' footer blocks
-  // would leave them less, the group keeps the rest of the sheet and those scroll in it, the total and Check out pinned
-  // under them (nothing moves between boxes: the apps' blocks stay drawn). Back once the lines would keep half the sheet.
-  // The sheet mounts after the drawer opens (its portal draws on a later render): elements held in state, not refs.
-  const [sheet, setSheet] = useState<HTMLDivElement | null>(null);
-  const [region, setRegion] = useState<HTMLDivElement | null>(null);
-  /** The bottom group's most height (px) while it yields to the lines; null: as tall as it needs. */
-  const [groupMax, setGroupMax] = useState<number | null>(null);
-  const compact = groupMax !== null;
-  useEffect(() => {
-    if (!isOpen || !sheet || !region || typeof ResizeObserver === "undefined") return;
-    const measure = () => {
-      const outer = region.parentElement;
-      const extras = sheet.querySelector<HTMLElement>("[data-drawer-extras]");
-      const group = extras?.parentElement;
-      // Not laid out yet (or no layout at all), or no group to yield: nothing to share.
-      if (sheet.clientHeight < 120 || !outer || !extras || !group) return;
-      const height = sheet.clientHeight;
-      // The sheet's other fixed parts (its handle, header, the added note, offers) and the room the group may take.
-      const fixed = height - outer.clientHeight - group.offsetHeight;
-      const room = Math.floor(height * (1 - LINES_SHARE) - fixed);
-      if (!compact) {
-        if (outer.clientHeight / height < LINES_SHARE) setGroupMax(room);
-        return;
-      }
-      // What the extras would add back to the group were they not scrolling in it.
-      const hidden = extras.scrollHeight - extras.clientHeight;
-      if ((outer.clientHeight - hidden) / height >= LINES_SHARE + 0.05) setGroupMax(null);
-      else if (Math.abs(room - groupMax) > 4) setGroupMax(room);
-    };
-    const observer = new ResizeObserver(measure);
-    observer.observe(sheet);
-    observer.observe(region);
-    measure();
-    return () => observer.disconnect();
-  }, [isOpen, compact, groupMax, cart.totalItems, sheet, region]);
   const dragStartY = useRef(0);
   const dragCurrentY = useRef(0);
 
@@ -696,7 +681,8 @@ export default function CartFlyout({ onReady }: Props) {
       issues: issueLists[key],
     });
     // A stock issue in the words the cart page uses; any other issue as the check said it.
-    const stockText = cartLineStockText(view);
+    const stockText = view.stock ? stockWords?.(view) ?? null : null;
+    if (view.stock && !stockWords) void loadStockWords().then(() => setStockWordsReady(true));
     const describedBy = inputsId(index, item);
     const remove = () => removeWithUndo(copy.removed(view.lineName), () => removeCartItemByKey(key));
     const parts: Record<string, React.ReactNode> = {
@@ -885,6 +871,7 @@ export default function CartFlyout({ onReady }: Props) {
           aria-label={lineCopy.removeFor(view.lineName)}
           aria-describedby={describedBy}
           onClick={remove}
+          data-control="action"
           className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90 sm:h-8 sm:w-8 cursor-pointer"
           data-part="line-remove"
         >
@@ -1095,15 +1082,25 @@ export default function CartFlyout({ onReady }: Props) {
       </div>
     </>
   );
-  /** The scrolling region between the drawer's fixed parts, with its fade when more lies below. */
-  const scrollRegion = (children: React.ReactNode, key?: number) => (
+  /**
+   * The bottom group's rows above the total: the money rows and the apps' footer blocks (`cart_drawer.footer`), or
+   * what a theme placed after its scrolling region. They end the scrolling region, at the sheet's foot while the lines
+   * leave room (`mt-auto`) and after the lines once they do not, each block at its own height: the lines keep the
+   * sheet, nothing is ever squeezed or clipped to a sliver, and only the total and Check out stay pinned under it.
+   */
+  const extrasBox = (children: React.ReactNode) => (
+    <div className="mt-auto shrink-0 space-y-3 border-t border-border bg-card p-3 sm:space-y-4 sm:p-5 [&:not(:has(>:not([hidden])))]:hidden" data-drawer-extras>{children}</div>
+  );
+  /** The scrolling region between the drawer's fixed parts (its rows above the total last), with its fade when more lies below. */
+  const scrollRegion = (children: React.ReactNode, key?: number, extras?: React.ReactNode) => (
     <div key={key} className="flex-1 relative overflow-hidden flex flex-col bg-muted/50" data-layout="scroll" data-part="drawer-scroll">
       <div
-        ref={(element) => { scrollRef.current = element; setRegion(element); }}
+        ref={scrollRef}
         onScroll={checkScroll}
-        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-2 sm:px-5 sm:py-4"
+        className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain"
       >
-        {children}
+        <div className="shrink-0 px-3 py-2 sm:px-5 sm:py-4">{children}</div>
+        {extras}
       </div>
 
       {/* More below: a soft fade only, so nothing covers a price or a button. */}
@@ -1113,10 +1110,13 @@ export default function CartFlyout({ onReady }: Props) {
       />
     </div>
   );
+  /** The total and Check out with View cart, pinned at the sheet's foot. */
+  const pinned = (children: React.ReactNode) => (
+    <div className="shrink-0 z-30 space-y-3 border-t border-border bg-card p-3 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb sm:space-y-4 sm:p-5" data-layout="group" data-drawer-pinned>{children}</div>
+  );
   /**
    * A theme's arrangement of the drawer, with the same guarantee as the host's: what it places after its scrolling region
-   * is the bottom group, whose total, Check out and View cart stay pinned at the bottom (a host box) while the rest
-   * (money rows, the apps' footer blocks, offers) scrolls in it where it would leave the lines less than their share.
+   * ends that region (money rows, the apps' footer blocks, offers), and the total, Check out and View cart stay pinned.
    */
   const themeDrawer = (layout: readonly CartDrawerNode[]) => {
     const hosts = { target: (name: string) => (name === "cart_drawer.footer" ? footerTarget : null), scroll: scrollRegion };
@@ -1126,18 +1126,11 @@ export default function CartFlyout({ onReady }: Props) {
     const buttons = drawerHas(after, "actions");
     if (at < 0 || cart.totalItems === 0 || (!total && !buttons && after.length === 0)) return drawerNodes(layout, pageParts, hosts);
     const extraParts = { ...pageParts, ...(total ? { summary: summaryRows } : {}), ...(buttons ? { actions: null } : {}) };
+    const extras = extrasBox(drawerNodes(after, extraParts, hosts));
     return (
       <>
-        {drawerNodes(layout.slice(0, at + 1), pageParts, hosts)}
-        <div className="flex min-h-0 shrink-0 flex-col bg-card" style={groupMax === null ? undefined : { maxHeight: `${groupMax}px` }} data-drawer-bottom data-drawer-compact={compact ? "" : undefined}>
-          <div className={compact ? "min-h-0 shrink overflow-y-auto overscroll-contain" : ""} data-drawer-extras>{drawerNodes(after, extraParts, hosts)}</div>
-          {(total || buttons) && (
-            <div className="shrink-0 space-y-3 border-t border-border bg-card p-3 sm:p-5 safe-area-pb" data-drawer-pinned>
-              {total && summaryTotal}
-              {buttons && <>{mainAction}{secondaryActions}</>}
-            </div>
-          )}
-        </div>
+        {drawerNodes(layout.slice(0, at + 1), pageParts, { ...hosts, scroll: (children, key) => scrollRegion(children, key, extras) })}
+        {(total || buttons) && pinned(<>{total && summaryTotal}{buttons && <>{mainAction}{secondaryActions}</>}</>)}
       </>
     );
   };
@@ -1172,7 +1165,6 @@ export default function CartFlyout({ onReady }: Props) {
             if (trigger?.isConnected) trigger.focus();
           });
         }}
-        ref={setSheet}
         className={`${DRAWER_SHEET} ${look.width === "wide" ? "sm:max-w-[440px]" : "sm:max-w-[380px]"}`}
         data-private="cart-drawer"
       >
@@ -1198,29 +1190,14 @@ export default function CartFlyout({ onReady }: Props) {
 
         {added}
 
-        {/* 2. CONTENT */}
-        {scrollRegion(cart.totalItems === 0 ? emptyState : lineList(true))}
+        {/* 2. CONTENT: the lines, then the offers (each with its own Add, read with the lines, never with the total),
+            then the rows above the total: the money rows and the apps' footer blocks. */}
+        {scrollRegion(cart.totalItems === 0 ? emptyState : lineList(true), undefined, cart.totalItems > 0 && <>{offers}{extrasBox(<>{summaryRows}{footerTarget}</>)}</>)}
 
         {undoPart}
 
-        {offers}
-
-        {/* 3. FOOTER: the total and Check out over the money rows and the apps' blocks; where those would leave the lines
-            less than their share of the sheet (`compact`), the group keeps the rest and they scroll in it, the total and
-            Check out pinned under them. */}
-        {cart.totalItems > 0 && (
-          <div className="flex flex-col border-t border-border bg-card p-3 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb" style={groupMax === null ? undefined : { maxHeight: `${groupMax}px` }} data-layout="group" data-drawer-compact={compact ? "" : undefined}>
-            <div className={`space-y-3 sm:space-y-4 ${compact ? "min-h-0 shrink overflow-y-auto overscroll-contain pb-3" : ""}`} data-drawer-extras>
-              {summaryRows}
-              {footerTarget}
-            </div>
-            <div className="shrink-0 space-y-3 sm:space-y-4" data-drawer-pinned>
-              {summaryTotal}
-              {mainAction}
-              {secondaryActions}
-            </div>
-          </div>
-        )}
+        {/* 3. FOOTER: the total and Check out, pinned. */}
+        {cart.totalItems > 0 && pinned(<>{summaryTotal}{mainAction}{secondaryActions}</>)}
         </>
         )}
       </Dialog.Content>

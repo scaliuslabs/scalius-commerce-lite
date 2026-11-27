@@ -320,37 +320,40 @@ const customerBlock = (target: string, ui: unknown, lineKey?: string) => ({
 });
 
 /**
- * The customer's protection app (private-look.md S1 and S4), drawn with the
- * general pieces any app has: under the eligible line not yet protected, an
- * amber row (its mark, the offer with Learn more inside its sentence, the price, Add Now); in the
- * summary, an amber "recommended" box, or once protected a green one with
- * Remove, and a success badge under the protected line. The redeem key
- * takes nothing.
+ * The customer's protection app as the theme's release draws it (its `cart.line.after`, `cart.page.summary` and
+ * `cart_drawer.footer` blocks), with the general pieces any app has: under the eligible line not yet protected, an
+ * amber row (its mark, the offer with Learn more inside its sentence, the price, Add Now); a protected line, nothing
+ * (the store's add-on row says it). In the summary and the drawer's footer: an amber "recommended" box with Learn more
+ * inside its sentence, or once protected the note on when the Protection ID comes and a green box with Remove. The
+ * redeem key takes nothing.
  */
 export function customerBlocks(protectedAccount: boolean) {
   const { account, inputKey } = GALLERY_CUSTOMER;
-  if (protectedAccount) {
-    return [
-      customerBlock("cart.line.after", { type: "badge", tone: "success", text: `\u2713 ${GALLERY_CUSTOMER.title} added` }, account.key),
-      customerBlock("cart.page.summary", { type: "stack", direction: "horizontal", tone: "success", children: [
+  const learnMore = (sentence: string) => ({ type: "text", text: [{ text: `${sentence} ` }, { text: CUSTOMER_LEARN_MORE.text, to: CUSTOMER_LEARN_MORE.to }] });
+  // Each block a stack around its pieces (the release's `ui.view`).
+  const summary = protectedAccount
+    ? { type: "stack", children: [
+      { type: "text", tone: "neutral", text: "Protection ID will be given after order completion." },
+      { type: "stack", direction: "horizontal", tone: "success", children: [
         { type: "mark", tone: "success" },
-        { type: "text", text: "Your account is protected", emphasis: "strong" },
+        { type: "text", text: "Your account is protected" },
         { type: "button", label: "Remove", tone: "secondary", action: { kind: "cart", op: "set_line_input", key: inputKey, value: null } },
-      ] }),
-    ];
-  }
+      ] },
+    ] }
+    : { type: "stack", children: [{ type: "stack", direction: "horizontal", tone: "warning", children: [
+      { type: "mark", tone: "warning" },
+      { type: "stack", children: [learnMore(`${GALLERY_CUSTOMER.title} recommended`)] },
+    ] }] };
   return [
-    customerBlock("cart.line.after", { type: "stack", direction: "horizontal", tone: "warning", children: [
+    ...(protectedAccount ? [] : [customerBlock("cart.line.after", { type: "stack", children: [{ type: "stack", direction: "horizontal", tone: "warning", children: [
       { type: "mark", tone: "warning" },
       // The offer's sentence with Learn more inside it (a text's link piece), in the column that takes the row's room.
-      { type: "stack", gap: "sm", children: [{ type: "text", text: [{ text: "Add Arcade Protection to get lifetime warranty and support. " }, { text: CUSTOMER_LEARN_MORE.text, to: CUSTOMER_LEARN_MORE.to }] }] },
+      { type: "stack", children: [learnMore("Add Arcade Protection to get lifetime warranty and support.")] },
       { type: "text", text: "\u09F3350", tone: "success", emphasis: "strong" },
       { type: "button", label: "Add Now", tone: "primary", action: { kind: "cart", op: "set_line_input", key: inputKey, value: "lifetime", lineKeys: [account.key] } },
-    ] }, account.key),
-    customerBlock("cart.page.summary", { type: "stack", direction: "horizontal", tone: "warning", children: [
-      { type: "mark", tone: "warning" },
-      { type: "stack", gap: "sm", children: [{ type: "text", text: `${GALLERY_CUSTOMER.title} recommended`, emphasis: "strong" }, CUSTOMER_LEARN_MORE] },
-    ] }),
+    ] }] }, account.key)]),
+    customerBlock("cart.page.summary", summary),
+    customerBlock("cart_drawer.footer", summary),
   ];
 }
 
@@ -387,12 +390,16 @@ function longWordAddOns() {
   return [{ appId: "acme.long", title: `${LONG_WORD_EN} ${LONG_WORD_BN}`, amountMinor: 35_000, details: [LONG_WORD_EN, LONG_WORD_BN] }];
 }
 
-/** The customer's protected account line: each unit with the app's add-on (৳350), the summary row opening to one entry a unit. */
+/**
+ * The customer's protected account line: each unit with the app's add-on (৳350), the summary row opening to one entry
+ * a unit, as the theme's release writes them (the title, "#n" when the line holds more than one; the note on when the
+ * Protection ID comes is the app's block, never a frozen detail).
+ */
 export function customerAddOns(units: number) {
   const name = GALLERY_CUSTOMER.account.line.name;
   return [{
     appId: GALLERY_CUSTOMER.appId, title: GALLERY_CUSTOMER.title, amountMinor: GALLERY_CUSTOMER.protectionMinor * units,
-    details: ["Protection ID will be given after order completion.", ...Array.from({ length: units }, (_, index) => `${name} #${index + 1} \u00B7 \u09F3350 \u00B7 Protection ID XXX-XXX-XXX`)],
+    details: Array.from({ length: units }, (_, index) => units > 1 ? `${name} #${index + 1}` : name),
   }];
 }
 

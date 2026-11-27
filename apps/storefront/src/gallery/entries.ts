@@ -953,7 +953,7 @@ export function galleryEntry(id: string): GalleryEntry | null {
 }
 
 /** The states the private pages' rendered tests draw a theme in (each a cart the buyer can hold). */
-export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many", "five", "one", "max", "customer", "customer-protected", "long-words"] as const;
+export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many", "five", "one", "max", "customer", "customer-protected", "customer-five", "long-words"] as const;
 export type PrivatePagesState = (typeof PRIVATE_PAGES_STATES)[number];
 
 /** Long Bangla titles: a line's words at their longest in the store's second language. */
@@ -1001,15 +1001,15 @@ function manyCart(count = 20): string {
  * line asking for a decision and nothing sold out (`decide`); no cart (`empty`); long Bangla
  * titles (`bn`); an Arabic, right-to-left presence (`ar`); twenty lines (`many`); one line (`one`) and
  * 99 (`max`); the customer's game cart with its protection offered (`customer`) or taken on two
- * accounts (`customer-protected`). `page: "home"` draws the homepage instead, where the cart drawer opens. With `noor`, the
+ * accounts (`customer-protected`), and protected with four more of its games, five lines (`customer-five`). `page: "home"` draws the homepage instead, where the cart drawer opens. With `noor`, the
  * store has Noor installed, so a theme from it draws its header and footer;
  * with `localization`, the store sells in two markets.
  */
 export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean; terms?: boolean; slowCheckMs?: number; page?: "home" | "sample-checkout" | "sample-receipt" | "sample-account" | GalleryAccountPage } = {}): GalleryEntry {
   const base = galleryEntry(entryId("app", "buyer-ui"))!;
   // `decide`: the base cart, whose first line asks for a decision and every line sells, so Place order reaches the question.
-  const customer = state === "customer" ? "offer" as const : state === "customer-protected" ? "protected" as const : undefined;
-  const cart: Record<string, string> = state === "empty" ? {} : { "cart:v3": customer ? galleryCustomerCart(customer === "protected") : state === "bn" ? BANGLA_LONG_CART : state === "lines" ? linesCart() : state === "many" ? manyCart() : state === "five" ? manyCart(5) : state === "one" ? repeatedCart(1) : state === "max" ? repeatedCart(99) : GALLERY_CART };
+  const customer = state === "customer" ? "offer" as const : state === "customer-protected" || state === "customer-five" ? "protected" as const : undefined;
+  const cart: Record<string, string> = state === "empty" ? {} : { "cart:v3": customer ? galleryCustomerCart(customer === "protected", state === "customer-five" ? 4 : 0) : state === "bn" ? BANGLA_LONG_CART : state === "lines" ? linesCart() : state === "many" ? manyCart() : state === "five" ? manyCart(5) : state === "one" ? repeatedCart(1) : state === "max" ? repeatedCart(99) : GALLERY_CART };
   const scenario: GalleryScenario = {
     ...base.scenario, delivering: true, buyerUiKinds: true, storage: cart,
     // Noor installed and active: its header and footer skins draw the theme's chrome.

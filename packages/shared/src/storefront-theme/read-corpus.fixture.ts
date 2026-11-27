@@ -48,7 +48,8 @@ export function privateLookDocument(): unknown {
   doc.privatePages = {
     ...doc.privatePages,
     controls: "header",
-    tokens: Object.fromEntries(styled.map((page) => [page, { action: { radius: 0 } }])),
+    // Every page an action button's corners; the phone tab bar its icons' chip corners.
+    tokens: Object.fromEntries(styled.map((page) => [page, page === "tabBar" ? { icon: { radius: 0 } } : { action: { radius: 0 } }])),
     pages: { cart: { layout: structuredClone(PRIVATE_PAGES.cart.layout) }, cartDrawer: { layout: structuredClone(PRIVATE_PAGES.cartDrawer.layout) } },
     labels: { "cart.heading": { en: "Your bag", bn: "আপনার ব্যাগ" }, "drawer.title": { en: "Bag" } },
   };

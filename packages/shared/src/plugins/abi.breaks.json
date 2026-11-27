@@ -3869,5 +3869,194 @@
   "change": "tables.limits.buyerChrome.markupBytes: a new limit on apps (65536).",
   "reason": "Pre-lock (rc.1 seals, buyer-page chrome, Nov 27): a limit that already held is now sealed with its direction: the header frame's half screen, the footer's one screen (now BUYER_CHROME_FRAME_MAX_SVH, which the storefront's frame style reads) and the 64 KiB of markup a region rebuilds. The numbers are the ones themes were already held to.",
   "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "3947a0d678347ba2",
+  "change": "tables.limits.theme.tabBar.blurBleed: a new limit on apps (0.06).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's tokens are checked against sealed floors that only loosen: what a blurred bar lets through (the store's 94% bar, 6%), a label's least size (10px) and the cues that tell the current tab apart by more than its hue (WCAG 1.4.1, G183: words 3:1 apart, a 2px ring at 3:1, a weight 200 heavier, a chip 4px larger). New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "3947a0d678347ba2",
+  "change": "tables.limits.theme.tabBar.labelMinSize: a new limit on apps (10).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's tokens are checked against sealed floors that only loosen: what a blurred bar lets through (the store's 94% bar, 6%), a label's least size (10px) and the cues that tell the current tab apart by more than its hue (WCAG 1.4.1, G183: words 3:1 apart, a 2px ring at 3:1, a weight 200 heavier, a chip 4px larger). New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "3947a0d678347ba2",
+  "change": "tables.limits.theme.tabBar.wordsApart: a new limit on apps (3).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's tokens are checked against sealed floors that only loosen: what a blurred bar lets through (the store's 94% bar, 6%), a label's least size (10px) and the cues that tell the current tab apart by more than its hue (WCAG 1.4.1, G183: words 3:1 apart, a 2px ring at 3:1, a weight 200 heavier, a chip 4px larger). New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "3947a0d678347ba2",
+  "change": "tables.limits.theme.tabBar.ringWidth: a new limit on apps (2).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's tokens are checked against sealed floors that only loosen: what a blurred bar lets through (the store's 94% bar, 6%), a label's least size (10px) and the cues that tell the current tab apart by more than its hue (WCAG 1.4.1, G183: words 3:1 apart, a 2px ring at 3:1, a weight 200 heavier, a chip 4px larger). New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "3947a0d678347ba2",
+  "change": "tables.limits.theme.tabBar.weightStep: a new limit on apps (200).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's tokens are checked against sealed floors that only loosen: what a blurred bar lets through (the store's 94% bar, 6%), a label's least size (10px) and the cues that tell the current tab apart by more than its hue (WCAG 1.4.1, G183: words 3:1 apart, a 2px ring at 3:1, a weight 200 heavier, a chip 4px larger). New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "3947a0d678347ba2",
+  "change": "tables.limits.theme.tabBar.chipStep: a new limit on apps (4).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's tokens are checked against sealed floors that only loosen: what a blurred bar lets through (the store's 94% bar, 6%), a label's least size (10px) and the cues that tell the current tab apart by more than its hue (WCAG 1.4.1, G183: words 3:1 apart, a 2px ring at 3:1, a weight 200 heavier, a chip 4px larger). New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.bar.height.min: a new limit on apps (56).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.bar.height.max: a new limit on apps (96).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.label.size.min: a new limit on apps (10).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.label.size.max: a new limit on apps (16).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.icon.size.min: a new limit on apps (16).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.icon.size.max: a new limit on apps (32).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.icon.padding.min: a new limit on apps (0).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.icon.padding.max: a new limit on apps (16).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.icon.radius.min: a new limit on apps (0).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.icon.radius.max: a new limit on apps (32).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.icon.border-width.min: a new limit on apps (0).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.icon.border-width.max: a new limit on apps (2).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.current.padding.min: a new limit on apps (0).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.current.padding.max: a new limit on apps (16).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.current.ring-width.min: a new limit on apps (0).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.bound.current.ring-width.max: a new limit on apps (4).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.labelLeading: a new limit on apps (1.25).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.labelRoomEm: a new limit on apps (0.15).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.gap: a new limit on apps (3).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.iconSize: a new limit on apps (22).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "5023dad2ca02789c",
+  "change": "tables.limits.theme.tabBar.currentWeight: a new limit on apps (700).",
+  "reason": "Pre-lock (rc.1, the phone tab bar's look, Nov 27): the bar's own numbers are sealed with their direction so a later release cannot refuse a bar that saved: each token's least value only falls and its most only rises, the height check's line height, room, gap and the store's icon size only fall, and the store's current-tab weight only rises. New with the tokens; no theme was held to them before.",
+  "type": "pre-lock"
  }
 ]

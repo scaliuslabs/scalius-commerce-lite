@@ -1375,6 +1375,7 @@ export type StorefrontPrivatePages = {
         checkout?: StorefrontPrivateArrangement;
         receipt?: StorefrontPrivateArrangement;
         account?: StorefrontPrivateArrangement;
+        tabBar?: unknown;
     };
     tokens?: {
         [key: string]: {
@@ -1419,6 +1420,7 @@ export type StorefrontPrivatePages = {
             checkout?: string;
             receipt?: string;
             account?: string;
+            tabBar?: string;
         };
         refused?: {
             cart?: Array<StorefrontPrivatePageRefusal>;
@@ -1426,6 +1428,7 @@ export type StorefrontPrivatePages = {
             checkout?: Array<StorefrontPrivatePageRefusal>;
             receipt?: Array<StorefrontPrivatePageRefusal>;
             account?: Array<StorefrontPrivatePageRefusal>;
+            tabBar?: Array<StorefrontPrivatePageRefusal>;
         };
         policy?: number;
         digest?: string;

@@ -23980,6 +23980,114 @@
      "value": 2,
      "loosens": "down"
     },
+    "theme.tabBar.blurBleed": {
+     "value": 0.06,
+     "loosens": "down"
+    },
+    "theme.tabBar.labelMinSize": {
+     "value": 10,
+     "loosens": "down"
+    },
+    "theme.tabBar.wordsApart": {
+     "value": 3,
+     "loosens": "down"
+    },
+    "theme.tabBar.ringWidth": {
+     "value": 2,
+     "loosens": "down"
+    },
+    "theme.tabBar.weightStep": {
+     "value": 200,
+     "loosens": "down"
+    },
+    "theme.tabBar.chipStep": {
+     "value": 4,
+     "loosens": "down"
+    },
+    "theme.tabBar.bound.bar.height.min": {
+     "value": 56,
+     "loosens": "down"
+    },
+    "theme.tabBar.bound.bar.height.max": {
+     "value": 96,
+     "loosens": "up"
+    },
+    "theme.tabBar.bound.label.size.min": {
+     "value": 10,
+     "loosens": "down"
+    },
+    "theme.tabBar.bound.label.size.max": {
+     "value": 16,
+     "loosens": "up"
+    },
+    "theme.tabBar.bound.icon.size.min": {
+     "value": 16,
+     "loosens": "down"
+    },
+    "theme.tabBar.bound.icon.size.max": {
+     "value": 32,
+     "loosens": "up"
+    },
+    "theme.tabBar.bound.icon.padding.min": {
+     "value": 0,
+     "loosens": "down"
+    },
+    "theme.tabBar.bound.icon.padding.max": {
+     "value": 16,
+     "loosens": "up"
+    },
+    "theme.tabBar.bound.icon.radius.min": {
+     "value": 0,
+     "loosens": "down"
+    },
+    "theme.tabBar.bound.icon.radius.max": {
+     "value": 32,
+     "loosens": "up"
+    },
+    "theme.tabBar.bound.icon.border-width.min": {
+     "value": 0,
+     "loosens": "down"
+    },
+    "theme.tabBar.bound.icon.border-width.max": {
+     "value": 2,
+     "loosens": "up"
+    },
+    "theme.tabBar.bound.current.padding.min": {
+     "value": 0,
+     "loosens": "down"
+    },
+    "theme.tabBar.bound.current.padding.max": {
+     "value": 16,
+     "loosens": "up"
+    },
+    "theme.tabBar.bound.current.ring-width.min": {
+     "value": 0,
+     "loosens": "down"
+    },
+    "theme.tabBar.bound.current.ring-width.max": {
+     "value": 4,
+     "loosens": "up"
+    },
+    "theme.tabBar.labelLeading": {
+     "value": 1.25,
+     "loosens": "down"
+    },
+    "theme.tabBar.labelRoomEm": {
+     "value": 0.15,
+     "loosens": "down"
+    },
+    "theme.tabBar.gap": {
+     "value": 3,
+     "loosens": "down"
+    },
+    "theme.tabBar.iconSize": {
+     "value": 22,
+     "loosens": "down"
+    },
+    "theme.tabBar.currentWeight": {
+     "value": 700,
+     "loosens": "up"
+    },
     "theme.mobileTabs.max": {
      "value": 5,
      "loosens": "up"
@@ -24396,6 +24504,7 @@
      "/account/downloads",
      "/warranty-claims/[orderId]/[claimId]"
     ],
+    "tabBar": [],
     "store-look": [
      "/track-order",
      "/checkout/quick",

@@ -1,5 +1,5 @@
 {
- "checker": 11,
+ "checker": 12,
  "policy": 2,
  "reasons": [
   "binding_object_types",

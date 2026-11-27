@@ -340,6 +340,35 @@ A label that names an action or an amount takes one of the store's **variants**,
 
 The words a part's variant draws are the store's: "Remove" (সরান) for `remove: words`, "Items" (পণ্য) for `summary: with-items`. Icons: `cart.empty`, `drawer.empty`.
 
+## The phone tab bar
+
+The store's phone bar (`blocks.mobileNav` with `bottom-tabs`, [themes.md](themes.md)) is drawn on public pages and on the buyer's receipt and account, where no theme stylesheet loads. Its look is one set of tokens, `tokens.tabBar`, that draws it the same on every page: the store compiles and checks it with the other private pages (`compiled.css.tabBar`; refused on its own: the bar then keeps the store's own look and your other pages keep theirs). It takes no arrangement: any `pages.tabBar` is refused (`not_available`). Without it the bar is the store's: the page colour at 94% under a blur, 60px, its labels 12px in the muted words and wrapping to a second line, never cut to "…", the current tab in the page's words and 200 heavier.
+
+| Target | Tokens | What it draws |
+| --- | --- | --- |
+| `bar` | `background`, `border` (its top edge), `height` (56 to 96 px; the page reserves it under its content), `backdrop` (`blur`, the default: the colour at 94% over a blur; or `solid`) | The bar. |
+| `label` | `text` (every tab's words and icon), `size` (10 to 16 px), `weight`, `case`, `tracking`, `clamp` (on the bar `"2"`, the default: a long label wraps; or `"1"`: one line, a label longer than its column ends in "…") | Each tab's label: 1.25 line height, with 0.15em of room above and below its lines for Bangla's vowel signs. |
+| `current` | `text`, `weight`, `background` and `padding` (0 to 16 px) of its icon's chip, `ring` and `ring-width` (0 to 4 px) around that chip | The tab of the page the buyer is on. |
+| `icon` | `size` (16 to 32 px), `background` (a chip behind it; none without), `border` and `border-width` (0 to 2 px), `radius`, `padding` (0 to 16 px) | Each tab's icon, in its tab's colour. |
+| `badge` | `background`, `text` | The cart's count. |
+
+What the save checks, in every palette buyers see: a label and the current tab's label read 4.5:1 on the bar (under a blur, on the bar's colour with what shows through it at its lightest and its darkest); an icon reads 3:1 on its chip (or on the bar); the cart count reads 4.5:1 on its badge and the badge 3:1 on the bar; the current tab is told apart from the others by more than its hue (WCAG 1.4.1, technique G183: a second cue that reads 3:1), by at least one of: its words 3:1 from the others', a ring at least 2px wide reading 3:1 on the bar (at the blur's lightest and darkest), a weight at least 200 heavier, or a chip at least 4px larger than theirs with both chips drawn (words 1.5:1 apart or one weight step are a shade of the same cue: refused); and the bar is as tall as a tab needs (its largest icon box with its chip and ring, 3px, and its label's lines with their room), so no label is cut. These floors (what a blurred bar lets through, 6%; the 10px label; the four cues) are sealed numbers that only loosen (`theme.tabBar.*` in the contract's limits). A label's floor is 10px, a phone tab bar's own label size (a page's words keep 12px). Refusals: `token_value` (a value outside its bounds, a bar too short), `contrast`, `unknown_style`, `unknown_token`.
+
+Precedence: every rule the tokens write has zero specificity (`:where`) and comes after the store's own bar rules (also zero specificity), so the tokens replace the store's look; on a public page any rule of your own stylesheet outranks both, whatever loads first. On the buyer's own pages your stylesheet never loads: the tokens are the bar's look there. The same holds for the bar's height: `--mobile-tabs-height` (and the page's reserve under it, `--mobile-tabs-reserve`) are the store's at zero specificity, so `bar.height` sets them, and a plain `:root` rule of your stylesheet outranks them on a public page with no specificity trick.
+
+A theme that styled the bar in its public stylesheet (a 3.6-style rule on `[data-part="tab-label"]` setting its size or line height, or `--mobile-tabs-height` on `:root`) drops those rules to take the tokens: on a public page its own rules still outrank them.
+
+A bar for a dark store, 80px with two-line capitals and round chips, the current one 4px larger:
+
+```json
+{
+  "bar": { "background": "background", "border": "border", "height": 80, "backdrop": "blur" },
+  "label": { "text": "muted-foreground", "size": 10, "weight": "700", "case": "uppercase", "tracking": "wide", "clamp": "2" },
+  "icon": { "size": 20, "padding": 8, "radius": 32, "background": { "light": "#ebebeb", "dark": "#211c31" } },
+  "current": { "text": "foreground", "padding": 12, "background": { "light": "#e6e6e6", "dark": "#272436" }, "ring": "#4f5fae", "ring-width": 2 }
+}
+```
+
 ## The receipt and the account
 
 The receipt (`/order-success`: the confirmation and the order's status view, and the theme editor's sample receipt) and every page of the account (its orders, an order, the profile with its addresses and saved cards, the inbox and a thread, warranties, reviews, gift cards and downloads, and a guest's warranty claim thread) take **tokens** (`tokens.receipt`, `tokens.account`), checked by the same colour table and floors as the cart: contrast per scheme, and the total never drawn smaller than another money row. They are not arranged yet: an arrangement other than the store's own for `pages.receipt` or `pages.account` is refused (`not_available`). Their parts are named in the [anatomy](#anatomy-reference) so the names stay when arranging comes.
@@ -383,6 +412,7 @@ cartDrawer (over public pages: no route of its own)
 checkout /checkout
 receipt /order-success
 account /account /account/orders/[id] /account/profile /account/inbox /account/inbox/[id] /account/warranties /account/reviews /account/gift-cards /account/downloads /warranty-claims/[orderId]/[claimId]
+tabBar (every page that draws the phone tab bar: no route of its own)
 store-look /track-order /checkout/quick /checkout/continue/[continuationId] /agent/continue/[continuationId] /cart/recover/[token] /payment-recovery /gift-card-balance /newsletter /newsletter/confirm /newsletter/unsubscribe
 no-theme /account/licence-key /account/delivery-message
 ```
@@ -449,7 +479,7 @@ What stays yours to check: that your header and footer read well without their s
 
 ## The reference cart
 
-The customer's prototype (a dark purple game store with a light scheme) expressed with this model alone: an arrangement with variants, tokens per scheme for the store's parts and the protection app's offer row, badge and status boxes, the store's controls in its header, and labels. Where the prototype's own colour reads under a floor, the nearest colour that passes stands in; the store's tests compile it against its light and dark palettes and show the prototype's own values refused.
+The reference theme (a dark store with a light scheme), as its release sets this model: an arrangement with variants, tokens per scheme for the store's parts and the protection app's offer row, badge and status boxes, the store's controls in its header, and labels. Where the prototype's own colour reads under a floor, the nearest colour that passes stands in; the store's tests compile it against its light and dark palettes and show the prototype's own values refused.
 
 ```json
 {
@@ -460,26 +490,24 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         { "type": "part", "part": "notices" },
         {
           "type": "layout",
-          "layout": "columns",
-          "hook": "cart-columns",
+          "layout": "grid",
+          "hook": "cart-grid",
           "children": [
+            { "type": "part", "part": "lines", "variant": "heading-above" },
             {
               "type": "layout",
               "layout": "stack",
+              "hook": "cart-side",
               "children": [
-                { "type": "part", "part": "lines", "variant": "heading-above" },
-                {
-                  "type": "layout",
-                  "layout": "fold",
-                  "children": [
-                    { "type": "part", "part": "summary", "variant": "with-items" },
-                    { "type": "target", "target": "cart.page.summary" }
-                  ]
-                },
-                { "type": "target", "target": "cart.page.below" }
+                { "type": "part", "part": "summary", "variant": "with-items" },
+                { "type": "target", "target": "cart.page.summary" }
               ]
             },
-            { "type": "part", "part": "details" }
+            {
+              "type": "layout",
+              "layout": "stack",
+              "children": [{ "type": "part", "part": "details" }, { "type": "target", "target": "cart.page.below" }]
+            }
           ]
         }
       ],
@@ -507,7 +535,11 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
                 "type": "layout",
                 "layout": "stack",
                 "hook": "line-side",
-                "children": [{ "type": "part", "part": "price" }, { "type": "part", "part": "quantity" }, { "type": "part", "part": "remove", "variant": "words" }]
+                "children": [
+                  { "type": "part", "part": "price" },
+                  { "type": "part", "part": "quantity" },
+                  { "type": "part", "part": "remove", "variant": "words" }
+                ]
               }
             ]
           },
@@ -518,23 +550,59 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
   },
   "tokens": {
     "cart": {
-      "page": { "gradient": { "shape": "radial", "from": { "light": "background", "dark": "#2b2d6e" }, "to": "background" } },
+      "page": {
+        "gradient": { "shape": "radial", "from": { "light": "background", "dark": "#2b2d6e" }, "to": "background" }
+      },
       "frame": { "max-width": 1400 },
-      "notice": { "background": { "light": "#f2ebd9", "dark": "#35282c" }, "text": { "light": "#000000", "dark": "#fef3c6" }, "radius": 0, "border-width": 0 },
+      "notice": {
+        "background": { "light": "#f2ebd9", "dark": "#35282c" },
+        "text": { "light": "#000000", "dark": "#fef3c6" },
+        "radius": 0,
+        "border-width": 0
+      },
       "lines": { "background": "card", "border": "#524179", "border-width": 0, "radius": 0, "shadow": "lg" },
-      "lines-heading": { "size": 36, "weight": "600", "text": "foreground" },
-      "lines-intro": { "text": "muted-foreground", "size": 14 },
-      "line-image": { "width": 64, "height": 80, "width-wide": 92, "height-wide": 112, "radius": 0, "fit": "cover", "background": "popover" },
-      "line-details": { "text": "muted-foreground", "size": 12 },
-      "line-title": { "weight": "600", "clamp": "2", "text": "foreground", "leading": "tight" },
-      "line-price": { "size": 18, "weight": "600", "align": "end", "text": { "light": "#000000", "dark": "#5ee9b5" }, "muted": { "light": "#111111", "dark": "#83838d" } },
-      "line-quantity": { "background": "muted", "border": { "light": "#7b7b7b", "dark": "#8575ae" }, "radius": 0, "text": { "light": "#111111", "dark": "#d4d4d8" } },
-      "line-remove": { "text": "destructive", "size": 14, "weight": "400" },
-      "summary": { "background": "card", "text": { "light": "#000000", "dark": "#d1d1d5" }, "border": "#524179", "border-width": 0, "radius": 0, "padding": 20, "gap": 12, "shadow": "lg" },
-      "summary-heading": { "size": 20, "weight": "600", "text": "foreground" },
-      "summary-rows": { "text": { "light": "#000000", "dark": "#d1d1d5" }, "size": 14 },
+      "lines-heading": { "size": 36, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "lines-intro": { "text": { "light": "#111111", "dark": "#9f9fa9" }, "size": 14 },
+      "cart-empty": {
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "line-image": { "width": 64, "height": 80, "radius": 0, "fit": "cover", "background": "popover" },
+      "line-details": { "text": { "light": "#111111", "dark": "#9f9fa9" }, "size": 12 },
+      "line-title": {
+        "weight": "600",
+        "clamp": "2",
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "leading": "tight"
+      },
+      "line-price": {
+        "size": 18,
+        "weight": "600",
+        "align": "end",
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "muted": { "light": "#111111", "dark": "#83838d" }
+      },
+      "line-quantity": {
+        "background": "muted",
+        "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+        "radius": 0,
+        "text": { "light": "#111111", "dark": "#d4d4d8" }
+      },
+      "line-remove": { "text": { "light": "destructive", "dark": "#ffa2a2" }, "size": 14, "weight": "400", "radius": 0 },
+      "summary": {
+        "background": "card",
+        "text": { "light": "#000000", "dark": "#cbcbd1" },
+        "border": "#524179",
+        "border-width": 0,
+        "radius": 0,
+        "padding": 20,
+        "gap": 12,
+        "shadow": "lg"
+      },
+      "summary-heading": { "size": 20, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "summary-rows": { "text": { "light": "#000000", "dark": "#cbcbd1" }, "size": 14 },
       "summary-total": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 20, "weight": "600" },
-      "summary-total-label": { "text": "foreground", "size": 16, "weight": "600" },
+      "summary-total-label": { "text": { "light": "#000000", "dark": "#ffffff" }, "size": 16, "weight": "600" },
       "summary-add-on": { "text": { "light": "#000000", "dark": "#5ee9b5" } },
       "summary-add-on-detail": {
         "background": { "light": "#dff7e8", "dark": "#10161e" },
@@ -558,16 +626,25 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
       "field-label": { "size": 12, "weight": "600" },
       "dock": { "background": "card", "border": "#524179", "border-width": 1 },
       "submit": {
-        "background": { "light": "#fed700", "dark": "primary" },
-        "text": { "light": "#000000", "dark": "primary-foreground" },
-        "border": { "light": "#000000", "dark": "primary" },
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
         "border-width": 2,
         "radius": 0,
         "weight": "600",
         "size": 14,
         "inset": 20
       },
-      "cart-empty": { "text": "foreground", "muted": "muted-foreground" },
+      "action": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "600",
+        "size": 14,
+        "inset": 20
+      },
       "dialog": {
         "background": "#171124",
         "text": "#ffffff",
@@ -578,14 +655,39 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         "shadow": "lg"
       },
       "dialog-title": { "size": 24, "weight": "800", "leading": "tight", "text": "#ffffff" },
-      "dialog-text": { "background": "#110d1e", "border": "#443567", "border-width": 1, "radius": 0, "padding": 16, "text": "#d4d4d8", "muted": "#d4d4d8" },
-      "dialog-agree": { "background": "#241b39", "border": "#49396d", "border-width": 1, "radius": 0, "padding": 16, "text": "#e4e4e7" },
-      "dialog-back": { "text": "#e4e4e7", "border": "#8575ae", "border-width": 1, "radius": 0, "weight": "700", "inset": 20 },
+      "dialog-text": {
+        "background": "#110d1e",
+        "border": "#443567",
+        "border-width": 1,
+        "radius": 0,
+        "padding": 16,
+        "text": "#d4d4d8",
+        "muted": "#d4d4d8"
+      },
+      "dialog-agree": {
+        "background": "#241b39",
+        "border": "#49396d",
+        "border-width": 1,
+        "radius": 0,
+        "padding": 16,
+        "text": "#e4e4e7"
+      },
+      "dialog-back": {
+        "text": "#e4e4e7",
+        "border": "#8575ae",
+        "border-width": 1,
+        "radius": 0,
+        "weight": "700",
+        "inset": 20
+      },
       "dialog-confirm": {
-        "background": { "light": "#fed700", "dark": "primary" },
-        "text": { "light": "#333e48", "dark": "primary-foreground" },
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
         "radius": 0,
         "weight": "800",
+        "size": 14,
         "inset": 20
       },
       "ui.stack.warning@arcade.protection/cart.line.after": {
@@ -601,27 +703,34 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         "border": { "light": "#f7e195", "dark": "#866c2e" },
         "size": 12
       },
-      "ui.text@arcade.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#fef3c6" }, "size": 14, "weight": "500" },
-      "ui.text.success@arcade.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 14, "weight": "600" },
-      "ui.link@arcade.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 12, "weight": "500" },
-      "ui.button@arcade.protection/cart.line.after": {
-        "background": { "light": "#fed700", "dark": "primary" },
-        "text": { "light": "#333e48", "dark": "primary-foreground" },
-        "border": { "light": "#fed700", "dark": "primary" },
+      "ui.text@arcade.protection/cart.line.after": {
+        "text": { "light": "#000000", "dark": "#fef3c6" },
+        "size": 14,
+        "weight": "500"
+      },
+      "ui.text.success@arcade.protection/cart.line.after": {
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "size": 14,
+        "weight": "600"
+      },
+      "ui.link@arcade.protection/cart.line.after": {
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "weight": "500"
+      },
+      "ui.button.primary@arcade.protection/cart.line.after": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#fed700", "dark": "#00bc7d" },
         "border-width": 0,
         "radius": 0,
         "weight": "600",
         "size": 12,
         "inset": 16
       },
-      "ui.badge.success@arcade.protection/cart.line.after": {
-        "background": "card",
-        "text": { "light": "#000000", "dark": "#5ee9b5" },
-        "border": "card",
-        "radius": 0,
-        "padding": 0,
-        "weight": "600",
-        "size": 12
+      "ui.text.neutral@arcade.protection/cart.page.summary": {
+        "text": { "light": "#111111", "dark": "#9f9fa9" },
+        "size": 12,
+        "weight": "400"
       },
       "ui.stack.warning@arcade.protection/cart.page.summary": {
         "background": { "light": "#f2ebd9", "dark": "#35282c" },
@@ -649,28 +758,429 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         "border": { "light": "#bede48", "dark": "#36756b" },
         "size": 12
       },
-      "ui.text@arcade.protection/cart.page.summary": { "text": { "light": "#000000", "dark": "#ffffff" }, "size": 14, "weight": "600" },
-      "ui.link@arcade.protection/cart.page.summary": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 12, "weight": "500" },
-      "ui.button@arcade.protection/cart.page.summary": {
-        "background": { "light": "#fed700", "dark": "muted" },
-        "text": { "light": "#000000", "dark": "#a4f4cf" },
+      "ui.text@arcade.protection/cart.page.summary": {
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "size": 14,
+        "weight": "600"
+      },
+      "ui.link@arcade.protection/cart.page.summary": {
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "weight": "500"
+      },
+      "ui.button.primary@arcade.protection/cart.page.summary": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#fed700", "dark": "#00bc7d" },
         "border-width": 0,
+        "radius": 0,
+        "weight": "600",
+        "size": 12,
+        "inset": 12
+      },
+      "ui.button.secondary@arcade.protection/cart.page.summary": {
+        "background": { "light": "#ffffff", "dark": "muted" },
+        "text": { "light": "#000000", "dark": "#a4f4cf" },
+        "border": { "light": "#000000", "dark": "#8575ae" },
+        "border-width": 1,
         "radius": 0,
         "weight": "600",
         "size": 12,
         "inset": 8
       },
-      "@line-grid": { "columns": [64, "1fr", 88], "columns-wide": [92, "1fr", 150], "gap": 12 },
+      "@line-grid": { "columns": [64, "1fr", 88], "columns-wide": [64, "1fr", 150], "gap": 12 },
       "@line-side": { "gap": 8 },
-      "@cart-columns": { "gap": 24 }
+      "@cart-grid": { "columns": ["2fr", "1fr"], "gap": 24 },
+      "@cart-side": { "gap": 16 }
+    },
+    "checkout": {
+      "page": {
+        "gradient": { "shape": "radial", "from": { "light": "background", "dark": "#2b2d6e" }, "to": "background" }
+      },
+      "frame": { "max-width": 1400 },
+      "heading": { "size": 36, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "notice": {
+        "background": { "light": "#f2ebd9", "dark": "#35282c" },
+        "text": { "light": "#000000", "dark": "#fef3c6" },
+        "radius": 0,
+        "border-width": 0
+      },
+      "summary": {
+        "background": "card",
+        "border-width": 0,
+        "radius": 0,
+        "shadow": "lg",
+        "padding": 20,
+        "text": { "light": "#000000", "dark": "#cbcbd1" },
+        "gap": 12
+      },
+      "summary-heading": { "size": 20, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "summary-rows": { "text": { "light": "#000000", "dark": "#cbcbd1" }, "size": 14 },
+      "summary-total": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 20, "weight": "600" },
+      "summary-total-label": { "text": { "light": "#000000", "dark": "#ffffff" }, "size": 16, "weight": "600" },
+      "summary-add-on": { "text": { "light": "#000000", "dark": "#5ee9b5" } },
+      "summary-add-on-detail": {
+        "background": { "light": "#dff7e8", "dark": "#10161e" },
+        "border": { "light": "#b7e6c9", "dark": "#10161e" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 8,
+        "size": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#7e7e88" }
+      },
+      "fold-toggle": { "background": "card", "border": { "light": "#7b7b7b", "dark": "#8575ae" }, "radius": 0 },
+      "gift-card": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "checkout-empty": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "payment-method": {
+        "background": { "light": "#eeeeee", "dark": "#171225" },
+        "border": { "light": "#8a8a8a", "dark": "#6b5f8a" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 16,
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" },
+        "link": { "light": "#000000", "dark": "#5ee9b5" }
+      },
+      "payment-chosen": {
+        "background": { "light": "#fff4b8", "dark": "#174144" },
+        "border": { "light": "#000000", "dark": "#5ee9b5" },
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "muted": { "light": "#111111", "dark": "#c4c4cc" }
+      },
+      "payment-details": {
+        "background": { "light": "#f8f9fa", "dark": "#181327" },
+        "radius": 0,
+        "padding": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "link": { "light": "#000000", "dark": "#5ee9b5" }
+      },
+      "input": {
+        "background": "muted",
+        "text": "foreground",
+        "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+        "radius": 0,
+        "ring": { "light": "#907a00", "dark": "#a397ff" }
+      },
+      "field-label": { "size": 12, "weight": "600" },
+      "submit": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "600",
+        "size": 14,
+        "inset": 20
+      },
+      "action": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "600",
+        "size": 14,
+        "inset": 20
+      },
+      "legal": { "text": { "light": "#000000", "dark": "#d4d4d8" }, "size": 14 },
+      "ui.badge.success@arcade.protection/checkout.summary.after": {
+        "background": "card",
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "border": "card",
+        "radius": 0,
+        "padding": 0,
+        "weight": "600",
+        "size": 12
+      },
+      "ui.text.neutral@arcade.protection/checkout.summary.after": {
+        "text": { "light": "#111111", "dark": "#9f9fa9" },
+        "size": 12,
+        "weight": "400"
+      }
+    },
+    "receipt": {
+      "page": {
+        "gradient": { "shape": "radial", "from": { "light": "background", "dark": "#2b2d6e" }, "to": "background" }
+      },
+      "frame": { "max-width": 1400 },
+      "status": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "status-title": { "size": 30, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "status-message": { "text": { "light": "#111111", "dark": "#9f9fa9" } },
+      "tracking": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "order": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "order-facts": {
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "status-badge": {
+        "background": "muted",
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "border": "#524179",
+        "border-width": 1,
+        "radius": 0
+      },
+      "summary": { "text": { "light": "#000000", "dark": "#cbcbd1" } },
+      "summary-heading": { "size": 20, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "summary-rows": { "text": { "light": "#000000", "dark": "#cbcbd1" }, "size": 14 },
+      "summary-total": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 20, "weight": "600" },
+      "summary-total-label": { "text": { "light": "#000000", "dark": "#ffffff" }, "size": 16, "weight": "600" },
+      "summary-add-on": { "text": { "light": "#000000", "dark": "#5ee9b5" } },
+      "summary-add-on-detail": {
+        "background": { "light": "#dff7e8", "dark": "#10161e" },
+        "border": { "light": "#b7e6c9", "dark": "#10161e" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 8,
+        "size": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#7e7e88" }
+      },
+      "delivery": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "section-heading": { "size": 20, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "delivery-contact": {
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "lines": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "lines-heading": { "size": 20, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "line": { "border": "#524179", "radius": 0 },
+      "line-image": { "radius": 0, "background": "popover" },
+      "line-title": { "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "line-details": { "text": { "light": "#111111", "dark": "#9f9fa9" }, "size": 12 },
+      "line-price": {
+        "size": 18,
+        "weight": "600",
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "muted": { "light": "#111111", "dark": "#83838d" }
+      },
+      "conversation": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "message": {
+        "background": { "light": "#e6f6ef", "dark": "#1d2035" },
+        "border": { "light": "#047857", "dark": "#34d399" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "message-own": {
+        "background": { "light": "#ffffff", "dark": "#272239" },
+        "border": { "light": "#7b7b7b", "dark": "#d6d6d6" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "input": {
+        "background": "muted",
+        "text": "foreground",
+        "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+        "radius": 0,
+        "ring": { "light": "#907a00", "dark": "#a397ff" }
+      },
+      "action": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "radius": 0,
+        "weight": "600"
+      },
+      "submit": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "600",
+        "size": 14,
+        "inset": 20
+      },
+      "dialog": {
+        "background": "#171124",
+        "text": "#ffffff",
+        "muted": "#d4d4d8",
+        "border": { "light": "#eaeaea", "dark": "#49396d" },
+        "border-width": 1,
+        "radius": 0,
+        "shadow": "lg"
+      },
+      "dialog-title": { "size": 24, "weight": "800", "leading": "tight", "text": "#ffffff" },
+      "dialog-back": {
+        "text": "#e4e4e7",
+        "border": "#8575ae",
+        "border-width": 1,
+        "radius": 0,
+        "weight": "700",
+        "inset": 20
+      },
+      "dialog-confirm": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "800",
+        "size": 14,
+        "inset": 20
+      }
+    },
+    "account": {
+      "page": {
+        "gradient": { "shape": "radial", "from": { "light": "background", "dark": "#2b2d6e" }, "to": "background" }
+      },
+      "navigation": {
+        "background": { "light": "#f1f1f1", "dark": "#18112a" },
+        "border": { "light": "#eaeaea", "dark": "#503e70" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 8,
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "nav-item": { "text": { "light": "#111111", "dark": "#9f9fa9" }, "size": 14, "weight": "600", "radius": 0 },
+      "nav-current": {
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "link": { "light": "#000000", "dark": "#5ee9b5" },
+        "size": 14,
+        "weight": "600",
+        "radius": 0
+      },
+      "sign-out": {
+        "background": "muted",
+        "text": { "light": "#111111", "dark": "#9f9fa9" },
+        "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+        "border-width": 1,
+        "radius": 0,
+        "size": 12,
+        "weight": "600"
+      },
+      "heading-title": { "size": 24, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "heading-intro": { "text": { "light": "#111111", "dark": "#9f9fa9" } },
+      "card": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20, "gap": 12 },
+      "card-title": { "size": 18, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "status-badge": {
+        "background": "muted",
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "border": "#524179",
+        "border-width": 1,
+        "radius": 0
+      },
+      "summary": { "text": { "light": "#000000", "dark": "#cbcbd1" }, "gap": 12 },
+      "summary-heading": { "size": 20, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "summary-rows": { "text": { "light": "#000000", "dark": "#cbcbd1" }, "size": 14 },
+      "summary-total": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 20, "weight": "600" },
+      "summary-total-label": { "text": { "light": "#000000", "dark": "#ffffff" }, "size": 16, "weight": "600" },
+      "summary-add-on": { "text": { "light": "#000000", "dark": "#5ee9b5" } },
+      "summary-add-on-detail": {
+        "background": { "light": "#dff7e8", "dark": "#10161e" },
+        "border": { "light": "#b7e6c9", "dark": "#10161e" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 8,
+        "size": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#7e7e88" }
+      },
+      "line": { "border": "#524179", "radius": 0 },
+      "line-image": { "radius": 0, "background": "popover", "fit": "cover" },
+      "line-title": { "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "line-details": { "text": { "light": "#111111", "dark": "#9f9fa9" }, "size": 12 },
+      "line-price": { "size": 14, "weight": "600", "text": { "light": "#000000", "dark": "#5ee9b5" } },
+      "delivery-message": {
+        "background": { "light": "#f8f9fa", "dark": "#151024" },
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "radius": 0,
+        "padding": 16
+      },
+      "delivery-reveal": {
+        "background": "muted",
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+        "border-width": 1,
+        "radius": 0,
+        "size": 12
+      },
+      "conversation": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "message": {
+        "background": { "light": "#e6f6ef", "dark": "#1d2035" },
+        "border": { "light": "#047857", "dark": "#34d399" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "message-own": {
+        "background": { "light": "#ffffff", "dark": "#272239" },
+        "border": { "light": "#7b7b7b", "dark": "#d6d6d6" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "input": {
+        "background": "muted",
+        "text": "foreground",
+        "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+        "radius": 0,
+        "ring": { "light": "#907a00", "dark": "#a397ff" }
+      },
+      "action": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "radius": 0,
+        "weight": "600"
+      },
+      "submit": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "600",
+        "size": 14,
+        "inset": 20
+      },
+      "dialog": {
+        "background": "#171124",
+        "text": "#ffffff",
+        "muted": "#d4d4d8",
+        "border": { "light": "#eaeaea", "dark": "#49396d" },
+        "border-width": 1,
+        "radius": 0,
+        "shadow": "lg"
+      },
+      "dialog-title": { "size": 24, "weight": "800", "leading": "tight", "text": "#ffffff" },
+      "dialog-back": {
+        "text": "#e4e4e7",
+        "border": "#8575ae",
+        "border-width": 1,
+        "radius": 0,
+        "weight": "700",
+        "inset": 20
+      },
+      "dialog-confirm": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "800",
+        "size": 14,
+        "inset": 20
+      }
     }
   },
   "labels": {
-    "cart.heading": { "en": "Your Cart", "bn": "আপনার কার্ট" },
-    "cart.intro": { "en": "Review your items before checkout.", "bn": "চেকআউটের আগে পণ্যগুলো দেখে নিন।" },
-    "cart.summaryHeading": { "en": "Order Summary", "bn": "অর্ডারের সারাংশ" },
-    "cart.empty": { "en": "Your cart is empty.", "bn": "আপনার কার্ট খালি।" },
-    "cart.emptyText": { "en": "Add a product from the store to see it here.", "bn": "এখানে দেখতে স্টোর থেকে একটি পণ্য যোগ করুন।" },
+    "cart.heading": { "en": "My Basket", "bn": "আমার ঝুড়ি" },
+    "cart.intro": { "en": "Check each item before you pay now.", "bn": "দাম দেওয়ার আগে পণ্যগুলো মিলিয়ে নিন।" },
+    "cart.summaryHeading": { "en": "Basket Totals", "bn": "ঝুড়ির হিসাবটা" },
+    "cart.empty": { "en": "Your basket's empty", "bn": "আপনার ঝুড়ি ফাঁকা।" },
+    "cart.emptyText": {
+      "en": "Pick something from the shop to list it here.",
+      "bn": "এখানে রাখতে দোকান থেকে একটি পণ্য বেছে নিন।"
+    },
     "cart.continue": "continue-shopping",
     "dialog.goBack": "go-back",
     "dialog.confirm": "continue-checkout",
@@ -688,8 +1198,9 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 - an app's block on a line and in the summary, and an add-on row, each holding a 120-letter English word and a Bangla one;
 - a store that asks for its terms to be ticked: the required box and its words on a details form coloured per scheme;
 - lines, summary and details in one `columns` with twenty empty groups beside them: refused at save, or drawn with every part at its floor;
-- the default look and the customer's look with one, twenty and ninety-nine lines on a 390×700 phone, a 768×1024 tablet and a 1280×800 laptop;
-- the customer's cart (the reference above), offered and protected, at 390 and 1280, light and dark, and its protected cart in the drawer with the add-on row open;
+- the default look and the reference theme's look with one, twenty and ninety-nine lines on a 390×700 phone, a 768×1024 tablet and a 1280×800 laptop;
+- the phone tab bar's look (`tokens.tabBar`) on the account and a public page: the reference theme's, a hostile one and one just above every floor, and the store's own bar with the reference theme's tabs;
+- the reference theme's cart (above), offered and protected, at 390 and 1280, light and dark, and its protected cart in the drawer with the add-on row open;
 - the store's controls in its header, in the strip at the page's end and nowhere, in a store with the light or dark switch and two markets;
 - a stored document forged past the save (a stylesheet, the theme's chrome and search, content blocks in the page and a line): the store reads it with all of them dropped and its private pages' compile refused, so the theme stays (its light or dark switch is drawn) and its cart draws the default look with none of them;
 - the payment step, drawn as the editor's sample checkout draws it for buyers: a look in palette roles with its methods as a list, the same with a narrow frame and tiles, and a forged stylesheet, at 320, 390 and 1280 px, light and dark. It fails when Pay or the total is not drawn, is off screen when scrolled to or is covered; when Pay is smaller, lighter or fainter than the gift card's Apply, its words read under 4.5:1 on its fill, or it is not found on its card (its fill under 3:1 on what is behind it, with no edge that finds it, as Place order below); when the total is smaller than another money row or reads under 4.5:1; or when the payment provider's surface is painted other than the store paints it. Four mutations prove these fail: Pay hidden, the total hidden, Pay weaker than Apply, token mode reaching into the provider's surface;
@@ -704,7 +1215,7 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 | A line asking for a decision, a kit and an offer row | 390 dark, 1280 light | the confirmation dialog in both |
 | Place order asking for the decision | 390 light, 1280 dark | the confirmation dialog in both |
 | One, twenty and ninety-nine lines | 390×700 light, 768×1024 dark, 1280×800 light | none |
-| The customer's cart, offered or protected | 390 and 1280, each light and dark | its own checks in all four; focus rings at 390 light and 1280 dark; hover at 1280 dark |
+| The reference theme's cart, offered or protected | 390 and 1280, each light and dark | its own checks in all four; focus rings at 390 light and 1280 dark; hover at 1280 dark |
 | Every other state (empty, Bangla, Arabic, 120-letter words) | 320 light, 1280 dark | none |
 | The drawer | 390 light, 1280 dark | none |
 
@@ -731,14 +1242,15 @@ In every draw: the first screen, the store's controls, prominence, apps and add-
 | First screen | At scroll 0, none of the page's lead parts starts inside the screen. |
 | Depth | What the theme adds above Place order (its place under the theme less its place under the default look, same cart, the fold open) is over 3200px and 448px a line, or either place cannot be measured. |
 | Touch | On a phone, swiping from the top does not reach the end of the details form, Place order's own place (never its docked bar, on screen from the start). |
-| The customer's cart | The offer row's mark, sentence, price and Add Now are not in one band at 1280 or take more than two at 390; a status box does not paint its tone's surface; the add-on row does not open to its three lines in order, or its amount shows more than once. |
+| The reference theme's cart | The offer row's mark, sentence, price and Add Now are not in one band at 1280 or take more than two at 390; a status box does not paint its tone's surface; the add-on row does not open to its lines in order, or its amount shows more than once. |
 | Drawn as written | An element a style target names draws corners other than the target's `radius` token; under square or pill buttons, an action button (filled, `data-control="action"` or an app's `data-ui="button"`) on the cart, its dialogs, the drawer, the payment step, the receipt or the account draws other corners; under a square radius, a field or a public page's `rounded-lg`/`rounded-xl` draws rounded ones; under the default Style, any corner differs from what its class drew before. |
 | Reading order | A line, on the cart page or in the drawer, has its details, price, stepper, actions or app block before its title in the markup. |
-| Drawer lines | Five lines in the drawer on a 390x844 phone show fewer than two whole lines, or on a 320x568 one no whole line, or Check out is not wholly on screen. |
+| Drawer lines | Five lines in the drawer on a 390x844 phone show fewer than two whole lines, or on a 320x568 one no whole line (the reference theme's five lines too: four options each, one protected), the total or Check out is not wholly on screen, or an app block in the drawer's footer is squeezed or lies in a pane of its own shorter than it. |
 | Dialog actions | A confirmation dialog's Go back or Confirm says other words than the theme's `dialog.goBack` and `dialog.confirm`, runs out of the dialog or cuts its words, where the two do not fit side by side stacks with Confirm on top (it belongs at the bottom, nearest the thumb), or reads its actions in another order than it draws them (Go back, then Confirm). |
 | Empty cart | An empty cart shows no heading or no link back to the shop, with its lazy file refused (they are the page's own markup). |
+| Phone tab bar | On the account and a public page at 320 and 390 px (every tab's weight alone too), light and dark, English and Bangla (the reference theme's look, a hostile look, one just above every floor, the store's own): a label is cut, takes more than two lines, runs out of the bar, is drawn under 10px or reads under 4.5:1 on the bar; an icon runs out of the bar or its glyph is under 14px inside its chip; the current tab differs by its hue alone; the page reserves less than the bar's height; the theme's look is not written where it set one. |
 | Drawer line block | A line's app block in the drawer lies elsewhere than the cart page's line puts it: under the whole line from the image's edge, or in the text column. |
-| Layout shift | The customer's cart, at 390 and 1280 px, scores 0.05 or more in layout shift (as Chrome counts it, no input) from its first paint until it is still; behind an 800ms cart check, 0.1 or more on a first view or 0.05 or more on the next. |
+| Layout shift | The reference theme's cart, at 390 and 1280 px, scores 0.05 or more in layout shift (as Chrome counts it, no input) from its first paint until it is still; behind an 800ms cart check, 0.1 or more on a first view or 0.05 or more on the next. Behind a check slower than a first view's 1200ms wait, the lines do not show within 1200ms of the check being asked (the blocks then move them once: that first view alone carries no shift bound). |
 | Server | Any request answers 5xx. |
 
 **How to run it.**
@@ -748,7 +1260,7 @@ In every draw: the first screen, the store's controls, prominence, apps and add-
 | The gate (named cases and the fast seed set) | `pnpm test:private-pages` |
 | A longer run | `pnpm test:private-pages --seeds 30 --from 100` (`--no-named` for seeds only, `--all-states` for every state of each) |
 | One seed or case | `--seed 7`, `--case "B4"` (a failing seed prints its document) |
-| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (63 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, the total ranked by size only, a filled button's fill unchecked, an edge read by a border it does not draw, Go back filled, the switch drawn under `controls: none`, a nested control's cells left to the row around it, shape tokens at zero specificity, Place order's dialog in the store's words, the empty cart's words left to its lazy file, the action row reaching the filled actions, an edge's solid style at zero specificity with the action row reaching it, the drawer's line block in its text column, outline buttons on their surface radius, the radius steps rounding a square theme, a dialog's actions stacking with Confirm on top, a line reading its details before its title, and the drawer's footer never yielding to its lines). A rule of the store's stylesheet is undone by CSS the gallery draws after the store's sheets (Tailwind reads the stylesheet's imports from disk), naming the source text it takes back |
+| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (71 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, the total ranked by size only, a filled button's fill unchecked, an edge read by a border it does not draw, Go back filled, the switch drawn under `controls: none`, a nested control's cells left to the row around it, shape tokens at zero specificity, Place order's dialog in the store's words, the empty cart's words left to its lazy file, the action row reaching the filled actions, an edge's solid style at zero specificity with the action row reaching it, the drawer's line block in its text column, outline buttons on their surface radius, the radius steps rounding a square theme, a dialog's actions stacking with Confirm on top, a line reading its details before its title, the drawer's footer never yielding to its lines, its blocks in a pane shorter than they are, a tab's long name cut to an ellipsis, a tab's icon squeezed inside its chip, every tab's weight reaching the current tab, and a first view held past 1200ms). A rule of the store's stylesheet is undone by CSS the gallery draws after the store's sheets (Tailwind reads the stylesheet's imports from disk), naming the source text it takes back |
 
 The gate checks the cart page with the fixture store's data, not every store's data.
 
@@ -1021,10 +1533,28 @@ account style dialog-text [data-private="dialog"] [data-part="dialog-text"] toke
 account style dialog-agree [data-private="dialog"] [data-part="dialog-agree"] tokens=background,text,border,border-width,radius,padding
 account style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=text,border,border-width,radius,ring,inset,weight boundary=edge
 account style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=dialog-back:size+weight
+tabBar root data-private=tab-bar
+tabBar part bar hooks=tab-bar,tab,tab-label,tab-icon,tab-badge
+tabBar layouts 
+tabBar style bar [data-private="tab-bar"] tokens=background,border,height,backdrop
+tabBar style label [data-private="tab-bar"] [data-part="tab-label"] tokens=text,size,weight,case,tracking,clamp
+tabBar style current [data-private="tab-bar"] [data-part="tab"][aria-current] tokens=text,weight,background,padding,ring,ring-width
+tabBar style icon [data-private="tab-bar"] [data-part="tab-icon"] tokens=size,background,border,border-width,radius,padding graphic
+tabBar style badge [data-private="tab-bar"] [data-part="tab-badge"] tokens=background,text
 dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-agree,dialog-actions,dialog-back,dialog-confirm,field-label
 buyer-ui attributes=data-buyer-ui-target,data-buyer-ui-app,data-ui
 chrome roots data-private=core-header|core-footer controls=header|footer|none
 layout tokens=background,gradient,border,border-width,border-style,radius,shadow,padding,gap,columns,columns-wide
+tabBar bound bar.height 56..96px
+tabBar bound label.size 10..16px
+tabBar bound icon.size 16..32px
+tabBar bound icon.padding 0..16px
+tabBar bound icon.radius 0..32px
+tabBar bound icon.border-width 0..2px
+tabBar bound current.padding 0..16px
+tabBar bound current.ring-width 0..4px
+tabBar choice label.clamp 1
+tabBar choice label.clamp 2
 buyer-ui style ui.banner[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="banner"] tokens=background,text,border,border-width,radius,shadow,padding
 buyer-ui style ui.stack[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="stack"][data-tone] tokens=background,text,border,border-width,radius,shadow,padding,gap
 buyer-ui style ui.button[.primary|secondary|critical][@<app>][/<target>] :is(a[data-ui="button"],[data-ui="button"]>button) tokens=background,text,border,border-width,radius,ring,inset,weight,size,case

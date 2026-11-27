@@ -47,6 +47,7 @@ const { cards, words } = Astro.props;
             href={`${card.href}#buy-again`}
             data-astro-prefetch="false"
             data-buy-again={card.buyAgain}
+            data-control="action"
             class="relative z-10 inline-flex min-h-9 items-center rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted sm:min-h-10 sm:text-sm"
           >{words.buyAgain}</a>
         </div>

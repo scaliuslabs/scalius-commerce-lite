@@ -339,11 +339,7 @@ const FORGED_WORDS = "Forged words 7Q, call 01700000000";
 const FORGED_MARK = "forged-7q";
 const FORGED_BLOCK = (hook) => ({ type: "content", hook, content: { kind: "text", text: { en: FORGED_WORDS } } });
 /** The customer's protected cart's add-on lines (apps/storefront/src/gallery/api.ts `customerAddOns`), in order. */
-const CUSTOMER_DETAILS = [
-  "Protection ID will be given after order completion.",
-  "Grand Theft Auto V: Premium Edition #1 · ৳350 · Protection ID XXX-XXX-XXX",
-  "Grand Theft Auto V: Premium Edition #2 · ৳350 · Protection ID XXX-XXX-XXX",
-];
+const CUSTOMER_DETAILS = ["Grand Theft Auto V: Premium Edition #1", "Grand Theft Auto V: Premium Edition #2"];
 /** The customer's look (packages/shared/src/storefront-theme/private-reference.fixture.ts): its palettes and privatePages. */
 const REFERENCE = { reference: true, toggle: true, scheme: "system" };
 
@@ -602,13 +598,12 @@ const RECEIPT_LOOK = {
   order: CARD_LOOK, delivery: CARD_LOOK, lines: CARD_LOOK, "summary-total": EMERALD_TOTAL,
   "summary-total-label": { text: "foreground", size: 16, weight: "600" }, "status-badge": { radius: 0 }, "status-title": { size: 30, weight: "600" },
 };
-const ACCOUNT_LOOK = {
-  card: CARD_LOOK, "nav-current": { text: "foreground", weight: "600" }, "sign-out": { background: "muted", radius: 0, weight: "600" },
-  "heading-title": { size: 24, weight: "600" }, "status-badge": { radius: 0 }, "summary-total": EMERALD_TOTAL,
-};
 const AFTER_ORDER_CASES = {
-  "the receipt in the customer's look": { request: { ...REFERENCE, page: "sample-receipt" }, privatePages: { tokens: { receipt: RECEIPT_LOOK } } },
-  "the account in the customer's look": { request: { ...REFERENCE, page: "sample-account" }, privatePages: { tokens: { account: ACCOUNT_LOOK } } },
+  // The customer's own receipt, account and payment step: its release's tokens (the reference fixture), as stores draw them.
+  "the receipt in the customer's look": { request: { ...REFERENCE, page: "sample-receipt" } },
+  "the account in the customer's look": { request: { ...REFERENCE, page: "sample-account" } },
+  "the account's order page in the customer's look": { request: { ...REFERENCE, page: "account-order" } },
+  "the payment step in the customer's look": { request: { ...REFERENCE, page: "sample-checkout" }, states: ["base"] },
   // A receipt document forged past the save: a stylesheet hiding the total and a content block. None of it draws.
   "the receipt forged past the save": { request: { toggle: true, scheme: "system", page: "sample-receipt", forged: {
     pages: { receipt: { layout: [FORGED_BLOCK("forged-page")] } },
@@ -683,8 +678,8 @@ const HYGIENE_CASES = {
   // look (its cart line arranges it so), in the text column under the host's own line.
   "the customer's offered cart in the drawer: a line's app block under the line": { states: ["customer"], drawerLineTarget: "below", request: { ...REFERENCE, page: "home" } },
   "the store's own drawer: a line's app block in the text column": { states: ["base"], drawerLineTarget: "column", request: { page: "home" }, privatePages: {} },
-  // Five lines in the drawer on a phone: its lines keep a share of the sheet (the bottom group's other parts join them
-  // where they would crowd them): two whole lines on a 390x844 phone, one and Check out on a 320x568 one.
+  // Five lines in the drawer on a phone: the lines keep the sheet (the rows above the total end the scrolling region,
+  // each app block at its own height): two whole lines on a 390x844 phone, one and Check out on a 320x568 one.
   // A public page under a square theme: its radius steps (`rounded-lg`, `rounded-xl`) draw square too (they once added
   // 1px and 2px to every radius, a square one included).
   "a square theme's public page": { states: ["base"], publicSquare: true, request: { style: SQUARE, page: "home" }, privatePages: {} },
@@ -696,16 +691,59 @@ const HYGIENE_CASES = {
     { type: "part", part: "undo" }, { type: "part", part: "offers" },
     { type: "layout", layout: "group", children: [{ type: "part", part: "summary" }, { type: "target", target: "cart_drawer.footer" }, { type: "part", part: "actions" }] },
   ] } } } },
-  "five lines in the customer's drawer on a phone": { states: ["five"], drawerLines: true, viewports: [{ width: 390, height: 844, scheme: "dark" }, { width: 320, height: 568, scheme: "light" }], request: { ...REFERENCE, page: "home" } },
+  // The customer's own five lines (its games with their four options, one protected with its add-on and Edit) and its
+  // protection app's footer blocks, as a real store draws them.
+  "five lines in the customer's drawer on a phone": { states: ["customer-five"], drawerLines: true, viewports: [{ width: 390, height: 844, scheme: "dark" }, { width: 320, height: 568, scheme: "light" }], request: { ...REFERENCE, page: "home" } },
   // The customer's cart arrives without moving under the buyer: what shifts from the first paint until the page is
   // still (`layoutShift`: the layout-shift score, as Chrome counts it) stays under 0.05, on a phone and a wide screen.
   "the customer's cart arrives without moving": { states: ["customer"], layoutShift: 0.05, request: REFERENCE },
   // A cart check slower than the first showing's wait (800ms, the gallery's own API answers at once): the first view's
-  // blocks land after the lines and move them (measured 0.089 at 390: its bound, `layoutShift`, 0.1); the next view
-  // reserves each block's remembered room and does not move (measured 0.003: `revisitShift`).
+  // blocks land before the lines show (a first view waits for them up to FIRST_REVEAL_WAIT_MS, 1200ms) and nothing
+  // moves (measured 0.005 at 390: its bound, `layoutShift`, 0.1); the next view reserves each block's remembered room
+  // and does not wait (`revisitShift`).
   "the customer's cart with a slow check, and the next view": { states: ["customer"], layoutShift: 0.1, revisitShift: 0.05, request: { ...REFERENCE, slowCheckMs: 800 } },
+  // A check slower than the wait (2.5s): the lines show by 1200ms after it is asked, the phone's LCP budget, and the
+  // blocks move them once when they land. That one-time shift on a first view is accepted (FIRST_REVEAL_WAIT_MS), so this
+  // case alone carries no shift bound; the next view reserves the blocks' room and does not move.
+  "the customer's cart with a check slower than the first view's wait": { states: ["customer"], linesShownBy: 1200, revisitShift: 0.05, request: { ...REFERENCE, slowCheckMs: 2500 } },
 };
 Object.assign(REGRESSIONS, HYGIENE_CASES);
+
+// ─── The phone tab bar (`tokens.tabBar`): one look on every page that draws it ───
+// Its look by tokens on the account (a buyer's page: no theme stylesheet loads) and on a public page, English and
+// Bangla, at 320 and 390, light and dark: every label whole (two lines at most, never cut), at its floor or above and
+// reading on the bar, the icons inside the bar, the current tab apart by more than its hue, and the page's reserve
+// under it as tall as the bar (`tabBarShown`).
+const TAB_BAR_VIEWPORTS = [{ width: 320, height: 640, scheme: "light" }, { width: 390, height: 844, scheme: "dark" }, { width: 320, height: 640, scheme: "dark" }, { width: 390, height: 844, scheme: "light" }];
+/** The outside theme's bar in tokens (private-tab-bar.test.ts `OUTSIDE_THEME_BAR`). */
+const OUTSIDE_BAR = {
+  bar: { background: "background", border: "border", height: 80, backdrop: "blur" },
+  label: { text: "muted-foreground", size: 10, weight: "700", case: "uppercase", tracking: "wide", clamp: "2" },
+  icon: { size: 20, padding: 8, radius: 32, background: { light: "#ebebeb", dark: "#211c31" } },
+  current: { text: "foreground", padding: 12, background: { light: "#e6e6e6", dark: "#272436" }, ring: "#4f5fae", "ring-width": 2 },
+};
+/** A hostile look that saves: a solid bar per scheme, square edged chips, heavy wide capitals, a 3px ring, the bar at its least height. */
+const HOSTILE_BAR = {
+  bar: { background: { light: "#fffbe6", dark: "#06140f" }, border: { light: "#111111", dark: "#5ee9b5" }, height: 78, backdrop: "solid" },
+  label: { text: { light: "#4a3b00", dark: "#c9f2e3" }, size: 10, weight: "800", case: "uppercase", tracking: "wider", clamp: "2" },
+  icon: { size: 24, padding: 6, radius: 0, background: { light: "#f1e6b3", dark: "#123528" }, border: { light: "#111111", dark: "#5ee9b5" }, "border-width": 2 },
+  current: { text: { light: "#000000", dark: "#ffffff" }, weight: "800", padding: 6, background: { light: "#fed700", dark: "#0b5d44" }, ring: { light: "#111111", dark: "#ffffff" }, "ring-width": 3 },
+  badge: { background: { light: "#111111", dark: "#fed700" }, text: { light: "#fed700", dark: "#111111" } },
+};
+const TAB_BAR_CASES = {
+  "the phone tab bar in the customer's look, on the account, English and Bangla": { states: ["base", "bn"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { ...REFERENCE, page: "account-profile", tabBar: OUTSIDE_BAR } },
+  "the phone tab bar in the customer's look, on a public page": { states: ["base", "bn"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { ...REFERENCE, page: "home", tabBar: OUTSIDE_BAR } },
+  "the phone tab bar in a hostile look, on the account and a public page": { states: ["base"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { tabs: true, toggle: true, scheme: "system", page: "account-profile", tabBar: HOSTILE_BAR } },
+  "the phone tab bar just above every floor": { states: ["base"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { tabs: true, toggle: true, scheme: "system", page: "account-profile", nearFloorTabBar: true } },
+  // The store's own bar (no tokens) under the customer's tabs: a long label wraps, never ends in "…".
+  "the store's own phone tab bar with the customer's tabs, English and Bangla": { states: ["base", "bn"], tabBar: "store", viewports: TAB_BAR_VIEWPORTS, request: { ...REFERENCE, page: "home" } },
+  // Every tab's weight alone: the current tab keeps the store's 700, 200 heavier (its rule is written beside the tabs').
+  "the phone tab bar with only its labels' weight": { states: ["base"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { tabs: true, toggle: true, scheme: "system", page: "account-profile", tabBar: { label: { weight: "500" } } } },
+  "a phone tab bar label under its floor": { refused: "token_value", refusedFor: /label size/, request: { tabs: true, page: "home", tabBar: { label: { size: 8 } } }, states: ["base"] },
+  // The current tab told apart by words 1.5:1 from the others' and one weight step: a hue and a shade, refused.
+  "a current tab apart by 1.5:1 words alone": { refused: "contrast", refusedFor: /current tab is told apart by its hue alone/, request: { tabs: true, toggle: true, scheme: "system", page: "home", tabBar: { bar: { height: 72 }, label: { text: { light: "#555555", dark: "#a0a0a0" }, weight: "500" }, current: { text: { light: "#000000", dark: "#e6e6e6" }, weight: "600" } } }, states: ["base"] },
+};
+Object.assign(REGRESSIONS, TAB_BAR_CASES);
 
 // ─── PNG pixels (Chromium's 8-bit RGB or RGBA screenshots) ────────────────
 
@@ -883,9 +921,10 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt, styleTargets }
     if (style.backgroundImage !== "none" && !row.gradient) problems.push(`${name(element)}: paints an image its row (${row.key}) does not`);
   };
   // The page itself: in token mode its row paints the body (the theme's page paint included); with no
-  // tokens nothing may paint it but the page colour, or what stands on it would go unchecked at save.
+  // tokens nothing may paint it but the page colour, or what stands on it would go unchecked at save. The drawer
+  // stands on its own card over a public page, whose paint the public pages' save checks: it is not the drawer's.
   if (tokenMode && rowOf.has(document.body)) checkPaint(document.body);
-  if (!tokenMode) {
+  if (!tokenMode && !scope?.includes("cart-drawer")) {
     const body = getComputedStyle(document.body);
     const page = getComputedStyle(document.documentElement).getPropertyValue("--background").trim();
     if (body.backgroundImage !== "none" || (/^#[0-9a-f]{6}$/i.test(page) && body.backgroundColor !== parse(page))) {
@@ -1370,7 +1409,7 @@ function forgedAbsent({ words, mark }) {
  * The customer's cart under its own look (private-look.md 2.1, 2.2, 3), measured: the offer row's pieces (their
  * boxes) in one band at 1280 and in at most two at 390 (the sentence's own words may wrap inside its box: beside
  * the details form the lines column is 572px at 1280, not the prototype's 1440 page); the status box painting its tone's
- * surface (its row's paint, not the summary's); the add-on row opened to its three lines in order, its amount once.
+ * surface (its row's paint, not the summary's); the add-on row opened to its lines in order, its amount once.
  */
 function customerChecks({ state, rows, details }) {
   const problems = [];
@@ -1568,6 +1607,24 @@ function installLayoutShifts() {
       }
     }).observe({ type: "layout-shift", buffered: true });
   } catch { /* no Layout Instability API: nothing recorded */ }
+  // When the cart check is first asked, and when the cart's lines first show (`data-cart-state="items"`), for `linesShownBy`.
+  const fetched = window.fetch;
+  window.fetch = function (input, init) {
+    if (window.__ptCheckAt === undefined && /validate-cart|cart-validation/.test(String(input?.url ?? input))) window.__ptCheckAt = performance.now();
+    return fetched.call(this, input, init);
+  };
+  new MutationObserver(() => {
+    if (window.__ptLinesAt === undefined && document.querySelector('[data-private="cart"][data-cart-state="items"]')) window.__ptLinesAt = performance.now();
+  }).observe(document, { subtree: true, attributes: true, attributeFilter: ["data-cart-state"], childList: true });
+}
+
+/** The lines show at most `bound` ms after the cart check is asked (its request's start): a slower check never holds them longer. */
+function linesShownBy(bound) {
+  const asked = window.__ptCheckAt;
+  if (asked === undefined) return ["the cart check was never asked"];
+  if (window.__ptLinesAt === undefined) return ["the lines never showed"];
+  const waited = Math.round(window.__ptLinesAt - asked);
+  return waited <= bound + 150 ? [] : [`the lines showed ${waited}ms after the cart check was asked: a first view waits at most ${bound}ms`];
 }
 
 /** The layout-shift score so far, against `bound`, naming the largest shifts. */
@@ -1579,18 +1636,112 @@ function layoutShiftOver(bound) {
 
 /**
  * In the open drawer at scroll 0: its lines keep room on a phone: two whole lines where the screen is 700px or taller,
- * else one; and Check out wholly on screen.
+ * else one; Check out and the total wholly on screen; and every app block in the drawer's footer at its own height, in a
+ * box that can show it whole (never squeezed, nor clipped to a sliver by a pane shorter than it).
  */
 function drawerLinesShown() {
   const problems = [];
-  const region = document.querySelector('[data-private="cart-drawer"] [data-part="drawer-scroll"]')?.getBoundingClientRect();
-  const lines = [...document.querySelectorAll('[data-private="cart-drawer"] [data-part="drawer-lines"] [data-part="line"]')].map((line) => line.getBoundingClientRect());
+  const sheet = '[data-private="cart-drawer"]';
+  // At scroll 0, as the drawer opens (the walk before scrolled each text into view).
+  for (const box of document.querySelectorAll(`${sheet} [data-part="drawer-scroll"] *`)) if (box.scrollTop > 0) box.scrollTop = 0;
+  const region = document.querySelector(`${sheet} [data-part="drawer-scroll"]`)?.getBoundingClientRect();
+  const lines = [...document.querySelectorAll(`${sheet} [data-part="drawer-lines"] [data-part="line"]`)].map((line) => line.getBoundingClientRect());
   if (!region) return ["the drawer draws no scrolling region"];
   const whole = lines.filter((line) => line.top >= region.top - 0.5 && line.bottom <= region.bottom + 0.5 && line.bottom <= innerHeight).length;
   const wanted = innerHeight >= 700 ? 2 : 1;
-  if (whole < wanted) problems.push(`${whole} whole line${whole === 1 ? "" : "s"} on screen at ${innerWidth}x${innerHeight} (its scrolling region ${Math.round(region.height)}px of the sheet): at least ${wanted}`);
-  const checkout = document.querySelector('[data-private="cart-drawer"] [data-part="drawer-checkout"]')?.getBoundingClientRect();
-  if (!checkout || checkout.top < 0 || checkout.bottom > innerHeight + 0.5) problems.push("Check out is not wholly on screen");
+  if (whole < wanted) problems.push(`${whole} whole line${whole === 1 ? "" : "s"} on screen at ${innerWidth}x${innerHeight} (its scrolling region ${Math.round(region.top)} to ${Math.round(region.bottom)}, the lines ${lines.slice(0, 3).map((line) => `${Math.round(line.top)} to ${Math.round(line.bottom)}`).join(", ")}): at least ${wanted}`);
+  for (const part of ["drawer-checkout", "drawer-total"]) {
+    const box = document.querySelector(`${sheet} [data-part="${part}"]`)?.getBoundingClientRect();
+    if (!box || box.top < 0 || box.bottom > innerHeight + 0.5) problems.push(`${part === "drawer-total" ? "the total" : "Check out"} is not wholly on screen`);
+  }
+  for (const block of document.querySelectorAll(`${sheet} [data-buyer-ui-target="cart_drawer.footer"] [data-buyer-ui-app]`)) {
+    if (!block.checkVisibility()) continue;
+    const height = block.getBoundingClientRect().height;
+    if (height < 8 || block.scrollHeight > block.clientHeight + 1) problems.push(`an app block in the drawer's footer is drawn ${Math.round(height)}px tall, its own height ${block.scrollHeight}px`);
+    // It scrolls with the lines in the drawer's own region, or lies in a box that shows it whole.
+    for (let box = block.parentElement; box && !box.matches(sheet); box = box.parentElement) {
+      if (!/(auto|scroll|hidden|clip)/.test(getComputedStyle(box).overflowY)) continue;
+      if (!box.parentElement?.matches('[data-part="drawer-scroll"]') && box.clientHeight + 1 < height) problems.push(`an app block in the drawer's footer (${Math.round(height)}px) lies in a pane of its own ${box.clientHeight}px tall: it shows only a sliver`);
+      break;
+    }
+  }
+  return problems;
+}
+
+/**
+ * The phone tab bar as drawn: present; the theme's look written where it set one (`looked`); every label whole (not
+ * cut at its side or below, at most two lines, inside the bar) at 10px or more and reading 4.5:1 on the bar (its colour
+ * over the page's, at its lightest and darkest through a blurred bar); every icon inside the bar, its glyph at least
+ * 14px inside its chip; the current tab apart
+ * from the others by its weight, a ring or its words' lightness; the page's reserve as tall as the bar.
+ */
+function tabBarShown({ looked }) {
+  const problems = [];
+  // A computed colour (`rgb()`, `rgba()`, `color(srgb …)`) as [r, g, b, alpha] in 0 to 255 and 0 to 1.
+  const parseColour = (text) => {
+    const srgb = /color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)(?: \/ ([\d.]+))?\)/.exec(text);
+    if (srgb) return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255, srgb[4] === undefined ? 1 : Number(srgb[4])];
+    const rgb = /rgba?\(([\d.]+), ([\d.]+), ([\d.]+)(?:, ([\d.]+))?\)/.exec(text);
+    return rgb ? [Number(rgb[1]), Number(rgb[2]), Number(rgb[3]), rgb[4] === undefined ? 1 : Number(rgb[4])] : null;
+  };
+  const bar = document.querySelector('[data-private="tab-bar"]');
+  if (!bar?.checkVisibility()) return ["the phone tab bar is not drawn"];
+  if (looked && !document.querySelector("style[data-tab-bar-look]")) problems.push("the theme's look for the bar is not written on the page");
+  if (!looked && document.querySelector("style[data-tab-bar-look]")) problems.push("a look for the bar is written where the theme set none");
+  const box = bar.getBoundingClientRect();
+  const reserve = Number.parseFloat(getComputedStyle(document.body).paddingBottom);
+  if (reserve + 0.5 < box.height) problems.push(`the page reserves ${reserve}px under its content for a ${Math.round(box.height)}px bar`);
+  const luminance = ([r, g, b]) => [r, g, b].map((channel) => { const value = channel / 255; return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4; }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+  const contrast = (a, b) => { const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const page = parseColour(getComputedStyle(document.body).backgroundColor) ?? [255, 255, 255, 1];
+  const fill = parseColour(getComputedStyle(bar).backgroundColor) ?? [0, 0, 0, 0];
+  const over = (under) => [0, 1, 2].map((index) => fill[index] * fill[3] + under[index] * (1 - fill[3]));
+  const backs = [over([255, 255, 255]), over([0, 0, 0]), over(page)];
+  const words = (element) => element.textContent.replace(/\s+/g, " ").trim();
+  for (const label of bar.querySelectorAll('[data-part="tab-label"]')) {
+    const style = getComputedStyle(label);
+    const rect = label.getBoundingClientRect();
+    const name = words(label);
+    if (label.scrollHeight > label.clientHeight + 1 || label.scrollWidth > label.clientWidth + 1) problems.push(`the label "${name}" is cut (${label.scrollWidth}x${label.scrollHeight} in ${label.clientWidth}x${label.clientHeight})`);
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    const lines = new Set([...range.getClientRects()].filter((each) => each.width > 1).map((each) => Math.round(each.top))).size;
+    if (lines > 2) problems.push(`the label "${name}" takes ${lines} lines`);
+    // Every glyph inside the label's box (it clips): a Bangla vowel sign above or below its line is drawn whole.
+    const glyphs = [...range.getClientRects()].filter((each) => each.width > 1);
+    const clipped = glyphs.filter((each) => each.top < rect.top - 0.5 || each.bottom > rect.bottom + 0.5);
+    if (clipped.length > 0) problems.push(`the label "${name}" clips its glyphs: their box ${Math.round(clipped[0].top)} to ${Math.round(clipped[0].bottom)}, the label's ${Math.round(rect.top)} to ${Math.round(rect.bottom)}`);
+    if (rect.top < box.top - 0.5 || rect.bottom > box.bottom + 0.5) problems.push(`the label "${name}" runs out of the bar`);
+    if (Number.parseFloat(style.fontSize) < 10) problems.push(`the label "${name}" is drawn at ${style.fontSize}, under the bar's 10px`);
+    const ink = parseColour(style.color);
+    if (ink) {
+      const least = Math.min(...backs.map((back) => contrast(ink, back)));
+      if (least < 4.45) problems.push(`the label "${name}" reads ${least.toFixed(2)}:1 on the bar`);
+    }
+  }
+  for (const icon of bar.querySelectorAll('[data-part="tab-icon"]')) {
+    const rect = icon.getBoundingClientRect();
+    if (rect.top < box.top - 0.5 || rect.bottom > box.bottom + 0.5) problems.push(`a tab's icon (${Math.round(rect.height)}px) runs out of the ${Math.round(box.height)}px bar`);
+    // The glyph itself, inside its chip's room and edge: never squeezed to a dot.
+    const style = getComputedStyle(icon);
+    const glyph = rect.width - ["paddingLeft", "paddingRight", "borderLeftWidth", "borderRightWidth"].reduce((sum, side) => sum + Number.parseFloat(style[side]), 0);
+    if (glyph < 14) problems.push(`a tab's icon is drawn ${glyph.toFixed(1)}px wide inside its chip`);
+  }
+  // The current tab is told apart by more than its hue: words 3:1 from the others', a ring 2px or wider reading 3:1 on
+  // the bar, a weight 200 heavier, or a chip 4px larger (both drawn).
+  const current = bar.querySelector('[data-part="tab"][aria-current]');
+  const other = bar.querySelector('[data-part="tab"]:not([aria-current])');
+  if (current && other) {
+    const [a, b] = [getComputedStyle(current), getComputedStyle(other)];
+    const [mine, theirs] = [current, other].map((tab) => tab.querySelector('[data-part="tab-icon"]'));
+    const ring = mine ? /(rgba?\([^)]*\)|color\([^)]*\))\s+0px\s+0px\s+0px\s+([\d.]+)px/.exec(getComputedStyle(mine).boxShadow) : null;
+    const ringed = ring && Number(ring[2]) >= 1.95 && Math.min(...backs.map((back) => contrast(parseColour(ring[1]), back))) >= 2.95;
+    const apart = contrast(parseColour(a.color), parseColour(b.color)) >= 2.95;
+    const heavier = Number(a.fontWeight) - Number(b.fontWeight) >= 200;
+    const chip = (icon) => icon && parseColour(getComputedStyle(icon).backgroundColor)?.[3] > 0;
+    const larger = chip(mine) && chip(theirs) && mine.getBoundingClientRect().width - theirs.getBoundingClientRect().width >= 7.9;
+    if (!ringed && !apart && !heavier && !larger) problems.push("the current tab is told apart from the others by its hue alone");
+  }
   return problems;
 }
 
@@ -2141,6 +2292,7 @@ async function open(context, id, width, server5xx, height = 900) {
 async function draw({ context, id, state, width, height, focus, hover, interact, rows, controls, request, drawn, entry }) {
   const problems = [];
   const server5xx = [];
+  if (entry?.tabBar) return drawTabBar({ context, id, width, height, entry, request });
   if (request?.page === "home") return drawDrawer({ context, id, width, height, problems, server5xx, rows, state, request, entry });
   if (request?.page === "sample-checkout") return drawCheckout({ context, id, width, height, request, entry });
   if (entry?.blockLazy) await context.route(entry.blockLazy, (route) => route.abort());
@@ -2178,6 +2330,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
     // The first screen and Place order, as a buyer arrives: at scroll 0, then down the cart.
     add("first screen", await page.evaluate(firstScreen, LEAD));
     if (entry?.layoutShift !== undefined) add("layout shift", await page.evaluate(layoutShiftOver, entry.layoutShift));
+    if (entry?.linesShownBy !== undefined) add("first view", await page.evaluate(linesShownBy, entry.linesShownBy));
     if (entry?.revisitShift !== undefined) {
       // The next view in the same browser: the blocks' heights this view remembered reserve their room.
       await page.reload({ waitUntil: "load" });
@@ -2446,6 +2599,22 @@ async function drawCheckout({ context, id, width, height = 900, request, entry }
 }
 // ─── end of the payment step ───
 
+/** The phone tab bar on the page its case names, at a phone's width: `tabBarShown`. */
+async function drawTabBar({ context, id, width, height = 844, entry, request }) {
+  const problems = [];
+  const server5xx = [];
+  const page = await context.newPage();
+  page.on("response", (answer) => { if (answer.status() >= 500) server5xx.push(`${answer.status()} ${answer.request().method()} ${new URL(answer.url()).pathname}`); });
+  await page.setViewportSize({ width, height });
+  await timed("load", () => page.goto(`${gallery.url}/__gallery/e/${id}`, { waitUntil: "load" }));
+  await page.waitForSelector('[data-private="tab-bar"]', { timeout: 20_000 }).catch(() => {});
+  await settle(page);
+  problems.push(...(await page.evaluate(tabBarShown, { looked: entry.tabBar !== "store" && Boolean(request.tabBar || request.nearFloorTabBar) })).map((problem) => `tab bar: ${problem}`));
+  problems.push(...server5xx.map((answer) => `server: ${answer}`));
+  await page.close();
+  return problems;
+}
+
 async function drawDrawer({ context, id, width, height = 900, problems, server5xx, state, request, entry }) {
   const at = (label, list) => problems.push(...list.map((problem) => `${label}: ${problem}`));
   const page = await timed("load", () => open(context, id, width, server5xx, height));
@@ -2468,7 +2637,7 @@ async function drawDrawer({ context, id, width, height = 900, problems, server5x
       await page.waitForSelector(`${scope} [data-part="add-on-details"]`, { timeout: 10_000 }).catch(() => at("drawer", ["the add-on row is not drawn"]));
       await openAddOns(page, scope);
       const lines = await page.evaluate((scope) => [...document.querySelectorAll(`${scope} [data-part="add-on-detail"]`)].filter((line) => line.checkVisibility()).map((line) => line.textContent.replace(/\s+/g, " ").trim()), scope);
-      if (JSON.stringify(lines) !== JSON.stringify(CUSTOMER_DETAILS)) at("drawer", [`the add-on row opens to ${JSON.stringify(lines)}, not its three lines in order`]);
+      if (JSON.stringify(lines) !== JSON.stringify(CUSTOMER_DETAILS)) at("drawer", [`the add-on row opens to ${JSON.stringify(lines)}, not its lines in order`]);
       await settle(page);
     }
     const walked = await page.evaluate(walk, { rows: [], anatomy: [{ name: "the drawer", selector: scope }], uiKinds: UI_KINDS, mandatory: state === "empty" ? DRAWER_EMPTY_MANDATORY : DRAWER_MANDATORY, scope, exempt: EXEMPT, styleTargets: [] });

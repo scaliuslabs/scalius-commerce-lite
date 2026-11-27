@@ -52,6 +52,7 @@ import { PRIVATE_CONTROL_PLACES, PRIVATE_PAGE_KEYS, PRIVATE_PAGE_WORDS, type Pri
 
 export { PRIVATE_UI_TONES, PRIVATE_BUYER_UI_STYLES, type PrivateUiTone, type PrivateBuyerUiStyle } from "./private-buyer-ui";
 import { PRIVATE_BUYER_UI_STYLES } from "./private-buyer-ui";
+import { PRIVATE_TAB_BAR_BOUNDS, PRIVATE_TAB_BAR_CHOICES } from "./private-tab-bar-limits";
 
 /** Words in each language the theme writes them in, keyed by base language (`en`, `bn`). */
 export type PrivateWords = Record<string, string>;
@@ -88,6 +89,8 @@ export const PRIVATE_TOKEN_NAMES = [
   "background", "gradient", "text", "muted", "link", "error", "placeholder", "ring", "invalid", "border", "border-width", "border-style", "radius", "shadow", "padding", "inset", "gap",
   "font", "weight", "size", "leading", "case", "tracking", "align", "clamp",
   "columns", "columns-wide", "width", "height", "width-wide", "height-wide", "fit", "max-width",
+  // The phone tab bar's own (private-tab-bar.ts): a blurred or solid bar, the current tab's ring.
+  "backdrop", "ring-width",
 ] as const;
 export type PrivateTokenName = (typeof PRIVATE_TOKEN_NAMES)[number];
 
@@ -537,7 +540,8 @@ const CART_DRAWER: PrivatePageSpec = {
   root: "cart-drawer",
   frames: ["standard", "wide"],
   layoutHooks: { scroll: ["drawer-scroll"] },
-  // The scroll region holds what a buyer browses; the summary, its total and the way to check out stay in view.
+  // The scroll region holds what a buyer browses; the total and the way to check out stay in view (the summary's rows
+  // and the apps' footer blocks end the scroll region: CartFlyout.tsx).
   layoutContents: { scroll: ["added", "lines", "recommendations", "undo", "offers"] },
   parts: {
     header: part(true, ["drawer-header", "drawer-title", "drawer-count", "drawer-close"]),
@@ -867,6 +871,37 @@ const ACCOUNT_PAGE: PrivatePageSpec = {
   ...PRIVATE_PAGE_WORDS.account,
 };
 
+// ─── The phone tab bar (`tabBar`) ──────────────────────────────────────────
+
+/**
+ * The store's phone tab bar (`blocks.mobileNav` `bottom-tabs`), on every page that draws it, public and private:
+ * one look by tokens (private-tab-bar.ts writes and checks it), no arrangement. Its words are the theme's tabs.
+ */
+const TAB_BAR_ROOT = '[data-private="tab-bar"]';
+const TAB_BAR: PrivatePageSpec = {
+  root: "tab-bar",
+  // Not a part an arrangement places (the bar takes none): the bar itself, drawn by the store wherever the theme's
+  // phone navigation is the tab bar.
+  parts: { bar: part(false, ["tab-bar", "tab", "tab-label", "tab-icon", "tab-badge"]) },
+  targets: [],
+  layouts: [],
+  styles: {
+    // The bar: its colour (blurred at 94% over the page, or solid), its top edge and its height (the page reserves it).
+    bar: { selector: TAB_BAR_ROOT, absolute: true, tokens: ["background", "border", "height", "backdrop"], kind: "box", surface: "background", ink: "foreground" },
+    // Every tab's label and icon colour, the label's type and its lines (`clamp`, on the bar 1 or 2; 2 by default: a label is never cut).
+    label: { selector: `${TAB_BAR_ROOT} [data-part="tab-label"]`, absolute: true, tokens: ["text", "size", "weight", "case", "tracking", "clamp"], kind: "text", surface: "under", ink: "muted-foreground", on: "bar", hostSize: 12, hostWeight: 500 },
+    // The current tab (`aria-current`): its colour and weight, its icon's chip and a ring around it.
+    current: { selector: `${TAB_BAR_ROOT} [data-part="tab"][aria-current]`, absolute: true, tokens: ["text", "weight", "background", "padding", "ring", "ring-width"], kind: "text", surface: "under", ink: "foreground", on: "bar", hostWeight: 600 },
+    // Each tab's icon, in its tab's colour: its size and an optional chip (fill, edge, corners, room around the icon).
+    icon: { selector: `${TAB_BAR_ROOT} [data-part="tab-icon"]`, absolute: true, tokens: ["size", "background", "border", "border-width", "radius", "padding"], kind: "box", surface: "under", ink: "muted-foreground", on: "bar", graphic: true },
+    // The cart count.
+    badge: { selector: `${TAB_BAR_ROOT} [data-part="tab-badge"]`, absolute: true, tokens: ["background", "text"], kind: "box", surface: "destructive", ink: "destructive-foreground", on: "bar" },
+  },
+  layout: [p("bar")],
+  items: {},
+  ...PRIVATE_PAGE_WORDS.tabBar,
+};
+
 /**
  * Every private page the model draws, by its key in the theme document's
  * `privatePages.pages`.
@@ -877,6 +912,7 @@ export const PRIVATE_PAGES = {
   checkout: CHECKOUT_PAGE,
   receipt: RECEIPT_PAGE,
   account: ACCOUNT_PAGE,
+  tabBar: TAB_BAR,
 } as const satisfies Record<PrivatePageKey, PrivatePageSpec>;
 
 /** The hook every private surface's root carries (`data-private="<root>"`): the stylesheet's scope. */
@@ -940,6 +976,10 @@ export function privatePageAnatomy(): string[] {
   lines.push(`buyer-ui attributes=${PRIVATE_BUYER_UI_HOOKS.join(",")}`);
   lines.push(`chrome roots ${PRIVATE_SCOPE_ATTRIBUTE}=core-header|core-footer controls=${PRIVATE_CONTROL_PLACES.join("|")}`);
   lines.push(`layout tokens=${PRIVATE_LAYOUT_TOKENS.join(",")}`);
+  // The phone tab bar's own bounds and choices (private-tab-bar.ts), where they differ from a token's everywhere else:
+  // a choice a line of its own, so one more is growth.
+  for (const [name, [least, most]] of Object.entries(PRIVATE_TAB_BAR_BOUNDS)) lines.push(`tabBar bound ${name} ${least}..${most}px`);
+  for (const [name, values] of Object.entries(PRIVATE_TAB_BAR_CHOICES)) for (const value of values) lines.push(`tabBar choice ${name} ${value}`);
   for (const [kind, style] of Object.entries(PRIVATE_BUYER_UI_STYLES)) lines.push(`buyer-ui style ui.${kind}${style.tones ? `[.${style.tones.join("|")}]` : ""}[@<app>][/<target>] ${style.kind} tokens=${style.tokens.join(",")}`);
   return lines;
 }

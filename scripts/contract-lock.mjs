@@ -13,7 +13,9 @@
 //   node scripts/contract-lock.mjs --write [--allow-no-replay]
 //       write contract.lock.json once, on the freeze release's commit (every
 //       sealed file committed, every ledger entry typed, replay bundles frozen
-//       at this release). Refuses at any other release and over a lock. There
+//       at this release, and where the private reference check is in the tree,
+//       the outside theme release it names frozen: referenceReleaseProblems;
+//       `judge` refuses the same at or past the freeze). Refuses at any other release and over a lock. There
 //       is no relock: rewriting a lock arrives with the first new contract
 //       version, with its per-version snapshots and host adapter.
 //   node scripts/contract-lock.mjs anchor
@@ -210,9 +212,29 @@ export async function buildLock(root = DEFAULT_ROOT, { allowNoReplay = false, pl
 }
 
 /** Writes the lock, once, at the freeze release. A second lock is refused: relocking arrives with the first new contract version. */
+/**
+ * The private reference check (internal/reference-theme, stripped from the public copy) holds the rendered gate's
+ * reference look to an outside theme's release, and skips where that release cannot be read. At a release it must not
+ * skip: where the check is in the tree, the release its fixture names must be frozen under internal/replay.
+ */
+export function referenceReleaseProblems(root) {
+  const named = join(root, "internal/reference-theme/reference.json");
+  // The public copy has no `internal/`: nothing to hold. The private tree always carries the check: its absence is refused.
+  if (!existsSync(join(root, "internal"))) return [];
+  if (!existsSync(named)) return ["The private tree has no internal/reference-theme/reference.json: the rendered gate's reference look is checked against the outside theme's release from there; restore it."];
+  const { themeId, fixture } = JSON.parse(readFileSync(named, "utf8"));
+  const release = existsSync(join(root, fixture)) ? /export const REFERENCE_RELEASE = "([^"]+)"/.exec(readFileSync(join(root, fixture), "utf8"))?.[1] : undefined;
+  const listed = join(root, "internal/replay/replay.json");
+  const bundles = existsSync(listed) ? JSON.parse(readFileSync(listed, "utf8")).bundles ?? [] : [];
+  if (release && bundles.some((bundle) => bundle.id === themeId && bundle.version === release)) return [];
+  return [`The rendered gate's reference look names release ${release ?? "(none)"} of the outside theme, which is not frozen under internal/replay: freeze it first (node tests/replay/freeze.mjs add <zip> --set internal/replay --built-against <platform> --settings <file>), so the reference check runs at this release instead of skipping.`];
+}
+
 export async function writeLock(root = DEFAULT_ROOT, { allowNoReplay = false, platform = SCALIUS_PLATFORM_VERSION, contractVersion = PLUGIN_API_VERSION } = {}) {
   if (existsSync(join(root, LOCK_FILE))) return { problems: [`${LOCK_FILE} exists: the contract is locked. There is no relock yet: it arrives with the first new contract version (per-version snapshots and the host adapter).`] };
   if (platform !== FREEZE) return { problems: [`The lock is written at the freeze release ${FREEZE}; this is ${platform}.`] };
+  const reference = referenceReleaseProblems(root);
+  if (reference.length > 0) return { problems: reference };
   const built = await buildLock(root, { allowNoReplay, platform, contractVersion });
   if (!built.lock) return built;
   writeFileSync(join(root, LOCK_FILE), `${JSON.stringify(built.lock, null, 1)}\n`);
@@ -697,6 +719,10 @@ async function main(args) {
     const { lines, problems } = args.includes("judge")
       ? await judgeWithAnchor(root, { run, verifySignatures, freezeCommit: args.includes("--freeze-commit") })
       : await verifyLock(root, { run, verifySignatures, freezeCommit: args.includes("--freeze-commit") });
+    // A release (a tree at or past the freeze, or with the lock) is judged with the reference check able to run
+    // (referenceReleaseProblems); before the freeze, ordinary CI keeps that check's loud skip.
+    const release = existsSync(join(root, LOCK_FILE)) || comparePluginVersions(platformOf(root), FREEZE) >= 0;
+    if (args.includes("judge") && release) problems.push(...referenceReleaseProblems(root));
     for (const line of lines) console.log(line);
     for (const problem of problems) console.error(`refused: ${problem}`);
     // Written after deciding: the judge that started this one reads its verdict here.
