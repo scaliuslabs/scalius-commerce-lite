@@ -2,7 +2,8 @@ import { installCartCalls } from "./cart-calls";
 import { checkoutText } from "@/lib/checkout-text";
 import { buyerApiErrorTextNow, loadBuyerApiErrors } from "../buyer-api-error-text-later";
 import { readBuyerAttributes } from "@/lib/buyer-ui/state";
-import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
+import { buyerUiDrawn, renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
+import { FIRST_REVEAL_WAIT_MS, cartColumnHasAppBlocks, cartHasReservedBlocks, keepReservedBlockHeights, reserveKnownBlockHeights, settleBlockHeights } from "./reveal";
 import { storefrontUiSlotsOn } from "@scalius/shared/plugins/storefront-protocol";
 import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
 import { emitBuyerEvent } from "@/lib/buyer-events/bus";
@@ -462,12 +463,16 @@ function handleAbandonedCheckout() {
 
 /** The totals ask again after a quote fails in transit (a cold or restarting API), then say so with a retry button. */
 
-function syncCartPagePresentation(ready: boolean): void {
+/** The first showing is held for the check's app blocks (lib/cart/reveal.ts says when). */
+let firstRevealHeld = false;
+
+function syncCartPagePresentation(shown: boolean): void {
   const root = document.getElementById("cartPageRoot");
   const cartItems = document.getElementById("cartItems");
   const cartSummary = document.getElementById("cartSummary");
   const checkoutPanel = document.getElementById("checkoutPanel");
   const hasItems = Object.keys(cartStore.get().items).length > 0;
+  const ready = shown && !(firstRevealHeld && hasItems);
 
   if (root) {
     root.dataset.cartReady = ready ? "true" : "false";
@@ -1782,6 +1787,7 @@ function paintCartLines(): void {
   container.innerHTML = `<ul class="divide-y divide-border">${cartLineEntries(items)
     .map(([cartKey, item], position) => renderCartLine(cartKey, item, position, lineRules[cartKey] ?? [], mixed))
     .join("")}</ul>`;
+  keepReservedBlockHeights(container);
   paintLineInputs();
 }
 
@@ -2354,14 +2360,35 @@ export async function initCartFunctionality() {
   if (checkoutForm) onTextEdit(checkoutForm, () => handleAbandonedCheckout(), { signal: runtimeSignal });
 
   // Lines paint straight from the saved cart; the availability check's
-  // answer lands inside each line's fixed status slot and below the totals,
-  // so it never moves painted content (no CLS, no network-gated first paint).
-  await renderCartItems();
-  if (applyPendingCartRepairState()) {
+  // answer lands inside each line's fixed status slot and below the totals.
+  // Its app blocks are drawn with the lines when it answers within
+  // FIRST_REVEAL_WAIT_MS; a slower check never holds the lines longer.
+  // Only a store with an app that draws a block in the cart column holds the lines, and only until the room of each
+  // block is known (remembered from the last view) or the check's blocks are drawn, at most FIRST_REVEAL_WAIT_MS.
+  const pageRoot = document.getElementById("cartPageRoot");
+  const appBlocks = cartHasReservedBlocks(pageRoot);
+  firstRevealHeld = cartColumnHasAppBlocks(pageRoot) && Object.keys(cartStore.get().items).length > 0;
+  let checked: Promise<boolean> | null = null;
+  try {
     await renderCartItems();
+    if (applyPendingCartRepairState()) {
+      await renderCartItems();
+    }
+    // The totals may have asked for this check already (the cart's discounts before an address).
+    checked = checkCartNow();
+    const known = appBlocks && pageRoot ? reserveKnownBlockHeights(pageRoot) : true;
+    if (firstRevealHeld && !known) {
+      await Promise.race([checked.then(() => buyerUiDrawn()), new Promise((done) => setTimeout(done, FIRST_REVEAL_WAIT_MS))]).catch(() => undefined);
+    }
+  } finally {
+    if (firstRevealHeld) {
+      firstRevealHeld = false;
+      syncCartPagePresentation(true);
+    }
   }
-  // The totals may have asked for this check already (the cart's discounts before an address).
-  await checkCartNow();
+  // The rooms go once the check's and the first quote's blocks are drawn; their heights are remembered for the next view.
+  if (appBlocks && pageRoot) void checked?.then(() => buyerUiDrawn()).then(() => cartTotalsSettled()).then(() => buyerUiDrawn()).then(() => settleBlockHeights(pageRoot), () => undefined);
+  await (checked ?? checkCartNow());
   await recoveryCheck;
   updateCheckoutButtonState();
 }

@@ -740,6 +740,8 @@ export interface OrderLineProperty {
   revision?: string;
   /** A choice that needs confirmation: the agreement the buyer accepted. */
   confirmation?: { text: string };
+  /** A choice its app draws itself: printed only where the row holds no add-on of that app (`printedLineAnswers`). */
+  appDrawnChoice?: true;
 }
 
 /** How an order line reaches the buyer and what it carries (Wave A). */

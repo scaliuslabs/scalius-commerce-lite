@@ -9,6 +9,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { cashCollectionPoint } from "@scalius/shared/order-payment-methods";
 import { dateLocale, formatDateTime, formatNumber, localeDigits, numberLocale } from "@scalius/shared/locale-format";
 import { presentLineEntry, type LineEntryWords } from "@scalius/shared/line-entry-words";
+import { printedLineAnswers } from "@scalius/shared/line-input-surfaces";
 import { buyerLineAddOnRows, rowItemsOnly } from "@scalius/shared/buyer-line-add-on-text";
 import { addOnDocumentRows } from "@scalius/shared/add-on-document";
 import { buyerOrderAddOnTotals } from "@scalius/shared/add-on-folding";
@@ -224,9 +225,11 @@ type OrderFacts = NonNullable<ReturnType<typeof resolveOrderFacts>>;
 /**
  * The line's frozen buyer inputs as "Engraving: Anika (+৳200)", read from the
  * immutable `order_items.properties` snapshot. Plain text: the email template
- * escapes it. Emails only; SMS variables never carry buyer inputs.
+ * escapes it. Emails only; SMS variables never carry buyer inputs. An
+ * app-drawn choice the row's add-on of the same app states (`addOnApps`) is
+ * not printed beside it (`printedLineAnswers`).
  */
-function linePropertiesText(stored: string | null, money: ((minor: number) => string) | null, words: LineEntryWords, count: (value: number) => string): string[] {
+function linePropertiesText(stored: string | null, money: ((minor: number) => string) | null, words: LineEntryWords, count: (value: number) => string, addOnApps: ReadonlyArray<string | null> = []): string[] {
   if (!stored) return [];
   let parsed: unknown;
   try {
@@ -235,9 +238,8 @@ function linePropertiesText(stored: string | null, money: ((minor: number) => st
     return [];
   }
   if (!Array.isArray(parsed)) return [];
-  return parsed.flatMap((entry: unknown) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
-    const frozen = entry as Record<string, unknown>;
+  const records = parsed.filter((entry: unknown): entry is Record<string, unknown> & { key: string } => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry) && typeof (entry as { key?: unknown }).key === "string");
+  return printedLineAnswers(records, addOnApps).flatMap((frozen) => {
     // The platform's words ("Yes", "Add-on") in the message's language; the merchant's and apps' as frozen.
     const { priceMinor } = frozen;
     const { label, value, displayValue } = typeof frozen.key === "string" && typeof frozen.label === "string" && typeof frozen.displayValue === "string"
@@ -470,7 +472,7 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
           unitPrice: money && own.unitPriceMinor !== null ? money(own.unitPriceMinor) : null,
           subtotal: money ? money(own.grossSubtotalMinor) : null,
           properties: [
-            ...linePropertiesText(item.properties, money, messageLineWords(order, lang), (value) => formatNumber(value, lang === "bn" ? "bn-BD" : "en-US")),
+            ...linePropertiesText(item.properties, money, messageLineWords(order, lang), (value) => formatNumber(value, lang === "bn" ? "bn-BD" : "en-US"), (item.addOns ?? []).map((addOn) => addOn.appId)),
             // What the apps charged on the row: its `addOns`, the one place a row says it.
             ...(money ? buyerLineAddOnRows(item.addOns, { label: messageLineWords(order, lang).lineAddOnText, money, language: lang }).map((row) => row.text) : []),
           ],

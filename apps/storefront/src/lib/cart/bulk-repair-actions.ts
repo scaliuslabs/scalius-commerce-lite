@@ -58,7 +58,7 @@ export function selectCartKeysForBulkRepair(
 
 function actionButton(label: (count: string) => string, count: number, call: CartCall): string {
   if (count <= 0) return "";
-  return `<button type="button" class="rounded-md border border-current/20 px-2.5 py-1 text-xs font-semibold hover:bg-background/70"${cartCallAttributes(call)}>${label(formatCount(count))}</button>`;
+  return `<button type="button" data-control="action" class="rounded-md border border-current/20 px-2.5 py-1 text-xs font-semibold hover:bg-background/70"${cartCallAttributes(call)}>${label(formatCount(count))}</button>`;
 }
 
 export function renderBulkCartRepairActions(

@@ -30,24 +30,10 @@ import {
   providerReasonSchema,
   providerRefSchema,
 } from "./common";
+// The states themselves live beside the shipment machine (zod-free), so an
+// app's code that reads them never carries this port's schemas.
+import { COURIER_SHIPMENT_STATUSES } from "../../shipment-state";
 
-/** The normalized shipment states every courier maps its own statuses to. */
-export const COURIER_SHIPMENT_STATUSES = [
-  "pending",
-  "pickup_assigned",
-  "picked_up",
-  "pickup_failed",
-  "in_transit",
-  "out_for_delivery",
-  "delivered",
-  "partial_delivered",
-  "delivery_failed",
-  "on_hold",
-  "failed",
-  "cancelled",
-  "returned",
-  "unknown",
-] as const;
 export const courierShipmentStatusSchema = z.enum(COURIER_SHIPMENT_STATUSES);
 export type CourierShipmentStatus = z.infer<typeof courierShipmentStatusSchema>;
 

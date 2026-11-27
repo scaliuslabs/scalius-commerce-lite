@@ -256,6 +256,7 @@ const lineBlocks = new Set(((order as { buyerUi?: Array<{ target?: unknown; line
               item.properties,
               (property) => savedMoneySummary ? formatReceiptMinor(property.priceMinor) : formatReceiptAmount(property.price),
               copy,
+              (item as { addOns?: unknown }).addOns,
             ),
             // What the apps charged on the row: its `addOns`, the one place a row says it.
             ...buyerLineAddOnRows((item as { addOns?: unknown }).addOns, { label: copy.lineAddOnText, money: formatReceiptMinor, language: pageLanguage() }),

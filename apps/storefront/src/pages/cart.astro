@@ -2,6 +2,7 @@
 // src/pages/cart.astro
 import WindowGlobals from "@/components/WindowGlobals.astro";
 import { CART_COLUMN_PLACE_SCRIPT, CART_EARLY_CONTROLS_SCRIPT, CART_FIRST_PAINT_SCRIPT, CART_LOADING_LINES_SCRIPT, CART_PICKUP_CHOICE_SCRIPT, CART_QUICK_BUY_NOTICE_SCRIPT, CART_SUMMARY_FOLD_SCRIPT } from "@/lib/cart/cart-page-scripts";
+import { CART_RESERVED_SLOTS } from "@/lib/cart/reveal";
 import { DEFAULT_CUSTOMER_IDENTITY, checkoutContactFields } from "@scalius/shared/customer-auth-policy";
 import Layout from "@/layouts/Layout.astro";
 import LocationFields from "@/components/checkout/LocationFields.astro";
@@ -160,6 +161,8 @@ const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse || {
 };
 const pageLanguageCode = checkoutLanguageBaseCode(checkoutLanguage.code);
 const privateAsset = privateAssetUrls(readStorefrontExtensions(layoutData?.appExtensions));
+// The cart page's slots an active app draws a block at: only those make the first showing reserve room or wait (lib/cart/reveal.ts).
+const cartAppBlocks = (Array.isArray(layoutData?.buyerUiSlots) ? layoutData.buyerUiSlots : []).filter((slot) => (CART_RESERVED_SLOTS as readonly string[]).includes(slot)).join(" ");
 const cartPlan = privatePagePlan(cartRequestTheme.theme, "cart", pageLanguageCode, privateAsset);
 // The theme's words for the cart's labels, on the page and in the cart script alike.
 const lang: CheckoutLanguageData = { ...checkoutLanguage, languageData: withCartLabels(checkoutLanguage.languageData, cartPlan.labels) };
@@ -437,6 +440,7 @@ const dialogLabels = Object.fromEntries(Object.entries(cartPlan.labels).filter((
     data-mode-switch={deliveryModeSwitch ? "true" : "false"}
     data-physical-delivery={physicalDelivery ? undefined : "none"}
     data-summary="closed"
+    data-app-blocks={cartAppBlocks || undefined}
     class={cartPlan.frame === "narrow" ? "group container mx-auto max-w-3xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7" : "group container mx-auto max-w-6xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7"}
     data-private="cart"
   >
@@ -709,6 +713,7 @@ const dialogLabels = Object.fromEntries(Object.entries(cartPlan.labels).filter((
                 <button
                   type="submit"
                   id="applyDiscountBtn"
+                  data-control="action"
                   class="h-11 shrink-0 rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
                 >
                   {copy.applyDiscountText}
@@ -1172,6 +1177,14 @@ const dialogLabels = Object.fromEntries(Object.entries(cartPlan.labels).filter((
         then shows or hides it as the checked cart says. */}
     <style is:global>
       #cartPageRoot[data-cart-prepaint="items"][data-cart-state="loading"] :is(#checkoutPanel, [data-part="dock"]) { display: block; }
+      /* Under 64rem, where the form stacks under the lines, nothing after the loading lines in the page's flow is drawn
+         (the form, a theme's fold bar, the apps' blocks below the cart; Place order's dock stays): the lines arrive and
+         the rest appears with them, so nothing painted moves down (a layout shift). From 64rem the form stands beside
+         the lines and is drawn at once, as the rule above says. Clear cart's row keeps its room under the loading lines. */
+      @media (max-width: 63.99rem) {
+        #cartPageRoot[data-cart-prepaint="items"][data-cart-state="loading"] :is([data-part="lines"], :has([data-part="lines"])) ~ :is(#checkoutPanel, :not([data-part="dock"])) { display: none; }
+      }
+      #cartPageRoot[data-cart-prepaint="items"][data-cart-state="loading"] [data-part="lines-clear"] { display: block; visibility: hidden; }
       #cartPageRoot:has(#checkoutFormCard.hidden) [data-part="dock"] { display: none; }
       /* Focus moved by keyboard is never left under the docked Place order. */
       html:has([data-part="dock"]) { scroll-padding-block-end: 9rem; }

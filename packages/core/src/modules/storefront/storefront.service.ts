@@ -81,6 +81,7 @@ import {
 } from "../navigation";
 import { publicCategoryConditions } from "../categories";
 import {
+  activePluginBuyerUiSlots,
   activePluginInstallationsFromRows,
   activePluginLineInputs,
   activePluginPurchaseOptions,
@@ -897,8 +898,9 @@ export async function getLayoutData(
     purchaseOptions: activePluginPurchaseOptions(activeApps.values(), appLanguage),
     // Per-line inputs the active apps ask for (a gift message, a protection plan): the buy form draws them.
     lineInputs: activePluginLineInputs(activeApps.values(), appLanguage),
-    // The page groups where an active app draws a checkout or account block:
-    // only those pages read their blocks part (none: no read at all).
+    // The buyer UI slots where an active app draws a block: the cart reserves room (or waits a moment) for a
+    // line's or the summary's block only where one may come.
+    buyerUiSlots: activePluginBuyerUiSlots(activeApps.values()),
     // Buyer services apps provide (search, address autocomplete, sign-in): the pages call them only when named.
     appServices: activePluginStorefrontServices(activeApps.values()),
   };

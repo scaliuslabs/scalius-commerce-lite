@@ -266,6 +266,7 @@ function inputControl(
     field.value = answer?.value ?? "";
     const save = element("button", "min-h-11 shrink-0 rounded-md border border-border px-3 text-sm font-medium text-foreground hover:bg-muted sm:min-h-9", copy.save);
     save.type = "button";
+    save.dataset.control = "action";
     save.setAttribute("aria-label", copy.saveFor(view.input.label, cartLineName(item)));
     const previous = field.value;
     save.addEventListener("click", () => run(save, field.value || null, () => { field.value = previous; }));

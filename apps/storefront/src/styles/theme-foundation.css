@@ -103,8 +103,10 @@
   --color-header-foreground: var(--theme-header-foreground, var(--foreground));
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: calc(var(--radius) + 1px);
-  --radius-xl: calc(var(--radius) + 2px);
+  /* A step above the theme's radius, and none where the theme draws square:
+     `min(1px, radius * 1000)` is 1px for any radius, 0 for a square one. */
+  --radius-lg: calc(var(--radius) + min(1px, var(--radius) * 1000));
+  --radius-xl: calc(var(--radius) + min(2px, var(--radius) * 1000));
 }
 
 .site-root *,
@@ -485,6 +487,25 @@ html {
     color var(--theme-duration) var(--theme-ease),
     border-color var(--theme-duration) var(--theme-ease),
     transform var(--theme-duration) var(--theme-ease);
+}
+
+/* The host's other action buttons (an outline Apply, Go back, a line's
+   repair: `data-control="action"`; an app's button: `data-ui="button"`)
+   take the Style's button corners as their surfaces take its radius: each
+   radius step measured from the button corners instead of the surface radius,
+   so the default Style ("radius" buttons) draws them exactly as before, square
+   buttons draw them square and pill buttons as pills. Tiles and cards keep the
+   surface radius, a round control (`rounded-full`) its circle; a payment
+   provider's own surface is never reached. Zero specificity: a private page's
+   tokens and a theme's rules outrank it. */
+:where([data-control="action"], [data-ui="button"]):where(.rounded-sm, .rounded-md):where(:not([data-part="gateway"] *)) {
+  border-radius: max(0px, calc(var(--theme-button-radius, var(--radius)) - 2px));
+}
+:where([data-control="action"], [data-ui="button"]):where(.rounded-lg):where(:not([data-part="gateway"] *)) {
+  border-radius: calc(var(--theme-button-radius, var(--radius)) + min(1px, var(--theme-button-radius, var(--radius)) * 1000));
+}
+:where([data-control="action"], [data-ui="button"]):where(.rounded-xl):where(:not([data-part="gateway"] *)) {
+  border-radius: calc(var(--theme-button-radius, var(--radius)) + min(2px, var(--theme-button-radius, var(--radius)) * 1000));
 }
 
 .site-root :where(button, a, input[type="submit"]):where(.bg-primary):active,

@@ -28,6 +28,7 @@ import {
   parseQuotedShippingRate,
   positiveQuantity,
   requiredString,
+  withoutLaterShippingRates,
   type CheckoutDiscountFacts,
   type CheckoutDiscountLine,
   type QuotedShippingRate,
@@ -124,6 +125,18 @@ export interface TaxQuoteItemProperty {
   value: string;
   displayValue: string;
   priceMinor: number;
+  /** The app the entry belongs to (its input or add-on). */
+  appId?: string;
+  /** A choice its app draws itself: printed only where the line holds no add-on of that app (`printedLineAnswers`). */
+  appDrawnChoice?: true;
+}
+
+/** An entry's app and app-drawn mark, display only: a malformed one is dropped, never the line. */
+function entryApp(entry: Record<string, unknown>): Pick<TaxQuoteItemProperty, "appId" | "appDrawnChoice"> {
+  return {
+    ...(typeof entry.appId === "string" && entry.appId.length > 0 && entry.appId.length <= APP_SCOPED_KEY_MAX_LENGTH ? { appId: entry.appId } : {}),
+    ...(entry.appDrawnChoice === true ? { appDrawnChoice: true as const } : {}),
+  };
 }
 
 export interface TaxQuoteItem {
@@ -426,6 +439,7 @@ function parseQuoteAdjustments(value: unknown): TaxQuoteItemProperty[] {
       value: requiredString(entry.value, 120),
       displayValue: requiredString(entry.displayValue, 120),
       priceMinor: nonNegativeSafeInteger(entry.priceMinor),
+      ...entryApp(entry),
     };
   });
 }
@@ -466,6 +480,7 @@ function parseQuoteItem(value: unknown): TaxQuoteItem {
         value: nullableDescription(property.value, LINE_PROPERTY_INPUT_LIMITS.valueLength) ?? fail(),
         displayValue: nullableDescription(property.displayValue, LINE_PROPERTY_INPUT_LIMITS.valueLength) ?? fail(),
         priceMinor: nonNegativeSafeInteger(property.priceMinor),
+        ...entryApp(property),
       };
     }),
     propertiesPriceMinor: value.propertiesPriceMinor === undefined
@@ -656,7 +671,7 @@ export function parseQuotedShippingRates(
 ): QuotedShippingRate[] | null {
   if (value === undefined || value === null) return null;
   if (!Array.isArray(value) || value.length > MAX_QUOTED_SHIPPING_RATES) fail();
-  const rates = value.map((rate) => parseQuotedShippingRate(rate, decimalPlaces));
+  const rates = withoutLaterShippingRates(value).map((rate) => parseQuotedShippingRate(rate, decimalPlaces));
   if (new Set(rates.map(({ id }) => id)).size !== rates.length) fail();
   return rates;
 }

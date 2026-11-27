@@ -7,8 +7,11 @@
 // shadow tree can select it. The shadow root's style is the store's own text
 // (lib/private-pages/chrome-style.ts): it imports the store's reading of the
 // theme's sheet from the store's own path under the store's guard. The host
-// carries only the page's colour scheme and sign-in hint (the inline script
-// after it copies them from `<html>`), and has no child of its own.
+// carries only the page's colour scheme and sign-in hint, and has no child of
+// its own: the server renders the scheme `<html>` carries (`colorScheme`, so
+// a theme's `:host([data-color-scheme])` rule holds with scripts off too),
+// and the inline script after it copies both from `<html>` as the page's
+// scheme settles.
 //
 // Nothing the theme styles is ever in the top layer. Each popover of its
 // markup (a menu drawer, a dropdown) was lifted out as a panel (`InertPanel`)
@@ -18,6 +21,7 @@
 // own. The theme's button for it opens the store's panel (`data-buyer-panel-open`,
 // scripts/buyer-chrome.ts); without the store's script it opens nothing. No
 // app runtime, island or file base: nothing of the app runs here.
+import type { StorefrontColorScheme } from "@scalius/shared/storefront-theme";
 import type { BuyerChrome } from "@/lib/extensions";
 import { BUYER_CHROME_FRAME_STYLE, buyerChromeShadowStyle } from "@/lib/private-pages/chrome-style";
 import { BUYER_CHROME_STATE_SCRIPT } from "@/lib/inline-boot-scripts";
@@ -30,15 +34,17 @@ interface Props {
   chrome: BuyerChrome;
   /** The store's name, on the title bar of its panels. */
   storeName?: string | null;
+  /** The scheme the server renders on `<html data-color-scheme>` (Layout's), none when it renders none. */
+  colorScheme?: StorefrontColorScheme | null;
 }
 
-const { target, chrome, storeName } = Astro.props;
+const { target, chrome, storeName, colorScheme } = Astro.props;
 const style = buyerChromeShadowStyle(baseHref, chrome.sheet);
 const copy = storefrontCopy((await currentRequestTheme(Astro.locals)).language).chrome;
 const title = [storeName?.trim(), copy.nav.menu].filter(Boolean).join(" · ");
 ---
 
-<div data-buyer-chrome-frame={target} style={BUYER_CHROME_FRAME_STYLE[target]}><scalius-chrome data-chrome={target}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome><script is:inline set:html={BUYER_CHROME_STATE_SCRIPT}></script></div>
+<div data-buyer-chrome-frame={target} style={BUYER_CHROME_FRAME_STYLE[target]}><scalius-chrome data-chrome={target} data-color-scheme={colorScheme ?? undefined}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome><script is:inline set:html={BUYER_CHROME_STATE_SCRIPT}></script></div>
 {chrome.panels.map((panel, index) => (
   <div
     id={`buyer-panel-${target}-${index}`}
@@ -53,7 +59,7 @@ const title = [storeName?.trim(), copy.nav.menu].filter(Boolean).join(" · ");
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
       </button>
     </div>
-    <div data-buyer-chrome-frame="panel" style={BUYER_CHROME_FRAME_STYLE.panel}><scalius-chrome data-chrome="panel"><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={panel.html} /></template></scalius-chrome><script is:inline set:html={BUYER_CHROME_STATE_SCRIPT}></script></div>
+    <div data-buyer-chrome-frame="panel" style={BUYER_CHROME_FRAME_STYLE.panel}><scalius-chrome data-chrome="panel" data-color-scheme={colorScheme ?? undefined}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={panel.html} /></template></scalius-chrome><script is:inline set:html={BUYER_CHROME_STATE_SCRIPT}></script></div>
   </div>
 ))}
 

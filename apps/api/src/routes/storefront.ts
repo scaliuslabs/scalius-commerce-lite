@@ -6,7 +6,7 @@ import { parseBindingResourceSelector } from "@scalius/shared/storefront-theme/b
 // Storefront API — thin HTTP layer.
 // All query logic lives in src/modules/storefront/storefront.service.ts.
 
-import { STOREFRONT_COMPONENT_TARGETS } from "@scalius/shared/plugins/storefront-protocol";
+import { STOREFRONT_COMPONENT_TARGETS, STOREFRONT_UI_SLOTS } from "@scalius/shared/plugins/storefront-protocol";
 import { BUYER_CHROME_CHECKER_HEADER } from "@scalius/shared/plugins/buyer-chrome-mark";
 import { PLUGIN_STOREFRONT_SCRIPT_PAGES } from "@scalius/shared/plugins/manifest";
 import { PIXEL_CONSENT_CATEGORIES, PIXEL_EVENT_NAMES } from "@scalius/shared/plugins/buyer-events";
@@ -479,6 +479,9 @@ const layoutDataSchema = z.object({
     inputs: z.array(appLineInputViewSchema),
   })).optional().openapi({
     description: "Per-line inputs the active apps ask for (`checkout.lineInputs`), in the page's language, under `<app id>.<key>`; one with `products` only where the product's app field `<app id>.<customField>` is true, one with `variants` only where the SKU's is (a SKU's own value over its product's when both are named).",
+  }),
+  buyerUiSlots: z.array(z.enum(STOREFRONT_UI_SLOTS)).openapi({
+    description: "The buyer UI slots where an active app draws a block (an extension the app declares and its grant covers): a page reserves room for a slot's block only where one may come.",
   }),
   appServices: z.object({
     search: z.string().nullable().openapi({ description: "The search app predictive search passes as `provider` to /search; null: built-in search." }),

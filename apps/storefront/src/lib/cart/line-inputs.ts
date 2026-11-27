@@ -10,6 +10,7 @@
  * Answers are buyer content: never put them in URLs, analytics or logs.
  */
 import type { AppLineInputDeclaration } from "@scalius/shared/line-properties";
+import { isAppDrawnChoice } from "@scalius/shared/line-input-surfaces";
 import type { CartLineProperty, VariantCartItem } from "@/store/cart";
 import type { CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
 
@@ -100,6 +101,7 @@ export function lineAnswerFor(view: CartLineInputView, value: string | null, che
     displayValue: option?.label ?? (view.input.type === "checkbox" ? checkedText : text),
     priceMinor: 0,
     ...(view.input.textRevision ? { revision: view.input.textRevision } : {}),
+    ...(isAppDrawnChoice(view.input) ? { appDrawnChoice: true as const } : {}),
   };
 }
 

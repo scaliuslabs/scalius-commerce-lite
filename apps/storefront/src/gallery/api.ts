@@ -141,6 +141,8 @@ function layout(entry: GalleryEntry) {
       : {}),
     brand: { logo: theme.brand.logo ? mediaAsset(GALLERY_LOGO_ID, `${STORE_NAME} logo`) : null, darkLogo: null, footerLogo: null, favicon: null },
     storeShape: galleryStoreShape(entry),
+    // The slots the entry's apps draw blocks at, as the API names an active app's approved extensions.
+    buyerUiSlots: [...new Set(checkoutApps(entry).map((block) => block.target))],
     business: entry.scenario.locale === "bn" ? { ...business, companyName: BANGLA_STORE_NAME } : business,
     seo: { socialImage: "", returnPolicy: { enabled: true, category: "finite", returnWindowDays: 7, returnFees: "free" } },
     // The API serves the store language; a Bangla store speaks Bangla in its chrome too.
@@ -265,6 +267,8 @@ function checkoutApps(entry: GalleryEntry) {
       everyKindBlock("acme.kinds", "cart.page.summary"), everyKindBlock("acme.kinds", "cart.page.below"), everyKindBlock("acme.kinds", "cart.line.after", "line:v3:prod_1:variant:var_1:p:none"),
       // Inside the details form: every kind after the contact fields, a toned banner and a button after delivery.
       everyKindBlock("acme.kinds", "checkout.contact.after"),
+      // The drawer's footer crowded by an app's block of every kind (`drawerFooterKinds`): its lines must keep their share.
+      ...(entry.scenario.drawerFooterKinds ? [everyKindBlock("acme.kinds", "cart_drawer.footer")] : []),
       { appId: "acme.kinds", releaseId: "gallery", target: "checkout.delivery.after", attributes: [], values: {}, ui: { type: "stack", children: [
         { type: "banner", tone: "warning", title: "Delivery takes 3 days after Eid", text: "Order today to have it before the weekend." },
         { type: "button", label: "See delivery areas", action: { kind: "navigate", to: { kind: "store", path: "/pages/delivery" } } },
@@ -658,6 +662,7 @@ export async function answerFixtureApi(entry: GalleryEntry, request: Request): P
   url.pathname = apiPath(url.pathname);
   const json = { "Content-Type": "application/json" };
   if (url.pathname === "/api/v1/orders/cart-validation" && request.method === "POST") {
+    if (entry.scenario.slowCheckMs) await new Promise((done) => setTimeout(done, entry.scenario.slowCheckMs));
     return new Response(envelope({ ...await cartValidation(entry, request), buyerUi: checkoutApps(entry) }), { headers: json });
   }
   if (url.pathname === "/api/v1/orders/tax-quote" && request.method === "POST") {

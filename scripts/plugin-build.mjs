@@ -209,12 +209,16 @@ export function packageRootOf(path) {
   }
 }
 
-/** Bundles a plugin entry into one self-contained ES module (no imports, no Worker APIs). */
-export async function bundlePlugin(entry) {
+/**
+ * Bundles a plugin entry into one self-contained ES module (no imports, no
+ * Worker APIs). `sdk` resolves `@scalius/plugin-sdk`; the SDK's size check
+ * (scripts/plugin-sdk-size.mjs) passes its packed build instead.
+ */
+export async function bundlePlugin(entry, sdk = sdkResolution()) {
   const esbuild = await loadEsbuild();
   const result = await esbuild.build({
     entryPoints: [entry],
-    plugins: [sdkResolution()],
+    plugins: [sdk],
     absWorkingDir: packageRootOf(entry),
     bundle: true,
     write: false,
@@ -325,6 +329,30 @@ export function smokeSettings(contract, schema, store = null) {
     });
 }
 
+/** An app's storefront module (`src/storefront.tsx`) as `storefront/storefront.js`: one minified ES module. `sdk` as in bundlePlugin. */
+export async function bundleStorefrontModule(entry, directory, sdk = sdkResolution()) {
+  const esbuild = await loadEsbuild();
+  const result = await esbuild.build({
+    entryPoints: [entry],
+    plugins: [sdk],
+    absWorkingDir: directory,
+    bundle: true,
+    write: false,
+    format: "esm",
+    platform: "neutral",
+    mainFields: ["module", "main"],
+    conditions: ["workerd", "worker", "import"],
+    target: "es2022",
+    jsx: "automatic",
+    jsxImportSource: "@scalius/plugin-sdk/storefront",
+    minify: true,
+    legalComments: "none",
+    charset: "utf8",
+    logLevel: "silent",
+  });
+  return result.outputFiles[0].text;
+}
+
 /**
  * Compiles an app's storefront part (storefront-components.ts) and checks it
  * against the manifest and the budgets:
@@ -362,25 +390,7 @@ export async function packStorefront(contract, manifest, source) {
   if (needsModule && !moduleEntry) fail("the manifest declares component sections, product blocks or skins: write them in src/storefront.tsx (defineStorefront).");
   if (!needsModule && moduleEntry) fail("src/storefront exists but the manifest declares no component section or product block (one without a route) or skin.");
   if (moduleEntry) {
-    const result = await esbuild.build({
-      entryPoints: [moduleEntry],
-      plugins: [sdkResolution()],
-      absWorkingDir: directory,
-      bundle: true,
-      write: false,
-      format: "esm",
-      platform: "neutral",
-      mainFields: ["module", "main"],
-      conditions: ["workerd", "worker", "import"],
-      target: "es2022",
-      jsx: "automatic",
-      jsxImportSource: "@scalius/plugin-sdk/storefront",
-      minify: true,
-      legalComments: "none",
-      charset: "utf8",
-      logLevel: "silent",
-    });
-    const code = result.outputFiles[0].text;
+    const code = await bundleStorefrontModule(moduleEntry, directory);
     const bytes = Buffer.byteLength(code);
     if (bytes > limits.moduleBytes) fail(`storefront.js is ${bytes} bytes; the limit is ${limits.moduleBytes}. Keep server code and data out of it.`);
     const loaded = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
