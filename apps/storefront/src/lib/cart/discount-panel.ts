@@ -8,12 +8,13 @@ import { checkoutText } from "@/lib/checkout-text";
 import { formatMoney } from "@/lib/currency";
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
+// From quote-facts, not tax-quote-contract: the contract re-exports it, and importing through it keeps the whole quote parser in the cart page's first download.
 import {
   discountLineKey,
   type CheckoutDiscountFacts,
   type CheckoutDiscountOffer,
   type CheckoutRejectedCode,
-} from "../checkout/tax-quote-contract";
+} from "../checkout/quote-facts";
 import { pagePath } from "@/lib/presence-url";
 
 export interface DiscountPanelActions {
