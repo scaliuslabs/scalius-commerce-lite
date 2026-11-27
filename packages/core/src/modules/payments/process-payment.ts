@@ -47,7 +47,9 @@ import {
   ShipmentClaimConflictError,
   validateTransition,
   shipmentClaimShipmentStatusSql,
+  paymentMove,
 } from "../order-kernel";
+import { PAYMENT_MACHINE } from "@scalius/shared/payment-record-state";
 import { buildMetaPurchaseOutboxClaimInsert } from "../../integrations/meta/purchase-outbox";
 import {
   getUnpayableOrderReason,
@@ -138,12 +140,8 @@ function failedAttemptCanBePromoted(
   return record.status === PaymentRecordStatus.FAILED || record.amountMinor === incomingAmountMinor;
 }
 
-/** The row states a confirmed payment may promote to `succeeded`. */
-const PROMOTABLE_PAYMENT_STATUSES = [
-  PaymentRecordStatus.PENDING,
-  PaymentRecordStatus.FAILED,
-  PaymentRecordStatus.AUTHORIZED,
-] as const;
+/** The row states a confirmed payment may promote to `succeeded` (the payment machine's `confirmed` move). */
+const PROMOTABLE_PAYMENT_STATUSES = PAYMENT_MACHINE.moves.confirmed.from;
 
 function isMetaPurchaseEligibleAfterPayment(input: {
   status: string;
@@ -613,17 +611,11 @@ async function landLatePayment(
           sql`EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId}
             AND ${orderPayments.status} IN (${sql.join(PROMOTABLE_PAYMENT_STATUSES.map((status) => sql`${status}`), sql`, `)}))`,
         )),
-        db.update(orderPayments).set({
-          status: PaymentRecordStatus.SUCCEEDED,
+        paymentMove(db, "confirmed", and(eq(orderPayments.id, paymentId), landed), {
           amountMinor: params.amountMinor,
           providerSecondaryRef: sql`coalesce(${params.secondaryRef ?? null}, ${orderPayments.providerSecondaryRef})`,
           metadata,
-          updatedAt: sql`unixepoch()`,
-        }).where(and(
-          eq(orderPayments.id, paymentId),
-          inArray(orderPayments.status, [...PROMOTABLE_PAYMENT_STATUSES]),
-          landed,
-        )),
+        }),
         buildBatchGuard(db, sql`${landed} AND EXISTS (
           SELECT 1 FROM ${orderPayments}
           WHERE ${orderPayments.id} = ${paymentId} AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED}
@@ -999,20 +991,9 @@ export async function processPaymentConfirmed(
               AND status IN (${sql.join(PROMOTABLE_PAYMENT_STATUSES.map((status) => sql`${status}`), sql`, `)})
           )`,
         )).returning({ id: orders.id }),
-        db.update(orderPayments).set({
-          amountMinor: incomingAmountMinor,
-          currency: currency.code,
-          ...settlement,
-          paymentMethod: params.provider,
-          paymentType,
-          status: PaymentRecordStatus.SUCCEEDED,
-          providerSecondaryRef: params.secondaryRef ?? null,
-          metadata: paymentMetadataJson(params),
-          updatedAt: sql`unixepoch()`,
-        }).where(and(
+        paymentMove(db, "confirmed", and(
           eq(orderPayments.id, paymentId),
           eq(orderPayments.orderId, params.orderId),
-          inArray(orderPayments.status, [...PROMOTABLE_PAYMENT_STATUSES]),
           sql`EXISTS (
             SELECT 1 FROM orders
             WHERE id = ${params.orderId}
@@ -1021,7 +1002,15 @@ export async function processPaymentConfirmed(
               AND balance_due_minor = ${newBalanceDueMinor}
               AND payment_status = ${newPaymentStatus}
           )`,
-        )).returning({ id: orderPayments.id }),
+        ), {
+          amountMinor: incomingAmountMinor,
+          currency: currency.code,
+          ...settlement,
+          paymentMethod: params.provider,
+          paymentType,
+          providerSecondaryRef: params.secondaryRef ?? null,
+          metadata: paymentMetadataJson(params),
+        }).returning({ id: orderPayments.id }),
       ];
 
       if (paymentType === "deposit") {
@@ -1442,17 +1431,7 @@ async function applyFailedPayment(
 
     if (existing?.status === PaymentRecordStatus.PENDING) {
       batchStatements.push(
-        db
-          .update(orderPayments)
-          .set({
-            status: PaymentRecordStatus.FAILED,
-            updatedAt: sql`unixepoch()`,
-          })
-          .where(and(
-            eq(orderPayments.id, existing.id),
-            eq(orderPayments.status, PaymentRecordStatus.PENDING),
-          ))
-          .returning({ id: orderPayments.id }),
+        paymentMove(db, "failed", eq(orderPayments.id, existing.id)).returning({ id: orderPayments.id }),
       );
     } else if (!existing) {
       const currency = resolveOrderCurrencySnapshot(order);
@@ -1511,9 +1490,8 @@ export async function releaseAuthorization(
   if (!row || row.status !== PaymentRecordStatus.AUTHORIZED) return null;
   if (row.orderId !== input.orderId) return false;
   const [released] = await safeBatch(db, [
-    db.update(orderPayments)
-      .set({ status: PaymentRecordStatus.CANCELLED, updatedAt: sql`unixepoch()` })
-      .where(and(eq(orderPayments.id, row.id), eq(orderPayments.status, PaymentRecordStatus.AUTHORIZED)))
+    // Only the authorization is released here: a pending charge is not.
+    paymentMove(db, "cancelled", and(eq(orderPayments.id, row.id), eq(orderPayments.status, PaymentRecordStatus.AUTHORIZED)))
       .returning({ id: orderPayments.id }),
     db.update(orders)
       .set({ version: sql`${orders.version} + 1`, updatedAt: sql`unixepoch()` })
@@ -1659,16 +1637,14 @@ export async function processPaymentAuthorized(
         SELECT 1 FROM orders WHERE id = ${params.orderId} AND version = ${nextVersion}
       )`, AUTHORIZATION_GUARD),
       existing
-        ? db.update(orderPayments).set({
+        ? paymentMove(db, "authorized", eq(orderPayments.id, existing.id), {
           amountMinor,
           currency: currency.code,
           ...presentedSettlement(amountMinor, currency.code),
           paymentType,
-          status: PaymentRecordStatus.AUTHORIZED,
           providerSecondaryRef: params.secondaryRef ?? null,
           metadata,
-          updatedAt: sql`unixepoch()`,
-        }).where(and(eq(orderPayments.id, existing.id), inArray(orderPayments.status, [PaymentRecordStatus.PENDING, PaymentRecordStatus.FAILED])))
+        })
         : db.insert(orderPayments).values({
           id: paymentId,
           orderId: params.orderId,

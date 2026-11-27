@@ -1,6 +1,7 @@
 export * from "./browser";
 export * from "./delivery.service";
 export * from "./tracking";
+export * from "./shipment-move";
 export * from "./places";
 export * from "./places-import";
 export * from "./zones";

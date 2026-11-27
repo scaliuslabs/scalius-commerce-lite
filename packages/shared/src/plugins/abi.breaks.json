@@ -1954,5 +1954,29 @@
   "from": "43d11be555c837a3",
   "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
   "reason": "Pre-release (private pages, beta 8): buyer UI gains a `mark` node (a tone's glyph) and an optional `tone` on `stack` (a toned row: an offer row, a status box), drawn on buyer pages only; the SDK gains `ui.mark`. An added union arm and an optional field; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 state machines): the payment record state `confirmed` and the shipment state `processing` had no writer, so they leave their lists (migration 0227 moves a stored row to `pending` and `in_transit`). Only a value the platform never sent leaves a list an app reads; the event fact and representation schemas narrow by the same two members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/events.d.ts#variable:EVENT_FACT_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 state machines): the payment record state `confirmed` and the shipment state `processing` had no writer, so they leave their lists (migration 0227 moves a stored row to `pending` and `in_transit`). Only a value the platform never sent leaves a list an app reads; the event fact and representation schemas narrow by the same two members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/resource-states.d.ts#variable:PAYMENT_RECORD_STATUSES: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 state machines): the payment record state `confirmed` and the shipment state `processing` had no writer, so they leave their lists (migration 0227 moves a stored row to `pending` and `in_transit`). Only a value the platform never sent leaves a list an app reads; the event fact and representation schemas narrow by the same two members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/resource-states.d.ts#variable:SHIPMENT_STATUSES: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 state machines): the payment record state `confirmed` and the shipment state `processing` had no writer, so they leave their lists (migration 0227 moves a stored row to `pending` and `in_transit`). Only a value the platform never sent leaves a list an app reads; the event fact and representation schemas narrow by the same two members."
  }
 ]

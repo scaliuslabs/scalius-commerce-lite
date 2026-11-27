@@ -10,8 +10,11 @@ import {
   type CourierProvidersSource,
   lookupShipmentByMerchantOrderId,
   PROVIDER_OUTCOME_UNKNOWN,
+  shipmentMove,
   updateOrderStatusFromShipment,
 } from "../delivery";
+import { isCourierShipmentStatus } from "@scalius/shared/shipment-state";
+import type { CourierShipmentStatus } from "@scalius/shared/plugins/providers";
 import {
   assertNoActivePaymentSessionAttempt,
   assertNoRefundLocksOrder,
@@ -53,31 +56,27 @@ function cleanShipmentRecoveryMetadata(metadata: Record<string, unknown>): strin
     return Object.keys(next).length > 0 ? JSON.stringify(next) : null;
 }
 
+/**
+ * The courier state a held shipment is restored to: the first courier state
+ * its recorded facts name (the provider status it was held with, the
+ * booking's own words), else `pending`. Only a state of the courier port's
+ * list is ever restored: a courier's raw word or a recovery reason is not one.
+ */
 function safeFinalizedShipmentStatus(
     shipment: { rawStatus?: string | null },
     metadata: Record<string, unknown>,
-): { status: string; hasExplicitProviderState: boolean } {
+): { status: CourierShipmentStatus; hasExplicitProviderState: boolean } {
     const reconciliation = asRecord(metadata.reconciliation);
-    const explicitStatus =
-        stringField(reconciliation, "providerStatus") ??
-        stringField(metadata, "order_status") ??
-        stringField(metadata, "status");
+    const explicitStatus = [
+        stringField(reconciliation, "providerStatus"),
+        stringField(metadata, "order_status"),
+        stringField(metadata, "status"),
+    ].find(isCourierShipmentStatus);
+    if (explicitStatus) return { status: explicitStatus, hasExplicitProviderState: true };
 
-    if (explicitStatus && explicitStatus !== ShipmentStatus.RECONCILE_REQUIRED &&
-        explicitStatus !== PROVIDER_OUTCOME_UNKNOWN && explicitStatus !== "creating") {
-        return { status: explicitStatus, hasExplicitProviderState: true };
-    }
-
+    // A held row's raw status is usually its recovery reason, never a state; a reason that happens to end like one is skipped.
     const rawStatus = shipment.rawStatus?.trim();
-    if (
-        rawStatus &&
-        rawStatus !== ShipmentStatus.RECONCILE_REQUIRED &&
-        rawStatus !== PROVIDER_OUTCOME_UNKNOWN &&
-        rawStatus !== "creating" &&
-        !rawStatus.endsWith("_failed") &&
-        !rawStatus.includes("reconcile") &&
-        !rawStatus.includes("claim")
-    ) {
+    if (isCourierShipmentStatus(rawStatus) && !rawStatus.endsWith("_failed")) {
         return { status: rawStatus, hasExplicitProviderState: true };
     }
 
@@ -396,14 +395,8 @@ export async function resolveUnknownOrderShipment(
     delete nextMetadata.reconciliation;
     nextMetadata.unknownOutcomeResolution = evidence;
     const [shipmentResult, orderResult] = await db.batch([
-        db.update(deliveryShipments).set({
-            status: finalStatus,
-            rawStatus: input.outcome,
-            metadata: JSON.stringify(nextMetadata),
-            updatedAt: sql`unixepoch()`,
-        }).where(and(
+        shipmentMove(db, finalStatus, "store", and(
             eq(deliveryShipments.id, input.shipmentId),
-            eq(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED),
             eq(deliveryShipments.rawStatus, PROVIDER_OUTCOME_UNKNOWN),
             sql`EXISTS (
                 SELECT 1 FROM ${orders}
@@ -411,7 +404,10 @@ export async function resolveUnknownOrderShipment(
                   AND ${orders.version} = ${input.expectedOrderVersion}
                   AND ${orders.shipmentClaimId} = ${input.shipmentId}
             )`,
-        )).returning({ id: deliveryShipments.id }),
+        ), {
+            rawStatus: input.outcome,
+            metadata: JSON.stringify(nextMetadata),
+        }).returning({ id: deliveryShipments.id }),
         db.update(orders).set({
             shipmentClaimId: null,
             shipmentClaimExpiresAt: null,
@@ -560,7 +556,9 @@ export async function reconcileOrderShipment(
     await assertNoActivePaymentSessionAttempt(db, orderId);
 
     const orderStatusSync = asRecord(metadata.orderStatusSync);
-    const shipmentStatusForSync = stringField(orderStatusSync, "shipmentStatus");
+    const syncedStatus = stringField(orderStatusSync, "shipmentStatus");
+    // The courier state the shipment had when its order or stock update failed; a word that is not one restores `pending`.
+    const shipmentStatusForSync = syncedStatus === null ? null : isCourierShipmentStatus(syncedStatus) ? syncedStatus : ShipmentStatus.PENDING;
     if (shipmentStatusForSync) {
         const targetOrderStatus = stringField(orderStatusSync, "orderStatus") ?? order.status;
         let orderStatusChanged = false;
@@ -599,18 +597,10 @@ export async function reconcileOrderShipment(
             targetOrderStatus,
         );
 
-        await db
-            .update(deliveryShipments)
-            .set({
-                status: shipmentStatusForSync,
-                rawStatus: shipmentStatusForSync,
-                metadata: cleanShipmentRecoveryMetadata(metadata),
-                updatedAt: sql`unixepoch()`,
-            })
-            .where(and(
-                eq(deliveryShipments.id, shipmentId),
-                eq(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED),
-            ));
+        await shipmentMove(db, shipmentStatusForSync, "store", eq(deliveryShipments.id, shipmentId), {
+            rawStatus: shipmentStatusForSync,
+            metadata: cleanShipmentRecoveryMetadata(metadata),
+        });
 
         if (order.shipmentClaimId === shipmentId) {
             await clearShipmentClaim(db, orderId, shipmentId);
@@ -639,12 +629,10 @@ export async function reconcileOrderShipment(
             && stringField(asRecord(metadata.reconciliation), "reason") === "expired_order_shipment_claim";
         if (!leftover) throw new ConflictError("Shipment is no longer the active order shipment recovery claim.");
         const restored = safeFinalizedShipmentStatus(shipment, metadata).status;
-        await db.update(deliveryShipments).set({
-            status: restored,
+        await shipmentMove(db, restored, "store", eq(deliveryShipments.id, shipmentId), {
             rawStatus: restored,
             metadata: cleanShipmentRecoveryMetadata(metadata),
-            updatedAt: sql`unixepoch()`,
-        }).where(and(eq(deliveryShipments.id, shipmentId), eq(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED)));
+        });
         const followed = await followCourierStatus(db, orderId, shipmentId, restored);
         return {
             status: "repaired",
@@ -703,18 +691,10 @@ export async function reconcileOrderShipment(
         finalOrderStatus,
     );
 
-    await db
-        .update(deliveryShipments)
-        .set({
-            status: finalizedShipmentStatus.status,
-            rawStatus: finalizedShipmentStatus.status,
-            metadata: cleanShipmentRecoveryMetadata(metadata),
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(deliveryShipments.id, shipmentId),
-            eq(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED),
-        ));
+    await shipmentMove(db, finalizedShipmentStatus.status, "store", eq(deliveryShipments.id, shipmentId), {
+        rawStatus: finalizedShipmentStatus.status,
+        metadata: cleanShipmentRecoveryMetadata(metadata),
+    });
 
     await clearShipmentClaim(db, orderId, shipmentId);
     // A courier status the shipment already moved to (delivered, returned)

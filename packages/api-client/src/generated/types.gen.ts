@@ -3949,7 +3949,7 @@ export type OrderQuoteResource = {
 export type PaymentResource = {
     id: string;
     orderId: string;
-    status: 'pending' | 'confirmed' | 'succeeded' | 'failed' | 'refunded' | 'cancelled' | 'authorized';
+    status: 'pending' | 'succeeded' | 'failed' | 'refunded' | 'cancelled' | 'authorized';
     method: string;
     type: 'full' | 'deposit' | 'balance' | 'refund';
     currency: string;
@@ -3984,7 +3984,7 @@ export type ShipmentResource = {
     orderId: string;
     providerId: string | null;
     providerType: string;
-    status: 'pending' | 'pickup_assigned' | 'picked_up' | 'pickup_failed' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'partial_delivered' | 'delivery_failed' | 'on_hold' | 'failed' | 'cancelled' | 'returned' | 'unknown' | 'creating' | 'processing' | 'reconcile_required';
+    status: 'pending' | 'pickup_assigned' | 'picked_up' | 'pickup_failed' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'partial_delivered' | 'delivery_failed' | 'on_hold' | 'failed' | 'cancelled' | 'returned' | 'unknown' | 'creating' | 'reconcile_required';
     rawStatus: string | null;
     externalId: string | null;
     trackingId: string | null;

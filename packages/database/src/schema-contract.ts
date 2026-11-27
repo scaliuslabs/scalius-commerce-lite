@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 226,
-  name: "0226_order_line_messages",
+  version: 227,
+  name: "0227_dead_record_states",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -911,6 +911,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 226,
     name: "0226_order_line_messages",
     sourceSha256: "ab7145b5fbbfc7bf2aaa4f7468da3f21b0bc1ff3ba31823884476d70451b2820",
+  },
+  {
+    version: 227,
+    name: "0227_dead_record_states",
+    sourceSha256: "1997bfca50a0f4343d0f8aa77a2eff6a3dbf85bccdaccc7edeeec5380ea178dd",
   },
 ] as const;
 

@@ -5867,7 +5867,7 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | --- | --- | --- | --- |
 | `id` | string | yes | 1 to 128 characters |
 | `orderId` | string | yes | 1 to 128 characters |
-| `status` | "pending" \| "confirmed" \| "succeeded" \| "failed" \| "refunded" \| "cancelled" \| "authorized" | yes |  |
+| `status` | "pending" \| "succeeded" \| "failed" \| "refunded" \| "cancelled" \| "authorized" | yes |  |
 | `method` | string | yes | at most 4000 characters |
 | `type` | "full" \| "deposit" \| "balance" \| "refund" | yes |  |
 | `currency` | string | yes | 3 to 3 characters |
@@ -6053,7 +6053,7 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `orderId` | string | yes | 1 to 128 characters |
 | `providerId` | string \| null | yes | 1 to 128 characters |
 | `providerType` | string | yes | 1 to 64 characters |
-| `status` | "pending" \| "pickup_assigned" \| "picked_up" \| "pickup_failed" \| "in_transit" \| "out_for_delivery" \| "delivered" \| "partial_delivered" \| "delivery_failed" \| "on_hold" \| "failed" \| "cancelled" \| "returned" \| "unknown" \| "creating" \| "processing" \| "reconcile_required" | yes |  |
+| `status` | "pending" \| "pickup_assigned" \| "picked_up" \| "pickup_failed" \| "in_transit" \| "out_for_delivery" \| "delivered" \| "partial_delivered" \| "delivery_failed" \| "on_hold" \| "failed" \| "cancelled" \| "returned" \| "unknown" \| "creating" \| "reconcile_required" | yes |  |
 | `rawStatus` | string \| null | yes | at most 4000 characters |
 | `externalId` | string \| null | yes | at most 4000 characters |
 | `trackingId` | string \| null | yes | at most 4000 characters |

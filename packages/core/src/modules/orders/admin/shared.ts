@@ -34,6 +34,7 @@ import {
   PAYMENT_BLOCKED_ORDER_STATUSES,
 } from "../../payments";
 import { sql, eq, inArray, isNull, and, type SQL } from "drizzle-orm";
+import { PAYMENT_IN_FLIGHT_STATUSES } from "@scalius/shared/payment-record-state";
 import type { BatchItem } from "drizzle-orm/batch";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
 import { fromMinor } from "@scalius/shared/money";
@@ -183,7 +184,7 @@ export function paymentRecoveryLifecycleCondition() {
         WHEN EXISTS (
             SELECT 1 FROM ${orderPayments}
             WHERE ${orderPayments.orderId} = ${orderIdSql}
-              AND ${inArray(orderPayments.status, [PaymentRecordStatus.PENDING, PaymentRecordStatus.CONFIRMED, PaymentRecordStatus.AUTHORIZED])}
+              AND ${inArray(orderPayments.status, [...PAYMENT_IN_FLIGHT_STATUSES])}
         ) THEN 1
         WHEN NOT (${noActiveRefundAttemptForOrderColumnCondition(orderIdSql)}) THEN 1
         WHEN EXISTS (

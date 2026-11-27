@@ -30590,7 +30590,6 @@
      "type": "string",
      "enum": [
       "pending",
-      "confirmed",
       "succeeded",
       "failed",
       "refunded",
@@ -31918,7 +31917,6 @@
       "returned",
       "unknown",
       "creating",
-      "processing",
       "reconcile_required"
      ]
     },

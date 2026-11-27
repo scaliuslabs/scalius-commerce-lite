@@ -5,6 +5,7 @@
 // - the three mutation locks: a shipment claim, a hosted-payment setup and a
 //   refund in flight each keep every other writer off the order (the refund
 //   attempt's own states and moves are ./refund-attempt-machine);
+// - the one writer of a payment record's status (./payment-record-move);
 // - the immutable facts apps record on an order (`order_events`);
 // - the buyer's rows of an order (./buyer-lines: a split kit item is one row).
 export * from "./browser";
@@ -12,6 +13,7 @@ export * from "./shipment-claim";
 export * from "./payment-session-guard";
 export * from "./refund-attempt-guard";
 export * from "./refund-attempt-machine";
+export * from "./payment-record-move";
 export * from "./app-facts";
 export * from "./stock-held";
 export * from "./attribute-apps";

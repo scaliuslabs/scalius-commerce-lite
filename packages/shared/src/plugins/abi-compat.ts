@@ -13,7 +13,10 @@
 //   code (or its status), a
 //   storefront constant, a member of one of its lists or a key of one of its
 //   objects (a list and an object may grow), and no stable port goes back to
-//   beta.
+//   beta;
+// - a state machine an app sees only grows: no machine, state or move
+//   disappears, a move keeps its target and every state it leaves from, and
+//   who may make it only widens.
 //
 // A break is accepted only by an entry in `abi.breaks.json` naming the exact
 // change and the fingerprint of the snapshot it breaks from, so `vitest -u`
@@ -180,6 +183,43 @@ export function protocolBreakingChanges(before: unknown, after: unknown): string
 
   problems.push(...constantBreaks(was.storefront, now.storefront));
   problems.push(...providerRequiredBreaks(was.providerRequired, now.providerRequired));
+  problems.push(...machineBreaks(was.machines, now.machines));
+  return problems;
+}
+
+const strings = (value: unknown): string[] => Array.isArray(value) ? value.map(String) : [];
+
+/** A sealed machine (`protocolSeal().machines`) may gain states and moves, and a move may leave more states; nothing else changes. */
+function machineBreaks(before: unknown, after: unknown): string[] {
+  const problems: string[] = [];
+  const now = record(after);
+  for (const [name, value] of Object.entries(record(before))) {
+    if (!(name in now)) {
+      problems.push(`machines.${name}: the machine was removed.`);
+      continue;
+    }
+    const was = record(value);
+    const next = record(now[name]);
+    const states = new Set(strings(next.states));
+    for (const state of strings(was.states)) if (!states.has(state)) problems.push(`machines.${name}.states: "${state}" was removed.`);
+    const moves = record(next.moves);
+    for (const [move, entry] of Object.entries(record(was.moves))) {
+      if (!(move in moves)) {
+        problems.push(`machines.${name}.moves.${move}: the move was removed.`);
+        continue;
+      }
+      const previous = record(entry);
+      const current = record(moves[move]);
+      if (previous.to !== current.to) problems.push(`machines.${name}.moves.${move}: its target changed from ${String(previous.to)} to ${String(current.to)}.`);
+      const from = new Set(strings(current.from));
+      for (const state of strings(previous.from)) if (!from.has(state)) problems.push(`machines.${name}.moves.${move}: it no longer leaves "${state}".`);
+      if (current.by !== undefined) {
+        if (previous.by === undefined) problems.push(`machines.${name}.moves.${move}: it now names who may make it.`);
+        const by = new Set(strings(current.by));
+        for (const actor of strings(previous.by)) if (!by.has(actor)) problems.push(`machines.${name}.moves.${move}: "${actor}" may no longer make it.`);
+      }
+    }
+  }
   return problems;
 }
 

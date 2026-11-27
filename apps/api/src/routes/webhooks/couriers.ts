@@ -9,16 +9,20 @@
 // which the payment webhook sweep excludes) and applied through the same
 // shipment, fulfilment ledger and order sync as every courier. Only the
 // port's validated answer is applied: a status from the port's set, short
-// audit details, never the raw body. The courier's expected answer (status,
+// audit details, never the raw body; and only as a move of the shipment
+// machine (@scalius/shared/shipment-state): a report a settled shipment
+// refuses is acknowledged and applied nowhere, its refusal kept with the event. The courier's expected answer (status,
 // headers, body: Pathao's integration secret header) comes from the app.
 
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { apiNotFoundResponse } from "../../runtime/not-found";
 import type { Context } from "hono";
-import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { deliveryProviders, deliveryShipments, ShipmentStatus } from "@scalius/database/schema";
-import { courierFor, updateOrderStatusFromShipment } from "@scalius/core/modules/delivery";
+import { courierFor, shipmentMove, updateOrderStatusFromShipment } from "@scalius/core/modules/delivery";
+import { machineRefusal } from "@scalius/shared/machine";
+import { SHIPMENT_MACHINE } from "@scalius/shared/shipment-state";
 import { settleShipmentClaimForCourierPush, syncCourierFulfilmentFromShipment } from "@scalius/core/modules/fulfilment";
 import {
   isQualifiedProviderId,
@@ -257,8 +261,8 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
   const held = { id: claim.id, claimId: claim.claimId };
 
   try {
-    const written = await db.update(deliveryShipments).set({
-      status: tracking.status,
+    // The report is a move of the shipment machine, judged in the write.
+    const written = await shipmentMove(db, tracking.status, "courier", eq(deliveryShipments.id, shipment.id), {
       rawStatus: tracking.rawStatus,
       lastChecked: new Date(),
       updatedAt: new Date(),
@@ -267,14 +271,21 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
         ...(tracking.details ?? {}),
         lastWebhookAt: new Date().toISOString(),
       }),
-    }).where(and(
-      eq(deliveryShipments.id, shipment.id),
-      // A shipment that became a reconciliation meanwhile waits for staff.
-      ne(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED),
-    )).returning({ id: deliveryShipments.id });
+    }).returning({ id: deliveryShipments.id });
     if (written.length === 0) {
-      await markWebhookEventFailed(db, held, { error: "courier_webhook_shipment_held" });
-      return retryLater(c);
+      const current = (await db.select({ status: deliveryShipments.status }).from(deliveryShipments)
+        .where(eq(deliveryShipments.id, shipment.id)).get())?.status ?? shipment.status;
+      // A shipment that became a reconciliation meanwhile waits for staff: the courier comes back.
+      if (current === ShipmentStatus.RECONCILE_REQUIRED) {
+        await markWebhookEventFailed(db, held, { error: "courier_webhook_shipment_held" });
+        return retryLater(c);
+      }
+      // A settled shipment refuses the report (a late one, or out of order).
+      // Sending it again never makes it legal: it is acknowledged, applied
+      // nowhere, and the refusal is kept with the event.
+      const refusal = machineRefusal(SHIPMENT_MACHINE, current, tracking.status, "courier");
+      await markWebhookEventProcessed(db, held, { externalId, status: current, rawStatus: tracking.rawStatus, refusal });
+      return accepted(c, reply, { received: true, status: current, refusal });
     }
 
     // The ledger follows the parcel (F11): before the order moves for units

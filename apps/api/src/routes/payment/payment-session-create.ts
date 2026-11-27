@@ -2,7 +2,7 @@ import { gatewayPaymentKind } from "@scalius/shared/order-payment-methods";
 import { PAYMENT_REFUSAL_CODES, PAYMENT_REFUSALS, type PaymentRefusal } from "@scalius/shared/buyer-order-view";
 import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 import type { Context } from "hono";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   buildBatchGuard,
   isBatchGuardError,
@@ -46,7 +46,8 @@ import {
   type PaymentGateway,
   type PaymentProviders,
 } from "@scalius/core/modules/payments";
-import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderSqlCondition } from "@scalius/core/modules/order-kernel";
+import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderSqlCondition, paymentMove } from "@scalius/core/modules/order-kernel";
+import { PAYMENT_HOLDING_STATUSES } from "@scalius/shared/payment-record-state";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { requestPaymentProviders } from "../../plugins/providers/payment";
 import {
@@ -815,11 +816,7 @@ async function checkOrderCanUseGateway(
 
   // Nothing is being set up for the order: the plan answered processing before asking.
   const paymentRows = await reads.paymentRows();
-  const hasUnsafePaymentEvidence = paymentRows.some((payment) =>
-    payment.status === PaymentRecordStatus.PENDING ||
-    payment.status === PaymentRecordStatus.CONFIRMED || payment.status === PaymentRecordStatus.AUTHORIZED ||
-    payment.status === PaymentRecordStatus.SUCCEEDED
-  );
+  const hasUnsafePaymentEvidence = paymentRows.some((payment) => (PAYMENT_HOLDING_STATUSES as readonly string[]).includes(payment.status));
   const hasTerminalPaymentEvidence = paymentRows.some((payment) =>
     payment.paymentMethod === order.paymentMethod &&
     (payment.status === PaymentRecordStatus.FAILED || payment.status === PaymentRecordStatus.CANCELLED)
@@ -878,7 +875,7 @@ async function applyGatewayChange(
         AND NOT EXISTS (
           SELECT 1 FROM ${orderPayments}
           WHERE ${orderPayments.orderId} = ${order.id}
-            AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED}, ${PaymentRecordStatus.SUCCEEDED})
+            AND ${inArray(orderPayments.status, [...PAYMENT_HOLDING_STATUSES])}
         )
         AND (
           EXISTS (
@@ -899,10 +896,7 @@ async function applyGatewayChange(
     try {
       await safeBatch(db, [
         buildBatchGuard(db, replacementAuthority, "payment_attempt_replacement_conflict"),
-        db.update(orderPayments).set({
-          status: PaymentRecordStatus.CANCELLED,
-          updatedAt: sql`unixepoch()`,
-        }).where(and(
+        paymentMove(db, "cancelled", and(
           eq(orderPayments.orderId, order.id),
           eq(orderPayments.paymentMethod, order.paymentMethod),
           eq(orderPayments.status, PaymentRecordStatus.PENDING),
@@ -963,7 +957,7 @@ async function applyGatewayChange(
       sql`NOT EXISTS (
         SELECT 1 FROM ${orderPayments}
         WHERE ${orderPayments.orderId} = ${order.id}
-          AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED}, ${PaymentRecordStatus.SUCCEEDED})
+          AND ${inArray(orderPayments.status, [...PAYMENT_HOLDING_STATUSES])}
       )`,
       sql`EXISTS (
         SELECT 1 FROM ${orderPayments}

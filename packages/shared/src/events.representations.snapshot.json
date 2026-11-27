@@ -2152,7 +2152,6 @@
       "returned",
       "unknown",
       "creating",
-      "processing",
       "reconcile_required"
      ]
     },
@@ -2251,7 +2250,6 @@
      "type": "string",
      "enum": [
       "pending",
-      "confirmed",
       "succeeded",
       "failed",
       "refunded",

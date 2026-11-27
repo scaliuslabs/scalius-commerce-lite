@@ -47,6 +47,7 @@ import {
   type StatusUpdateResult,
 } from "../orders";
 import { assertOrderStockCoverable, defaultInventoryLocationIdSql } from "../inventory";
+import { shipmentMove } from "../delivery";
 
 type Statement = BatchItem<"sqlite">;
 
@@ -743,11 +744,10 @@ export async function voidOrderFulfilment(
         )) as Statement,
     ];
     if (fulfilment.shipmentId) {
-        statements.push(db.update(deliveryShipments).set({
-            status: ShipmentStatus.RETURNED,
+        // Staff are an own-courier parcel's courier: taking it back reports it returned.
+        statements.push(shipmentMove(db, ShipmentStatus.RETURNED, "courier", eq(deliveryShipments.id, fulfilment.shipmentId), {
             rawStatus: ShipmentStatus.RETURNED,
-            updatedAt: sql`unixepoch()`,
-        }).where(eq(deliveryShipments.id, fulfilment.shipmentId)) as Statement);
+        }) as Statement);
     }
     let fulfillmentStatus: string;
     try {

@@ -20389,7 +20389,6 @@
          "returned",
          "unknown",
          "creating",
-         "processing",
          "reconcile_required"
         ]
        },
@@ -20420,7 +20419,6 @@
          "returned",
          "unknown",
          "creating",
-         "processing",
          "reconcile_required"
         ]
        },
@@ -20468,7 +20466,6 @@
           "type": "string",
           "enum": [
            "pending",
-           "confirmed",
            "succeeded",
            "failed",
            "refunded",
@@ -20494,7 +20491,6 @@
         "type": "string",
         "enum": [
          "pending",
-         "confirmed",
          "succeeded",
          "failed",
          "refunded",
@@ -21627,5 +21623,816 @@
   },
   "STOREFRONT_SEARCH_SUGGESTIONS_MAX": 7,
   "STOREFRONT_EXTENSION_PREFIX": "/_x/"
+ },
+ "machines": {
+  "order": {
+   "states": [
+    "pending",
+    "processing",
+    "confirmed",
+    "shipped",
+    "delivered",
+    "completed",
+    "cancelled",
+    "returned",
+    "refunded",
+    "incomplete"
+   ],
+   "initial": [
+    "incomplete",
+    "pending",
+    "confirmed"
+   ],
+   "final": [
+    "cancelled",
+    "refunded"
+   ],
+   "moves": {
+    "pending": {
+     "from": [
+      "incomplete"
+     ],
+     "to": "pending"
+    },
+    "cancelled": {
+     "from": [
+      "incomplete",
+      "pending",
+      "processing",
+      "confirmed",
+      "shipped"
+     ],
+     "to": "cancelled"
+    },
+    "processing": {
+     "from": [
+      "pending"
+     ],
+     "to": "processing"
+    },
+    "confirmed": {
+     "from": [
+      "pending",
+      "processing",
+      "shipped"
+     ],
+     "to": "confirmed"
+    },
+    "shipped": {
+     "from": [
+      "confirmed"
+     ],
+     "to": "shipped"
+    },
+    "delivered": {
+     "from": [
+      "confirmed",
+      "shipped"
+     ],
+     "to": "delivered"
+    },
+    "returned": {
+     "from": [
+      "shipped",
+      "delivered",
+      "completed"
+     ],
+     "to": "returned"
+    },
+    "completed": {
+     "from": [
+      "delivered"
+     ],
+     "to": "completed"
+    },
+    "refunded": {
+     "from": [
+      "delivered",
+      "completed",
+      "returned"
+     ],
+     "to": "refunded"
+    }
+   }
+  },
+  "cod": {
+   "states": [
+    "pending",
+    "collected",
+    "failed",
+    "returned"
+   ],
+   "initial": [
+    "pending"
+   ],
+   "final": [
+    "collected",
+    "returned"
+   ],
+   "moves": {
+    "collected": {
+     "from": [
+      "pending",
+      "failed"
+     ],
+     "to": "collected"
+    },
+    "failed": {
+     "from": [
+      "pending",
+      "failed"
+     ],
+     "to": "failed"
+    },
+    "returned": {
+     "from": [
+      "pending",
+      "failed"
+     ],
+     "to": "returned"
+    }
+   }
+  },
+  "shipment": {
+   "states": [
+    "creating",
+    "reconcile_required",
+    "pending",
+    "pickup_assigned",
+    "picked_up",
+    "pickup_failed",
+    "in_transit",
+    "out_for_delivery",
+    "on_hold",
+    "delivery_failed",
+    "unknown",
+    "delivered",
+    "partial_delivered",
+    "returned",
+    "cancelled",
+    "failed"
+   ],
+   "initial": [
+    "creating",
+    "in_transit"
+   ],
+   "final": [],
+   "moves": {
+    "pending": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown"
+     ],
+     "to": "pending",
+     "by": [
+      "courier"
+     ]
+    },
+    "pickup_assigned": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown"
+     ],
+     "to": "pickup_assigned",
+     "by": [
+      "courier"
+     ]
+    },
+    "picked_up": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown"
+     ],
+     "to": "picked_up",
+     "by": [
+      "courier"
+     ]
+    },
+    "pickup_failed": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown"
+     ],
+     "to": "pickup_failed",
+     "by": [
+      "courier"
+     ]
+    },
+    "in_transit": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown"
+     ],
+     "to": "in_transit",
+     "by": [
+      "courier"
+     ]
+    },
+    "out_for_delivery": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown"
+     ],
+     "to": "out_for_delivery",
+     "by": [
+      "courier"
+     ]
+    },
+    "delivered": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown",
+      "delivered"
+     ],
+     "to": "delivered",
+     "by": [
+      "courier"
+     ]
+    },
+    "partial_delivered": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown",
+      "partial_delivered"
+     ],
+     "to": "partial_delivered",
+     "by": [
+      "courier"
+     ]
+    },
+    "delivery_failed": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown"
+     ],
+     "to": "delivery_failed",
+     "by": [
+      "courier"
+     ]
+    },
+    "on_hold": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown"
+     ],
+     "to": "on_hold",
+     "by": [
+      "courier"
+     ]
+    },
+    "failed": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown",
+      "failed"
+     ],
+     "to": "failed",
+     "by": [
+      "courier"
+     ]
+    },
+    "cancelled": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown",
+      "cancelled"
+     ],
+     "to": "cancelled",
+     "by": [
+      "courier"
+     ]
+    },
+    "returned": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown",
+      "returned"
+     ],
+     "to": "returned",
+     "by": [
+      "courier"
+     ]
+    },
+    "unknown": {
+     "from": [
+      "creating",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivery_failed",
+      "on_hold",
+      "unknown"
+     ],
+     "to": "unknown",
+     "by": [
+      "courier"
+     ]
+    },
+    "hold": {
+     "from": [
+      "creating",
+      "reconcile_required",
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "on_hold",
+      "delivery_failed",
+      "unknown",
+      "delivered",
+      "partial_delivered",
+      "returned",
+      "cancelled",
+      "failed"
+     ],
+     "to": "reconcile_required",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_pending": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "pending",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_pickup_assigned": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "pickup_assigned",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_picked_up": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "picked_up",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_pickup_failed": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "pickup_failed",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_in_transit": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "in_transit",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_out_for_delivery": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "out_for_delivery",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_delivered": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "delivered",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_partial_delivered": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "partial_delivered",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_delivery_failed": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "delivery_failed",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_on_hold": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "on_hold",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_failed": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "failed",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_cancelled": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "cancelled",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_returned": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "returned",
+     "by": [
+      "store"
+     ]
+    },
+    "restore_unknown": {
+     "from": [
+      "reconcile_required"
+     ],
+     "to": "unknown",
+     "by": [
+      "store"
+     ]
+    }
+   }
+  },
+  "payment": {
+   "states": [
+    "pending",
+    "authorized",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "refunded"
+   ],
+   "initial": [
+    "pending",
+    "authorized",
+    "succeeded",
+    "failed"
+   ],
+   "final": [
+    "cancelled",
+    "refunded"
+   ],
+   "moves": {
+    "confirmed": {
+     "from": [
+      "pending",
+      "failed",
+      "authorized"
+     ],
+     "to": "succeeded"
+    },
+    "authorized": {
+     "from": [
+      "pending",
+      "failed"
+     ],
+     "to": "authorized"
+    },
+    "failed": {
+     "from": [
+      "pending"
+     ],
+     "to": "failed"
+    },
+    "cancelled": {
+     "from": [
+      "pending",
+      "authorized"
+     ],
+     "to": "cancelled"
+    },
+    "released": {
+     "from": [
+      "succeeded"
+     ],
+     "to": "refunded"
+    }
+   }
+  },
+  "refund_record": {
+   "states": [
+    "pending",
+    "refunded",
+    "failed"
+   ],
+   "initial": [
+    "pending",
+    "refunded"
+   ],
+   "final": [
+    "failed"
+   ],
+   "moves": {
+    "refunded": {
+     "from": [
+      "pending"
+     ],
+     "to": "refunded"
+    },
+    "failed": {
+     "from": [
+      "pending"
+     ],
+     "to": "failed"
+    },
+    "reversed": {
+     "from": [
+      "refunded"
+     ],
+     "to": "failed"
+    },
+    "reopened": {
+     "from": [
+      "refunded"
+     ],
+     "to": "pending"
+    }
+   }
+  },
+  "warranty_claim": {
+   "states": [
+    "open",
+    "in_progress",
+    "resolved",
+    "rejected"
+   ],
+   "initial": [
+    "open"
+   ],
+   "final": [],
+   "moves": {
+    "in_progress": {
+     "from": [
+      "open",
+      "resolved",
+      "rejected"
+     ],
+     "to": "in_progress"
+    },
+    "resolved": {
+     "from": [
+      "open",
+      "in_progress",
+      "rejected"
+     ],
+     "to": "resolved"
+    },
+    "rejected": {
+     "from": [
+      "open",
+      "in_progress",
+      "resolved"
+     ],
+     "to": "rejected"
+    },
+    "open": {
+     "from": [
+      "in_progress",
+      "resolved",
+      "rejected"
+     ],
+     "to": "open"
+    }
+   }
+  },
+  "object_record": {
+   "states": [
+    "active",
+    "draft",
+    "published"
+   ],
+   "initial": [
+    "active",
+    "draft",
+    "published"
+   ],
+   "final": [],
+   "moves": {
+    "publish": {
+     "from": [
+      "draft"
+     ],
+     "to": "published"
+    },
+    "unpublish": {
+     "from": [
+      "published"
+     ],
+     "to": "draft"
+    },
+    "storefront_on": {
+     "from": [
+      "active"
+     ],
+     "to": "draft"
+    },
+    "storefront_off": {
+     "from": [
+      "draft",
+      "published"
+     ],
+     "to": "active"
+    }
+   }
+  },
+  "review": {
+   "states": [
+    "pending",
+    "published",
+    "rejected",
+    "withdrawn"
+   ],
+   "initial": [
+    "pending",
+    "published"
+   ],
+   "final": [
+    "withdrawn"
+   ],
+   "moves": {
+    "publish": {
+     "from": [
+      "pending"
+     ],
+     "to": "published",
+     "by": [
+      "staff",
+      "system"
+     ]
+    },
+    "reject": {
+     "from": [
+      "pending",
+      "published"
+     ],
+     "to": "rejected",
+     "by": [
+      "staff"
+     ]
+    },
+    "withdraw": {
+     "from": [
+      "pending",
+      "published"
+     ],
+     "to": "withdrawn",
+     "by": [
+      "buyer"
+     ]
+    },
+    "hold": {
+     "from": [
+      "published"
+     ],
+     "to": "pending",
+     "by": [
+      "system"
+     ]
+    },
+    "restore": {
+     "from": [
+      "rejected"
+     ],
+     "to": "published",
+     "by": [
+      "staff"
+     ]
+    }
+   }
+  }
  }
 }

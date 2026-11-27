@@ -46,7 +46,7 @@ import {
 } from "../order-kernel";
 import type { RefundNotificationFact } from "./refund-service";
 import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "../order-kernel";
-import { REFUND_ATTEMPT_IN_FLIGHT, refundAttemptMove } from "../order-kernel";
+import { REFUND_ATTEMPT_IN_FLIGHT, refundAttemptMove, refundRecordMove } from "../order-kernel";
 
 const REFUND_RECONCILIATION_LEASE_SECONDS = 5 * 60;
 const REFUND_RECONCILIATION_RETRY_SECONDS = 15 * 60;
@@ -440,12 +440,8 @@ async function writeAttemptFailed(
   await db.batch([
     claimGuard(db, attempt),
     ...(settlement ? [buildBatchGuard(db, settlement.guard, ATTEMPT_FAILED_CONFLICT)] : []),
-    db.update(orderPayments).set({
-      status: PaymentRecordStatus.FAILED,
-      updatedAt: sql`unixepoch()`,
-    }).where(and(
+    refundRecordMove(db, "failed", and(
       eq(orderPayments.id, attempt.refundPaymentId),
-      eq(orderPayments.status, PaymentRecordStatus.PENDING),
       refundAttemptHeldCondition(attempt.id, attempt.claimId, [attempt.status]),
     )),
     refundAttemptMove(db, "failed", stillClaimed(attempt), {
@@ -1139,8 +1135,7 @@ export async function reverseRefundTurnedBack(
       await db.batch([
         buildBatchGuard(db, money.guard, REOPEN_CONFLICT),
         ...(settlement ? [buildBatchGuard(db, settlement.guard, REOPEN_CONFLICT)] : []),
-        db.update(orderPayments).set({ status: PaymentRecordStatus.FAILED, updatedAt: sql`unixepoch()` })
-          .where(and(eq(orderPayments.id, attempt.refundPaymentId), eq(orderPayments.status, PaymentRecordStatus.REFUNDED))),
+        refundRecordMove(db, "reversed", eq(orderPayments.id, attempt.refundPaymentId)),
         money.write,
         refundAttemptMove(db, "reversed", eq(refundAttempts.id, attempt.id), {
           providerStatus: outcome.providerStatus,
@@ -1200,8 +1195,7 @@ export async function reopenRefundTurnedBack(db: Database, attemptId: string, pr
         buildBatchGuard(db, money.guard, REOPEN_CONFLICT),
         buildBatchGuard(db, sql`NOT EXISTS (SELECT 1 FROM ${refundAttempts} WHERE ${refundAttempts.sourcePaymentId} = ${attempt.sourcePaymentId}
           AND ${refundAttempts.status} IN (${inFlight}))`, REOPEN_SINGLE_FLIGHT),
-        db.update(orderPayments).set({ status: PaymentRecordStatus.PENDING, updatedAt: sql`unixepoch()` })
-          .where(and(eq(orderPayments.id, attempt.refundPaymentId), eq(orderPayments.status, PaymentRecordStatus.REFUNDED))),
+        refundRecordMove(db, "reopened", eq(orderPayments.id, attempt.refundPaymentId)),
         money.write,
         refundAttemptMove(db, "reopened", eq(refundAttempts.id, attempt.id), {
           providerStatus,

@@ -31,6 +31,7 @@
 //   capture, a void and a lookup act on money already taken and need only
 //   the gateway's readable credentials (`canOperateExistingPayments`).
 import { and, eq, inArray, lte, or, isNull, sql, type SQL } from "drizzle-orm";
+import { PAYMENT_IN_FLIGHT_STATUSES } from "@scalius/shared/payment-record-state";
 import {
   orderPayments,
   orders,
@@ -530,7 +531,7 @@ export async function chargeSavedPaymentMethod(
         AND NOT EXISTS (
           SELECT 1 FROM ${orderPayments}
           WHERE ${orderPayments.orderId} = ${input.orderId}
-            AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED})
+            AND ${inArray(orderPayments.status, [...PAYMENT_IN_FLIGHT_STATUSES])}
         )
         AND NOT EXISTS (
           SELECT 1 FROM ${paymentSessionAttempts}
