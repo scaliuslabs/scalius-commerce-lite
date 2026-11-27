@@ -13,6 +13,10 @@ import { storefrontSettingBindingsSchema } from "./bindings";
 import { STOREFRONT_COMPONENT_LIMITS } from "../plugins/storefront-protocol";
 
 /** One `list` item's field value. */
+/** The most values one app part stores, and fields one item of its list setting: read bounds, which only rise. */
+export const STOREFRONT_APP_VALUES_MAX = 40;
+export const STOREFRONT_APP_LIST_ITEM_FIELDS_MAX = 12;
+
 const appSettingItemValue = z.union([z.string().max(5000), z.number().finite(), z.boolean(), z.null()]);
 
 /** One setting value (`PluginSettingValue`), bounded. */
@@ -23,13 +27,13 @@ const appSettingValue = z.union([
   z.array(z.string().max(64)).max(50),
   // A `list` setting's items.
   z.array(z.record(z.string().regex(PLUGIN_SETTING_KEY), appSettingItemValue)
-    .refine((item) => Object.keys(item).length <= 12, "At most 12 fields per item."))
+    .refine((item) => Object.keys(item).length <= STOREFRONT_APP_LIST_ITEM_FIELDS_MAX, `At most ${STOREFRONT_APP_LIST_ITEM_FIELDS_MAX} fields per item.`))
     .max(PLUGIN_SETTING_LIST_MAX),
   z.null(),
 ]);
 
 export const storefrontAppValuesSchema = z.record(z.string().regex(PLUGIN_SETTING_KEY), appSettingValue)
-  .refine((values) => Object.keys(values).length <= 40, "At most 40 settings.");
+  .refine((values) => Object.keys(values).length <= STOREFRONT_APP_VALUES_MAX, `At most ${STOREFRONT_APP_VALUES_MAX} settings.`);
 
 export const storefrontAppKeySchema = z.string().regex(PLUGIN_SURFACE_KEY_PATTERN, "Use <app id>/<type>.");
 

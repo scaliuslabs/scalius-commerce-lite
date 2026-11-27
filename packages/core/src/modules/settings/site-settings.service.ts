@@ -36,6 +36,7 @@ import {
   ValidationError,
 } from "@scalius/core/errors";
 import { urlsNotReadyFilesImages } from "../media-references";
+import { themeRefusal, themeRefusalDetails } from "./theme-refusal";
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import {
   DEFAULT_STOREFRONT_THEME,
@@ -43,7 +44,8 @@ import {
   compareThemeDocuments,
   checkStorefrontThemeSave,
   compileStorefrontPrivatePages,
-  privatePagesCompiledCurrent,
+  privatePagesPolicyCurrent,
+  storedRowWithCompiled,
   privatePagesContextOf,
   privateTokenApps,
   filledPrivatePages,
@@ -73,6 +75,7 @@ import {
   type StorefrontTemplateSwitchPlan,
   type StorefrontThemeAppManifest,
   type StorefrontThemeDocument,
+  type StorefrontThemeSaveIssue,
   type StorefrontThemeSaveReason,
   type StorefrontThemeReadRepair,
   type ThemeDocumentChange,
@@ -332,9 +335,7 @@ function serializeThemeSettings(theme: StorefrontThemeDocument, baseline?: Store
   // What the store already holds and this write does not touch is not refused (`baseline`).
   const checked = checkStorefrontThemeSave(theme, baseline === undefined ? {} : { baseline });
   if (!checked.ok) {
-    const { message, reason, issues } = checked.refusal;
-    // One shape for every theme refusal: its reason (null when only words name it) and its first issues.
-    throw new ValidationError(message, { reason, issues: issues.slice(0, 20) });
+    throw themeRefusal(checked.refusal.message, checked.refusal.issues);
   }
   return { theme: checked.theme, serialized: checked.serialized };
 }
@@ -422,27 +423,26 @@ export async function getThemeSettings(db: Database): Promise<ThemeSettingsDocum
     : unpublishedThemeSettings();
 }
 
-/**
- * What the maintenance compile did; `refused` names the pages this checker refused (each now draws the
- * store's default look), `needs_save` a theme whose private pages the read had to repair (never written
- * silently: they keep the store's default look until the merchant saves).
- */
+/** What the maintenance compile did; `refused` names the pages this compile refused (each now draws the store's default look). */
 export type PrivatePagesRecompile =
-  | { outcome: "none" | "current" | "recompiled" | "unreadable" | "raced" | "needs_save" }
+  | { outcome: "none" | "current" | "recompiled" | "unreadable" | "raced" }
   | { outcome: "refused"; pages: PrivatePageKey[]; reasons: string[] };
 
 /**
- * The published theme's private pages compiled by this build when it has not
- * compiled them yet (the first maintenance run after a deploy; a buyer's
- * request never compiles, and serves the default look meanwhile). One read,
- * and one write only then, at the same revision (it is the same document):
- * the row's cache dependency moves with the write. Only the private pages are
- * written (their source as compiled, and the compile), into the stored row as
- * the upgrade chain reads it: never a value the read repaired. A page this
- * checker refuses keeps its source, draws the store's default look and
- * records why (`compiled.refused`, the save's own issues, shown to the
- * merchant on the theme page); so does a page a field a theme cannot set
- * reached (`withHeldRefusals`). Every other page keeps the theme's look.
+ * The published theme's private pages compiled by this build when its
+ * compiler or its checks did not make them (the first maintenance run after
+ * a deploy; a buyer's request never compiles). Until then a compile an older
+ * compiler made serves the store's default look, and one only an older policy
+ * passed keeps being served (`PRIVATE_POLICY_VERSION`). One read, and one
+ * write only then, at the same revision (it is the same document): the
+ * row's cache dependency moves with the write. The compile reads the theme as
+ * the read gives it (repaired) and only `privatePages.compiled` is written,
+ * its fingerprint over the stored row (`storedRowWithCompiled`): no value the
+ * read repaired is ever written. A page this compile refuses keeps its source,
+ * draws the store's default look and records why (`compiled.refused`, the
+ * save's own issues, shown to the merchant on the theme page); so does a page
+ * a field a theme cannot set reached (`withHeldRefusals`). Every other page
+ * keeps the theme's look.
  */
 export async function recompilePublishedPrivatePages(db: Database): Promise<PrivatePagesRecompile> {
   const row = (await selectThemeSettingsRows(db))[0];
@@ -451,15 +451,13 @@ export async function recompilePublishedPrivatePages(db: Database): Promise<Priv
   const read = readStoredStorefrontThemeDocument(row.colors);
   if (!read.ok) return { outcome: "unreadable" };
   const theme = read.document;
-  if (privatePagesCompiledCurrent(theme.privatePages)) return { outcome: "current" };
-  if (read.repairs?.some((repair) => repair.path.startsWith("privatePages"))) return { outcome: "needs_save" };
-  // Every path stores arrangements filled for this anatomy: a newly mandatory part is never missing.
+  if (privatePagesPolicyCurrent(theme.privatePages)) return { outcome: "current" };
+  // Every path draws arrangements filled for this anatomy: a newly mandatory part is never missing.
   const compiled = compileStorefrontPrivatePages(filledPrivatePages(theme.privatePages), privatePagesContextOf(theme)).value;
   const privatePages = withHeldRefusals(compiled, read.held ?? []);
-  const stored = upgradeStorefrontThemeDocument(JSON.parse(row.colors) as unknown);
-  const storedPrivatePages = typeof stored.privatePages === "object" && stored.privatePages !== null ? stored.privatePages : {};
+  const stored = storedRowWithCompiled(upgradeStorefrontThemeDocument(JSON.parse(row.colors) as unknown), privatePages.compiled, privatePages);
   const written = await db.update(themeSettings)
-    .set({ colors: JSON.stringify({ ...stored, privatePages: { ...storedPrivatePages, ...privatePages } }), updatedAt: sql`unixepoch()` })
+    .set({ colors: JSON.stringify(stored), updatedAt: sql`unixepoch()` })
     .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)))
     .returning({ id: themeSettings.id });
   // A publish moved the revision in between: nothing was written, so the version is not settled (tried again next run).
@@ -559,18 +557,19 @@ async function assertThemeReferences(db: Database, theme: StorefrontThemeDocumen
   const installed = new Set((appRows as Array<{ id: string }>).map((row) => row.id));
   const missing = apps.filter((app) => !installed.has(app));
   if (missing.length > 0) {
-    throw new ValidationError(`${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} not installed: a private page styles only installed apps' blocks. Remove the ui.*@${missing[0]} tokens or install the app.`, { reason: "unknown_app" satisfies StorefrontThemeSaveReason, apps: missing });
+    const message = `${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} not installed: a private page styles only installed apps' blocks. Remove the ui.*@${missing[0]} tokens or install the app.`;
+    throw themeRefusal(message, missing.map((app) => ({ path: "privatePages.tokens", message: `${app} is not installed.`, reason: "unknown_app" })), { apps: missing });
   }
   const images = new Set((mediaRows as Array<{ id: string; kind: string }>)
     .filter((row) => row.kind === "image")
     .map((row) => row.id));
   const issues = references
     .filter((reference) => !images.has(reference.mediaId))
-    .map((reference) => ({ path: reference.path, message: "That image is not in Files any more. Choose another image." }));
+    .map((reference): StorefrontThemeSaveIssue => ({ path: reference.path, message: "That image is not in Files any more. Choose another image.", reason: "media_missing" }));
   if (productId !== null && (productRows as unknown[]).length === 0) {
-    issues.push({ path: "pages.homeMode.productId", message: "That product is unavailable or in trash. Choose another product." });
+    issues.push({ path: "pages.homeMode.productId", message: "That product is unavailable or in trash. Choose another product.", reason: "home_product_unavailable" });
   }
-  if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues);
+  if (issues.length > 0) throw themeRefusal(issues[0]!.message, issues);
 }
 
 /** The images a theme names that are no longer (ready or trashed) images in Files. */
@@ -626,7 +625,10 @@ function assertThemeApps(theme: StorefrontThemeDocument, apps: ThemePublishApps)
     ...(inactive.length > 0 ? [`This theme uses parts of ${englishList(inactive)}, which ${inactive.length === 1 ? "is" : "are"} not active. Activate ${englishList(inactive)} in Apps, or remove ${inactive.length === 1 ? "its" : "their"} parts from the theme.`] : []),
     ...(outdated.length > 0 ? [`${englishList(outdated)} no longer ${outdated.length === 1 ? "offers" : "offer"} some parts this theme uses. Remove those parts from the theme.`] : []),
   ];
-  throw new AppError(400, THEME_APPS_UNAVAILABLE, sentences.join(" "), problems);
+  throw new AppError(400, THEME_APPS_UNAVAILABLE, sentences.join(" "), {
+    ...themeRefusalDetails(problems.apps.map((app) => ({ path: "apps", message: `${app.name ?? app.pluginId}: ${app.reason === "not_declared" ? "no longer offers parts this theme uses" : "not active"}.`, reason: THEME_APPS_UNAVAILABLE }))),
+    ...problems,
+  });
 }
 
 export const THEME_APP_SETTINGS_MISSING = "theme_app_settings_missing" satisfies StorefrontThemeSaveReason;
@@ -660,7 +662,7 @@ function assertThemeAppSettings(theme: StorefrontThemeDocument, apps: ThemePubli
     400,
     THEME_APP_SETTINGS_MISSING,
     `${missing.length === 1 ? "An app part in this theme needs a setting" : `${missing.length} app parts in this theme need settings`} before it can go live. Open the theme editor and fix ${missing.length === 1 ? "it" : "them"}, or remove ${missing.length === 1 ? "it" : "them"}.`,
-    { paths: missing.map((reference) => reference.path) },
+    { ...themeRefusalDetails(missing.map((reference) => ({ path: reference.path, message: "This app part needs a setting before it can go live.", reason: THEME_APP_SETTINGS_MISSING }))), paths: missing.map((reference) => reference.path) },
   );
 }
 

@@ -45,6 +45,23 @@ export type PrivateTokens = Partial<Record<PrivatePageKey, Record<string, Partia
  */
 export const PRIVATE_CHECKER_VERSION = 10;
 
+/**
+ * Two versions of the private pages' compile, because they fail differently:
+ *
+ * - `PRIVATE_CHECKER_VERSION` (stored as `sanitizer`), the compiler's: what
+ *   CSS it writes and how (the host's rules, token mode, the anatomy it reads).
+ *   A compile an older compiler made is never served: the pages draw the
+ *   store's default look until this build compiles them. Bump it only for a
+ *   change to what is written, or a safety fix to it.
+ * - `PRIVATE_POLICY_VERSION` (stored as `policy`), the checks': which values a
+ *   save refuses (a floor, a rank, a word rule, a new reason). A compile an
+ *   older policy passed keeps being served (it is still the host's own rules
+ *   from typed values, and it passed the policy of its day) until the
+ *   maintenance compile replaces it, refusing only the pages this policy no
+ *   longer passes. Bump it for a stricter or new check.
+ */
+export const PRIVATE_POLICY_VERSION = 1;
+
 /** The most compiled token CSS a page stores (each page serves only its own). */
 export const PRIVATE_COMPILED_CSS_MAX_BYTES = 64 * 1024;
 
@@ -242,6 +259,8 @@ export const storefrontPrivatePagesSchema = z.object({
      * draws the store's default look until a save, the others serve theirs. The merchant is shown them.
      */
     refused: z.partialRecord(z.enum(PRIVATE_PAGE_KEYS as [PrivatePageKey, ...PrivatePageKey[]]), z.array(privatePageRefusalSchema).min(1).max(PRIVATE_PAGE_REFUSALS_MAX)).optional(),
+    /** The checks' version (`PRIVATE_POLICY_VERSION`; absent: before it was stored): an older one is still served, and maintenance compiles again. */
+    policy: z.number().int().min(0).optional(),
     /**
      * A fingerprint of the source and of this compile (`privatePagesDigest`): a read serves the compile only
      * while it matches, so a stored look edited apart from its source (a row written by hand) is never served.
@@ -272,11 +291,11 @@ export interface StorefrontPrivatePages {
   tokens: PrivateTokens;
   labels: Partial<Record<string, PrivateWords | string>>;
   icons: Partial<Record<string, PrivateAssetRef>>;
-  compiled: { anatomy: number; sanitizer: number; css: Partial<Record<PrivatePageKey, string>>; refused?: Partial<Record<PrivatePageKey, PrivatePageRefusal[]>>; digest?: string };
+  compiled: { anatomy: number; sanitizer: number; css: Partial<Record<PrivatePageKey, string>>; refused?: Partial<Record<PrivatePageKey, PrivatePageRefusal[]>>; policy?: number; digest?: string };
 }
 export type StorefrontPrivatePagesTemplate = Partial<Omit<StorefrontPrivatePages, "compiled">>;
 
 /** The private pages as the host draws them with no theme of its own. */
 export function storefrontPrivatePagesDefault(): StorefrontPrivatePages {
-  return { pages: {}, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css: {} } };
+  return { pages: {}, tokens: {}, labels: {}, icons: {}, compiled: { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, policy: PRIVATE_POLICY_VERSION, css: {} } };
 }

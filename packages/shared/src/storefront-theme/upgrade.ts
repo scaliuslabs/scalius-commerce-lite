@@ -436,6 +436,8 @@ export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefr
   upgraded = withoutPrivatePageTemplates(upgraded);
   const released = readStoredPrivatePages(upgraded.privatePages);
   let candidate: Json = "privatePages" in upgraded ? { ...upgraded, privatePages: released.value } : upgraded;
+  // The stored input a compile's fingerprint covers: before any repair, so it matches every later read.
+  const stored = candidate;
   const repairs: StorefrontThemeReadRepair[] = [];
   // A repair can let a check that waited on the shape run (a list's own checks): a few rounds settle it.
   for (let round = 0; ; round += 1) {
@@ -444,7 +446,7 @@ export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefr
       // A compile is served only while it belongs to this source (its fingerprint) and this build made it; a
       // stored document holding what a theme cannot set is compiled by maintenance, its held pages refused there.
       const privatePages = result.data.privatePages;
-      const document = privatePagesCompiledCurrent(privatePages) && !privatePagesCompiledIntact(privatePages)
+      const document = privatePagesCompiledCurrent(privatePages) && !privatePagesCompiledIntact(stored, privatePages)
         ? { ...result.data, privatePages: uncompiledPrivatePages(privatePages) }
         : result.data;
       return { ok: true, document, storedVersion: (parsed as Json).version as number, ...(repairs.length > 0 ? { repairs } : {}), ...(released.held.length > 0 ? { held: released.held } : {}) };

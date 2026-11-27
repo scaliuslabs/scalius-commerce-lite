@@ -237,6 +237,7 @@ export const themeEditorMessages = defineMessages({
     discard: "Discard draft",
     discardTitle: "Discard your draft?",
     discardBody: "Your draft goes back to the live theme. Unpublished edits are removed for everyone.",
+    discardBodyUnreadable: "Your live theme can't be read, so your draft becomes the store's default theme. Unpublished edits are removed for everyone.",
     discarded: "Draft discarded",
     heldRestored: "Edits that weren't saved yet are back. Fix the setting to save them.",
 
@@ -619,6 +620,7 @@ export const themeEditorMessages = defineMessages({
     discard: "খসড়া বাতিল করুন",
     discardTitle: "আপনার খসড়া বাতিল করবেন?",
     discardBody: "আপনার খসড়া লাইভ থিমে ফিরে যাবে। পাবলিশ না করা পরিবর্তন সবার জন্য মুছে যাবে।",
+    discardBodyUnreadable: "আপনার লাইভ থিম পড়া যাচ্ছে না, তাই আপনার খসড়া স্টোরের ডিফল্ট থিম হয়ে যাবে। পাবলিশ না করা পরিবর্তন সবার জন্য মুছে যাবে।",
     discarded: "খসড়া বাতিল হয়েছে",
     heldRestored: "যে পরিবর্তনগুলো এখনো সেভ হয়নি সেগুলো ফিরে এসেছে। সেভ করতে সেটিংটি ঠিক করুন।",
 

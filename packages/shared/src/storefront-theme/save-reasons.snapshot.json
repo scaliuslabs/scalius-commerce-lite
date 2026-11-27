@@ -1,6 +1,9 @@
 {
  "checker": 10,
+ "policy": 1,
  "reasons": [
+  "binding_object_types",
+  "binding_source",
   "contrast",
   "dark_colors_missing",
   "document_too_large",
@@ -8,6 +11,7 @@
   "duplicate_target",
   "empty_layout",
   "foreign_asset",
+  "home_product_unavailable",
   "invalid_hook",
   "invalid_link",
   "label_figures",
@@ -17,6 +21,7 @@
   "layout_once",
   "lead_order",
   "markup",
+  "media_missing",
   "missing_part",
   "missing_target",
   "no_row",

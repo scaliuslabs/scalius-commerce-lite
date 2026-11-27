@@ -50,6 +50,7 @@ import { PRIVATE_PAGES, type PrivatePageSpec, type PrivateWords } from "./privat
 import {
   PRIVATE_CHECKER_VERSION,
   PRIVATE_COMPILED_CSS_MAX_BYTES,
+  PRIVATE_POLICY_VERSION,
   PRIVATE_LOOK_ONLY_PAGES,
   PRIVATE_NOT_AVAILABLE,
   PRIVATE_PAGE_REFUSALS_MAX,
@@ -62,6 +63,7 @@ import {
 
 export {
   PRIVATE_CHECKER_VERSION,
+  PRIVATE_POLICY_VERSION,
   PRIVATE_COMPILED_CSS_MAX_BYTES,
   PRIVATE_LAYOUT_MAX_DEPTH,
   PRIVATE_LOOK_ONLY_PAGES,
@@ -80,6 +82,7 @@ export {
   type StorefrontPrivatePages,
   type StorefrontPrivatePagesTemplate,
 } from "./private-schema";
+import { readStoredPrivatePages } from "./private-schema";
 import {
   compactPrivateArrangement,
   privateCheckoutBlockArrangement,
@@ -272,7 +275,7 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
     const own = value.tokens[page];
     const tokens = Object.keys(own ?? {}).length > 0 ? own! : painted && privatePageHasOwnPage(page) && privatePageNamed({ pages, tokens: value.tokens }, page) ? {} : null;
     if (!tokens) continue;
-    const arrangement = privatePageArrangement({ ...value, pages, compiled: { ...value.compiled, anatomy: PRIVATE_ANATOMY_VERSION } }, page) ?? context.defaults?.[page];
+    const arrangement = privatePageArrangement({ pages }, page) ?? context.defaults?.[page];
     const spec: PrivatePageSpec = PRIVATE_PAGES[page];
     const compiled = compilePrivateTokens(page, tokens, {
       layout: arrangement?.layout ?? spec.layout,
@@ -305,8 +308,8 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
   }
   const refused = Object.fromEntries([...byPage].map(([page, found]) => [page, pageRefusals(found)])) as NonNullable<StorefrontPrivatePages["compiled"]["refused"]>;
   const css = Object.fromEntries(Object.entries(tokenCss).filter(([page]) => !byPage.has(page as PrivatePageKey)));
-  const compiled = { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, css, ...(byPage.size > 0 ? { refused } : {}) };
-  const out = withPrivatePagesDigest({ ...value, pages, labels, compiled });
+  const compiled = { anatomy: PRIVATE_ANATOMY_VERSION, sanitizer: PRIVATE_CHECKER_VERSION, policy: PRIVATE_POLICY_VERSION, css, ...(byPage.size > 0 ? { refused } : {}) };
+  const out: StorefrontPrivatePages = { ...value, pages, labels, compiled };
   return issues.length > 0 ? { ok: false, issues, value: out } : { ok: true, value: out };
 }
 
@@ -321,36 +324,82 @@ export function filledPrivatePages(privatePages: StorefrontPrivatePages): Storef
   };
 }
 
-/** The fingerprint of the private pages' source and compile (everything but the fingerprint itself). */
-export function privatePagesDigest(privatePages: StorefrontPrivatePages): string {
-  const { digest: _digest, ...compiled } = privatePages.compiled;
+/** A stored theme document as JSON (the row as the upgrade chain reads it): what a compile's fingerprint covers. */
+export interface StorefrontPrivatePagesDigestInput {
+  privatePages?: unknown;
+  tokens?: unknown;
+  apps?: unknown;
+  blocks?: unknown;
+}
+
+const record = (value: unknown): Record<string, unknown> => (value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {});
+
+/**
+ * The fingerprint of a stored compile and everything it was made from: the
+ * private pages' source as stored (the read's input, never a value the read
+ * repaired), and what the compile was checked against (the palettes, the
+ * scheme, the page paint, the theme's app, the payment step's block;
+ * `privatePagesContextOf`'s inputs). A change to any of them makes the stored
+ * compile not this source's.
+ */
+export function privatePagesDigest(document: StorefrontPrivatePagesDigestInput): string {
+  const privatePages = record(document.privatePages);
+  const tokens = record(document.tokens);
+  const { digest: _digest, ...compiled } = record(privatePages.compiled);
   return storefrontFingerprint(storefrontCanonicalJson({
-    controls: privatePages.controls, pages: privatePages.pages, tokens: privatePages.tokens,
-    labels: privatePages.labels, icons: privatePages.icons, compiled,
+    source: { controls: privatePages.controls, pages: privatePages.pages, tokens: privatePages.tokens, labels: privatePages.labels, icons: privatePages.icons },
+    compiled,
+    context: {
+      colors: tokens.colors, darkColors: tokens.darkColors, colorScheme: tokens.colorScheme, colorSchemeToggle: tokens.colorSchemeToggle,
+      pagePaint: tokens.pagePaint, template: record(document.apps).template, checkout: record(document.blocks).checkout,
+    },
   }));
 }
 
 /** The source says nothing and the compile serves nothing: the store's own pages, with nothing to protect. */
 function privatePagesEmpty(privatePages: StorefrontPrivatePages): boolean {
   const { pages, tokens, labels, icons, controls, compiled } = privatePages;
-  return controls === undefined && [pages, tokens, labels, icons, compiled.css].every((record) => Object.keys(record).length === 0) && compiled.refused === undefined;
-}
-
-function withPrivatePagesDigest(privatePages: StorefrontPrivatePages): StorefrontPrivatePages {
-  const { digest: _digest, ...compiled } = privatePages.compiled;
-  if (privatePagesEmpty(privatePages)) return { ...privatePages, compiled };
-  return { ...privatePages, compiled: { ...compiled, digest: privatePagesDigest(privatePages) } };
+  return controls === undefined && [pages, tokens, labels, icons, compiled.css].every((entries) => Object.keys(entries).length === 0) && compiled.refused === undefined;
 }
 
 /**
- * Whether the stored compile still belongs to the stored source (its
- * fingerprint matches): a read treats any other as never compiled, so a look
- * edited apart from its source is never served.
+ * The document with its compile's fingerprint (`privatePagesDigest`), over
+ * the document as it will be stored: what every write of a compile stores.
+ * The store's own pages carry none.
  */
-export function privatePagesCompiledIntact(privatePages: StorefrontPrivatePages): boolean {
-  if (privatePages.compiled.digest !== undefined) return privatePages.compiled.digest === privatePagesDigest(privatePages);
+export function withPrivatePagesDigest<Document extends StorefrontPrivatePagesDigestInput & { privatePages: StorefrontPrivatePages }>(document: Document): Document {
+  const { digest: _digest, ...compiled } = document.privatePages.compiled;
+  const without = { ...document, privatePages: { ...document.privatePages, compiled } };
+  if (privatePagesEmpty(without.privatePages)) return without;
+  return { ...without, privatePages: { ...without.privatePages, compiled: { ...compiled, digest: privatePagesDigest(without) } } };
+}
+
+/**
+ * The stored row (as the upgrade chain reads it, the read's repairs never
+ * applied) with this build's compile in place of its own and the compile's
+ * fingerprint over that stored input: what the maintenance compile writes.
+ * Nothing but `privatePages.compiled` changes, so a value the read repaired,
+ * a content block or a stylesheet the theme cannot set stays as stored (and
+ * is never drawn); every later read of the row matches the fingerprint.
+ */
+export function storedRowWithCompiled(row: Record<string, unknown>, compiled: StorefrontPrivatePages["compiled"], read: StorefrontPrivatePages): Record<string, unknown> {
+  const { digest: _digest, ...without } = compiled;
+  const next = { ...row, privatePages: { ...record(row.privatePages), compiled: without } };
+  if (privatePagesEmpty({ ...read, compiled: without })) return next;
+  const digest = privatePagesDigest({ ...next, privatePages: readStoredPrivatePages(next.privatePages).value });
+  return { ...next, privatePages: { ...next.privatePages, compiled: { ...without, digest } } };
+}
+
+/**
+ * Whether the stored compile still belongs to what it was made from (its
+ * fingerprint matches the stored input, `privatePagesDigest`): a read treats
+ * any other as never compiled, so a look edited apart from its source, or
+ * kept over a palette it was not checked on, is never served.
+ */
+export function privatePagesCompiledIntact(stored: StorefrontPrivatePagesDigestInput, read: StorefrontPrivatePages): boolean {
+  if (read.compiled.digest !== undefined) return read.compiled.digest === privatePagesDigest(stored);
   // A compile that serves nothing over a source that says nothing (the store's own pages) has nothing to protect.
-  return privatePagesEmpty(privatePages);
+  return privatePagesEmpty(read);
 }
 
 /** The private pages marked never compiled (no page serves a look until this build compiles them). */
@@ -377,7 +426,7 @@ export function withHeldRefusals(privatePages: StorefrontPrivatePages, held: rea
     }
   }
   const css = Object.fromEntries(Object.entries(privatePages.compiled.css).filter(([page]) => !refused[page as PrivatePageKey]));
-  return withPrivatePagesDigest({ ...privatePages, compiled: { ...privatePages.compiled, css, refused } });
+  return { ...privatePages, compiled: { ...privatePages.compiled, css, refused } };
 }
 
 /**
@@ -408,6 +457,11 @@ export function storefrontRenderPrivatePages(privatePages: StorefrontPrivatePage
 /** Whether `compiled` was written by this build's checker and anatomy (else maintenance compiles it again). */
 export function privatePagesCompiledCurrent(privatePages: Pick<StorefrontPrivatePages, "compiled">): boolean {
   return privatePages.compiled.sanitizer === PRIVATE_CHECKER_VERSION && privatePages.compiled.anatomy === PRIVATE_ANATOMY_VERSION;
+}
+
+/** Whether this build's checks made the compile (else it is still served, if current, and maintenance compiles it again). */
+export function privatePagesPolicyCurrent(privatePages: Pick<StorefrontPrivatePages, "compiled">): boolean {
+  return privatePagesCompiledCurrent(privatePages) && (privatePages.compiled.policy ?? 0) === PRIVATE_POLICY_VERSION;
 }
 
 /** The pages this build's compile refused, each with why (none while the compile is not this build's). */
@@ -441,12 +495,26 @@ export function servedPrivatePages(privatePages: StorefrontPrivatePages): Storef
 
 // ─── Reading on the page ──────────────────────────────────────────────────
 
-/** A page's arrangement as this build draws it: as stored when it was checked against this anatomy, else filled in. */
-export function privatePageArrangement(privatePages: StorefrontPrivatePages, page: PrivatePageKey): PrivatePageArrangement | undefined {
+/**
+ * A page's arrangement as this build draws it: filled in for this anatomy (a
+ * newly mandatory part in its default place; an arrangement that already
+ * passes is unchanged), so a stored arrangement the maintenance compile
+ * checked filled is drawn exactly as it was checked, though only the compile
+ * is written back.
+ */
+export function privatePageArrangement(privatePages: Pick<StorefrontPrivatePages, "pages">, page: PrivatePageKey): PrivatePageArrangement | undefined {
   const arrangement = privatePages.pages[page];
   if (!arrangement) return undefined;
-  return privatePages.compiled.anatomy === PRIVATE_ANATOMY_VERSION ? arrangement : fillPrivateArrangement(page, arrangement);
+  let filled = FILLED.get(arrangement);
+  if (!filled) {
+    filled = fillPrivateArrangement(page, arrangement);
+    FILLED.set(arrangement, filled);
+  }
+  return filled;
 }
+
+/** Each stored arrangement as filled for this anatomy, once per object (a request draws a page many times over). */
+const FILLED = new WeakMap<PrivatePageArrangement, PrivatePageArrangement>();
 
 /**
  * The look a page may serve (the host's token rules, that page's only): the

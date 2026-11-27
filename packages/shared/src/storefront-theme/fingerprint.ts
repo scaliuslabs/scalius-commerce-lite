@@ -2,7 +2,7 @@
 // still belong together. Not a security boundary: anyone who can write the
 // row can write a matching fingerprint.
 
-/** A 53-bit FNV-1a-style fingerprint of `text` (two 32-bit lanes), base 36. */
+/** An FNV-1a-style fingerprint of `text`: two independent 32-bit lanes, base 36 each, joined. */
 export function storefrontFingerprint(text: string): string {
   let a = 0x811c9dc5;
   let b = 0x01000193;
