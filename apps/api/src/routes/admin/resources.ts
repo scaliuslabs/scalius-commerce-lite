@@ -64,6 +64,7 @@ import { assertContactFilterAllowed } from "./contact-access";
 import { handOverOrderLines } from "./orders/fulfilments";
 import { bookOrderShipment, createShipmentBodySchema } from "./orders-status";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
+import { optionalOrderRevisionSchema } from "./order-resource";
 import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
 import { requestStaffId } from "./request-actor";
 import { minorMoney } from "@scalius/shared/money-field";
@@ -542,7 +543,7 @@ app.openapi(createRoute({
 
 const releaseHoldBody = z.object({
   expectedRevision: z.number().int().min(1).openapi({
-    description: "The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision.",
+    description: "The order `revision` you read; a change since is refused with 409 `order_revision_conflict` and the hold stays. Releasing a released hold answers it again whatever the revision.",
   }),
 }).strict();
 
@@ -596,7 +597,10 @@ const recordPaymentBody = z.object({
   via: z.enum(RECORDED_PAYMENT_VIAS).openapi({ description: "How it was received." }),
   reference: z.string().trim().max(120).nullable().optional().openapi({ description: "The bank, cheque or transfer reference." }),
   note: z.string().trim().max(500).nullable().optional(),
-  expectedRevision: z.number().int().min(1).optional().openapi({ description: "The order `revision` you read; a different one is refused with 409." }),
+  expectedRevision: optionalOrderRevisionSchema,
+  allowOpenAttempt: z.boolean().optional().openapi({
+    description: "Record it, for the amount given, even though the buyer has a payment page open for the order that could still be paid: the order's open payment pages are cancelled at their provider in the same write, whether or not one was open when you read the order. If the buyer still pays on one, that payment is applied to what the order then owes when it is exactly that; on an order already paid in full it is refunded automatically (a late payment, with a timeline line; the order shows it as received until the refund lands); any other amount is left on the order for staff to reconcile, never counted. Without it, an open page (one the buyer touched within the last 24 hours, or a provider still processing a payment on one), or a payment being set up or charged right now, refuses the payment with 409 `payment_in_progress` (`details.paymentAttemptId`, `details.status`); one being set up or charged is refused either way.",
+  }),
 }).strict();
 
 app.openapi(createRoute({
@@ -632,6 +636,7 @@ app.openapi(createRoute({
     recordedBy,
     requestKey: await scopedRequestKey(c, "dashboard.resources.payments.create", c.req.valid("header")["idempotency-key"]),
     ...(body.expectedRevision !== undefined ? { expectedVersion: body.expectedRevision } : {}),
+    ...(body.allowOpenAttempt ? { allowOpenAttempt: true } : {}),
     // The timeline line commits with the payment, once per payment: in the
     // order's currency (the dashboard words it, like a cash collection).
     timelineLine: async ({ paymentId, currency, landed }) => ({ statement: buildOrderEventInsert(db, {

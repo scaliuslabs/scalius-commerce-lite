@@ -69,7 +69,7 @@ const BulkRunResource = namedSharedSchema(z.object({
   }),
   failures: z.array(z.object({
     id: z.string(),
-    code: z.string().openapi({ description: "price_changed, price_not_positive, stock_changed, below_reserved, not_found, retired, digital_stock, not_physical, revision_changed or needs_price." }),
+    code: z.string().openapi({ description: "price_changed, price_not_positive, stock_version_conflict, below_reserved, not_found, retired, digital_stock, not_physical, product_revision_conflict or needs_price: a stale read has the name the single writes answer with." }),
   })),
   errorCode: z.string().nullable().openapi({ description: "Why a failed run stopped." }),
   createdAt: nullableIsoTimestampSchema,

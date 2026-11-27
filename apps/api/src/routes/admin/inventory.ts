@@ -10,6 +10,7 @@ import {
     getInventoryLabelVariants,
     adjustInventory,
     adjustInventoryRequestSchema,
+    optionalStockVersionSchema,
     adjustStock,
     setStock,
     lookupByBarcodeOrSku,
@@ -928,9 +929,7 @@ const stockSetRoute = createRoute({
                         newStock: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).openapi({ description: "Counted whole-number stock at the location" }),
                         reason: z.string().trim().max(500).optional().openapi({ description: "Reason for stocktake" }),
                         locationId: optionalLocationIdSchema,
-                        expectedStockVersion: z.number().int().min(0).optional().openapi({
-                            description: "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to set the count whatever happened since.",
-                        }),
+                        expectedStockVersion: optionalStockVersionSchema,
                     }),
                 },
             },

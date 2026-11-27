@@ -15,7 +15,6 @@ import { allProtectedData } from "@scalius/shared/plugins/protected-data";
 import { replaceEmailAddresses } from "@scalius/shared/text-scan";
 import { AppError } from "../../errors";
 
-export const PAYOUT_REQUEST_MISMATCH_CODE = "payout_request_mismatch";
 /** The most payouts one list page reads. */
 export const PAYOUT_LIST_MAX = 50;
 
@@ -60,11 +59,11 @@ export function payoutRequestDigest(request: PayoutRequest): Promise<string> {
 }
 
 function mismatch(payoutId: string): AppError {
-    return new AppError(409, PAYOUT_REQUEST_MISMATCH_CODE,
+    return new AppError(422, "idempotency_key_reused",
         "This Idempotency-Key already sent a different payout. Use a new key for a new payout.", { payoutId });
 }
 
-/** The app's payout under a key, or null; another request under the key is refused (409 `payout_request_mismatch`). */
+/** The app's payout under a key, or null; another request under the key is refused (422 `idempotency_key_reused`, `details.payoutId`). */
 export async function findPayoutByKey(db: Database, request: PayoutRequest): Promise<Payout | null> {
     const row = await db.select().from(payouts)
         .where(and(eq(payouts.appId, request.appId), eq(payouts.idempotencyKey, request.idempotencyKey))).get();
