@@ -82,7 +82,7 @@ export interface PluginHttpInit {
 
 /** The RPC surface: plain data in, plain data out. */
 export interface PluginBridgeApi {
-  apiCall(operationId: string, input?: unknown): Promise<PluginApiResult>;
+  apiCall(operation: string, input?: unknown): Promise<PluginApiResult>;
   /** The record and its revision (what a conditional write names), or null. */
   objectsGet(object: string, id: string): Promise<ObjectRecordVersion | null>;
   objectsGetByHandle(object: string, handle: string): Promise<(ObjectRecordVersion & { id: string }) | null>;
@@ -225,14 +225,14 @@ export class PluginBridgeHost implements PluginBridgeApi {
 
   // ── api ────────────────────────────────────────────────────────────────
 
-  async apiCall(operationId: string, input?: unknown): Promise<PluginApiResult> {
+  async apiCall(operation: string, input?: unknown): Promise<PluginApiResult> {
     return this.guard("apiCall", async () => {
       const { callPluginOperation } = await import("./api-call");
       return callPluginOperation({
         pluginId: this.pluginId,
         version: this.props.version,
         operator: this.props.operator,
-        operationId,
+        operationId: operation,
         input,
         db: this.runtime.db(),
         env: await this.runtime.composedEnv(),

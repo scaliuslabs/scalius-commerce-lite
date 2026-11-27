@@ -73,8 +73,8 @@ export class PluginBridge extends WorkerEntrypoint<Env, PluginBridgeProps> imple
     return this.#hostInstance;
   }
 
-  async apiCall(operationId: string, input?: unknown): Promise<PluginApiResult> {
-    return (await this.#host()).apiCall(operationId, input);
+  async apiCall(operation: string, input?: unknown): Promise<PluginApiResult> {
+    return (await this.#host()).apiCall(operation, input);
   }
 
   async objectsGet(object: string, id: string): Promise<ObjectRecordVersion | null> {

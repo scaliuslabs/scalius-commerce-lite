@@ -2282,7 +2282,7 @@ export interface PluginInvocationResult {
     droppedLogs: number;
 }
 export interface PluginRuntimeBridge {
-    apiCall(operationId: string, input?: unknown): Promise<unknown>;
+    apiCall(operation: string, input?: unknown): Promise<unknown>;
     objectsGet(object: string, id: string): Promise<unknown>;
     objectsGetByHandle(object: string, handle: string): Promise<unknown>;
     objectsWrite(operations: unknown[]): Promise<Array<number | null>>;
@@ -2729,8 +2729,8 @@ export interface StableContract {
 }
 export declare const stableContract: StableContract;
 export interface ContractCall {
-    operationId: string;
-    operation: StableContractOperation;
+    operation: string;
+    contract: StableContractOperation;
     path: Record<string, string | number>;
     query: Record<string, string | number | boolean | null>;
     body: unknown;
@@ -2744,11 +2744,11 @@ export interface ContractApiOptions {
     contract?: StableContract;
 }
 export interface ContractApi {
-    (operationId: string, input: PluginApiCallInput | undefined, call?: {
+    (operation: string, input: PluginApiCallInput | undefined, call?: {
         scopes?: readonly string[];
     }): Promise<PluginApiResult>;
     readonly calls: Array<{
-        operationId: string;
+        operation: string;
         input: PluginApiCallInput | undefined;
         result: PluginApiResult;
     }>;
@@ -2824,7 +2824,7 @@ export interface PluginTestHarnessOptions {
     language?: string;
     features?: string[];
     store?: Partial<PluginStoreInfo>;
-    api?: (operationId: string, input: PluginApiCallInput | undefined, call: {
+    api?: (operation: string, input: PluginApiCallInput | undefined, call: {
         scopes: readonly string[];
     }) => PluginApiResult | Promise<PluginApiResult>;
     riskHistory?: (orderId: string) => {

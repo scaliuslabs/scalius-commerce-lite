@@ -72,10 +72,14 @@ export interface StableContract {
 /** The stable app API this SDK release was sealed against. */
 export const stableContract: StableContract = STABLE_CONTRACT;
 
-/** One call as a handler sees it: the app's input after the platform's checks. */
+/**
+ * One call as a handler sees it: the app's input after the platform's checks.
+ * `operation` is the app name the app called (`orders.get`), `contract` that
+ * operation's sealed entry (method, path, statuses, scopes, schemas).
+ */
 export interface ContractCall {
-  operationId: string;
-  operation: StableContractOperation;
+  operation: string;
+  contract: StableContractOperation;
   path: Record<string, string | number>;
   query: Record<string, string | number | boolean | null>;
   body: unknown;
@@ -105,15 +109,14 @@ export interface ContractApiOptions {
 
 /** What `createContractApi` returns: the `api` option of `createPluginTestHarness`, plus the calls it answered. */
 export interface ContractApi {
-  (operationId: string, input: PluginApiCallInput | undefined, call?: { scopes?: readonly string[] }): Promise<PluginApiResult>;
-  /** Every call, in order, with the result the app got. */
+  (operation: string, input: PluginApiCallInput | undefined, call?: { scopes?: readonly string[] }): Promise<PluginApiResult>;
   /**
-   * Every call the app made, in order: `operationId` is the app name it called
+   * Every call the app made, in order: `operation` is the app name it called
    * (`orders.create`), `input` what it passed (`path`, `query`, `body`,
    * `idempotencyKey`) and `result` the `{ ok, status, data, error }` it got,
    * a refusal or a replayed answer included.
    */
-  readonly calls: Array<{ operationId: string; input: PluginApiCallInput | undefined; result: PluginApiResult }>;
+  readonly calls: Array<{ operation: string; input: PluginApiCallInput | undefined; result: PluginApiResult }>;
 }
 
 /** An app operation name: lower snake segments joined by dots (`@scalius/shared/plugins/app-operations`). */
@@ -340,37 +343,37 @@ function declaredData(operation: StableContractOperation, data: unknown, contrac
 export function createContractApi(options: ContractApiOptions = {}): ContractApi {
   const contract = options.contract ?? stableContract;
   const handlers = options.handlers ?? {};
-  for (const operationId of Object.keys(handlers)) {
-    if (!contract.operations[operationId]) {
-      throw new Error(`createContractApi: ${operationId} is not a stable app API operation, so no app can call it. Stable operations: ${Object.keys(contract.operations).length} (see stableContract.operations).`);
+  for (const name of Object.keys(handlers)) {
+    if (!contract.operations[name]) {
+      throw new Error(`createContractApi: ${name} is not a stable app API operation, so no app can call it. Stable operations: ${Object.keys(contract.operations).length} (see stableContract.operations).`);
     }
   }
   const replays = new Map<string, { request: string; result: PluginApiResult }>();
   const calls: ContractApi["calls"] = [];
 
-  const answer = async (operationId: string, rawInput: unknown, granted: readonly string[] | undefined): Promise<PluginApiResult> => {
-    if (typeof operationId !== "string" || operationId.length > 128 || !OPERATION_NAME.test(operationId)) {
+  const answer = async (name: string, rawInput: unknown, granted: readonly string[] | undefined): Promise<PluginApiResult> => {
+    if (typeof name !== "string" || name.length > 128 || !OPERATION_NAME.test(name)) {
       return refusal(404, "api_unknown_operation", "Apps call an operation by its app name, such as orders.get.");
     }
-    const operation = contract.operations[operationId];
-    const exists = Boolean(operation) || NON_STABLE_OPERATIONS.has(operationId);
-    if (!exists) return refusal(404, "api_unknown_operation", `Unknown operation ${operationId}: it is not part of the stable app API.`);
+    const entry = contract.operations[name];
+    const exists = Boolean(entry) || NON_STABLE_OPERATIONS.has(name);
+    if (!exists) return refusal(404, "api_unknown_operation", `Unknown operation ${name}: it is not part of the stable app API.`);
     const input = normalize(rawInput);
     if (typeof input === "string") return refusal(400, "api_invalid_input", input);
     // As the host: an operation that exists but is beta or internal is refused, not unknown.
-    if (!operation) return refusal(403, "api_operation_not_stable", `${operationId} is not part of the stable app API.`);
-    if (granted && !grantCovers(operation, granted)) {
-      return refusal(403, "api_operation_forbidden", `Operation is not authorized: ${operationId} needs ${coveringScopesText(operation)}.`);
+    if (!entry) return refusal(403, "api_operation_not_stable", `${name} is not part of the stable app API.`);
+    if (granted && !grantCovers(entry, granted)) {
+      return refusal(403, "api_operation_forbidden", `Operation is not authorized: ${name} needs ${coveringScopesText(entry)}.`);
     }
 
     // The dispatcher's checks, in its order.
-    if (operation.idempotency === "required" && !input.idempotencyKey) return refusal(400, "idempotency_key_required", "This operation requires an idempotency key");
-    if (input.idempotencyKey && operation.idempotency === "none") return refusal(400, "idempotency_not_supported", "This operation does not support an idempotency key");
-    const method = operation.method.toUpperCase();
+    if (entry.idempotency === "required" && !input.idempotencyKey) return refusal(400, "idempotency_key_required", "This operation requires an idempotency key");
+    if (input.idempotencyKey && entry.idempotency === "none") return refusal(400, "idempotency_not_supported", "This operation does not support an idempotency key");
+    const method = entry.method.toUpperCase();
     if ((method === "GET" || method === "HEAD") && input.body !== undefined) return refusal(400, "body_not_allowed", `${method} operations do not accept a body`);
     let bodyText: string | undefined;
     if (input.body !== undefined) {
-      const declared = isRecord(input.body) ? declaredBodyProperties(operation, contract) : null;
+      const declared = isRecord(input.body) ? declaredBodyProperties(entry, contract) : null;
       const unknown = declared ? Object.keys(input.body as Record<string, unknown>).filter((key) => !declared.has(key)).sort() : [];
       if (unknown.length > 0) return refusal(400, "unknown_body_property", `Unknown body property '${unknown[0]}'. Allowed properties: ${[...declared!].sort().join(", ")}.`);
       try {
@@ -382,7 +385,7 @@ export function createContractApi(options: ContractApiOptions = {}): ContractApi
       if (new TextEncoder().encode(bodyText).byteLength > MAX_BODY_BYTES) return refusal(413, "body_too_large", "Operation body exceeds the 1 MiB limit");
     }
     const expected = new Set<string>();
-    for (const [, key] of operation.path.matchAll(/\{([A-Za-z][A-Za-z0-9_]*)\}/g)) {
+    for (const [, key] of entry.path.matchAll(/\{([A-Za-z][A-Za-z0-9_]*)\}/g)) {
       expected.add(key!);
       if (input.path[key!] === undefined || input.path[key!] === "") return refusal(400, "missing_path_parameter", `Missing path parameter: ${key}`);
     }
@@ -391,7 +394,7 @@ export function createContractApi(options: ContractApiOptions = {}): ContractApi
 
     // The Idempotency-Key middleware runs before the route validates.
     const request = JSON.stringify([method, input.path, Object.entries(input.query).filter(([, value]) => value !== null).sort(([a], [b]) => a.localeCompare(b)), bodyText ?? ""]);
-    const replayKey = input.idempotencyKey && method !== "GET" && method !== "HEAD" ? `${operationId}\n${input.idempotencyKey}` : null;
+    const replayKey = input.idempotencyKey && method !== "GET" && method !== "HEAD" ? `${name}\n${input.idempotencyKey}` : null;
     const earlier = replayKey ? replays.get(replayKey) : undefined;
     if (earlier) {
       if (earlier.request !== request) {
@@ -401,46 +404,46 @@ export function createContractApi(options: ContractApiOptions = {}): ContractApi
     }
 
     // The route's validation: path and query read as URL text, then the body.
-    const parameters = operation.input?.parameters ?? [];
+    const parameters = entry.input?.parameters ?? [];
     for (const parameter of parameters) {
       if (parameter.in !== "path" && parameter.in !== "query") continue;
       const source = parameter.in === "path" ? input.path : input.query;
       const raw = source[parameter.name];
       if (raw === undefined || raw === null) {
-        if (parameter.required) return validation(parameter.in, { path: parameter.name, message: "is required", missing: parameter.name }, operation);
+        if (parameter.required) return validation(parameter.in, { path: parameter.name, message: "is required", missing: parameter.name }, entry);
         continue;
       }
       const issue = contractSchemaIssue(parameter.schema, urlValue(parameter.schema, raw, contract), contract, parameter.name);
-      if (issue) return validation(parameter.in, issue, operation);
+      if (issue) return validation(parameter.in, issue, entry);
     }
-    const schema = bodySchema(operation);
+    const schema = bodySchema(entry);
     if (input.body === undefined) {
-      if (schema && operation.input?.requestBody?.required) return validation("body", { path: "", message: "is required" }, operation);
+      if (schema && entry.input?.requestBody?.required) return validation("body", { path: "", message: "is required" }, entry);
     } else if (schema) {
       const issue = contractSchemaIssue(schema, input.body, contract);
-      if (issue) return validation("body", issue, operation);
+      if (issue) return validation("body", issue, entry);
     }
 
-    const handler = handlers[operationId];
+    const handler = handlers[name];
     if (!handler) {
-      throw new Error(`createContractApi: the app called ${operationId} (a valid call), but no handler answers it. Add handlers["${operationId}"].`);
+      throw new Error(`createContractApi: the app called ${name} (a valid call), but no handler answers it. Add handlers["${name}"].`);
     }
-    const answered = await handler(copy({ operationId, operation, path: input.path, query: input.query, body: input.body, idempotencyKey: input.idempotencyKey }));
-    let result: PluginApiResult = isApiResult(answered) ? answered : { ok: true, status: operation.statuses[0] ?? 200, data: answered ?? null, error: null };
-    if (result.ok && options.checkOutput !== false && operation.output) {
-      const issue = contractSchemaIssue(operation.output, { success: true, data: result.data }, contract);
+    const answered = await handler(copy({ operation: name, contract: entry, path: input.path, query: input.query, body: input.body, idempotencyKey: input.idempotencyKey }));
+    let result: PluginApiResult = isApiResult(answered) ? answered : { ok: true, status: entry.statuses[0] ?? 200, data: answered ?? null, error: null };
+    if (result.ok && options.checkOutput !== false && entry.output) {
+      const issue = contractSchemaIssue(entry.output, { success: true, data: result.data }, contract);
       if (issue) {
-        throw new Error(`createContractApi: the handler for ${operationId} answered a shape the platform never returns: ${issue.path.replace(/^data\.?/, "data.")} ${issue.message}.`);
+        throw new Error(`createContractApi: the handler for ${name} answered a shape the platform never returns: ${issue.path.replace(/^data\.?/, "data.")} ${issue.message}.`);
       }
     }
-    if (result.ok && operation.output) result = { ...result, data: declaredData(operation, result.data, contract) };
+    if (result.ok && entry.output) result = { ...result, data: declaredData(entry, result.data, contract) };
     if (replayKey && result.status < 500) replays.set(replayKey, { request, result: copy(result) });
     return copy(result);
   };
 
-  const api = (async (operationId: string, input: PluginApiCallInput | undefined, call?: { scopes?: readonly string[] }) => {
-    const result = await answer(operationId, input, options.scopes ?? call?.scopes);
-    calls.push({ operationId, input: copy(input), result: copy(result) });
+  const api = (async (name: string, input: PluginApiCallInput | undefined, call?: { scopes?: readonly string[] }) => {
+    const result = await answer(name, input, options.scopes ?? call?.scopes);
+    calls.push({ operation: name, input: copy(input), result: copy(result) });
     return result;
   }) as ContractApi;
   Object.defineProperty(api, "calls", { value: calls, enumerable: true });

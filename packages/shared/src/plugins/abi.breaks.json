@@ -1960,5 +1960,29 @@
   "from": "73274f81298e2d40",
   "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:StableContractOperation: an existing signature changed or gained a required member.",
   "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): a stable operation in the SDK's contract copy loses `operationId` (the agent and REST name, not part of the app contract; an app names an operation by its app name) and gains `statuses`, the success statuses it answers, now sealed. createContractApi answers a handler's bare data with the operation's first success status (201 for a create) instead of always 200, and hands the app only the keys the operation declares, as the platform does."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4000e92863c20bae",
+  "change": "sdk.packages/plugin-sdk/src/runtime.d.ts#InterfaceDeclaration:PluginRuntimeBridge: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4000e92863c20bae",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractApi: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4000e92863c20bae",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractCall: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "4000e92863c20bae",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#InterfaceDeclaration:PluginTestHarnessOptions: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
  }
 ]
