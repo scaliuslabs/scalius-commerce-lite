@@ -9558,6 +9558,7 @@ export interface StorefrontEmbedRule {
 export declare function storefrontEmbedRule(unit: "section" | "component" | StorefrontSkinTarget): StorefrontEmbedRule;
 export declare const STOREFRONT_ISLAND_HYDRATION: readonly ["load", "idle", "visible", "interaction"];
 export type StorefrontIslandHydration = (typeof STOREFRONT_ISLAND_HYDRATION)[number];
+export declare const STOREFRONT_STYLE_FUNCTIONS: readonly ["var", "calc", "min", "max", "clamp", "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color-mix", "linear-gradient", "radial-gradient", "conic-gradient", "repeating-linear-gradient", "repeating-radial-gradient", "repeating-conic-gradient", "translate", "translatex", "translatey", "translate3d", "rotate", "scale", "scalex", "scaley", "skew", "skewx", "skewy", "matrix", "cubic-bezier", "steps", "minmax", "repeat", "fit-content"];
 export declare const STOREFRONT_COMPONENT_LIMITS: {
     readonly moduleBytes: number;
     readonly stylesheetBytes: number;

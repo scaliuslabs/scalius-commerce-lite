@@ -6094,7 +6094,7 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `revision` | integer | yes | Advances on every edit of the zone; local pickup is 0 until the merchant first saves it; at least 0 |
 | `currency` | string | yes | The store currency: every `*Minor` amount of the zone is in it; 3 to 3 characters |
 | `regions` | { countryCode: string, scope: "country" \| "admin_area" \| "postal_prefix", adminArea: string \| null, postalPrefix: string \| null }[] | yes | Where the zone delivers. A region belongs to one zone |
-| `places` | { id: string, name: string, type: "city" \| "zone" \| "area", parentName: string \| null }[] | yes | Bangladesh delivery places (city, thana, area) the zone serves. A place belongs to one zone |
+| `places` | { id: string, name: string, type: "city" \| "zone" \| "area", parentName: string \| null }[] | yes | The store's own delivery places the zone serves, each at one of up to three levels (`city`, `zone`, `area`) whose meaning a regional pack defines; empty for a store with none. A place belongs to one zone |
 | `rates` | [ShippingRate](#shippingrate)[] | yes |  |
 
 ### StaffMemberResource
@@ -6143,7 +6143,7 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `kind` | "country" \| "admin_area" \| "postal_prefix" \| "place" | yes | `country` is the registration: where the store collects tax. The others are regions of a registered country; the most specific region with rates of a line's class applies, and broader regions add only through `combinable` rates |
 | `adminArea` | string \| null | yes |  |
 | `postalPrefix` | string \| null | yes |  |
-| `place` | { id: string, type: "city" \| "zone" \| "area", name: string \| null } \| null | yes | A Bangladesh delivery place (kind `place`) |
+| `place` | { id: string, type: "city" \| "zone" \| "area", name: string \| null } \| null | yes | One of the store's own delivery places (kind `place`) |
 | `providerId` | string \| null | yes | A country's tax provider (`<app id>:<provider id>`); null uses the store-wide one, `system` being the rates below |
 | `revision` | integer | yes | at least 0 |
 | `taxEnabled` | boolean | yes | Whether the store collects tax at all |
