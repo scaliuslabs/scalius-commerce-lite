@@ -30,7 +30,7 @@ import { splitStorefrontEmbeds, type StorefrontMarkupPart } from "@scalius/share
 import { getLayoutData } from "@/lib/api/storefront";
 import { getRuntime, getRuntimePresence, getRuntimePrivateImageOrigins, getRuntimeStorefrontUrl, getWorkerEnv } from "@/lib/api/runtime";
 import { INERT_MARKUP_MAX_BYTES, inertChromeHtml } from "@scalius/shared/plugins/inert-html";
-import { buyerChromeCssProblem } from "@scalius/shared/plugins/buyer-chrome-css";
+import { checkedBuyerChromeSheet } from "@scalius/shared/plugins/buyer-chrome-css";
 import { cspSourcesAllowImage } from "@scalius/shared/security-csp";
 import { buyerChromeRoot } from "@/lib/cache-policy";
 import { layoutPageLanguage } from "@/lib/market-selector";
@@ -109,7 +109,7 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
 const perBuyerChrome = new WeakMap<object, Promise<RequestExtensions>>();
 
 /**
- * The render host for a buyer page's chrome (`buyerChromeMarkup`): only the
+ * The render host for a buyer page's chrome (`buyerPageChrome`): only the
  * apps with a header or footer skin that draws on buyer pages, told the page
  * is the buyer page's root (`/account`: never an order's or a claim's path)
  * of kind `buyer`, with no JSON-LD.
@@ -178,102 +178,149 @@ function buildExtensions(
   })();
 }
 
-/** A theme's header or footer on a buyer page: its inert markup and the stylesheet its shadow root imports (null: none). */
+/** A theme's header or footer on a buyer page: its inert markup and the checked text of its stylesheet (null: it ships none). */
 export interface BuyerChrome {
   html: string;
-  stylesheet: string | null;
+  sheet: string | null;
+}
+
+/** What a page's buyer chrome asks for: the projection each region's skin is drawn from. */
+export interface BuyerChromeAsk {
+  header: (() => unknown) | null;
+  footer: (() => unknown) | null;
 }
 
 /**
- * The theme's header or footer on one of the buyer's own pages
- * (`buyerChromeRoot`), when the skin the theme names declares `buyerPages`
- * and a Super Admin approved it: drawn from the same projection as on a
+ * The theme's header and footer on one of the buyer's own pages
+ * (`buyerChromeRoot`), where the skin the theme names declares `buyerPages`
+ * and a Super Admin approved it: each drawn from the same projection as on a
  * public page, told the page is `buyer` at its root, then rebuilt inert
  * (`inertHtml`); its slots draw nothing (the store's controls stay outside
- * the shadow root). Null when the store draws its own: no such skin, an
- * inactive app, a skin that draws nothing or misses its embeds, markup over
- * the rebuild's bound, or a stylesheet that reaches past a shadow root
- * (`buyerChromeCssProblem`) or cannot be read. The caller decides the page
- * may show it (never where the buyer pays).
+ * the shadow root). Decided once for the page: when a region that asks cannot
+ * draw (an inactive app, a skin that draws nothing or misses its embeds,
+ * markup over the rebuild's bound, a stylesheet that cannot be read or does
+ * not pass `checkedBuyerChromeSheet`), neither does the other, so the page
+ * shows the store's own header and footer, never one of each. The caller
+ * decides the page may show it at all (never where the buyer pays).
  */
-export async function buyerChromeMarkup(locals: object, url: URL, target: "header" | "footer", data: () => unknown): Promise<BuyerChrome | null> {
+export async function buyerPageChrome(locals: object, url: URL, ask: BuyerChromeAsk): Promise<{ header: BuyerChrome | null; footer: BuyerChrome | null }> {
+  const none = { header: null, footer: null };
   const root = buyerChromeRoot(url.pathname);
-  if (!root) return null;
+  if (!root) return none;
   const theme = await currentRequestTheme(locals);
-  const ref = theme.theme.apps?.skins?.[target];
-  const key = ref ? parsePluginSurfaceKey(ref.app) : null;
-  if (!ref || !key) return null;
   const { byId, host } = await buyerChromeExtensions(locals, root);
-  const extension = byId.get(key.pluginId);
-  const declaration = extension?.skins.find((entry) => entry.id === key.type && entry.target === target && entry.buyerPages === true);
-  if (!extension || !declaration) return null;
-  const stylesheet = extension.stylesheet ? await buyerChromeStylesheet(extension, url.origin) : null;
-  if (stylesheet === false) return null;
-  const values = resolvePluginSettingBindings(declaration.settings, ref.values, ref.bindings, theme.bindingContext);
-  const settings = resolveSkinSettings(declaration.settings, values, (id) => storefrontImageOf(theme.skinMedia.get(id)));
-  const projection = await data();
-  const rendered = await host.render(extension, { kind: "skin", target, component: declaration.id, settings, data: projection } as never, { jsonLd: false });
-  const markup = appMarkup(extension, target, rendered);
-  if (!markup) return null;
-  // A link is kept as written only to a URL the skin was handed: by the store (its projection) or by the merchant.
-  const links = handedStrings([projection, values]);
-  // Its embeds (its slots) draw nothing here: the markup around them is rebuilt as one document, so an element
-  // that opens before a slot and closes after it stays one element, and a button still finds its drawer.
-  const html = inertHtml(markup.parts.map((part) => (part.kind === "html" ? part.html : "")).join(""), links);
-  if (html === null) {
-    warnOnce(`buyer-chrome-size:${extension.pluginId}:${target}`, `${extension.pluginId} ${target} skin draws over ${INERT_MARKUP_MAX_BYTES / 1024} KiB on a buyer page: the store draws its own ${target} there.`);
-    return null;
-  }
-  return html.trim() === "" ? null : { html, stylesheet };
+  const sheets = new Map<string, Promise<string | false | null>>();
+  const region = async (target: "header" | "footer", data: () => unknown): Promise<BuyerChrome | null | "store"> => {
+    const ref = theme.theme.apps?.skins?.[target];
+    const key = ref ? parsePluginSurfaceKey(ref.app) : null;
+    const extension = key ? byId.get(key.pluginId) : undefined;
+    const declaration = extension?.skins.find((entry) => entry.id === key!.type && entry.target === target && entry.buyerPages === true);
+    // No skin asks to draw here: the store's own region, which says nothing about the other one.
+    if (!ref || !extension || !declaration) return "store";
+    // One read of an app's sheet per page, shared by its header and footer.
+    if (!sheets.has(extension.pluginId)) sheets.set(extension.pluginId, extension.stylesheet ? buyerChromeSheet(extension, url.origin) : Promise.resolve(null));
+    const sheet = await sheets.get(extension.pluginId)!;
+    if (sheet === false) return null;
+    const values = resolvePluginSettingBindings(declaration.settings, ref.values, ref.bindings, theme.bindingContext);
+    const settings = resolveSkinSettings(declaration.settings, values, (id) => storefrontImageOf(theme.skinMedia.get(id)));
+    const projection = await data();
+    const rendered = await host.render(extension, { kind: "skin", target, component: declaration.id, settings, data: projection } as never, { jsonLd: false });
+    const markup = appMarkup(extension, target, rendered);
+    if (!markup) return null;
+    // Its embeds (its slots) draw nothing here: the markup around them is rebuilt as one document, so an element
+    // that opens before a slot and closes after it stays one element, and a button still finds its drawer.
+    const html = inertHtml(markup.parts.map((part) => (part.kind === "html" ? part.html : "")).join(""), handedLinks(projection));
+    if (html === null) {
+      warnOnce(`buyer-chrome-size:${extension.pluginId}:${target}`, `${extension.pluginId} ${target} skin draws over ${INERT_MARKUP_MAX_BYTES / 1024} KiB on a buyer page: the store draws its own header and footer there.`);
+      return null;
+    }
+    return html.trim() === "" ? null : { html, sheet };
+  };
+  const [header, footer] = await Promise.all([
+    ask.header ? region("header", ask.header) : "store" as const,
+    ask.footer ? region("footer", ask.footer) : "store" as const,
+  ]);
+  if (header === null || footer === null) return none;
+  return { header: header === "store" ? null : header, footer: footer === "store" ? null : footer };
 }
 
-/** Every string inside a value (a skin's projection, the merchant's values), each once. */
-function handedStrings(values: readonly unknown[]): Set<string> {
+/**
+ * The URLs a skin may link off the store on a buyer page: those of the store's
+ * own projection that the merchant set in the store, never the theme (the
+ * header's menu and category menu, the footer's menus, social profiles and
+ * policies), and the store's routes. Never a value of the skin's settings or
+ * of the theme document: a template ships those, so they would be the theme's
+ * own URLs dressed as the merchant's.
+ */
+export function handedLinks(projection: unknown): Set<string> {
   const out = new Set<string>();
-  const visit = (value: unknown, depth: number) => {
-    if (typeof value === "string") out.add(value);
-    else if (depth < 12 && Array.isArray(value)) for (const item of value) visit(item, depth + 1);
-    else if (depth < 12 && typeof value === "object" && value !== null) for (const item of Object.values(value)) visit(item, depth + 1);
+  const data = (projection ?? {}) as {
+    routes?: Record<string, unknown>;
+    menu?: unknown; categories?: unknown; menus?: unknown; policies?: unknown;
+    store?: { social?: unknown };
   };
-  for (const value of values) visit(value, 0);
+  const menu = (items: unknown, depth = 0) => {
+    if (!Array.isArray(items) || depth > 4) return;
+    for (const item of items) {
+      const entry = item as { url?: unknown; children?: unknown; items?: unknown };
+      if (typeof entry?.url === "string") out.add(entry.url);
+      menu(entry?.children, depth + 1);
+      menu(entry?.items, depth + 1);
+    }
+  };
+  for (const route of Object.values(data.routes ?? {})) if (typeof route === "string") out.add(route);
+  menu(data.menu);
+  menu(data.categories);
+  menu(data.menus);
+  menu(data.policies);
+  menu(data.store?.social);
   return out;
 }
 
-/** Stylesheet verdicts this isolate keeps, by app release (a release's files never change). */
-const sheetVerdicts = new Map<string, boolean>();
-const SHEET_VERDICTS_MAX = 32;
+/** Checked sheet texts this isolate keeps, by store and app release (a release's files never change). */
+const checkedSheets = new Map<string, string | false>();
+const CHECKED_SHEETS_MAX = 8;
 
 /**
- * The app's stylesheet URL for a buyer page's shadow root, or false when it
- * cannot style one: it holds a word that reaches past the shadow root
- * (`buyerChromeCssProblem`), or it cannot be read now (not kept: the next
- * page reads it again).
+ * The app's stylesheet as a buyer page's shadow root may hold it: its bytes
+ * read once per isolate and release, checked and rebased
+ * (`checkedBuyerChromeSheet`), the text the store writes. False when it does
+ * not pass (kept) or cannot be read now (not kept: the next page reads it again).
  */
-async function buyerChromeStylesheet(extension: StorefrontExtension, store: string): Promise<string | false> {
-  const href = `${storefrontExtensionBase(extension.pluginId, extension.release)}${STOREFRONT_STYLESHEET_FILE}`;
+async function buyerChromeSheet(extension: StorefrontExtension, store: string): Promise<string | false> {
   const key = `${store} ${extension.pluginId}/${extension.release}`;
-  let allowed = sheetVerdicts.get(key);
-  if (allowed === undefined) {
-    const file = await readExtensionFile((getWorkerEnv() ?? {}) as { BACKEND_API?: Fetcher }, store, extension.pluginId, extension.release, STOREFRONT_STYLESHEET_FILE).catch(() => null);
-    if (!file) return false;
-    const problem = buyerChromeCssProblem(new TextDecoder().decode(file.bytes));
-    allowed = problem === null;
-    if (problem) warnOnce(`buyer-chrome-css:${extension.pluginId}:${extension.release}`, `${extension.pluginId}: ${problem}, so the store draws its own header and footer on buyer pages.`);
-    if (sheetVerdicts.size >= SHEET_VERDICTS_MAX) sheetVerdicts.delete(sheetVerdicts.keys().next().value!);
-    sheetVerdicts.set(key, allowed);
-  }
-  return allowed ? href : false;
+  const known = checkedSheets.get(key);
+  if (known !== undefined) return known;
+  const file = await readExtensionFile((getWorkerEnv() ?? {}) as { BACKEND_API?: Fetcher }, store, extension.pluginId, extension.release, STOREFRONT_STYLESHEET_FILE).catch(() => null);
+  if (!file) return false;
+  const checked = checkedBuyerChromeSheet(file.bytes, storefrontExtensionBase(extension.pluginId, extension.release));
+  if (!checked.ok) warnOnce(`buyer-chrome-css:${extension.pluginId}:${extension.release}`, `${extension.pluginId}: ${checked.problem}, so the store draws its own header and footer on buyer pages.`);
+  const value = checked.ok ? checked.text : false;
+  if (checkedSheets.size >= CHECKED_SHEETS_MAX) checkedSheets.delete(checkedSheets.keys().next().value!);
+  checkedSheets.set(key, value);
+  return value;
 }
 
-/** Forgets the stylesheet verdicts and rebuilt markup this isolate keeps (tests). */
+/** Forgets the checked sheets and rebuilt markup this isolate keeps (tests). */
 export function clearBuyerChromeMemo(): void {
-  sheetVerdicts.clear();
+  checkedSheets.clear();
   inertMemo.clear();
 }
 
 /** Rebuilt markup this isolate keeps, by its content, the links it was handed and the page's image origins (a skin's markup repeats on every page). */
 const INERT_MEMO_MAX = 64;
 const inertMemo = new Map<string, string | null>();
+
+/** An image URL on this store under an app's proxy or the API: a request there reaches an app or acts, never draws a picture. */
+function storeEndpointImage(src: string, origin: string): boolean {
+  try {
+    const url = new URL(src, origin || "https://store.invalid");
+    if (origin && url.origin !== new URL(origin).origin) return false;
+    return /^\/(?:apps|api)(?:\/|$)/i.test(decodeURIComponent(url.pathname));
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Checked app markup rebuilt for a buyer page (`inertChromeHtml`, an allow-list): no island,
@@ -287,7 +334,7 @@ export function inertHtml(html: string, links: ReadonlySet<string> = new Set()):
   const key = `${origin} ${allowed.join(" ")}\u0000${[...links].sort().join("\u0001")}\u0000${html}`;
   const known = inertMemo.get(key);
   if (known !== undefined) return known;
-  const rebuilt = inertChromeHtml(html, { imageAllowed: (src) => cspSourcesAllowImage(src, allowed, origin), links });
+  const rebuilt = inertChromeHtml(html, { imageAllowed: (src) => cspSourcesAllowImage(src, allowed, origin) && !storeEndpointImage(src, origin), links });
   if (inertMemo.size >= INERT_MEMO_MAX) inertMemo.delete(inertMemo.keys().next().value!);
   inertMemo.set(key, rebuilt);
   return rebuilt;

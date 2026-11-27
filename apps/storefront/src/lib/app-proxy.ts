@@ -7,9 +7,13 @@
 //
 // What crosses: a small allowlist of request headers, the client IP for the
 // API's rate limit, and, so the API can tell the app who is signed in, the
-// store's own session cookie (`cs_tok`) and no other cookie: for GET/HEAD
-// always, for unsafe methods only from this store's own pages (Sec-Fetch-Site
-// same-origin/none, or an Origin equal to the store's). The API resolves the
+// store's own session cookie (`cs_tok`) and no other cookie: for a navigation
+// or a script's fetch only (`Sec-Fetch-Dest` document, iframe or empty; never
+// an image, a stylesheet, a font or any other subresource a page's markup or
+// CSS can request), for unsafe methods only from this store's own pages
+// (Sec-Fetch-Site same-origin/none, or an Origin equal to the store's). A
+// subresource request from one of the buyer's own pages (its Referer) never
+// reaches the app at all: there only a theme's inert chrome could make one. The API resolves the
 // buyer and gives the app only `request.customer = { id }`; the app never
 // sees the cookie. No credential or other session crosses.
 //
@@ -28,6 +32,7 @@ import { hasControlCharacter } from "@scalius/shared/plugins/html";
 import { setOwnCsp } from "@/lib/middleware-helper/own-csp";
 import { ANSWER_CSP } from "@scalius/shared/http-security";
 import { readBoundedBytes, readBoundedText } from "@/lib/bounded-body";
+import { isPrivateStorefrontPathname } from "@/lib/cache-policy";
 
 /** `vendor.name` (the platform's plugin id pattern). */
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
@@ -79,6 +84,39 @@ export function isSameOriginAppRequest(request: Request): boolean {
   return origin !== null && origin === new URL(request.url).origin;
 }
 
+/** The fetch destinations a buyer's identity may cross the proxy with: a page, a frame, or a script's fetch. */
+const IDENTIFIED_DESTINATIONS = new Set(["document", "iframe", "frame", "empty"]);
+/** A first media range a subresource asks for, for a browser that states no destination. */
+const SUBRESOURCE_ACCEPT = /^\s*(?:image\/|text\/css|font\/|application\/font|video\/|audio\/)/i;
+
+/**
+ * Whether the request is a subresource (an image, a stylesheet, a font, media,
+ * a script, ...): what markup or CSS requests, never a navigation or a
+ * script's own fetch. Judged by `Sec-Fetch-Dest`, else by what it accepts.
+ */
+export function isSubresourceRequest(request: Request): boolean {
+  const destination = request.headers.get("sec-fetch-dest");
+  if (destination !== null) return !IDENTIFIED_DESTINATIONS.has(destination.trim().toLowerCase());
+  return SUBRESOURCE_ACCEPT.test(request.headers.get("accept") ?? "");
+}
+
+/** Whether a subresource request comes from one of the buyer's own pages (its same-origin Referer, under any presence). */
+export function isSubresourceFromBuyerPage(request: Request): boolean {
+  if (!isSubresourceRequest(request)) return false;
+  const referer = request.headers.get("referer");
+  if (!referer) return false;
+  let page: URL;
+  try {
+    page = new URL(referer);
+  } catch {
+    return false;
+  }
+  if (page.origin !== new URL(request.url).origin) return false;
+  const path = page.pathname;
+  const withoutPresence = `/${path.split("/").slice(2).join("/")}`;
+  return isPrivateStorefrontPathname(path) || isPrivateStorefrontPathname(withoutPresence);
+}
+
 /**
  * The `Cookie` header the proxy forwards: the store's session cookie alone,
  * as the browser sent it, or null (no session, a malformed value, or an
@@ -86,7 +124,7 @@ export function isSameOriginAppRequest(request: Request): boolean {
  */
 export function appProxySessionCookie(request: Request): string | null {
   const header = request.headers.get("cookie");
-  if (!header) return null;
+  if (!header || isSubresourceRequest(request)) return null;
   let value: string | null = null;
   for (const chunk of header.split(";")) {
     const separator = chunk.indexOf("=");
@@ -118,6 +156,8 @@ export async function proxyAppRequest(
   if (!METHODS.has(method)) return plain(405, "Method not allowed.", { Allow: [...METHODS].join(", ") });
   const apiPath = appProxyApiPath(pluginId, path, new URL(request.url).search);
   if (!apiPath) return plain(404, "Not found.");
+  // A buyer's own page sends no app a subresource request: only a theme's chrome there could, from its CSS.
+  if (isSubresourceFromBuyerPage(request)) return plain(404, "Not found.");
   const target = resolveTarget(apiPath);
   if (!target) return plain(503, "The store cannot reach this app right now.");
   const body = await boundedBody(request);

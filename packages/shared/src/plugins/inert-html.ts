@@ -12,9 +12,10 @@
 //   chrome takes what a buyer types;
 // - a button only as `type="button"`, and only with a host behaviour (the
 //   store's light or dark switch, cart or search) or a `popovertarget` naming
-//   the region's own menu drawer; any other button goes with its content;
-// - `popover` only on the menu drawer (`data-menu-drawer`), always `auto`: it
-//   opens on a buyer's press alone and closes on a press outside it;
+//   one of the region's own popovers; any other button goes with its content;
+// - `popover` only on an element with an id some kept button targets (a menu
+//   drawer, `data-menu-drawer`, or a dropdown), always `auto`: it opens on a
+//   buyer's press alone and closes on a press outside it or Escape;
 // - host behaviours only from a closed list (`INERT_BEHAVIOURS`), each on the
 //   elements it belongs to; no other data attribute but the buyer UI's style
 //   words; no handler, tab stop, access key, role description or live region
@@ -69,7 +70,7 @@ export const INERT_BEHAVIOURS: Readonly<Record<string, { tags: readonly string[]
   "data-color-scheme-toggle": { tags: ["button"] },
   "data-cart-open": { tags: ["a", "button"] },
   "data-search-open": { tags: ["a", "button"] },
-  "data-menu-drawer": { tags: ["div", "nav", "aside", "section"] },
+  "data-menu-drawer": { tags: ["div", "nav", "aside", "section", "ul", "ol"] },
   "data-sticky-header": { tags: "any" },
   "data-scalius-cart-count": { tags: ["span"] },
 };
@@ -123,7 +124,7 @@ const DESCRIPTOR = /^(?:\d+w|\d*\.?\d+(?:e[+-]?\d+)?x|\d+h)$/i;
 function allowedSrcset(value: string, options: InertChromeOptions): boolean {
   return value.split(",").every((candidate) => {
     const [url = "", ...descriptors] = candidate.trim().split(/[\t\n\f\r ]+/);
-    return url !== "" && options.imageAllowed(url) && descriptors.every((descriptor) => DESCRIPTOR.test(descriptor));
+    return url !== "" && options.imageAllowed(url) && !storeEndpoint(url) && descriptors.every((descriptor) => DESCRIPTOR.test(descriptor));
   });
 }
 
@@ -188,28 +189,55 @@ const behaviourAllowed = (name: string, tag: string) => {
   return rule !== undefined && (rule.tags === "any" || rule.tags.includes(tag));
 };
 
-/** The menu drawers the markup holds (`popover` with `data-menu-drawer`, with an id): what a button may open. */
-function drawerIds(nodes: ChildNode[], out: Set<string>): Set<string> {
-  for (const node of nodes) {
-    if (!isTag(node)) continue;
-    const tag = node.name.toLowerCase();
-    if (DROP.has(tag)) continue;
-    const id = node.attribs.id ?? "";
-    if (KEEP.has(tag) && "popover" in node.attribs && "data-menu-drawer" in node.attribs && behaviourAllowed("data-menu-drawer", tag) && NAME.test(id)) out.add(id);
-    drawerIds(node.children, out);
-  }
-  return out;
+/** The elements a popover may be drawn on (a drawer, a dropdown panel, a list). */
+const POPOVER_TAGS = new Set(["div", "nav", "aside", "section", "ul", "ol"]);
+
+/**
+ * The popovers the markup keeps: an element with `popover` and an id on one
+ * of `POPOVER_TAGS` that a button of the same markup targets (`popovertarget`).
+ * Only those open, and only on a buyer's press.
+ */
+function popoverIds(nodes: ChildNode[]): Set<string> {
+  const declared = new Set<string>();
+  const targeted = new Set<string>();
+  const visit = (list: ChildNode[]) => {
+    for (const node of list) {
+      if (!isTag(node)) continue;
+      const tag = node.name.toLowerCase();
+      if (DROP.has(tag)) continue;
+      const id = node.attribs.id ?? "";
+      if (POPOVER_TAGS.has(tag) && "popover" in node.attribs && NAME.test(id)) declared.add(id);
+      if (tag === "button" && typeof node.attribs.popovertarget === "string") targeted.add(node.attribs.popovertarget);
+      visit(UNWRAP.has(tag) ? node.children.flatMap((child) => isTag(child) && child.name.toLowerCase() === "template"
+        ? ((child as Element & { content?: { children: ChildNode[] } }).content?.children ?? child.children) : [child]) : node.children);
+    }
+  };
+  visit(nodes);
+  return new Set([...declared].filter((id) => targeted.has(id)));
 }
 
-function attributes(tag: string, input: Record<string, string>, options: InertChromeOptions, drawers: ReadonlySet<string>): Array<[string, string]> | null {
+/** A same-store path under an app's proxy or the API (as the router decodes it): a request there reaches an app or acts, never draws a picture. */
+function storeEndpoint(url: string): boolean {
+  if (!url.startsWith("/") || url.startsWith("//")) return false;
+  let path = url.split(/[?#]/)[0]!;
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    return true;
+  }
+  return /^\/+(?:apps|api)(?:[/\\]|$)/i.test(path);
+}
+
+function attributes(tag: string, input: Record<string, string>, options: InertChromeOptions, popovers: ReadonlySet<string>): Array<[string, string]> | null {
   const out: Array<[string, string]> = [];
   const has = (name: string) => Object.prototype.hasOwnProperty.call(input, name);
   if (tag === "button") {
     const target = input.popovertarget ?? "";
-    if (!drawers.has(target) && !BUTTON_BEHAVIOURS.some((name) => has(name))) return null;
+    if (!popovers.has(target) && !BUTTON_BEHAVIOURS.some((name) => has(name))) return null;
     out.push(["type", "button"]);
   }
-  const drawer = has("data-menu-drawer") && has("popover") && behaviourAllowed("data-menu-drawer", tag) && drawers.has(input.id ?? "");
+  const popover = has("popover") && POPOVER_TAGS.has(tag) && popovers.has(input.id ?? "");
+  const drawer = popover && has("data-menu-drawer") && behaviourAllowed("data-menu-drawer", tag);
   for (const [rawName, rawValue] of Object.entries(input)) {
     const name = rawName.toLowerCase();
     const value = String(rawValue ?? "");
@@ -234,7 +262,7 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
       continue;
     }
     if (name === "popover") {
-      if (drawer) out.push([name, "auto"]);
+      if (popover) out.push([name, "auto"]);
       continue;
     }
     if (name in INERT_BEHAVIOURS) {
@@ -267,7 +295,7 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
     }
     if (name === "rel" || name === "target") continue; // written below, from the link kept
     if (name === "popovertarget") {
-      if (tag === "button" && drawers.has(value)) out.push([name, value]);
+      if (tag === "button" && popovers.has(value)) out.push([name, value]);
       continue;
     }
     if (name === "popovertargetaction") {
@@ -284,7 +312,7 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
     }
     if (name === "src") {
       if (tag !== "img") continue;
-      if (!options.imageAllowed(value)) return null;
+      if (!options.imageAllowed(value) || storeEndpoint(value)) return null;
       out.push([name, value]);
       continue;
     }
@@ -313,7 +341,7 @@ function attributes(tag: string, input: Record<string, string>, options: InertCh
   return out;
 }
 
-function walk(nodes: ChildNode[], options: InertChromeOptions, drawers: ReadonlySet<string>, out: string[]): void {
+function walk(nodes: ChildNode[], options: InertChromeOptions, popovers: ReadonlySet<string>, out: string[]): void {
   for (const node of nodes) {
     if (isText(node)) { out.push(escapeHtmlText(node.data)); continue; }
     if (!isTag(node)) continue;
@@ -324,18 +352,18 @@ function walk(nodes: ChildNode[], options: InertChromeOptions, drawers: Readonly
       const children = node.children.flatMap((child) => isTag(child) && child.name.toLowerCase() === "template"
         ? ((child as Element & { content?: { children: ChildNode[] } }).content?.children ?? child.children)
         : [child]);
-      walk(children, options, drawers, out);
+      walk(children, options, popovers, out);
       continue;
     }
     if (!KEEP.has(tag)) {
-      walk(node.children, options, drawers, out);
+      walk(node.children, options, popovers, out);
       continue;
     }
-    const kept = attributes(tag, node.attribs, options, drawers);
+    const kept = attributes(tag, node.attribs, options, popovers);
     if (!kept) continue;
     out.push(writeStartTag(tag, kept));
     if (VOID_ELEMENTS.has(tag)) continue;
-    walk(node.children, options, drawers, out);
+    walk(node.children, options, popovers, out);
     out.push(`</${tag}>`);
   }
 }
@@ -350,7 +378,7 @@ export const INERT_MARKUP = {
   attributes: [...GENERAL, "class", "id", "style", ...ID_REFERENCES, ...Object.keys(VALUES), ...Object.keys(INERT_BEHAVIOURS)],
   byTag: {
     ...Object.fromEntries(Object.entries(BY_TAG).map(([tag, list]) => [tag, [...list]])),
-    button: [...BY_TAG.button!, "type"], div: ["popover"], nav: ["popover"], aside: ["popover"], section: ["popover"],
+    button: [...BY_TAG.button!, "type"], div: ["popover"], nav: ["popover"], aside: ["popover"], section: ["popover"], ul: ["popover"], ol: ["popover", ...BY_TAG.ol!],
     // The host's own state on a drawn page: the cart count marks itself empty (scripts/buyer-chrome.ts).
     span: [...BY_TAG.span!, "data-empty"],
   } as Record<string, string[]>,
@@ -400,6 +428,6 @@ export function inertChromeHtml(html: string, options: InertChromeOptions): stri
   if (html.length > INERT_MARKUP_MAX_BYTES / 3 && new TextEncoder().encode(html).byteLength > INERT_MARKUP_MAX_BYTES) return null;
   const document = parseDocument(untrustedHtml(html), { ...UNTRUSTED_HTML_PARSING, recognizeSelfClosing: true });
   const out: string[] = [];
-  walk(document.children, options, drawerIds(document.children, new Set()), out);
+  walk(document.children, options, popoverIds(document.children), out);
   return out.join("");
 }

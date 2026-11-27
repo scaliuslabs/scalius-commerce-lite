@@ -8,9 +8,17 @@
 //
 // - the hostile sheet (aimed at the page's fields and links, its body,
 //   `:root:has()`, lifting its host over the page inside the guard's own layer
-//   name, a fixed layer, a screen-wide shadow) leaves every host control's
-//   computed style as under the store's chrome, the page's body unpainted, and
-//   every host control taking a press at its centre (nothing covers it);
+//   name, the host's own outline, shadow, drop-shadow chain, reflection,
+//   border image and clip margin, a tall host, a fixed and an absolute layer)
+//   leaves every host control's computed style as under the store's chrome,
+//   the page's body unpainted, every host control's pixel the page's own (never
+//   a forged colour) and taking a press at its centre, and the header's frame at
+//   most half the screen with the account's first control on the first screen;
+// - each of those effects alone (`drawn` probes, at 390 and 1280 px) holds the
+//   same, and an open popover a theme styles to cover the screen leaves a
+//   strip a press closes it on; each sheet the store refuses (`refused` probes:
+//   a url token holding `/*`, `@import`, `:host(:is(...))`, a UTF-16 sheet, ...)
+//   draws the store's own header and sends no request it names;
 // - each shadow root holds only what the inert rebuild writes: no form, field,
 //   label, submit button, handler or tab stop;
 // - under a theme's sheet the chrome follows the page's scheme on its host, its
@@ -97,7 +105,12 @@ const register = async (id, chrome) => {
   return (await answer.json()).id;
 };
 // The rebuild's own checker and what it may write, from the store's code as the gallery serves it.
-const { problems: PROBLEMS_SOURCE, markup: INERT_MARKUP } = await fetch(`${gallery.url}/__gallery/buyer-chrome`).then((answer) => answer.json());
+const { problems: PROBLEMS_SOURCE, markup: INERT_MARKUP, refused: REFUSED, drawn: DRAWN, colours: COLOURS, utf16: UTF16 } = await fetch(`${gallery.url}/__gallery/buyer-chrome`).then((answer) => answer.json());
+const registerSheet = async (id, sheet) => {
+  const answer = await fetch(`${gallery.url}/__gallery/buyer-chrome`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, chrome: "forged", ...sheet }) });
+  if (!answer.ok) throw new Error(`the gallery refused the ${id} entry (${answer.status})`);
+  return (await answer.json()).id;
+};
 const ids = { none: await register("buyer-chrome-none", "none"), theme: await register("buyer-chrome-theme", "theme"), forged: await register("buyer-chrome-forged", "forged") };
 // A cart in the browser (the gallery's own seed, as the cart page's entries hold it).
 const index = await fetch(`${gallery.url}/__gallery/index.json`).then((answer) => answer.json());
@@ -106,6 +119,22 @@ const CART = index.entries.find((entry) => entry.storage?.["cart:v3"])?.storage[
 const browser = await chromium.launch();
 const failures = [];
 let draws = 0;
+// A page of its own that turns a screenshot into its pixel (the page under test never runs this).
+const decoder = await (await browser.newContext()).newPage();
+const FORGED = COLOURS.map((colour) => colour.match(/\d+/g).map(Number));
+/** Whether a pixel reads as one of the hostile sheet's colours. */
+const forgedPixel = (rgb) => FORGED.some((colour) => colour.every((value, at) => Math.abs(value - rgb[at]) <= 40));
+const pixelAt = async (page, x, y) => decoder.evaluate(async (b64) => {
+  const image = new Image();
+  image.src = `data:image/png;base64,${b64}`;
+  await image.decode();
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const context = canvas.getContext("2d");
+  context.drawImage(image, 0, 0);
+  return Array.from(context.getImageData(0, 0, 1, 1).data.slice(0, 3));
+}, (await page.screenshot({ clip: { x: Math.max(0, Math.floor(x)), y: Math.max(0, Math.floor(y)), width: 1, height: 1 } })).toString("base64"));
 
 /** The page's own controls: links, buttons and fields of its main part, the same under every chrome. */
 const MAIN_CONTROLS = "main a[href], main button, main input, main select, main textarea";
@@ -131,25 +160,44 @@ const hostStyles = (page) => page.evaluate(([selector, properties]) => Array.fro
   return Object.fromEntries(properties.map((property) => [property, style.getPropertyValue(property)]));
 }), [MAIN_CONTROLS, STYLE_PROPERTIES]);
 
-/** Each host control a buyer can see that does not take a press at its centre (something drawn over it). */
-const coveredControls = (page) => page.evaluate(async (selector) => {
+/**
+ * Each host control a buyer can see that something drawn over it covers: it
+ * does not take a press at its centre, or the pixel there reads as one of the
+ * hostile sheet's colours (a layer that takes no press still paints over it).
+ */
+async function coveredControls(page) {
   const covered = [];
-  for (const element of document.querySelectorAll(selector)) {
-    const style = getComputedStyle(element);
-    if (style.visibility !== "visible" || style.display === "none" || element.closest("[hidden]")) continue;
-    element.scrollIntoView({ block: "center", inline: "center" });
-    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
-    const box = element.getBoundingClientRect();
-    if (box.width < 2 || box.height < 2) continue;
-    const x = box.left + box.width / 2;
-    const y = box.top + box.height / 2;
-    if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) continue;
-    const hit = document.elementFromPoint(x, y);
-    if (!hit || (!element.contains(hit) && !hit.contains(element))) covered.push(`${element.localName}${element.className ? `.${String(element.className).split(" ")[0]}` : ""} "${(element.textContent ?? "").trim().slice(0, 30)}" under <${hit?.localName ?? "nothing"}>`);
+  const count = await page.evaluate((selector) => document.querySelectorAll(selector).length, HOST_CONTROLS);
+  for (let at = 0; at < count; at += 1) {
+    const point = await page.evaluate(async ([selector, index]) => {
+      const element = document.querySelectorAll(selector)[index];
+      const style = getComputedStyle(element);
+      if (style.visibility !== "visible" || style.display === "none" || element.closest("[hidden]")) return null;
+      element.scrollIntoView({ block: "center", inline: "center" });
+      await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+      const box = element.getBoundingClientRect();
+      if (box.width < 2 || box.height < 2) return null;
+      const x = box.left + box.width / 2;
+      const y = box.top + box.height / 2;
+      if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return null;
+      const hit = document.elementFromPoint(x, y);
+      return { x, y, takesPress: Boolean(hit && (element.contains(hit) || hit.contains(element))), name: `${element.localName}${element.className ? `.${String(element.className).split(" ")[0]}` : ""} "${(element.textContent ?? "").trim().slice(0, 30)}"`, hit: hit?.localName ?? "nothing" };
+    }, [HOST_CONTROLS, at]);
+    if (!point) continue;
+    if (!point.takesPress) covered.push(`${point.name} under <${point.hit}>`);
+    const rgb = await pixelAt(page, point.x, point.y);
+    if (forgedPixel(rgb)) covered.push(`${point.name} painted over (rgb ${rgb.join(", ")})`);
   }
-  window.scrollTo(0, 0);
+  await page.evaluate(() => window.scrollTo(0, 0));
   return covered;
-}, HOST_CONTROLS);
+}
+
+/** The header frame's height and where the account's first control starts, against the screen. */
+const firstScreen = (page) => page.evaluate((selector) => {
+  const frame = document.querySelector('[data-buyer-chrome-frame="header"]');
+  const first = Array.from(document.querySelectorAll(selector)).find((element) => element.getBoundingClientRect().width > 0);
+  return { frame: frame ? frame.getBoundingClientRect().height : 0, first: first ? first.getBoundingClientRect().top : 0, screen: innerHeight };
+}, "main a[href], main button, main input");
 
 /** What each chrome shadow root holds that the rebuild never writes (the shadow root's own style aside), and its host's box. */
 const chromeShape = (page) => page.evaluate(([problemsSource, markup]) => {
@@ -169,6 +217,7 @@ const chromeShape = (page) => page.evaluate(([problemsSource, markup]) => {
       contain: getComputedStyle(host).contain,
       top: box.top + scrollY,
       height: box.height,
+      frame: host.parentElement?.hasAttribute("data-buyer-chrome-frame") ? getComputedStyle(host.parentElement).contain + " " + getComputedStyle(host.parentElement).overflow : null,
     };
   });
 }, [PROBLEMS_SOURCE, INERT_MARKUP]);
@@ -206,9 +255,13 @@ for (const width of WIDTHS) {
       for (const problem of shape.problems) problems.push(`markup: the ${shape.target}: ${problem}`);
       if (shape.position !== "static") problems.push(`containment: the ${shape.target}'s host is ${shape.position}, not in the page's flow`);
       if (!/paint/.test(shape.contain)) problems.push(`containment: the ${shape.target}'s host is not paint-contained (${shape.contain})`);
+      if (!shape.frame || !/paint/.test(shape.frame) || !/clip/.test(shape.frame)) problems.push(`containment: the ${shape.target} has no store frame that clips it (${shape.frame})`);
     }
     const header = shapes.find((shape) => shape.target === "header");
     if (header && header.top > 4) problems.push(`containment: the header's host starts ${Math.round(header.top)}px down the page`);
+    const screen = await firstScreen(forged.page);
+    if (screen.frame > screen.screen / 2 + 1) problems.push(`containment: the header's frame is ${Math.round(screen.frame)}px tall on a ${screen.screen}px screen`);
+    if (screen.first >= screen.screen) problems.push(`containment: the account's first control starts ${Math.round(screen.first)}px down, below the first screen`);
     const styles = await hostStyles(forged.page);
     if (styles.length !== expected.length) problems.push(`style: ${styles.length} main-part controls under the forged sheet, ${expected.length} under the store's chrome`);
     styles.forEach((style, at) => {
@@ -280,7 +333,14 @@ for (const width of WIDTHS) {
         await page.keyboard.press("Escape");
         if (await page.evaluate(() => document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector("[data-menu-drawer]").matches(":popover-open"))) problems.push("drawer: Escape leaves the menu drawer open");
       }
-      // The store's base under the theme's sheet loads (the shadow root's first import).
+      // A dropdown (any popover a theme's button targets) opens on a press and closes on a press outside it.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.locator('scalius-chrome[data-chrome="header"] .gc-more').click();
+    const more = () => page.evaluate(() => document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector("#chrome-more").matches(":popover-open"));
+    if (!(await more())) problems.push("dropdown: the theme's dropdown does not open on a press");
+    await page.mouse.click(width - 10, 790);
+    if (await more()) problems.push("dropdown: a press outside the theme's dropdown leaves it open");
+    // The store's base under the theme's sheet loads (the shadow root's first import).
       const base = await page.evaluate(() => /@import url\("([^"]+)"\) layer\(scalius-base\)/.exec(document.querySelector("scalius-chrome").shadowRoot.querySelector("style")?.textContent ?? "")?.[1] ?? null);
       const baseText = base ? await page.evaluate(async (href) => (await fetch(href, { headers: { accept: "text/css" } })).text(), base) : "";
       if (!/box-sizing/.test(baseText) || /--theme\(/.test(baseText)) problems.push(`base: the store's base sheet does not load compiled (${base})`);
@@ -293,6 +353,59 @@ for (const width of WIDTHS) {
     fail(`${label} (a theme's sheet)`, problems);
     if (!failures.some((failure) => failure.startsWith(`${label} `))) console.log(`✓ ${label}`);
   }
+}
+
+// ── Each effect alone, and the popover that tries to cover the screen.
+for (const [name, sheet] of Object.entries(DRAWN)) {
+  const id = await registerSheet(`buyer-chrome-drawn-${name}`, { sheet });
+  for (const [width, scheme] of [[390, "light"], [1280, "dark"]]) {
+    const label = `${width}px ${scheme} (drawn probe ${name})`;
+    const probe = await open(id, width, scheme);
+    draws += 1;
+    const problems = [];
+    try {
+      const shapes = await chromeShape(probe.page);
+      if (shapes.length !== 2) problems.push(`shadow: the probe draws ${shapes.length} chrome regions`);
+      if (name === "popover-cover") {
+        await probe.page.locator('scalius-chrome[data-chrome="header"] .gc-more').click();
+        const strip = await pixelAt(probe.page, width - 12, 400);
+        if (forgedPixel(strip)) problems.push(`popover: the open popover paints the whole screen (rgb ${strip.join(", ")} at the strip)`);
+        await probe.page.mouse.click(width - 12, 400);
+        const open = await probe.page.evaluate(() => document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector("#chrome-more").matches(":popover-open"));
+        if (open) problems.push("popover: a press on the strip beside the open popover does not close it");
+      } else {
+        for (const covered of await coveredControls(probe.page)) problems.push(`covered: ${covered}`);
+        const screen = await firstScreen(probe.page);
+        if (screen.frame > screen.screen / 2 + 1) problems.push(`containment: the header's frame is ${Math.round(screen.frame)}px tall on a ${screen.screen}px screen`);
+        if (screen.first >= screen.screen) problems.push(`containment: the account's first control starts below the first screen (${Math.round(screen.first)}px)`);
+      }
+    } catch (error) {
+      problems.push(`probe: could not be checked (${String(error?.message ?? error).split("\n")[0]})`);
+    }
+    await probe.context.close();
+    fail(label, problems);
+    if (problems.length === 0) console.log(`✓ ${label}`);
+  }
+}
+
+// ── Sheets the store refuses: its own header draws, and nothing they name is requested.
+for (const [name, sheet] of [...Object.entries(REFUSED).map(([key, text]) => [key, { sheet: text }]), ["utf16-bom", { sheetBase64: UTF16 }]]) {
+  const id = await registerSheet(`buyer-chrome-refused-${name}`, sheet);
+  const label = `390px light (refused probe ${name})`;
+  const context = await browser.newContext({ viewport: { width: 390, height: 800 } });
+  const page = await context.newPage();
+  const named = [];
+  page.on("request", (request) => { if (/\/leak\?|evil\.css/.test(request.url())) named.push(request.url().replace(gallery.url, "")); });
+  await page.goto(`${gallery.url}/__gallery/e/${id}`, { waitUntil: "load" });
+  await page.waitForTimeout(300);
+  draws += 1;
+  const problems = [];
+  const drawn = await page.evaluate(() => document.querySelectorAll("scalius-chrome").length);
+  if (drawn !== 0) problems.push(`refusal: the store draws the probe's chrome (${drawn} regions) from a sheet it must refuse`);
+  for (const request of [...new Set(named)]) problems.push(`refusal: the page requests ${request}`);
+  await context.close();
+  fail(label, problems);
+  if (problems.length === 0) console.log(`✓ ${label}`);
 }
 
 await browser.close();

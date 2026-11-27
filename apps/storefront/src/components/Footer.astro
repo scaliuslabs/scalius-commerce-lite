@@ -18,7 +18,7 @@ import FooterLocalization from "./footer/FooterLocalization.astro";
 import FooterSlot from "./footer/FooterSlot.astro";
 
 type Props = import("astro/types").ComponentProps<typeof CoreFooter> & {
-  /** A buyer page's theme footer (lib/extensions `buyerChromeMarkup`): drawn in place of the store's. */
+  /** A buyer page's theme footer (lib/extensions `buyerPageChrome`): drawn in place of the store's. */
   buyerChrome?: BuyerChrome | null;
 };
 

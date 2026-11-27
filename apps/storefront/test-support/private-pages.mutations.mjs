@@ -402,7 +402,9 @@ export const MUTATIONS = {
  */
 // ─── A theme's chrome on the buyer's own pages (buyer-chrome.browser.mjs `--mutations`) ───
 const CHROME = "apps/storefront/src/components/private/PrivateChrome.astro";
+const CHROME_STYLE = "apps/storefront/src/lib/private-pages/chrome-style.ts";
 const SHADOW = '<scalius-chrome data-chrome={target}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome>';
+const CSS = "packages/shared/src/plugins/buyer-chrome-css.ts";
 /** Each names the check of buyer-chrome.browser.mjs that must fail under it. */
 export const CHROME_MUTATIONS = {
   "C1 no shadow root": {
@@ -418,15 +420,30 @@ export const CHROME_MUTATIONS = {
     ],
     expect: /^markup: /,
   },
-  "C3 no paint containment": {
-    why: "the guard keeps the host in the flow but no longer holds what the theme draws to its box",
-    rewrites: [rewrite("apps/storefront/src/lib/private-pages/chrome-style.ts", "max-inline-size:100%!important;contain:paint!important;", "max-inline-size:100%!important;")],
+  "C3 no paint containment on the host": {
+    why: "the guard no longer paint-contains the host (the frame still clips: the gate names the host's own containment)",
+    rewrites: [rewrite(CHROME_STYLE, "max-inline-size:100%!important;contain:paint!important;", "max-inline-size:100%!important;")],
+    expect: /^containment: /,
+  },
+  "C4 the theme's text unlayered": {
+    why: "the theme's checked text is written outside its layer, so its important rules in a layer it names outrank the guard",
+    rewrites: [rewrite(CHROME_STYLE, "theme ? `@layer theme{${theme}}` : \"\",", "theme ?? \"\",")],
+    expect: /^containment: /,
+  },
+  "C5 no store frame": {
+    why: "the shadow host sits in no frame of the store's: the host's own effects and layers paint over the page",
+    rewrites: [rewrite(CHROME, "<div data-buyer-chrome-frame={target} style={BUYER_CHROME_FRAME_STYLE[target]}>", "<div data-buyer-chrome-frame={target}>")],
     expect: /^covered: |^containment: /,
   },
-  "C4 the theme's sheet unlayered": {
-    why: "the theme's sheet is imported outside its layer, so its important rules outrank the guard",
-    rewrites: [rewrite("apps/storefront/src/lib/private-pages/chrome-style.ts", "theme ? `@import ${cssUrl(theme)} layer(theme);` : \"\",", "theme ? `@import ${cssUrl(theme)};` : \"\",")],
-    expect: /^covered: |^containment: /,
+  "C6 :host unchecked": {
+    why: "the check lets :host() hold, or :host chain, a selector that matches the page around the host",
+    rewrites: [rewrite(CSS, '|| lower(name.value) !== "host") continue;', "|| true) continue;")],
+    expect: /^refusal: /,
+  },
+  "C7 no popover cap": {
+    why: "the guard no longer holds an open popover narrower than the screen",
+    rewrites: [rewrite(CHROME_STYLE, "max-inline-size:calc(100vw - 48px)!important;", "")],
+    expect: /^popover: /,
   },
 };
 

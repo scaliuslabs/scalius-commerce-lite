@@ -292,6 +292,7 @@ export const policies = [
       "apps/admin-v2/src/routes/invoice.$orderId.tsx": "a constant print stylesheet",
       "apps/admin-v2/test-support/polish.browser.mjs": "a browser test harness page, not shipped",
       "apps/admin-v2/test-support/tiptap.browser.mjs": "a browser test harness page, not shipped",
+      "apps/storefront/test-support/buyer-chrome-css.differential.browser.mjs": "a browser test harness page (an empty document), not shipped",
       "apps/storefront/test-support/private-pages.mutations.mjs": "the private pages gate's known-bad rewrites: source text the test gallery serves under a mutation, never shipped",
       "packages/plugin-sdk/src/storefront/jsx-runtime.ts": "an app's JSX becomes a string the storefront sanitizes with sanitizePluginHtml before it renders it",
       "apps/storefront/src/lib/add-on-row.ts": "code-built markup: every value it interpolates goes through escapeHtml",

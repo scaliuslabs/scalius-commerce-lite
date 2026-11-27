@@ -42,6 +42,10 @@ function Header({ data }: HeaderProps) {
           ],
         }),
         jsx("div", { class: "gc-cover", children: "Your account is locked: call 01700000000" }),
+        jsx("div", { class: "gc-cover2", children: "Sign in again" }),
+        // A dropdown a press opens (any targeted popover), beside the drawer.
+        jsx("button", { class: "gc-more", type: "button", popovertarget: "chrome-more", children: "More" }),
+        jsx("ul", { id: "chrome-more", class: "gc-more-panel", popover: "auto", children: data.menu.slice(0, 3).map((item) => jsx("li", { children: jsx("a", { href: item.url, children: item.title }) })) }),
         jsx("div", {
           id: "chrome-drawer",
           class: "gc-drawer",

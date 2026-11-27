@@ -5,6 +5,7 @@
 // fonts and images (assets.ts). The storefront serves only files that passed.
 
 import { checkStorefrontPublicFile } from "./assets";
+import { buyerChromeSheetBytesProblem, checkedBuyerChromeSheet } from "./buyer-chrome-css";
 import { STOREFRONT_PIXEL_FILE } from "./buyer-events";
 import { pluginHasStorefrontModule, type PluginManifest } from "./manifest";
 import {
@@ -82,6 +83,15 @@ export async function verifyStorefrontFiles(
     const size = bytes.byteLength;
     if (path === STOREFRONT_MODULE_FILE && size > limits.moduleBytes) throw new Error(`storefront/${path} is over ${limits.moduleBytes} bytes.`);
     if (path === STOREFRONT_STYLESHEET_FILE && size > limits.stylesheetBytes) throw new Error(`storefront/${path} is over ${limits.stylesheetBytes} bytes.`);
+    if (path === STOREFRONT_STYLESHEET_FILE) {
+      // One decoder reads every app's sheet; a theme whose header or footer draws on buyer pages is checked as the store uses it there.
+      const encoding = buyerChromeSheetBytesProblem(bytes);
+      if (encoding && /UTF-8|UTF-16/.test(encoding)) throw new Error(`storefront/${path}: ${encoding}.`);
+      if (storefront.skins.some((skin) => skin.buyerPages === true)) {
+        const checked = checkedBuyerChromeSheet(bytes, "/");
+        if (!checked.ok) throw new Error(`storefront/${path}: a skin draws on buyer pages (buyerPages), and ${checked.problem}.`);
+      }
+    }
     if (path === STOREFRONT_PIXEL_FILE && size > limits.pixelBytes) throw new Error(`storefront/${path} is over ${limits.pixelBytes} bytes.`);
     if (path.startsWith("islands/")) {
       if (size > limits.islandBytes) throw new Error(`storefront/${path} is over ${limits.islandBytes} bytes.`);

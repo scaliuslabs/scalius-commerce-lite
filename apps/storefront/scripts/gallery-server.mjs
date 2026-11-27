@@ -366,13 +366,24 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       // buyer pages with a theme's stylesheet (`theme`) or a hostile one (`forged`), or the store's own chrome (`none`).
       if (url.pathname === `${GALLERY_PREFIX}/buyer-chrome` && request.method === "GET") {
         const { INERT_MARKUP, inertMarkupProblems } = await vite.ssrLoadModule("@scalius/shared/plugins/inert-html");
-        return sendJson(response, 200, { problems: inertMarkupProblems.toString(), markup: INERT_MARKUP });
+        const probes = await vite.ssrLoadModule("/src/gallery/chrome-app-extension.ts");
+        return sendJson(response, 200, {
+          problems: inertMarkupProblems.toString(), markup: INERT_MARKUP,
+          refused: probes.GALLERY_REFUSED_SHEETS, drawn: probes.GALLERY_DRAWN_PROBES, colours: probes.GALLERY_FORGED_COLOURS,
+          utf16: Buffer.from(probes.galleryUtf16Sheet(":host-context(body) .gc-logo{background-image:url(/apps/forged.chrome/leak?utf16)}")).toString("base64"),
+        });
       }
       if (url.pathname === `${GALLERY_PREFIX}/buyer-chrome` && request.method === "POST") {
         const body = JSON.parse(await readBody(request) || "{}");
         const { registerBuyerChromeEntry } = await vite.ssrLoadModule("/src/gallery/entries.ts");
         const chrome = ["theme", "forged", "none"].includes(body.chrome) ? body.chrome : "none";
-        return sendJson(response, 200, { id: registerBuyerChromeEntry(String(body.id), chrome).id });
+        // A probe sheet of its own (`sheet`: text, or `sheetBase64`: bytes), drawn by a theme app installed for it.
+        let probe = null;
+        if (typeof body.sheet === "string" || typeof body.sheetBase64 === "string") {
+          const { installGalleryProbeChromeApp } = await vite.ssrLoadModule("/src/gallery/chrome-app-extension.ts");
+          probe = installGalleryProbeChromeApp(String(body.id), typeof body.sheet === "string" ? body.sheet : new Uint8Array(Buffer.from(body.sheetBase64, "base64"))).pluginId;
+        }
+        return sendJson(response, 200, { id: registerBuyerChromeEntry(String(body.id), probe ? "forged" : chrome, probe).id });
       }
       // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens), and the
       // app node kinds that have rows (their selectors inside a block).
