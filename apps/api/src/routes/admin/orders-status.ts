@@ -667,8 +667,11 @@ const reconcileShipmentRoute = createRoute({
             required: true,
             content: {
                 "application/json": {
-                    // A shipment held for a courier's report needs staff's choice: apply the report, or keep the shipment as it was.
-                    schema: z.object({ courierReport: z.enum(["apply", "keep"]).optional() }).strict(),
+                    // A courier's report needs staff's choice (apply it, or keep the shipment as it was), for the report they saw.
+                    schema: z.object({
+                        courierReport: z.enum(["apply", "keep"]).optional(),
+                        report: z.object({ status: z.string().min(1).max(64), rawStatus: z.string().max(200) }).strict().optional(),
+                    }).strict().refine((body) => !body.courierReport || body.report, { message: "Name the courier's report you decide on.", path: ["report"] }),
                 },
             },
         },
@@ -687,8 +690,8 @@ app.openapi(reconcileShipmentRoute, async (c) => {
     const body = c.req.valid("json");
     const db = c.get("db");
 
-    const result = body.courierReport
-        ? await resolveCourierReport(db, orderId, shipmentId, body.courierReport)
+    const result = body.courierReport && body.report
+        ? await resolveCourierReport(db, orderId, shipmentId, body.courierReport, body.report)
         : await reconcileOrderShipment(db, orderId, shipmentId);
     const { availabilityTransitionVariantIds: _availabilityTransitionVariantIds, ...responseData } = result;
 

@@ -93,6 +93,7 @@ const timelineCopy = defineMessages({
     "timeline.courierReportDetail": "The shipment waits for you: apply the courier's report, or keep it as it was.",
     "timeline.courierReportLate": "{courier} reported “{words}” for a settled parcel; nothing changed",
     "timeline.courierReportDismissed": "{courier}'s report “{words}” was set aside; the parcel stays as it was",
+    "timeline.courierReportApplyAfterAll": "Apply after all",
     "timeline.rejectedCount": "{count} not approved",
   },
   bn: {
@@ -181,6 +182,7 @@ const timelineCopy = defineMessages({
     "timeline.courierReportDetail": "শিপমেন্টটি আপনার অপেক্ষায়: কুরিয়ারের জানানো অবস্থা প্রয়োগ করুন, অথবা আগের মতো রাখুন।",
     "timeline.courierReportLate": "শেষ হওয়া একটি পার্সেলের জন্য {courier} জানিয়েছে “{words}”; কিছু বদলায়নি",
     "timeline.courierReportDismissed": "{courier}-এর জানানো “{words}” সরিয়ে রাখা হয়েছে; পার্সেলটি আগের মতোই আছে",
+    "timeline.courierReportApplyAfterAll": "তবুও প্রয়োগ করুন",
     "timeline.rejectedCount": "{count}টি অনুমোদিত হয়নি",
   },
 });

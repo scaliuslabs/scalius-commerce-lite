@@ -20,7 +20,6 @@ import { useHydrated } from "~/hooks/use-hydrated";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { formatNumber, useMessages } from "~/i18n";
 import { orderDetailLabel, orderDetailMessages, shipmentRecoveryCopy } from "~/i18n/order-detail";
-import { resourceMessages } from "~/i18n/resource";
 import {
   orderErrorMessage,
   useCreateOrderShipment,
@@ -35,6 +34,7 @@ import { formatSavedMajorAmount } from "~/lib/order-money-format";
 import { queryKeys } from "~/lib/query-keys";
 import { cn } from "@scalius/shared/utils";
 import { getOrderItemName } from "./order-returns/shared";
+import { CourierReportApply } from "./CourierReportApply";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { formatCurrencyAmount, formatOrderDate } from "./formatters";
 import type { Order, OrderFulfillment, OrderItem, OrderShipment } from "./types";
@@ -44,7 +44,6 @@ import { Field } from "~/components/ui/field";
 import { isSettledShipment } from "@scalius/shared/shipment-state";
 
 // The courier check: its form loads when the merchant first opens it.
-const ConfirmDialog = lazy(() => import("~/components/admin/shared/ConfirmDialog").then((module) => ({ default: module.ConfirmDialog })));
 const CourierCheckDialog = lazy(() => import("./CourierCheckDialog").then((module) => ({ default: module.CourierCheckDialog })));
 
 /** The courier's name for a shipment's provider type, from the store's couriers. */
@@ -138,7 +137,12 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
         <CourierReportDecision
           report={recovery.courierReport}
           pending={repairMutation.isPending}
-          decide={(courierReport) => repairMutation.mutate({ orderId: order.id, shipmentId, courierReport })}
+          decide={(courierReport) => repairMutation.mutate({
+            orderId: order.id,
+            shipmentId,
+            courierReport,
+            report: { status: recovery.courierReport!.reportedStatus, rawStatus: recovery.courierReport!.rawStatus },
+          })}
         />
       ) : null}
     </div>
@@ -156,34 +160,17 @@ function CourierReportDecision({ report, pending, decide }: {
   decide: (courierReport: "apply" | "keep") => void;
 }) {
   const t = useMessages(orderDetailMessages);
-  const [confirming, setConfirming] = useState(false);
-  const opened = useOpenedOnce(confirming);
   const reported = orderDetailLabel(t, "courierReport.state.", report.reportedStatus);
   const previous = orderDetailLabel(t, "courierReport.state.", report.previousStatus);
   return (
     <div className="space-y-2">
       <p className="text-muted-foreground">{t("courierReport.saw", { reported, previous, words: report.rawStatus })}</p>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" variant="outline" loading={pending} onClick={() => setConfirming(true)}>
-          {t("courierReport.apply", { reported })}
-        </Button>
+        <CourierReportApply reportedStatus={report.reportedStatus} pending={pending} apply={() => decide("apply")} />
         <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => decide("keep")}>
           {t("courierReport.keep", { previous })}
         </Button>
       </div>
-      {opened ? (
-        <Suspense fallback={null}>
-          <ConfirmDialog
-            open={confirming}
-            onOpenChange={setConfirming}
-            title={t("courierReport.confirmTitle", { reported })}
-            description={orderDetailLabel(t, "courierReport.effect.", report.reportedStatus)}
-            confirmLabel={t("courierReport.apply", { reported })}
-            isLoading={pending}
-            onConfirm={() => { decide("apply"); setConfirming(false); }}
-          />
-        </Suspense>
-      ) : null}
     </div>
   );
 }

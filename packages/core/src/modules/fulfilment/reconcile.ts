@@ -28,8 +28,8 @@ import {
   requeueShipmentClaimParkedPaymentEvents,
   validateTransition,
 } from "../order-kernel";
-import { sql, eq, and } from "drizzle-orm";
-import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
+import { sql, eq, and, type SQL } from "drizzle-orm";
+import { AppError, NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import {
   type OrderShipmentReconciliationResult,
   reconcileInventoryForStatus,
@@ -51,10 +51,15 @@ function stringField(record: Record<string, unknown> | null, key: string): strin
     return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function cleanShipmentRecoveryMetadata(metadata: Record<string, unknown>): string | null {
+function cleanShipmentRecoveryMetadataObject(metadata: Record<string, unknown>): Record<string, unknown> {
     const next = { ...metadata };
     delete next.reconciliation;
     delete next.orderStatusSync;
+    return next;
+}
+
+function cleanShipmentRecoveryMetadata(metadata: Record<string, unknown>): string | null {
+    const next = cleanShipmentRecoveryMetadataObject(metadata);
     return Object.keys(next).length > 0 ? JSON.stringify(next) : null;
 }
 
@@ -447,22 +452,44 @@ export async function resolveUnknownOrderShipment(
     };
 }
 
+/** The courier's report staff decide on: its state and its words, as the page showed them. */
+export interface ResolvedCourierReport {
+    status: string;
+    rawStatus: string;
+}
+
+/** The report staff saw is not the one the shipment now holds (the courier spoke again, or another decision landed). */
+function courierReportChanged(): AppError {
+    return new AppError(409, "conflict", "The courier's report changed since you looked. Look at the shipment again before deciding.", { reason: "courier_report_changed" });
+}
+
+/** SQL: the held shipment still holds exactly this report, against this previous state. */
+function holdsReport(shipmentId: string, report: ResolvedCourierReport) {
+    const field = (path: string) => sql`CASE WHEN json_valid(${deliveryShipments.metadata}) THEN json_extract(${deliveryShipments.metadata}, ${path}) END`;
+    return sql`EXISTS (SELECT 1 FROM ${deliveryShipments} WHERE ${deliveryShipments.id} = ${shipmentId}
+        AND ${deliveryShipments.status} = ${ShipmentStatus.RECONCILE_REQUIRED} AND ${deliveryShipments.rawStatus} = ${COURIER_REPORT_HELD}
+        AND ${field("$.reconciliation.providerStatus")} = ${report.status}
+        AND ${field("$.reconciliation.rawProviderStatus")} = ${report.rawStatus})`;
+}
+
 /**
- * After a booking is finished: a shipment status past "booked" moves the
- * order as the courier's push would (with the fulfilment ledger following
- * the parcel). Returns the order status after, or null when nothing applies.
- */
-/**
- * Staff's decision on a courier's report held for them: `apply` restores the
- * shipment to the report and moves the order and stock as a push would;
- * `keep` restores the shipment to the state it was in (its `restore_<previous>`
- * move), moves nothing else, and sets the report aside on the order's timeline.
+ * Staff's decision on a courier's report, for the report they saw (state and
+ * words; any other is refused as changed):
+ * - `apply` restores a held shipment to the report and moves the order and
+ *   stock as a push would; on a shipment kept against that report
+ *   (`dismissedReport`, still in the state it was kept in) it applies it after
+ *   all;
+ * - `keep` restores a held shipment to the state it was in (its
+ *   `restore_<previous>` move), moves nothing else, remembers the report as
+ *   dismissed (the same report arriving again is recorded, not held again),
+ *   and sets it aside on the order's timeline.
  */
 export async function resolveCourierReport(
     db: Database,
     orderId: string,
     shipmentId: string,
     decision: "apply" | "keep",
+    report: ResolvedCourierReport,
 ): Promise<OrderShipmentReconciliationResult> {
     const shipment = await db.select({
         orderId: deliveryShipments.orderId, status: deliveryShipments.status, rawStatus: deliveryShipments.rawStatus,
@@ -470,29 +497,55 @@ export async function resolveCourierReport(
     }).from(deliveryShipments).where(eq(deliveryShipments.id, shipmentId)).get();
     if (!shipment) throw new NotFoundError("Shipment not found");
     if (shipment.orderId !== orderId) throw new ValidationError("Shipment does not belong to this order");
-    if (shipment.status !== ShipmentStatus.RECONCILE_REQUIRED || shipment.rawStatus !== COURIER_REPORT_HELD) {
-        throw new ConflictError("This shipment no longer waits on a courier's report. Reload to see the latest.");
-    }
-    if (decision === "apply") return reconcileOrderShipment(db, orderId, shipmentId, { applyCourierReport: true });
-
     const metadata = parseShipmentMetadata(shipment.metadata);
+    const isHeld = shipment.status === ShipmentStatus.RECONCILE_REQUIRED && shipment.rawStatus === COURIER_REPORT_HELD;
+
+    if (!isHeld) {
+        // Apply after all: the report staff kept the shipment against, while it is still as they kept it.
+        const dismissed = asRecord(metadata.dismissedReport);
+        const keptAs = stringField(dismissed, "previousStatus");
+        if (decision !== "apply" || dismissed?.status !== report.status || dismissed?.rawStatus !== report.rawStatus || keptAs !== shipment.status
+            || !isCourierShipmentStatus(report.status)) {
+            throw courierReportChanged();
+        }
+        const reconciliation = { required: true, reason: COURIER_REPORT_HELD, providerStatus: report.status, rawProviderStatus: report.rawStatus, previousStatus: keptAs, detectedAt: new Date().toISOString() };
+        const field = (path: string) => sql`CASE WHEN json_valid(${deliveryShipments.metadata}) THEN json_extract(${deliveryShipments.metadata}, ${path}) END`;
+        const held = await shipmentMove(db, ShipmentStatus.RECONCILE_REQUIRED, "store", and(
+            eq(deliveryShipments.id, shipmentId),
+            eq(deliveryShipments.status, keptAs),
+            sql`${field("$.dismissedReport.status")} = ${report.status}`,
+            sql`${field("$.dismissedReport.rawStatus")} = ${report.rawStatus}`,
+        ), {
+            rawStatus: COURIER_REPORT_HELD,
+            metadata: JSON.stringify({ ...metadata, dismissedReport: undefined, reconciliation }),
+        }).returning({ id: deliveryShipments.id });
+        if (held.length === 0) throw courierReportChanged();
+        return reconcileOrderShipment(db, orderId, shipmentId, { applyCourierReport: report });
+    }
+
     const held = asRecord(metadata.reconciliation);
+    // Compared exactly, as the guard in the write compares them (the courier's words may be empty).
+    if (held?.providerStatus !== report.status || held?.rawProviderStatus !== report.rawStatus) throw courierReportChanged();
+    if (decision === "apply") return reconcileOrderShipment(db, orderId, shipmentId, { applyCourierReport: report });
+
     const previous = stringField(held, "previousStatus");
     if (!isCourierShipmentStatus(previous)) throw new ConflictError("The state this shipment was in is not known; apply the courier's report instead.");
     const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
+    const kept = { ...cleanShipmentRecoveryMetadataObject(metadata), dismissedReport: { status: report.status, rawStatus: report.rawStatus, previousStatus: previous } };
     const [restored] = await db.batch([
-        shipmentMove(db, previous, "store", eq(deliveryShipments.id, shipmentId), {
+        // Guarded on the very report staff saw, in the same statement.
+        shipmentMove(db, previous, "store", and(eq(deliveryShipments.id, shipmentId), holdsReport(shipmentId, report)), {
             rawStatus: previous,
-            metadata: cleanShipmentRecoveryMetadata(metadata),
+            metadata: JSON.stringify(kept),
         }).returning({ id: deliveryShipments.id }),
         // The dismissed report, on the timeline: what the courier said, and that staff kept the parcel as it was.
         courierReportLine(db, {
             orderId, shipmentId, courierName: shipment.courierName, outcome: "dismissed", previousStatus: previous,
-            reportedStatus: stringField(held, "providerStatus") ?? "unknown", rawStatus: stringField(held, "rawProviderStatus") ?? "",
+            reportedStatus: report.status, rawStatus: report.rawStatus,
         }, sql`EXISTS (SELECT 1 FROM ${deliveryShipments} WHERE ${deliveryShipments.id} = ${shipmentId} AND ${deliveryShipments.status} = ${previous})`),
     ]) as unknown as [Array<{ id: string }>, unknown];
-    if (restored.length === 0) throw new ConflictError("The shipment changed while it was being resolved. Reload to see the latest.");
+    if (restored.length === 0) throw courierReportChanged();
     return {
         status: "repaired",
         orderId,
@@ -513,16 +566,21 @@ export async function resolveCourierReport(
  * Nothing written means another repair moved it first: that is fine when it
  * landed where this one would, and a conflict for staff otherwise.
  */
-async function restoreHeldShipment(db: Database, shipmentId: string, to: CourierShipmentStatus, metadata: Record<string, unknown>): Promise<void> {
-    const written = await shipmentMove(db, to, "store", eq(deliveryShipments.id, shipmentId), {
+async function restoreHeldShipment(db: Database, shipmentId: string, to: CourierShipmentStatus, metadata: Record<string, unknown>, guard?: SQL): Promise<void> {
+    const written = await shipmentMove(db, to, "store", and(eq(deliveryShipments.id, shipmentId), guard), {
         rawStatus: to,
         metadata: cleanShipmentRecoveryMetadata(metadata),
     }).returning({ id: deliveryShipments.id });
     if (written.length > 0) return;
     const now = await db.select({ status: deliveryShipments.status }).from(deliveryShipments).where(eq(deliveryShipments.id, shipmentId)).get();
-    if (now?.status !== to) throw new ConflictError("The shipment changed while it was being repaired. Reload to see the latest.");
+    if (now?.status !== to || guard) throw guard ? courierReportChanged() : new ConflictError("The shipment changed while it was being repaired. Reload to see the latest.");
 }
 
+/**
+ * After a booking is finished: a shipment status past "booked" moves the
+ * order as the courier's push would (with the fulfilment ledger following
+ * the parcel). Returns the order status after, or null when nothing applies.
+ */
 async function followCourierStatus(db: Database, orderId: string, shipmentId: string, status: string): Promise<string | null> {
     if (status === ShipmentStatus.PENDING) return null;
     await syncCourierFulfilmentFromShipment(db, shipmentId, status);
@@ -535,7 +593,8 @@ export async function reconcileOrderShipment(
     db: Database,
     orderId: string,
     shipmentId: string,
-    options: { applyCourierReport?: true } = {},
+    /** Apply a courier's report held for staff: the one they saw, guarded in the restore itself. */
+    options: { applyCourierReport?: ResolvedCourierReport } = {},
 ): Promise<OrderShipmentReconciliationResult> {
     // Repair settles an expired booking claim first (as the maintenance sweep
     // would): released when its attempt booked nothing, otherwise it becomes
@@ -708,7 +767,8 @@ export async function reconcileOrderShipment(
             && reason === "expired_order_shipment_claim";
         if (!leftover && !courierReport) throw new ConflictError("Shipment is no longer the active order shipment recovery claim.");
         const restored = safeFinalizedShipmentStatus(shipment, metadata).status;
-        await restoreHeldShipment(db, shipmentId, restored, metadata);
+        await restoreHeldShipment(db, shipmentId, restored, metadata,
+            options.applyCourierReport ? holdsReport(shipmentId, options.applyCourierReport) : undefined);
         const followed = await followCourierStatus(db, orderId, shipmentId, restored);
         return {
             status: "repaired",

@@ -15,9 +15,13 @@
 //   `reconciliation.previousStatus`, and writes a timeline line, in one
 //   batch: staff apply it or keep the shipment as it was
 //   (fulfilment/reconcile.ts `resolveCourierReport`);
-// - a shipment held for staff takes no report: one held for a courier's
-//   report keeps the courier's latest settled word, so staff never apply a
-//   stale one, and the caller asks the courier to send it again.
+// - a shipment held for staff takes no report. One held for a courier's
+//   report keeps the courier's latest settled word (staff resolve the report
+//   they saw, guarded on it), and the report is then stored: the caller
+//   acknowledges it. Only a report a race kept from being stored, or one for
+//   a booking held for staff, has the courier send it again;
+// - a report staff kept the shipment against (`dismissedReport`) arriving
+//   again is recorded, not held again; a different one holds anew.
 import { and, eq, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { safeBatch, type Database } from "@scalius/database/client";
@@ -49,7 +53,9 @@ export type CourierReportOutcome =
   | { outcome: "recorded"; status: string }
   /** The settled shipment takes no move to the report: it is held for staff with it now. */
   | { outcome: "held"; previous: string; reported: CourierShipmentStatus }
-  /** The shipment was already held for staff: nothing moved (a courier's latest settled word is kept). */
+  /** The shipment is held for a courier's report: this report is stored with the hold (or, a late open one, needs nothing): acknowledge it. */
+  | { outcome: "stored" }
+  /** The shipment waits for staff and this report could not be stored (a booking held for staff, a lost race): the courier sends it again. */
   | { outcome: "waiting" };
 
 const ATTEMPTS = 3;
@@ -117,24 +123,31 @@ export async function applyCourierReport(db: Database, shipmentId: string, repor
       sql`coalesce(${deliveryShipments.metadata}, '') = ${row.metadata ?? ""}`);
 
     if (row.status === ShipmentStatus.RECONCILE_REQUIRED) {
+      if (row.rawStatus !== COURIER_REPORT_HELD) return { outcome: "waiting" };
       const held = record(metadata.reconciliation);
-      // A courier's report held for staff keeps the courier's latest settled word (never a late open one).
-      if (row.rawStatus === COURIER_REPORT_HELD && isSettledShipment(report.status) && held.providerStatus !== report.status) {
-        await db.update(deliveryShipments).set({
-          lastChecked: report.set?.lastChecked ?? sql`${deliveryShipments.lastChecked}`,
-          metadata: JSON.stringify({ ...metadata, reconciliation: { ...held, providerStatus: report.status, rawProviderStatus: report.rawStatus, updatedAt: new Date().toISOString() } }),
-        }).where(unchanged);
-      }
-      return { outcome: "waiting" };
+      // A late open report changes nothing; the courier's latest settled word replaces the held one.
+      const same = held.providerStatus === report.status && held.rawProviderStatus === report.rawStatus;
+      if (!isSettledShipment(report.status) || same) return { outcome: "stored" };
+      const written = await db.update(deliveryShipments).set({
+        lastChecked: report.set?.lastChecked ?? sql`${deliveryShipments.lastChecked}`,
+        metadata: JSON.stringify({ ...metadata, reconciliation: { ...held, providerStatus: report.status, rawProviderStatus: report.rawStatus, updatedAt: new Date().toISOString() } }),
+      }).where(unchanged).returning({ id: deliveryShipments.id });
+      if (written.length > 0) return { outcome: "stored" };
+      if (attempt >= ATTEMPTS) return { outcome: "waiting" };
+      continue;
     }
 
     let outcome = courierReportOutcome(row.status, report.status);
+
     // Cash collected at the door, then the courier says the parcel came back:
     // the store's own return refuses a collected order, so staff decide.
     if (outcome === "move" && row.status === ShipmentStatus.DELIVERED && report.status === ShipmentStatus.RETURNED) {
       const cash = await db.select({ status: codTracking.codStatus }).from(codTracking).where(eq(codTracking.orderId, row.orderId)).get();
       if (cash?.status === CodStatus.COLLECTED) outcome = "hold";
     }
+    // The report staff kept the shipment against, arriving again: recorded, not held again.
+    const dismissed = record(metadata.dismissedReport);
+    if (outcome === "hold" && dismissed.status === report.status && dismissed.rawStatus === report.rawStatus) outcome = "record";
 
     if (outcome === "move") {
       // The machine judges it in the write, from the state read: a report that lost a race reads again.

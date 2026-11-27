@@ -22,17 +22,18 @@ import { useMessages } from "~/i18n";
 import { orderTimelineMessages } from "~/i18n/order-timeline";
 import { orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
-import { orderErrorMessage, useAddOrderComment, useDeleteOrderComment } from "~/lib/api-mutations/orders";
+import { orderErrorMessage, useAddOrderComment, useDeleteOrderComment, useReconcileShipment } from "~/lib/api-mutations/orders";
 import { orderTimelineWindowOptions } from "~/lib/api-query-options/orders";
 import { readAdminApiErrorCode } from "~/lib/admin-api-error";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
 import { formatSavedMajorAmount } from "~/lib/order-money-format";
-import { describeTimelineEvent } from "~/lib/order-timeline-display";
+import { describeTimelineEvent, dismissedCourierReport } from "~/lib/order-timeline-display";
 import { timelineActor } from "~/lib/actor";
 import { useActorText } from "~/components/admin/shared/ActorName";
 import { formatOrderDay, formatOrderTime, formatOrderTimestamp } from "./formatters";
 import type { Order } from "./types";
+import { CourierReportApply } from "./CourierReportApply";
 import { matchesShortcut } from "../layout/shortcuts";
 
 const COMMENT_MAX_LENGTH = 2000;
@@ -64,7 +65,8 @@ function OrderTimeline({ order }: { order: Order }) {
   const r = useMessages(resourceMessages);
   const { fmt } = useCurrency();
   const hydrated = useHydrated();
-  const canComment = useOrderActionPermissions().canEditOrders;
+  const permissions = useOrderActionPermissions();
+  const canComment = permissions.canEditOrders;
   const [comment, setComment] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
   const client = useQueryClient();
@@ -98,6 +100,20 @@ function OrderTimeline({ order }: { order: Order }) {
     const actor = actors.get(id);
     return actor ? actorText(actor) : null;
   };
+  // A set-aside courier report can still be applied while its shipment stays as it was kept:
+  // only the newest one per shipment offers it, and the server refuses it if anything moved since.
+  const reconcile = useReconcileShipment();
+  const applicable = new Set<string>();
+  if (permissions.canManageOrderShipments) {
+    const seen = new Set<string>();
+    for (const event of events) {
+      const report = dismissedCourierReport(event);
+      if (!report || seen.has(report.shipmentId)) continue;
+      seen.add(report.shipmentId);
+      const shipment = order.shipments?.find((candidate) => candidate.id === report.shipmentId);
+      if (shipment?.status === report.previousStatus) applicable.add(event.id);
+    }
+  }
   const nextCursor = query.data?.pages.at(-1)?.nextCursor;
   const canAppend = (query.data?.pages.length ?? 0) < 2;
 
@@ -225,6 +241,22 @@ function OrderTimeline({ order }: { order: Order }) {
                             {/* "Order created by Rina" already names who. */}
                             {[event.kind === "placed" ? null : actor, group.day ? formatOrderTime(event.createdAt) : formatOrderTimestamp(event.createdAt)].filter(Boolean).join(" · ")}
                           </p>
+                          {applicable.has(event.id) ? (() => {
+                            const report = dismissedCourierReport(event)!;
+                            return (
+                              <CourierReportApply
+                                reportedStatus={report.reportedStatus}
+                                label={t("timeline.courierReportApplyAfterAll")}
+                                pending={reconcile.isPending}
+                                apply={() => reconcile.mutate({
+                                  orderId: order.id,
+                                  shipmentId: report.shipmentId,
+                                  courierReport: "apply",
+                                  report: { status: report.reportedStatus, rawStatus: report.rawStatus },
+                                })}
+                              />
+                            );
+                          })() : null}
                           {comment && event.own ? (
                             <Button type="button" variant="link" size="sm" onClick={() => setDeleting(event.id)}>
                               {t("timeline.delete")}
