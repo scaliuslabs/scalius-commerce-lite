@@ -23,6 +23,7 @@ import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@s
 import { AppError, ConflictError, NotFoundError, OrderRevisionConflictError, ValidationError } from "@scalius/core/errors";
 import { sha256Hex } from "@scalius/shared/hash";
 import { presentedSettlement } from "@scalius/shared/money-chain";
+import { chargeKind } from "@scalius/shared/payment-record-state";
 import { RECORDED_PAYMENT_METHOD, RECORDED_PAYMENT_VIAS, type RecordedPaymentVia } from "@scalius/shared/payment-terms";
 import { deriveOrderPaymentState, ledgerTotalsCondition, paymentLedgerTotalsSql, withReceived } from "./payment-state";
 import { resolveOrderCurrencySnapshot } from "./order-currency";
@@ -259,7 +260,7 @@ export async function recordOrderPayment(
       settlementRate: sql<string>`${settlement.settlementRate}`.as("settlement_rate"),
       exchangeAdjustmentMinor: sql<number>`${settlement.exchangeAdjustmentMinor}`.as("exchange_adjustment_minor"),
       paymentMethod: sql<string>`${RECORDED_PAYMENT_METHOD}`.as("payment_method"),
-      paymentType: sql<string>`${paymentType}`.as("payment_type"),
+      paymentType: sql<string>`${chargeKind(paymentType)}`.as("payment_type"),
       status: sql<string>`${PaymentRecordStatus.SUCCEEDED}`.as("status"),
       providerRef: sql<null>`NULL`.as("provider_ref"),
       providerSecondaryRef: sql<null>`NULL`.as("provider_secondary_ref"),

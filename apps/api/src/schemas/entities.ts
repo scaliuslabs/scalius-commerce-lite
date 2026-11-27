@@ -282,6 +282,8 @@ export const orderShipmentRecoverySchema = z.object({
   canRetryCreate: z.boolean(),
   canRepair: z.boolean(),
   unknownOutcome: z.boolean(),
+  /** Reason `courier_report`: the report staff apply or set aside. */
+  courierReport: z.object({ previousStatus: z.string(), reportedStatus: z.string(), rawStatus: z.string() }).nullable().optional(),
   updatedAt: nullableTimestampSchema,
 });
 

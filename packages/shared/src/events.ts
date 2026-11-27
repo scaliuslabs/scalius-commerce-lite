@@ -155,11 +155,10 @@ const state = z.string().min(1).max(64);
 const nullableState = state.nullable();
 const nullableId = id.nullable();
 /**
- * A status fact: typed as its resource's closed list (resource-states.ts, what
- * an app compiles against) and read as stored. A value outside the list (a
- * state a newer platform adds, or one a column the database does not
- * constrain holds) is delivered as it is, never dropped: a consumer treats a
- * state it does not know as unknown.
+ * A status fact: typed as its resource's list (resource-states.ts, what an
+ * app compiles against) and read as stored. The list is open: a value outside
+ * it (a state a newer platform adds) is delivered as it is, never dropped,
+ * and a consumer handles it by the list's fallback.
  */
 function statusOf<const S extends readonly [string, ...string[]]>(states: S): z.ZodType<S[number]> {
   return z.union([z.enum(states), state]) as unknown as z.ZodType<S[number]>;

@@ -536,6 +536,8 @@ const REGRESSIONS = {
   "Place order the dock's colour behind a dark edge": { refused: "contrast", refusedFor: /submit/, request: { scheme: "light" }, privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, submit: { ...EDGED_ACTION, background: "#ffffff" } } } } },
   "Pay brand fill with a 1px edge": { refused: "contrast", refusedFor: /submit/, request: { ...REFERENCE, scheme: "light", page: "sample-checkout" }, states: ["base"], privatePages: { tokens: { checkout: { ...CHECKOUT_TOKENS, "payment-details": { background: "#ffffff" }, submit: { ...EDGED_ACTION, "border-width": 1 } } } } },
   "Place order brand fill with a 1px edge": { refused: "contrast", refusedFor: /submit/, request: { scheme: "light" }, privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, submit: { ...EDGED_ACTION, "border-width": 1 } } } } },
+  // The store's other filled buttons (sign in, Apply) in the brand's yellow on a white form: found by their words.
+  "the store's filled buttons in a brand fill on a white form": { request: { scheme: "light" }, states: ["base", "lines"], privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, "details-form": { background: "#ffffff" }, submit: EDGED_ACTION, action: { background: "#fed700", text: "#111111", radius: 0 } } } } },
   // ─── The payment step (page `checkout`): drawn as the editor's sample checkout draws it, as buyers get it ───
   [CHECKOUT_LIST]: { request: { ...REFERENCE, page: "sample-checkout" }, privatePages: { tokens: { checkout: CHECKOUT_TOKENS } }, states: ["base"] },
   [CHECKOUT_TILES]: { request: { ...REFERENCE, page: "sample-checkout" }, privatePages: { pages: { checkout: { frame: "narrow", layout: CHECKOUT_TILES_LAYOUT } }, tokens: { checkout: CHECKOUT_TOKENS } }, states: ["base"] },
@@ -558,6 +560,41 @@ const AFTER_ORDER_PAGES = {
     page: "account", root: '[data-private="account"]',
     mandatory: ['[data-part="navigation"]', '[data-part="sign-out"]', '[data-part="heading-title"]', '[data-part="card"]'],
   },
+  // The account's own pages as a signed-in buyer gets them (src/gallery/account.ts), each under the account's look.
+  "account-inbox": { page: "account", root: '[data-private="account"]', mandatory: ['a[data-part="card"]', '[data-part="nav-badge"]'] },
+  // The order page (drawn in the browser): its payment methods to choose between, a reviewed line's stars, its conversation.
+  "account-order": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="payment-choices"] button[aria-checked="true"] [data-choice-dot]', '[data-part="pay"]', '[data-part="rating"]', '[data-part="conversation"]', '[data-summary-row="total"]'] },
+  "account-profile-remove-address": { page: "account", root: '[data-private="account"]', scope: "#removeAddress-adr_gallery1", open: "#removeAddress-adr_gallery1", mandatory: ["#removeAddress-adr_gallery1 .bg-destructive"] },
+  "account-profile-remove-card": { page: "account", root: '[data-private="account"]', scope: "#removePaymentMethod-cpm_gallery1", open: "#removePaymentMethod-cpm_gallery1", mandatory: ["#removePaymentMethod-cpm_gallery1 .bg-destructive"] },
+  "account-warranty-claim-form": { page: "account", root: '[data-private="account"]', mandatory: ["[data-warranty-claim][open] textarea, [data-warranty-claim][open] select, [data-warranty-claim][open] input:not([type=hidden])"] },
+  "account-thread": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="conversation"]', '[data-part="message-own"]', '[data-part="message"]', '[data-part="heading-title"]'] },
+  "account-profile": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="card-title"]', '[data-part="sign-out"]'] },
+  // The profile with its edit dialog open (a card over the page, which its backdrop dims): the dialog is walked.
+  // Its Save is disabled until a field changes: drawn, and taking no click.
+  "account-profile-dialog": { page: "account", root: '[data-private="account"]', scope: "#editDetails", open: "#editDetails", mandatory: ['#editDetails [data-part="card-title"]', "#fieldName", "#editDetails button[type=submit]:disabled"] },
+  // The details form posted with no name: the server draws the dialog open, the name field invalid and its message.
+  "account-profile-error": { page: "account", root: '[data-private="account"]', scope: "#editDetails", mandatory: ['#fieldName[aria-invalid="true"]', "#nameError", '#editDetails [data-part="card-title"]'] },
+  // The reviews with the written review's edit and withdraw forms open.
+  "account-reviews": { page: "account", root: '[data-private="account"]', open: '[data-part="card"] details', mandatory: ['[data-part="card"]', '[data-part="rating"]'] },
+  // The gift cards with a card's history open.
+  "account-gift-cards": { page: "account", root: '[data-private="account"]', open: '[data-part="card"] details', mandatory: ['[data-part="card"]', '[data-part="status-badge"]'] },
+  "account-downloads": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="card-title"]'] },
+  "account-warranties": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="status-badge"]'] },
+  "warranty-claim": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="conversation"]', '[data-part="message-own"]', '[data-part="heading-title"]'] },
+};
+/**
+ * A hostile look that saves: every surface the account's pages draw painted per scheme, a brand yellow action found
+ * by its edge in light, a pale critical button, a blue buyer's message, the stars' own colour, square corners.
+ */
+const ACCOUNT_HOSTILE = {
+  page: { background: { light: "#f4f1ea", dark: "#0f0b1c" }, text: { light: "#1a1a1a", dark: "#f5f5f5" }, muted: { light: "#4a4a4a", dark: "#c9c4d6" }, link: { light: "#0b5cad", dark: "#7cc4ff" } },
+  card: { background: { light: "#ffffff", dark: "#1e1831" }, text: { light: "#1a1a1a", dark: "#fafafa" }, muted: { light: "#4a4a4a", dark: "#c9c4d6" }, link: { light: "#0b5cad", dark: "#5ee9b5" }, border: { light: "#8a8a8a", dark: "#6b5f8a" }, radius: 0 },
+  conversation: { background: { light: "#fffdf5", dark: "#171225" }, text: { light: "#1a1a1a", dark: "#fafafa" }, muted: { light: "#4a4a4a", dark: "#c9c4d6" }, link: { light: "#0b5cad", dark: "#7cc4ff" } },
+  "message-own": { background: { light: "#dbeafe", dark: "#14532d" }, text: { light: "#0b1b3a", dark: "#ecfdf5" }, muted: { light: "#1e3a5f", dark: "#bbf7d0" }, link: { light: "#0b3d91", dark: "#d9f99d" } },
+  action: { background: { light: "#fed700", dark: "#00bc7d" }, text: { light: "#111111", dark: "#04110b" }, border: { light: "#111111", dark: "#00bc7d" }, "border-width": 2, radius: 0 },
+  "action-critical": { background: { light: "#fde047", dark: "#7f1d1d" }, text: { light: "#111111", dark: "#ffffff" }, border: { light: "#111111", dark: "#fca5a5" }, "border-width": 2, radius: 0 },
+  rating: { text: { light: "#9a3412", dark: "#fbbf24" } },
+  input: { background: { light: "#ffffff", dark: "#0f0b1c" }, text: { light: "#1a1a1a", dark: "#f5f5f5" }, border: { light: "#6b6b6b", dark: "#8575ae" }, radius: 0 },
 };
 const CARD_LOOK = { background: "card", radius: 0, "border-width": 0, shadow: "lg" };
 const EMERALD_TOTAL = { text: "foreground", size: 20, weight: "600" };
@@ -581,6 +618,17 @@ const AFTER_ORDER_CASES = {
   "an arrangement of the receipt": { refused: "not_available", request: { page: "sample-receipt" }, privatePages: { pages: { receipt: { layout: [{ type: "part", part: "summary" }, { type: "part", part: "status" }] } } } },
   "a receipt total drawn smaller than its rows": { refused: "prominence", refusedFor: /summary-total/, request: { page: "sample-receipt" }, privatePages: { tokens: { receipt: { "summary-total": { size: 14 } } } } },
 };
+// The review's probe: the buyer's message given only its surface and words, beside a dark filled action. Its muted
+// words (a photo that does not load) are its own row's, never the action's.
+AFTER_ORDER_CASES["the account's buyer message in its own colours beside a dark action"] = { request: { toggle: true, scheme: "system", page: "account-thread" }, privatePages: { tokens: { account: {
+  "message-own": { background: { light: "#eef2ff", dark: "#1e3a8a" }, text: { light: "#111111", dark: "#ffffff" } }, action: { background: { light: "#111111", dark: "#f5f5f5" }, text: { light: "#ffffff", dark: "#111111" } },
+} } } };
+// Every page of the account the routes table names, drawn under the hostile look in light and dark (review 3).
+for (const page of Object.keys(AFTER_ORDER_PAGES).filter((name) => name !== "sample-receipt" && name !== "sample-account")) {
+  AFTER_ORDER_CASES[`the account's ${page} in a hostile look`] = { request: { toggle: true, scheme: "system", page }, privatePages: { tokens: { account: ACCOUNT_HOSTILE } } };
+  // Every row's every colour just above its floor on its surface, boxes light and dark in turn (src/gallery/near-floor.ts).
+  AFTER_ORDER_CASES[`the account's ${page} just above every floor`] = { request: { toggle: true, scheme: "system", page, nearFloor: true } };
+}
 Object.assign(REGRESSIONS, AFTER_ORDER_CASES);
 
 // ─── Drawn as the theme wrote it (rc-gate-hygiene) ────────────────────────
@@ -746,6 +794,17 @@ const EXEMPT = "script,style,template,noscript,#gallery-page-end,vite-error-over
  * the host draws, checks each against the colour table (or, with no tokens,
  * the anatomy's style targets) and returns them for the pixel checks.
  */
+/**
+ * `action` (the store's ordinary filled buttons) never reaches a main action, read by Chromium's own selector engine:
+ * Place order, Pay and Confirm are drawn by their own rows only (private-anatomy.ts `actionApart`).
+ */
+function actionKeepsOff(styleTargets) {
+  const action = styleTargets.find((each) => each.name === "action");
+  if (!action) return [];
+  return [...document.querySelectorAll('[data-part="details-submit"],[data-part="pay"],[data-part="status-retry"],[data-part="dialog-confirm"]')]
+    .filter((element) => element.matches(action.selector)).map((element) => `action reaches the main action ${element.dataset.part}`);
+}
+
 function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt, styleTargets }) {
   const problems = [];
   const width = innerWidth;
@@ -877,6 +936,10 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt, styleTargets }
       if (!cells.includes(style.color) && !element.closest(":disabled,[aria-disabled=true]")) problems.push(`text "${node.textContent.trim().slice(0, 30)}" ${name(element)}: ${style.color} is none of its row's colours (${rowOf.get(row).key}: ${cells.join(" ")})`);
     }
     if (element.closest(":disabled,[aria-disabled=true]")) continue;
+    // Words a sideways-scrolling strip holds out of its view (a phone's account tabs): read where they scroll into view,
+    // never against the page beside the strip they are clipped by.
+    const strip = element.closest("[data-account-nav]");
+    if (strip && rects.some((rect) => { const view = strip.getBoundingClientRect(); return rect.left < view.left - 0.5 || rect.right > view.right + 0.5; })) continue;
     const id = texts.length;
     const size = Number.parseFloat(style.fontSize);
     texts.push({ id, label: `"${node.textContent.trim().slice(0, 30)}" ${name(element)}`, color: style.color, large: size >= 24 || (size >= 18.6 && Number(style.fontWeight) >= 700) });
@@ -904,10 +967,12 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt, styleTargets }
     if (control.disabled || control.closest("[inert],fieldset:disabled") || control.closest(exempt)) continue;
     let target = control;
     const box = control.getBoundingClientRect();
-    if (box.width < 4 || box.height < 4 || !control.checkVisibility({ opacityProperty: true, visibilityProperty: true })) {
-      // A visually hidden box or radio drawn by its label: the label takes the click.
-      const label = control.labels?.[0];
-      if (!control.matches("input[type=checkbox],input[type=radio]") || !label || !label.checkVisibility()) continue;
+    const clipped = /^rect\(0(px)?[, ]+0(px)?[, ]+0(px)?[, ]+0(px)?\)$/.test(getComputedStyle(control).clip);
+    if (box.width < 4 || box.height < 4 || clipped || !control.checkVisibility({ opacityProperty: true, visibilityProperty: true })) {
+      // A visually hidden box, radio or file input drawn by its label (the reply form's attach button): the label
+      // takes the click, and draws the focus ring in the words' own colour.
+      const label = [...(control.labels ?? [])].find((each) => each.checkVisibility() && !each.matches(".sr-only"));
+      if (!control.matches("input[type=checkbox],input[type=radio],input[type=file]") || !label) continue;
       target = label;
     }
     if (!claim(control, "control")) continue;
@@ -995,6 +1060,9 @@ function wholeTexts() {
 function clicks() {
   const problems = [];
   for (const control of document.querySelectorAll("[data-pt-control]")) {
+    // Visually hidden (a file input clipped to 1px behind the control that opens it): that control is the one clicked.
+    const hiddenBox = control.getBoundingClientRect();
+    if (hiddenBox.width < 4 || hiddenBox.height < 4 || /rect\(0(px)?,? 0(px)?,? 0(px)?,? 0(px)?\)/.test(getComputedStyle(control).clip)) continue;
     const target = document.querySelector(`[data-pt-control-label="${control.dataset.ptControl}"]`) ?? control;
     target.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
     // A link that wraps is clicked on its longest line's words.
@@ -1225,7 +1293,8 @@ function boundaries(scope) {
   const ratio = (a, b) => { const [x, y] = [luminance(a), luminance(b)]; return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
   const own = (element) => { const back = rgb(getComputedStyle(element).backgroundColor); return back && back.alpha > 0.99 ? back.channels : null; };
   const behind = (element) => { for (let at = element.parentElement; at; at = at.parentElement) { const back = own(at); if (back) return back; } return [255, 255, 255]; };
-  const shown = (element) => element.checkVisibility() && element.getBoundingClientRect().width > 0 && !element.closest(".sr-only");
+  // Visually hidden (a file input clipped to 1px behind the label that opens it) is not where a buyer finds it.
+  const shown = (element) => element.checkVisibility() && element.getBoundingClientRect().width >= 4 && element.getBoundingClientRect().height >= 4 && !element.closest(".sr-only");
   const type = (element) => { const style = getComputedStyle(element); return { size: Number.parseFloat(style.fontSize), weight: Number(style.fontWeight) }; };
   const name = (element) => element.dataset.part ?? (element.id ? `#${element.id}` : element.tagName.toLowerCase());
   // Found by its fill, or by a drawn edge over a fill apart from what is behind it (installActionFound).
@@ -1243,6 +1312,7 @@ function boundaries(scope) {
     filled(submit, "Place order");
     for (const other of document.querySelectorAll('[data-private="cart"] .bg-primary')) if (other !== submit && shown(other)) outranks(submit, other, "Place order", `the filled button "${other.textContent.trim().slice(0, 24)}"`);
   }
+  // The store's ordinary buttons and the apps' are found by their words (checked as words), never by their fill.
   for (const dialog of scope ? [root] : document.querySelectorAll('[data-private="dialog"]')) {
     const [back, confirm] = ['[data-part="dialog-back"]', '[data-part="dialog-confirm"]'].map((selector) => [...dialog.querySelectorAll(selector)].find(shown));
     if (back) {
@@ -1253,7 +1323,7 @@ function boundaries(scope) {
     if (back && confirm) outranks(confirm, back, "Confirm", "Go back");
   }
   // A field drawn as a box around its input (`data-field`) is that box.
-  const edged = [...root.querySelectorAll('input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field],[data-part="line-quantity"],[data-part="fold-toggle"],[data-part="dialog-back"]')];
+  const edged = [...root.querySelectorAll('input:not([type="checkbox"],[type="radio"],[type="hidden"],[type="file"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field],[data-part="line-quantity"],[data-part="fold-toggle"],[data-part="dialog-back"]')];
   for (const element of edged) {
     if (!shown(element)) continue;
     const style = getComputedStyle(element);
@@ -1772,7 +1842,8 @@ async function focusRings(page, controls) {
 /**
  * Under the pointer, each kind of control still reads: its words at their
  * floor on what is behind them while hovered, and a control the host gives a
- * hover surface (a `hover:bg-*` class) shows it (a quarter of its box changes).
+ * hover surface (a `hover:bg-*` class) shows it (a quarter of its box changes),
+ * or, where its row has no hover surface its words read on, is underlined.
  */
 async function hovers(page, controls) {
   const problems = [];
@@ -1787,7 +1858,7 @@ async function hovers(page, controls) {
       const element = document.querySelector(`[data-pt-control="${id}"]`);
       element.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
       const rect = element.getBoundingClientRect();
-      return { x: rect.left, y: rect.top, w: rect.width, h: rect.height, surfaced: [...element.classList].some((name) => /(^|:)hover:bg-/.test(name)) };
+      return { x: rect.left, y: rect.top, w: rect.width, h: rect.height, surfaced: [...element.classList].some((name) => /(^|:)hover:bg-/.test(name)), decorated: getComputedStyle(element).textDecorationLine.includes("underline") };
     }, control.id);
     const clip = { x: Math.max(0, Math.floor(box.x)), y: Math.max(0, Math.floor(box.y)) };
     clip.width = Math.min(viewport.width, Math.ceil(box.x + box.w)) - clip.x;
@@ -1798,11 +1869,13 @@ async function hovers(page, controls) {
     await hidden.evaluate((style) => style.remove());
     await page.mouse.move(box.x + box.w / 2, box.y + box.h / 2);
     // The words as they are drawn under the pointer: their colours, and their boxes inside the control.
-    const words = await page.evaluate(({ id, clip }) => {
+    const { words, underlined } = await page.evaluate(({ id, clip }) => {
       // A colour transition (the hover's, or the words coming back from hidden) drawn to its end.
       for (const animation of document.getAnimations()) animation.finish();
       const element = document.querySelector(`[data-pt-control="${id}"]`);
       const out = [];
+      // Where its box has no hover surface its words keep, the hovered control is underlined instead (`--pt-hd`).
+      const underlined = getComputedStyle(element).textDecorationLine.includes("underline");
       const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         const parent = node.parentElement;
@@ -1814,7 +1887,7 @@ async function hovers(page, controls) {
         const rects = [...range.getClientRects()].map((rect) => ({ x: rect.left - clip.x, y: rect.top - clip.y, w: rect.width, h: rect.height })).filter((rect) => rect.w >= 2 && rect.h >= 4);
         if (rects.length > 0) out.push({ text: node.textContent.trim().slice(0, 30), color: style.color, large: size >= 24 || (size >= 18.6 && Number(style.fontWeight) >= 700), rects });
       }
-      return out;
+      return { words: out, underlined };
     }, { id: control.id, clip });
     const covered = await page.addStyleTag({ content: hide });
     const after = decode(await page.screenshot({ clip, animations: "disabled", caret: "hide" }));
@@ -1832,7 +1905,7 @@ async function hovers(page, controls) {
       const worst = ratios[0];
       if (worst < (word.large ? 3 : 4.5)) problems.push(`control ${control.label} hovered: "${word.text}" ${word.color} reads ${worst.toFixed(2)}:1 on what is behind it`);
     }
-    if (box.surfaced) {
+    if (box.surfaced && !(underlined && !box.decorated)) {
       let changed = 0;
       for (let y = 0; y < Math.min(before.height, after.height); y += 1) {
         for (let x = 0; x < Math.min(before.width, after.width); x += 1) {
@@ -2071,7 +2144,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   if (request?.page === "home") return drawDrawer({ context, id, width, height, problems, server5xx, rows, state, request, entry });
   if (request?.page === "sample-checkout") return drawCheckout({ context, id, width, height, request, entry });
   if (entry?.blockLazy) await context.route(entry.blockLazy, (route) => route.abort());
-  if (AFTER_ORDER_PAGES[request?.page]) return drawAfterOrder({ context, id, width, rows, request, drawn, entry });
+  if (AFTER_ORDER_PAGES[request?.page]) return drawAfterOrder({ context, id, width, rows, request, drawn, entry, focus, hover });
   const page = await timed("load", () => open(context, id, width, server5xx, height));
   // A slow cart check (`slowCheckMs`): the page is measured once it has answered, as a buyer then sees it.
   if (request?.slowCheckMs) await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
@@ -2083,6 +2156,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   const check = async (label, scope, list, { controls: wantControls = true } = {}) => {
     await timed("settle", () => settle(page));
     const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: list, scope, exempt: EXEMPT, styleTargets: STYLE_TARGETS }));
+    problems.push(...(await page.evaluate(actionKeepsOff, STYLE_TARGETS)).map((problem) => `${label}: ${problem}`));
     at(label, walked.problems);
     if (request?.forged) at(label, await page.evaluate(forgedAbsent, { words: FORGED_WORDS, mark: FORGED_MARK }));
     // Under a theme's tokens, the table's look: every action and field is found where it stands.
@@ -2223,7 +2297,7 @@ async function afterOrderTargets(page) {
  * (its colour table in token mode, its anatomy without), every word whole and at its floor, every control taking a
  * click, the total no smaller than its rows, the scheme the store shows, and none of a forged document.
  */
-async function drawAfterOrder({ context, id, width, rows, request, drawn, entry }) {
+async function drawAfterOrder({ context, id, width, rows, request, drawn, entry, focus, hover }) {
   const problems = [];
   const server5xx = [];
   const spec = AFTER_ORDER_PAGES[request.page];
@@ -2240,18 +2314,30 @@ async function drawAfterOrder({ context, id, width, rows, request, drawn, entry 
     if (shown !== drawn) problems.push(`scheme: the page draws its ${shown} colours where the store shows its ${drawn} ones`);
   }
   await openAddOns(page, spec.root);
+  // A page drawn with a dialog open (the profile's edit dialog: a popover over the page).
+  // A page drawn with something open: a popover dialog shown, a disclosure opened.
+  if (spec.open) await page.evaluate((selector) => { for (const element of document.querySelectorAll(selector)) { if (element instanceof HTMLDetailsElement) element.open = true; else element.showPopover?.(); } }, spec.open);
   await page.waitForTimeout(150);
   const targets = await afterOrderTargets(spec.page);
   const anatomy = targets.filter(({ name }) => name !== "page").concat([{ name: `the ${spec.page}`, selector: spec.root }]);
-  const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy, uiKinds: UI_KINDS, mandatory: spec.mandatory, scope: spec.root, exempt: EXEMPT, styleTargets: targets }));
+  const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy, uiKinds: UI_KINDS, mandatory: spec.mandatory, scope: spec.scope ?? spec.root, exempt: EXEMPT, styleTargets: targets }));
+  at(spec.page, await page.evaluate(actionKeepsOff, targets));
   at(spec.page, walked.problems);
   if (request?.forged) at(spec.page, await page.evaluate(forgedAbsent, { words: FORGED_WORDS, mark: FORGED_MARK }));
-  if (rows.length > 0) at(spec.page, await page.evaluate(boundaries, spec.root));
+  if (rows.length > 0) at(spec.page, await page.evaluate(boundaries, spec.scope ?? spec.root));
   at(spec.page, await timed("whole", () => page.evaluate(wholeTexts)));
   at(spec.page, await timed("contrast", () => textContrast(page, walked.texts)));
   at(spec.page, await timed("clicks", () => page.evaluate(clicks)));
   at(`${spec.page} prominence`, await page.evaluate(prominence, `${spec.root} [data-part="summary"]`));
   if (request?.style) at(`${spec.page} drawn as written`, await page.evaluate(drawnAsWritten, { scope: spec.root, style: request.style, defaults: entry?.defaultCorners === true }));
+  // The page's states, forced as a buyer reaches them: Tab through it in reading order, each kind of control's focus
+  // ring (a card link's inset, the star picker's on its star) and, under a pointer, every control's words on its hover
+  // surface (or its underline where its box has none).
+  if (focus) {
+    at(`${spec.page} focus order`, await timed("tab", () => focusOrder(page, walked.controls)));
+    at(`${spec.page} focus`, await timed("rings", () => focusRings(page, walked.controls)));
+  }
+  if (hover) at(`${spec.page} hover`, await timed("hover", () => hovers(page, walked.controls)));
   at("5xx", server5xx);
   await page.close();
   return problems;
@@ -2541,7 +2627,9 @@ try {
         const drawn = degraded ? null : entry.request?.scheme === "light" || entry.request?.scheme === "dark" ? entry.request.scheme : scheme;
         const rows = tables.find((table) => table.scheme === drawn)?.rows ?? tables[0]?.rows ?? [];
         for (const touch of [true, false]) {
-          const plan = (entry.viewports ?? (AFTER_ORDER_PAGES[entry.request?.page] ? [{ width: 390, scheme: "light" }, { width: 390, scheme: "dark" }, { width: 1280, scheme: "light" }, { width: 1280, scheme: "dark" }] : entry.request?.page === "home" ? [{ width: 390, scheme: "light" }, { width: 1280, scheme: "dark" }] : drawsOf(state))).filter((each) => each.scheme === scheme && (each.width < 1280) === touch);
+          // The receipt and the account: Tab order and focus rings on a phone light and the wide page dark, under the
+          // pointer on the wide page in both schemes.
+          const plan = (entry.viewports ?? (AFTER_ORDER_PAGES[entry.request?.page] ? [{ width: 390, scheme: "light", focus: true }, { width: 390, scheme: "dark" }, { width: 1280, scheme: "light", hover: true }, { width: 1280, scheme: "dark", focus: true, hover: true }] : entry.request?.page === "home" ? [{ width: 390, scheme: "light" }, { width: 1280, scheme: "dark" }] : drawsOf(state))).filter((each) => each.scheme === scheme && (each.width < 1280) === touch);
           if (plan.length === 0) continue;
           const context = await browser.newContext({ colorScheme: scheme, viewport: { width: 1280, height: 900 }, hasTouch: touch });
           await context.addInitScript(installActionFound);

@@ -2839,7 +2839,7 @@ Response `data`:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `events` | { id: string, kind: "placed" \| "comment" \| "status_changed" \| "details_edited" \| "items_edited" \| "shipment_created" \| "cod_collected" \| "cod_failed" \| "cod_returned" \| "payment_recorded" \| "refund_recorded" \| "refund_kept" \| "return_created" \| "return_approved" \| "return_received" \| "parcel_returned" \| "request_submitted" \| "request_resolved" \| "archived" \| "unarchived" \| "invoice_issued" \| "fulfillment_location_changed" \| "prices_set" \| "pos_sale" \| "app_event" \| "stock_held" \| "late_payment" \| "payment_dispute" \| "delivery_message" \| "terms_accepted", body: string \| null, data: Record<string, unknown> \| null, actorName: string \| null, actorId: string \| null, own: boolean, createdAt: string }[] | yes |  |
+| `events` | { id: string, kind: "placed" \| "comment" \| "status_changed" \| "details_edited" \| "items_edited" \| "shipment_created" \| "cod_collected" \| "cod_failed" \| "cod_returned" \| "payment_recorded" \| "refund_recorded" \| "refund_kept" \| "return_created" \| "return_approved" \| "return_received" \| "parcel_returned" \| "request_submitted" \| "request_resolved" \| "archived" \| "unarchived" \| "invoice_issued" \| "fulfillment_location_changed" \| "prices_set" \| "pos_sale" \| "app_event" \| "stock_held" \| "late_payment" \| "payment_dispute" \| "delivery_message" \| "terms_accepted" \| "courier_report", body: string \| null, data: Record<string, unknown> \| null, actorName: string \| null, actorId: string \| null, own: boolean, createdAt: string }[] | yes |  |
 | `nextCursor` | string \| null | yes |  |
 
 ## order_uploads
@@ -5868,7 +5868,7 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | --- | --- | --- | --- |
 | `id` | string | yes | 1 to 128 characters |
 | `orderId` | string | yes | 1 to 128 characters |
-| `status` | "pending" \| "confirmed" \| "succeeded" \| "failed" \| "refunded" \| "cancelled" \| "authorized" | yes |  |
+| `status` | "pending" \| "succeeded" \| "failed" \| "refunded" \| "cancelled" \| "authorized" | yes |  |
 | `method` | string | yes | at most 4000 characters |
 | `type` | "full" \| "deposit" \| "balance" \| "refund" | yes |  |
 | `currency` | string | yes | 3 to 3 characters |
@@ -6054,7 +6054,7 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `orderId` | string | yes | 1 to 128 characters |
 | `providerId` | string \| null | yes | 1 to 128 characters |
 | `providerType` | string | yes | 1 to 64 characters |
-| `status` | "pending" \| "pickup_assigned" \| "picked_up" \| "pickup_failed" \| "in_transit" \| "out_for_delivery" \| "delivered" \| "partial_delivered" \| "delivery_failed" \| "on_hold" \| "failed" \| "cancelled" \| "returned" \| "unknown" \| "creating" \| "processing" \| "reconcile_required" | yes |  |
+| `status` | "pending" \| "pickup_assigned" \| "picked_up" \| "pickup_failed" \| "in_transit" \| "out_for_delivery" \| "delivered" \| "partial_delivered" \| "delivery_failed" \| "on_hold" \| "failed" \| "cancelled" \| "returned" \| "unknown" \| "creating" \| "reconcile_required" | yes |  |
 | `rawStatus` | string \| null | yes | at most 4000 characters |
 | `externalId` | string \| null | yes | at most 4000 characters |
 | `trackingId` | string \| null | yes | at most 4000 characters |

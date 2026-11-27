@@ -11,17 +11,19 @@ import {
   type CourierFind,
   type CourierShipment,
   type CourierShipmentInput,
+  type CourierShipmentStatus,
 } from "@scalius/shared/plugins/providers";
 
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import {
+  COURIER_REPORT_HELD,
   PROVIDER_OUTCOME_UNKNOWN,
   type MerchantOrderShipmentLookup,
   type ShipmentOptions,
   type ShipmentResult,
 } from "./types";
-import { and, eq, desc, getTableColumns, notInArray, sql } from "drizzle-orm";
+import { and, eq, desc, getTableColumns, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ConflictError } from "@scalius/core/errors";
 import {
@@ -39,6 +41,8 @@ import type { DeliveryProviderReadinessSummary } from "./provider-readiness";
 import type { Courier, CourierCall, CourierRow, CourierSetup } from "./couriers/port";
 import { courierFor, type CourierProvidersSource } from "./couriers/registry";
 import { readinessMessages } from "@scalius/shared/readiness";
+import { shipmentMove } from "./shipment-move";
+import { applyCourierReport } from "./courier-report";
 
 type ShipmentInternalOptions = {
   shipmentId?: string;
@@ -71,19 +75,6 @@ const DELETABLE_SHIPMENT_STATUSES = new Set<string>([
   ShipmentStatus.FAILED,
   ShipmentStatus.CANCELLED,
 ]);
-
-/**
- * A parcel's last word from its courier, and a booking staff must reconcile:
- * a status check the courier did not answer leaves these as they are.
- */
-const NO_ANSWER_KEEPS_STATUSES = [
-  ShipmentStatus.DELIVERED,
-  ShipmentStatus.PARTIAL_DELIVERED,
-  ShipmentStatus.RETURNED,
-  ShipmentStatus.CANCELLED,
-  ShipmentStatus.FAILED,
-  ShipmentStatus.RECONCILE_REQUIRED,
-] as const;
 
 export const ORDER_SHIPMENT_LIST_LIMIT = 100;
 
@@ -278,12 +269,9 @@ export async function markShipmentReconciliationRequired(
     .get();
 
   const errorMessage = error instanceof Error ? error.message : error ? String(error) : undefined;
-  await db
-    .update(deliveryShipments)
-    .set({
+  await shipmentMove(db, ShipmentStatus.RECONCILE_REQUIRED, "store", eq(deliveryShipments.id, shipmentId), {
       ...(data?.externalId !== undefined ? { externalId: data.externalId } : {}),
       ...(data?.trackingId !== undefined ? { trackingId: data.trackingId } : {}),
-      status: ShipmentStatus.RECONCILE_REQUIRED,
       rawStatus: reason,
       metadata: mergeShipmentMetadata(existing?.metadata, {
         ...(data?.metadata ?? {}),
@@ -295,9 +283,7 @@ export async function markShipmentReconciliationRequired(
           detectedAt: new Date().toISOString(),
         },
       }),
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(eq(deliveryShipments.id, shipmentId));
+  });
 }
 
 /**
@@ -659,18 +645,17 @@ export async function createShipment(
     try {
       const trackingId = shipmentResult.data.trackingId;
       const trackingUrl = trackingId && courier.trackingUrl ? courier.trackingUrl(trackingId) : null;
-      await db
-        .update(deliveryShipments)
-        .set({
-          externalId: booked.externalId,
-          trackingId,
-          ...(trackingUrl ? { trackingUrl } : {}),
-          status: booked.status || "pending",
-          rawStatus: booked.rawStatus || "pending",
-          metadata: JSON.stringify(booked.details ?? {}),
-          updatedAt: sql`unixepoch()`,
-        })
-        .where(eq(deliveryShipments.id, shipmentId));
+      // The courier's answer to its booking is its first report. A row the
+      // sweep held for staff meanwhile refuses it and keeps waiting for them,
+      // with the booking's ids (below).
+      const written = await shipmentMove(db, booked.status, "courier", eq(deliveryShipments.id, shipmentId), {
+        externalId: booked.externalId,
+        trackingId,
+        ...(trackingUrl ? { trackingUrl } : {}),
+        rawStatus: booked.rawStatus || booked.status,
+        metadata: JSON.stringify(booked.details ?? {}),
+      }).returning({ id: deliveryShipments.id });
+      if (written.length === 0) throw new Error("The shipment left creating before the courier answered.");
       return { ...shipmentResult, shipmentId };
     } catch {
       try {
@@ -694,15 +679,13 @@ export async function createShipment(
   }
 
   try {
-    await db
-      .update(deliveryShipments)
-      .set({
-        status: "failed",
-        rawStatus: "provider_rejected",
-        metadata: JSON.stringify({ error: shipmentResult.message }),
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(eq(deliveryShipments.id, shipmentId));
+    // A certain refusal: the courier booked nothing.
+    const rejected = await shipmentMove(db, ShipmentStatus.FAILED, "courier", eq(deliveryShipments.id, shipmentId), {
+      rawStatus: "provider_rejected",
+      metadata: JSON.stringify({ error: shipmentResult.message }),
+    }).returning({ id: deliveryShipments.id });
+    // The sweep held the row for staff meanwhile: it keeps waiting for them, and the caller hears so.
+    if (rejected.length === 0) return { ...shipmentResult, shipmentId, reconciliationRequired: true };
     return { ...shipmentResult, shipmentId };
   } catch {
     return {
@@ -819,7 +802,9 @@ export async function checkShipmentStatus(
   if (orderClaim) assertNoActiveShipmentClaim(orderClaim);
   // A reconciliation waits for staff, as a courier push does: only its own
   // commands move the shipment on (they re-check the courier themselves).
-  if (shipment.status === ShipmentStatus.RECONCILE_REQUIRED) {
+  // A shipment held for a courier's report may be refreshed: what the courier
+  // says now is kept with the hold, so staff decide on its latest word.
+  if (shipment.status === ShipmentStatus.RECONCILE_REQUIRED && shipment.rawStatus !== COURIER_REPORT_HELD) {
     throw new ConflictError("This shipment waits for staff to reconcile it. Use Reconcile on its order; a refresh changes nothing until then.");
   }
 
@@ -842,7 +827,7 @@ export async function checkShipmentStatus(
   try {
     const { courier, settings } = await requireCourierSettings(provider, encryptionKey, couriers);
 
-    let statusResult: { status: string; rawStatus: string; metadata: Record<string, unknown> };
+    let statusResult: { status: CourierShipmentStatus; rawStatus: string; metadata: Record<string, unknown> };
     let answered = true;
     try {
       const tracking = await courier.trackShipment({ externalId: shipment.externalId }, courierCall(settings, db));
@@ -850,35 +835,29 @@ export async function checkShipmentStatus(
     } catch (error: unknown) {
       const failure = providerErrorOf(error);
       if (!failure) throw error;
-      // The courier could not answer: the shipment says so until the next check.
+      // The courier could not answer: an open shipment says so until the next check.
       statusResult = { status: ShipmentStatus.UNKNOWN, rawStatus: "error", metadata: { error: failure.message } };
       answered = false;
     }
 
-    // Update shipment in database. A reconciliation that began meanwhile is
-    // kept; no answer is not news either: it never replaces a parcel's last
-    // word (checked in the write, so a courier push that lands meanwhile is
-    // kept too).
-    const written = await db
-      .update(deliveryShipments)
-      .set({
+    let stored: { status: string; rawStatus: string } = statusResult;
+    if (answered) {
+      // The courier's answer is its report, applied as a push is: a settled
+      // parcel takes only a correction, and any other report holds it for
+      // staff with the report; a shipment held meanwhile keeps waiting.
+      const applied = await applyCourierReport(db, shipmentId, {
         status: statusResult.status,
         rawStatus: statusResult.rawStatus,
-        updatedAt: sql`unixepoch()`,
-        metadata: mergeShipmentMetadata(shipment.metadata, statusResult.metadata || {}),
-      })
-      .where(and(
-        eq(deliveryShipments.id, shipmentId),
-        notInArray(deliveryShipments.status, answered ? [ShipmentStatus.RECONCILE_REQUIRED] : [...NO_ANSWER_KEEPS_STATUSES]),
-      ))
-      .returning({ id: deliveryShipments.id });
-    if (written.length === 0) {
-      const [kept] = await db
-        .select({ status: deliveryShipments.status, rawStatus: deliveryShipments.rawStatus })
-        .from(deliveryShipments)
-        .where(eq(deliveryShipments.id, shipmentId));
-      if (!kept) throw new NotFoundError(`Shipment with ID ${shipmentId} not found`);
-      statusResult = { status: kept.status, rawStatus: kept.rawStatus ?? kept.status, metadata: statusResult.metadata };
+        details: statusResult.metadata,
+      });
+      if (applied.outcome !== "applied") stored = await storedStatus(db, shipmentId);
+    } else {
+      // No answer is no report: an open shipment reads `unknown`, a settled or held one keeps its last word.
+      const written = await shipmentMove(db, ShipmentStatus.UNKNOWN, "courier", eq(deliveryShipments.id, shipmentId), {
+        rawStatus: statusResult.rawStatus,
+        metadata: mergeShipmentMetadata(shipment.metadata, statusResult.metadata),
+      }).returning({ id: deliveryShipments.id });
+      if (written.length === 0) stored = await storedStatus(db, shipmentId);
     }
 
     return {
@@ -886,8 +865,8 @@ export async function checkShipmentStatus(
       externalId: shipment.externalId,
       trackingId: shipment.trackingId,
       orderId: shipment.orderId,
-      status: statusResult.status,
-      rawStatus: statusResult.rawStatus,
+      status: stored.status,
+      rawStatus: stored.rawStatus,
       metadata: statusResult.metadata,
     };
   } catch (error: unknown) {
@@ -898,6 +877,15 @@ export async function checkShipmentStatus(
       `Failed to check shipment status: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+}
+
+async function storedStatus(db: Database, shipmentId: string): Promise<{ status: string; rawStatus: string }> {
+  const [kept] = await db
+    .select({ status: deliveryShipments.status, rawStatus: deliveryShipments.rawStatus })
+    .from(deliveryShipments)
+    .where(eq(deliveryShipments.id, shipmentId));
+  if (!kept) throw new NotFoundError(`Shipment with ID ${shipmentId} not found`);
+  return { status: kept.status, rawStatus: kept.rawStatus ?? kept.status };
 }
 
 /**

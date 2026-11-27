@@ -579,7 +579,7 @@ export function renderConversationMessages(
   ${dayLine}
   <div class="flex ${mine ? "justify-end" : "justify-start"}"><div class="min-w-0 max-w-[min(36rem,90%)]">
     <p data-message-author${showAuthor ? "" : " hidden"} class="mb-1 text-xs text-muted-foreground ${mine ? "text-end" : "text-start"}">${escapeHtml(author)}${timeTag ? ` · ${timeTag}` : ""}</p>
-    <div class="${bubble}"><span class="sr-only">${escapeHtml(author)}: </span>${body}${renderAttachments(message, options, mine)}${renderProducts(products)}</div>
+    <div data-part="${mine ? "message-own" : "message"}" class="${bubble}"><span class="sr-only">${escapeHtml(author)}: </span>${body}${renderAttachments(message, options, mine)}${renderProducts(products)}</div>
   </div></div>
 </li>`;
   }).join("");
@@ -604,7 +604,7 @@ export function renderInboxItems(items: readonly BuyerConversationSummary[]): st
     const day = (value: number) => formatStoreDateTime(value, language, { dateStyle: "short" });
     const compactTime = item.lastMessageAt ? formatStoreDateTime(item.lastMessageAt * 1000, language, day(item.lastMessageAt * 1000) === day(Date.now()) ? { timeStyle: "short" } : { month: "short", day: "numeric" }) : "";
     return `<li>
-  <a href="${escapeHtml(href)}" data-astro-prefetch="false" class="flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+  <a href="${escapeHtml(href)}" data-astro-prefetch="false" data-part="card" class="flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
     <span aria-hidden="true" class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${unread ? "bg-primary" : "bg-transparent"}"></span>
     <span class="min-w-0 flex-1">
       <span class="block break-words text-sm ${unread ? "font-semibold" : "font-medium"} text-foreground">${escapeHtml(conversationTitle(item))}</span>

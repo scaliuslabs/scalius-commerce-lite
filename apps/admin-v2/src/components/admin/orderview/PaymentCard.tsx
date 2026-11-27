@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { orderHeldAmount } from "@scalius/shared/order-admin-actions";
 import { refundRecordedByHand } from "@scalius/shared/order-payment-methods";
+import { PAYMENT_HOLDING_STATUSES } from "@scalius/shared/payment-record-state";
 import { providerLabel } from "~/i18n/provider-copy";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { InlineError } from "~/components/admin/states/InlineError";
@@ -73,7 +74,7 @@ function isRecoveryLinkGateway(value: string | null | undefined): boolean {
 function inferRecoveryLinkEligibility(order: Order, attempts: SessionAttempt[], payments: Payment[]): boolean {
   if (!isRecoveryLinkGateway(order.paymentRecovery?.gateway ?? order.paymentMethod)) return false;
   if (order.status !== "incomplete" || Number(order.paidAmount ?? 0) > 0) return false;
-  if (payments.some((payment) => ["pending", "confirmed", "succeeded"].includes(payment.status))) return false;
+  if (payments.some((payment) => (PAYMENT_HOLDING_STATUSES as readonly string[]).includes(payment.status))) return false;
   const hasFailedEvidence = payments.some((payment) => payment.status === "failed")
     || attempts.some((attempt) => attempt.status === "failed" || attempt.staleProcessing);
   const recoveryState = order.paymentRecovery?.state;

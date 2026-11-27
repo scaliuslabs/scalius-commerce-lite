@@ -34,7 +34,7 @@ import { z } from "zod";
 export { privateTokensSchema, type PrivateTokens } from "./private-schema";
 import { buyerUiButtonProminenceIssues, PRIVATE_UI_BUTTON_UNDER } from "./private-buyer-ui";
 import { STOREFRONT_THEME_COLOR_KEYS, STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE, storefrontThemeColorDistance, storefrontThemeContrast, storefrontThemeHoverSurface, storefrontThemeMix, type StorefrontThemeColors } from "./contrast";
-import { storefrontPagePaintColors, storefrontPagePaintCss, storefrontThemeFocusRing, type StorefrontPagePaint } from "./tokens";
+import { STOREFRONT_RATING_COLOR, storefrontPagePaintColors, storefrontPagePaintCss, storefrontThemeFocusRing, type StorefrontPagePaint } from "./tokens";
 import { privateTokensSchema, type PrivateTokens } from "./private-schema";
 import {
   PRIVATE_BUYER_UI_STYLES,
@@ -68,6 +68,18 @@ export const PRIVATE_EDGE_MIN_WIDTH = 2;
  * outlined button, Go back's look, never the store's action.
  */
 export const PRIVATE_EDGE_FILL_DISTANCE = STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE;
+
+/**
+ * How far a hover surface stands from the surface it replaces (CIE76) to be one a buyer sees: nearer, it is no hover,
+ * and the row's surface is its hover (its hovered controls are underlined instead, `--pt-hd`).
+ */
+export const PRIVATE_HOVER_DISTANCE = 3;
+
+/** A row's hover surface: the store's, where it is visibly apart from every point of the surface, else the surface itself. */
+function visibleHover(surface: readonly string[], words: readonly string[]): string {
+  const hover = storefrontThemeHoverSurface(surface, words);
+  return surface.every((point) => storefrontThemeColorDistance(point, hover) >= PRIVATE_HOVER_DISTANCE) ? hover : surface[0]!;
+}
 
 const HEX = /^#[0-9a-f]{6}$/;
 const oneColorSchema = /* @__PURE__ */ (() => z.union([z.enum(STOREFRONT_THEME_COLOR_KEYS), z.string().regex(HEX)]))();
@@ -429,6 +441,18 @@ function prominenceIssues(page: PrivatePageKey, tokens: Record<string, Values>):
  * palette the two are clearly apart: 3:1 (a mark's floor) or `PRIVATE_EDGE_FILL_DISTANCE` (a filled button's fill from what is around it).
  */
 function chosenIssues(page: PrivatePageKey, tables: readonly PrivateTokenTable[]): PrivateTokenIssue[] {
+  // Every row a choice is drawn on (private-anatomy.ts `chosen`: the account's cards): the chosen option's link-coloured
+  // edge clearly apart from the others' border, in each palette.
+  for (const [name, style] of Object.entries(PRIVATE_PAGES[page].styles as Readonly<Record<string, PrivateStyleSpec>>)) {
+    if (!style.chosen) continue;
+    for (const table of tables) for (const row of table.rows.filter((each) => each.key === name && each.from.link !== undefined && each.from.border !== undefined)) {
+      const apart = storefrontThemeColorDistance(row.link, row.border);
+      const ratio = storefrontThemeContrast(row.link, row.border);
+      if (apart < PRIVATE_EDGE_FILL_DISTANCE && ratio < PRIVATE_MARK_CONTRAST_FLOOR) {
+        return [{ path: ["privatePages", "tokens", page, row.from.link ?? row.from.border ?? name], reason: "contrast", message: `${name}: a chosen option's edge (${row.link}, its link colour) reads ${ratio.toFixed(2)}:1 and ${apart.toFixed(1)} apart from an unchosen one's border (${row.border}) in the ${table.palette.scheme} colours: a buyer tells which is chosen at ${PRIVATE_MARK_CONTRAST_FLOOR}:1 or ${PRIVATE_EDGE_FILL_DISTANCE} apart. Set link and border clearly apart.` }];
+      }
+    }
+  }
   if (!Object.hasOwn(PRIVATE_PAGES[page].styles, "payment-method")) return [];
   for (const table of tables) {
     const card = ["payment-method", "payment", "page"].map((key) => table.rows.find((row) => row.key === key)).find(Boolean);
@@ -521,6 +545,16 @@ export interface PrivateTokenRow {
    */
   boundary: "fill" | "edge" | null;
   bordered: boolean;
+  /**
+   * A filled button found by its fill on some of what is around it and by its drawn edge on the rest (a yellow
+   * button with a dark edge on a light card and in a dark dialog): the surfaces around it where its edge finds it.
+   * Absent where one way finds it everywhere (its boundary says which).
+   */
+  edgeOn?: string[];
+  /** Its words are a graphic's marks (a rating's stars): its text and muted colours read at 3:1, not 4.5:1. */
+  graphic?: true;
+  /** It always paints its surface (private-anatomy.ts `opaque`: it may stand in the top layer). */
+  opaque?: true;
   /** The theme key that set each cell, for a refusal's path. */
   from: Partial<Record<PrivateRowColour | "surface", string>>;
   /**
@@ -581,7 +615,7 @@ interface Place {
   key: string;
   selector: string;
   kind: PrivateStyleKind;
-  surface: PrivatePaletteRole | "under";
+  surface: PrivateStyleSpec["surface"];
   ink: PrivatePaletteRole;
   /** The row beneath it, or `boxes`: every box of the page. */
   parent: string | "boxes" | null;
@@ -604,6 +638,14 @@ interface Place {
   share?: PrivateTokenRow["share"];
   /** private-anatomy.ts `boundary` (a field's row: `edge`). */
   boundary?: "fill" | "edge";
+  /** private-anatomy.ts `bare`: a box of words only, never one a control drawn anywhere stands on. */
+  bare?: true;
+  /** private-anatomy.ts `graphic`: its words are marks, read at 3:1. */
+  graphic?: true;
+  /** private-anatomy.ts `chosen`: a choice is drawn on it, its link and border apart. */
+  chosen?: true;
+  /** private-anatomy.ts `opaque`: it always paints its surface (it may stand in the top layer). */
+  opaque?: true;
 }
 
 /** Every row of the page as the arrangement places it, in the order the CSS writes them (an inner row after the rows it can share an element with). */
@@ -613,7 +655,9 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
   const styles = Object.entries(spec.styles);
   const selectorOf = (style: PrivateStyleSpec) => style.absolute ? style.selector : style.selector ? `${root} ${style.selector}` : root;
   const place = (key: string, style: PrivateStyleSpec, parent: Place["parent"]) => {
-    places.push({ key, selector: selectorOf(style), kind: style.kind, surface: style.surface, ink: style.ink, parent, nested: parent !== "boxes" && parent !== null && !style.absolute, base: null, sources: [key], ...(style.boundary ? { boundary: style.boundary } : {}) });
+    // A box that holds fields (a card, a conversation with its reply form) is a box a field row stands in.
+    if (style.fields) holders.add(key);
+    places.push({ key, selector: selectorOf(style), kind: style.kind, surface: style.surface, ink: style.ink, parent, nested: parent !== "boxes" && parent !== null && !style.absolute, base: null, sources: [key], ...(style.boundary ? { boundary: style.boundary } : {}), ...(style.bare ? { bare: true as const } : {}), ...(style.chosen ? { chosen: true as const } : {}), ...(style.opaque ? { opaque: true as const } : {}) });
   };
   // The rows that hold fields: a part that draws them (on its box, else on what it sits on), a dialog, an app's target.
   const holders = new Set<string>();
@@ -731,7 +775,7 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
   place(pageKey, spec.styles[pageKey]!, null);
   // The page's frame, then the fields and buttons drawn anywhere, then the arrangement, then the dialogs and the store's chrome with its controls.
   for (const [name, style] of styles) if (style.on === pageKey && !style.absolute) place(name, style, pageKey);
-  for (const [name, style] of styles) if (!style.on && !style.part && !style.item && !style.layout && !style.element && name !== pageKey) place(name, style, "boxes");
+  for (const [name, style] of styles) if (!style.on && !style.part && !style.item && !style.layout && !style.element && !style.within && name !== pageKey) place(name, style, "boxes");
   const frame = places[1]?.key ?? pageKey;
   walk(context.layout, frame, undefined);
   for (const [name, style] of styles) {
@@ -756,6 +800,16 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
       places.push({
         key: `${name}/${holder}`, selector: `${byKey.get(holder)!.selector} ${style.element}`, kind: style.kind, surface: style.surface, ink: style.ink, parent: holder, nested: true, base: null, sources: [name],
         ...(painted.has(holder) ? { more: painted.get(holder)! } : {}), ...(style.kind === "text" ? { writes: "leaf" as const } : {}),
+      });
+    }
+  }
+  // A style drawn in named boxes wherever the page draws it (a rating): a row in each, outer before inner.
+  for (const [name, style] of styles) {
+    if (!style.within) continue;
+    for (const holder of style.within.filter((key) => byKey.has(key)).sort((a, b) => depth(a) - depth(b))) {
+      places.push({
+        key: `${name}/${holder}`, selector: `${byKey.get(holder)!.selector} ${style.selector}`, kind: style.kind, surface: style.surface, ink: style.ink, parent: holder, nested: true, base: null, sources: [name],
+        ...(style.graphic ? { graphic: true as const } : {}),
       });
     }
   }
@@ -804,9 +858,12 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     return HEX.test(String(one)) ? String(one) : colors[one as keyof StorefrontThemeColors];
   };
   const byKey = new Map<string, PrivateTokenRow>();
-  // Every box of the page, gathered once: the rows drawn anywhere are resolved after all of them.
+  // Every box of the page a store's control drawn anywhere may stand on, gathered once (the rows drawn anywhere are
+  // resolved after all of them): never an app's box (an app draws its own buttons there, rows of their own), nor a
+  // box of words only (a message, an add-on's lines: `bare`).
+  const bare = new Set(places.filter((place) => place.bare).map((place) => place.key));
   let allBoxes: PrivateTokenRow[] | null = null;
-  const boxes = () => (allBoxes ??= [...byKey.values()].filter((row) => row.kind === "box"));
+  const boxes = () => (allBoxes ??= [...byKey.values()].filter((row) => row.kind === "box" && !row.key.startsWith("ui.") && !bare.has(row.key)));
   const resolve = (place: Place): PrivateTokenRow => {
     const { values, from: set } = merged(tokens, place.sources);
     const parents = place.parent === "boxes" ? boxes() : place.parent ? [place.parent, ...place.more ?? []].map((key) => byKey.get(key)!) : [];
@@ -826,6 +883,10 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
       paint = hex(values.background);
       surface = [paint];
       from.surface = set.background;
+    } else if ((place.surface === "under-hover" || place.surface === "under-link") && parent) {
+      // A surface taken from the row it sits in (a message from its conversation): the page's own look, never the palette's.
+      paint = place.surface === "under-hover" ? parent.hover : parent.link;
+      surface = [paint];
     } else if (place.surface === "under") {
       // On every row it may stand on.
       surface = parents.length === 1 ? parents[0]!.surface : parents.length > 1 ? [...new Set(parents.flatMap((row) => row.surface))] : [colors.background];
@@ -839,14 +900,14 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     } else if (place.boundary === "fill") {
       // A filled button the theme leaves at its palette's fill: that fill where it reads on what is around it, else
       // the palette's inverse (its words' colour), else black or white, so a dark dialog's Confirm is still a button.
-      paint = readable([colors[place.surface], colors[place.ink]], parents.flatMap((row) => row.surface), PRIVATE_MARK_CONTRAST_FLOOR);
+      paint = readable([colors[place.surface as PrivatePaletteRole], colors[place.ink]], parents.flatMap((row) => row.surface), PRIVATE_MARK_CONTRAST_FLOOR);
       surface = [paint];
     } else {
-      paint = colors[place.surface];
+      paint = colors[place.surface as PrivatePaletteRole];
       surface = [paint];
     }
     // A row with no surface of its own reads first what the row beneath reads on that same surface.
-    const under = place.surface === "under" && !fill && !values.background ? parent : null;
+    const under = (place.surface === "under" || place.surface === "under-hover" || place.surface === "under-link") && !fill && !values.background ? parent : null;
     const cell = cellOf(place.ink);
     const take = (name: PrivateRowColour, token: PrivateTokenName | null, candidates: ReadonlyArray<string | null | undefined>, backs: readonly string[], floor: number) => {
       const value = token ? values[token] : undefined;
@@ -857,9 +918,18 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
       return readable(candidates, backs, floor);
     };
     const own = (name: "text" | "muted" | "link" | "error") => (cell === name ? "text" : name === "text" ? null : name) as PrivateTokenName | null;
-    const text = take("text", own("text"), [under?.text, colors[cell === "text" ? place.ink : "foreground"], colors.foreground, colors.background], surface, PRIVATE_CONTRAST_FLOOR);
-    const muted = take("muted", own("muted"), [under?.muted, colors["muted-foreground"], text], surface, PRIVATE_CONTRAST_FLOOR);
-    const link = take("link", own("link"), [under?.link, colors.primary, text], surface, PRIVATE_CONTRAST_FLOOR);
+    // A graphic's marks (a rating's stars) read at 3:1: its colour the rating amber, else that amber toward the page's words.
+    const wordFloor = place.graphic ? PRIVATE_MARK_CONTRAST_FLOOR : PRIVATE_CONTRAST_FLOOR;
+    const text = take("text", own("text"), place.graphic
+      ? [STOREFRONT_RATING_COLOR, ...[0.2, 0.35, 0.5, 0.65].map((weight) => storefrontThemeMix(STOREFRONT_RATING_COLOR, parent?.text ?? colors.foreground, weight))]
+      : [under?.text, colors[cell === "text" ? place.ink : "foreground"], colors.foreground, colors.background], surface, wordFloor);
+    const muted = take("muted", own("muted"), [under?.muted, colors["muted-foreground"], text], surface, wordFloor);
+    // A choice's row (`chosen`): the chosen option's edge (its link) and the others' (its border) clearly apart. A default
+    // is found apart from what the theme set (or from the other default); only a pair the theme set both of is refused.
+    const apart = (a: string, b: string) => storefrontThemeContrast(a, b) >= PRIVATE_MARK_CONTRAST_FLOOR || storefrontThemeColorDistance(a, b) >= PRIVATE_EDGE_FILL_DISTANCE;
+    const chosenBorder = place.chosen && values.border !== undefined ? hex(values.border) : null;
+    const linkCandidates = [under?.link, colors.primary, text, colors.foreground, "#1d4ed8", "#93c5fd", "#000000", "#ffffff"];
+    const link = take("link", own("link"), chosenBorder ? linkCandidates.filter((colour) => colour && apart(colour, chosenBorder)) : linkCandidates.slice(0, 3), surface, PRIVATE_CONTRAST_FLOOR);
     const error = take("error", own("error"), [under?.error, colors.destructive, text], surface, PRIVATE_CONTRAST_FLOOR);
     // What a field's marks and a control's focus ring are drawn on: the rows beneath (a page's own surface).
     const around = parents.length > 0 ? parents.flatMap((row) => row.surface) : surface;
@@ -868,23 +938,29 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     const ring = take("ring", "ring", [under?.ring, storefrontThemeFocusRing(colors), text, colors.foreground, colors.background], marked ? around : surface, PRIVATE_MARK_CONTRAST_FLOOR);
     // A field's and an outlined control's border is how a buyer finds it: it reads on what is around it.
     const edgeBorder = () => take("border", "border", [colors.input, colors.border, muted, text], around, PRIVATE_MARK_CONTRAST_FLOOR);
-    // A filled button is found by its fill, or by a drawn edge: a solid border the theme sets at least
-    // PRIVATE_EDGE_MIN_WIDTH wide, reading on every point around it, over a fill still clearly a colour of its own.
+    // A filled button is found, on each surface around it, by its fill where that reads there, else by a drawn edge:
+    // a solid border the theme sets at least PRIVATE_EDGE_MIN_WIDTH wide, reading on that surface, over a fill still
+    // clearly a colour of its own there. Found by its edge everywhere, it is an edge; on some surfaces only, its fill
+    // is read on the rest (`edgeOn`).
     const width = values["border-width"];
-    const edged = place.boundary === "fill" && typeof width === "number" && width >= PRIVATE_EDGE_MIN_WIDTH && (values["border-style"] ?? "solid") === "solid"
-      && ((drawn: string) => around.every((back) => storefrontThemeContrast(drawn, back) >= PRIVATE_MARK_CONTRAST_FLOOR))(edgeBorder())
-      && surface.every((point) => around.every((back) => storefrontThemeColorDistance(point, back) >= PRIVATE_EDGE_FILL_DISTANCE));
+    const solidEdge = place.boundary === "fill" && typeof width === "number" && width >= PRIVATE_EDGE_MIN_WIDTH && (values["border-style"] ?? "solid") === "solid";
+    const drawnEdge = solidEdge ? edgeBorder() : null;
+    const edgeOn = drawnEdge === null ? [] : [...new Set(around)].filter((back) => !surface.every((point) => storefrontThemeContrast(point, back) >= PRIVATE_MARK_CONTRAST_FLOOR)
+      && storefrontThemeContrast(drawnEdge, back) >= PRIVATE_MARK_CONTRAST_FLOOR && surface.every((point) => storefrontThemeColorDistance(point, back) >= PRIVATE_EDGE_FILL_DISTANCE));
+    const edged = edgeOn.length > 0 && edgeOn.length === new Set(around).size;
     const boundary = place.kind === "field" || edged ? "edge" : place.boundary ?? null;
-    const border = boundary === "edge" ? edgeBorder() : take("border", "border", [under?.border ?? colors.border], surface, 1);
+    const border = boundary === "edge" ? edgeBorder() : drawnEdge ?? take("border", "border", place.chosen
+      ? [under?.border, colors.border, colors.input, muted, text, "#000000", "#ffffff"].filter((colour) => colour && apart(colour, link))
+      : [under?.border ?? colors.border], surface, 1);
     const field = place.kind === "field" || place.parent === null;
     const placeholder = field ? take("placeholder", "placeholder", [colors["muted-foreground"], muted, text], surface, PRIVATE_CONTRAST_FLOOR) : null;
     const invalid = field ? take("invalid", "invalid", [colors.destructive, error, text], around, PRIVATE_MARK_CONTRAST_FLOOR) : null;
     const cells = { text, muted, link, error };
     const row: PrivateTokenRow = {
       key: place.key, sources: place.sources, selector: place.selector, kind: place.kind, parents: parents.map((each) => each.key), nested: place.nested, base: place.base,
-      paint, gradient, surface, ink: cells[cell], inkCell: cell, text, muted, link, error, border, ring, hover: storefrontThemeHoverSurface(paint !== null && !gradient ? [paint] : surface, [text, cells[cell]]), placeholder, invalid,
-      boundary, bordered: values["border-width"] !== 0 && values["border-style"] !== "none", from,
-      writes: null, ...(place.share ? { share: place.share } : {}),
+      paint, gradient, surface, ink: cells[cell], inkCell: cell, text, muted, link, error, border, ring, hover: visibleHover(paint !== null && !gradient ? [paint] : surface, [text, cells[cell], ...(place.kind === "box" && !place.writes ? [muted, link] : [])]), placeholder, invalid,
+      boundary, bordered: values["border-width"] !== 0 && values["border-style"] !== "none", ...(boundary === "fill" && edgeOn.length > 0 ? { edgeOn } : {}), from,
+      writes: null, ...(place.share ? { share: place.share } : {}), ...(place.graphic ? { graphic: true as const } : {}), ...(place.opaque ? { opaque: true as const } : {}),
     };
     return place.writes ? readsBeneath(row, place.writes, cell, parent, Boolean(fill || values.background)) : row;
   };
@@ -916,7 +992,7 @@ export function privateTokenTables(
   for (const [name, style] of Object.entries(spec.styles)) {
     // A target only a host layout draws (the fold's bar) has no row where the arrangement has no such layout;
     // a field style's rows are its holders' (`input/details-form`).
-    if (keys.has(name) || (style.element && [...keys].some((key) => key.startsWith(`${name}/`))) || (style.layout && !layouts.has(style.layout))) continue;
+    if (keys.has(name) || ((style.element || style.within) && [...keys].some((key) => key.startsWith(`${name}/`))) || (style.layout && !layouts.has(style.layout))) continue;
     issues.push({ path: ["privatePages", "tokens", page, name], reason: "no_row", message: `${name}: the page draws it but its colour table has no row for it, so its colours could not be checked.` });
   }
   return { tables: context.palettes.map((palette) => ({ palette, rows: resolveRows(places, tokens, palette) })), issues };
@@ -933,23 +1009,28 @@ export function privateTablePairs(table: PrivateTokenTable): PrivateTokenPair[] 
     const add = (what: PrivateRowColour, fore: string | null, backs: readonly string[], floor: number) => {
       if (fore && (!row.writes || row.writes.includes(what))) for (const back of new Set(backs)) pairs.push({ key: row.key, what, fore, back, floor });
     };
-    for (const what of ["text", "muted", "link", "error", "placeholder"] as const) add(what, row[what], row.surface, PRIVATE_CONTRAST_FLOOR);
+    // A graphic's marks (a rating's filled and empty stars) read at 3:1 (WCAG 1.4.11), words at 4.5:1.
+    for (const what of ["text", "muted", "link", "error", "placeholder"] as const) add(what, row[what], row.surface, row.graphic && (what === "text" || what === "muted") ? PRIVATE_MARK_CONTRAST_FLOOR : PRIVATE_CONTRAST_FLOOR);
     add("ring", row.ring, marked ? around : row.surface, PRIVATE_MARK_CONTRAST_FLOOR);
     // An edge is found by its border where it draws one, else by its own fill; a filled button by its fill, or
     // where it draws a solid edge of its own over a fill clearly apart, as an edge (WCAG 1.4.11): a pair the check
     // reads is a pair the CSS draws.
     if (row.boundary === "edge" && row.bordered) add("border", row.border, around, PRIVATE_MARK_CONTRAST_FLOOR);
+    else if (row.edgeOn) add("border", row.border, row.edgeOn, PRIVATE_MARK_CONTRAST_FLOOR);
     else add("border", row.border, row.surface, 1);
     if (row.boundary === "fill" || (row.boundary === "edge" && !row.bordered)) {
-      for (const fore of new Set(row.surface)) for (const back of new Set(around)) pairs.push({ key: row.key, what: "fill", fore, back, floor: PRIVATE_MARK_CONTRAST_FLOOR });
+      // A filled button found by its edge on some surfaces is read by its fill on the others.
+      for (const fore of new Set(row.surface)) for (const back of new Set(around)) if (!row.edgeOn?.includes(back)) pairs.push({ key: row.key, what: "fill", fore, back, floor: PRIVATE_MARK_CONTRAST_FLOOR });
     }
     add("invalid", row.invalid, around, PRIVATE_MARK_CONTRAST_FLOOR);
     // A hovered control paints the hover surface under its words.
     // (A hover that is a point of the surface adds no pair: its words are checked on the surface.)
     // A row that writes only some cells and paints nothing hovers (a control: an app's button) on the hover of the row
     // it stands on: its words are checked there.
-    const hovers = !row.writes || row.writes.includes("hover") || (row.kind === "control" && row.parents.length <= 1);
-    if (!row.surface.includes(row.hover) && hovers) for (const word of new Set([row.text, row.ink])) pairs.push({ key: row.key, what: "hover", fore: word, back: row.hover, floor: PRIVATE_CONTRAST_FLOOR });
+    // A graphic's marks paint no hover surface under them (a star the pointer is on takes the filled colour).
+    const hovers = !row.graphic && (!row.writes || row.writes.includes("hover") || (row.kind === "control" && row.parents.length <= 1));
+    // Every word colour the row draws reads on its hover surface too (a card that is a link: its muted and link words).
+    if (!row.surface.includes(row.hover) && hovers) for (const word of new Set([row.text, row.ink, ...(row.kind === "box" && !row.writes ? [row.muted, row.link] : [])])) pairs.push({ key: row.key, what: "hover", fore: word, back: row.hover, floor: PRIVATE_CONTRAST_FLOOR });
   }
   return pairs;
 }
@@ -1002,11 +1083,15 @@ const CELL_PROPERTY = /* @__PURE__ */ (() => Object.fromEntries(CELL_PROPERTIES)
 export function privateRowDeclarations(row: PrivateTokenRow, parent: PrivateTokenRow | null, also: ReadonlySet<string> = NONE): string {
   if (row.writes) return writtenDeclarations(row, row.writes);
   const inherited = row.nested && (row.kind === "box" || row.kind === "text") && !row.key.startsWith("ui.") ? parent : null;
-  const paints = row.paint !== null && (also.has("background-color") || !(inherited && inherited.surface.length === 1 && inherited.paint === row.paint && !row.gradient));
+  const paints = row.paint !== null && (row.opaque || also.has("background-color") || !(inherited && inherited.surface.length === 1 && inherited.paint === row.paint && !row.gradient));
+  // Where no hover surface keeps every word readable (the hover is the surface), a hovered control is underlined instead.
+  const hoverMark = (each: PrivateTokenRow) => (each.surface.includes(each.hover) ? "underline" : "none");
+  const hoverDeclaration = hoverMark(row) !== (inherited ? hoverMark(inherited) : "none") || also.has("--pt-hd") ? `--pt-hd:${hoverMark(row)}` : "";
   return [
     paints ? `background-color:${row.paint}` : "",
     row.gradient ? `background-image:${row.gradient}` : "",
     `color:${row.ink}`,
+    hoverDeclaration,
     row.kind === "field" ? `border-color:${row.border}` : "",
     ...CELL_PROPERTIES.map(([cell, property]) => row[cell] && (row[cell] !== inherited?.[cell] || also.has(property)) ? `${property}:${row[cell]}` : ""),
   ].filter(Boolean).join(";");
@@ -1284,10 +1369,11 @@ export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [decla
   ].map((name) => [name, ["background-color:transparent"]] as const),
   // A hover surface is the nearest row's: visibly not its surface, its words readable on it.
   ...["hover:bg-background/70", "hover:bg-muted", "hover:bg-muted/40", "hover:bg-muted/50", "hover:bg-primary-hover", "sm:hover:bg-muted/60"].map((name) => [name, ["background-color:var(--pt-h)", ":hover"]] as const),
-  ...["text-foreground", "text-card-foreground", "text-primary-foreground"].map((name) => [name, ["color:var(--pt-t)"]] as const),
-  ...["text-muted-foreground", "text-muted-foreground/60"].map((name) => [name, ["color:var(--pt-m)"]] as const),
+  ...["text-foreground", "text-card-foreground", "text-primary-foreground", "text-destructive-foreground"].map((name) => [name, ["color:var(--pt-t)"]] as const),
+  ...["text-muted-foreground", "text-muted-foreground/60", "text-muted-foreground/40"].map((name) => [name, ["color:var(--pt-m)"]] as const),
   ...["text-primary", "text-primary-ink"].map((name) => [name, ["color:var(--pt-l)"]] as const),
-  ...["text-destructive", "text-destructive-foreground"].map((name) => [name, ["color:var(--pt-e)"]] as const),
+  // A filled button's words are its row's own words (`text`), whatever its role; the error words are a row's `error`.
+  ["text-destructive", ["color:var(--pt-e)"]],
   ["hover:text-foreground", ["color:var(--pt-t)", ":hover"]],
   ["hover:text-muted-foreground", ["color:var(--pt-m)", ":hover"]],
   ["hover:text-primary", ["color:var(--pt-l)", ":hover"]],
@@ -1331,6 +1417,20 @@ export const PRIVATE_TOKEN_MODE_CLASSES: Readonly<Record<string, readonly [decla
   ["focus-visible:after:ring-ring", ["--tw-ring-color:var(--pt-r)", ":focus-visible"]],
   ["focus:border-primary", ["border-color:var(--pt-r)", ":focus"]],
   ["focus:ring-primary/20", ["--tw-ring-color:var(--pt-r)", ":focus"]],
+  // Every page of the account (its profile, inbox, warranties, reviews, gift cards and downloads): a tint paints
+  // nothing, a hover is the row's, a rule line its border, a faint star its muted words, a ring its focus ring.
+  ["bg-muted/30", ["background-color:transparent"]],
+  ...["hover:bg-destructive/10", "hover:bg-destructive/90"].map((name) => [name, ["background-color:var(--pt-h)", ":hover"]] as const),
+  ["bg-primary/30", ["background-color:var(--pt-b)"]],
+  ["focus-visible:ring-primary", ["--tw-ring-color:var(--pt-r)", ":focus-visible"]],
+  // The review form's star: its ring drawn while its radio has focus (a sibling's state): the colour is the row's ring always.
+  ["[input:focus-visible+&]:ring-ring", ["--tw-ring-color:var(--pt-r)"]],
+  ["focus:ring-primary/30", ["--tw-ring-color:var(--pt-r)", ":focus"]],
+  // The store's outlined button (components/ui/button.tsx, the receipt's Print): its hover the row's, its ring offset clear.
+  ["ring-offset-background", ["--tw-ring-offset-color:transparent"]],
+  ["hover:bg-accent/50", ["background-color:var(--pt-h)", ":hover"]],
+  ["hover:text-accent-foreground", ["color:var(--pt-t)", ":hover"]],
+  ["hover:border-accent/50", ["border-color:var(--pt-b)", ":hover"]],
 ]))();
 
 const classSelector = (name: string) => `.${name.replace(/[^a-zA-Z0-9_-]/g, (character) => `\\${character}`)}`;
@@ -1352,6 +1452,8 @@ function classRules(names: readonly string[]): string {
 }
 
 const SURFACE_CLASSES = /* @__PURE__ */ (() => Object.keys(PRIVATE_TOKEN_MODE_CLASSES).filter((name) => PRIVATE_TOKEN_MODE_CLASSES[name]![0] === "background-color:transparent"))();
+/** The classes that paint a row's hover surface under the pointer. */
+const HOVER_SURFACE_CLASSES = /* @__PURE__ */ (() => Object.keys(PRIVATE_TOKEN_MODE_CLASSES).filter((name) => PRIVATE_TOKEN_MODE_CLASSES[name]![0] === "background-color:var(--pt-h)" && PRIVATE_TOKEN_MODE_CLASSES[name]![1] === ":hover"))();
 
 /**
  * The host's CSS around a page's table in token mode (`PRIVATE_TOKEN_MODE`):
@@ -1387,8 +1489,15 @@ export const PRIVATE_TOKEN_MODE_CSS = {
     + `${PRIVATE_TOKEN_MODE} :where(${PRIVATE_OWN_LOOK_HOOKS.map((hook) => `[data-part="${hook}"]`).join(",")}){color:var(--color-foreground);--focus-ring-color:var(--color-ring)}`
     // The recommendations paint the palette's page under them: the store's own cards on the store's own page.
     + `${PRIVATE_TOKEN_MODE} :where([data-part="recommendations"]){background-color:var(--color-background)}`
-    + `${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}:focus-visible){outline-color:var(--pt-r)}${UI_WORDS_CSS}`,
+    + `${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}:focus-visible){outline-color:var(--pt-r)}${UI_WORDS_CSS}`
+    // A rating's stars (rating-stars.css): the filled ones its row's colour, the empty ones its muted colour.
+    + `${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}[data-part="rating"]){--sc-star-on:var(--pt-t);--sc-star-off:var(--pt-m)}`,
   after: `${classRules(Object.keys(PRIVATE_TOKEN_MODE_CLASSES).filter((name) => !SURFACE_CLASSES.includes(name)))}`
+    // A hovered control whose row has no hover surface that keeps its words readable: underlined instead (`--pt-hd`).
+    + `@media (hover:hover){${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}:is(${HOVER_SURFACE_CLASSES.map(classSelector).join(",")}):hover){text-decoration-line:var(--pt-hd,none)}}`
+    // A mark the store fills with its action colour that is no button and no part of its own (an unread dot, a progress
+    // bar's done steps): drawn in its row's link colour, which reads on the row (`action` is the store's buttons only).
+    + `${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}.bg-primary:not(button,a,[role="button"],[data-part])){background-color:var(--pt-l)}`
     + `${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}:is(input,textarea))::placeholder{color:var(--pt-p)}`
     // A field's error border, a field box's too (`data-field`: its input inside says it is invalid).
     + `${PRIVATE_TOKEN_MODE} :where(${IN_SCOPE}:is(input,select,textarea)[aria-invalid="true"],${IN_SCOPE}[data-field]:has([aria-invalid="true"])){border-color:var(--pt-i)}`,

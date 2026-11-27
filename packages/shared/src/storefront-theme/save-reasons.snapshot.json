@@ -1,6 +1,6 @@
 {
- "checker": 10,
- "policy": 1,
+ "checker": 11,
+ "policy": 2,
  "reasons": [
   "binding_object_types",
   "binding_source",

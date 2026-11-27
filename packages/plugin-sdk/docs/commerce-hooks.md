@@ -254,7 +254,7 @@ A third-party app calling a beta or internal operation gets `api_operation_not_s
 - **Instants.** Every instant is an ISO 8601 date-time string, in and out.
 - **Errors.** Every code is lower_snake (`price_changed`, `api_operation_not_stable`); an area prefix is `<area>_<code>`. `APP_ERROR_CODES` lists every code with its HTTP status. A code is only ever added and its status never changes.
 - **Money.** Integer `*Minor` fields with an ISO 4217 `currency` beside them. No stable operation takes a decimal amount.
-- **One representation.** A `*.get` or `*.list` returns the same shape as a webhook's `data`. A single resource answers `{ <singular>: Resource }`. Addresses are the `PostalAddress` shape. States are closed enums: decide money from `paymentStatus` and hand-over from `fulfillmentStatus`, not from the order's `status`.
+- **One representation.** A `*.get` or `*.list` returns the same shape as a webhook's `data`. A single resource answers `{ <singular>: Resource }`. Addresses are the `PostalAddress` shape. Decide money from `paymentStatus` and hand-over from `fulfillmentStatus`; `status` is the order's workflow stage. Every state and kind you read is an open list ([value lists](#value-lists-you-read-are-open)).
 - **One retry key.** Every stable mutation takes `idempotencyKey` (sent as the `Idempotency-Key` header, 8 to 200 printable characters). Stock moves require it.
   - A repeat by the same caller for the same operation within 24 hours returns the first response (`Idempotent-Replayed: true`).
   - The same key for a different request is 422 `idempotency_key_reused`. One still running is 409 `idempotency_in_progress`.
@@ -268,6 +268,43 @@ A third-party app calling a beta or internal operation gets `api_operation_not_s
   - another command on the same order still running: `return_command_in_progress` (retry with the same key); a segment name in use: `segment_name_taken`;
   - costs without their scope: `cost_scope_required` (purchase orders, and a webhook subscription to their topics, need `read_product_costs`).
 - **Checkout refusals.** What your functions answer can refuse a buyer's checkout, with the store's words for the buyer and these reasons for you: `properties_invalid` (an answer your line input refuses, or a key no active app declares), `purchase_option_unavailable` (an option no active app offers, or two of one app on a line), `checkout_app_unavailable` (an option's owning app did not answer its line), `purchase_options_conflict` (two owners priced one line) and `add_on_unavailable` (an add-on the line cannot take).
+
+### Value lists you read are open
+
+Every list of values you read may gain members in any release: a state, a kind, a source, a layout. A value is never renamed, repurposed or removed; that would be a break. So handle a value you do not know by the list's fallback below, never as an error, and give every `switch` over one a default branch (at runtime a status can carry a value outside the list you compiled against). Every list you send (a status you ask for, a filter, a slot or a part you declare) is closed: the platform refuses a value outside it, and the list only widens. The storefront's lists are in [Storefront](storefront.md#value-lists-you-read).
+
+| List | What it is | A value you do not know |
+| --- | --- | --- |
+| `ORDER_STATUSES` | The order's workflow stage (`status`) | treat an unknown status as a stage you do not act on |
+| `PAYMENT_STATUSES` | The order's money (`paymentStatus`) | treat an unknown value as not paid |
+| `FULFILLMENT_STATUSES` | The order's hand-over (`fulfillmentStatus`) | treat an unknown value as not handed over |
+| `ORDER_CHANNELS` | Where the order came in | treat an unknown channel as one with no handling of its own |
+| `FULFILLMENT_TYPES` | How a line reaches the buyer | treat an unknown type as a line you do not hand over |
+| `FULFILLMENT_RECORD_STATUSES` | A fulfilment record's state | treat an unknown value as not counting, like `voided` |
+| `PAYMENT_RECORD_STATUSES` | A payment record's state | treat an unknown status as money not taken, like `pending` |
+| `PAYMENT_RECORD_TYPES` | What a payment record is | treat an unknown type as a record you do not count |
+| `REFUND_STATUSES` | A refund's state | treat an unknown status as not refunded yet, like `pending` |
+| `REFUND_SETTLEMENTS` | Where a refund's money goes | treat an unknown settlement as one you do not act on |
+| `RETURN_STATUSES` | A return's state | treat an unknown status as a return still open |
+| `RETURN_SOURCES` | Who opened a return | treat an unknown source as one with no handling of its own |
+| `SHIPMENT_STATUSES` | A shipment's state | treat an unknown status as a parcel still open |
+| `GIFT_CARD_STATUSES` | A gift card's state | treat an unknown status as not usable, like `disabled` |
+| `GIFT_CARD_SOURCES` | How a gift card came to be | treat an unknown source as one with no handling of its own |
+| `GIFT_CARD_TRANSACTION_KINDS` | A gift card ledger entry's kind | count an entry of an unknown kind by its amount, as the balance does |
+| `GIFT_CARD_ACTOR_TYPES` | Who wrote a ledger entry | treat an unknown actor as one with no handling of its own |
+
+Every other list in a representation or an event fact (a warranty's or a claim's status, an object record's status, a discount's source, a conversation message's author) follows the same rule: treat a value you do not know as one you do not act on. The store never refuses to send a body for a state it does not list yet: it sends the state as stored.
+
+**The order's stages.** `status` holds the workflow stages `incomplete`, `pending`, `processing`, `confirmed`, `shipped`, `delivered`, `completed`, `cancelled`, `returned` and `refunded`. All of them are permanent stages: the store's own rules move orders through them (cash on delivery is collected only on a `shipped` or `delivered` order), and you may rely on them as stages. A stage is not a money or hand-over fact: `refunded` says the order's workflow ended in a refund, `paymentStatus` says how much came back.
+
+**How states move.** Each state you can see moves by a declared machine, exported from `@scalius/plugin-sdk` so you never copy its table. The machines are sealed with the contract: a machine's states and moves only grow, so a move the platform makes today it keeps making. A machine does not decide everything about a record (a hold or a lock can still stop a move it allows), but no move it declares today is ever taken away.
+
+- `ORDER_MACHINE`: the order's stages; `orders.set_status` refuses a move it does not declare. `COD_MACHINE`: cash on delivery's collection.
+- `SHIPMENT_MACHINE`: a courier's report (its answer to a booking, a tracking answer, a push) may move an open shipment to any state it reports, in any order. A settled shipment (`delivered`, `partial_delivered`, `returned`, `cancelled`, `failed`, listed as `SETTLED_SHIPMENT_STATUSES`) moves only by a courier's correction (`SHIPMENT_CORRECTIONS`): a delivered parcel the buyer refused comes back `returned`, and a cancelled booking the rider picked up anyway goes on. Any other report over a settled shipment is never dropped: a late or vague one (an open state, `unknown`, or `delivered` over a partial delivery) is recorded on the order's timeline and changes nothing; one naming another settled state holds the shipment for staff (`reconcile_required`), who apply the report or keep the shipment as it was. A held shipment takes no report until staff resolve it.
+- `PAYMENT_MACHINE`: a charge (`type` `full`, `deposit` or `balance`), moved by its provider's events: `confirmed` (also a capture) to `succeeded`, `authorized`, `failed`, and `cancelled` (a released authorization, a void, or a switch to another gateway); a gift card's tender given back is `refunded`. Captured money is never cancelled: it goes back as a refund record. `REFUND_RECORD_MACHINE`: a refund record (`type` `refund`), moved with its refund: `pending` to `refunded` or `failed`; a completed refund the provider turns back is `failed` or `pending` again.
+- `WARRANTY_CLAIM_MACHINE`: staff move a claim from any state to any other (start work, resolve, decline, reopen); apps read a claim's status and never move it.
+- `OBJECT_RECORD_MACHINE`: an object record's `status` is publication, not a workflow. A type that is not storefront-visible keeps every record `active`; a storefront-visible type's record is `draft` or `published`, and you set either at any time. Changing a type's visibility moves all its records at once. Keep your own workflow in a field of your own, moved by your own machine with `moveRecordStatus`.
+- `REVIEW_MACHINE`: a product review's moderation.
 
 ### What the stable tier covers
 

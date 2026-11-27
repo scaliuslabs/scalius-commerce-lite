@@ -23,7 +23,7 @@ import { readAccountSummaryForRequest } from "@/lib/account-server";
 import { accountUi as ui } from "@/lib/account-ui";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
-import { privatePageLook } from "@/lib/private-pages/look";
+import { privateRouteLook } from "@/lib/private-pages/look";
 
 export const prerender = false;
 
@@ -51,7 +51,7 @@ const skeleton = "theme-skeleton block";
 // A payment page: only the payment provider's scripts run here, none of the store's (lib/analytics-csp.ts).
 markPaymentPage(Astro.locals);
 // The theme's look for the account, only when it set tokens for it: else the page draws as without a theme.
-const look = privatePageLook((await resolveRequestTheme(Astro, layoutData)).theme, "account");
+const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutData)).theme);
 ---
 
 <Layout title={orderWords.pageTitle} layoutData={layoutData} {...look}>
@@ -141,7 +141,7 @@ const look = privatePageLook((await resolveRequestTheme(Astro, layoutData)).them
               </div>
               <p id="orderBuyAgainMessage" role="status" class="mb-3 text-sm text-muted-foreground empty:hidden"></p>
               <ul id="orderItems" class="divide-y divide-border"></ul>
-              <dl id="orderSummary" data-part="summary" class="mt-4 space-y-2 border-t border-border pt-4 text-sm"></dl>
+              <div id="orderSummary" data-part="summary" class="mt-4 space-y-2 border-t border-border pt-4 text-sm"></div>
             </section>
           </div>
 
@@ -162,13 +162,13 @@ const look = privatePageLook((await resolveRequestTheme(Astro, layoutData)).them
                   <h3 id="orderPaymentRecoveryTitle" class="text-sm font-semibold text-foreground"></h3>
                   <p id="orderPaymentRecoveryDescription" class="mt-1 text-sm text-muted-foreground"></p>
                 </div>
-                <div id="orderPaymentRecoveryMethods" class="grid gap-2" role="radiogroup" aria-label={orderWords.paymentMethod}></div>
+                <div id="orderPaymentRecoveryMethods" data-part="payment-choices" class="grid gap-2" role="radiogroup" aria-label={orderWords.paymentMethod}></div>
                 <div id="accountStripeSection" class="hidden space-y-2">
-                  <div id="accountStripeCardElement" class="rounded-lg border border-input bg-background p-3"></div>
+                  <div id="accountStripeCardElement" data-part="gateway" class="rounded-lg border border-input bg-background p-3"></div>
                   <p id="accountStripeError" class="hidden text-sm text-destructive"></p>
                 </div>
                 <p id="orderPaymentRecoveryMessage" role="status" class="hidden text-sm"></p>
-                <button type="button" id="orderPaymentRecoveryButton" class={`${ui.primaryButton} w-full`}></button>
+                <button type="button" id="orderPaymentRecoveryButton" data-part="pay" class={`${ui.primaryButton} w-full`}></button>
               </div>
             </section>
 

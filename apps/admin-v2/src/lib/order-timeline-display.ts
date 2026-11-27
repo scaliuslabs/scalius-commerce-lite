@@ -18,6 +18,21 @@ export interface TimelineLine {
 const text = (value: unknown): string | null => (typeof value === "string" && value.trim() ? value.trim() : null);
 const count = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? value : 0);
 
+/** A courier's report staff set aside: what "apply after all" sends back, or null for any other line. */
+export function dismissedCourierReport(event: Pick<OrderTimelineEvent, "kind" | "data">): {
+  shipmentId: string; previousStatus: string; reportedStatus: string; rawStatus: string;
+} | null {
+  if (event.kind !== "courier_report") return null;
+  const data = event.data ?? {};
+  const shipmentId = text(data.shipmentId);
+  const previousStatus = text(data.previousStatus);
+  const reportedStatus = text(data.reportedStatus);
+  // The courier's own words are sent back exactly as stored: the server compares them.
+  const rawStatus = typeof data.rawStatus === "string" ? data.rawStatus : null;
+  if (text(data.outcome) !== "dismissed" || !shipmentId || !previousStatus || !reportedStatus || rawStatus === null) return null;
+  return { shipmentId, previousStatus, reportedStatus, rawStatus };
+}
+
 /**
  * Words every timeline kind; `money` formats a major-unit amount in the
  * order's currency, and `actor` is who wrote the line, already worded
@@ -180,6 +195,17 @@ export function describeTimelineEvent(
           : t("timeline.parcelReturnedMany", { count: count(data.quantity) }),
         detail: null,
       };
+    case "courier_report": {
+      // A courier's report over a settled parcel (its words are the courier's own): held for staff, recorded, or set aside.
+      const vars = {
+        courier: text(data.courierName) ?? t("fulfill.defaultCourier"),
+        words: text(data.rawStatus) ?? text(data.reportedStatus) ?? "",
+      };
+      const outcome = text(data.outcome);
+      if (outcome === "recorded") return { text: t("timeline.courierReportLate", vars), detail: null };
+      if (outcome === "dismissed") return { text: t("timeline.courierReportDismissed", vars), detail: null };
+      return { text: t("timeline.courierReport", vars), detail: t("timeline.courierReportDetail") };
+    }
     case "request_submitted": {
       const type = text(data.type);
       return {

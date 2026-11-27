@@ -78,6 +78,7 @@
     "fulfilment -> orders",
     "fulfilment -> payments",
     "fulfilment -> settings",
+    "gift-cards -> order-kernel",
     "inventory -> markets",
     "inventory -> products",
     "inventory -> settings",

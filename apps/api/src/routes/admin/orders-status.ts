@@ -8,6 +8,7 @@ import {
     markOrderDelivered,
     processCodAction,
     reconcileOrderShipment,
+    resolveCourierReport,
     resolveUnknownOrderShipment,
 } from "@scalius/core/modules/fulfilment";
 import {
@@ -662,6 +663,18 @@ const reconcileShipmentRoute = createRoute({
     summary: "Repair a shipment reconciliation lock",
     request: {
         params: z.object({ id: z.string(), shipmentId: z.string() }),
+        body: {
+            required: true,
+            content: {
+                "application/json": {
+                    // A courier's report needs staff's choice (apply it, or keep the shipment as it was), for the report they saw.
+                    schema: z.object({
+                        courierReport: z.enum(["apply", "keep"]).optional(),
+                        report: z.object({ status: z.string().min(1).max(64), rawStatus: z.string().max(200) }).strict().optional(),
+                    }).strict().refine((body) => !body.courierReport || body.report, { message: "Name the courier's report you decide on.", path: ["report"] }),
+                },
+            },
+        },
     },
     responses: {
         200: {
@@ -674,9 +687,12 @@ const reconcileShipmentRoute = createRoute({
 
 app.openapi(reconcileShipmentRoute, async (c) => {
     const { id: orderId, shipmentId } = c.req.valid("param");
+    const body = c.req.valid("json");
     const db = c.get("db");
 
-    const result = await reconcileOrderShipment(db, orderId, shipmentId);
+    const result = body.courierReport && body.report
+        ? await resolveCourierReport(db, orderId, shipmentId, body.courierReport, body.report)
+        : await reconcileOrderShipment(db, orderId, shipmentId);
     const { availabilityTransitionVariantIds: _availabilityTransitionVariantIds, ...responseData } = result;
 
     if (RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {

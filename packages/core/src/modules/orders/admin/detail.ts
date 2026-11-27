@@ -43,6 +43,7 @@ import {
     presentOrderListFacts,
     buildShipmentRecoverySummary,
     buildPaymentRecoverySummary,
+    heldCourierReport,
 } from "./shared";
 import { buildOrderEditReadiness } from "./readiness";
 import { presentOrderLineFulfilment, presentOrderPickup } from "../line-presentation";
@@ -172,6 +173,7 @@ async function getOrderDetailsOnce(
                 providerType: deliveryShipments.providerType,
                 status: deliveryShipments.status,
                 rawStatus: deliveryShipments.rawStatus,
+                metadata: deliveryShipments.metadata,
                 externalId: deliveryShipments.externalId,
                 trackingId: deliveryShipments.trackingId,
                 lastChecked: deliveryShipments.lastChecked,
@@ -304,6 +306,7 @@ async function getOrderDetailsOnce(
             providerName: latestShipmentRow.providerName,
             status: latestShipmentRow.status,
             rawStatus: latestShipmentRow.rawStatus,
+            courierReport: heldCourierReport(latestShipmentRow),
             externalId: latestShipmentRow.externalId,
             trackingId: latestShipmentRow.trackingId,
             lastChecked: unixToDate(latestShipmentRow.lastChecked),

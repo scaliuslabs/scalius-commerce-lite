@@ -281,8 +281,8 @@ Resource: `shipment`.
 | `shipmentId` | string | yes | 1 to 128 characters |
 | `orderId` | string | yes | 1 to 128 characters |
 | `providerId` | string \| null | yes |  |
-| `previousStatus` | "pending" \| "pickup_assigned" \| "picked_up" \| "pickup_failed" \| "in_transit" \| "out_for_delivery" \| "delivered" \| "partial_delivered" \| "delivery_failed" \| "on_hold" \| "failed" \| "cancelled" \| "returned" \| "unknown" \| "creating" \| "processing" \| "reconcile_required" \| string | yes |  |
-| `status` | "pending" \| "pickup_assigned" \| "picked_up" \| "pickup_failed" \| "in_transit" \| "out_for_delivery" \| "delivered" \| "partial_delivered" \| "delivery_failed" \| "on_hold" \| "failed" \| "cancelled" \| "returned" \| "unknown" \| "creating" \| "processing" \| "reconcile_required" \| string | yes |  |
+| `previousStatus` | "pending" \| "pickup_assigned" \| "picked_up" \| "pickup_failed" \| "in_transit" \| "out_for_delivery" \| "delivered" \| "partial_delivered" \| "delivery_failed" \| "on_hold" \| "failed" \| "cancelled" \| "returned" \| "unknown" \| "creating" \| "reconcile_required" \| string | yes |  |
+| `status` | "pending" \| "pickup_assigned" \| "picked_up" \| "pickup_failed" \| "in_transit" \| "out_for_delivery" \| "delivered" \| "partial_delivered" \| "delivery_failed" \| "on_hold" \| "failed" \| "cancelled" \| "returned" \| "unknown" \| "creating" \| "reconcile_required" \| string | yes |  |
 
 ## payment.updated
 
@@ -293,8 +293,8 @@ Resource: `payment`.
 | `paymentId` | string | yes | 1 to 128 characters |
 | `orderId` | string | yes | 1 to 128 characters |
 | `provider` | string | yes | 1 to 150 characters |
-| `previousStatus` | "pending" \| "confirmed" \| "succeeded" \| "failed" \| "refunded" \| "cancelled" \| "authorized" \| string \| null | yes |  |
-| `status` | "pending" \| "confirmed" \| "succeeded" \| "failed" \| "refunded" \| "cancelled" \| "authorized" \| string | yes |  |
+| `previousStatus` | "pending" \| "succeeded" \| "failed" \| "refunded" \| "cancelled" \| "authorized" \| string \| null | yes |  |
+| `status` | "pending" \| "succeeded" \| "failed" \| "refunded" \| "cancelled" \| "authorized" \| string | yes |  |
 
 ## checkout.abandoned
 

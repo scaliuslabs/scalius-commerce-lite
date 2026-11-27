@@ -42,8 +42,13 @@ export type PrivateTokens = Partial<Record<PrivatePageKey, Record<string, Partia
  * look, the others keep theirs) and records why; a page joins token mode
  * only when the theme names it (`pages.<page>` or `tokens.<page>`), a page
  * paint alone no longer puts it there.
+ * Version 11: the look reaches every page its key covers (`PRIVATE_PAGE_ROUTES`)
+ * and writes rows for the parts a buyer reads there (conversations and their
+ * messages, review stars, an order's payment choices, the menu's count pill, a
+ * filled button that removes something), underlines hovered controls where a
+ * box has no hover surface, and gives `action` only to real buttons and links.
  */
-export const PRIVATE_CHECKER_VERSION = 10;
+export const PRIVATE_CHECKER_VERSION = 11;
 
 /**
  * Two versions of the private pages' compile, because they fail differently:
@@ -59,8 +64,13 @@ export const PRIVATE_CHECKER_VERSION = 10;
  *   from typed values, and it passed the policy of its day) until the
  *   maintenance compile replaces it, refusing only the pages this policy no
  *   longer passes. Bump it for a stricter or new check.
+ *
+ * Policy 2: the new account and receipt rows are checked (stars at 3:1, a
+ * chosen payment option apart from the others where the theme sets both
+ * colours, a box's muted and link words on its hover surface), and every
+ * control that starts a payment is a main action (its fill or its edge).
  */
-export const PRIVATE_POLICY_VERSION = 1;
+export const PRIVATE_POLICY_VERSION = 2;
 
 /** The most compiled token CSS a page stores (each page serves only its own). */
 export const PRIVATE_COMPILED_CSS_MAX_BYTES = 64 * 1024;

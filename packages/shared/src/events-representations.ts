@@ -1053,9 +1053,12 @@ export function eventRepresentationProtectedPaths(type: EventRepresentationType)
   return derived(type).protectedPaths;
 }
 
-/** A status field: `status`, `paymentStatus`, `fulfillmentStatus` and the like. */
-const STATUS_KEY = /^(?:status|[a-z]\w*Status)$/;
 type Path = readonly PropertyKey[];
+
+/** A state field: `status`, `paymentStatus`, `fulfillmentStatus` and the like. */
+const STATE_KEY = /^(?:status|[a-z]\w*Status)$/;
+/** The carried states already logged in this isolate (type, path, value). */
+const CARRIED_LOGGED = new Set<string>();
 
 function valueAt(root: unknown, path: Path): unknown {
   return path.reduce<unknown>((node, key) => (node as Record<PropertyKey, unknown> | null | undefined)?.[key], root);
@@ -1071,11 +1074,15 @@ function setAt(root: unknown, path: Path, value: unknown): void {
  * (fields it does not declare are dropped, a mismatch throws: a bug, never a
  * guess), then protected fields outside `customerData` read null.
  *
- * A status is the one exception to "a mismatch throws". Its published type is
- * the closed list, but a stored status outside it (a column the database does
- * not constrain, a state a newer platform adds) is carried as stored: a body
- * is never refused for it, and a receiver treats a state it does not know as
- * unknown.
+ * A state is the one exception to "a mismatch throws". A state field
+ * (`status`, `paymentStatus` and the like) holds what a machine or an outside
+ * party (a courier, a provider) moved it to, in a column the database does
+ * not constrain: a stored state outside the published list is carried as
+ * stored, so a body is never refused for it, and a receiver handles it by
+ * the list's fallback. Each carried value is logged once per type, path and
+ * value. Every other list (a kind, a source, a tender's `via`) is written by
+ * the store from its own closed vocabulary, so a value outside it is a bug,
+ * refused as any other mismatch.
  */
 export function buildEventRepresentation<T extends EventRepresentationType>(
   type: T,
@@ -1086,14 +1093,22 @@ export function buildEventRepresentation<T extends EventRepresentationType>(
   let parsed = schema.safeParse(value);
   const stored: Array<[Path, string]> = [];
   if (!parsed.success) {
+    // An off-list state (an enum of two or more values, never a single literal) is carried as stored.
     const statuses = parsed.error.issues.filter((issue) => issue.code === "invalid_value"
-      && STATUS_KEY.test(String(issue.path.at(-1))) && typeof valueAt(value, issue.path) === "string"
+      && STATE_KEY.test(String(issue.path.at(-1)))
+      && ((issue as { values?: readonly unknown[] }).values?.length ?? 0) > 1 && typeof valueAt(value, issue.path) === "string"
       && (valueAt(value, issue.path) as string).length > 0);
     if (statuses.length === parsed.error.issues.length) {
-      // Each off-list status stands in as a listed one for the parse, then reads as stored.
+      // Each off-list value stands in as a listed one for the parse, then reads as stored.
       const standIn = structuredClone(value);
       for (const issue of statuses) {
-        stored.push([issue.path, valueAt(value, issue.path) as string]);
+        const carried = valueAt(value, issue.path) as string;
+        const key = `${type}:${issue.path.join(".")}:${carried}`;
+        if (!CARRIED_LOGGED.has(key)) {
+          CARRIED_LOGGED.add(key);
+          console.warn(`[events] ${type} ${issue.path.join(".")} carries a state outside its published list: ${carried}`);
+        }
+        stored.push([issue.path, carried]);
         setAt(standIn, issue.path, (issue as { values: readonly unknown[] }).values[0]);
       }
       parsed = schema.safeParse(standIn);

@@ -6,6 +6,8 @@
 // works without JavaScript; the reply form is a plain POST that JavaScript
 // upgrades to an in-place send.
 import Layout from "@/layouts/Layout.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { privateRouteLook } from "@/lib/private-pages/look";
 import ConversationReplyForm from "@/components/conversation/ConversationReplyForm.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import { getLayoutData } from "@/lib/api";
@@ -36,6 +38,8 @@ const [layoutData, read, summary] = await Promise.all([
   target ? readConversation(Astro.request, target, beforeSeq) : Promise.resolve(null),
   readAccountSummaryForRequest(Astro.request),
 ]);
+// The account's look (`PRIVATE_PAGE_ROUTES`), only where the theme set it: else the page draws as without a theme.
+const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutData)).theme);
 Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
 const thread = read?.ok ? read.data : null;
 const failure = thread ? null : read && !read.ok ? read.reason : "no_access";
@@ -57,7 +61,7 @@ const shellState = failure === "signed_out" ? "signed_out" : failure === "unavai
 const title = thread ? conversationTitle(thread) : copy.notFound;
 ---
 
-<Layout title={copy.inboxTitle} layoutData={layoutData}>
+<Layout title={copy.inboxTitle} layoutData={layoutData} {...look}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <AccountShell
     current="inbox"
@@ -91,7 +95,7 @@ const title = thread ? conversationTitle(thread) : copy.notFound;
     )}
 
     {thread && conversationId && (
-      <div id="conversation" data-conversation-panel class={`${ui.card} flex min-h-0 flex-1 flex-col overflow-hidden [overflow-anchor:none]`}>
+      <div id="conversation" data-conversation-panel data-part="conversation" class={`${ui.card} flex min-h-0 flex-1 flex-col overflow-hidden [overflow-anchor:none]`}>
         <div data-conversation-scroller role="region" aria-label={copy.historyLabel} tabindex="0" class="min-h-0 flex-1 px-4 py-3 [overflow-anchor:none] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary sm:px-5">
           <p class="mb-3 break-words text-sm font-medium text-muted-foreground">{title}</p>
           {earlierHref && (

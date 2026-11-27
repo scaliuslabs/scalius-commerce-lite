@@ -5,6 +5,8 @@
 // thread in their Inbox. Server-rendered and works
 // without JavaScript; private and never cached.
 import Layout from "@/layouts/Layout.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { privateRouteLook } from "@/lib/private-pages/look";
 import ConversationReplyForm from "@/components/conversation/ConversationReplyForm.astro";
 import { getActiveCheckoutLanguage, getLayoutData } from "@/lib/api";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
@@ -38,6 +40,8 @@ const [layoutData, language, read] = await Promise.all([
   getActiveCheckoutLanguage().catch(() => null),
   target ? readConversation(Astro.request, target, beforeSeq) : Promise.resolve(null),
 ]);
+// The account's look (`PRIVATE_PAGE_ROUTES`: the guest's copy of the account's inbox thread), only where the theme set it.
+const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutData)).theme);
 Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
 const copy = pickWarrantyCopy(language?.languageData, getCheckoutLanguagePreset(language?.code));
 const thread = read?.ok ? read.data : null;
@@ -54,14 +58,16 @@ const earliestSeq = Math.min(...(thread?.messages ?? []).map((message) => messag
 const earlierHref = thread?.hasMore ? `${pageHref}?conversationBefore=${earliestSeq}#conversation` : null;
 ---
 
-<Layout title={title} layoutData={layoutData} documentLanguage={checkoutLanguageBaseCode(language?.code)}>
+<Layout title={title} layoutData={layoutData} {...look} documentLanguage={checkoutLanguageBaseCode(language?.code)}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
-  <div class={ACCOUNT_CONTAINER}>
-    <a href={receiptHref} data-astro-prefetch="false" class={ui.textButton}>
-      <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-      {conversationCopy().viewOrder}
-    </a>
-    <h1 class="mt-2 text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
+  <div class={ACCOUNT_CONTAINER} data-private="account">
+    <header data-part="heading">
+      <a href={receiptHref} data-astro-prefetch="false" data-part="heading-back" class="-ms-1 inline-flex min-h-11 items-center gap-1 px-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+        <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        {conversationCopy().viewOrder}
+      </a>
+      <h1 data-part="heading-title" class="mt-2 text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
+    </header>
 
     {failure === "no_access" && (
       <div class={`${ui.empty} mt-6`} role="alert">
@@ -78,7 +84,7 @@ const earlierHref = thread?.hasMore ? `${pageHref}?conversationBefore=${earliest
     {thread && target && (
       <div id="conversation" data-conversation-panel style="overflow-anchor:none" class="mt-2">
         <p class="text-sm text-muted-foreground"><span data-conversation-thread-status>{conversationStatusLabel(thread.status)}</span></p>
-        <div class={`${ui.card} ${ui.cardBody} mt-6`}>
+        <div data-part="conversation" class={`${ui.card} ${ui.cardBody} mt-6`}>
           {earlierHref && <a href={earlierHref} data-conversation-earlier data-before={earliestSeq} data-before-param="conversationBefore" data-astro-prefetch="false" class="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">{conversationCopy().earlierMessages}</a>}
           <ol id="claimMessages" class="mx-auto max-w-3xl [overflow-anchor:none]" aria-label={conversationCopy().messagesLabel} hidden={thread.messages.length === 0} set:html={messagesHtml} />
           {beforeSeq ? <a href={`${pageHref}#conversation`} data-astro-prefetch="false" class="mt-4 inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">{conversationCopy().latestMessages}</a> : <ConversationReplyForm

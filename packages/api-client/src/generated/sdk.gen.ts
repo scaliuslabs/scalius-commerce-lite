@@ -6702,7 +6702,14 @@ export const postApiV1AdminOrdersByIdShipmentsByShipmentIdRefresh = <ThrowOnErro
 /**
  * Repair a shipment reconciliation lock
  */
-export const postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/reconcile', ...options });
+export const postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileErrors, ThrowOnError>({
+    url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/reconcile',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
 
 /**
  * Resolve an unknown shipment through a positive provider lookup
