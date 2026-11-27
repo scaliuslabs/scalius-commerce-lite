@@ -14,5 +14,6 @@
     "skin footer (footer, sample content)": "drew",
     "skin card (product_card, sample content)": "drew",
     "section product_row (sample content)": "drew"
-  }
+  },
+  "load": "loads"
 }

@@ -2,7 +2,15 @@
   "bundle": "2.0.0-beta.8/acme.delivery-slots-0.2.0.zip",
   "builtAgainst": "2.0.0-beta.8",
   "install": "accepted (signed)",
-  "buyerUi": {
-    "checkout.contact.after": "valid buyer.ui answer (a buyer UI document)"
+  "load": "loads",
+  "functions": {
+    "cart.validate · plain lines, en, BDT": "ran (errors: 1)",
+    "cart.validate · a kit, en, BDT": "ran (errors: 1)",
+    "cart.validate · plain lines, bn, BDT": "ran (errors: 1)",
+    "cart.validate · plain lines, en, USD": "ran (errors: 1)",
+    "buyer.ui checkout.contact.after · plain lines, en, BDT": "ran (ui)",
+    "buyer.ui checkout.contact.after · a kit, en, BDT": "ran (ui)",
+    "buyer.ui checkout.contact.after · plain lines, bn, BDT": "ran (ui)",
+    "buyer.ui checkout.contact.after · plain lines, en, USD": "ran (ui)"
   }
 }
