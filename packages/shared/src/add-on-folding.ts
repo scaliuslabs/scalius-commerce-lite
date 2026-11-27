@@ -36,7 +36,7 @@ export function lineAddOnsOf(entries: ReadonlyArray<{ key?: string; value?: stri
     if (typeof amountMinor !== "number" || !Number.isSafeInteger(amountMinor) || amountMinor < 0) return [];
     const title = (entry.value ?? entry.displayValue ?? "").trim();
     const details = readAddOnDetails(entry.details, ADD_ON_DETAILS_MAX) ?? [];
-    return title ? [{ appId: entry.appId ?? null, title, amountMinor, ...(details.length > 0 ? { details } : {}) }] : [];
+    return title ? [{ appId: entry.appId || null, title, amountMinor, ...(details.length > 0 ? { details } : {}) }] : [];
   });
 }
 
@@ -200,7 +200,8 @@ export function buyerLineAddOns(
     const amountMinor = sum.per === "bundle"
       ? (units !== null && sum.totalMinor % units === 0 ? sum.totalMinor / units : null)
       : (sum.perLine.size === counted.length && new Set(sum.perLine.values()).size === 1 ? [...sum.perLine.values()][0]! : null);
-    return { appId: sum.appId, title: sum.title, totalMinor: sum.totalMinor, amountMinor, per: sum.per, units, ...(sum.details?.length ? { details: sum.details } : {}) };
+    // A title stored longer than the one shape holds (an older order) is cut, never a read that fails.
+    return { appId: sum.appId, title: sum.title.slice(0, ADD_ON_TITLE_MAX), totalMinor: sum.totalMinor, amountMinor, per: sum.per, units, ...(sum.details?.length ? { details: sum.details } : {}) };
   });
 }
 

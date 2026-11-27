@@ -35,7 +35,7 @@ import { LINE_ADD_ONS_MAX } from "../line-identity";
 import { ADD_ON_DETAILS_MAX } from "../add-on-totals";
 import { appTextSchema } from "./app-text";
 import { lineAddOnSchema } from "./line-add-on";
-import { isStoreActionOrAmountWord, STORE_WORDS_REASON } from "../store-words";
+import { adjustFunctionWords } from "./function-words";
 import { ONLINE_STORE_CHANNEL_ID, SALES_CHANNEL_ID_MAX_LENGTH, SALES_CHANNEL_ID_PATTERN } from "../sales-channels";
 
 const id = z.string().min(1).max(128);
@@ -55,15 +55,10 @@ const storeLabel = z.string().trim().min(1).max(80);
  */
 /**
  * An add-on's title or detail line: app text drawn among the store's money
- * rows, so it never reads as one of the store's action or amount words
- * ("Total", "সর্বমোট", "Place order"; store-words.ts), refused with reason
- * `store_words`.
+ * rows. One that reads as the store's amount word is drawn as the store's
+ * neutral word instead (`adjustFunctionWords`), never refusing the answer.
  */
-const addOnLabel = label.superRefine((text, context) => {
-  if (isStoreActionOrAmountWord(text)) {
-    context.addIssue({ code: "custom", message: `"${text}" is the store's own word for an action or an amount: name what the add-on is.`, params: { reason: STORE_WORDS_REASON } });
-  }
-});
+const addOnLabel = label;
 const addOnDetails = z.array(addOnLabel).max(ADD_ON_DETAILS_MAX).optional();
 
 /** Add-ons one line carries: the one bound the cart, the page and checkout share (`LINE_ADD_ONS_MAX`). */
@@ -151,7 +146,12 @@ export const functionCartLineSchema = z.object({
    * a kit's one line) the increment times the units the bundle's anchor holds
    * per bundle unit, since the anchor charges the fee over them. Checkout
    * rounds every add-on once, half-up, to it: answer multiples of it to be
-   * charged exactly (a share is rounded to it too). The host always sends it;
+   * charged exactly (a share is rounded to it too). On a kit's one line it is
+   * read from the kit's split before your own price for the kit: if that price
+   * makes one of its items split into lines differently (its share starts or
+   * stops dividing), the anchor's units per kit, and so the final step, can
+   * differ, and checkout rounds once to the final step (the app's log says
+   * so). The host always sends it;
    * optional only so a cart an app's tests build by hand still reads.
    */
   addOnStepMinor: nonNegativeMinor.min(1).optional(),
@@ -921,15 +921,22 @@ export const PLUGIN_FUNCTION_INVALID_OUTPUT = "function_invalid_output";
 
 /**
  * A function's answer checked the way the host checks it: the parsed output,
- * or `function_invalid_output` with the first issue's path. The host and the
- * SDK test harness both use this, so a test sees what production does.
+ * or `function_invalid_output` with the first issue's path. A label that passes
+ * for the store's word gives way alone (a row's title to the store's neutral
+ * word, a rename skipped) and is named in `notices` (the app's log), the rest
+ * of the answer standing (`adjustFunctionWords`). The host and the SDK test
+ * harness both use this, so a test sees what production does.
  */
 export function checkPluginFunctionOutput<P extends PluginRunPoint>(
   point: P,
   value: unknown,
-): { ok: true; value: PluginFunctionOutput<P> } | { ok: false; code: typeof PLUGIN_FUNCTION_INVALID_OUTPUT; reason: string | null; message: string } {
+  options: { language?: string | null } = {},
+): { ok: true; value: PluginFunctionOutput<P>; notices?: string[] } | { ok: false; code: typeof PLUGIN_FUNCTION_INVALID_OUTPUT; reason: string | null; message: string } {
   const parsed = PLUGIN_RUN_SCHEMAS[point].output.safeParse(value);
-  if (parsed.success) return { ok: true, value: parsed.data as PluginFunctionOutput<P> };
+  if (parsed.success) {
+    const adjusted = adjustFunctionWords(point, parsed.data, options.language ?? null);
+    return { ok: true, value: adjusted.value as PluginFunctionOutput<P>, ...(adjusted.notices.length > 0 ? { notices: adjusted.notices } : {}) };
+  }
   const issue = parsed.error.issues[0];
   // A refusal that names its reason (`params.reason`) carries it, machine-readable, beside the message.
   const reason = (issue as { params?: { reason?: unknown } } | undefined)?.params?.reason;

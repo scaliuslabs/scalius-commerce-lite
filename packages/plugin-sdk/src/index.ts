@@ -123,6 +123,7 @@ export type {
   PluginUiActionResult,
   PluginUiDocument,
   PluginUiNode,
+  PluginUiSpan,
   PluginUiSurface,
   PluginUiTarget,
 } from "@scalius/shared/plugins";

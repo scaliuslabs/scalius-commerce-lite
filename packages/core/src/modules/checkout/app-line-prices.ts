@@ -205,13 +205,8 @@ export function createAppLinePricer(
                 bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300), units: item.bundle.units } : null,
             })),
         });
-        // What checkout charges is known only as it lays the lines out: it tells each app once a message.
-        const told = new Set<string>();
-        const report: AddOnReport = (appId, message) => {
-            if (told.has(`${appId}\u0000${message}`)) return;
-            told.add(`${appId}\u0000${message}`);
-            apps.report(appId, "cart.line_prices", message);
-        };
+        // What checkout charges is known only as it lays the lines out; the host writes a line once an hour.
+        const report: AddOnReport = (appId, message) => apps.report(appId, "cart.line_prices", message);
         return { ...kitPricing(resolveAppLinePricing(items, lineIds, results, storeAmountConversionOf(preliminary), apps), kits, preliminary.items), report };
     };
 }

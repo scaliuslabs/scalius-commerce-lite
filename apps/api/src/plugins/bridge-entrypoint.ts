@@ -6,6 +6,7 @@
 // in-process. Lazily loaded: importing this module loads no host code.
 
 import { WorkerEntrypoint } from "cloudflare:workers";
+import { assertDatabaseWritable } from "@scalius/shared/database-migration-freeze";
 import type { PluginApiResult, PluginObjectQuery } from "@scalius/plugin-sdk";
 import type { ObjectRecordVersion, ObjectOperation, ObjectQueryResult } from "@scalius/core/modules/objects";
 import type { PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
@@ -65,6 +66,8 @@ export class PluginBridge extends WorkerEntrypoint<Env, PluginBridgeProps> imple
   protected readonly environment: () => Promise<PluginBridgeEnvironment> = () => workerEnvironment(this.env, this.ctx);
 
   #host(): Promise<PluginBridgeApi> {
+    // An app's call reaches the database: refused while a migration freeze holds.
+    assertDatabaseWritable(this.env);
     this.#hostInstance ??= (async () => {
       const props = requireProps(this.ctx.props);
       const [{ PluginBridgeHost }, environment] = await Promise.all([import("./bridge"), this.environment()]);
@@ -73,8 +76,8 @@ export class PluginBridge extends WorkerEntrypoint<Env, PluginBridgeProps> imple
     return this.#hostInstance;
   }
 
-  async apiCall(operationId: string, input?: unknown): Promise<PluginApiResult> {
-    return (await this.#host()).apiCall(operationId, input);
+  async apiCall(operation: string, input?: unknown): Promise<PluginApiResult> {
+    return (await this.#host()).apiCall(operation, input);
   }
 
   async objectsGet(object: string, id: string): Promise<ObjectRecordVersion | null> {

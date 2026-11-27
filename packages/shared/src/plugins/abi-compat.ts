@@ -163,6 +163,10 @@ export function protocolBreakingChanges(before: unknown, after: unknown): string
     else if (record(entry).status !== record(nowErrors[code]).status) {
       problems.push(`errors.${code}: the status changed from ${String(record(entry).status)} to ${String(record(nowErrors[code]).status)}.`);
     }
+    // Declared details an app reads: a field is never removed, retyped or made optional.
+    if (code in nowErrors && record(entry).details !== undefined) {
+      problems.push(...schemaBreaks(`errors.${code} details`, record(entry).details, record(nowErrors[code]).details ?? {}, "response"));
+    }
   }
 
   const events = record(was.events);

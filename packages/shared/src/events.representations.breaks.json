@@ -76,5 +76,11 @@
   "from": "910b78ed85d3fabd",
   "change": "behaviour: order lines[].addOns[].amountMinor on an expanded bundle's or a kit's anchor line is per bundle unit with per: \"bundle\", not per anchor unit as adjustments[].amountMinor was; totalMinor = amountMinor × units, never × quantity.",
   "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): a meaning change no schema diff shows. On an app bundle's anchor line `amountMinor` is now what one BUNDLE unit pays (`per: \"bundle\"`), where the old per-unit field was what one ANCHOR unit paid, while the line's `quantity` still counts anchor units: `amountMinor × quantity` now overstates the add-on by the anchor's units per bundle unit (doubles it for a pair). The one rule, stated in commerce-hooks.md: `totalMinor = amountMinor × units` whenever `amountMinor` is a number, `units` being the line's quantity for `per: \"unit\"` and its bundle units for `per: \"bundle\"`; every shape carrying `per` carries `units`. Read `totalMinor` for money."
+ },
+ {
+  "snapshot": "events.representations.snapshot.json",
+  "from": "910b78ed85d3fabd",
+  "change": "truncation fetch.operationId: the field was removed.",
+  "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): the operationId is the agent and REST name of an operation, not part of the app contract, and sealing it here would have frozen every stable operation id through the webhook body. A receiver reads the resource with `appOperation` (what an app passes to ctx.api.call) or with `method` and `path` (what an HTTP caller sends); both stay."
  }
 ]

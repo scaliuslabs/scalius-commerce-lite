@@ -4,3 +4,8 @@
 // (read once when that module loads) lets it follow the stub instead. A test
 // of the real behaviour deletes the flag in `vi.hoisted`.
 Reflect.set(globalThis, Symbol.for("scalius.plugins.ambientHostFetch"), true);
+
+// A refusal whose code declares the details apps read (APP_ERROR_CODES) and
+// whose producer sends another shape throws where it is made, so every test
+// that drives a producer holds it to the sealed shape (production logs it).
+Reflect.set(globalThis, Symbol.for("scalius.appErrorDetails.strict"), true);
