@@ -89,6 +89,8 @@ const timelineCopy = defineMessages({
     "timeline.returnRejected": "Return rejected",
     "timeline.parcelReturnedOne": "Parcel came back: 1 item is unsent again",
     "timeline.parcelReturnedMany": "Parcel came back: {count} items are unsent again",
+    "timeline.courierReport": "{courier} reported another outcome for a settled parcel: “{words}”",
+    "timeline.courierReportDetail": "The shipment waits for you. Repair applies the courier's report to it and to the order.",
     "timeline.rejectedCount": "{count} not approved",
   },
   bn: {
@@ -173,6 +175,8 @@ const timelineCopy = defineMessages({
     "timeline.returnRejected": "রিটার্ন নাকচ করা হয়েছে",
     "timeline.parcelReturnedOne": "পার্সেল ফেরত এসেছে: ১টি প্রোডাক্ট আবার না-পাঠানো",
     "timeline.parcelReturnedMany": "পার্সেল ফেরত এসেছে: {count}টি প্রোডাক্ট আবার না-পাঠানো",
+    "timeline.courierReport": "{courier} শেষ হওয়া একটি পার্সেলের জন্য অন্য ফলাফল জানিয়েছে: “{words}”",
+    "timeline.courierReportDetail": "শিপমেন্টটি আপনার অপেক্ষায়। মেরামত করলে কুরিয়ারের জানানো অবস্থা শিপমেন্ট ও অর্ডারে প্রয়োগ হয়।",
     "timeline.rejectedCount": "{count}টি অনুমোদিত হয়নি",
   },
 });

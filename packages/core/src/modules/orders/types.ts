@@ -65,6 +65,8 @@ export const ORDER_SHIPMENT_RECOVERY_REASONS = [
     "none",
     "courier_unconfirmed",
     "reconcile_required",
+    /** The courier reported another state for a settled parcel (a correction no move allows): Repair applies the report. */
+    "courier_report",
     "creating",
     "claim_expired",
     "failed",

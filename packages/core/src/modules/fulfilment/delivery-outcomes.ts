@@ -25,7 +25,7 @@ import {
   validateTransition,
   shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
-import { sql, eq, and, inArray, ne } from "drizzle-orm";
+import { sql, eq, and, inArray, notInArray } from "drizzle-orm";
 import { AppError, NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import { fromMinor } from "@scalius/shared/money";
 import {
@@ -264,8 +264,11 @@ function openOwnCourierParcelsUpdate(
         eq(deliveryShipments.orderId, orderId),
         eq(deliveryShipments.providerType, "manual"),
         sql`${deliveryShipments.providerId} IS NULL`,
-        // A parcel already there is not written again.
-        ne(deliveryShipments.status, status),
+        // A parcel already there is not written again, and a delivered one is
+        // not returned with the rest (a correction is a courier's, not this
+        // order-wide record). Own-courier parcels are never partly delivered:
+        // nothing writes that for them.
+        notInArray(deliveryShipments.status, [status, ShipmentStatus.DELIVERED]),
     ), { rawStatus: status });
 }
 

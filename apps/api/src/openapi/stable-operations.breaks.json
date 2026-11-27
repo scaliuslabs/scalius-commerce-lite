@@ -3255,6 +3255,6 @@
   "snapshot": "stable-operations.snapshot.json",
   "from": "5c884e0ad30524dc",
   "change": "behaviour: a payment's `status` no longer lists `confirmed`, and a shipment's `status` no longer lists `processing`, in every response that carries them.",
-  "reason": "Pre-lock contract fix (rc.1 state machines): neither value had a writer (no operation ever answered it), so both leave their lists, and migration 0227 moves a stored row to `pending` and `in_transit`. A list an app reads is open and only gains members after the lock. The schema diff is additive for a response, so this entry records the change for review."
+  "reason": "Pre-lock contract fix (rc.1 state machines): both values leave their lists. `confirmed` had no writer in this codebase's history; `processing` has had none since July 2026, but a store older than that may hold such a parcel and may have sent it as a shipment's status or previous status. Migration 0227 rewrites any stored row to `pending` and `in_transit` without enqueueing an event. A list an app reads is open and only gains members after the lock. The schema diff is additive for a response, so this entry records the change for review."
  }
 ]

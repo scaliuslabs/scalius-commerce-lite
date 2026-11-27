@@ -1043,8 +1043,6 @@ export function eventRepresentationProtectedPaths(type: EventRepresentationType)
   return paths;
 }
 
-/** A status field: `status`, `paymentStatus`, `fulfillmentStatus` and the like. */
-const STATUS_KEY = /^(?:status|[a-z]\w*Status)$/;
 type Path = readonly PropertyKey[];
 
 function valueAt(root: unknown, path: Path): unknown {
@@ -1061,11 +1059,11 @@ function setAt(root: unknown, path: Path, value: unknown): void {
  * (fields it does not declare are dropped, a mismatch throws: a bug, never a
  * guess), then protected fields outside `customerData` read null.
  *
- * A status is the one exception to "a mismatch throws". Its published type is
- * the closed list, but a stored status outside it (a column the database does
- * not constrain, a state a newer platform adds) is carried as stored: a body
- * is never refused for it, and a receiver treats a state it does not know as
- * unknown.
+ * A value of a list is the one exception to "a mismatch throws". Every list
+ * a representation carries (a status, a kind, a source) is open: a stored
+ * value outside the published list (a column the database does not
+ * constrain, a state a newer platform adds) is carried as stored, so a body
+ * is never refused for it, and a receiver handles it by the list's fallback.
  */
 export function buildEventRepresentation<T extends EventRepresentationType>(
   type: T,
@@ -1076,11 +1074,12 @@ export function buildEventRepresentation<T extends EventRepresentationType>(
   let parsed = schema.safeParse(value);
   const stored: Array<[Path, string]> = [];
   if (!parsed.success) {
+    // An off-list value of an enum (two or more values: never a single literal) is a list's new member.
     const statuses = parsed.error.issues.filter((issue) => issue.code === "invalid_value"
-      && STATUS_KEY.test(String(issue.path.at(-1))) && typeof valueAt(value, issue.path) === "string"
+      && ((issue as { values?: readonly unknown[] }).values?.length ?? 0) > 1 && typeof valueAt(value, issue.path) === "string"
       && (valueAt(value, issue.path) as string).length > 0);
     if (statuses.length === parsed.error.issues.length) {
-      // Each off-list status stands in as a listed one for the parse, then reads as stored.
+      // Each off-list value stands in as a listed one for the parse, then reads as stored.
       const standIn = structuredClone(value);
       for (const issue of statuses) {
         stored.push([issue.path, valueAt(value, issue.path) as string]);

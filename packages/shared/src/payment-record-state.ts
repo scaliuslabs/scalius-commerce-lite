@@ -79,3 +79,6 @@ export const PAYMENT_IN_FLIGHT_STATUSES = ["pending", "authorized"] as const sat
 
 /** A charge that holds or may hold the buyer's money: in flight, or taken. */
 export const PAYMENT_HOLDING_STATUSES = [...PAYMENT_IN_FLIGHT_STATUSES, "succeeded"] as const satisfies readonly ChargeStatus[];
+
+/** A charge the provider landed: money held or taken, or taken and later given back. */
+export const PAYMENT_LANDED_STATUSES = ["authorized", "succeeded", "refunded"] as const satisfies readonly ChargeStatus[];

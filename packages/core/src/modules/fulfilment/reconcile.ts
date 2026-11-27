@@ -9,6 +9,7 @@ import {
 import {
   type CourierProvidersSource,
   lookupShipmentByMerchantOrderId,
+  COURIER_REPORT_HELD,
   PROVIDER_OUTCOME_UNKNOWN,
   shipmentMove,
   updateOrderStatusFromShipment,
@@ -450,6 +451,21 @@ export async function resolveUnknownOrderShipment(
  * order as the courier's push would (with the fulfilment ledger following
  * the parcel). Returns the order status after, or null when nothing applies.
  */
+/**
+ * Restores a held shipment to a courier state (the store's `restore_*` move).
+ * Nothing written means another repair moved it first: that is fine when it
+ * landed where this one would, and a conflict for staff otherwise.
+ */
+async function restoreHeldShipment(db: Database, shipmentId: string, to: CourierShipmentStatus, metadata: Record<string, unknown>): Promise<void> {
+    const written = await shipmentMove(db, to, "store", eq(deliveryShipments.id, shipmentId), {
+        rawStatus: to,
+        metadata: cleanShipmentRecoveryMetadata(metadata),
+    }).returning({ id: deliveryShipments.id });
+    if (written.length > 0) return;
+    const now = await db.select({ status: deliveryShipments.status }).from(deliveryShipments).where(eq(deliveryShipments.id, shipmentId)).get();
+    if (now?.status !== to) throw new ConflictError("The shipment changed while it was being repaired. Reload to see the latest.");
+}
+
 async function followCourierStatus(db: Database, orderId: string, shipmentId: string, status: string): Promise<string | null> {
     if (status === ShipmentStatus.PENDING) return null;
     await syncCourierFulfilmentFromShipment(db, shipmentId, status);
@@ -597,10 +613,7 @@ export async function reconcileOrderShipment(
             targetOrderStatus,
         );
 
-        await shipmentMove(db, shipmentStatusForSync, "store", eq(deliveryShipments.id, shipmentId), {
-            rawStatus: shipmentStatusForSync,
-            metadata: cleanShipmentRecoveryMetadata(metadata),
-        });
+        await restoreHeldShipment(db, shipmentId, shipmentStatusForSync, metadata);
 
         if (order.shipmentClaimId === shipmentId) {
             await clearShipmentClaim(db, orderId, shipmentId);
@@ -623,16 +636,17 @@ export async function reconcileOrderShipment(
     if (order.shipmentClaimId !== shipmentId) {
         // A finisher that lost the race to another marked the shipment after
         // the order was already shipped and its claim cleared: the booking is
-        // done, so the shipment only takes its courier status back.
+        // done, so the shipment only takes its courier status back. A courier's
+        // report over a settled shipment was held for staff: Repair applies it
+        // (restores the shipment to it and moves the order as a push would).
+        const reason = stringField(asRecord(metadata.reconciliation), "reason");
+        const courierReport = !order.shipmentClaimId && reason === COURIER_REPORT_HELD;
         const leftover = !order.shipmentClaimId
             && (order.status === OrderStatus.SHIPPED || order.status === OrderStatus.DELIVERED)
-            && stringField(asRecord(metadata.reconciliation), "reason") === "expired_order_shipment_claim";
-        if (!leftover) throw new ConflictError("Shipment is no longer the active order shipment recovery claim.");
+            && reason === "expired_order_shipment_claim";
+        if (!leftover && !courierReport) throw new ConflictError("Shipment is no longer the active order shipment recovery claim.");
         const restored = safeFinalizedShipmentStatus(shipment, metadata).status;
-        await shipmentMove(db, restored, "store", eq(deliveryShipments.id, shipmentId), {
-            rawStatus: restored,
-            metadata: cleanShipmentRecoveryMetadata(metadata),
-        });
+        await restoreHeldShipment(db, shipmentId, restored, metadata);
         const followed = await followCourierStatus(db, orderId, shipmentId, restored);
         return {
             status: "repaired",
@@ -644,7 +658,9 @@ export async function reconcileOrderShipment(
             inventoryReconciled: false,
             claimCleared: false,
             trackingId: shipment.trackingId,
-            message: "The shipment was already finished; its courier status is restored.",
+            message: courierReport
+                ? "The courier's report is applied: the shipment and the order follow it."
+                : "The shipment was already finished; its courier status is restored.",
             availabilityTransitionVariantIds: [],
         };
     }
@@ -691,10 +707,7 @@ export async function reconcileOrderShipment(
         finalOrderStatus,
     );
 
-    await shipmentMove(db, finalizedShipmentStatus.status, "store", eq(deliveryShipments.id, shipmentId), {
-        rawStatus: finalizedShipmentStatus.status,
-        metadata: cleanShipmentRecoveryMetadata(metadata),
-    });
+    await restoreHeldShipment(db, shipmentId, finalizedShipmentStatus.status, metadata);
 
     await clearShipmentClaim(db, orderId, shipmentId);
     // A courier status the shipment already moved to (delivered, returned)
@@ -843,11 +856,13 @@ export async function settleShipmentClaimForCourierPush(
     nowSeconds = Math.floor(Date.now() / 1000),
 ): Promise<{ state: "ready" | "in_flight" | "unresolved"; finalized?: OrderShipmentReconciliationResult }> {
     const shipment = await db
-        .select({ orderId: deliveryShipments.orderId, status: deliveryShipments.status })
+        .select({ orderId: deliveryShipments.orderId, status: deliveryShipments.status, rawStatus: deliveryShipments.rawStatus })
         .from(deliveryShipments)
         .where(eq(deliveryShipments.id, shipmentId))
         .get();
     if (!shipment) return { state: "unresolved" };
+    // A courier's report held for staff is theirs to apply: another push never repairs it.
+    if (shipment.status === ShipmentStatus.RECONCILE_REQUIRED && shipment.rawStatus === COURIER_REPORT_HELD) return { state: "unresolved" };
     const order = await db
         .select({ shipmentClaimId: orders.shipmentClaimId, shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt })
         .from(orders)

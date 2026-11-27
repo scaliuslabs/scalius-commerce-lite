@@ -736,6 +736,17 @@ export async function processPaymentConfirmed(
         return { success: false, retryable: false, error: "Provider payment reference already belongs to another order" };
       }
       assertOrderPaymentCurrency(existing.currency, currency, "Existing provider payment");
+      // The payment machine takes no confirmation of a charge the store
+      // already ended (a cancelled or given-back one), but money arrived: it
+      // goes to staff (the event's manual reconciliation shows on the order),
+      // never silently.
+      if (!PAYMENT_MACHINE.moves.confirmed.from.some((from) => from === existing.status) && existing.status !== PaymentRecordStatus.SUCCEEDED) {
+        return {
+          success: false,
+          retryable: false,
+          error: `The provider confirmed a payment the store had already recorded as ${existing.status}. Check it with the provider, and refund the money if it was taken.`,
+        };
+      }
       if (!failedAttemptCanBePromoted(existing, incomingAmountMinor)) {
         return { success: false, error: "Existing provider payment amount does not match the confirmed amount" };
       }

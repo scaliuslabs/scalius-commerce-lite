@@ -21789,7 +21789,8 @@
       "out_for_delivery",
       "delivery_failed",
       "on_hold",
-      "unknown"
+      "unknown",
+      "cancelled"
      ],
      "to": "pending",
      "by": [
@@ -21807,7 +21808,8 @@
       "out_for_delivery",
       "delivery_failed",
       "on_hold",
-      "unknown"
+      "unknown",
+      "cancelled"
      ],
      "to": "pickup_assigned",
      "by": [
@@ -21825,7 +21827,8 @@
       "out_for_delivery",
       "delivery_failed",
       "on_hold",
-      "unknown"
+      "unknown",
+      "cancelled"
      ],
      "to": "picked_up",
      "by": [
@@ -21843,7 +21846,8 @@
       "out_for_delivery",
       "delivery_failed",
       "on_hold",
-      "unknown"
+      "unknown",
+      "cancelled"
      ],
      "to": "pickup_failed",
      "by": [
@@ -21861,7 +21865,8 @@
       "out_for_delivery",
       "delivery_failed",
       "on_hold",
-      "unknown"
+      "unknown",
+      "cancelled"
      ],
      "to": "in_transit",
      "by": [
@@ -21879,7 +21884,8 @@
       "out_for_delivery",
       "delivery_failed",
       "on_hold",
-      "unknown"
+      "unknown",
+      "cancelled"
      ],
      "to": "out_for_delivery",
      "by": [
@@ -21935,7 +21941,8 @@
       "out_for_delivery",
       "delivery_failed",
       "on_hold",
-      "unknown"
+      "unknown",
+      "cancelled"
      ],
      "to": "delivery_failed",
      "by": [
@@ -21953,7 +21960,8 @@
       "out_for_delivery",
       "delivery_failed",
       "on_hold",
-      "unknown"
+      "unknown",
+      "cancelled"
      ],
      "to": "on_hold",
      "by": [
@@ -22010,6 +22018,7 @@
       "delivery_failed",
       "on_hold",
       "unknown",
+      "delivered",
       "returned"
      ],
      "to": "returned",

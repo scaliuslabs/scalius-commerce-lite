@@ -21,9 +21,10 @@ export {
 export { COD_MACHINE, COD_STATUSES, ORDER_MACHINE, type CodStatusValue, type OrderStatusValue } from "@scalius/shared/order-state";
 /** A product review's moderation. */
 export { REVIEW_MACHINE, REVIEW_STATUSES, type ReviewStatus } from "@scalius/shared/reviews";
-/** A shipment's states: a courier's report moves an open one in any order, a settled one takes none, and the store holds one for staff. */
+/** A shipment's states: a courier's report moves an open one in any order, a settled one only by a declared correction, and the store holds one for staff with any other report. */
 export {
   SETTLED_SHIPMENT_STATUSES,
+  SHIPMENT_CORRECTIONS,
   SHIPMENT_MACHINE,
   type ShipmentActor,
   type ShipmentMove,

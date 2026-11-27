@@ -41,6 +41,7 @@ import type { Courier, CourierCall, CourierRow, CourierSetup } from "./couriers/
 import { courierFor, type CourierProvidersSource } from "./couriers/registry";
 import { readinessMessages } from "@scalius/shared/readiness";
 import { shipmentMove } from "./shipment-move";
+import { applyCourierReport } from "./courier-report";
 
 type ShipmentInternalOptions = {
   shipmentId?: string;
@@ -663,10 +664,12 @@ export async function createShipment(
 
   try {
     // A certain refusal: the courier booked nothing.
-    await shipmentMove(db, ShipmentStatus.FAILED, "courier", eq(deliveryShipments.id, shipmentId), {
+    const rejected = await shipmentMove(db, ShipmentStatus.FAILED, "courier", eq(deliveryShipments.id, shipmentId), {
       rawStatus: "provider_rejected",
       metadata: JSON.stringify({ error: shipmentResult.message }),
-    });
+    }).returning({ id: deliveryShipments.id });
+    // The sweep held the row for staff meanwhile: it keeps waiting for them, and the caller hears so.
+    if (rejected.length === 0) return { ...shipmentResult, shipmentId, reconciliationRequired: true };
     return { ...shipmentResult, shipmentId };
   } catch {
     return {
@@ -807,6 +810,7 @@ export async function checkShipmentStatus(
     const { courier, settings } = await requireCourierSettings(provider, encryptionKey, couriers);
 
     let statusResult: { status: CourierShipmentStatus; rawStatus: string; metadata: Record<string, unknown> };
+    let answered = true;
     try {
       const tracking = await courier.trackShipment({ externalId: shipment.externalId }, courierCall(settings, db));
       statusResult = { status: tracking.status, rawStatus: tracking.rawStatus, metadata: tracking.details ?? {} };
@@ -815,24 +819,27 @@ export async function checkShipmentStatus(
       if (!failure) throw error;
       // The courier could not answer: an open shipment says so until the next check.
       statusResult = { status: ShipmentStatus.UNKNOWN, rawStatus: "error", metadata: { error: failure.message } };
+      answered = false;
     }
 
-    // The answer is a courier report (checked in the write, so a push that
-    // lands meanwhile is judged too): a settled parcel keeps its last word,
-    // and a shipment held for staff keeps waiting for them.
-    const written = await shipmentMove(db, statusResult.status, "courier", eq(deliveryShipments.id, shipmentId), {
-        rawStatus: statusResult.rawStatus,
-        metadata: mergeShipmentMetadata(shipment.metadata, statusResult.metadata || {}),
-      })
-      .returning({ id: deliveryShipments.id });
     let stored: { status: string; rawStatus: string } = statusResult;
-    if (written.length === 0) {
-      const [kept] = await db
-        .select({ status: deliveryShipments.status, rawStatus: deliveryShipments.rawStatus })
-        .from(deliveryShipments)
-        .where(eq(deliveryShipments.id, shipmentId));
-      if (!kept) throw new NotFoundError(`Shipment with ID ${shipmentId} not found`);
-      stored = { status: kept.status, rawStatus: kept.rawStatus ?? kept.status };
+    if (answered) {
+      // The courier's answer is its report, applied as a push is: a settled
+      // parcel takes only a correction, and any other report holds it for
+      // staff with the report; a shipment held meanwhile keeps waiting.
+      const applied = await applyCourierReport(db, shipmentId, {
+        status: statusResult.status,
+        rawStatus: statusResult.rawStatus,
+        details: statusResult.metadata,
+      });
+      if (applied.outcome !== "applied") stored = await storedStatus(db, shipmentId);
+    } else {
+      // No answer is no report: an open shipment reads `unknown`, a settled or held one keeps its last word.
+      const written = await shipmentMove(db, ShipmentStatus.UNKNOWN, "courier", eq(deliveryShipments.id, shipmentId), {
+        rawStatus: statusResult.rawStatus,
+        metadata: mergeShipmentMetadata(shipment.metadata, statusResult.metadata),
+      }).returning({ id: deliveryShipments.id });
+      if (written.length === 0) stored = await storedStatus(db, shipmentId);
     }
 
     return {
@@ -852,6 +859,15 @@ export async function checkShipmentStatus(
       `Failed to check shipment status: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+}
+
+async function storedStatus(db: Database, shipmentId: string): Promise<{ status: string; rawStatus: string }> {
+  const [kept] = await db
+    .select({ status: deliveryShipments.status, rawStatus: deliveryShipments.rawStatus })
+    .from(deliveryShipments)
+    .where(eq(deliveryShipments.id, shipmentId));
+  if (!kept) throw new NotFoundError(`Shipment with ID ${shipmentId} not found`);
+  return { status: kept.status, rawStatus: kept.rawStatus ?? kept.status };
 }
 
 /**

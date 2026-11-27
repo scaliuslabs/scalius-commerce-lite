@@ -47,7 +47,7 @@ import type {
     OrderShipmentSummary,
 } from "../types";
 import { hasActiveShipmentClaim, isShipmentClaimHeld, isShipmentClaimLeaseLive, noActiveRefundAttemptForOrderColumnCondition } from "../../order-kernel";
-import { PROVIDER_OUTCOME_UNKNOWN } from "../../delivery";
+import { COURIER_REPORT_HELD, PROVIDER_OUTCOME_UNKNOWN } from "../../delivery";
 
 // ─────────────────────────────────────────
 // Service functions
@@ -319,6 +319,25 @@ export function buildShipmentRecoverySummary(
             canRetryCreate: false,
             canRepair: false,
             unknownOutcome: true,
+            updatedAt: latestShipment.updatedAt,
+        };
+    }
+
+    if (status === ShipmentStatus.RECONCILE_REQUIRED && latestShipment?.rawStatus === COURIER_REPORT_HELD) {
+        return {
+            state: "needs_attention",
+            reason: "courier_report",
+            severity: "danger",
+            activeLock: true,
+            label: "The courier reported another outcome",
+            message: "The courier reported a different state for a parcel that was already settled. The timeline says what it reported; Repair applies the report to the shipment and the order.",
+            shipmentId,
+            status,
+            providerType,
+            canRefresh: false,
+            canRetryCreate: false,
+            canRepair: true,
+            unknownOutcome: false,
             updatedAt: latestShipment.updatedAt,
         };
     }

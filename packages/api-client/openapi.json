@@ -248695,6 +248695,7 @@
                                       "none",
                                       "courier_unconfirmed",
                                       "reconcile_required",
+                                      "courier_report",
                                       "creating",
                                       "claim_expired",
                                       "failed"
@@ -250603,6 +250604,7 @@
                                       "none",
                                       "courier_unconfirmed",
                                       "reconcile_required",
+                                      "courier_report",
                                       "creating",
                                       "claim_expired",
                                       "failed"
@@ -254483,7 +254485,8 @@
                                   "late_payment",
                                   "payment_dispute",
                                   "delivery_message",
-                                  "terms_accepted"
+                                  "terms_accepted",
+                                  "courier_report"
                                 ]
                               },
                               "body": {
@@ -254700,7 +254703,8 @@
                             "late_payment",
                             "payment_dispute",
                             "delivery_message",
-                            "terms_accepted"
+                            "terms_accepted",
+                            "courier_report"
                           ]
                         },
                         "body": {
@@ -256161,6 +256165,7 @@
                                 "none",
                                 "courier_unconfirmed",
                                 "reconcile_required",
+                                "courier_report",
                                 "creating",
                                 "claim_expired",
                                 "failed"

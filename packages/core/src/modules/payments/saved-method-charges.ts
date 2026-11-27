@@ -31,7 +31,7 @@
 //   capture, a void and a lookup act on money already taken and need only
 //   the gateway's readable credentials (`canOperateExistingPayments`).
 import { and, eq, inArray, lte, or, isNull, sql, type SQL } from "drizzle-orm";
-import { PAYMENT_IN_FLIGHT_STATUSES } from "@scalius/shared/payment-record-state";
+import { PAYMENT_IN_FLIGHT_STATUSES, PAYMENT_LANDED_STATUSES } from "@scalius/shared/payment-record-state";
 import {
   orderPayments,
   orders,
@@ -908,7 +908,7 @@ async function expireCommand(db: Database, row: AttemptRow): Promise<boolean> {
       eq(orderPayments.paymentMethod, row.gateway),
       eq(orderPayments.paymentType, row.paymentType),
       eq(orderPayments.amountMinor, row.amountMinor),
-      inArray(orderPayments.status, [PaymentRecordStatus.SUCCEEDED, PaymentRecordStatus.REFUNDED, PaymentRecordStatus.AUTHORIZED]),
+      inArray(orderPayments.status, [...PAYMENT_LANDED_STATUSES]),
       sql`${orderPayments.createdAt} >= ${Number(row.createdAt)}`,
     ))
     .get();

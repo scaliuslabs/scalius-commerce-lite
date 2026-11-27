@@ -6,14 +6,20 @@
 // - The courier's report (its answer to a booking, a tracking answer, a push,
 //   or staff recording an own-courier parcel, where the store is its own
 //   courier) may move an open shipment to any state it reports, in any order.
-//   A settled shipment takes no report that moves it: a late `in_transit`
-//   after `delivered` is refused and changes nothing. A report of the state
-//   the shipment is already in is not a move; it only refreshes the courier's
-//   words.
+//   A report of the state the shipment is already in is not a move; it only
+//   refreshes the courier's words.
+// - A settled shipment's courier part is over, but couriers correct
+//   themselves. Two corrections are moves: a delivered parcel the buyer
+//   refused at the door comes back `returned`, and a cancelled booking the
+//   rider picked up anyway goes on (to any open state, and from there as any
+//   open shipment). Every other report naming another state over a settled
+//   shipment is no move: the writer holds the shipment for staff with the
+//   courier's report (`holdForCourierReport` in core), never drops it.
 // - The store holds any shipment for staff (`reconcile_required`: a booking
 //   whose outcome is unknown, an order or stock update that failed after the
-//   courier's word). A held shipment takes no courier report; only staff's
-//   resolution restores it to a courier state.
+//   courier's word, a courier's report the settled shipment takes no move
+//   for). A held shipment takes no courier report; only staff's resolution
+//   restores it to a courier state.
 //
 // The server writes a shipment's status only as a move of this machine
 // (`shipmentMove` in core), so every writer (the courier push, the status
@@ -59,14 +65,26 @@ export const SHIPMENT_STATES: Readonly<Record<ShipmentStatus, StateFacts>> = {
 /** Who moves a shipment: its courier (or staff for an own-courier parcel), or the store holding and restoring it. */
 export type ShipmentActor = "courier" | "store";
 
-/** The settled states: no courier report moves a shipment out of one. */
+/** The settled states: the courier's part is over; only a declared correction moves one (SHIPMENT_CORRECTIONS). */
 export const SETTLED_SHIPMENT_STATUSES = COURIER_SHIPMENT_STATUSES.filter((status) => SHIPMENT_STATES[status].settled);
 
+/** The open courier states: a report moves the shipment from one to any courier state. */
+const OPEN_COURIER = COURIER_SHIPMENT_STATUSES.filter((status) => !SHIPMENT_STATES[status].settled);
+
 /** The states a courier report may move: the open courier states and the booking still waiting for the courier's answer. */
-const REPORTABLE: readonly ShipmentStatus[] = [
-  "creating",
-  ...COURIER_SHIPMENT_STATUSES.filter((status) => !SHIPMENT_STATES[status].settled),
-];
+const REPORTABLE: readonly ShipmentStatus[] = ["creating", ...OPEN_COURIER];
+
+/**
+ * The couriers' corrections of a settled shipment, which are moves: the
+ * settled state, and the reports that move it. A delivered parcel refused at
+ * the door comes back; a cancelled booking the rider picked up anyway goes on
+ * (`unknown` is no correction: it says nothing happened). Any other report of
+ * another state over a settled shipment holds it for staff.
+ */
+export const SHIPMENT_CORRECTIONS: Readonly<Partial<Record<CourierShipmentStatus, readonly CourierShipmentStatus[]>>> = {
+  delivered: ["returned"],
+  cancelled: OPEN_COURIER.filter((status) => status !== "unknown"),
+};
 
 /**
  * A move's name: a courier's report is named by the state it reports
@@ -78,7 +96,8 @@ export type ShipmentMove = CourierShipmentStatus | "hold" | `restore_${CourierSh
 const moves = {} as Record<ShipmentMove, MachineMove<ShipmentStatus>>;
 for (const to of COURIER_SHIPMENT_STATUSES) {
   // A report of the state the shipment is in names it among the sources: it refreshes the courier's words.
-  moves[to] = { from: REPORTABLE.includes(to) ? REPORTABLE : [...REPORTABLE, to], to, by: ["courier"] };
+  const corrected = SETTLED_SHIPMENT_STATUSES.filter((from) => SHIPMENT_CORRECTIONS[from]?.includes(to));
+  moves[to] = { from: [...REPORTABLE, ...corrected, ...(REPORTABLE.includes(to) ? [] : [to])], to, by: ["courier"] };
 }
 moves.hold = { from: Object.keys(SHIPMENT_STATES) as ShipmentStatus[], to: "reconcile_required", by: ["store"] };
 for (const to of COURIER_SHIPMENT_STATUSES) moves[`restore_${to}`] = { from: ["reconcile_required"], to, by: ["store"] };
@@ -90,7 +109,7 @@ export const SHIPMENT_MACHINE = defineMachine<ShipmentStatus, Record<ShipmentMov
   // is called); an own-courier parcel starts `in_transit`, handed over.
   initial: ["creating", "in_transit"],
   // The store may hold any shipment for staff, so no state is final; a settled
-  // one only leaves for that hold, and comes back to a courier state.
+  // one leaves by a correction or for that hold, and comes back to a courier state.
   final: [],
   moves,
 });
@@ -122,4 +141,13 @@ export function isSettledShipment(status: string | null | undefined): boolean {
 /** Whether `value` is a state a courier reports (the courier port's list). */
 export function isCourierShipmentStatus(value: string | null | undefined): value is CourierShipmentStatus {
   return (COURIER_SHIPMENT_STATUSES as readonly string[]).includes(value ?? "");
+}
+
+/**
+ * Whether a courier's report of `to` over a shipment in `from` holds it for
+ * staff: the shipment is settled, the report names another state, and no
+ * correction moves it there.
+ */
+export function courierReportHolds(from: string, to: string): boolean {
+  return isSettledShipment(from) && from !== to && isCourierShipmentStatus(to) && !canWriteShipmentStatus(from, to, "courier");
 }

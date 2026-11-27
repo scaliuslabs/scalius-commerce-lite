@@ -8667,7 +8667,8 @@
             "late_payment",
             "payment_dispute",
             "delivery_message",
-            "terms_accepted"
+            "terms_accepted",
+            "courier_report"
            ]
           },
           "body": {

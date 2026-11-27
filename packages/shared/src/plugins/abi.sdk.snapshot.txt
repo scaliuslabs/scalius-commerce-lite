@@ -599,7 +599,7 @@ import type { PluginObjectCollection } from "./context";
 export { defineMachine, machineRefusal, movesByTarget, type AnyMachine, type Machine, type MachineMove, type MachineMoves, type MachineRefusal, type MachineSpec, } from "@scalius/shared/machine";
 export { COD_MACHINE, COD_STATUSES, ORDER_MACHINE, type CodStatusValue, type OrderStatusValue } from "@scalius/shared/order-state";
 export { REVIEW_MACHINE, REVIEW_STATUSES, type ReviewStatus } from "@scalius/shared/reviews";
-export { SETTLED_SHIPMENT_STATUSES, SHIPMENT_MACHINE, type ShipmentActor, type ShipmentMove, type ShipmentStatus, } from "@scalius/shared/shipment-state";
+export { SETTLED_SHIPMENT_STATUSES, SHIPMENT_CORRECTIONS, SHIPMENT_MACHINE, type ShipmentActor, type ShipmentMove, type ShipmentStatus, } from "@scalius/shared/shipment-state";
 export { PAYMENT_MACHINE, REFUND_RECORD_MACHINE, type ChargeStatus, type PaymentMove, type RefundRecordMove, type RefundRecordStatus, } from "@scalius/shared/payment-record-state";
 export { WARRANTY_CLAIM_MACHINE, type WarrantyClaimStatus } from "@scalius/shared/warranty";
 export { OBJECT_RECORD_MACHINE, objectRecordStatuses } from "@scalius/shared/plugins/object-status";
@@ -10693,6 +10693,7 @@ export type ReviewStatus = "rejected" | "pending" | "published" | "withdrawn";
 
 // packages/shared/src/shipment-state.d.ts
 export declare const SETTLED_SHIPMENT_STATUSES: ("failed" | "unknown" | "cancelled" | "pending" | "pickup_assigned" | "picked_up" | "pickup_failed" | "in_transit" | "out_for_delivery" | "delivered" | "partial_delivered" | "delivery_failed" | "on_hold" | "returned")[];
+export declare const SHIPMENT_CORRECTIONS: Readonly<Partial<Record<CourierShipmentStatus, readonly CourierShipmentStatus[]>>>;
 export declare const SHIPMENT_MACHINE: import("./machine").Machine<ShipmentStatus, Record<ShipmentMove, MachineMove<ShipmentStatus>>>;
 export type ShipmentActor = "store" | "courier";
 export type ShipmentMove = "failed" | "unknown" | "cancelled" | "pending" | "pickup_assigned" | "picked_up" | "pickup_failed" | "in_transit" | "out_for_delivery" | "delivered" | "partial_delivered" | "delivery_failed" | "on_hold" | "returned" | "hold" | "restore_failed" | "restore_unknown" | "restore_cancelled" | "restore_pending" | "restore_pickup_assigned" | "restore_picked_up" | "restore_pickup_failed" | "restore_in_transit" | "restore_out_for_delivery" | "restore_delivered" | "restore_partial_delivered" | "restore_delivery_failed" | "restore_on_hold" | "restore_returned";

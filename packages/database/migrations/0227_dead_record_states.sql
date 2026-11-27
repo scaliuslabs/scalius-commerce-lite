@@ -1,3 +1,5 @@
+-- rewrites order_payments: rows whose status is `confirmed`, a state no writer has set in this codebase's history (expected none)
+-- rewrites delivery_shipments: rows whose status is `processing`, own-courier parcels written before July 2026 (a few per older store)
 -- Two stored states no writer sets leave their lists (the payment and the
 -- shipment machines, packages/shared/src/payment-record-state.ts and
 -- shipment-state.ts), so no row may still hold them:
@@ -7,8 +9,21 @@
 -- - a shipment `processing`: what an own-courier parcel was written before
 --   July 2026, handed over; it becomes `in_transit`, the state that parcel
 --   starts in now.
+-- The rewrite is a correction, not news (as 0207): event demand is held for
+-- the updates so no payment.updated or shipment.updated is enqueued, then
+-- restored in the same transaction.
+CREATE TABLE `migration_event_demand_hold` (`filter` text PRIMARY KEY NOT NULL);
+--> statement-breakpoint
+INSERT INTO `migration_event_demand_hold` (`filter`) SELECT `filter` FROM `event_demand`;
+--> statement-breakpoint
+DELETE FROM `event_demand`;
+--> statement-breakpoint
 UPDATE `order_payments` SET `status` = 'pending' WHERE `status` = 'confirmed';
 --> statement-breakpoint
 UPDATE `delivery_shipments` SET `status` = 'in_transit' WHERE `status` = 'processing';
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (227, '0227_dead_record_states', '1997bfca50a0f4343d0f8aa77a2eff6a3dbf85bccdaccc7edeeec5380ea178dd');
+INSERT INTO `event_demand` (`filter`) SELECT `filter` FROM `migration_event_demand_hold`;
+--> statement-breakpoint
+DROP TABLE `migration_event_demand_hold`;
+--> statement-breakpoint
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (227, '0227_dead_record_states', 'c1f65974975b27971654872330edf348ebca807a32fa242348ab49a3ffa3482d');

@@ -71191,7 +71191,7 @@ export type GetApiV1AdminOrdersResponses = {
                 } | null;
                 shipmentRecovery: {
                     state: 'none' | 'creating' | 'needs_attention' | 'failed';
-                    reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'creating' | 'claim_expired' | 'failed';
+                    reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'courier_report' | 'creating' | 'claim_expired' | 'failed';
                     severity: 'info' | 'warning' | 'danger';
                     activeLock: boolean;
                     label: string;
@@ -71733,7 +71733,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                 } | null;
                 shipmentRecovery: {
                     state: 'none' | 'creating' | 'needs_attention' | 'failed';
-                    reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'creating' | 'claim_expired' | 'failed';
+                    reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'courier_report' | 'creating' | 'claim_expired' | 'failed';
                     severity: 'info' | 'warning' | 'danger';
                     activeLock: boolean;
                     label: string;
@@ -72885,7 +72885,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message' | 'terms_accepted';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message' | 'terms_accepted' | 'courier_report';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -72969,7 +72969,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message' | 'terms_accepted';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message' | 'terms_accepted' | 'courier_report';
             body: string | null;
             data: {
                 [key: string]: unknown;
@@ -73348,7 +73348,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
             } | null;
             shipmentRecovery: {
                 state: 'none' | 'creating' | 'needs_attention' | 'failed';
-                reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'creating' | 'claim_expired' | 'failed';
+                reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'courier_report' | 'creating' | 'claim_expired' | 'failed';
                 severity: 'info' | 'warning' | 'danger';
                 activeLock: boolean;
                 label: string;
