@@ -486,10 +486,18 @@ export const MUTATIONS = {
     expect: /reading order: a line reads \S+ before its title/,
   },
   "H-k the drawer's footer never yields to its lines": {
-    why: "the drawer's bottom group keeps its money rows, the apps' footer blocks and View cart however little room they leave the lines",
-    rewrites: [rewrite("apps/storefront/src/components/CartFlyout.tsx", "const LINES_SHARE = 0.45;", "const LINES_SHARE = 0;")],
-    cases: ["five lines in the drawer on a phone", "five lines in a theme's arranged drawer on a phone"],
-    expect: /drawer lines: .*whole line|Check out is not wholly on screen/,
+    why: "the drawer's rows above the total stand outside its scrolling region, however little room they leave the lines",
+    rewrites: [rewrite("apps/storefront/src/components/CartFlyout.tsx",
+      "{scrollRegion(cart.totalItems === 0 ? emptyState : lineList(true), undefined, cart.totalItems > 0 && extrasBox(<>{summaryRows}{footerTarget}</>))}",
+      "{scrollRegion(cart.totalItems === 0 ? emptyState : lineList(true))}{cart.totalItems > 0 && extrasBox(<>{summaryRows}{footerTarget}</>)}")],
+    cases: ["five lines in the drawer on a phone", "five lines in the customer's drawer on a phone"],
+    expect: /drawer lines: .*whole line|is not wholly on screen/,
+  },
+  "H-l the drawer's footer blocks in a pane shorter than they are": {
+    why: "the rows above the total scroll in a pane of their own that can be shorter than an app's block: the block shows as a sliver",
+    rewrites: [rewrite("apps/storefront/src/components/CartFlyout.tsx", '<div className="mt-auto shrink-0 space-y-3 border-t', '<div className="mt-auto shrink-0 max-h-8 overflow-y-auto space-y-3 border-t')],
+    cases: ["five lines in the customer's drawer on a phone"],
+    expect: /drawer lines: an app block in the drawer's footer .*sliver/,
   },
   "H-i the dialog's actions stack with Confirm on top": {
     why: "Confirm comes first in the dialog's markup: where its large Confirm and Go back do not fit side by side, Confirm stacks on top, away from the thumb",

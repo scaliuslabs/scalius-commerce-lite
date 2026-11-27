@@ -74,7 +74,7 @@ export const GALLERY_CUSTOMER = {
   title: "Arcade Protection",
   account: {
     key: "line:v3:prod_gta5:variant:var_gta5_account:p:none", variantId: "var_gta5_account", price: 2222,
-    line: { id: "prod_gta5", slug: "gta-v-premium-edition", name: "Grand Theft Auto V: Premium Edition", price: 2222, quantity: 1, variantId: "var_gta5_account", propertiesHash: "none", options: [{ name: "Platform", label: "Rockstar Launcher" }, { name: "Type", label: "Account" }] },
+    line: { id: "prod_gta5", slug: "gta-v-premium-edition", name: "Grand Theft Auto V: Premium Edition", price: 2222, quantity: 1, variantId: "var_gta5_account", propertiesHash: "none", options: [{ name: "Edition", label: "Enhanced Edition" }, { name: "Platform", label: "Rockstar Launcher" }, { name: "Format", label: "Account" }, { name: "Region", label: "Global" }] },
   },
   redeem: {
     key: "line:v3:prod_gta5:variant:var_gta5_key:p:none", variantId: "var_gta5_key", price: 1754,
@@ -82,12 +82,26 @@ export const GALLERY_CUSTOMER = {
   },
 } as const;
 
-/** The customer's cart as the browser keeps it: protected, the account line holds two units at its price with the add-on. */
-export function galleryCustomerCart(protectedAccount: boolean): string {
+/** More of the reference store's games, each with its four options as the store sells them (taller lines than a plain product's). */
+const CUSTOMER_GAMES = [
+  { id: "prod_elden", name: "Elden Ring", price: 4679, options: ["Standard Edition", "Steam"] },
+  { id: "prod_rdr2", name: "Red Dead Redemption 2", price: 3150, options: ["Ultimate Edition", "Rockstar Launcher"] },
+  { id: "prod_cyber", name: "Cyberpunk 2077", price: 2890, options: ["Ultimate Edition", "Steam"] },
+  { id: "prod_forza", name: "Forza Horizon 5", price: 3499, options: ["Premium Edition", "Xbox"] },
+].map(({ id, name, price, options: [edition, platform] }) => ({
+  key: `line:v3:${id}:variant:var_${id}:p:none`,
+  line: { id, slug: id.replace("prod_", ""), name, price, quantity: 1, variantId: `var_${id}`, propertiesHash: "none", options: [{ name: "Edition", label: edition }, { name: "Platform", label: platform }, { name: "Format", label: "Account" }, { name: "Region", label: "Global" }] },
+}));
+
+/**
+ * The customer's cart as the browser keeps it: protected, the account line holds two units at its price with the
+ * add-on. `games`: that many more of the store's games after it, instead of the redeem key (five lines in all with four).
+ */
+export function galleryCustomerCart(protectedAccount: boolean, games = 0): string {
   const { account, redeem } = GALLERY_CUSTOMER;
   const unit = account.price + (protectedAccount ? GALLERY_CUSTOMER.protectionMinor / 100 : 0);
   return JSON.stringify({ items: {
     [account.key]: { ...account.line, price: unit, quantity: protectedAccount ? 2 : 1 },
-    [redeem.key]: redeem.line,
+    ...(games > 0 ? Object.fromEntries(CUSTOMER_GAMES.slice(0, games).map((game) => [game.key, game.line])) : { [redeem.key]: redeem.line }),
   } });
 }

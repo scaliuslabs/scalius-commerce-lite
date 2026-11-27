@@ -1,0 +1,351 @@
+{
+  "colors": {
+    "background": "#ffffff",
+    "foreground": "#000000",
+    "card": "#f1f1f1",
+    "card-foreground": "#000000",
+    "popover": "#ffffff",
+    "popover-foreground": "#000000",
+    "primary": "#7a6500",
+    "primary-foreground": "#ffffff",
+    "secondary": "#f8f9fa",
+    "secondary-foreground": "#000000",
+    "muted": "#f8f9fa",
+    "muted-foreground": "#111111",
+    "accent": "#f8f9fa",
+    "accent-foreground": "#000000",
+    "destructive": "#cd3140",
+    "destructive-foreground": "#ffffff",
+    "border": "#eaeaea",
+    "input": "#8b8b8b"
+  },
+  "darkColors": {
+    "background": "#100c20",
+    "foreground": "#ffffff",
+    "card": "#1e1831",
+    "card-foreground": "#ffffff",
+    "popover": "#19152a",
+    "popover-foreground": "#ffffff",
+    "primary": "#00bc7d",
+    "primary-foreground": "#06110d",
+    "secondary": "#2b2346",
+    "secondary-foreground": "#ffffff",
+    "muted": "#2b2346",
+    "muted-foreground": "#9f9fa9",
+    "accent": "#2b2346",
+    "accent-foreground": "#ffffff",
+    "destructive": "#ff9a9a",
+    "destructive-foreground": "#100c20",
+    "border": "#524179",
+    "input": "#7a68a6"
+  },
+  "privatePages": {
+    "controls": "header",
+    "pages": {
+      "cart": {
+        "layout": [
+          { "type": "part", "part": "notices" },
+          {
+            "type": "layout",
+            "layout": "columns",
+            "hook": "cart-columns",
+            "children": [
+              {
+                "type": "layout",
+                "layout": "stack",
+                "children": [
+                  { "type": "part", "part": "lines", "variant": "heading-above" },
+                  {
+                    "type": "layout",
+                    "layout": "fold",
+                    "children": [
+                      { "type": "part", "part": "summary", "variant": "with-items" },
+                      { "type": "target", "target": "cart.page.summary" }
+                    ]
+                  },
+                  { "type": "target", "target": "cart.page.below" }
+                ]
+              },
+              { "type": "part", "part": "details" }
+            ]
+          }
+        ],
+        "items": {
+          "line": [
+            {
+              "type": "layout",
+              "layout": "grid",
+              "hook": "line-grid",
+              "children": [
+                { "type": "part", "part": "image" },
+                {
+                  "type": "layout",
+                  "layout": "stack",
+                  "children": [
+                    { "type": "part", "part": "details", "variant": "values" },
+                    { "type": "part", "part": "title" },
+                    { "type": "part", "part": "inputs" },
+                    { "type": "part", "part": "limit" },
+                    { "type": "part", "part": "issue" },
+                    { "type": "part", "part": "rule" }
+                  ]
+                },
+                {
+                  "type": "layout",
+                  "layout": "stack",
+                  "hook": "line-side",
+                  "children": [
+                    { "type": "part", "part": "price" },
+                    { "type": "part", "part": "quantity" },
+                    { "type": "part", "part": "remove", "variant": "words" }
+                  ]
+                }
+              ]
+            },
+            { "type": "target", "target": "cart.line.after" }
+          ]
+        }
+      }
+    },
+    "tokens": {
+      "cart": {
+        "page": {
+          "gradient": { "shape": "radial", "from": { "light": "background", "dark": "#2b2d6e" }, "to": "background" }
+        },
+        "frame": { "max-width": 1400 },
+        "notice": {
+          "background": { "light": "#f2ebd9", "dark": "#35282c" },
+          "text": { "light": "#000000", "dark": "#fef3c6" },
+          "radius": 0,
+          "border-width": 0
+        },
+        "lines": { "background": "card", "border": "#524179", "border-width": 0, "radius": 0, "shadow": "lg" },
+        "lines-heading": { "size": 36, "weight": "600", "text": "foreground" },
+        "lines-intro": { "text": "muted-foreground", "size": 14 },
+        "line-image": {
+          "width": 64,
+          "height": 80,
+          "width-wide": 92,
+          "height-wide": 112,
+          "radius": 0,
+          "fit": "cover",
+          "background": "popover"
+        },
+        "line-details": { "text": "muted-foreground", "size": 12 },
+        "line-title": { "weight": "600", "clamp": "2", "text": "foreground", "leading": "tight" },
+        "line-price": {
+          "size": 18,
+          "weight": "600",
+          "align": "end",
+          "text": { "light": "#000000", "dark": "#5ee9b5" },
+          "muted": { "light": "#111111", "dark": "#83838d" }
+        },
+        "line-quantity": {
+          "background": "muted",
+          "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+          "radius": 0,
+          "text": { "light": "#111111", "dark": "#d4d4d8" }
+        },
+        "line-remove": { "text": "destructive", "size": 14, "weight": "400" },
+        "summary": {
+          "background": "card",
+          "text": { "light": "#000000", "dark": "#d1d1d5" },
+          "border": "#524179",
+          "border-width": 0,
+          "radius": 0,
+          "padding": 20,
+          "gap": 12,
+          "shadow": "lg"
+        },
+        "summary-heading": { "size": 20, "weight": "600", "text": "foreground" },
+        "summary-rows": { "text": { "light": "#000000", "dark": "#d1d1d5" }, "size": 14 },
+        "summary-total": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 20, "weight": "600" },
+        "summary-total-label": { "text": "foreground", "size": 16, "weight": "600" },
+        "summary-add-on": { "text": { "light": "#000000", "dark": "#5ee9b5" } },
+        "summary-add-on-detail": {
+          "background": { "light": "#dff7e8", "dark": "#10161e" },
+          "border": { "light": "#b7e6c9", "dark": "#10161e" },
+          "border-width": 1,
+          "radius": 0,
+          "padding": 8,
+          "size": 12,
+          "text": { "light": "#000000", "dark": "#d4d4d8" },
+          "muted": { "light": "#111111", "dark": "#7e7e88" }
+        },
+        "details-form": { "background": "card", "padding": 20, "radius": 0, "border-width": 0 },
+        "section-heading": { "size": 20, "weight": "600" },
+        "input": {
+          "background": "muted",
+          "text": "foreground",
+          "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+          "radius": 0,
+          "ring": { "light": "#907a00", "dark": "#a397ff" }
+        },
+        "field-label": { "size": 12, "weight": "600" },
+        "dock": { "background": "card", "border": "#524179", "border-width": 1 },
+        "submit": {
+          "background": { "light": "#fed700", "dark": "primary" },
+          "text": { "light": "#000000", "dark": "primary-foreground" },
+          "border": { "light": "#000000", "dark": "primary" },
+          "border-width": 2,
+          "radius": 0,
+          "weight": "600",
+          "size": 14,
+          "inset": 20
+        },
+        "cart-empty": { "text": "foreground", "muted": "muted-foreground" },
+        "dialog": {
+          "background": "#171124",
+          "text": "#ffffff",
+          "muted": "#d4d4d8",
+          "border": { "light": "#eaeaea", "dark": "#49396d" },
+          "border-width": 1,
+          "radius": 0,
+          "shadow": "lg"
+        },
+        "dialog-title": { "size": 24, "weight": "800", "leading": "tight", "text": "#ffffff" },
+        "dialog-text": {
+          "background": "#110d1e",
+          "border": "#443567",
+          "border-width": 1,
+          "radius": 0,
+          "padding": 16,
+          "text": "#d4d4d8",
+          "muted": "#d4d4d8"
+        },
+        "dialog-agree": {
+          "background": "#241b39",
+          "border": "#49396d",
+          "border-width": 1,
+          "radius": 0,
+          "padding": 16,
+          "text": "#e4e4e7"
+        },
+        "dialog-back": {
+          "text": "#e4e4e7",
+          "border": "#8575ae",
+          "border-width": 1,
+          "radius": 0,
+          "weight": "700",
+          "inset": 20
+        },
+        "dialog-confirm": {
+          "background": { "light": "#fed700", "dark": "primary" },
+          "text": { "light": "#333e48", "dark": "primary-foreground" },
+          "radius": 0,
+          "weight": "800",
+          "inset": 20
+        },
+        "ui.stack.warning@arcade.protection/cart.line.after": {
+          "background": { "light": "#f2ebd9", "dark": "#35282c" },
+          "text": { "light": "#000000", "dark": "#fef3c6" },
+          "border-width": 0,
+          "radius": 0,
+          "padding": 8,
+          "gap": 8
+        },
+        "ui.mark.warning@arcade.protection/cart.line.after": {
+          "text": { "light": "#000000", "dark": "#fee685" },
+          "border": { "light": "#f7e195", "dark": "#866c2e" },
+          "size": 12
+        },
+        "ui.text@arcade.protection/cart.line.after": {
+          "text": { "light": "#000000", "dark": "#fef3c6" },
+          "size": 14,
+          "weight": "500"
+        },
+        "ui.text.success@arcade.protection/cart.line.after": {
+          "text": { "light": "#000000", "dark": "#5ee9b5" },
+          "size": 14,
+          "weight": "600"
+        },
+        "ui.link@arcade.protection/cart.line.after": {
+          "text": { "light": "#000000", "dark": "#5ee9b5" },
+          "size": 12,
+          "weight": "500"
+        },
+        "ui.button@arcade.protection/cart.line.after": {
+          "background": { "light": "#fed700", "dark": "primary" },
+          "text": { "light": "#333e48", "dark": "primary-foreground" },
+          "border": { "light": "#fed700", "dark": "primary" },
+          "border-width": 0,
+          "radius": 0,
+          "weight": "600",
+          "size": 12,
+          "inset": 16
+        },
+        "ui.badge.success@arcade.protection/cart.line.after": {
+          "background": "card",
+          "text": { "light": "#000000", "dark": "#5ee9b5" },
+          "border": "card",
+          "radius": 0,
+          "padding": 0,
+          "weight": "600",
+          "size": 12
+        },
+        "ui.stack.warning@arcade.protection/cart.page.summary": {
+          "background": { "light": "#f2ebd9", "dark": "#35282c" },
+          "text": { "light": "#000000", "dark": "#ffffff" },
+          "border-width": 0,
+          "radius": 0,
+          "padding": 12,
+          "gap": 12
+        },
+        "ui.stack.success@arcade.protection/cart.page.summary": {
+          "background": { "light": "#fed700", "dark": "#1b2839" },
+          "text": { "light": "#000000", "dark": "#ffffff" },
+          "border-width": 0,
+          "radius": 0,
+          "padding": 12,
+          "gap": 12
+        },
+        "ui.mark.warning@arcade.protection/cart.page.summary": {
+          "text": { "light": "#000000", "dark": "#fee685" },
+          "border": { "light": "#f7e195", "dark": "#786231" },
+          "size": 14
+        },
+        "ui.mark.success@arcade.protection/cart.page.summary": {
+          "text": { "light": "#000000", "dark": "#a4f4cf" },
+          "border": { "light": "#bede48", "dark": "#36756b" },
+          "size": 12
+        },
+        "ui.text@arcade.protection/cart.page.summary": {
+          "text": { "light": "#000000", "dark": "#ffffff" },
+          "size": 14,
+          "weight": "600"
+        },
+        "ui.link@arcade.protection/cart.page.summary": {
+          "text": { "light": "#000000", "dark": "#5ee9b5" },
+          "size": 12,
+          "weight": "500"
+        },
+        "ui.button@arcade.protection/cart.page.summary": {
+          "background": { "light": "#fed700", "dark": "muted" },
+          "text": { "light": "#000000", "dark": "#a4f4cf" },
+          "border-width": 0,
+          "radius": 0,
+          "weight": "600",
+          "size": 12,
+          "inset": 8
+        },
+        "@line-grid": { "columns": [64, "1fr", 88], "columns-wide": [92, "1fr", 150], "gap": 12 },
+        "@line-side": { "gap": 8 },
+        "@cart-columns": { "gap": 24 }
+      }
+    },
+    "labels": {
+      "cart.heading": { "en": "Your Cart", "bn": "আপনার কার্ট" },
+      "cart.intro": { "en": "Review your items before checkout.", "bn": "চেকআউটের আগে পণ্যগুলো দেখে নিন।" },
+      "cart.summaryHeading": { "en": "Order Summary", "bn": "অর্ডারের সারাংশ" },
+      "cart.empty": { "en": "Your cart is empty.", "bn": "আপনার কার্ট খালি।" },
+      "cart.emptyText": {
+        "en": "Add a product from the store to see it here.",
+        "bn": "এখানে দেখতে স্টোর থেকে একটি পণ্য যোগ করুন।"
+      },
+      "cart.continue": "continue-shopping",
+      "dialog.goBack": "go-back",
+      "dialog.confirm": "continue-checkout",
+      "drawer.checkout": "proceed-to-checkout"
+    }
+  }
+}

@@ -460,26 +460,24 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         { "type": "part", "part": "notices" },
         {
           "type": "layout",
-          "layout": "columns",
-          "hook": "cart-columns",
+          "layout": "grid",
+          "hook": "cart-grid",
           "children": [
+            { "type": "part", "part": "lines", "variant": "heading-above" },
             {
               "type": "layout",
               "layout": "stack",
+              "hook": "cart-side",
               "children": [
-                { "type": "part", "part": "lines", "variant": "heading-above" },
-                {
-                  "type": "layout",
-                  "layout": "fold",
-                  "children": [
-                    { "type": "part", "part": "summary", "variant": "with-items" },
-                    { "type": "target", "target": "cart.page.summary" }
-                  ]
-                },
-                { "type": "target", "target": "cart.page.below" }
+                { "type": "part", "part": "summary", "variant": "with-items" },
+                { "type": "target", "target": "cart.page.summary" }
               ]
             },
-            { "type": "part", "part": "details" }
+            {
+              "type": "layout",
+              "layout": "stack",
+              "children": [{ "type": "part", "part": "details" }, { "type": "target", "target": "cart.page.below" }]
+            }
           ]
         }
       ],
@@ -507,7 +505,11 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
                 "type": "layout",
                 "layout": "stack",
                 "hook": "line-side",
-                "children": [{ "type": "part", "part": "price" }, { "type": "part", "part": "quantity" }, { "type": "part", "part": "remove", "variant": "words" }]
+                "children": [
+                  { "type": "part", "part": "price" },
+                  { "type": "part", "part": "quantity" },
+                  { "type": "part", "part": "remove", "variant": "words" }
+                ]
               }
             ]
           },
@@ -518,23 +520,59 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
   },
   "tokens": {
     "cart": {
-      "page": { "gradient": { "shape": "radial", "from": { "light": "background", "dark": "#2b2d6e" }, "to": "background" } },
+      "page": {
+        "gradient": { "shape": "radial", "from": { "light": "background", "dark": "#2b2d6e" }, "to": "background" }
+      },
       "frame": { "max-width": 1400 },
-      "notice": { "background": { "light": "#f2ebd9", "dark": "#35282c" }, "text": { "light": "#000000", "dark": "#fef3c6" }, "radius": 0, "border-width": 0 },
+      "notice": {
+        "background": { "light": "#f2ebd9", "dark": "#35282c" },
+        "text": { "light": "#000000", "dark": "#fef3c6" },
+        "radius": 0,
+        "border-width": 0
+      },
       "lines": { "background": "card", "border": "#524179", "border-width": 0, "radius": 0, "shadow": "lg" },
-      "lines-heading": { "size": 36, "weight": "600", "text": "foreground" },
-      "lines-intro": { "text": "muted-foreground", "size": 14 },
-      "line-image": { "width": 64, "height": 80, "width-wide": 92, "height-wide": 112, "radius": 0, "fit": "cover", "background": "popover" },
-      "line-details": { "text": "muted-foreground", "size": 12 },
-      "line-title": { "weight": "600", "clamp": "2", "text": "foreground", "leading": "tight" },
-      "line-price": { "size": 18, "weight": "600", "align": "end", "text": { "light": "#000000", "dark": "#5ee9b5" }, "muted": { "light": "#111111", "dark": "#83838d" } },
-      "line-quantity": { "background": "muted", "border": { "light": "#7b7b7b", "dark": "#8575ae" }, "radius": 0, "text": { "light": "#111111", "dark": "#d4d4d8" } },
-      "line-remove": { "text": "destructive", "size": 14, "weight": "400" },
-      "summary": { "background": "card", "text": { "light": "#000000", "dark": "#d1d1d5" }, "border": "#524179", "border-width": 0, "radius": 0, "padding": 20, "gap": 12, "shadow": "lg" },
-      "summary-heading": { "size": 20, "weight": "600", "text": "foreground" },
-      "summary-rows": { "text": { "light": "#000000", "dark": "#d1d1d5" }, "size": 14 },
+      "lines-heading": { "size": 36, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "lines-intro": { "text": { "light": "#111111", "dark": "#9f9fa9" }, "size": 14 },
+      "cart-empty": {
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "line-image": { "width": 64, "height": 80, "radius": 0, "fit": "cover", "background": "popover" },
+      "line-details": { "text": { "light": "#111111", "dark": "#9f9fa9" }, "size": 12 },
+      "line-title": {
+        "weight": "600",
+        "clamp": "2",
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "leading": "tight"
+      },
+      "line-price": {
+        "size": 18,
+        "weight": "600",
+        "align": "end",
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "muted": { "light": "#111111", "dark": "#83838d" }
+      },
+      "line-quantity": {
+        "background": "muted",
+        "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+        "radius": 0,
+        "text": { "light": "#111111", "dark": "#d4d4d8" }
+      },
+      "line-remove": { "text": { "light": "destructive", "dark": "#ffa2a2" }, "size": 14, "weight": "400", "radius": 0 },
+      "summary": {
+        "background": "card",
+        "text": { "light": "#000000", "dark": "#cbcbd1" },
+        "border": "#524179",
+        "border-width": 0,
+        "radius": 0,
+        "padding": 20,
+        "gap": 12,
+        "shadow": "lg"
+      },
+      "summary-heading": { "size": 20, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "summary-rows": { "text": { "light": "#000000", "dark": "#cbcbd1" }, "size": 14 },
       "summary-total": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 20, "weight": "600" },
-      "summary-total-label": { "text": "foreground", "size": 16, "weight": "600" },
+      "summary-total-label": { "text": { "light": "#000000", "dark": "#ffffff" }, "size": 16, "weight": "600" },
       "summary-add-on": { "text": { "light": "#000000", "dark": "#5ee9b5" } },
       "summary-add-on-detail": {
         "background": { "light": "#dff7e8", "dark": "#10161e" },
@@ -558,16 +596,25 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
       "field-label": { "size": 12, "weight": "600" },
       "dock": { "background": "card", "border": "#524179", "border-width": 1 },
       "submit": {
-        "background": { "light": "#fed700", "dark": "primary" },
-        "text": { "light": "#000000", "dark": "primary-foreground" },
-        "border": { "light": "#000000", "dark": "primary" },
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
         "border-width": 2,
         "radius": 0,
         "weight": "600",
         "size": 14,
         "inset": 20
       },
-      "cart-empty": { "text": "foreground", "muted": "muted-foreground" },
+      "action": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "600",
+        "size": 14,
+        "inset": 20
+      },
       "dialog": {
         "background": "#171124",
         "text": "#ffffff",
@@ -578,14 +625,39 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         "shadow": "lg"
       },
       "dialog-title": { "size": 24, "weight": "800", "leading": "tight", "text": "#ffffff" },
-      "dialog-text": { "background": "#110d1e", "border": "#443567", "border-width": 1, "radius": 0, "padding": 16, "text": "#d4d4d8", "muted": "#d4d4d8" },
-      "dialog-agree": { "background": "#241b39", "border": "#49396d", "border-width": 1, "radius": 0, "padding": 16, "text": "#e4e4e7" },
-      "dialog-back": { "text": "#e4e4e7", "border": "#8575ae", "border-width": 1, "radius": 0, "weight": "700", "inset": 20 },
+      "dialog-text": {
+        "background": "#110d1e",
+        "border": "#443567",
+        "border-width": 1,
+        "radius": 0,
+        "padding": 16,
+        "text": "#d4d4d8",
+        "muted": "#d4d4d8"
+      },
+      "dialog-agree": {
+        "background": "#241b39",
+        "border": "#49396d",
+        "border-width": 1,
+        "radius": 0,
+        "padding": 16,
+        "text": "#e4e4e7"
+      },
+      "dialog-back": {
+        "text": "#e4e4e7",
+        "border": "#8575ae",
+        "border-width": 1,
+        "radius": 0,
+        "weight": "700",
+        "inset": 20
+      },
       "dialog-confirm": {
-        "background": { "light": "#fed700", "dark": "primary" },
-        "text": { "light": "#333e48", "dark": "primary-foreground" },
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
         "radius": 0,
         "weight": "800",
+        "size": 14,
         "inset": 20
       },
       "ui.stack.warning@arcade.protection/cart.line.after": {
@@ -601,27 +673,34 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         "border": { "light": "#f7e195", "dark": "#866c2e" },
         "size": 12
       },
-      "ui.text@arcade.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#fef3c6" }, "size": 14, "weight": "500" },
-      "ui.text.success@arcade.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 14, "weight": "600" },
-      "ui.link@arcade.protection/cart.line.after": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 12, "weight": "500" },
-      "ui.button@arcade.protection/cart.line.after": {
-        "background": { "light": "#fed700", "dark": "primary" },
-        "text": { "light": "#333e48", "dark": "primary-foreground" },
-        "border": { "light": "#fed700", "dark": "primary" },
+      "ui.text@arcade.protection/cart.line.after": {
+        "text": { "light": "#000000", "dark": "#fef3c6" },
+        "size": 14,
+        "weight": "500"
+      },
+      "ui.text.success@arcade.protection/cart.line.after": {
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "size": 14,
+        "weight": "600"
+      },
+      "ui.link@arcade.protection/cart.line.after": {
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "weight": "500"
+      },
+      "ui.button.primary@arcade.protection/cart.line.after": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#fed700", "dark": "#00bc7d" },
         "border-width": 0,
         "radius": 0,
         "weight": "600",
         "size": 12,
         "inset": 16
       },
-      "ui.badge.success@arcade.protection/cart.line.after": {
-        "background": "card",
-        "text": { "light": "#000000", "dark": "#5ee9b5" },
-        "border": "card",
-        "radius": 0,
-        "padding": 0,
-        "weight": "600",
-        "size": 12
+      "ui.text.neutral@arcade.protection/cart.page.summary": {
+        "text": { "light": "#111111", "dark": "#9f9fa9" },
+        "size": 12,
+        "weight": "400"
       },
       "ui.stack.warning@arcade.protection/cart.page.summary": {
         "background": { "light": "#f2ebd9", "dark": "#35282c" },
@@ -649,20 +728,418 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
         "border": { "light": "#bede48", "dark": "#36756b" },
         "size": 12
       },
-      "ui.text@arcade.protection/cart.page.summary": { "text": { "light": "#000000", "dark": "#ffffff" }, "size": 14, "weight": "600" },
-      "ui.link@arcade.protection/cart.page.summary": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 12, "weight": "500" },
-      "ui.button@arcade.protection/cart.page.summary": {
-        "background": { "light": "#fed700", "dark": "muted" },
-        "text": { "light": "#000000", "dark": "#a4f4cf" },
+      "ui.text@arcade.protection/cart.page.summary": {
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "size": 14,
+        "weight": "600"
+      },
+      "ui.link@arcade.protection/cart.page.summary": {
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "weight": "500"
+      },
+      "ui.button.primary@arcade.protection/cart.page.summary": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#fed700", "dark": "#00bc7d" },
         "border-width": 0,
+        "radius": 0,
+        "weight": "600",
+        "size": 12,
+        "inset": 12
+      },
+      "ui.button.secondary@arcade.protection/cart.page.summary": {
+        "background": { "light": "#ffffff", "dark": "muted" },
+        "text": { "light": "#000000", "dark": "#a4f4cf" },
+        "border": { "light": "#000000", "dark": "#8575ae" },
+        "border-width": 1,
         "radius": 0,
         "weight": "600",
         "size": 12,
         "inset": 8
       },
-      "@line-grid": { "columns": [64, "1fr", 88], "columns-wide": [92, "1fr", 150], "gap": 12 },
+      "@line-grid": { "columns": [64, "1fr", 88], "columns-wide": [64, "1fr", 150], "gap": 12 },
       "@line-side": { "gap": 8 },
-      "@cart-columns": { "gap": 24 }
+      "@cart-grid": { "columns": ["2fr", "1fr"], "gap": 24 },
+      "@cart-side": { "gap": 16 }
+    },
+    "checkout": {
+      "page": {
+        "gradient": { "shape": "radial", "from": { "light": "background", "dark": "#2b2d6e" }, "to": "background" }
+      },
+      "frame": { "max-width": 1400 },
+      "heading": { "size": 36, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "notice": {
+        "background": { "light": "#f2ebd9", "dark": "#35282c" },
+        "text": { "light": "#000000", "dark": "#fef3c6" },
+        "radius": 0,
+        "border-width": 0
+      },
+      "summary": {
+        "background": "card",
+        "border-width": 0,
+        "radius": 0,
+        "shadow": "lg",
+        "padding": 20,
+        "text": { "light": "#000000", "dark": "#cbcbd1" },
+        "gap": 12
+      },
+      "summary-heading": { "size": 20, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "summary-rows": { "text": { "light": "#000000", "dark": "#cbcbd1" }, "size": 14 },
+      "summary-total": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 20, "weight": "600" },
+      "summary-total-label": { "text": { "light": "#000000", "dark": "#ffffff" }, "size": 16, "weight": "600" },
+      "summary-add-on": { "text": { "light": "#000000", "dark": "#5ee9b5" } },
+      "summary-add-on-detail": {
+        "background": { "light": "#dff7e8", "dark": "#10161e" },
+        "border": { "light": "#b7e6c9", "dark": "#10161e" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 8,
+        "size": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#7e7e88" }
+      },
+      "fold-toggle": { "background": "card", "border": { "light": "#7b7b7b", "dark": "#8575ae" }, "radius": 0 },
+      "gift-card": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "checkout-empty": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "payment-method": {
+        "background": { "light": "#eeeeee", "dark": "#171225" },
+        "border": { "light": "#8a8a8a", "dark": "#6b5f8a" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 16,
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" },
+        "link": { "light": "#000000", "dark": "#5ee9b5" }
+      },
+      "payment-chosen": {
+        "background": { "light": "#fff4b8", "dark": "#174144" },
+        "border": { "light": "#000000", "dark": "#5ee9b5" },
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "muted": { "light": "#111111", "dark": "#c4c4cc" }
+      },
+      "payment-details": {
+        "background": { "light": "#f8f9fa", "dark": "#181327" },
+        "radius": 0,
+        "padding": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "link": { "light": "#000000", "dark": "#5ee9b5" }
+      },
+      "input": {
+        "background": "muted",
+        "text": "foreground",
+        "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+        "radius": 0,
+        "ring": { "light": "#907a00", "dark": "#a397ff" }
+      },
+      "field-label": { "size": 12, "weight": "600" },
+      "submit": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "600",
+        "size": 14,
+        "inset": 20
+      },
+      "action": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "600",
+        "size": 14,
+        "inset": 20
+      },
+      "legal": { "text": { "light": "#000000", "dark": "#d4d4d8" }, "size": 14 },
+      "ui.badge.success@arcade.protection/checkout.summary.after": {
+        "background": "card",
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "border": "card",
+        "radius": 0,
+        "padding": 0,
+        "weight": "600",
+        "size": 12
+      },
+      "ui.text.neutral@arcade.protection/checkout.summary.after": {
+        "text": { "light": "#111111", "dark": "#9f9fa9" },
+        "size": 12,
+        "weight": "400"
+      }
+    },
+    "receipt": {
+      "page": {
+        "gradient": { "shape": "radial", "from": { "light": "background", "dark": "#2b2d6e" }, "to": "background" }
+      },
+      "frame": { "max-width": 1400 },
+      "status": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "status-title": { "size": 30, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "status-message": { "text": { "light": "#111111", "dark": "#9f9fa9" } },
+      "tracking": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "order": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "order-facts": {
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "status-badge": {
+        "background": "muted",
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "border": "#524179",
+        "border-width": 1,
+        "radius": 0
+      },
+      "summary": { "text": { "light": "#000000", "dark": "#cbcbd1" } },
+      "summary-heading": { "size": 20, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "summary-rows": { "text": { "light": "#000000", "dark": "#cbcbd1" }, "size": 14 },
+      "summary-total": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 20, "weight": "600" },
+      "summary-total-label": { "text": { "light": "#000000", "dark": "#ffffff" }, "size": 16, "weight": "600" },
+      "summary-add-on": { "text": { "light": "#000000", "dark": "#5ee9b5" } },
+      "summary-add-on-detail": {
+        "background": { "light": "#dff7e8", "dark": "#10161e" },
+        "border": { "light": "#b7e6c9", "dark": "#10161e" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 8,
+        "size": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#7e7e88" }
+      },
+      "delivery": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "section-heading": { "size": 20, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "delivery-contact": {
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "lines": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "lines-heading": { "size": 20, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "line": { "border": "#524179", "radius": 0 },
+      "line-image": { "radius": 0, "background": "popover" },
+      "line-title": { "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "line-details": { "text": { "light": "#111111", "dark": "#9f9fa9" }, "size": 12 },
+      "line-price": {
+        "size": 18,
+        "weight": "600",
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "muted": { "light": "#111111", "dark": "#83838d" }
+      },
+      "conversation": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "message": {
+        "background": { "light": "#e6f6ef", "dark": "#1d2035" },
+        "border": { "light": "#047857", "dark": "#34d399" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "message-own": {
+        "background": { "light": "#ffffff", "dark": "#272239" },
+        "border": { "light": "#7b7b7b", "dark": "#d6d6d6" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "input": {
+        "background": "muted",
+        "text": "foreground",
+        "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+        "radius": 0,
+        "ring": { "light": "#907a00", "dark": "#a397ff" }
+      },
+      "action": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "radius": 0,
+        "weight": "600"
+      },
+      "submit": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "600",
+        "size": 14,
+        "inset": 20
+      },
+      "dialog": {
+        "background": "#171124",
+        "text": "#ffffff",
+        "muted": "#d4d4d8",
+        "border": { "light": "#eaeaea", "dark": "#49396d" },
+        "border-width": 1,
+        "radius": 0,
+        "shadow": "lg"
+      },
+      "dialog-title": { "size": 24, "weight": "800", "leading": "tight", "text": "#ffffff" },
+      "dialog-back": {
+        "text": "#e4e4e7",
+        "border": "#8575ae",
+        "border-width": 1,
+        "radius": 0,
+        "weight": "700",
+        "inset": 20
+      },
+      "dialog-confirm": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "800",
+        "size": 14,
+        "inset": 20
+      }
+    },
+    "account": {
+      "page": {
+        "gradient": { "shape": "radial", "from": { "light": "background", "dark": "#2b2d6e" }, "to": "background" }
+      },
+      "navigation": {
+        "background": { "light": "#f1f1f1", "dark": "#18112a" },
+        "border": { "light": "#eaeaea", "dark": "#503e70" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 8,
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "nav-item": { "text": { "light": "#111111", "dark": "#9f9fa9" }, "size": 14, "weight": "600", "radius": 0 },
+      "nav-current": {
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "link": { "light": "#000000", "dark": "#5ee9b5" },
+        "size": 14,
+        "weight": "600",
+        "radius": 0
+      },
+      "sign-out": {
+        "background": "muted",
+        "text": { "light": "#111111", "dark": "#9f9fa9" },
+        "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+        "border-width": 1,
+        "radius": 0,
+        "size": 12,
+        "weight": "600"
+      },
+      "heading-title": { "size": 24, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "heading-intro": { "text": { "light": "#111111", "dark": "#9f9fa9" } },
+      "card": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20, "gap": 12 },
+      "card-title": { "size": 18, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "status-badge": {
+        "background": "muted",
+        "text": { "light": "#000000", "dark": "#ffffff" },
+        "border": "#524179",
+        "border-width": 1,
+        "radius": 0
+      },
+      "summary": { "text": { "light": "#000000", "dark": "#cbcbd1" }, "gap": 12 },
+      "summary-heading": { "size": 20, "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "summary-rows": { "text": { "light": "#000000", "dark": "#cbcbd1" }, "size": 14 },
+      "summary-total": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 20, "weight": "600" },
+      "summary-total-label": { "text": { "light": "#000000", "dark": "#ffffff" }, "size": 16, "weight": "600" },
+      "summary-add-on": { "text": { "light": "#000000", "dark": "#5ee9b5" } },
+      "summary-add-on-detail": {
+        "background": { "light": "#dff7e8", "dark": "#10161e" },
+        "border": { "light": "#b7e6c9", "dark": "#10161e" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 8,
+        "size": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#7e7e88" }
+      },
+      "line": { "border": "#524179", "radius": 0 },
+      "line-image": { "radius": 0, "background": "popover", "fit": "cover" },
+      "line-title": { "weight": "600", "text": { "light": "#000000", "dark": "#ffffff" } },
+      "line-details": { "text": { "light": "#111111", "dark": "#9f9fa9" }, "size": 12 },
+      "line-price": { "size": 14, "weight": "600", "text": { "light": "#000000", "dark": "#5ee9b5" } },
+      "delivery-message": {
+        "background": { "light": "#f8f9fa", "dark": "#151024" },
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "radius": 0,
+        "padding": 16
+      },
+      "delivery-reveal": {
+        "background": "muted",
+        "text": { "light": "#000000", "dark": "#5ee9b5" },
+        "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+        "border-width": 1,
+        "radius": 0,
+        "size": 12
+      },
+      "conversation": { "background": "card", "border-width": 0, "radius": 0, "shadow": "lg", "padding": 20 },
+      "message": {
+        "background": { "light": "#e6f6ef", "dark": "#1d2035" },
+        "border": { "light": "#047857", "dark": "#34d399" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "message-own": {
+        "background": { "light": "#ffffff", "dark": "#272239" },
+        "border": { "light": "#7b7b7b", "dark": "#d6d6d6" },
+        "border-width": 1,
+        "radius": 0,
+        "padding": 12,
+        "text": { "light": "#000000", "dark": "#d4d4d8" },
+        "muted": { "light": "#111111", "dark": "#9f9fa9" }
+      },
+      "input": {
+        "background": "muted",
+        "text": "foreground",
+        "border": { "light": "#7b7b7b", "dark": "#8575ae" },
+        "radius": 0,
+        "ring": { "light": "#907a00", "dark": "#a397ff" }
+      },
+      "action": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "radius": 0,
+        "weight": "600"
+      },
+      "submit": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "600",
+        "size": 14,
+        "inset": 20
+      },
+      "dialog": {
+        "background": "#171124",
+        "text": "#ffffff",
+        "muted": "#d4d4d8",
+        "border": { "light": "#eaeaea", "dark": "#49396d" },
+        "border-width": 1,
+        "radius": 0,
+        "shadow": "lg"
+      },
+      "dialog-title": { "size": 24, "weight": "800", "leading": "tight", "text": "#ffffff" },
+      "dialog-back": {
+        "text": "#e4e4e7",
+        "border": "#8575ae",
+        "border-width": 1,
+        "radius": 0,
+        "weight": "700",
+        "inset": 20
+      },
+      "dialog-confirm": {
+        "background": { "light": "#fed700", "dark": "#00bc7d" },
+        "text": { "light": "#333e48", "dark": "#06110d" },
+        "border": { "light": "#333e48", "dark": "#00bc7d" },
+        "border-width": 2,
+        "radius": 0,
+        "weight": "800",
+        "size": 14,
+        "inset": 20
+      }
     }
   },
   "labels": {
@@ -670,7 +1147,10 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
     "cart.intro": { "en": "Review your items before checkout.", "bn": "চেকআউটের আগে পণ্যগুলো দেখে নিন।" },
     "cart.summaryHeading": { "en": "Order Summary", "bn": "অর্ডারের সারাংশ" },
     "cart.empty": { "en": "Your cart is empty.", "bn": "আপনার কার্ট খালি।" },
-    "cart.emptyText": { "en": "Add a product from the store to see it here.", "bn": "এখানে দেখতে স্টোর থেকে একটি পণ্য যোগ করুন।" },
+    "cart.emptyText": {
+      "en": "Add a product from the store to see it here.",
+      "bn": "এখানে দেখতে স্টোর থেকে একটি পণ্য যোগ করুন।"
+    },
     "cart.continue": "continue-shopping",
     "dialog.goBack": "go-back",
     "dialog.confirm": "continue-checkout",
@@ -731,7 +1211,7 @@ In every draw: the first screen, the store's controls, prominence, apps and add-
 | First screen | At scroll 0, none of the page's lead parts starts inside the screen. |
 | Depth | What the theme adds above Place order (its place under the theme less its place under the default look, same cart, the fold open) is over 3200px and 448px a line, or either place cannot be measured. |
 | Touch | On a phone, swiping from the top does not reach the end of the details form, Place order's own place (never its docked bar, on screen from the start). |
-| The customer's cart | The offer row's mark, sentence, price and Add Now are not in one band at 1280 or take more than two at 390; a status box does not paint its tone's surface; the add-on row does not open to its three lines in order, or its amount shows more than once. |
+| The customer's cart | The offer row's mark, sentence, price and Add Now are not in one band at 1280 or take more than two at 390; a status box does not paint its tone's surface; the add-on row does not open to its lines in order, or its amount shows more than once. |
 | Drawn as written | An element a style target names draws corners other than the target's `radius` token; under square or pill buttons, an action button (filled, `data-control="action"` or an app's `data-ui="button"`) on the cart, its dialogs, the drawer, the payment step, the receipt or the account draws other corners; under a square radius, a field or a public page's `rounded-lg`/`rounded-xl` draws rounded ones; under the default Style, any corner differs from what its class drew before. |
 | Reading order | A line, on the cart page or in the drawer, has its details, price, stepper, actions or app block before its title in the markup. |
 | Drawer lines | Five lines in the drawer on a 390x844 phone show fewer than two whole lines, or on a 320x568 one no whole line, or Check out is not wholly on screen. |

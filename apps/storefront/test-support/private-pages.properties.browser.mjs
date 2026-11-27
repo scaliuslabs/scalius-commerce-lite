@@ -339,11 +339,7 @@ const FORGED_WORDS = "Forged words 7Q, call 01700000000";
 const FORGED_MARK = "forged-7q";
 const FORGED_BLOCK = (hook) => ({ type: "content", hook, content: { kind: "text", text: { en: FORGED_WORDS } } });
 /** The customer's protected cart's add-on lines (apps/storefront/src/gallery/api.ts `customerAddOns`), in order. */
-const CUSTOMER_DETAILS = [
-  "Protection ID will be given after order completion.",
-  "Grand Theft Auto V: Premium Edition #1 · ৳350 · Protection ID XXX-XXX-XXX",
-  "Grand Theft Auto V: Premium Edition #2 · ৳350 · Protection ID XXX-XXX-XXX",
-];
+const CUSTOMER_DETAILS = ["Grand Theft Auto V: Premium Edition #1", "Grand Theft Auto V: Premium Edition #2"];
 /** The customer's look (packages/shared/src/storefront-theme/private-reference.fixture.ts): its palettes and privatePages. */
 const REFERENCE = { reference: true, toggle: true, scheme: "system" };
 
@@ -602,13 +598,12 @@ const RECEIPT_LOOK = {
   order: CARD_LOOK, delivery: CARD_LOOK, lines: CARD_LOOK, "summary-total": EMERALD_TOTAL,
   "summary-total-label": { text: "foreground", size: 16, weight: "600" }, "status-badge": { radius: 0 }, "status-title": { size: 30, weight: "600" },
 };
-const ACCOUNT_LOOK = {
-  card: CARD_LOOK, "nav-current": { text: "foreground", weight: "600" }, "sign-out": { background: "muted", radius: 0, weight: "600" },
-  "heading-title": { size: 24, weight: "600" }, "status-badge": { radius: 0 }, "summary-total": EMERALD_TOTAL,
-};
 const AFTER_ORDER_CASES = {
-  "the receipt in the customer's look": { request: { ...REFERENCE, page: "sample-receipt" }, privatePages: { tokens: { receipt: RECEIPT_LOOK } } },
-  "the account in the customer's look": { request: { ...REFERENCE, page: "sample-account" }, privatePages: { tokens: { account: ACCOUNT_LOOK } } },
+  // The customer's own receipt, account and payment step: its release's tokens (the reference fixture), as stores draw them.
+  "the receipt in the customer's look": { request: { ...REFERENCE, page: "sample-receipt" } },
+  "the account in the customer's look": { request: { ...REFERENCE, page: "sample-account" } },
+  "the account's order page in the customer's look": { request: { ...REFERENCE, page: "account-order" } },
+  "the payment step in the customer's look": { request: { ...REFERENCE, page: "sample-checkout" }, states: ["base"] },
   // A receipt document forged past the save: a stylesheet hiding the total and a content block. None of it draws.
   "the receipt forged past the save": { request: { toggle: true, scheme: "system", page: "sample-receipt", forged: {
     pages: { receipt: { layout: [FORGED_BLOCK("forged-page")] } },
@@ -683,8 +678,8 @@ const HYGIENE_CASES = {
   // look (its cart line arranges it so), in the text column under the host's own line.
   "the customer's offered cart in the drawer: a line's app block under the line": { states: ["customer"], drawerLineTarget: "below", request: { ...REFERENCE, page: "home" } },
   "the store's own drawer: a line's app block in the text column": { states: ["base"], drawerLineTarget: "column", request: { page: "home" }, privatePages: {} },
-  // Five lines in the drawer on a phone: its lines keep a share of the sheet (the bottom group's other parts join them
-  // where they would crowd them): two whole lines on a 390x844 phone, one and Check out on a 320x568 one.
+  // Five lines in the drawer on a phone: the lines keep the sheet (the rows above the total end the scrolling region,
+  // each app block at its own height): two whole lines on a 390x844 phone, one and Check out on a 320x568 one.
   // A public page under a square theme: its radius steps (`rounded-lg`, `rounded-xl`) draw square too (they once added
   // 1px and 2px to every radius, a square one included).
   "a square theme's public page": { states: ["base"], publicSquare: true, request: { style: SQUARE, page: "home" }, privatePages: {} },
@@ -696,7 +691,9 @@ const HYGIENE_CASES = {
     { type: "part", part: "undo" }, { type: "part", part: "offers" },
     { type: "layout", layout: "group", children: [{ type: "part", part: "summary" }, { type: "target", target: "cart_drawer.footer" }, { type: "part", part: "actions" }] },
   ] } } } },
-  "five lines in the customer's drawer on a phone": { states: ["five"], drawerLines: true, viewports: [{ width: 390, height: 844, scheme: "dark" }, { width: 320, height: 568, scheme: "light" }], request: { ...REFERENCE, page: "home" } },
+  // The customer's own five lines (its games with their four options, one protected with its add-on and Edit) and its
+  // protection app's footer blocks, as a real store draws them.
+  "five lines in the customer's drawer on a phone": { states: ["customer-five"], drawerLines: true, viewports: [{ width: 390, height: 844, scheme: "dark" }, { width: 320, height: 568, scheme: "light" }], request: { ...REFERENCE, page: "home" } },
   // The customer's cart arrives without moving under the buyer: what shifts from the first paint until the page is
   // still (`layoutShift`: the layout-shift score, as Chrome counts it) stays under 0.05, on a phone and a wide screen.
   "the customer's cart arrives without moving": { states: ["customer"], layoutShift: 0.05, request: REFERENCE },
@@ -883,9 +880,10 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt, styleTargets }
     if (style.backgroundImage !== "none" && !row.gradient) problems.push(`${name(element)}: paints an image its row (${row.key}) does not`);
   };
   // The page itself: in token mode its row paints the body (the theme's page paint included); with no
-  // tokens nothing may paint it but the page colour, or what stands on it would go unchecked at save.
+  // tokens nothing may paint it but the page colour, or what stands on it would go unchecked at save. The drawer
+  // stands on its own card over a public page, whose paint the public pages' save checks: it is not the drawer's.
   if (tokenMode && rowOf.has(document.body)) checkPaint(document.body);
-  if (!tokenMode) {
+  if (!tokenMode && !scope?.includes("cart-drawer")) {
     const body = getComputedStyle(document.body);
     const page = getComputedStyle(document.documentElement).getPropertyValue("--background").trim();
     if (body.backgroundImage !== "none" || (/^#[0-9a-f]{6}$/i.test(page) && body.backgroundColor !== parse(page))) {
@@ -1370,7 +1368,7 @@ function forgedAbsent({ words, mark }) {
  * The customer's cart under its own look (private-look.md 2.1, 2.2, 3), measured: the offer row's pieces (their
  * boxes) in one band at 1280 and in at most two at 390 (the sentence's own words may wrap inside its box: beside
  * the details form the lines column is 572px at 1280, not the prototype's 1440 page); the status box painting its tone's
- * surface (its row's paint, not the summary's); the add-on row opened to its three lines in order, its amount once.
+ * surface (its row's paint, not the summary's); the add-on row opened to its lines in order, its amount once.
  */
 function customerChecks({ state, rows, details }) {
   const problems = [];
@@ -1579,18 +1577,32 @@ function layoutShiftOver(bound) {
 
 /**
  * In the open drawer at scroll 0: its lines keep room on a phone: two whole lines where the screen is 700px or taller,
- * else one; and Check out wholly on screen.
+ * else one; Check out and the total wholly on screen; and every app block in the drawer's footer at its own height, in a
+ * box that can show it whole (never squeezed, nor clipped to a sliver by a pane shorter than it).
  */
 function drawerLinesShown() {
   const problems = [];
-  const region = document.querySelector('[data-private="cart-drawer"] [data-part="drawer-scroll"]')?.getBoundingClientRect();
-  const lines = [...document.querySelectorAll('[data-private="cart-drawer"] [data-part="drawer-lines"] [data-part="line"]')].map((line) => line.getBoundingClientRect());
+  const sheet = '[data-private="cart-drawer"]';
+  const region = document.querySelector(`${sheet} [data-part="drawer-scroll"]`)?.getBoundingClientRect();
+  const lines = [...document.querySelectorAll(`${sheet} [data-part="drawer-lines"] [data-part="line"]`)].map((line) => line.getBoundingClientRect());
   if (!region) return ["the drawer draws no scrolling region"];
   const whole = lines.filter((line) => line.top >= region.top - 0.5 && line.bottom <= region.bottom + 0.5 && line.bottom <= innerHeight).length;
   const wanted = innerHeight >= 700 ? 2 : 1;
   if (whole < wanted) problems.push(`${whole} whole line${whole === 1 ? "" : "s"} on screen at ${innerWidth}x${innerHeight} (its scrolling region ${Math.round(region.height)}px of the sheet): at least ${wanted}`);
-  const checkout = document.querySelector('[data-private="cart-drawer"] [data-part="drawer-checkout"]')?.getBoundingClientRect();
-  if (!checkout || checkout.top < 0 || checkout.bottom > innerHeight + 0.5) problems.push("Check out is not wholly on screen");
+  for (const part of ["drawer-checkout", "drawer-total"]) {
+    const box = document.querySelector(`${sheet} [data-part="${part}"]`)?.getBoundingClientRect();
+    if (!box || box.top < 0 || box.bottom > innerHeight + 0.5) problems.push(`${part === "drawer-total" ? "the total" : "Check out"} is not wholly on screen`);
+  }
+  for (const block of document.querySelectorAll(`${sheet} [data-buyer-ui-target="cart_drawer.footer"] [data-buyer-ui-app]`)) {
+    if (!block.checkVisibility()) continue;
+    const height = block.getBoundingClientRect().height;
+    if (height < 8 || block.scrollHeight > block.clientHeight + 1) problems.push(`an app block in the drawer's footer is drawn ${Math.round(height)}px tall, its own height ${block.scrollHeight}px`);
+    for (let box = block.parentElement; box && !box.matches(sheet); box = box.parentElement) {
+      if (!/(auto|scroll|hidden|clip)/.test(getComputedStyle(box).overflowY)) continue;
+      if (box.clientHeight + 1 < height) problems.push(`an app block in the drawer's footer (${Math.round(height)}px) lies in a pane ${box.clientHeight}px tall: it shows only a sliver`);
+      break;
+    }
+  }
   return problems;
 }
 
@@ -2468,7 +2480,7 @@ async function drawDrawer({ context, id, width, height = 900, problems, server5x
       await page.waitForSelector(`${scope} [data-part="add-on-details"]`, { timeout: 10_000 }).catch(() => at("drawer", ["the add-on row is not drawn"]));
       await openAddOns(page, scope);
       const lines = await page.evaluate((scope) => [...document.querySelectorAll(`${scope} [data-part="add-on-detail"]`)].filter((line) => line.checkVisibility()).map((line) => line.textContent.replace(/\s+/g, " ").trim()), scope);
-      if (JSON.stringify(lines) !== JSON.stringify(CUSTOMER_DETAILS)) at("drawer", [`the add-on row opens to ${JSON.stringify(lines)}, not its three lines in order`]);
+      if (JSON.stringify(lines) !== JSON.stringify(CUSTOMER_DETAILS)) at("drawer", [`the add-on row opens to ${JSON.stringify(lines)}, not its lines in order`]);
       await settle(page);
     }
     const walked = await page.evaluate(walk, { rows: [], anatomy: [{ name: "the drawer", selector: scope }], uiKinds: UI_KINDS, mandatory: state === "empty" ? DRAWER_EMPTY_MANDATORY : DRAWER_MANDATORY, scope, exempt: EXEMPT, styleTargets: [] });

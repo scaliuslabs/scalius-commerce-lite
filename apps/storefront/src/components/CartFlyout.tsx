@@ -61,15 +61,17 @@ export const cartOpenState = atom<boolean>(false);
  */
 const DRAWER_OVERLAY =
   "fixed inset-0 z-[var(--scalius-z-overlay,70)] bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0";
-/** Mobile: a bottom sheet of most of the screen (Shopify: room for the lines). From `sm`: a side sheet, its width the theme's. */
+/**
+ * Mobile: a bottom sheet of the screen but a 3rem strip above it (the page shows there, and a tap on it closes the
+ * sheet), so five real lines leave two whole on a 390x844 phone and one on a 320x568 one under the pinned total and
+ * Check out. From `sm`: a side sheet, its width the theme's.
+ */
 const DRAWER_SHEET =
   "z-[var(--scalius-z-overlay,70)] w-full flex flex-col p-0 bg-card shadow-2xl gap-0 transition-transform duration-300 ease-out border-s border-none focus:outline-none"
   + " data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500"
-  + " fixed inset-x-0 bottom-0 h-[85dvh] max-h-[85dvh] top-auto rounded-t-[20px] border-t-0"
+  + " fixed inset-x-0 bottom-0 h-[calc(100dvh-3rem)] max-h-[calc(100dvh-3rem)] top-auto rounded-t-[20px] border-t-0"
   + " sm:fixed sm:inset-y-0 sm:inset-e-0 sm:inset-s-auto sm:h-full sm:max-h-none sm:w-full sm:rounded-none sm:border-s";
 /** The drawer's filled buttons (the storefront button's look, flat in the primary colour). */
-/** The least share of the drawer's sheet its scrolling lines keep (the bottom group's other parts join them otherwise). */
-const LINES_SHARE = 0.45;
 
 const DRAWER_BUTTON =
   "whitespace-nowrap ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -464,42 +466,6 @@ export default function CartFlyout({ onReady }: Props) {
   // Scroll & Swipe Logic
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollMore, setCanScrollMore] = useState(false);
-  // The lines keep a share of the sheet (`LINES_SHARE`): where the bottom group's money rows and the apps' footer blocks
-  // would leave them less, the group keeps the rest of the sheet and those scroll in it, the total and Check out pinned
-  // under them (nothing moves between boxes: the apps' blocks stay drawn). Back once the lines would keep half the sheet.
-  // The sheet mounts after the drawer opens (its portal draws on a later render): elements held in state, not refs.
-  const [sheet, setSheet] = useState<HTMLDivElement | null>(null);
-  const [region, setRegion] = useState<HTMLDivElement | null>(null);
-  /** The bottom group's most height (px) while it yields to the lines; null: as tall as it needs. */
-  const [groupMax, setGroupMax] = useState<number | null>(null);
-  const compact = groupMax !== null;
-  useEffect(() => {
-    if (!isOpen || !sheet || !region || typeof ResizeObserver === "undefined") return;
-    const measure = () => {
-      const outer = region.parentElement;
-      const extras = sheet.querySelector<HTMLElement>("[data-drawer-extras]");
-      const group = extras?.parentElement;
-      // Not laid out yet (or no layout at all), or no group to yield: nothing to share.
-      if (sheet.clientHeight < 120 || !outer || !extras || !group) return;
-      const height = sheet.clientHeight;
-      // The sheet's other fixed parts (its handle, header, the added note, offers) and the room the group may take.
-      const fixed = height - outer.clientHeight - group.offsetHeight;
-      const room = Math.floor(height * (1 - LINES_SHARE) - fixed);
-      if (!compact) {
-        if (outer.clientHeight / height < LINES_SHARE) setGroupMax(room);
-        return;
-      }
-      // What the extras would add back to the group were they not scrolling in it.
-      const hidden = extras.scrollHeight - extras.clientHeight;
-      if ((outer.clientHeight - hidden) / height >= LINES_SHARE + 0.05) setGroupMax(null);
-      else if (Math.abs(room - groupMax) > 4) setGroupMax(room);
-    };
-    const observer = new ResizeObserver(measure);
-    observer.observe(sheet);
-    observer.observe(region);
-    measure();
-    return () => observer.disconnect();
-  }, [isOpen, compact, groupMax, cart.totalItems, sheet, region]);
   const dragStartY = useRef(0);
   const dragCurrentY = useRef(0);
 
@@ -1095,15 +1061,25 @@ export default function CartFlyout({ onReady }: Props) {
       </div>
     </>
   );
-  /** The scrolling region between the drawer's fixed parts, with its fade when more lies below. */
-  const scrollRegion = (children: React.ReactNode, key?: number) => (
+  /**
+   * The bottom group's rows above the total: the money rows and the apps' footer blocks (`cart_drawer.footer`), or
+   * what a theme placed after its scrolling region. They end the scrolling region, at the sheet's foot while the lines
+   * leave room (`mt-auto`) and after the lines once they do not, each block at its own height: the lines keep the
+   * sheet, nothing is ever squeezed or clipped to a sliver, and only the total and Check out stay pinned under it.
+   */
+  const extrasBox = (children: React.ReactNode) => (
+    <div className="mt-auto shrink-0 space-y-3 border-t border-border bg-card p-3 sm:space-y-4 sm:p-5 [&:not(:has(>:not([hidden])))]:hidden" data-drawer-extras>{children}</div>
+  );
+  /** The scrolling region between the drawer's fixed parts (its rows above the total last), with its fade when more lies below. */
+  const scrollRegion = (children: React.ReactNode, key?: number, extras?: React.ReactNode) => (
     <div key={key} className="flex-1 relative overflow-hidden flex flex-col bg-muted/50" data-layout="scroll" data-part="drawer-scroll">
       <div
-        ref={(element) => { scrollRef.current = element; setRegion(element); }}
+        ref={scrollRef}
         onScroll={checkScroll}
-        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-2 sm:px-5 sm:py-4"
+        className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain"
       >
-        {children}
+        <div className="shrink-0 px-3 py-2 sm:px-5 sm:py-4">{children}</div>
+        {extras}
       </div>
 
       {/* More below: a soft fade only, so nothing covers a price or a button. */}
@@ -1113,10 +1089,13 @@ export default function CartFlyout({ onReady }: Props) {
       />
     </div>
   );
+  /** The total and Check out with View cart, pinned at the sheet's foot. */
+  const pinned = (children: React.ReactNode) => (
+    <div className="shrink-0 z-30 space-y-3 border-t border-border bg-card p-3 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb sm:space-y-4 sm:p-5" data-layout="group" data-drawer-pinned>{children}</div>
+  );
   /**
    * A theme's arrangement of the drawer, with the same guarantee as the host's: what it places after its scrolling region
-   * is the bottom group, whose total, Check out and View cart stay pinned at the bottom (a host box) while the rest
-   * (money rows, the apps' footer blocks, offers) scrolls in it where it would leave the lines less than their share.
+   * ends that region (money rows, the apps' footer blocks, offers), and the total, Check out and View cart stay pinned.
    */
   const themeDrawer = (layout: readonly CartDrawerNode[]) => {
     const hosts = { target: (name: string) => (name === "cart_drawer.footer" ? footerTarget : null), scroll: scrollRegion };
@@ -1126,18 +1105,11 @@ export default function CartFlyout({ onReady }: Props) {
     const buttons = drawerHas(after, "actions");
     if (at < 0 || cart.totalItems === 0 || (!total && !buttons && after.length === 0)) return drawerNodes(layout, pageParts, hosts);
     const extraParts = { ...pageParts, ...(total ? { summary: summaryRows } : {}), ...(buttons ? { actions: null } : {}) };
+    const extras = extrasBox(drawerNodes(after, extraParts, hosts));
     return (
       <>
-        {drawerNodes(layout.slice(0, at + 1), pageParts, hosts)}
-        <div className="flex min-h-0 shrink-0 flex-col bg-card" style={groupMax === null ? undefined : { maxHeight: `${groupMax}px` }} data-drawer-bottom data-drawer-compact={compact ? "" : undefined}>
-          <div className={compact ? "min-h-0 shrink overflow-y-auto overscroll-contain" : ""} data-drawer-extras>{drawerNodes(after, extraParts, hosts)}</div>
-          {(total || buttons) && (
-            <div className="shrink-0 space-y-3 border-t border-border bg-card p-3 sm:p-5 safe-area-pb" data-drawer-pinned>
-              {total && summaryTotal}
-              {buttons && <>{mainAction}{secondaryActions}</>}
-            </div>
-          )}
-        </div>
+        {drawerNodes(layout.slice(0, at + 1), pageParts, { ...hosts, scroll: (children, key) => scrollRegion(children, key, extras) })}
+        {(total || buttons) && pinned(<>{total && summaryTotal}{buttons && <>{mainAction}{secondaryActions}</>}</>)}
       </>
     );
   };
@@ -1172,7 +1144,6 @@ export default function CartFlyout({ onReady }: Props) {
             if (trigger?.isConnected) trigger.focus();
           });
         }}
-        ref={setSheet}
         className={`${DRAWER_SHEET} ${look.width === "wide" ? "sm:max-w-[440px]" : "sm:max-w-[380px]"}`}
         data-private="cart-drawer"
       >
@@ -1198,29 +1169,15 @@ export default function CartFlyout({ onReady }: Props) {
 
         {added}
 
-        {/* 2. CONTENT */}
-        {scrollRegion(cart.totalItems === 0 ? emptyState : lineList(true))}
+        {/* 2. CONTENT, ending in the rows above the total: the money rows and the apps' footer blocks. */}
+        {scrollRegion(cart.totalItems === 0 ? emptyState : lineList(true), undefined, cart.totalItems > 0 && extrasBox(<>{summaryRows}{footerTarget}</>))}
 
         {undoPart}
 
         {offers}
 
-        {/* 3. FOOTER: the total and Check out over the money rows and the apps' blocks; where those would leave the lines
-            less than their share of the sheet (`compact`), the group keeps the rest and they scroll in it, the total and
-            Check out pinned under them. */}
-        {cart.totalItems > 0 && (
-          <div className="flex flex-col border-t border-border bg-card p-3 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb" style={groupMax === null ? undefined : { maxHeight: `${groupMax}px` }} data-layout="group" data-drawer-compact={compact ? "" : undefined}>
-            <div className={`space-y-3 sm:space-y-4 ${compact ? "min-h-0 shrink overflow-y-auto overscroll-contain pb-3" : ""}`} data-drawer-extras>
-              {summaryRows}
-              {footerTarget}
-            </div>
-            <div className="shrink-0 space-y-3 sm:space-y-4" data-drawer-pinned>
-              {summaryTotal}
-              {mainAction}
-              {secondaryActions}
-            </div>
-          </div>
-        )}
+        {/* 3. FOOTER: the total and Check out, pinned. */}
+        {cart.totalItems > 0 && pinned(<>{summaryTotal}{mainAction}{secondaryActions}</>)}
         </>
         )}
       </Dialog.Content>

@@ -303,7 +303,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       // theme's own app, whose files an icon may name), a store of two markets (`localization`), a look an
       // older checker compiled (`stale`), the phone tab bar setting (`tabs`), the homepage, where the cart
       // drawer opens (`page: "home"`), a colour set saved at version 14 (`saved`), and the customer's
-      // reference look (`reference`: its two palettes, and its privatePages unless the body names others).
+      // reference look (`reference`: its release's colours, theme tokens and phone bar, and its privatePages unless the body names others).
       // `forged` is written onto the stored document past the compiler, as a row edited by hand would be.
       // The answer carries the colour table of the page as the storefront reads the document (each row's
       // key, selector, kind and paint) for the coverage walk, whether that read fell back to the store's
@@ -320,7 +320,9 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const colors = reference ? { ...reference.REFERENCE_LIGHT_PALETTE } : body.palette && shared.STOREFRONT_THEME_PALETTES[body.palette] ? { ...shared.STOREFRONT_THEME_PALETTES[body.palette] } : base.tokens.colors;
         const darkColors = reference ? { ...reference.REFERENCE_PALETTE } : shared.storefrontDarkPalette(colors);
         // `style`: the theme's Style corners (Theme -> Style: `radius` for surfaces and fields, `buttonShape` for buttons).
-        let tokens = { ...base.tokens, colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors, ...(body.paint ? { pagePaint: body.paint } : {}), ...(body.style?.radius ? { radius: body.style.radius } : {}), ...(body.style?.buttonShape ? { buttonShape: body.style.buttonShape } : {}) };
+        // The reference's other theme tokens (its page paint, Style corners and type) as its release ships them; the case's scheme rules.
+        const { colorScheme: _scheme, colorSchemeToggle: _toggle, ...referenceTokens } = reference?.REFERENCE_THEME_TOKENS ?? {};
+        let tokens = { ...base.tokens, ...structuredClone(referenceTokens), colors, colorScheme: body.scheme ?? "system", colorSchemeToggle: body.toggle === true, darkColors, ...(body.paint ? { pagePaint: body.paint } : {}), ...(body.style?.radius ? { radius: body.style.radius } : {}), ...(body.style?.buttonShape ? { buttonShape: body.style.buttonShape } : {}) };
         // A colour set a store saved at version 14 (`saved`): its colours and made dark colours kept the action
         // colour as their focus ring. Read as the store reads a stored document.
         if (body.saved === true) {
@@ -334,8 +336,10 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         }
         // A page paint the palette cannot read on is dropped by a save: a case that asks for one names a readable paint.
         if (body.paint && !shared.storefrontTokensWithReadablePaint(tokens).pagePaint) return sendJson(response, 400, { error: "The page paint does not read on this palette." });
-        // The phone tab bar (`tabs`: the theme's bottom-tabs phone navigation).
-        const theme = { ...base, tokens, ...(body.tabs === true ? { blocks: { ...base.blocks, mobileNav: { variant: "bottom-tabs", settings: { tabs: [{ kind: "home" }, { kind: "categories" }, { kind: "offers" }, { kind: "account" }], drawer: "accordion" } } } } : {}) };
+        // The phone tab bar (`tabs`: the theme's bottom-tabs phone navigation; the reference's own under `reference`).
+        // The reference's own bar where it has one: the real theme's tabs and words.
+        const mobileNav = reference?.REFERENCE_MOBILE_NAV ? structuredClone(reference.REFERENCE_MOBILE_NAV) : body.tabs === true ? { variant: "bottom-tabs", settings: { tabs: [{ kind: "home" }, { kind: "categories" }, { kind: "offers" }, { kind: "account" }], drawer: "accordion" } } : null;
+        const theme = { ...base, tokens, ...(mobileNav ? { blocks: { ...base.blocks, mobileNav } } : {}) };
         // Saved as the store saves it (site-settings.service.ts): read by the document's schema (a refusal naming its
         // reason, as `not_available`, answers it), then compiled.
         // `nearFloor`: the account's look generated just above every floor against this palette (src/gallery/near-floor.ts).
