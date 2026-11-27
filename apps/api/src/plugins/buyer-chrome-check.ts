@@ -9,13 +9,14 @@
 // - Install and update (`storeRelease`): the upload ran this checker on the
 //   app's `styles.css` and the shipped sheet matched it, so the release is
 //   marked with no parse of its own.
-// - After a deploy (`recheckBuyerChromeAfterDeploy`, a maintenance step): a
-//   release marked by an older checker, or never marked, is read again and
-//   must be this checker's writing of itself (`recheckedBuyerChromeSheet`).
-//   That parse costs about 30 ms of CPU for the largest sheet an app may ship,
-//   so one run checks one release and the step stays open for the deploy until
-//   none is left; until then the release's buyer pages draw the store's own
-//   header and footer. A check is counted before it starts, so one a run
+// - After a deploy (`recheckBuyerChromeAfterDeploy`, a stage of the version's
+//   post-deploy settle, scheduled/catalog-projections.ts): a release marked by
+//   an older checker, or never marked, is read again and must be this
+//   checker's writing of itself (`recheckedBuyerChromeSheet`). That parse costs
+//   about 30 ms of CPU for the largest sheet an app may ship, so one run checks
+//   one release and the version stays unsettled until none is left; until then
+//   the release's buyer pages draw the store's own header and footer. A
+//   settled version costs a later tick nothing here. A check is counted before it starts, so one a run
 //   could not finish (stopped at a CPU limit) is tried at most
 //   `BUYER_CHROME_CHECK_TRIES` times, then refused. A refusal is marked (not
 //   checked again under this checker) and written once to the app's log,
@@ -23,18 +24,14 @@
 // A buyer's request never parses a sheet: it reads a file the mark allows.
 
 import type { Database } from "@scalius/database/client";
-import { getDb } from "@scalius/database/client";
 import { listPluginInstallations, writePluginLogs, type PluginInstallation } from "@scalius/core/modules/plugins";
-import { getSystemKv, getSystemKvMany, putSystemKv } from "@scalius/core/utils/system-kv";
+import { getSystemKvMany, putSystemKv } from "@scalius/core/utils/system-kv";
 import { BUYER_CHROME_CSS_VERSION, recheckedBuyerChromeSheet } from "@scalius/shared/plugins/buyer-chrome-css";
 import { buyerChromeMarkCurrent, buyerChromeMarkKey, buyerChromeMarkTries, readBuyerChromeMark, type BuyerChromeMark } from "@scalius/shared/plugins/buyer-chrome-mark";
 import { sha256Hex } from "@scalius/shared/plugins/registry";
 import { STOREFRONT_BUYER_CHROME_FILE } from "@scalius/shared/plugins/storefront-protocol";
 import { STOREFRONT_INCIDENT_SOURCE } from "@scalius/shared/plugins/storefront-incidents";
 import { readPluginStorefrontFile } from "./storefront-files";
-
-/** `system_kv`: the deploy and checker version whose check of every release settled (`<deploy>:<checker>`). */
-export const BUYER_CHROME_CHECKED_FOR_KEY = "buyer-chrome-checked-for";
 
 /** Releases one maintenance run parses (each about 30 ms of CPU at the largest sheet). */
 export const BUYER_CHROME_CHECKS_PER_RUN = 1;
@@ -121,18 +118,12 @@ export async function recheckBuyerChromeSheets(
 }
 
 /**
- * The maintenance step: after a deploy, every installed release's buyer-page
- * sheet checked by this checker, a run at a time, until none is left for this
- * deploy and checker. Null when there is nothing to do (settled, or no deploy id).
+ * The post-deploy stage: every installed release's buyer-page sheet checked by
+ * this checker, one parse a run. The caller keeps the version unsettled while
+ * `remaining` is above zero (a deploy ships its checker, so the version
+ * names the checker too).
  */
-export async function recheckBuyerChromeAfterDeploy(env: Env): Promise<BuyerChromeRecheck | null> {
-  const deploy = env.CF_VERSION_METADATA?.id;
-  if (!deploy) return null;
-  const db = getDb(env);
-  const settled = `${deploy}:${BUYER_CHROME_CSS_VERSION}`;
-  if (await getSystemKv(db, BUYER_CHROME_CHECKED_FOR_KEY) === settled) return null;
-  const result = await recheckBuyerChromeSheets(db, await listPluginInstallations(db), (pluginId, release) =>
+export async function recheckBuyerChromeAfterDeploy(env: Env, db: Database): Promise<BuyerChromeRecheck> {
+  return recheckBuyerChromeSheets(db, await listPluginInstallations(db), (pluginId, release) =>
     readPluginStorefrontFile(env, db, pluginId, release, STOREFRONT_BUYER_CHROME_FILE, { unmarked: true }));
-  if (result.remaining === 0) await putSystemKv(db, BUYER_CHROME_CHECKED_FOR_KEY, settled);
-  return result;
 }

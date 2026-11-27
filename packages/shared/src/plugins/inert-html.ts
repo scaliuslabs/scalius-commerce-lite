@@ -196,10 +196,17 @@ const behaviourAllowed = (name: string, tag: string) => {
 /** The elements a panel may be lifted from (a drawer, a dropdown panel, a list). */
 const POPOVER_TAGS = new Set(["div", "nav", "aside", "section", "ul", "ol"]);
 
+/**
+ * The panels a theme's popover is lifted as: a side sheet (`drawer`, a
+ * popover marked `data-panel="drawer"` or `menuDrawer()`) or a panel under
+ * the button that opens it (`menu`). Sealed (contract-tables.ts).
+ */
+export const INERT_PANEL_KINDS = ["drawer", "menu"] as const;
+
 /** A theme's popover lifted out of its region: the store draws it in a top-layer element of its own. */
 export interface InertPanel {
   /** A side sheet (`drawer`) or a panel under the button that opens it (`menu`). */
-  kind: "drawer" | "menu";
+  kind: (typeof INERT_PANEL_KINDS)[number];
   /** The panel's own markup, rebuilt as the region's is (a label of the theme's stays on it, inside the theme's frame). */
   html: string;
 }

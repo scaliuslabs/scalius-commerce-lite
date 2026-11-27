@@ -59,7 +59,7 @@ const iconOf = (tab: PhoneTab): { name: Icon } | { src: string } => {
 const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : copy.tabs[tab.kind]);
 ---
 
-<nav id="mobile-tab-bar" class="mobile-tab-bar" aria-label={copy.tabs.label} data-tab-menu={menu}>
+<nav id="mobile-tab-bar" class="mobile-tab-bar" data-part="tab-bar" aria-label={copy.tabs.label} data-tab-menu={menu}>
   <ul style={`--mobile-tab-count: ${shown.length}`}>
     {
       shown.map((tab) => {
@@ -67,51 +67,51 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
         const page = current(tab) ? "page" : undefined;
         const glyph = "name" in icon
           ? <TabIcon name={icon.name} />
-          : <img src={icon.src} alt="" width="22" height="22" loading="lazy" decoding="async" />;
+          : <img src={icon.src} alt="" width="22" height="22" loading="lazy" decoding="async" data-part="tab-icon" />;
         return (
           <li>
             {tab.kind === "home" && (
-              <a href="/" class="mobile-tab" aria-current={page}>{glyph}<span>{labelOf(tab)}</span></a>
+              <a href="/" class="mobile-tab" data-part="tab" aria-current={page}>{glyph}<span data-part="tab-label">{labelOf(tab)}</span></a>
             )}
             {tab.kind === "categories" && (
               <a
                 href={menu === "app" ? "/categories" : "#mobile-menu-panel"}
                 role="button"
-                class="mobile-tab"
+                class="mobile-tab" data-part="tab"
                 aria-current={current(tab) ? "true" : undefined}
                 aria-haspopup="dialog"
                 aria-controls={menu === "app" ? undefined : "mobile-menu-panel"}
                 aria-expanded="false"
                 data-mobile-menu-open={menu === "app" ? undefined : ""}
                 data-app-menu-open={menu === "app" ? "" : undefined}
-              >{glyph}<span>{labelOf(tab)}</span></a>
+              >{glyph}<span data-part="tab-label">{labelOf(tab)}</span></a>
             )}
             {tab.kind === "offers" && (
-              <a href={PHONE_OFFERS_HREF} class="mobile-tab" aria-current={page} data-astro-prefetch="false">{glyph}<span>{labelOf(tab)}</span></a>
+              <a href={PHONE_OFFERS_HREF} class="mobile-tab" data-part="tab" aria-current={page} data-astro-prefetch="false">{glyph}<span data-part="tab-label">{labelOf(tab)}</span></a>
             )}
             {tab.kind === "search" && (
-              <a href="/search" class="mobile-tab" aria-current={page} data-search-open data-astro-prefetch="false">{glyph}<span>{labelOf(tab)}</span></a>
+              <a href="/search" class="mobile-tab" data-part="tab" aria-current={page} data-search-open data-astro-prefetch="false">{glyph}<span data-part="tab-label">{labelOf(tab)}</span></a>
             )}
             {tab.kind === "compare" && (
-              <a href="/compare" rel="nofollow" class="mobile-tab" aria-current={page} data-compare-tab data-astro-prefetch="false">{glyph}<span>{labelOf(tab)}</span></a>
+              <a href="/compare" rel="nofollow" class="mobile-tab" data-part="tab" aria-current={page} data-compare-tab data-astro-prefetch="false">{glyph}<span data-part="tab-label">{labelOf(tab)}</span></a>
             )}
             {tab.kind === "cart" && (
-              <a href="/cart" class="mobile-tab" aria-current={page} aria-haspopup="dialog" data-cart-open data-astro-prefetch="false">
-                <span class="mobile-tab-icon">{glyph}<span class="mobile-tab-badge" data-tab-cart-count data-scalius-cart-count aria-hidden="true"></span></span>
-                <span>{labelOf(tab)}</span>
+              <a href="/cart" class="mobile-tab" data-part="tab" aria-current={page} aria-haspopup="dialog" data-cart-open data-astro-prefetch="false">
+                <span class="mobile-tab-icon">{glyph}<span class="mobile-tab-badge" data-part="tab-badge" data-tab-cart-count data-scalius-cart-count aria-hidden="true"></span></span>
+                <span data-part="tab-label">{labelOf(tab)}</span>
               </a>
             )}
             {tab.kind === "account" && (
               <a
                 href="/account"
-                class="mobile-tab"
+                class="mobile-tab" data-part="tab"
                 aria-current={page}
                 data-account-link
                 data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)}
-              >{glyph}<span>{labelOf(tab)}</span></a>
+              >{glyph}<span data-part="tab-label">{labelOf(tab)}</span></a>
             )}
             {tab.kind === "link" && (
-              <a href={tab.href} class="mobile-tab" aria-current={page} data-astro-prefetch={getStorefrontPrefetchAttribute(tab.href, Astro.url)}>{glyph}<span>{labelOf(tab)}</span></a>
+              <a href={tab.href} class="mobile-tab" data-part="tab" aria-current={page} data-astro-prefetch={getStorefrontPrefetchAttribute(tab.href, Astro.url)}>{glyph}<span data-part="tab-label">{labelOf(tab)}</span></a>
             )}
           </li>
         );

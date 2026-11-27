@@ -14,6 +14,9 @@
 //   storefront constant, a member of one of its lists or a key of one of its
 //   objects (a list and an object may grow), and no stable port goes back to
 //   beta;
+// - each contract table (contract-tables.ts: host CSS variables and hooks,
+//   the skin HTML allow-list, app limits, store words, delivery) moves only
+//   as its own rule allows: grow, loosen, or refuse nothing new;
 // - a state machine an app sees only grows: no machine, state or move
 //   disappears, a move keeps its target and every state it leaves from, and
 //   who may make it only widens.
@@ -23,6 +26,7 @@
 // alone never accepts one and an entry never pre-accepts a later break.
 
 import { jsonSchemaBreakingChanges, type SchemaDirection } from "../schema-compat";
+import { contractTableBreaks } from "../contract/rules";
 
 type Json = Record<string, unknown>;
 
@@ -51,7 +55,14 @@ function schemaBreaks(label: string, before: unknown, after: unknown, direction:
 
 /** The manifest an app writes: the host must keep accepting every manifest it accepted. */
 export function manifestBreakingChanges(before: unknown, after: unknown): string[] {
-  return schemaBreaks("manifest", record(before).schema, record(after).schema, "request");
+  return [...versionBreaks(before, after), ...schemaBreaks("manifest", record(before).schema, record(after).schema, "request")];
+}
+
+/** A changed contract version is itself a change: after the lock only a `new-version` entry accepts it. */
+function versionBreaks(before: unknown, after: unknown): string[] {
+  const was = record(before).apiVersion;
+  const now = record(after).apiVersion;
+  return was !== undefined && was !== now ? [`apiVersion: ${String(was)} became ${String(now)}: a new contract version.`] : [];
 }
 
 function isObject(value: unknown): value is Json {
@@ -63,7 +74,8 @@ function isObject(value: unknown): value is Json {
  * member, an object keeps every key with exactly its value (both may gain
  * entries); anything nested, and any other value, stays equal. A limits
  * table (`…_LIMITS`) gains no key silently: a new limit restricts apps, so it
- * needs an acknowledgement that says why what passed before still passes.
+ * needs an acknowledgement that says why what passed before still passes. Its
+ * numbers are maxima and budgets: one may rise (a limit only loosens), never fall.
  */
 function constantValueBreaks(name: string, was: unknown, now: unknown): string[] {
   const path = `storefront.${name}`;
@@ -75,7 +87,10 @@ function constantValueBreaks(name: string, was: unknown, now: unknown): string[]
     return [
       ...Object.entries(was).flatMap(([key, value]) => !(key in now)
         ? [`${path}.${key}: the key was removed.`]
-        : JSON.stringify(value) === JSON.stringify(now[key]) ? [] : [`${path}.${key}: the constant value changed.`]),
+        : JSON.stringify(value) === JSON.stringify(now[key]) ? []
+          : name.endsWith("_LIMITS") && typeof value === "number" && typeof now[key] === "number"
+            ? ((now[key] as number) < value ? [`${path}.${key}: the limit tightened from ${value} to ${String(now[key])}.`] : [])
+            : [`${path}.${key}: the constant value changed.`]),
       ...(name.endsWith("_LIMITS") ? Object.keys(now).filter((key) => !(key in was)).map((key) => `${path}.${key}: a new limit was added.`) : []),
     ];
   }
@@ -105,7 +120,11 @@ function providerRequiredBreaks(before: unknown, after: unknown): string[] {
 export function protocolBreakingChanges(before: unknown, after: unknown): string[] {
   const was = record(before);
   const now = record(after);
-  const problems: string[] = [];
+  const problems: string[] = [...versionBreaks(before, after)];
+  const sealedEvents = record(was.events);
+  if (sealedEvents.apiVersion !== undefined && sealedEvents.apiVersion !== record(now.events).apiVersion) {
+    problems.push(`events.apiVersion: ${String(sealedEvents.apiVersion)} became ${String(record(now.events).apiVersion)}: a new contract version.`);
+  }
 
   const nowFunctions = record(now.functions);
   problems.push(...removedKeys("functions", was.functions, now.functions, "function point"));
@@ -166,6 +185,10 @@ export function protocolBreakingChanges(before: unknown, after: unknown): string
     else if (record(entry).status !== record(nowErrors[code]).status) {
       problems.push(`errors.${code}: the status changed from ${String(record(entry).status)} to ${String(record(nowErrors[code]).status)}.`);
     }
+    // The meaning an app branches on is contract too: a rewording is an acknowledged change.
+    if (code in nowErrors && record(entry).meaning !== undefined && record(entry).meaning !== record(nowErrors[code]).meaning) {
+      problems.push(`errors.${code}: the meaning changed.`);
+    }
     // Declared details an app reads: a field is never removed, retyped or made optional.
     if (code in nowErrors && record(entry).details !== undefined) {
       problems.push(...schemaBreaks(`errors.${code} details`, record(entry).details, record(nowErrors[code]).details ?? {}, "response"));
@@ -187,6 +210,7 @@ export function protocolBreakingChanges(before: unknown, after: unknown): string
 
   problems.push(...constantBreaks(was.storefront, now.storefront));
   problems.push(...providerRequiredBreaks(was.providerRequired, now.providerRequired));
+  if ("tables" in was) problems.push(...contractTableBreaks(was.tables, now.tables));
   problems.push(...machineBreaks(was.machines, now.machines));
   return problems;
 }

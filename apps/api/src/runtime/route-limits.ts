@@ -228,7 +228,7 @@ export const BODY_LIMITS = {
   mediaRenditions: 32 * MIB,
   /** One part of a digital file, streamed to storage. */
   digitalPart: DIGITAL_UPLOAD_PART_BYTES,
-  /** An app package (plugins/package-zip.ts PLUGIN_PACKAGE_MAX_BYTES). */
+  /** An app package (@scalius/shared/plugins/package-limits PLUGIN_PACKAGE_MAX_BYTES). */
   appPackage: 20 * MIB,
 } as const satisfies Record<string, BodyLimit>;
 

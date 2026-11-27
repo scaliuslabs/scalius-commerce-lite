@@ -69,6 +69,7 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `cron-idle` | 10 | 14 | 92 | 7,020 | 7 | 0 / 1.6 |
 | `cron-nightly` | 26 | 61 | 194 | 20,323 | 61 | - |
 | `drain-busy` | 8 | 18 | 13 | 629 | 14 | - |
+| `drain-idle-pages` | 10 | 12 | 3 | 5 | 0 | - |
 | `order-3-line-commit` | 14 | 68 | 54 | 57 | 16 | - |
 | `order-lifecycle` | 14 | 68 | 54 | 57 | 16 | - |
 | `bulk-run-chunk` | 7 | 195 | 1,086 | 275 | 2 | - |
@@ -97,7 +98,11 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 
 Read the `cron-idle` row with care: a Free store ticks 1,440 times a day, so one row written per tick is
 1,440 rows a day per store before any order (144 million a day across 100,000 stores). An idle tick
-writes 0 rows on both profiles; the worst counters include first-run, hourly and daily work.
+writes 0 rows on both profiles; the worst counters include first-run, hourly and daily work. Work a new
+version does once (the projection rebuild, the private pages compile, the apps' buyer-page sheets) is a
+stage of one post-deploy settle (`requestPostDeployProjectionRebuild`): a settled version costs a sweep
+one read, and a once-per-deploy check never becomes a sweep of its own. A new sweep also shifts which job
+each Free minute runs, so it moves every case that measures a sweep minute.
 `FREE_PLAN_BUDGET_TRACE=1` prints every metered D1 call with its statements, which is how to find where
 calls go. The rows-read column is an estimate, but it catches real regressions (a full index scan of
 `cache_dep` on every render was found this way).
