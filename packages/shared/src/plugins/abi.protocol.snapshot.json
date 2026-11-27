@@ -22725,5 +22725,1154 @@
   },
   "STOREFRONT_SEARCH_SUGGESTIONS_MAX": 7,
   "STOREFRONT_EXTENSION_PREFIX": "/_x/"
+ },
+ "tables": {
+  "hostCssVariables": {
+   "rule": "grow",
+   "value": [
+    "--background",
+    "--foreground",
+    "--card",
+    "--card-foreground",
+    "--popover",
+    "--popover-foreground",
+    "--primary",
+    "--primary-foreground",
+    "--secondary",
+    "--secondary-foreground",
+    "--muted",
+    "--muted-foreground",
+    "--accent",
+    "--accent-foreground",
+    "--destructive",
+    "--destructive-foreground",
+    "--border",
+    "--input",
+    "--ring",
+    "--theme-font-body",
+    "--theme-font-heading",
+    "--theme-heading-weight",
+    "--theme-heading-tracking",
+    "--theme-heading-leading",
+    "--theme-heading-transform",
+    "--theme-h1-weight",
+    "--theme-section-weight",
+    "--radius",
+    "--theme-button-radius",
+    "--theme-control-height",
+    "--theme-container-width",
+    "--theme-gutter-phone",
+    "--theme-gutter-tablet",
+    "--theme-gutter-desktop",
+    "--theme-grid-gap-phone",
+    "--theme-grid-gap-desktop",
+    "--theme-image-ratio",
+    "--theme-image-fit",
+    "--theme-header-background",
+    "--theme-header-foreground",
+    "--theme-sale",
+    "--theme-rating",
+    "--theme-surface-border",
+    "--theme-surface-shadow",
+    "--theme-duration-fast",
+    "--theme-duration-base"
+   ]
+  },
+  "hostHooks": {
+   "rule": "grow",
+   "value": {
+    "buyForm": {
+     "data-buy-part": [
+      "price",
+      "options",
+      "inputs",
+      "purchase-options",
+      "quantity",
+      "actions",
+      "status",
+      "warranty",
+      "stock",
+      "variant-title"
+     ],
+     "data-buy-field": [
+      "option",
+      "input",
+      "quantity"
+     ],
+     "data-buy-field-part": [
+      "label",
+      "control",
+      "value",
+      "error",
+      "help",
+      "counter",
+      "surcharge",
+      "decrease",
+      "increase"
+     ],
+     "data-action": [
+      "add-to-cart",
+      "buy-now"
+     ],
+     "data-state": [
+      "ready",
+      "busy",
+      "unavailable",
+      "idle",
+      "error"
+     ],
+     "data-option-availability": [
+      "available",
+      "sold_out",
+      "incompatible"
+     ],
+     "data-buyer-input": [],
+     "data-buyer-input-type": [],
+     "data-empty": [],
+     "data-stock-tone": [],
+     "data-price-current": [],
+     "data-price-regular": [],
+     "data-price-badge": []
+    },
+    "placedOffers": {
+     "data-placed-offers": [],
+     "data-placed-offer": [],
+     "data-availability": [],
+     "data-offer-part": [
+      "title",
+      "options",
+      "price",
+      "saving",
+      "actions",
+      "choose"
+     ],
+     "data-price-current": [],
+     "data-price-regular": []
+    },
+    "kits": {
+     "data-kit-contents": [],
+     "data-kit-part": [
+      "summary",
+      "items",
+      "item",
+      "title",
+      "options",
+      "quantity",
+      "delivery",
+      "unavailable",
+      "more",
+      "saving"
+     ],
+     "data-kit-delivery": []
+    },
+    "relatedProducts": {
+     "data-recs-part": [
+      "root",
+      "title",
+      "list"
+     ],
+     "data-recs-reason": []
+    },
+    "catalogFilters": {
+     "data-catalog-embed": [
+      "filters"
+     ],
+     "data-placement": [
+      "sidebar",
+      "bar"
+     ],
+     "custom-properties": [
+      "--catalog-filter-column",
+      "--catalog-filter-row",
+      "--catalog-filter-label"
+     ]
+    },
+    "stickyColumn": {
+     "data-sticky-column": [],
+     "custom-properties": [
+      "--sticky-column-shift"
+     ]
+    },
+    "phoneBar": {
+     "selectors": [
+      "#mobile-tab-bar",
+      ".mobile-tab",
+      ".mobile-tab > span:last-child",
+      ".mobile-tab svg",
+      ".mobile-tab[aria-current]"
+     ],
+     "custom-properties": [
+      "--mobile-tabs-height"
+     ]
+    }
+   }
+  },
+  "skinHtml": {
+   "rule": "grow",
+   "value": {
+    "tags": [
+     "a",
+     "abbr",
+     "article",
+     "aside",
+     "b",
+     "bdi",
+     "blockquote",
+     "br",
+     "button",
+     "caption",
+     "circle",
+     "clippath",
+     "code",
+     "dd",
+     "defs",
+     "del",
+     "details",
+     "div",
+     "dl",
+     "dt",
+     "ellipse",
+     "em",
+     "figcaption",
+     "figure",
+     "footer",
+     "form",
+     "g",
+     "h1",
+     "h2",
+     "h3",
+     "h4",
+     "h5",
+     "h6",
+     "header",
+     "hr",
+     "i",
+     "img",
+     "input",
+     "ins",
+     "label",
+     "li",
+     "line",
+     "lineargradient",
+     "mark",
+     "nav",
+     "ol",
+     "optgroup",
+     "option",
+     "p",
+     "path",
+     "picture",
+     "polygon",
+     "polyline",
+     "pre",
+     "q",
+     "radialgradient",
+     "rect",
+     "s",
+     "scalius-embed",
+     "scalius-island",
+     "section",
+     "select",
+     "small",
+     "source",
+     "span",
+     "stop",
+     "strong",
+     "sub",
+     "summary",
+     "sup",
+     "svg",
+     "table",
+     "tbody",
+     "td",
+     "textarea",
+     "tfoot",
+     "th",
+     "thead",
+     "time",
+     "tr",
+     "u",
+     "ul",
+     "video"
+    ],
+    "svgTags": [
+     "circle",
+     "clipPath",
+     "defs",
+     "ellipse",
+     "g",
+     "line",
+     "linearGradient",
+     "path",
+     "polygon",
+     "polyline",
+     "radialGradient",
+     "rect",
+     "stop",
+     "svg"
+    ],
+    "attributes": [
+     "class",
+     "dir",
+     "hidden",
+     "lang",
+     "role",
+     "title"
+    ],
+    "componentAttributes": [
+     "class",
+     "dir",
+     "hidden",
+     "id",
+     "inert",
+     "lang",
+     "popover",
+     "popovertarget",
+     "popovertargetaction",
+     "role",
+     "style",
+     "tabindex",
+     "title",
+     "translate"
+    ],
+    "tagAttributes": {
+     "a": [
+      "href",
+      "hreflang",
+      "rel",
+      "target"
+     ],
+     "button": [
+      "disabled",
+      "name",
+      "type",
+      "value"
+     ],
+     "details": [
+      "open"
+     ],
+     "form": [
+      "action",
+      "method"
+     ],
+     "img": [
+      "alt",
+      "decoding",
+      "height",
+      "loading",
+      "sizes",
+      "src",
+      "srcset",
+      "width"
+     ],
+     "input": [
+      "autocomplete",
+      "checked",
+      "disabled",
+      "inputmode",
+      "max",
+      "maxlength",
+      "min",
+      "minlength",
+      "name",
+      "pattern",
+      "placeholder",
+      "readonly",
+      "required",
+      "size",
+      "step",
+      "type",
+      "value"
+     ],
+     "ol": [
+      "reversed",
+      "start",
+      "type"
+     ],
+     "optgroup": [
+      "disabled",
+      "label"
+     ],
+     "option": [
+      "disabled",
+      "label",
+      "selected",
+      "value"
+     ],
+     "select": [
+      "disabled",
+      "multiple",
+      "name",
+      "required",
+      "size"
+     ],
+     "source": [
+      "height",
+      "media",
+      "sizes",
+      "srcset",
+      "type",
+      "width"
+     ],
+     "td": [
+      "colspan",
+      "rowspan"
+     ],
+     "textarea": [
+      "cols",
+      "disabled",
+      "maxlength",
+      "minlength",
+      "name",
+      "placeholder",
+      "readonly",
+      "required",
+      "rows"
+     ],
+     "th": [
+      "abbr",
+      "colspan",
+      "rowspan",
+      "scope"
+     ],
+     "time": [
+      "datetime"
+     ]
+    },
+    "componentTagAttributes": {
+     "img": [
+      "fetchpriority"
+     ],
+     "input": [
+      "autofocus"
+     ],
+     "label": [
+      "for"
+     ],
+     "scalius-embed": [
+      "kind"
+     ],
+     "source": [
+      "src"
+     ],
+     "video": [
+      "autoplay",
+      "controls",
+      "height",
+      "loop",
+      "muted",
+      "playsinline",
+      "poster",
+      "preload",
+      "src",
+      "width"
+     ]
+    },
+    "svgAttributes": [
+     "clip-path",
+     "clip-rule",
+     "clipPathUnits",
+     "cx",
+     "cy",
+     "d",
+     "fill",
+     "fill-opacity",
+     "fill-rule",
+     "focusable",
+     "fx",
+     "fy",
+     "gradientTransform",
+     "gradientUnits",
+     "height",
+     "offset",
+     "opacity",
+     "pathLength",
+     "points",
+     "preserveAspectRatio",
+     "r",
+     "rx",
+     "ry",
+     "spreadMethod",
+     "stop-color",
+     "stop-opacity",
+     "stroke",
+     "stroke-dasharray",
+     "stroke-dashoffset",
+     "stroke-linecap",
+     "stroke-linejoin",
+     "stroke-miterlimit",
+     "stroke-opacity",
+     "stroke-width",
+     "transform",
+     "vector-effect",
+     "viewBox",
+     "width",
+     "x",
+     "x1",
+     "x2",
+     "y",
+     "y1",
+     "y2"
+    ],
+    "booleanAttributes": [
+     "autofocus",
+     "autoplay",
+     "checked",
+     "controls",
+     "disabled",
+     "hidden",
+     "inert",
+     "loop",
+     "multiple",
+     "muted",
+     "open",
+     "playsinline",
+     "readonly",
+     "required",
+     "reversed",
+     "selected"
+    ],
+    "inputTypes": [
+     "button",
+     "checkbox",
+     "date",
+     "email",
+     "hidden",
+     "number",
+     "radio",
+     "reset",
+     "search",
+     "submit",
+     "tel",
+     "text",
+     "url"
+    ],
+    "buttonTypes": [
+     "button",
+     "reset",
+     "submit"
+    ],
+    "values": {
+     "decoding": [
+      "async",
+      "auto",
+      "sync"
+     ],
+     "dir": [
+      "auto",
+      "ltr",
+      "rtl"
+     ],
+     "fetchpriority": [
+      "auto",
+      "high",
+      "low"
+     ],
+     "loading": [
+      "eager",
+      "lazy"
+     ],
+     "popover": [
+      "",
+      "auto",
+      "hint",
+      "manual"
+     ],
+     "popovertargetaction": [
+      "hide",
+      "show",
+      "toggle"
+     ],
+     "preload": [
+      "auto",
+      "metadata",
+      "none"
+     ],
+     "target": [
+      "_blank",
+      "_self"
+     ],
+     "translate": [
+      "no",
+      "yes"
+     ]
+    },
+    "patterns": {
+     "data": "^data-(?!sx-)[a-z][a-z0-9-]{0,40}$",
+     "aria": "^aria-[a-z]{2,24}$",
+     "class": "^[A-Za-z0-9_:/[\\]().%#!@,-]{1,80}$",
+     "svgValue": "^[\\w\\s#.,%()+-]{0,4000}$",
+     "styleProperty": "^(?:--[\\w-]{1,60}|-?[a-z][a-z-]{1,40})$"
+    }
+   }
+  },
+  "delivery": {
+   "rule": "grow",
+   "value": {
+    "headers": {
+     "eventId": "Scalius-Event-Id",
+     "topic": "Scalius-Topic",
+     "apiVersion": "Scalius-Api-Version",
+     "signature": "Scalius-Signature"
+    },
+    "secretPrefix": "whsec_",
+    "signatureToleranceSeconds": 300,
+    "signatureVector": {
+     "secret": "whsec_contract",
+     "timestamp": 1767225600,
+     "body": "{\"id\":\"evt_1\"}",
+     "signature": "t=1767225600,v1=3fdcd7d595087653789b28db0cfa1f04448600ce85de5bb605bfcd368e59fafd"
+    }
+   }
+  },
+  "limits": {
+   "rule": "loosen",
+   "value": {
+    "plan.free.cpuMs": {
+     "value": 50,
+     "loosens": "up"
+    },
+    "plan.free.wallMs": {
+     "value": 10000,
+     "loosens": "up"
+    },
+    "plan.free.subrequests": {
+     "value": 50,
+     "loosens": "up"
+    },
+    "plan.free.storageBytes": {
+     "value": 52428800,
+     "loosens": "up"
+    },
+    "plan.free.invocationsPerMinute": {
+     "value": 600,
+     "loosens": "up"
+    },
+    "plan.free.breachesBeforeStop": {
+     "value": 5,
+     "loosens": "up"
+    },
+    "plan.free.messagesPerMinute": {
+     "value": 60,
+     "loosens": "up"
+    },
+    "plan.free.runningJobs": {
+     "value": 3,
+     "loosens": "up"
+    },
+    "plan.free.heldEventDays": {
+     "value": 7,
+     "loosens": "up"
+    },
+    "plan.free.heldEvents": {
+     "value": 2000,
+     "loosens": "up"
+    },
+    "plan.free.uploads.maxBytes": {
+     "value": 5242880,
+     "loosens": "up"
+    },
+    "plan.free.uploads.maxFiles": {
+     "value": 3,
+     "loosens": "up"
+    },
+    "plan.paid.cpuMs": {
+     "value": 200,
+     "loosens": "up"
+    },
+    "plan.paid.wallMs": {
+     "value": 30000,
+     "loosens": "up"
+    },
+    "plan.paid.subrequests": {
+     "value": 1000,
+     "loosens": "up"
+    },
+    "plan.paid.storageBytes": {
+     "value": 1073741824,
+     "loosens": "up"
+    },
+    "plan.paid.invocationsPerMinute": {
+     "value": 6000,
+     "loosens": "up"
+    },
+    "plan.paid.breachesBeforeStop": {
+     "value": 5,
+     "loosens": "up"
+    },
+    "plan.paid.messagesPerMinute": {
+     "value": 300,
+     "loosens": "up"
+    },
+    "plan.paid.runningJobs": {
+     "value": 10,
+     "loosens": "up"
+    },
+    "plan.paid.heldEventDays": {
+     "value": 30,
+     "loosens": "up"
+    },
+    "plan.paid.heldEvents": {
+     "value": 50000,
+     "loosens": "up"
+    },
+    "plan.paid.uploads.maxBytes": {
+     "value": 20971520,
+     "loosens": "up"
+    },
+    "plan.paid.uploads.maxFiles": {
+     "value": 10,
+     "loosens": "up"
+    },
+    "functions.wallMs": {
+     "value": 1500,
+     "loosens": "up"
+    },
+    "functions.checkoutBudgetMs": {
+     "value": 3000,
+     "loosens": "up"
+    },
+    "functions.reads": {
+     "value": 4,
+     "loosens": "up"
+    },
+    "functions.readKeys": {
+     "value": 100,
+     "loosens": "up"
+    },
+    "functions.readBytes": {
+     "value": 262144,
+     "loosens": "up"
+    },
+    "providers.checkoutDeadlineMs": {
+     "value": 2000,
+     "loosens": "up"
+    },
+    "ui.maxChildren": {
+     "value": 100,
+     "loosens": "up"
+    },
+    "ui.maxTableColumns": {
+     "value": 12,
+     "loosens": "up"
+    },
+    "ui.maxTableRows": {
+     "value": 100,
+     "loosens": "up"
+    },
+    "ui.maxOptions": {
+     "value": 100,
+     "loosens": "up"
+    },
+    "ui.maxKeyValueItems": {
+     "value": 50,
+     "loosens": "up"
+    },
+    "ui.maxSpans": {
+     "value": 20,
+     "loosens": "up"
+    },
+    "ui.text": {
+     "value": 2000,
+     "loosens": "up"
+    },
+    "ui.label": {
+     "value": 120,
+     "loosens": "up"
+    },
+    "buyerUi.responseBytes": {
+     "value": 262144,
+     "loosens": "up"
+    },
+    "buyerUi.lineBlocksBytes": {
+     "value": 131072,
+     "loosens": "up"
+    },
+    "buyerUi.blocks": {
+     "value": 12,
+     "loosens": "up"
+    },
+    "checkout.attributesBytes": {
+     "value": 8192,
+     "loosens": "up"
+    },
+    "storefront.pagePropsBytes": {
+     "value": 65536,
+     "loosens": "up"
+    },
+    "storefront.templateBytes": {
+     "value": 65536,
+     "loosens": "up"
+    },
+    "storefront.htmlAttributeChars": {
+     "value": 2000,
+     "loosens": "up"
+    },
+    "storefront.htmlClassTokens": {
+     "value": 40,
+     "loosens": "up"
+    },
+    "objects.recordBytes": {
+     "value": 65536,
+     "loosens": "up"
+    },
+    "objects.responseBytes": {
+     "value": 131072,
+     "loosens": "up"
+    },
+    "jobs.inputBytes": {
+     "value": 16384,
+     "loosens": "up"
+    },
+    "jobs.stateBytes": {
+     "value": 65536,
+     "loosens": "up"
+    },
+    "messages.subjectChars": {
+     "value": 200,
+     "loosens": "up"
+    },
+    "messages.htmlBytes": {
+     "value": 102400,
+     "loosens": "up"
+    },
+    "messages.textBytes": {
+     "value": 51200,
+     "loosens": "up"
+    },
+    "messages.smsChars": {
+     "value": 1000,
+     "loosens": "up"
+    },
+    "uploads.readBytes": {
+     "value": 262144,
+     "loosens": "up"
+    }
+   }
+  },
+  "storeWords": {
+   "rule": "refuse",
+   "value": {
+    "subtotalText": {
+     "en": "Subtotal",
+     "bn": "পণ্যের মোট",
+     "class": "amount"
+    },
+    "shippingText": {
+     "en": "Shipping",
+     "bn": "ডেলিভারি চার্জ",
+     "class": "amount"
+    },
+    "discountText": {
+     "en": "Discount",
+     "bn": "ছাড়",
+     "class": "amount"
+    },
+    "totalText": {
+     "en": "Total",
+     "bn": "সর্বমোট",
+     "class": "amount"
+    },
+    "estimatedTotalText": {
+     "en": "Estimated total",
+     "bn": "আনুমানিক সর্বমোট",
+     "class": "amount"
+    },
+    "taxText": {
+     "en": "Tax",
+     "bn": "কর",
+     "class": "amount"
+    },
+    "placeOrderText": {
+     "en": "Place order",
+     "bn": "অর্ডার করুন",
+     "class": "action"
+    },
+    "continueToPaymentText": {
+     "en": "Continue to payment",
+     "bn": "পেমেন্টে এগিয়ে যান",
+     "class": "action"
+    },
+    "dueNowText": {
+     "en": "Due now",
+     "bn": "এখন পরিশোধযোগ্য",
+     "class": "amount"
+    },
+    "dueOnDeliveryText": {
+     "en": "Due on delivery",
+     "bn": "ডেলিভারির সময় পরিশোধযোগ্য",
+     "class": "amount"
+    },
+    "dueAtPickupText": {
+     "en": "Due at pickup",
+     "bn": "সংগ্রহের সময় পরিশোধযোগ্য",
+     "class": "amount"
+    },
+    "amountDueText": {
+     "en": "Amount due",
+     "bn": "পরিশোধযোগ্য টাকা",
+     "class": "amount"
+    },
+    "onlinePaymentText": {
+     "en": "Pay online",
+     "bn": "অনলাইনে পেমেন্ট করুন",
+     "class": "action"
+    },
+    "payAmountText": {
+     "en": "Pay {amount}",
+     "bn": "{amount} পরিশোধ করুন",
+     "class": "action"
+    },
+    "payAmountNowText": {
+     "en": "Pay {amount} now",
+     "bn": "এখন {amount} পরিশোধ করুন",
+     "class": "action"
+    },
+    "continueToProviderText": {
+     "en": "Continue to {provider}",
+     "bn": "{provider}-এ এগিয়ে যান",
+     "class": "action"
+    },
+    "addToCartText": {
+     "en": "Add to cart",
+     "bn": "কার্টে যোগ করুন",
+     "class": "action"
+    },
+    "buyNowText": {
+     "en": "Buy now",
+     "bn": "এখনই কিনুন",
+     "class": "action"
+    },
+    "orderReceiptPaidText": {
+     "en": "Paid",
+     "bn": "পরিশোধিত",
+     "class": "amount"
+    },
+    "orderReceiptBalanceDueText": {
+     "en": "Balance due",
+     "bn": "বাকি টাকা",
+     "class": "amount"
+    },
+    "orderReceiptLineTotalText": {
+     "en": "Line total",
+     "bn": "পণ্যটির মোট",
+     "class": "amount"
+    },
+    "variant:subtotal": {
+     "en": "Subtotal",
+     "bn": "সাবটোটাল",
+     "class": "amount"
+    },
+    "variant:items-total": {
+     "en": "Items total",
+     "bn": "পণ্যের মোট",
+     "class": "amount"
+    },
+    "variant:checkout": {
+     "en": "Checkout",
+     "bn": "চেকআউট",
+     "class": "action"
+    },
+    "variant:proceed-to-checkout": {
+     "en": "Proceed to checkout",
+     "bn": "চেকআউটে এগিয়ে যান",
+     "class": "action"
+    },
+    "variant:continue-checkout": {
+     "en": "Continue checkout",
+     "bn": "চেকআউট চালিয়ে যান",
+     "class": "action"
+    }
+   }
+  },
+  "storeWordSlots": {
+   "rule": "refuse",
+   "value": {
+    "currencyWord": "(?!(?:in|on|at|by|for|to|of|per|with|from|or|and)\\.?(?: |$))[\\p{L}\\p{M}]{1,4}\\.?",
+    "amount": "(?:(?!(?:in|on|at|by|for|to|of|per|with|from|or|and)\\.?(?: |$))[\\p{L}\\p{M}]{1,4}\\.? )?\\p{Sc}*\\p{Nd}[\\p{Nd},.]*(?:/-)?\\p{Sc}*(?: (?!(?:in|on|at|by|for|to|of|per|with|from|or|and)\\.?(?: |$))[\\p{L}\\p{M}]{1,4}\\.?)?",
+    "provider": "[^\\s]+"
+   }
+  },
+  "storeWordKinds": {
+   "rule": "refuse",
+   "value": {
+    "button": [
+     "action",
+     "fixed"
+    ],
+    "link": [
+     "action",
+     "fixed"
+    ],
+    "bulk-action": [
+     "action",
+     "fixed"
+    ],
+    "purchase-option": [
+     "action",
+     "fixed"
+    ],
+    "payment-method": [
+     "action",
+     "fixed"
+    ],
+    "shipping-rate": [
+     "action",
+     "fixed"
+    ],
+    "add-on": [
+     "amount",
+     "fixed"
+    ],
+    "add-on-detail": [
+     "amount",
+     "fixed"
+    ],
+    "discount": [
+     "amount",
+     "fixed"
+    ],
+    "bundle": [
+     "amount",
+     "fixed"
+    ],
+    "key-value": [
+     "amount",
+     "fixed"
+    ],
+    "badge": [
+     "amount",
+     "fixed"
+    ],
+    "heading": [
+     "amount",
+     "fixed"
+    ],
+    "banner-title": [
+     "amount",
+     "fixed"
+    ],
+    "disclosure": [
+     "action",
+     "amount"
+    ],
+    "sentence": [
+     "fixed"
+    ],
+    "help": [
+     "fixed"
+    ],
+    "alt": [
+     "fixed"
+    ],
+    "choice": [
+     "fixed"
+    ],
+    "input-label": [
+     "fixed"
+    ],
+    "agreement": [
+     "fixed"
+    ]
+   }
+  },
+  "storeWordOwn": {
+   "rule": "grow",
+   "value": {
+    "button": [],
+    "link": [],
+    "bulk-action": [],
+    "purchase-option": [],
+    "payment-method": [],
+    "shipping-rate": [
+     "shippingText"
+    ],
+    "add-on": [],
+    "add-on-detail": [],
+    "discount": [
+     "discountText"
+    ],
+    "bundle": [],
+    "key-value": [],
+    "badge": [],
+    "heading": [],
+    "banner-title": [],
+    "disclosure": [],
+    "sentence": [],
+    "help": [],
+    "alt": [],
+    "choice": [],
+    "input-label": [],
+    "agreement": []
+   }
+  },
+  "storeWordsReason": {
+   "rule": "grow",
+   "value": "store_words"
+  },
+  "themeLabelAmountWords": {
+   "rule": "refuse",
+   "value": {
+    "en": [
+     "Total",
+     "Subtotal",
+     "Estimated total",
+     "Amount due",
+     "Due now",
+     "Balance due",
+     "Subtotal",
+     "Items total",
+     "grand total",
+     "total due",
+     "taka",
+     "tk",
+     "bdt",
+     "usd",
+     "dollar",
+     "dollars",
+     "eur",
+     "euro",
+     "euros",
+     "gbp",
+     "pound",
+     "pounds",
+     "inr",
+     "rupee",
+     "rupees",
+     "aed",
+     "dirham",
+     "dirhams"
+    ],
+    "bn": [
+     "সর্বমোট",
+     "পণ্যের মোট",
+     "আনুমানিক সর্বমোট",
+     "পরিশোধযোগ্য টাকা",
+     "এখন পরিশোধযোগ্য",
+     "বাকি টাকা",
+     "সাবটোটাল",
+     "পণ্যের মোট",
+     "মোট",
+     "টাকা",
+     "টাকার",
+     "টাকায়",
+     "পরিশোধযোগ্য"
+    ]
+   }
+  },
+  "neutralWords": {
+   "rule": "grow",
+   "value": {
+    "addOn": {
+     "en": "Add-on",
+     "bn": "অ্যাড-অন"
+    },
+    "discount": {
+     "en": "Discount",
+     "bn": "ছাড়",
+     "class": "amount"
+    }
+   }
+  }
  }
 }

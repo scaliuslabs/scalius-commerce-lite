@@ -545,6 +545,12 @@ The form has a public anatomy: style it through these hooks and states only. A t
 
 A field's pieces are `[data-buy-field-part="…"]` with the names above. The SDK's `<Price>` writes `[data-price]` (with `data-discounted` while the compare-at is higher), `[data-price-current]` and `[data-price-regular]`, so one rule styles a card's price and the form's.
 
+### Styling the store's phone bar
+
+Under any header that leaves the phone navigation to the store, the store draws its bottom bar (the tabs the theme document chose). Style it through these names only: the bar `#mobile-tab-bar`, each tab `.mobile-tab`, a tab's label (its last `span`, `.mobile-tab > span:last-child`) and icon (`.mobile-tab svg`), the current tab `.mobile-tab[aria-current]`, and the bar's height `--mobile-tabs-height` (read it to keep your own fixed content above the bar). The names hold; anything else inside the bar does not.
+
+Every hook on this page that holds is in the store's sealed list `STOREFRONT_HOST_HOOKS`, by where it is: the buy form, placed offers, kits, related products, the filters wrapper, the sticky buy column and the phone bar. The list only grows.
+
 ### The single-page order
 
 `<OrderForm product={settings.product} maxQuantity={5} />` places the store's own order form in your markup: option picker, quantity, name, phone, address. The buyer orders without leaving the page.

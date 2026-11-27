@@ -12,6 +12,7 @@ import { PLUGIN_SCOPES } from "./scopes";
 import { APP_ERROR_CODES } from "./app-errors";
 import * as protocol from "./storefront-protocol";
 import { PLUGIN_UI_SURFACES, pluginUiDocumentSchema } from "./ui";
+import { contractTables } from "./contract-tables";
 
 const schema = (value: z.ZodType, io: "input" | "output" = "input") => z.toJSONSchema(value, { io });
 const port = (value: { input: z.ZodType; output: z.ZodType }) => ({ input: schema(value.input), output: schema(value.output, "output") });
@@ -30,7 +31,7 @@ export function manifestSeal() {
   return { apiVersion: PLUGIN_API_VERSION, schema: schema(pluginManifestSchema) };
 }
 
-/** Functions, stable provider ports, UI, scopes, error codes, events and storefront protocol constants. */
+/** Functions, stable provider ports, UI, scopes, error codes, events, storefront protocol constants and the contract tables. */
 export function protocolSeal() {
   return {
     apiVersion: PLUGIN_API_VERSION,
@@ -49,6 +50,8 @@ export function protocolSeal() {
     },
     storefront: Object.fromEntries(Object.entries(protocol).filter(([name, value]) => name === name.toUpperCase() && typeof value !== "function")
       .map(([name, value]) => [name, value instanceof RegExp ? value.source : value])),
+    // Host CSS variables and hooks, the skin HTML allow-list, app limits, store words, delivery (contract-tables.ts).
+    tables: contractTables(),
   };
 }
 

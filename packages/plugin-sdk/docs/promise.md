@@ -5,26 +5,30 @@ You are deciding whether to build an app or a theme on Scalius and keep it for y
 ## Where this stands
 
 - The contract is frozen at `v2.0.0-rc.1` as a candidate. The promise starts at `2.0.0`.
-- Between rc.1 and 2.0.0 we intend no break. If one proves necessary, it is listed in the release notes and in the contract's break ledgers (`abi.breaks.json`, `stable-operations.breaks.json`, `events.representations.breaks.json`, in the public repository).
+- Between rc.1 and 2.0.0 we intend no break. If one proves necessary, it is listed in the release notes and in the contract's break ledgers (`abi.breaks.json`, `stable-operations.breaks.json`, `events.representations.breaks.json`, `contract.breaks.json`, in the public repository).
+- `contract.lock.json` at the repository root records every sealed snapshot as it was at the freeze. From then on a sealed change is accepted only with a ledger entry written after the lock and typed `growth`, `security` (naming its advisory) or `new-version`; see [How it is enforced](#how-it-is-enforced). `node scripts/contract-lock.mjs status` shows which seals moved since the lock and what each ledger recorded since.
 - There is one contract version today: `2026-10` (`PLUGIN_API_VERSION`, equal to `EVENTS_API_VERSION`).
 
 ## What is covered
 
-Within a supported contract version, a release only adds to these:
+Within a supported contract version, a release only adds to these. Each names, in parentheses, the seal that enforces it: a committed snapshot whose test refuses anything but growth.
 
-- **The app manifest**: every field `defineManifest` and `parsePluginManifest` accept, `apiVersion` and `minPlatformVersion` included ([Apps](apps.md#the-manifest)).
-- **The SDK's exported entry points and types**: `definePlugin`, `ctx`, the providers, the test harness and fixtures.
-- **Functions**: each point, its input, its output and its failure policy ([Commerce hooks](commerce-hooks.md#2-the-checkout-function-interface)).
-- **Events**: topics, facts, webhook representations, delivery headers and signing ([Event reference](events.md)).
-- **The dashboard and buyer UI protocols**: admin UI documents and surfaces, Buyer UI extensions and their slots.
-- **The 209 stable operations** an app calls with `ctx.api.call` ([Stable app API reference](operations.md)): names, scopes, parameters, bodies and responses, and the error codes (`APP_ERROR_CODES`) with each code's meaning and HTTP status.
-- **Stable provider ports**: their required operations and schemas.
-- **The theme document and its upgrade chain**: a stored theme, template or page preset of any `themeVersion` from 10 on is read and upgraded, never reset ([Storefront](storefront.md#stored-themes-and-versioning)).
-- **Skin projections**: what a skin reads. When core changes a section, the host adapts so your input stays the same ([Skins](storefront.md#skins)).
-- **The storefront component protocol**: the component ABI, slots, targets, embeds, data shapes and the pack format. Its limits only loosen.
-- **Sealed tokens and names**: the host CSS variables and `data-*` hooks these pages name, such as the store's tokens in [Build a theme](themes.md#7-every-language-and-logical-css), [the buy form's anatomy](storefront.md#styling-the-buy-form) and [placed offers and kits](storefront.md#placed-offers-and-kits). The names hold; the nesting between them and the classes inside do not.
-- **Inline style in app markup**: a `style` attribute that calls only the functions listed in [Storefront security](storefront.md#security) (`STOREFRONT_STYLE_FUNCTIONS`) is a permanent part of the contract. That list only grows.
-- **The private-page model**: page keys, part and target names, variants, style targets, tokens and their types, label keys and refusal reasons ([Design the buyer's private pages](private-pages.md)).
+- **The app manifest**: every field `defineManifest` and `parsePluginManifest` accept, `apiVersion` and `minPlatformVersion` included ([Apps](apps.md#the-manifest)) (`abi.manifest.snapshot.json`).
+- **The SDK's exported entry points and types**: `definePlugin`, `ctx`, the providers, the test harness and fixtures (`abi.sdk.snapshot.txt`, the emitted declarations).
+- **Functions**: each point, its input and its output, and the failure policies a manifest declares ([Commerce hooks](commerce-hooks.md#2-the-checkout-function-interface)) (the protocol seal's `functions` and the manifest seal).
+- **Events**: topics, facts, webhook representations, delivery headers and signing ([Event reference](events.md)) (the protocol seal's `events`, `events.representations.snapshot.json`, and the `delivery` table: the header names, the secret prefix, the tolerance and one signature the test signs again).
+- **The dashboard and buyer UI protocols**: admin UI documents and surfaces, Buyer UI extensions and their slots (the protocol seal's `ui`, `extensions` and the storefront slot constants).
+- **The 209 stable operations** an app calls with `ctx.api.call` ([Stable app API reference](operations.md)): names, scopes, parameters, bodies, responses, success statuses and the names of their schemas (`sample("OrderResource")`) (`stable-operations.snapshot.json`), and the error codes (`APP_ERROR_CODES`) with each code's meaning, details and HTTP status (the protocol seal's `errors`).
+- **Stable provider ports**: their required operations and schemas (the protocol seal's `providers` and `providerRequired`).
+- **The theme document and its upgrade chain**: a stored theme, template or page preset of any `themeVersion` from 10 on is read and upgraded, never reset ([Storefront](storefront.md#stored-themes-and-versioning)) (`compat.snapshot.json` under its own rule, the frozen goldens `compat/v*`, and `read-bounds.snapshot.json`: a bound a stored theme is read against only rises).
+- **Skin projections**: what a skin reads. When core changes a section, the host adapts so your input stays the same ([Skins](storefront.md#skins)) (the protocol seal's storefront constants, `STOREFRONT_SECTION_SKIN_PROJECTIONS`, and the SDK declarations).
+- **The storefront component protocol**: the component ABI, slots, targets, embeds, data shapes and the pack format. Its limits only loosen (the protocol seal's storefront constants; `STOREFRONT_COMPONENT_LIMITS` may only rise).
+- **Sealed tokens and names**: the host CSS variables in [Build a theme](themes.md#7-every-language-and-logical-css) (`STOREFRONT_HOST_CSS_VARIABLES`) and the hooks on the store's public markup: [the buy form's anatomy](storefront.md#styling-the-buy-form), [placed offers and kits](storefront.md#placed-offers-and-kits), related products, the filters wrapper, the sticky buy column and [the phone bar](storefront.md#styling-the-stores-phone-bar) (`STOREFRONT_HOST_HOOKS`) (the protocol seal's `hostCssVariables` and `hostHooks` tables; a test reads each from the markup that writes it). The names hold; the nesting between them and the classes inside do not.
+- **What app markup may hold**: the skin HTML allow-list (tags, attributes, their values and patterns) and the functions a `style` attribute may call, listed in [Storefront security](storefront.md#security) (`STOREFRONT_STYLE_FUNCTIONS`). Inline style is a permanent part of the contract. Both lists only grow (the protocol seal's `skinHtml` table and storefront constants).
+- **The limits an app is built against**: the per-app quotas of both plans (CPU, wall time, calls per run, storage, runs and messages a minute, running jobs, held events), the checkout function wall cap and budget, a function's reads, UI, buyer UI, object, job, message, upload and template sizes. A maximum only rises (the protocol seal's `limits` table).
+- **What the store refuses**: the store's action and amount words, their slot patterns and each label kind's reach, the theme's amount words, and the reasons every check site gives with a digest of the constants it reads (theme save, app templates, manifest policy, buyer UI, function answers, storefront markup, pack) (the protocol seal's `storeWords`, `storeWordSlots`, `storeWordKinds` and `themeLabelAmountWords` tables, and `refusal-census.snapshot.json`). A new word or reason is a new refusal: only the security exception adds one.
+- **The private-page model**: page keys, part and target names, variants, style targets, tokens and their types, label keys and refusal reasons ([Design the buyer's private pages](private-pages.md)) (`private-anatomy.snapshot.txt` under its own rule, with each token's type; `save-reasons.snapshot.json`, with the checker and policy versions).
+- **Released apps and themes keep working**: every bundle built against this release or later replays with the outcome it had when it was frozen (`tests/replay`, whose frozen expectations the lock records).
 
 "Only adds" means a new optional field, operation, event, function point, slot, token, error code or list value. A list the reference marks open may gain values, so handle a value you do not know as that list says. Removing, renaming or retyping something, making an output nullable, adding a required input, changing a default, or refusing at save, install or run something that passes today is a break.
 
@@ -34,8 +38,13 @@ Within a supported contract version, a release only adds to these:
 - **Every operation that is not one of the 209 stable ones**: beta and internal operations, the dashboard's REST API and the storefront's REST API (`/api/v1/...`), and agent or CLI commands built on them. An agent's saved script is covered only where it calls stable operations.
 - **Undocumented DOM and CSS.** Core markup, class names, element nesting, script order and bundle internals. Only the names listed above hold.
 - **Which error code an operation answers in a given case.** The codes themselves, their meanings and statuses are covered. Branch on `code`, and treat a code you do not know by its HTTP status.
-- **Anything marked beta**, wherever it appears.
+- **Anything marked beta**, wherever it appears, beta provider ports included (their snapshot is reviewed, not sealed).
 - **Timing and order** beyond what [Consistency](#consistency-of-what-your-app-reads) says.
+- **What the host does with a failure** beyond the declared policy: when a slow or failing app is left out, and how its circuit counts. The replay of released bundles does not run checkout functions.
+- **Limits not in the sealed table**: an app's outbound HTTP (`ctx.http.fetch` sizes, redirects and timeout), route body sizes, a buyer UI run's CPU, the offer run's 300 ms, the upload package size, and Cloudflare's own plan limits.
+- **What `pnpm plugin validate` and `pack` add of their own**: the bundle size a registry lists (16 MiB) is the registry's, not a store check. Every other check they fail on is the store's own.
+- **A check that refuses more without changing its listed constants or reasons**: the refusal census sees a new reason or a changed list, limit or pattern, not a new branch inside a check. The private-page CSS allow-list may shrink for security at any time.
+- **Undocumented host CSS variables**: any custom property the store writes that `STOREFRONT_HOST_CSS_VARIABLES` does not list (`--mobile-tabs-reserve`, `--theme-ink`, the `--theme-text-*` steps) is internal.
 
 ## The security exception
 
@@ -43,6 +52,13 @@ A check may be tightened only to close a security hole. Each one gets a dated no
 
 - A stored theme is never dropped. A value a tighter check refuses is left out of the read (a link reads as no link, a tab or a card is left out) and the rest of the theme keeps its design; a private page a tighter check refuses falls back to the store's own look on its own, the other pages keep theirs, and the merchant's theme page says which page or part and why until a save fixes it. A stricter check keeps serving a page's look until the store compiles it again; only a change to what the store writes shows the store's own look meanwhile.
 - For an app, an answer the tighter check refuses is treated like any invalid answer at that point (see [Failure policy and limits](commerce-hooks.md#failure-policy-and-limits)).
+
+## How it is enforced
+
+- Every surface above is a committed snapshot with a compatibility rule; its test refuses a removal, a retype, a narrower input, a new requirement or a new refusal unless a ledger entry names that exact change and the snapshot it changes from.
+- Each ledger entry has a type: `growth`, `pre-lock` (made before the freeze), `security` (with its advisory id and date) or `new-version` (with the contract version it belongs to).
+- `contract.lock.json` fixes every snapshot as it was at the freeze. After it, each seal also compares with the locked snapshot, so a snapshot rewritten by hand is still refused, and accepts only entries written after the lock and typed `growth`, `security` or `new-version`. The entries before the lock, the theme goldens and the frozen replay expectations never change.
+- The seals run on every commit. Their tests are not in the public repository, which carries the lock, the snapshots and the ledgers to read.
 
 ## Versions
 

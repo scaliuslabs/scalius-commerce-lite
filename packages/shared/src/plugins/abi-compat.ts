@@ -13,13 +13,17 @@
 //   code (or its status), a
 //   storefront constant, a member of one of its lists or a key of one of its
 //   objects (a list and an object may grow), and no stable port goes back to
-//   beta.
+//   beta;
+// - each contract table (contract-tables.ts: host CSS variables and hooks,
+//   the skin HTML allow-list, app limits, store words, delivery) moves only
+//   as its own rule allows: grow, loosen, or refuse nothing new.
 //
 // A break is accepted only by an entry in `abi.breaks.json` naming the exact
 // change and the fingerprint of the snapshot it breaks from, so `vitest -u`
 // alone never accepts one and an entry never pre-accepts a later break.
 
 import { jsonSchemaBreakingChanges, type SchemaDirection } from "../schema-compat";
+import { contractTableBreaks } from "./contract-tables";
 
 type Json = Record<string, unknown>;
 
@@ -60,7 +64,8 @@ function isObject(value: unknown): value is Json {
  * member, an object keeps every key with exactly its value (both may gain
  * entries); anything nested, and any other value, stays equal. A limits
  * table (`…_LIMITS`) gains no key silently: a new limit restricts apps, so it
- * needs an acknowledgement that says why what passed before still passes.
+ * needs an acknowledgement that says why what passed before still passes. Its
+ * numbers are maxima and budgets: one may rise (a limit only loosens), never fall.
  */
 function constantValueBreaks(name: string, was: unknown, now: unknown): string[] {
   const path = `storefront.${name}`;
@@ -72,7 +77,10 @@ function constantValueBreaks(name: string, was: unknown, now: unknown): string[]
     return [
       ...Object.entries(was).flatMap(([key, value]) => !(key in now)
         ? [`${path}.${key}: the key was removed.`]
-        : JSON.stringify(value) === JSON.stringify(now[key]) ? [] : [`${path}.${key}: the constant value changed.`]),
+        : JSON.stringify(value) === JSON.stringify(now[key]) ? []
+          : name.endsWith("_LIMITS") && typeof value === "number" && typeof now[key] === "number"
+            ? ((now[key] as number) < value ? [`${path}.${key}: the limit tightened from ${value} to ${String(now[key])}.`] : [])
+            : [`${path}.${key}: the constant value changed.`]),
       ...(name.endsWith("_LIMITS") ? Object.keys(now).filter((key) => !(key in was)).map((key) => `${path}.${key}: a new limit was added.`) : []),
     ];
   }
@@ -184,6 +192,7 @@ export function protocolBreakingChanges(before: unknown, after: unknown): string
 
   problems.push(...constantBreaks(was.storefront, now.storefront));
   problems.push(...providerRequiredBreaks(was.providerRequired, now.providerRequired));
+  if ("tables" in was) problems.push(...contractTableBreaks(was.tables, now.tables));
   return problems;
 }
 

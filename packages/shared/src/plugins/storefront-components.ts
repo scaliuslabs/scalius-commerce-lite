@@ -90,13 +90,16 @@ const themeVersion = (what: string) => z.number({
  * that still does not fit is left out of the library and reported on the
  * app's page.
  */
+/** The most a template's theme or a page preset's sections hold, as JSON characters. */
+export const STOREFRONT_APP_TEMPLATE_MAX_BYTES = 64 * 1024;
+
 export const storefrontTemplateDeclarationSchema = z.object({
   id: key,
   name: title,
   description: description.optional(),
   /** The theme document version `theme` was written for (`STOREFRONT_THEME_DOCUMENT_VERSION` for this release). */
   themeVersion: themeVersion("the template's theme is"),
-  theme: z.record(z.string(), z.unknown()).refine((value) => JSON.stringify(value).length <= 64 * 1024, "A template's theme is at most 64 KiB."),
+  theme: z.record(z.string(), z.unknown()).refine((value) => JSON.stringify(value).length <= STOREFRONT_APP_TEMPLATE_MAX_BYTES, "A template's theme is at most 64 KiB."),
 }).strict();
 export type StorefrontTemplateDeclaration = z.infer<typeof storefrontTemplateDeclarationSchema>;
 
@@ -115,7 +118,7 @@ export const storefrontPagePresetDeclarationSchema = z.object({
   /** The theme document version `sections` were written for (`STOREFRONT_THEME_DOCUMENT_VERSION` for this release). */
   themeVersion: themeVersion("the preset's sections are"),
   sections: z.array(z.record(z.string(), z.unknown())).min(1).max(24)
-    .refine((value) => JSON.stringify(value).length <= 64 * 1024, "A page preset's sections are at most 64 KiB."),
+    .refine((value) => JSON.stringify(value).length <= STOREFRONT_APP_TEMPLATE_MAX_BYTES, "A page preset's sections are at most 64 KiB."),
 }).strict();
 export type StorefrontPagePresetDeclaration = z.infer<typeof storefrontPagePresetDeclarationSchema>;
 

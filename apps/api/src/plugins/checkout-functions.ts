@@ -38,7 +38,8 @@ import { writePluginNotices, type PluginHost, type PluginHostOptions } from "./h
 import { prepareBuyerUiBlocks } from "./buyer-ui";
 import { BUYER_UI_BLOCKS_MAX, BUYER_UI_LINE_BLOCKS_MAX, BUYER_UI_RESPONSE_MAX_BYTES, type BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
 import { isStorefrontUiLineSlot, STOREFRONT_UI_SLOT_PAGES } from "@scalius/shared/plugins/storefront-protocol";
-import { CHECKOUT_APP_BUDGET_MS, CHECKOUT_APP_CEILING_MS, checkoutAppShare, optionalAppBudget, PLUGIN_FUNCTION_WALL_MS, createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
+import { CHECKOUT_APP_BUDGET_MS, PLUGIN_FUNCTION_WALL_MS } from "@scalius/shared/plugins/app-limits";
+import { CHECKOUT_APP_CEILING_MS, checkoutAppShare, optionalAppBudget, createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
 import { localizedCheckoutAttributes, localizedPurchaseOptions, pluginTextChain } from "@scalius/shared/plugins/manifest-text";
