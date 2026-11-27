@@ -1,6 +1,8 @@
 import type { CourierBookingOptionValue } from "@scalius/shared/plugins/providers";
 
 export const PROVIDER_OUTCOME_UNKNOWN = "provider_outcome_unknown";
+/** A held shipment's raw status when a courier reported another state over a settled one (courier-report.ts). */
+export const COURIER_REPORT_HELD = "courier_report_on_settled";
 
 // Common interfaces
 export interface ShipmentResult {

@@ -443,7 +443,7 @@ export interface StorefrontMoney {
   formatted: string;
 }
 
-/** The kinds of a card's typed facts (`StorefrontProductCard.cardFacts`). The list only grows, at its end. */
+/** The kinds of a card's typed facts (`StorefrontProductCard.cardFacts`). The list only grows, at its end: skip a fact of a kind you do not know. */
 export const STOREFRONT_CARD_FACT_KINDS = ["pack_size", "condition", "delivery"] as const;
 export type StorefrontCardFactKind = (typeof STOREFRONT_CARD_FACT_KINDS)[number];
 
@@ -623,10 +623,15 @@ export interface StorefrontHeaderData {
    * an accordion or one level at a time (`drill`), and whether the store
    * draws its bottom tab bar under this header on phones. The bar's menu tab
    * opens the element marked with `menuDrawer()` (a `popover` or a dialog).
-   * Absent from older stores.
+   * The menu list may grow: treat an unknown value as `accordion`. Absent
+   * from older stores.
    */
   phoneNavigation?: { menu: "accordion" | "drill"; tabBar: boolean };
-  /** The first selected homepage render unit, only when desktop and phone agree. */
+  /**
+   * The first selected homepage render unit, only when desktop and phone
+   * agree: a core section or an app's. The kinds may grow: treat a lead of a
+   * kind you do not know as none (`null`).
+   */
   page?: {
     lead:
       | {
@@ -714,7 +719,7 @@ export interface StorefrontInstallments {
   monthly: StorefrontMoney;
 }
 
-/** A buyer's availability band: never a quantity. */
+/** A buyer's availability band: never a quantity. The list may grow: treat an unknown value as `untracked`: show no stock word. */
 export type StorefrontAvailability = "untracked" | "out_of_stock" | "low_stock" | "in_stock";
 
 /** What a product's media item is (`StorefrontProductMedia.kind`). The list only grows, at its end: treat one you do not know as a photo. */
@@ -956,7 +961,11 @@ export interface StorefrontSpecification {
 /** One buyer input of the buy form. */
 export interface StorefrontBuyerInput {
   key: string;
-  /** `file`: an app's upload input (its answer is upload ids the buy form's own control makes). */
+  /**
+   * `file`: an app's upload input (its answer is upload ids the buy form's
+   * own control makes). The list may grow: leave an input of a type you do
+   * not know to the buy form's `inputs` part.
+   */
   type: "text" | "textarea" | "select" | "checkbox" | "file";
   label: string;
   required: boolean;
@@ -1009,6 +1018,7 @@ export interface StorefrontProductState {
 
 /** What a listing_main skin gets: the listing as the core listing page shows it (this page of it). */
 export interface StorefrontListingPage {
+  /** What the listing lists. The list may grow: treat an unknown value as `collection`. */
   kind: "category" | "collection" | "brand" | "search";
   title: string;
   /** The merchant's description on the first page, sanitized by the store; null otherwise. */
@@ -1031,8 +1041,9 @@ export interface StorefrontListingPage {
    * filters, or this listing's own template), which the `filters` embed
    * draws: `sidebar` (a column beside the results) or `bar` (a row of
    * dropdowns over a full-width grid). Lay the page out around it; a skin
-   * never chooses another. Absent when the listing shows no filters (too few
-   * products, or the theme hides them), and from older stores.
+   * never chooses another. The list may grow: treat an unknown value as
+   * `sidebar`. Absent when the listing shows no filters (too few products, or
+   * the theme hides them), and from older stores.
    */
   filters?: { placement: "sidebar" | "bar" };
 }
@@ -1078,6 +1089,7 @@ export interface StorefrontDeliveryFacts {
 export interface StorefrontObjectFieldView {
   key: string;
   name: string;
+  /** The field's value in parts, in order. The kinds may grow: skip a part of a kind you do not know. */
   parts: Array<
     | { kind: "text"; text: string }
     | { kind: "link"; href: string; label: string; external: boolean }
@@ -1093,6 +1105,7 @@ export interface StorefrontPromotionEnd {
 }
 
 export interface StorefrontHeroSkinSettings {
+  /** The list may grow: treat an unknown value as `full-bleed`. */
   layout: "full-bleed" | "contained-banners" | "split" | "full-screen" | "wide-editorial";
   slides: Array<{
     image: StorefrontImage | null;
@@ -1109,21 +1122,25 @@ export interface StorefrontHeroSkinSettings {
   }>;
   phonePlacement?: "after-categories";
   sideBanners?: Array<{ image: StorefrontImage | null; alt: string; href: string | null }>;
+  /** The list may grow: treat an unknown value as `screen`. */
   phoneHeight?: "screen" | "compact";
 }
 
 export interface StorefrontUspStripSkinSettings {
+  /** The list may grow: treat an unknown value as `icons`. */
   style: "icons" | "ticker";
   source: StorefrontDeliveryFacts | { kind: "custom"; items: Array<{ title: string; detail: string }> };
 }
 
 export interface StorefrontCategoryTilesSkinSettings {
+  /** The list may grow: treat an unknown value as `photo`. */
   style: "photo" | "photo-grid" | "round" | "round-small" | "round-row" | "icons" | "quad" | "square";
   title: string;
   categories: StorefrontTile[];
 }
 
 export interface StorefrontCollectionsSkinSettings {
+  /** The list may grow: treat an unknown value as `large`. */
   carousel: "large" | "compact";
   /** Each collection with its own products (`cards`); none until the merchant picks them (see `data.cards`). */
   collections: StorefrontTile[];
@@ -1169,10 +1186,12 @@ export interface StorefrontLookbookSkinSettings {
   title: string;
   image: StorefrontImage | null;
   products: StorefrontProductList;
+  /** The list may grow: treat an unknown value as `tall`. */
   photo: "tall" | "square";
 }
 
 export interface StorefrontBannerSkinSettings {
+  /** The list may grow: treat an unknown value as `full`. */
   layout: "full" | "two-up" | "four-up";
   heading: string;
   text: string;
@@ -1182,9 +1201,15 @@ export interface StorefrontBannerSkinSettings {
 
 export interface StorefrontBrandWallSkinSettings {
   title: string;
+  /** The list may grow: treat an unknown value as `rail`. */
   style: "grid" | "rail";
 }
 
+/**
+ * The layouts may grow: draw an unknown layout as `rich-text` from its
+ * `heading` and `body`, or nothing without them. `imageSide` may grow too:
+ * treat an unknown value as `start`.
+ */
 export type StorefrontEditorialSkinSettings =
   | { layout: "rich-text"; heading: string; body: string }
   | { layout: "image-with-text"; heading: string; body: string; image: StorefrontImage | null; imageSide: "start" | "end" }
@@ -1216,6 +1241,7 @@ export interface StorefrontNewsletterSkinSettings {
   heading: string;
   text: string;
   image?: StorefrontImage | null;
+  /** The list may grow: treat an unknown value as `optional`. */
   email?: "optional" | "required" | "hidden";
   whatsapp?: boolean;
   buttonLabel?: string;
@@ -1338,6 +1364,7 @@ export interface StorefrontRenderContext {
      */
     darkLogo?: StorefrontImage | null;
   };
+  /** The page's kind and path. The kinds may grow: treat an unknown value as `other`. */
   page: { kind: "home" | "landing" | "product" | "listing" | "search" | "cart" | "page" | "other"; path: string };
   /** The app's file base URL (`/_x/<plugin id>/<release>/`): its public files are under `public/`. */
   assets: string;
@@ -1360,6 +1387,7 @@ interface SkinJobBase {
   settings: StorefrontResolvedSettings;
 }
 
+/** One skin call, by the target the skin declared. The targets may grow: draw nothing for a target you do not know. */
 export type StorefrontSkinJob =
   | (SkinJobBase & { target: "header"; data: StorefrontHeaderData })
   | (SkinJobBase & { target: "footer"; data: StorefrontFooterData })
@@ -1497,7 +1525,7 @@ export interface StorefrontCartLine {
    * (`per: "bundle"`: a kit or an app's bundle sold as one line, whose
    * quantity is its bundle units) pays, or null when no one amount is exact;
    * `units`, how many of those the line holds (`total = amount × units`). A
-   * free extra is 0.
+   * free extra is 0. `per` may grow: show `total` for a `per` you do not know.
    */
   addOns: Array<{ title: string; total: StorefrontMoney; amount: StorefrontMoney | null; per: "unit" | "bundle"; units: number | null }>;
 }
@@ -1511,6 +1539,7 @@ export interface StorefrontCartLine {
  * check's `code`: `properties_invalid`, `properties_required` or
  * `confirmation_required`), or the cart could not be checked or saved
  * (`failed`). On success the changed lines carry the store's price and add-ons.
+ * The reasons may grow: treat an unknown reason as `failed`.
  */
 export type StorefrontLineInputResult =
   | { ok: true; changed: number }
@@ -1522,7 +1551,8 @@ export type StorefrontLineInputResult =
  * nothing changed: the buyer went back from the agreement (`cancelled`), one
  * of the app's inputs needs a decision but names no `proceedWith` choice, so
  * the buyer chooses it on the line (`undecided`), or the cart could not be
- * checked or saved (`failed`).
+ * checked or saved (`failed`). The reasons may grow: treat an unknown reason
+ * as `failed`.
  */
 export type StorefrontDecideResult =
   | { ok: true; changed: number }

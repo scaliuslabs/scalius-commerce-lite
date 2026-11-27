@@ -14,6 +14,7 @@ import {
   markShipmentReconciliationRequired,
   refusedBookingOptions,
   PROVIDER_OUTCOME_UNKNOWN,
+  shipmentMove,
 } from "../delivery";
 import {
   assertNoActivePaymentSessionAttempt,
@@ -121,16 +122,14 @@ export async function resolveExpiredShipmentClaim(
                 detectedAt: new Date().toISOString(),
             },
         };
-        statements.push(db.update(deliveryShipments).set({
-            status: ShipmentStatus.RECONCILE_REQUIRED,
-            rawStatus: reason,
-            metadata: JSON.stringify(metadata),
-            updatedAt: sql`unixepoch()`,
-        }).where(and(
+        statements.push(shipmentMove(db, ShipmentStatus.RECONCILE_REQUIRED, "store", and(
             eq(deliveryShipments.id, claimId),
             eq(deliveryShipments.status, shipment.status),
             stillClaimed,
-        )).returning({ id: deliveryShipments.id }) as BatchItem<"sqlite">);
+        ), {
+            rawStatus: reason,
+            metadata: JSON.stringify(metadata),
+        }).returning({ id: deliveryShipments.id }) as BatchItem<"sqlite">);
     }
     statements.push(db.update(orders).set({
         shipmentClaimExpiresAt: null,

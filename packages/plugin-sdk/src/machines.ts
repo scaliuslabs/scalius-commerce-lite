@@ -21,6 +21,28 @@ export {
 export { COD_MACHINE, COD_STATUSES, ORDER_MACHINE, type CodStatusValue, type OrderStatusValue } from "@scalius/shared/order-state";
 /** A product review's moderation. */
 export { REVIEW_MACHINE, REVIEW_STATUSES, type ReviewStatus } from "@scalius/shared/reviews";
+/** A shipment's states: a courier's report moves an open one in any order, a settled one only by a declared correction, and the store holds one for staff with any other report. */
+export {
+  SETTLED_SHIPMENT_STATUSES,
+  SHIPMENT_CORRECTIONS,
+  SHIPMENT_MACHINE,
+  type ShipmentActor,
+  type ShipmentMove,
+  type ShipmentStatus,
+} from "@scalius/shared/shipment-state";
+/** A payment record's machines: a charge, moved by its provider's events, and a refund record, moved with its refund. */
+export {
+  PAYMENT_MACHINE,
+  REFUND_RECORD_MACHINE,
+  type ChargeStatus,
+  type PaymentMove,
+  type RefundRecordMove,
+  type RefundRecordStatus,
+} from "@scalius/shared/payment-record-state";
+/** A warranty claim: staff move it from any state to any other; apps read it. */
+export { WARRANTY_CLAIM_MACHINE, type WarrantyClaimStatus } from "@scalius/shared/warranty";
+/** An object record's publication: draft and published for a storefront-visible type, else active. */
+export { OBJECT_RECORD_MACHINE, objectRecordStatuses } from "@scalius/shared/plugins/object-status";
 
 /** What `moveRecordStatus` did. */
 export type RecordStatusMove<S extends string> =

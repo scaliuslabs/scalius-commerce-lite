@@ -4008,7 +4008,7 @@ export type OrderQuoteResource = {
 export type PaymentResource = {
     id: string;
     orderId: string;
-    status: 'pending' | 'confirmed' | 'succeeded' | 'failed' | 'refunded' | 'cancelled' | 'authorized';
+    status: 'pending' | 'succeeded' | 'failed' | 'refunded' | 'cancelled' | 'authorized';
     method: string;
     type: 'full' | 'deposit' | 'balance' | 'refund';
     currency: string;
@@ -4043,7 +4043,7 @@ export type ShipmentResource = {
     orderId: string;
     providerId: string | null;
     providerType: string;
-    status: 'pending' | 'pickup_assigned' | 'picked_up' | 'pickup_failed' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'partial_delivered' | 'delivery_failed' | 'on_hold' | 'failed' | 'cancelled' | 'returned' | 'unknown' | 'creating' | 'processing' | 'reconcile_required';
+    status: 'pending' | 'pickup_assigned' | 'picked_up' | 'pickup_failed' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'partial_delivered' | 'delivery_failed' | 'on_hold' | 'failed' | 'cancelled' | 'returned' | 'unknown' | 'creating' | 'reconcile_required';
     rawStatus: string | null;
     externalId: string | null;
     trackingId: string | null;
@@ -69271,7 +69271,13 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses = {
 export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponse = PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses];
 
 export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileData = {
-    body?: never;
+    body: {
+        courierReport?: 'apply' | 'keep';
+        report?: {
+            status: string;
+            rawStatus: string;
+        };
+    };
     path: {
         id: string;
         shipmentId: string;
@@ -69301,6 +69307,17 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileErrors = {
      * Conflict
      */
     409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Service unavailable
      */
@@ -71347,7 +71364,7 @@ export type GetApiV1AdminOrdersResponses = {
                 } | null;
                 shipmentRecovery: {
                     state: 'none' | 'creating' | 'needs_attention' | 'failed';
-                    reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'creating' | 'claim_expired' | 'failed';
+                    reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'courier_report' | 'creating' | 'claim_expired' | 'failed';
                     severity: 'info' | 'warning' | 'danger';
                     activeLock: boolean;
                     label: string;
@@ -71359,6 +71376,11 @@ export type GetApiV1AdminOrdersResponses = {
                     canRetryCreate: boolean;
                     canRepair: boolean;
                     unknownOutcome: boolean;
+                    courierReport?: {
+                        previousStatus: string;
+                        reportedStatus: string;
+                        rawStatus: string;
+                    } | null;
                     updatedAt: NullableTimestamp;
                 };
                 paymentRecovery: {
@@ -71889,7 +71911,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                 } | null;
                 shipmentRecovery: {
                     state: 'none' | 'creating' | 'needs_attention' | 'failed';
-                    reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'creating' | 'claim_expired' | 'failed';
+                    reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'courier_report' | 'creating' | 'claim_expired' | 'failed';
                     severity: 'info' | 'warning' | 'danger';
                     activeLock: boolean;
                     label: string;
@@ -71901,6 +71923,11 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     canRetryCreate: boolean;
                     canRepair: boolean;
                     unknownOutcome: boolean;
+                    courierReport?: {
+                        previousStatus: string;
+                        reportedStatus: string;
+                        rawStatus: string;
+                    } | null;
                     updatedAt: NullableTimestamp;
                 };
                 paymentRecovery: {
@@ -73045,7 +73072,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message' | 'terms_accepted';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message' | 'terms_accepted' | 'courier_report';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -73129,7 +73156,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message' | 'terms_accepted';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held' | 'late_payment' | 'payment_dispute' | 'delivery_message' | 'terms_accepted' | 'courier_report';
             body: string | null;
             data: {
                 [key: string]: unknown;
@@ -73508,7 +73535,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
             } | null;
             shipmentRecovery: {
                 state: 'none' | 'creating' | 'needs_attention' | 'failed';
-                reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'creating' | 'claim_expired' | 'failed';
+                reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'courier_report' | 'creating' | 'claim_expired' | 'failed';
                 severity: 'info' | 'warning' | 'danger';
                 activeLock: boolean;
                 label: string;
@@ -73520,6 +73547,11 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 canRetryCreate: boolean;
                 canRepair: boolean;
                 unknownOutcome: boolean;
+                courierReport?: {
+                    previousStatus: string;
+                    reportedStatus: string;
+                    rawStatus: string;
+                } | null;
                 updatedAt: NullableTimestamp;
             };
             paymentRecovery: {

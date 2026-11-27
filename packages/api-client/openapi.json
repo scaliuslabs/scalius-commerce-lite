@@ -19693,7 +19693,6 @@
             "type": "string",
             "enum": [
               "pending",
-              "confirmed",
               "succeeded",
               "failed",
               "refunded",
@@ -19910,7 +19909,6 @@
               "returned",
               "unknown",
               "creating",
-              "processing",
               "reconcile_required"
             ]
           },
@@ -242518,6 +242516,45 @@
             "in": "path"
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "courierReport": {
+                    "type": "string",
+                    "enum": [
+                      "apply",
+                      "keep"
+                    ]
+                  },
+                  "report": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "rawStatus": {
+                        "type": "string",
+                        "maxLength": 200
+                      }
+                    },
+                    "required": [
+                      "status",
+                      "rawStatus"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Shipment reconciliation repaired",
@@ -242638,6 +242675,44 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -249637,6 +249712,7 @@
                                       "none",
                                       "courier_unconfirmed",
                                       "reconcile_required",
+                                      "courier_report",
                                       "creating",
                                       "claim_expired",
                                       "failed"
@@ -249683,6 +249759,26 @@
                                   },
                                   "unknownOutcome": {
                                     "type": "boolean"
+                                  },
+                                  "courierReport": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "previousStatus": {
+                                        "type": "string"
+                                      },
+                                      "reportedStatus": {
+                                        "type": "string"
+                                      },
+                                      "rawStatus": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "previousStatus",
+                                      "reportedStatus",
+                                      "rawStatus"
+                                    ]
                                   },
                                   "updatedAt": {
                                     "$ref": "#/components/schemas/NullableTimestamp"
@@ -251545,6 +251641,7 @@
                                       "none",
                                       "courier_unconfirmed",
                                       "reconcile_required",
+                                      "courier_report",
                                       "creating",
                                       "claim_expired",
                                       "failed"
@@ -251591,6 +251688,26 @@
                                   },
                                   "unknownOutcome": {
                                     "type": "boolean"
+                                  },
+                                  "courierReport": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "previousStatus": {
+                                        "type": "string"
+                                      },
+                                      "reportedStatus": {
+                                        "type": "string"
+                                      },
+                                      "rawStatus": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "previousStatus",
+                                      "reportedStatus",
+                                      "rawStatus"
+                                    ]
                                   },
                                   "updatedAt": {
                                     "$ref": "#/components/schemas/NullableTimestamp"
@@ -255438,7 +255555,8 @@
                                   "late_payment",
                                   "payment_dispute",
                                   "delivery_message",
-                                  "terms_accepted"
+                                  "terms_accepted",
+                                  "courier_report"
                                 ]
                               },
                               "body": {
@@ -255655,7 +255773,8 @@
                             "late_payment",
                             "payment_dispute",
                             "delivery_message",
-                            "terms_accepted"
+                            "terms_accepted",
+                            "courier_report"
                           ]
                         },
                         "body": {
@@ -257116,6 +257235,7 @@
                                 "none",
                                 "courier_unconfirmed",
                                 "reconcile_required",
+                                "courier_report",
                                 "creating",
                                 "claim_expired",
                                 "failed"
@@ -257162,6 +257282,26 @@
                             },
                             "unknownOutcome": {
                               "type": "boolean"
+                            },
+                            "courierReport": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "previousStatus": {
+                                  "type": "string"
+                                },
+                                "reportedStatus": {
+                                  "type": "string"
+                                },
+                                "rawStatus": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "previousStatus",
+                                "reportedStatus",
+                                "rawStatus"
+                              ]
                             },
                             "updatedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"

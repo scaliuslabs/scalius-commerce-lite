@@ -6,7 +6,6 @@ import {
 } from "@scalius/database/client";
 import {
   OrderStatus,
-  PaymentRecordStatus,
   PaymentStatus,
   orderPayments,
   orders,
@@ -21,6 +20,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { PaymentType } from "./types";
+import { PAYMENT_HOLDING_STATUSES } from "@scalius/shared/payment-record-state";
 import { noActiveShipmentClaimCondition } from "../order-kernel";
 import { hostedSession, sessionTransition } from "./session-lifecycle";
 
@@ -44,11 +44,7 @@ export interface ReconcileHostedPaymentReturnInput {
 }
 
 const HOSTED_PAYMENT_RETURN_GUARD = "hosted_payment_return_conflict";
-const UNSAFE_PAYMENT_STATUSES = [
-  PaymentRecordStatus.PENDING,
-  PaymentRecordStatus.CONFIRMED, PaymentRecordStatus.AUTHORIZED,
-  PaymentRecordStatus.SUCCEEDED,
-] as const;
+const UNSAFE_PAYMENT_STATUSES = PAYMENT_HOLDING_STATUSES;
 const RETRYABLE_ATTEMPT_STATUSES = new Set(["failed"]);
 const TERMINAL_ORDER_STATUSES = new Set<string>([
   OrderStatus.CANCELLED,
@@ -127,11 +123,7 @@ export async function reconcileHostedPaymentReturn(
         SELECT 1 FROM ${orderPayments}
         WHERE ${orderPayments.orderId} = ${order.id}
           AND ${orderPayments.paymentType} = ${input.paymentType}
-          AND ${orderPayments.status} IN (
-            ${PaymentRecordStatus.PENDING},
-            ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED},
-            ${PaymentRecordStatus.SUCCEEDED}
-          )
+          AND ${inArray(orderPayments.status, [...PAYMENT_HOLDING_STATUSES])}
       )
       AND EXISTS (
         SELECT 1 FROM ${paymentSessionAttempts}

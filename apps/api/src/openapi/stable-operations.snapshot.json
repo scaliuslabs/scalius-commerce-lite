@@ -8789,7 +8789,8 @@
             "late_payment",
             "payment_dispute",
             "delivery_message",
-            "terms_accepted"
+            "terms_accepted",
+            "courier_report"
            ]
           },
           "body": {
@@ -31051,7 +31052,6 @@
      "type": "string",
      "enum": [
       "pending",
-      "confirmed",
       "succeeded",
       "failed",
       "refunded",
@@ -32379,7 +32379,6 @@
       "returned",
       "unknown",
       "creating",
-      "processing",
       "reconcile_required"
      ]
     },
