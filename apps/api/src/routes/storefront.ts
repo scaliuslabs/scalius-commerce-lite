@@ -69,7 +69,7 @@ import { serveCacheFrontierCheck, serveCacheFrontierDelta } from "../cache-front
 const MAX_BATCH_PART_RENDERS = MAX_STOREFRONT_BATCH_PARTS;
 
 import { ok } from "../utils/api-response";
-import { successEnvelope, errorResponses } from "../schemas/responses";
+import { successEnvelope, errorResponses, listingSortSchema } from "../schemas/responses";
 import { storeShapeApiSchema, storefrontSectionListApiSchema, storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
 import { marketMatrixSchema, marketPresenceQuerySchema } from "../schemas/markets";
@@ -381,6 +381,9 @@ const layoutDataSchema = z.object({
     returnPolicy: returnPolicySchema,
     /** Default og:image: "" or an absolute https URL. */
     socialImage: z.string(),
+    defaultListingSort: listingSortSchema.openapi({
+      description: "The order listings open in when their address names none (the listing reads apply the same); a search with words opens best match first.",
+    }),
   }),
   /** Public origins of this deployment, so the storefront needs no separate platform read. */
   platform: z.object({

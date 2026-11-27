@@ -1,6 +1,8 @@
+import { STOREFRONT_SEARCH_SORTS } from "@scalius/shared/listing-sorts";
 import {
   buildProductListHref,
   type ProductListFilterState,
+  type ProductListSort,
 } from "./product-list-query";
 import { normalizeSearchQuery } from "./search-query";
 
@@ -21,6 +23,10 @@ function readCanonicalFilters(
   } catch {
     return {};
   }
+}
+
+function listedSort(value: string | undefined): ProductListSort | undefined {
+  return (STOREFRONT_SEARCH_SORTS as readonly string[]).includes(value ?? "") ? value as ProductListSort : undefined;
 }
 
 /**
@@ -51,7 +57,8 @@ export function setupCatalogSorts(): void {
             [sortSelect.name === "limit" ? "limit" : "sortBy"]: sortSelect.value,
             page: 1,
           },
-          defaultSort: sortSelect.dataset.defaultSort === "relevance" ? "relevance" : "newest",
+          // The order the listing opens in (the store's default, or relevance for a search): left out of the URL.
+          defaultSort: listedSort(sortSelect.dataset.defaultSort),
         });
       });
     });

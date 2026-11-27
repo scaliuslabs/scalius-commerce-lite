@@ -881,6 +881,7 @@ export async function getLayoutData(
       discovery: seo.value.discovery,
       returnPolicy: seo.value.returnPolicy,
       socialImage: seo.value.socialImage,
+      defaultListingSort: seo.value.defaultListingSort,
     },
     cspAllowedDomains: security.value.cspAllowedDomains,
     cspImageSources: security.value.imageSources,

@@ -8844,7 +8844,7 @@ export type GetApiV1CollectionsByIdData = {
          */
         cursor?: string;
         /**
-         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another).
          */
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
@@ -9040,6 +9040,10 @@ export type GetApiV1CollectionsByIdResponses = {
                  */
                 count: number;
             }>;
+            /**
+             * The order read: `sort` when given, best match for a search, else the store's default listing order.
+             */
+            sort: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
     };
 };
@@ -9247,7 +9251,7 @@ export type GetApiV1BrandsBySlugProductsData = {
          */
         cursor?: string;
         /**
-         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another).
          */
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
@@ -10967,6 +10971,10 @@ export type GetApiV1StorefrontLayoutResponses = {
                     policyUrl: string;
                 };
                 socialImage: string;
+                /**
+                 * The order listings open in when their address names none (the listing reads apply the same); a search with words opens best match first.
+                 */
+                defaultListingSort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
             };
             platform: {
                 storefrontUrl: string;
@@ -21466,7 +21474,7 @@ export type GetApiV1ProductsData = {
          */
         cursor?: string;
         /**
-         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Defaults to relevance when `search` is set, otherwise newest.
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another). With `search` set, best match (relevance) instead.
          */
         sort?: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
@@ -21621,6 +21629,10 @@ export type GetApiV1ProductsResponses = {
              * Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction).
              */
             correctedQuery: string | null;
+            /**
+             * The order read: `sort` when given, best match for a search, else the store's default listing order.
+             */
+            sort: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
     };
 };
@@ -23356,7 +23368,7 @@ export type GetApiV1CategoriesBySlugProductsData = {
          */
         cursor?: string;
         /**
-         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another).
          */
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         /**
@@ -60249,6 +60261,10 @@ export type GetApiV1AdminSettingsSeoResponses = {
                 returnMethod: 'mail' | 'in_store' | 'both';
                 policyUrl: string;
             };
+            /**
+             * The order category, collection, brand and search listings open in when their address names none; a search with words opens best match first.
+             */
+            defaultListingSort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
         };
     };
 };
@@ -60279,6 +60295,10 @@ export type PostApiV1AdminSettingsSeoData = {
             returnMethod?: 'mail' | 'in_store' | 'both';
             policyUrl?: string;
         };
+        /**
+         * The order category, collection, brand and search listings open in when their address names none; a search with words opens best match first.
+         */
+        defaultListingSort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating' | 'popular';
     };
     path?: never;
     query?: never;

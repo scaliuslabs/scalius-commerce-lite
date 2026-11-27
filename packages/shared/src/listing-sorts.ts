@@ -15,6 +15,13 @@ export const STOREFRONT_LISTING_SORTS = [
 ] as const;
 export type StorefrontListingSort = (typeof STOREFRONT_LISTING_SORTS)[number];
 
+/**
+ * The order a listing opens in when its address names none, until the
+ * merchant picks another (Online store -> Preferences, the `seo` settings
+ * document's `defaultListingSort`). A search with words opens best match first.
+ */
+export const DEFAULT_LISTING_SORT: StorefrontListingSort = "newest";
+
 /** A search's orders: best match first, then every listing order. */
 export const STOREFRONT_SEARCH_SORTS = ["relevance", ...STOREFRONT_LISTING_SORTS] as const;
 export type StorefrontSearchSort = (typeof STOREFRONT_SEARCH_SORTS)[number];

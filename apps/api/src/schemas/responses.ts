@@ -110,7 +110,7 @@ export const listingSortSchema = z.enum(STOREFRONT_LISTING_SORTS);
 /** A search's orders: `relevance`, then every listing order. */
 export const searchSortSchema = z.enum(STOREFRONT_SEARCH_SORTS);
 /** What each listing order means, for the `sort` parameter's description. */
-export const LISTING_SORT_DESCRIPTION = "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.";
+export const LISTING_SORT_DESCRIPTION = "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another).";
 
 /** The `after`/`before` query parameters shared by every keyset-paged list. */
 export const keysetQuerySchema = {

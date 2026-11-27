@@ -21,6 +21,7 @@ import {
 } from "@scalius/database/schema";
 import { eq, and, desc, gt, isNull, lt, lte, notInArray, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import type { StorefrontListingSort } from "@scalius/shared/listing-sorts";
 import { z } from "zod";
 import {
   buildBatchGuard,
@@ -1480,6 +1481,7 @@ export async function saveSeoSettings(
     socialImage?: string;
     discovery?: PartialSeoDiscoverySettings;
     returnPolicy?: PartialSeoReturnPolicySettings;
+    defaultListingSort?: StorefrontListingSort;
   },
   options: SettingsSaveOptions = {},
 ) {
@@ -1496,6 +1498,7 @@ export async function saveSeoSettings(
     homepageTitle: data.homepageTitle,
     homepageMetaDescription: data.homepageMetaDescription,
     socialImage: data.socialImage,
+    defaultListingSort: data.defaultListingSort,
     discovery: current && data.discovery !== undefined
       ? mergeSeoDiscoverySettings(current.discovery, data.discovery)
       : undefined,

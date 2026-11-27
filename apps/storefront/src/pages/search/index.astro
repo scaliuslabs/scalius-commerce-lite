@@ -76,7 +76,8 @@ if (!layoutData || !productsResponse) {
 }
 
 const facets = productsResponse.facets ?? [];
-const queryState = resolveProductListQueryState({ url: Astro.url, facets, rankByRelevance: true });
+// The store's default listing order (the listing read applied it when the URL named none).
+const queryState = resolveProductListQueryState({ url: Astro.url, facets, rankByRelevance: true, defaultListingSort: layoutData?.seo?.defaultListingSort });
 if (queryState.redirectPath) {
   const redirect = canonicalRedirect(Astro.url, queryState.redirectPath);
   if (redirect) return redirect;

@@ -29,6 +29,7 @@ import {
   SEO_RETURN_POLICY_METHODS,
   isValidSeoReturnPolicyUrl,
 } from "@scalius/shared/seo-return-policy";
+import { STOREFRONT_LISTING_SORTS } from "@scalius/shared/listing-sorts";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import {
   runSeoDiscoveryLiveProbe,
@@ -1039,6 +1040,9 @@ const seoSettingsSchema = z.object({
     returnMethod: z.enum(SEO_RETURN_POLICY_METHODS),
     policyUrl: z.string().max(SEO_POLICY_URL_MAX_LENGTH),
   }),
+  defaultListingSort: z.enum(STOREFRONT_LISTING_SORTS).openapi({
+    description: "The order category, collection, brand and search listings open in when their address names none; a search with words opens best match first.",
+  }),
 });
 
 const getSeoRoute = createRoute({
@@ -1378,6 +1382,7 @@ const saveSeoSchema = z.object({
     .optional(),
   discovery: saveSeoDiscoverySchema.optional(),
   returnPolicy: saveSeoReturnPolicySchema.optional(),
+  defaultListingSort: seoSettingsSchema.shape.defaultListingSort.optional(),
 });
 
 const saveSeoRoute = createRoute({

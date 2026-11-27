@@ -37012,10 +37012,10 @@
                 "rating",
                 "popular"
               ],
-              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest."
+              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another)."
             },
             "required": false,
-            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.",
+            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another).",
             "name": "sort",
             "in": "query"
           },
@@ -37591,6 +37591,21 @@
                           },
                           "maxItems": 4,
                           "description": "\"N★ & up\" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0."
+                        },
+                        "sort": {
+                          "type": "string",
+                          "enum": [
+                            "relevance",
+                            "newest",
+                            "price-asc",
+                            "price-desc",
+                            "name-asc",
+                            "name-desc",
+                            "discount",
+                            "rating",
+                            "popular"
+                          ],
+                          "description": "The order read: `sort` when given, best match for a search, else the store's default listing order."
                         }
                       },
                       "required": [
@@ -37601,7 +37616,8 @@
                         "pageInfo",
                         "priceRange",
                         "facets",
-                        "ratingFacet"
+                        "ratingFacet",
+                        "sort"
                       ]
                     }
                   },
@@ -38320,11 +38336,10 @@
                 "rating",
                 "popular"
               ],
-              "default": "newest",
-              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest."
+              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another)."
             },
             "required": false,
-            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.",
+            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another).",
             "name": "sort",
             "in": "query"
           },
@@ -43951,12 +43966,27 @@
                             },
                             "socialImage": {
                               "type": "string"
+                            },
+                            "defaultListingSort": {
+                              "type": "string",
+                              "enum": [
+                                "newest",
+                                "price-asc",
+                                "price-desc",
+                                "name-asc",
+                                "name-desc",
+                                "discount",
+                                "rating",
+                                "popular"
+                              ],
+                              "description": "The order listings open in when their address names none (the listing reads apply the same); a search with words opens best match first."
                             }
                           },
                           "required": [
                             "discovery",
                             "returnPolicy",
-                            "socialImage"
+                            "socialImage",
+                            "defaultListingSort"
                           ]
                         },
                         "platform": {
@@ -80547,10 +80577,10 @@
                 "rating",
                 "popular"
               ],
-              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Defaults to relevance when `search` is set, otherwise newest."
+              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another). With `search` set, best match (relevance) instead."
             },
             "required": false,
-            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Defaults to relevance when `search` is set, otherwise newest.",
+            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another). With `search` set, best match (relevance) instead.",
             "name": "sort",
             "in": "query"
           },
@@ -80932,6 +80962,21 @@
                           "type": "string",
                           "nullable": true,
                           "description": "Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction)."
+                        },
+                        "sort": {
+                          "type": "string",
+                          "enum": [
+                            "relevance",
+                            "newest",
+                            "price-asc",
+                            "price-desc",
+                            "name-asc",
+                            "name-desc",
+                            "discount",
+                            "rating",
+                            "popular"
+                          ],
+                          "description": "The order read: `sort` when given, best match for a search, else the store's default listing order."
                         }
                       },
                       "required": [
@@ -80941,7 +80986,8 @@
                         "priceRange",
                         "facets",
                         "ratingFacet",
-                        "correctedQuery"
+                        "correctedQuery",
+                        "sort"
                       ]
                     }
                   },
@@ -87267,11 +87313,10 @@
                 "rating",
                 "popular"
               ],
-              "default": "newest",
-              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest."
+              "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another)."
             },
             "required": false,
-            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest.",
+            "description": "Sort order. `rating`: the Bayesian review rank, unreviewed products last. `popular`: best selling first (2 or more units sold in the last 30 days, net of returns, refreshed nightly), then newest. Omitted: the store's default listing order (newest unless the merchant picked another).",
             "name": "sort",
             "in": "query"
           },
@@ -211131,6 +211176,20 @@
                             "returnMethod",
                             "policyUrl"
                           ]
+                        },
+                        "defaultListingSort": {
+                          "type": "string",
+                          "enum": [
+                            "newest",
+                            "price-asc",
+                            "price-desc",
+                            "name-asc",
+                            "name-desc",
+                            "discount",
+                            "rating",
+                            "popular"
+                          ],
+                          "description": "The order category, collection, brand and search listings open in when their address names none; a search with words opens best match first."
                         }
                       },
                       "required": [
@@ -211139,7 +211198,8 @@
                         "homepageMetaDescription",
                         "socialImage",
                         "discovery",
-                        "returnPolicy"
+                        "returnPolicy",
+                        "defaultListingSort"
                       ]
                     }
                   },
@@ -211460,6 +211520,20 @@
                         "maxLength": 2048
                       }
                     }
+                  },
+                  "defaultListingSort": {
+                    "type": "string",
+                    "enum": [
+                      "newest",
+                      "price-asc",
+                      "price-desc",
+                      "name-asc",
+                      "name-desc",
+                      "discount",
+                      "rating",
+                      "popular"
+                    ],
+                    "description": "The order category, collection, brand and search listings open in when their address names none; a search with words opens best match first."
                   }
                 },
                 "required": [

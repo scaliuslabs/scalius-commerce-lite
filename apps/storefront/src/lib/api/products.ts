@@ -411,7 +411,7 @@ export async function getProductsByCategory(
 
   const normalizedOptions = normalizeProductListOptions(options);
   const queryString = buildCanonicalQueryString(normalizedOptions, {
-    defaultParams: { page: 1, limit: 20, sort: "newest" },
+    defaultParams: { page: 1, limit: 20 },
   });
   // v2 drops category payloads cached before buyer priceRange became authoritative.
   const cacheKey = `category_products_v2_${categorySlug}_${queryString || "default"}`;
@@ -485,7 +485,7 @@ export async function getAllProducts(
 ): Promise<PaginatedResponse<Product> | null> {
   const normalizedOptions = normalizeProductListOptions(options);
   const queryString = buildCanonicalQueryString(normalizedOptions, {
-    defaultParams: { page: 1, limit: 20, sort: "newest" },
+    defaultParams: { page: 1, limit: 20 },
   });
   const cacheKey = `all_products_${queryString || "default"}`;
 

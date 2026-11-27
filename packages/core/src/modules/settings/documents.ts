@@ -22,6 +22,7 @@ import {
   type SeoReturnPolicySettings,
 } from "@scalius/shared/seo-return-policy";
 import { emiSettingsSchema, type EmiSettings } from "@scalius/shared/emi";
+import { DEFAULT_LISTING_SORT, STOREFRONT_LISTING_SORTS, type StorefrontListingSort } from "@scalius/shared/listing-sorts";
 import { DEFAULT_NET_TERMS_SETTINGS, readNetTermsSettings, type NetTermsSettings } from "@scalius/shared/payment-terms";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import {
@@ -521,7 +522,8 @@ export const emiDocument = defineSettingsDocument<EmiSettings>({
 });
 
 // ─────────────────────────────────────────
-// SEO/discovery policy. The look (logo, announcement, footer words, homepage
+// SEO/discovery policy, and the order listings open in (Online store ->
+// Preferences). The look (logo, announcement, footer words, homepage
 // sections) is the storefront theme document, never a settings document.
 // ─────────────────────────────────────────
 
@@ -532,6 +534,12 @@ export interface SeoSettings {
   socialImage: string;
   discovery: SeoDiscoverySettings;
   returnPolicy: SeoReturnPolicySettings;
+  /**
+   * The order category, collection, brand and search listings open in when
+   * their address names none (`DEFAULT_LISTING_SORT` until the merchant
+   * picks another); a search with words opens best match first.
+   */
+  defaultListingSort: StorefrontListingSort;
 }
 
 export const seoDocument = defineSettingsDocument<SeoSettings>({
@@ -542,6 +550,7 @@ export const seoDocument = defineSettingsDocument<SeoSettings>({
     socialImage: z.string().max(2048),
     discovery: z.unknown().transform(normalizeSeoDiscoverySettings),
     returnPolicy: z.unknown().transform(normalizeSeoReturnPolicySettings),
+    defaultListingSort: z.enum(STOREFRONT_LISTING_SORTS).catch(DEFAULT_LISTING_SORT),
   }),
   defaults: {
     homepageTitle: "",
@@ -549,6 +558,7 @@ export const seoDocument = defineSettingsDocument<SeoSettings>({
     socialImage: "",
     discovery: normalizeSeoDiscoverySettings(undefined),
     returnPolicy: normalizeSeoReturnPolicySettings(undefined),
+    defaultListingSort: DEFAULT_LISTING_SORT,
   },
 });
 

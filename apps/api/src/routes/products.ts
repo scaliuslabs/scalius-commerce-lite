@@ -26,6 +26,7 @@ import {
   storefrontProductSectionQuerySchema,
   storefrontProductSectionSchema,
   resolvePublicAttributeFilters,
+  storefrontListingSort,
   getStorefrontProductComparison,
   normalizeCompareIds,
   MAX_COMPARE_PRODUCTS,
@@ -123,7 +124,7 @@ const productFilterSchema = z.object({
   ...listingCursorQuerySchema,
   sort: searchSortSchema
     .optional()
-    .openapi({ description: `${LISTING_SORT_DESCRIPTION} Defaults to relevance when \`search\` is set, otherwise newest.` }),
+    .openapi({ description: `${LISTING_SORT_DESCRIPTION} With \`search\` set, best match (relevance) instead.` }),
   minRating: minRatingQuerySchema,
   minPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
   maxPrice: majorMoney(z.coerce.number().min(0)).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
@@ -671,6 +672,7 @@ const listProductsRoute = createRoute({
         correctedQuery: z.string().nullable().openapi({
           description: "Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction).",
         }),
+        sort: searchSortSchema.openapi({ description: "The order read: `sort` when given, best match for a search, else the store's default listing order." }),
       })) } },
     },
     400: errorResponses[400],
@@ -684,14 +686,18 @@ app.openapi(listProductsRoute, async (c) => {
   const queryParams = readRepeatedPublicQueryValues(c.req.url);
   const search = normalizePublicListingSearchParam(params.search);
 
-  const attributeFilters = await resolvePublicAttributeFilters(
-    db,
-    queryParams,
-    Object.keys(params),
-  );
+  // The order (the store's default when none is asked for) is read beside the filters: no round trip of its own.
+  const [attributeFilters, sort] = await Promise.all([
+    resolvePublicAttributeFilters(
+      db,
+      queryParams,
+      Object.keys(params),
+    ),
+    storefrontListingSort(db, { sort: params.sort, search, ids: params.ids }, { searchRanks: true }),
+  ]);
 
   const { presence: _presence, ...filters } = params;
-  const result = await getStorefrontProducts(db, { ...filters, search, attributeFilters }, publicMarketPricing(c));
+  const result = await getStorefrontProducts(db, { ...filters, sort, search, attributeFilters }, publicMarketPricing(c));
   // The HTTP schema keeps custom JSON opaque instead of recursively expanding the codec type.
   const response: z.infer<typeof listProductsRoute.responses[200]["content"]["application/json"]["schema"]>["data"] = result;
   return ok(c, response);

@@ -3,7 +3,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { collections } from "@scalius/database/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import { NotFoundError } from "../utils/api-error";
-import { successEnvelope, paginationSchema, errorResponses, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, listingSortSchema, LISTING_SORT_DESCRIPTION } from "../schemas/responses";
+import { successEnvelope, paginationSchema, errorResponses, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, listingSortSchema, searchSortSchema, LISTING_SORT_DESCRIPTION } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import { getPublicCollectionCatalog, getPublicCollectionSitemapEntries, listPublicCollectionDirectory } from "@scalius/core/modules/catalog";
 import { marketPresenceQueryField } from "../schemas/markets";
@@ -283,6 +283,7 @@ const getCollectionByIdRoute = createRoute({
         priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
         facets: z.array(productFacetSchema),
         ratingFacet: ratingFacetSchema,
+        sort: searchSortSchema.openapi({ description: "The order read: `sort` when given, best match for a search, else the store's default listing order." }),
       })) } },
     },
     404: errorResponses[404],
@@ -294,15 +295,17 @@ app.openapi(getCollectionByIdRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   const params = c.req.valid("query");
+  const search = normalizePublicListingSearchParam(params.search);
   const attributeFilters = await resolvePublicAttributeFilters(
     db,
     readRepeatedPublicQueryValues(c.req.url),
     Object.keys(params),
   );
   const { presence: _presence, ...filters } = params;
+  // Without `sort`, the collection read applies the store's default order (in its first batch).
   const result = await getPublicCollectionCatalog(db, id, {
     ...filters,
-    search: normalizePublicListingSearchParam(params.search),
+    search,
     attributeFilters,
   }, publicMarketPricing(c));
 
@@ -332,6 +335,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
     priceRange,
     facets,
     ratingFacet,
+    sort: result.sort,
   };
   return ok(c, response);
 });

@@ -39,7 +39,7 @@ export async function getProductsByBrand(
   if (!brandSlug) return null;
   const normalizedOptions = normalizeProductListOptions(options);
   const queryString = buildCanonicalQueryString(normalizedOptions, {
-    defaultParams: { page: 1, limit: 20, sort: "newest" },
+    defaultParams: { page: 1, limit: 20 },
   });
 
   return withEdgeCache(

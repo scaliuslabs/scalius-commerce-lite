@@ -12,7 +12,7 @@ import {
   getPublicCategorySitemapEntries,
   getPublicCategoryTree,
 } from "@scalius/core/modules/categories";
-import { getStorefrontCategoryProducts, resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
+import { getStorefrontCategoryProducts, resolvePublicAttributeFilters, storefrontListingSort } from "@scalius/core/modules/catalog";
 import { marketPresenceQueryField } from "../schemas/markets";
 import { publicMarketPricing, publicTranslation } from "../utils/public-market";
 import { localizedHandleFields } from "../schemas/translations";
@@ -65,7 +65,6 @@ const categoryProductFilterSchema = z.object({
   ...listingCursorQuerySchema,
   sort: listingSortSchema
     .optional()
-    .default("newest")
     .openapi({ description: LISTING_SORT_DESCRIPTION }),
   minRating: minRatingQuerySchema,
   search: z.string().trim().max(100).optional().openapi({ description: "Search within category" }),
@@ -524,9 +523,11 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   const { slug } = c.req.valid("param");
   const params = c.req.valid("query");
   const queryParams = readRepeatedPublicQueryValues(c.req.url);
-  const [category, attributeFilters] = await Promise.all([
+  // The order (the store's default when none is asked for) is read beside the category: no round trip of its own.
+  const [category, attributeFilters, sort] = await Promise.all([
     getPublicCategoryBySlug(db, slug, publicTranslation(c)),
     resolvePublicAttributeFilters(db, queryParams, Object.keys(params)),
+    storefrontListingSort(db, params, { searchRanks: false }),
   ]);
 
   if (!category) {
@@ -559,6 +560,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   const { includeSubcategories, shelfPreview, presence: _presence, ...filters } = params;
   const result = await getStorefrontCategoryProducts(db, categoryForProducts, {
     ...filters,
+    sort,
     search,
     attributeFilters,
   }, {
@@ -571,7 +573,8 @@ app.openapi(getCategoryProductsRoute, async (c) => {
 
   const appliedFilters: z.infer<typeof appliedCategoryFiltersSchema> = {
     attributes: appliedFacetFilters(attributeFilters),
-    sort: params.sort,
+    // The order read: the one asked for, else the store's default listing order.
+    sort: result.sort as z.infer<typeof listingSortSchema>,
   };
   if (normalizedSearch) appliedFilters.search = normalizedSearch;
   if (params.minRating !== undefined) appliedFilters.minRating = params.minRating;

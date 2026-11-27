@@ -8,6 +8,8 @@ import { postApiV1AdminSettingsSeo, postApiV1AdminSettingsSeoFeedFilesRegistered
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
+import { SearchableSelect } from "~/components/ui/searchable-select";
+import type { StorefrontListingSort } from "@scalius/shared/listing-sorts";
 import { ChoiceField } from "~/components/ui/field";
 import { standaloneLinkTarget } from "~/components/ui/link";
 import { Textarea } from "~/components/ui/textarea";
@@ -43,7 +45,21 @@ interface Preferences {
   socialImage: string;
   productCatalogEnabled: boolean;
   includeUnavailableProducts: boolean;
+  defaultListingSort: StorefrontListingSort;
 }
+
+/** The listing orders, in the storefront's sort menu order, with their dashboard words. */
+const LISTING_SORT_LABELS = {
+  newest: "sortNewest",
+  popular: "sortPopular",
+  "price-asc": "sortPriceAsc",
+  "price-desc": "sortPriceDesc",
+  "name-asc": "sortNameAsc",
+  "name-desc": "sortNameDesc",
+  discount: "sortDiscount",
+  rating: "sortRating",
+} as const satisfies Record<StorefrontListingSort, string>;
+const LISTING_SORTS = Object.keys(LISTING_SORT_LABELS) as StorefrontListingSort[];
 
 function FeedLink({ id, label, url, help }: { id: string; label: string; url: string; help?: string }) {
   const t = useMessages(onlineStoreMessages);
@@ -262,6 +278,7 @@ function PreferencesCards() {
     socialImage: data.socialImage,
     productCatalogEnabled: data.discovery.feeds.productCatalogEnabled,
     includeUnavailableProducts: data.discovery.feeds.includeUnavailableProducts,
+    defaultListingSort: data.defaultListingSort,
   }), [data]);
   const { draft, setDraft } = useDocumentDraft<Preferences>({
     label: t("preferencesTitle"),
@@ -277,6 +294,7 @@ function PreferencesCards() {
             homepageTitle: next.homepageTitle,
             homepageMetaDescription: next.homepageMetaDescription,
             socialImage: next.socialImage,
+            defaultListingSort: next.defaultListingSort,
             discovery: {
               feeds: {
                 productCatalogEnabled: next.productCatalogEnabled,
@@ -329,6 +347,18 @@ function PreferencesCards() {
             rows={3}
             aria-describedby="preferences-description-note"
             onChange={(event) => set({ homepageMetaDescription: event.target.value })}
+          />
+        </Field>
+      </SectionCard>
+
+      <SectionCard title={t("productListings")} description={t("productListingsHelp")}>
+        <Field id="preferences-listing-sort" label={t("defaultListingSort")} help={t("defaultListingSortHelp")}>
+          <SearchableSelect
+            id="preferences-listing-sort"
+            value={draft.defaultListingSort}
+            options={LISTING_SORTS.map((sort) => ({ value: sort, label: t(LISTING_SORT_LABELS[sort]) }))}
+            triggerClassName="w-full"
+            onValueChange={(sort) => set({ defaultListingSort: sort as StorefrontListingSort })}
           />
         </Field>
       </SectionCard>
