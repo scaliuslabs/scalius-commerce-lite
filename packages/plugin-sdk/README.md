@@ -28,7 +28,7 @@ The scaffold's npm scripts (`validate`, `build`, `preview`, `dev`, `pack`, `veri
 
 ### Upgrade the SDK
 
-The SDK is versioned with the platform: Scalius 2.0.0-beta.8 ships `scalius-plugin-sdk-2.0.0-beta.8.tgz`, and each release a new file name, so npm installs it afresh instead of keeping the old build from its lockfile. To move an app to a newer SDK:
+The SDK is versioned with the platform: Scalius 2.0.0-rc.1 ships `scalius-plugin-sdk-2.0.0-rc.1.tgz`, and each release a new file name, so npm installs it afresh instead of keeping the old build from its lockfile. To move an app to a newer SDK:
 
 1. Pack the new SDK into the app's vendor folder (from a checkout of the release; its `dist/` is built first):
 
