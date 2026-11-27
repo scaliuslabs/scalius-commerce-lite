@@ -175,4 +175,7 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   "dashboard.theme.ai_providers_list": {},
   "dashboard.theme.ai_draft_create": { openWorld: true, limits: { response: 65_536 } },
   "dashboard.theme.draft_sections": { revision: "required", limits: { request: 65_536, response: 4096 } },
+  // Template updates: an app's new release of the draft's template, merged with the merchant's work into the draft.
+  "dashboard.theme.template_update_get": { limits: { response: 65_536 } },
+  "dashboard.theme.template_update_apply": { revision: "required", limits: { request: 65_536, response: 4096 } },
 } satisfies Record<string, OperationRegistryEntry>;

@@ -1,4 +1,4 @@
-// The storefront theme document (version 15): the template it is based on
+// The storefront theme document (`STOREFRONT_THEME_DOCUMENT_VERSION`): the template it is based on
 // (a label: no renderer reads it), the tokens, one variant per block (plus
 // the shared navigation source, the listing's filter style and page chrome,
 // and the presentation of the buyer's private pages not yet drawn from

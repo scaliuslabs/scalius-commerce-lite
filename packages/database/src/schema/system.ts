@@ -262,6 +262,37 @@ export const themeTemplateDesigns = sqliteTable("theme_template_designs", {
 ]);
 
 /**
+ * The release of an app template a store's theme was applied from (or last
+ * reviewed an update of): the template as that release declared it, so a
+ * later release's update merges against it (the template update's BASE,
+ * `planStorefrontTemplateUpdate`). One row per template key
+ * (`<app id>/<template id>`), written with the draft at an apply and at a
+ * reviewed update, and before an app update replaces the manifest when the
+ * store has none for a template it uses (`source` 'update': assumed, as the
+ * store kept no record of the apply). Never live.
+ */
+export const themeTemplateBases = sqliteTable("theme_template_bases", {
+    template: text("template").primaryKey(),
+    pluginId: text("plugin_id").notNull(),
+    /** The app release that declared it. */
+    appVersion: text("app_version").notNull(),
+    /** The theme document version the declaration is written for. */
+    themeVersion: integer("theme_version").notNull(),
+    /** The template's theme as declared (handles unresolved): read through the template read like any declaration. */
+    theme: text("theme").notNull(),
+    /** `apply`: applied from it; `review`: the merchant reviewed an update to it; `update`: assumed when an app update found no record. */
+    source: text("source", { enum: ["apply", "review", "update"] }).notNull(),
+    recordedAt: integer("recorded_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    check("theme_template_bases_template_shape", sql`length(${table.template}) BETWEEN 3 AND 200 AND instr(${table.template}, '/') > 1`),
+    check("theme_template_bases_source_check", sql`${table.source} IN ('apply', 'review', 'update')`),
+    check("theme_template_bases_theme_json", sql`json_valid(${table.theme}) AND json_type(${table.theme}) = 'object' AND length(${table.theme}) <= 262144`),
+    check("theme_template_bases_version_shape", sql`length(${table.appVersion}) BETWEEN 1 AND 80 AND ${table.themeVersion} >= 1`),
+]);
+
+/**
  * Short-lived preview sessions (and their one-time continuations). A session
  * stores no theme: each preview read resolves the shared draft as it is then.
  * Only a SHA-256 token hash is persisted; the bearer token stays in a

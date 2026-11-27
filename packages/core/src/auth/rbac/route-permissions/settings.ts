@@ -151,6 +151,10 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/settings/theme/template": {
     POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
   },
+  "/api/v1/admin/settings/theme/template-update": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
+  },
   // Drafting changes nothing until the editor saves, but only an editor may ask (it calls the merchant's AI app).
   "/api/v1/admin/settings/theme/ai-draft": {
     POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },

@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7c69bb6d-dbed-4815-90d1-65c3592fdd43",
-  "prevId": "ef623c9d-8f12-4f46-ab1e-5d995fd154ab",
+  "id": "a5591b45-8631-4a3a-90eb-04edca590843",
+  "prevId": "7c69bb6d-dbed-4815-90d1-65c3592fdd43",
   "tables": {
     "account": {
       "name": "account",
@@ -25221,6 +25221,83 @@
         }
       }
     },
+    "theme_template_bases": {
+      "name": "theme_template_bases",
+      "columns": {
+        "template": {
+          "name": "template",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "plugin_id": {
+          "name": "plugin_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "app_version": {
+          "name": "app_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "theme_version": {
+          "name": "theme_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "theme": {
+          "name": "theme",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "theme_template_bases_template_shape": {
+          "name": "theme_template_bases_template_shape",
+          "value": "length(\"theme_template_bases\".\"template\") BETWEEN 3 AND 200 AND instr(\"theme_template_bases\".\"template\", '/') > 1"
+        },
+        "theme_template_bases_source_check": {
+          "name": "theme_template_bases_source_check",
+          "value": "\"theme_template_bases\".\"source\" IN ('apply', 'review', 'update')"
+        },
+        "theme_template_bases_theme_json": {
+          "name": "theme_template_bases_theme_json",
+          "value": "json_valid(\"theme_template_bases\".\"theme\") AND json_type(\"theme_template_bases\".\"theme\") = 'object' AND length(\"theme_template_bases\".\"theme\") <= 262144"
+        },
+        "theme_template_bases_version_shape": {
+          "name": "theme_template_bases_version_shape",
+          "value": "length(\"theme_template_bases\".\"app_version\") BETWEEN 1 AND 80 AND \"theme_template_bases\".\"theme_version\" >= 1"
+        }
+      }
+    },
     "theme_template_designs": {
       "name": "theme_template_designs",
       "columns": {
@@ -30017,6 +30094,15 @@
             "id"
           ],
           "isUnique": false
+        },
+        "gift_cards_live_idx": {
+          "name": "gift_cards_live_idx",
+          "columns": [
+            "currency_code",
+            "expires_at"
+          ],
+          "isUnique": false,
+          "where": "\"gift_cards\".\"status\" = 'active' AND \"gift_cards\".\"balance_minor\" > 0"
         },
         "gift_cards_last4_idx": {
           "name": "gift_cards_last4_idx",
