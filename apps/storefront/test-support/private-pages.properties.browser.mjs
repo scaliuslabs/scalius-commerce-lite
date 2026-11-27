@@ -534,6 +534,10 @@ const REGRESSIONS = {
   "Place order the dock's colour behind a dark edge": { refused: "contrast", refusedFor: /submit/, request: { scheme: "light" }, privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, submit: { ...EDGED_ACTION, background: "#ffffff" } } } } },
   "Pay brand fill with a 1px edge": { refused: "contrast", refusedFor: /submit/, request: { ...REFERENCE, scheme: "light", page: "sample-checkout" }, states: ["base"], privatePages: { tokens: { checkout: { ...CHECKOUT_TOKENS, "payment-details": { background: "#ffffff" }, submit: { ...EDGED_ACTION, "border-width": 1 } } } } },
   "Place order brand fill with a 1px edge": { refused: "contrast", refusedFor: /submit/, request: { scheme: "light" }, privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, submit: { ...EDGED_ACTION, "border-width": 1 } } } } },
+  // The store's other filled buttons (sign in, Apply) take the same rule: the brand fill found by its drawn edge, and
+  // refused the colour of the form they stand on.
+  "the store's filled buttons in a brand fill with a drawn edge": { request: { scheme: "light" }, states: ["base", "lines"], privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, "details-form": { background: "#ffffff" }, submit: EDGED_ACTION, action: EDGED_ACTION } } } },
+  "the store's filled buttons the colour of the form, with no edge": { refused: "contrast", refusedFor: /^action: its fill #fed700 on /, request: { scheme: "light" }, privatePages: { tokens: { cart: { "details-form": { background: "#fed700", text: "#111111", muted: "#111111", link: "#111111", error: "#111111" }, action: { background: "#fed700", text: "#111111" } } } } },
   // ─── The payment step (page `checkout`): drawn as the editor's sample checkout draws it, as buyers get it ───
   [CHECKOUT_LIST]: { request: { ...REFERENCE, page: "sample-checkout" }, privatePages: { tokens: { checkout: CHECKOUT_TOKENS } }, states: ["base"] },
   [CHECKOUT_TILES]: { request: { ...REFERENCE, page: "sample-checkout" }, privatePages: { pages: { checkout: { frame: "narrow", layout: CHECKOUT_TILES_LAYOUT } }, tokens: { checkout: CHECKOUT_TOKENS } }, states: ["base"] },
@@ -578,6 +582,10 @@ const AFTER_ORDER_CASES = {
   // What the save must refuse: an arrangement of a page that keeps the store's order, and a total under its rows.
   "an arrangement of the receipt": { refused: "not_available", request: { page: "sample-receipt" }, privatePages: { pages: { receipt: { layout: [{ type: "part", part: "summary" }, { type: "part", part: "status" }] } } } },
   "a receipt total drawn smaller than its rows": { refused: "prominence", refusedFor: /summary-total/, request: { page: "sample-receipt" }, privatePages: { tokens: { receipt: { "summary-total": { size: 14 } } } } },
+  // Every filled button is found by its fill or its edge: the account's buttons the colour of its cards are refused.
+  "an account's filled buttons the colour of its cards": { refused: "contrast", refusedFor: /^action: its fill #1d4ed8 on #1d4ed8/, request: { page: "sample-account" }, privatePages: { tokens: { account: {
+    card: { background: "#1d4ed8", text: "#ffffff", muted: "#ffffff", link: "#ffffff", error: "#ffffff" }, action: { background: "#1d4ed8", text: "#ffffff" },
+  } } } },
 };
 Object.assign(REGRESSIONS, AFTER_ORDER_CASES);
 
@@ -1132,7 +1140,8 @@ function installActionFound() {
 /**
  * How a buyer finds the page's actions and fields (WCAG 1.4.11), measured under a theme's tokens (the colour
  * table's look): Place order's fill reads at 3:1 on what is behind it and it is never smaller or lighter than another
- * filled button on the page; in a dialog Go back paints no fill of its own, Confirm's fill reads at 3:1 on the
+ * filled button on the page; every other filled button the store draws (`action`, the account's `action-critical`) is
+ * found where it stands, by its fill or its drawn edge; in a dialog Go back paints no fill of its own, Confirm's fill reads at 3:1 on the
  * dialog and it is never smaller or lighter than Go back; a field, the stepper, the fold's bar and Go back show their
  * border at 3:1 on what is behind them or, drawing none, their own fill.
  */
@@ -1164,6 +1173,11 @@ function boundaries(scope) {
     filled(submit, "Place order");
     for (const other of document.querySelectorAll('[data-private="cart"] .bg-primary')) if (other !== submit && shown(other)) outranks(submit, other, "Place order", `the filled button "${other.textContent.trim().slice(0, 24)}"`);
   }
+  // The store's other filled buttons, each where it stands (an app's buttons are its own rows; the store's own look's
+  // parts keep their colours).
+  const others = [...root.querySelectorAll(':is(button,a).bg-primary, :is(button,a).bg-destructive')]
+    .filter((element) => !element.matches('[data-part="details-submit"],[data-part="dialog-confirm"],[data-part="pay"]') && !element.closest('[data-buyer-ui-target],[data-part="gateway"],[data-part="recommendations"]'));
+  for (const other of others) if (shown(other)) filled(other, `the filled button "${other.textContent.trim().slice(0, 24)}"`);
   for (const dialog of scope ? [root] : document.querySelectorAll('[data-private="dialog"]')) {
     const [back, confirm] = ['[data-part="dialog-back"]', '[data-part="dialog-confirm"]'].map((selector) => [...dialog.querySelectorAll(selector)].find(shown));
     if (back) {
