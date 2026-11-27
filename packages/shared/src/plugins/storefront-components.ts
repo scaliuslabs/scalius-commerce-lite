@@ -30,6 +30,7 @@ import {
   PLUGIN_PRODUCT_SOURCE,
   pluginSettingsSchemaSchema,
   resolvePluginSettingValues,
+  withoutLaterSettingTypes,
   type PluginSettingItem,
   type PluginSettingsSchema,
 } from "./settings-schema";
@@ -423,8 +424,9 @@ function deepFreeze<T>(value: T): T {
 
 /**
  * The layout payload's `appExtensions`, shape-checked; anything malformed is
- * left out, and a key a later release added to a settings field is left out
- * of that field (the API may be a release ahead). The list is frozen and shared.
+ * left out, and a key or a field type a later release added to a settings
+ * schema is left out of it (the API may be a release ahead), the surface
+ * drawn without that field. The list is frozen and shared.
  */
 export function readStorefrontExtensions(value: unknown): readonly StorefrontExtension[] {
   if (!Array.isArray(value)) return [];
@@ -449,6 +451,11 @@ export function readStorefrontExtensions(value: unknown): readonly StorefrontExt
   return list;
 }
 
+/** A surface's settings schema as the API sent it: a later release's field type or key on a field left out. */
+function readSentSettings(value: unknown) {
+  return safeParseLeavingOutUnknownKeys(pluginSettingsSchemaSchema, withoutLaterSettingTypes(value));
+}
+
 function parseStorefrontExtensions(value: readonly unknown[]): StorefrontExtension[] {
   const out: StorefrontExtension[] = [];
   for (const entry of value) {
@@ -461,7 +468,7 @@ function parseStorefrontExtensions(value: readonly unknown[]): StorefrontExtensi
       if (typeof skin !== "object" || skin === null) return [];
       const record = skin as Record<string, unknown>;
       if (typeof record.id !== "string" || !PLUGIN_KEY_PATTERN.test(record.id) || !isStorefrontSkinTarget(record.target)) return [];
-      const settings = safeParseLeavingOutUnknownKeys(pluginSettingsSchemaSchema, record.settings ?? []);
+      const settings = readSentSettings(record.settings ?? []);
       const buyerPages = record.buyerPages === true && (record.target === "header" || record.target === "footer");
       return settings.success ? [{ id: record.id, target: record.target, settings: settings.data, ...(buyerPages ? { buyerPages: true as const } : {}) }] : [];
     }) : [];
@@ -470,14 +477,14 @@ function parseStorefrontExtensions(value: readonly unknown[]): StorefrontExtensi
       const record = component as Record<string, unknown>;
       if (typeof record.type !== "string" || !PLUGIN_KEY_PATTERN.test(record.type) || !Array.isArray(record.targets)) return [];
       const targets = record.targets.filter((target): target is StorefrontComponentTarget => (STOREFRONT_COMPONENT_TARGETS as readonly unknown[]).includes(target));
-      const settings = safeParseLeavingOutUnknownKeys(pluginSettingsSchemaSchema, record.settings ?? []);
+      const settings = readSentSettings(record.settings ?? []);
       return settings.success && targets.length > 0 ? [{ type: record.type, targets, settings: settings.data, ...(record.reads === true ? { reads: true as const } : {}) }] : [];
     }) : [];
     const sectionSettings: Record<string, PluginSettingsSchema> = {};
     if (typeof item.sectionSettings === "object" && item.sectionSettings !== null) {
       for (const [type, schema] of Object.entries(item.sectionSettings as Record<string, unknown>)) {
         if (!PLUGIN_KEY_PATTERN.test(type)) continue;
-        const parsed = safeParseLeavingOutUnknownKeys(pluginSettingsSchemaSchema, schema);
+        const parsed = readSentSettings(schema);
         if (parsed.success) sectionSettings[type] = parsed.data;
       }
     }

@@ -28,6 +28,8 @@ Within a supported contract version, a release only adds to these:
 
 "Only adds" means a new optional field, operation, event, function point, slot, token, error code or list value. Every list you read is open and may gain values, so handle a value you do not know as that list says ([commerce hooks](commerce-hooks.md#value-lists-you-read-are-open), [storefront](storefront.md#value-lists-you-read)); a list you send is closed. Removing, renaming or retyping something, making an output nullable, adding a required input, changing a default, or refusing at save, install or run something that passes today is a break.
 
+How the contract grows, so that a store keeps working while one of its parts is a release behind (the API deploys before the storefront, and either may be rolled back alone): a build that meets a key it does not know in a theme, an app's settings schema or anything else the platform sends leaves it out and draws the rest; a list member it does not know reads as the default for that one value (a field of an unknown type is left out, as an unset value). So a key added after rc.1 must mean the old behaviour when it is ignored. A change that hides, restricts or narrows (only some markets, hidden, a shorter list) is never a new key: it is a new list member, which an older build reads as a known default, or a raised document version, which an older build does not draw at all. An added field is optional; one a reader requires is never added, and a field a newer build has that an older one did not send reads as its default.
+
 ## What is not covered
 
 - **The database schema.** Tables, columns, migrations and triggers. Apps and themes never see a table, and the schema may change in any release.

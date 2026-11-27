@@ -17,7 +17,7 @@ import {
   hasSettingBindings,
   readSentStoreShape,
   storefrontThemeDocumentSchema,
-  readSentStorefrontThemeDocument,
+  repairSentStorefrontThemeDocument,
   type ResolvedStorefrontTheme,
   type ResolvedStorefrontThemeLayout,
   type StoreShape,
@@ -108,6 +108,14 @@ function reportThemeReadOnce(signature: string, report: () => void): void {
   report();
 }
 
+function deepFreeze<T>(value: T): T {
+  if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+  }
+  return value;
+}
+
 /** A schema path as the logs show it: indexes elided, each part cut short; never a value. */
 function maskedPath(path: readonly PropertyKey[]): string {
   return path.map((part) => (typeof part === "number" || /^\d+$/.test(String(part)) ? "#" : String(part).slice(0, 40))).join(".") || "(root)";
@@ -125,7 +133,29 @@ function maskedPath(path: readonly PropertyKey[]): string {
  */
 export function readStorefrontThemeDocument(value: unknown): StorefrontThemeRead {
   if (value === undefined || value === null) return { theme: DEFAULT_STOREFRONT_THEME, degraded: false };
-  const read = readSentStorefrontThemeDocument(value);
+  // The fast path: a document this build reads as it is.
+  const strict = storefrontThemeDocumentSchema.safeParse(value);
+  if (strict.success) return { theme: strict.data, degraded: false };
+  // A document read with repairs is read once per isolate while the API keeps sending it (keyed by its JSON).
+  let key: string | null;
+  try { key = JSON.stringify(value); } catch { key = null; }
+  const known = key === null ? undefined : repairedThemeReads.get(key);
+  if (known) return known;
+  const read = readRepaired(value);
+  if (key !== null && key.length <= REPAIRED_THEME_READ_KEY_MAX) {
+    if (repairedThemeReads.size >= REPAIRED_THEME_READS_MAX) repairedThemeReads.delete(repairedThemeReads.keys().next().value!);
+    repairedThemeReads.set(key, read);
+  }
+  return read;
+}
+
+/** Reads this isolate repaired, by the sent document's JSON (the published theme, a preview or two): bounded. */
+const repairedThemeReads = new Map<string, StorefrontThemeRead>();
+const REPAIRED_THEME_READS_MAX = 8;
+const REPAIRED_THEME_READ_KEY_MAX = 1_000_000;
+
+function readRepaired(value: unknown): StorefrontThemeRead {
+  const read = repairSentStorefrontThemeDocument(value);
   const version = (value as { version?: unknown }).version;
   const declared = typeof version === "number" && Number.isSafeInteger(version) ? version : null;
   if (read.ok) {
@@ -139,7 +169,8 @@ export function readStorefrontThemeDocument(value: unknown): StorefrontThemeRead
         reasons,
       }));
     }
-    return { theme: read.document, degraded: false };
+    // Shared by every request that gets the same document: frozen, as the default theme is.
+    return { theme: deepFreeze(read.document), degraded: false };
   }
   reportThemeReadOnce(`unreadable:${declared}:${read.reason}`, () => console.warn("[theme] Unreadable theme document; rendering the default theme uncached.", {
     version: declared,

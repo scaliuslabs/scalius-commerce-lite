@@ -470,7 +470,11 @@ export type SentStorefrontThemeRead =
  */
 export function readSentStorefrontThemeDocument(value: unknown): SentStorefrontThemeRead {
   const strict = storefrontThemeDocumentSchema.safeParse(value);
-  if (strict.success) return { ok: true, document: strict.data };
+  return strict.success ? { ok: true, document: strict.data } : repairSentStorefrontThemeDocument(value);
+}
+
+/** `readSentStorefrontThemeDocument` past its strict parse: for a caller that ran it (and keeps what this returns). */
+export function repairSentStorefrontThemeDocument(value: unknown): SentStorefrontThemeRead {
   const upgraded = upgradedForRead(value);
   if (!upgraded.ok) return upgraded;
   const read = repairedRead(upgraded.document);

@@ -91,7 +91,9 @@ export type CheckoutRejectedCodeReason =
   | "lower_savings"
   | "needs_delivery"
   | "delivery_discount_applied"
-  | "unavailable";
+  | "unavailable"
+  /** This storefront's own: a reason a newer API added, told in the storefront's words, never the API's. */
+  | "later";
 
 /** An applied code that adds nothing right now, with why and what to do. */
 export interface CheckoutRejectedCode {
@@ -314,13 +316,13 @@ export function parseDiscountFacts(data: Record<string, unknown>): CheckoutDisco
       };
     }),
     // A newer API's offer kind or rejection reason never fails the quote: the offer is left out, and the
-    // reason reads as `unavailable`, the API's own message shown (an older storefront meets them first).
+    // reason reads as `later`, told in the storefront's own words (an older storefront meets them first).
     offers: offers.filter((offer) => !isLaterOffer(offer)).map(parseOffer),
     rejectedCodes: rejectedCodes.map((rejection) => {
       if (!isRecord(rejection) || typeof rejection.reason !== "string") fail();
       return {
         code: requiredString(rejection.code, MAX_CODE_LENGTH),
-        reason: REJECTED_CODE_REASONS.has(rejection.reason as CheckoutRejectedCodeReason) ? rejection.reason as CheckoutRejectedCodeReason : "unavailable",
+        reason: REJECTED_CODE_REASONS.has(rejection.reason as CheckoutRejectedCodeReason) ? rejection.reason as CheckoutRejectedCodeReason : "later",
         message: requiredString(rejection.message, 300),
         ...(typeof rejection.shortfallAmount === "number" ? { shortfallAmount: nonNegativeAmount(rejection.shortfallAmount) } : {}),
         ...(typeof rejection.shortfallQuantity === "number" ? { shortfallQuantity: positiveQuantity(Math.min(rejection.shortfallQuantity, MAX_QUANTITY)) } : {}),
