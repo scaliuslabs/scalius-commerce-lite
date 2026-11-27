@@ -71,24 +71,27 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
     <nav aria-label={words.nav} data-part="navigation" class={sidebar
       ? (workspace ? "mb-3 shrink-0 border-b border-border lg:mb-0 lg:border-b-0" : "mb-6 border-b border-border sm:mb-8 lg:mb-0 lg:border-b-0")
       : (workspace ? "mb-3 shrink-0 border-b border-border" : "mb-6 border-b border-border sm:mb-8")}>
-      <div class={sidebar
-        ? "-mx-4 flex items-center overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 lg:flex-col lg:items-stretch lg:overflow-visible [&::-webkit-scrollbar]:hidden"
-        : "-mx-4 flex items-center overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden"} data-account-nav>
-        {tabs.map((item) => (
-          <a
-            href={item.href}
-            aria-current={item.key === current ? "page" : undefined}
-            data-astro-prefetch="false"
-            data-part="nav-item"
-            class:list={[tab, sidebar && sideTab, item.key === current ? "text-foreground after:bg-primary" : "text-muted-foreground after:bg-transparent hover:text-foreground"]}
-          >
-            {item.label}
-            {item.badge && (
-              <span data-part="nav-badge" class="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold tabular-nums text-primary-foreground">{item.badge}<span class="sr-only"> {item.badgeLabel}</span></span>
-            )}
-          </a>
-        ))}
-        <form method="post" action="/api/auth/logout" class={sidebar ? "ms-auto shrink-0 ps-2 lg:ms-0 lg:mt-2 lg:border-t lg:border-border lg:ps-0 lg:pt-2" : "ms-auto shrink-0 ps-2"} data-account-sign-out>
+      {/* The tabs scroll sideways on a phone; Sign out stands outside them, always in view at the strip's end. */}
+      <div class={sidebar ? "-mx-4 flex items-center sm:mx-0 lg:flex-col lg:items-stretch" : "-mx-4 flex items-center sm:mx-0"}>
+        <div class={sidebar
+          ? "flex min-w-0 flex-1 items-center overflow-x-auto ps-4 [scrollbar-width:none] sm:ps-0 lg:flex-col lg:items-stretch lg:overflow-visible [&::-webkit-scrollbar]:hidden"
+          : "flex min-w-0 flex-1 items-center overflow-x-auto ps-4 [scrollbar-width:none] sm:ps-0 [&::-webkit-scrollbar]:hidden"} data-account-nav>
+          {tabs.map((item) => (
+            <a
+              href={item.href}
+              aria-current={item.key === current ? "page" : undefined}
+              data-astro-prefetch="false"
+              data-part="nav-item"
+              class:list={[tab, sidebar && sideTab, item.key === current ? "text-foreground after:bg-primary" : "text-muted-foreground after:bg-transparent hover:text-foreground"]}
+            >
+              {item.label}
+              {item.badge && (
+                <span data-part="nav-badge" class="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold tabular-nums text-primary-foreground">{item.badge}<span class="sr-only"> {item.badgeLabel}</span></span>
+              )}
+            </a>
+          ))}
+        </div>
+        <form method="post" action="/api/auth/logout" class={sidebar ? "shrink-0 pe-1 ps-2 sm:pe-0 lg:mt-2 lg:border-t lg:border-border lg:ps-0 lg:pt-2" : "shrink-0 pe-1 ps-2 sm:pe-0"} data-account-sign-out>
           <button type="submit" data-part="sign-out" class="inline-flex min-h-12 items-center gap-2 whitespace-nowrap px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
             <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
             {words.signOut}
