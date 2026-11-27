@@ -77,7 +77,7 @@ export type StorefrontSkinDeclaration = z.infer<typeof storefrontSkinDeclaration
  */
 const themeVersion = (what: string) => z.number({
   error: (issue) => issue.input === undefined
-    ? `State the theme document version ${what} written for: themeVersion: ${STOREFRONT_THEME_DOCUMENT_VERSION} in this release.`
+    ? `State the theme document version ${what} written for (themeVersion): the version you wrote it against, never a newer one (this release writes ${STOREFRONT_THEME_DOCUMENT_VERSION}).`
     : undefined,
 }).int().positive();
 
