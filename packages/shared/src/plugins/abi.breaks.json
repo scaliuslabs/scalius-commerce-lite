@@ -1984,5 +1984,11 @@
   "from": "4000e92863c20bae",
   "change": "sdk.packages/plugin-sdk/src/testing.d.ts#InterfaceDeclaration:PluginTestHarnessOptions: an existing signature changed or gained a required member.",
   "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "3e517c5852023605",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1, Nov 27): thirteen sealed meanings told apps to read an `error.details` field (details.orderId, details.payoutId, details.issues, ...) that ctx.api.call never delivered: the bridge passed only code and message. Those codes now declare their details (a JSON Schema on the entry: payout and reversal ids and status, admin order state and orderId, review id, unpublished product ids, unresolved handles, the first 20 schema issues as path and message), the bridge and createContractApi deliver exactly the declared fields, and a removed or retyped details field is a break (protocolBreakingChanges). `rate_limited` promised details.retryAfterSeconds, which no app refusal carries: its meaning now says the limits are per minute and an HTTP answer's Retry-After says when. `validation_error` now says details.issues is there when the schema refused the value (a store rule's refusal names the field in the message). Every other code carries no details, as before."
  }
 ]

@@ -1,7 +1,8 @@
 // `ctx.api.call(operation, input)`: a plugin's `/api/v1` operation call,
 // dispatched in-process exactly as an agent's (agent-access/dispatch.ts) but
 // as the plugin principal. The result is the route's own response, unwrapped
-// from the `{ success, data }` envelope; refusals are results, not throws.
+// from the `{ success, data }` envelope; refusals are results, not throws, and
+// carry `details` only for a code that declares them (APP_ERROR_CODES).
 // An app names an operation by its app name (`orders.get`, app-operations.ts),
 // never by the dashboard's operation id (`dashboard.resources.orders.get`).
 // A third-party app reaches the stable app API only (`x-scalius-agent.stability`);
@@ -28,6 +29,7 @@ import { projectOperationResponse } from "./protected-response";
 import { IDEMPOTENCY_KEY_PATTERN } from "../routes/admin/idempotency";
 import { appOperationName, resolveAppOperation } from "./app-operations";
 import { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode } from "@scalius/shared/plugins/app-errors";
+import { appErrorDetails } from "@scalius/shared/plugins/app-error-details";
 
 /**
  * A dispatch refusal as the app sees it: one of the sealed app error codes
@@ -122,21 +124,25 @@ export function createPluginDispatchAuthority(db: Database): OperationDispatchAu
 }
 
 /** The route's JSON envelope as the plugin sees it. */
-function unwrap(status: number, ok: boolean, body: unknown): PluginApiResult {
+export function unwrap(status: number, ok: boolean, body: unknown): PluginApiResult {
   if (isRecord(body) && typeof body.success === "boolean") {
     if (body.success) return { ok, status, data: body.data ?? null, error: null };
     const error = isRecord(body.error) ? body.error : {};
+    // A route's schema refusal carries no code, only the ZodError name;
+    // name it as the MCP and the SDK's createContractApi do.
+    const code = typeof error.code === "string"
+      ? error.code
+      : error.name === "ZodError" ? "validation_error" : "internal_error";
+    // Only the details the code declares (APP_ERROR_CODES), projected to its keys.
+    const details = appErrorDetails(code, error.details);
     return {
       ok: false,
       status,
       data: null,
       error: {
-        // A route's schema refusal carries no code, only the ZodError name;
-        // name it as the MCP and the SDK's createContractApi do.
-        code: typeof error.code === "string"
-          ? error.code
-          : error.name === "ZodError" ? "validation_error" : "internal_error",
+        code,
         message: typeof error.message === "string" ? error.message : "The operation failed.",
+        ...(details ? { details } : {}),
       },
     };
   }

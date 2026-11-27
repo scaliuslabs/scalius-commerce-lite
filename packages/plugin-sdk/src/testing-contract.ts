@@ -26,6 +26,7 @@
 // never returns. A repeat with the same Idempotency-Key replays the first
 // answer without calling the handler again, as the platform does.
 
+import { appErrorDetails } from "@scalius/shared/plugins/app-error-details";
 import { schemaProjector, type SchemaProjector } from "@scalius/shared/schema-projection";
 import type { PluginApiCallInput, PluginApiResult } from "./context";
 import { NON_STABLE_OPERATION_NAMES, STABLE_CONTRACT } from "./testing-contract.gen";
@@ -306,11 +307,15 @@ function declaredBodyProperties(operation: StableContractOperation, contract: St
   return declared.size > 0 ? declared : null;
 }
 
+/** An issue's path as the platform's `details.issues` carry it: keys and list indexes (`items[0].sku` is `["items", 0, "sku"]`). */
+const issuePath = (path: string): Array<string | number> => [...path.matchAll(/([^.[\]]+)|\[(\d+)\]/g)].map(([, key, index]) => (index === undefined ? key! : Number(index)));
+
 function validation(where: string, issue: SchemaIssue, operation: StableContractOperation): PluginApiResult {
   const precondition = issue.missing && /^expected/i.test(issue.missing) && operation.revision !== "none"
     ? " This operation is revision-checked: pass the revision you read (a change since is refused with 409)."
     : "";
-  return refusal(400, "validation_error", `${where}${issue.path ? `.${issue.path}` : ""} ${issue.message}.${precondition}`);
+  const message = `${where}${issue.path ? `.${issue.path}` : ""} ${issue.message}.${precondition}`;
+  return { ok: false, status: 400, data: null, error: { code: "validation_error", message, details: { issues: [{ path: issuePath(issue.path), message: issue.message }] } } };
 }
 
 function isApiResult(value: unknown): value is PluginApiResult {
@@ -437,6 +442,12 @@ export function createContractApi(options: ContractApiOptions = {}): ContractApi
       }
     }
     if (result.ok && entry.output) result = { ...result, data: declaredData(entry, result.data, contract) };
+    // A refusal carries only the details its code declares, as the platform sends it.
+    if (!result.ok && result.error) {
+      const details = appErrorDetails(result.error.code, result.error.details);
+      const { details: _given, ...error } = result.error;
+      result = { ...result, error: details ? { ...error, details } : error };
+    }
     if (replayKey && result.status < 500) replays.set(replayKey, { request, result: copy(result) });
     return copy(result);
   };

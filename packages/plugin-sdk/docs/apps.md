@@ -495,7 +495,7 @@ With the Sensitive `write_webhooks` scope, an app keeps up to 5 webhook endpoint
 | Storage over quota | Adding writes fail with `quota_storage`; deletes work |
 | Theme draws with an inactive app's parts | Publishing is refused with `theme_apps_unavailable` |
 
-A refusal of a `ctx.*` call throws an error with a stable `code` from `APP_ERROR_CODES` (`object_conflict`, `http_not_allowed`, `rate_limited`). A refused `ctx.api.call` answers `{ ok: false, status, data: null, error: { code, message } }`.
+A refusal of a `ctx.*` call throws an error with a stable `code` from `APP_ERROR_CODES` (`object_conflict`, `http_not_allowed`, `rate_limited`). A refused `ctx.api.call` answers `{ ok: false, status, data: null, error: { code, message, details? } }`. `details` is there only for a code that declares it (`APP_ERROR_CODES[code].details`, a JSON Schema: `payout_request_mismatch` carries `payoutId`, `validation_error` the first 20 `issues` as `path` and `message`), with exactly the declared fields; every other code carries none.
 
 ## Testing
 

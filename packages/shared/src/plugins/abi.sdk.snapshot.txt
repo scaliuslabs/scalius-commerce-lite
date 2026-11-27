@@ -102,6 +102,7 @@ export interface PluginApiResult<T = unknown> {
     error: {
         code: string;
         message: string;
+        details?: Record<string, unknown>;
     } | null;
 }
 export interface PluginApi {
@@ -5834,7 +5835,12 @@ export declare const PLUGIN_API_VERSION: "2026-10";
 export declare const APP_ERROR_CODES: {
     readonly validation_error: {
         readonly status: 400;
-        readonly meaning: "A path, query or body value the operation's schema refuses; details.issues names the fields.";
+        readonly meaning: "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message).";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly invalid_cursor: {
         readonly status: 400;
@@ -5862,7 +5868,7 @@ export declare const APP_ERROR_CODES: {
     };
     readonly rate_limited: {
         readonly status: 429;
-        readonly meaning: "Too many calls; retry after details.retryAfterSeconds.";
+        readonly meaning: "Too many calls; retry later. An app's limits are per minute; an HTTP answer's Retry-After header says when.";
     };
     readonly internal_error: {
         readonly status: 500;
@@ -6015,6 +6021,11 @@ export declare const APP_ERROR_CODES: {
     readonly admin_order_create_request_mismatch: {
         readonly status: 409;
         readonly meaning: "The order request's key already belongs to another request: details.state is committed (details.orderId is the order it placed: read it, never place it again), processing (retry shortly) or failed (details.canRetryWithNewKey).";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly return_revision_conflict: {
         readonly status: 409;
@@ -6094,7 +6105,12 @@ export declare const APP_ERROR_CODES: {
     };
     readonly handle_unresolved: {
         readonly status: 422;
-        readonly meaning: "No category or collection has the handle; details.unresolved lists them.";
+        readonly meaning: "No category or collection has the handle; details.unresolved lists them (the first 20, each its kind and handle).";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly section_not_found: {
         readonly status: 404;
@@ -6151,6 +6167,11 @@ export declare const APP_ERROR_CODES: {
     readonly payout_request_mismatch: {
         readonly status: 409;
         readonly meaning: "The Idempotency-Key already sent a different payout (details.payoutId); use a new key for a new payout.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly payout_reversal_unsupported: {
         readonly status: 422;
@@ -6159,26 +6180,56 @@ export declare const APP_ERROR_CODES: {
     readonly payout_not_reversible: {
         readonly status: 409;
         readonly meaning: "Only a paid payout can be reversed (details.status is the payout's).";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly payout_reversal_exceeds_payout: {
         readonly status: 409;
         readonly meaning: "The reversal takes back more than the payout has left to give back (details.reversibleMinor), or the payout already has 20 reversals.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly payout_reversal_currency_mismatch: {
         readonly status: 422;
         readonly meaning: "A reversal is in its payout's currency (details.currency).";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly payout_reversal_request_mismatch: {
         readonly status: 409;
         readonly meaning: "The Idempotency-Key already reversed another amount or payout (details.reversalId); use a new key for a new reversal.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly payout_reversal_outcome_unknown: {
         readonly status: 503;
         readonly meaning: "The reversal is recorded (details.reversalId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resume it, never applied twice.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly payout_outcome_unknown: {
         readonly status: 503;
         readonly meaning: "The payout is recorded (details.payoutId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resubmit it, never sent twice.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly conversation_channel_unavailable: {
         readonly status: 422;
@@ -6187,6 +6238,11 @@ export declare const APP_ERROR_CODES: {
     readonly sales_channel_product_unpublished: {
         readonly status: 422;
         readonly meaning: "An order or quote on an app's sales channel names a product not published to it (details.productIds); publish it to the channel first. Nothing was written.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly pos_sales_channel_not_owned: {
         readonly status: 403;
@@ -6255,6 +6311,11 @@ export declare const APP_ERROR_CODES: {
     readonly review_exists: {
         readonly status: 409;
         readonly meaning: "The buyer already has a live review of the product, or the order line has its review; details.reviewId names it.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly review_not_eligible: {
         readonly status: 409;
@@ -6493,6 +6554,7 @@ export type AppErrorCode = "not_found" | "validation_error" | "invalid_cursor" |
 export interface AppErrorCodeEntry {
     readonly status: number;
     readonly meaning: string;
+    readonly details?: Readonly<Record<string, unknown>>;
 }
 export declare function isAppErrorCode(value: unknown): value is AppErrorCode;
 
