@@ -34,7 +34,7 @@ export const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z
 /** The authoring commands, as `--help` lists them (`<app>` defaults to the current folder). */
 export const AUTHORING_USAGE = [
   ["create <vendor.name> [--storefront | --theme] [--dir <folder>]", "scaffold an app (with a storefront section), or a theme starter"],
-  ["validate [app]", "check an app the way a store loads it"],
+  ["validate [app] [--previous <release.zip>]", "check an app the way a store loads it (and, against the release stores have, what it does to their template updates)"],
   ["build [app]", "pack an app into its dist/ folder"],
   ["preview [app] [--store sample|empty|other] [--out <html>] [--fixture <json>]", "render storefront parts on three fixture stores (or one) to a static HTML file"],
   ["dev [app] [--store sample|empty|other] [--fixture <json>]", "rebuild and preview fixtures as sources change"],
@@ -264,9 +264,11 @@ export async function runAuthoring(command, rest) {
     case "create":
       create(parsed().positional[0], rest);
       return true;
-    case "validate":
-      await runValidate(appPath(parsed().positional[0]));
+    case "validate": {
+      const args = parsed();
+      await runValidate(appPath(args.positional[0]), { previous: args.flags.get("--previous") });
       return true;
+    }
     case "dev":
     case "preview":
       await preview(command, rest);

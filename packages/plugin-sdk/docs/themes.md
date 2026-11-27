@@ -258,6 +258,17 @@ templates: [{
 - Homepage sections are where handles resolve, and where a missing one costs only its section.
 - When a merchant applies the template again, a section whose id they already have keeps their values.
 
+### Shipping an update to your template
+
+Stores that applied your template keep it as theirs, and your next release still reaches them. When a store updates your app, the store compares three things: your template as the release the store applied shipped it, the same template in your new release, and the store's theme now. Every part you changed that the merchant never touched is offered as an improvement; every part you both changed is the merchant's choice ("the theme now suggests X; you have Y"). The merchant puts the result in their draft, previews and publishes; nothing reaches buyers before that, and the draft it replaced stays in the theme's history.
+
+You declare nothing extra. What makes an update land well:
+
+- **Keep section ids.** Homepage sections match by `id`. Rename one and a store that changed it keeps its copy and gets yours as a new section. `scalius-plugin validate --previous <your last release.zip>` warns when a section id changes or a template disappears.
+- **Change what you mean to change.** Tokens, a block's fields, a section's settings and a private page's tokens merge one value at a time. These are each one value, taken whole and only where the merchant left them as you shipped them: a private page's arrangement; a label, with all its languages; an icon; any list (tabs, product modules, a receipt's cards); and an object whose `variant`, `type`, `kind`, `app`, `layout` or `style` changed (its other fields belong to that choice).
+- **Keep the template id.** A store matches your release by `<app id>/<template id>`; a new id is a new template.
+- **Ship a template that saves.** The merged theme passes the same save check as any theme; a value the check refuses blocks that update in every store that takes it.
+
 ## Test on more than one store
 
 `pnpm plugin preview <app>` renders every part on three fixture stores, one after the other in `dist/preview.html`:
