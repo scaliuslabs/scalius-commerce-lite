@@ -5,7 +5,12 @@
 // header, so a page always has one. Under an app header the store adds the
 // theme's phone tab bar and its menu disclosure behaviour (nav-disclosure.ts),
 // and the merchant's light or dark switch where the skin places `header.actions`.
+// On a buyer's own page a header skin that asks (`buyerPages`) draws inert in
+// a shadow root (`buyerChrome`, from Layout: components/private/PrivateChrome.astro),
+// its slots empty, with the phone tab bar beside it; otherwise the store's.
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
+import PrivateChrome from "@/components/private/PrivateChrome.astro";
+import type { BuyerChrome } from "@/lib/extensions";
 import Skin from "@/components/apps/Skin.astro";
 import { appSkin, requestExtensions } from "@/lib/extensions";
 import { headerData, headerMarket, headerPageData } from "@/lib/extensions/data";
@@ -21,9 +26,13 @@ import MobileTabBar from "./MobileTabBar.astro";
 import AppHeaderBehaviour from "./AppHeaderBehaviour.astro";
 import { phoneNavigation } from "./phone-navigation";
 
-type Props = import("astro/types").ComponentProps<typeof CoreHeader> & { pageLead?: HomepageHeaderLead };
+type Props = import("astro/types").ComponentProps<typeof CoreHeader> & {
+  pageLead?: HomepageHeaderLead;
+  /** A buyer page's theme header (lib/extensions `buyerPageChrome`): drawn in place of the store's. */
+  buyerChrome?: BuyerChrome | null;
+};
 
-const { pageLead, ...props } = Astro.props;
+const { pageLead, buyerChrome, ...props } = Astro.props;
 const theme = await currentRequestTheme(Astro.locals);
 // Under an app header the store still draws the theme's phone tab bar.
 const phone = phoneNavigation(theme.resolved.blocks);
@@ -54,6 +63,12 @@ const data = async () => {
 };
 ---
 
+{buyerChrome ? (
+<div class="contents" data-storefront-header data-buyer-chrome>
+  <PrivateChrome target="header" chrome={buyerChrome} storeName={props.storeName ?? null} />
+  {tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}
+</div>
+) : (
 <div class="contents" data-storefront-header>
   <Skin target="header" data={data} embeds={embeds} editorMark={theme.preview !== null ? THEME_EDITOR_MARKS.header : undefined}>
     <CoreHeader {...props} />
@@ -65,3 +80,4 @@ const data = async () => {
     </Fragment>
   </Skin>
 </div>
+)}

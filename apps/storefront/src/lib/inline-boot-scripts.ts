@@ -156,6 +156,16 @@ export const WINDOW_GLOBALS_SCRIPT =
 export const SIGNED_IN_HINT_SCRIPT =
   'document.cookie.split(";").some(function(c){return c.trim()==="cs_auth=1"})&&document.documentElement.setAttribute("data-scalius-signed-in","");';
 
+/**
+ * A theme's chrome on a buyer page (components/private/PrivateChrome.astro):
+ * the page's colour scheme and sign-in hint copied from `<html>` onto the
+ * shadow host just before it, as the parser reaches it, so the theme's
+ * `:host([data-color-scheme="dark"])` and signed-in parts never flash (the
+ * colour scheme script and scripts/buyer-chrome.ts keep them current).
+ */
+export const BUYER_CHROME_STATE_SCRIPT =
+  '(function(s){var h=s.previousElementSibling,r=document.documentElement,c=r.getAttribute("data-color-scheme");if(!h)return;if(c)h.setAttribute("data-color-scheme",c);h.toggleAttribute("data-scalius-signed-in",r.hasAttribute("data-scalius-signed-in"))})(document.currentScript)';
+
 /** `astro dev` only: React Fast Refresh's preamble, before any island module. */
 export const REACT_REFRESH_PREAMBLE = `import RefreshRuntime from "/@react-refresh";
 if (!window.$RefreshReg$) {

@@ -3,12 +3,16 @@ import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 // (`StorefrontRenderContext.page.kind`). Apps branch on these values, so each
 // path gets its own kind: a CMS page is "page", the cart is "cart", and every
 // other path that is not a catalog, content or landing page (checkout, the
-// receipt, account, blog, feeds, ...) is "other". Components never render on
+// receipt, account, blog, feeds, ...) is "other". The buyer's own pages where a
+// theme's header and footer may draw (`BUYER_CHROME_STOREFRONT_ROOTS`: the
+// account, the receipt, order tracking, ...) are "buyer": only a skin with
+// `buyerPages: true` draws there, rebuilt inert. Components never render on
 // a buyer's page (`appComponentsRenderOn`), so "other" is not a promise that
 // one draws there.
 
 import { STOREFRONT_ROUTE_SEGMENTS } from "@scalius/shared/storefront-route-segments";
 import type { StorefrontRenderContext } from "@scalius/shared/plugins/storefront-protocol";
+import { buyerChromeRoot } from "@/lib/cache-policy";
 
 export type StorefrontPageKind = StorefrontRenderContext["page"]["kind"];
 
@@ -23,6 +27,7 @@ export function pageKind(pathname: string): StorefrontPageKind {
   if (/^\/(?:categories|collections|brands)(?:\/|$)/.test(path)) return "listing";
   if (path === "/search" || path.startsWith("/search/")) return "search";
   if (path === "/cart") return "cart";
+  if (buyerChromeRoot(path)) return "buyer";
   const segment = path.slice(1);
   if (CMS_SLUG.test(segment) && !STOREFRONT_ROUTE_SEGMENTS.has(segment)) return "page";
   return "other";
