@@ -1,0 +1,339 @@
+{
+ "lock": 1,
+ "platform": "2.0.0-rc.1",
+ "contractVersion": "2026-10",
+ "seals": {
+  "packages/shared/src/plugins/abi.manifest.snapshot.json": {
+   "sha256": "e4555bafd12d3cc44373d32e657e5f476111d8bb3ad20b650e4cdf2609d3239e",
+   "blob": "2d00c0e0e40538873709a321ab28b5696fb8918f"
+  },
+  "packages/shared/src/plugins/abi.protocol.snapshot.json": {
+   "sha256": "2adbd6553ba3454509cd6fe3b69190e585eb007af1dee05fe97a56b8f8d099da",
+   "blob": "3ec67530d3d4d4bd62f05afa5358c8b3cac2f38c"
+  },
+  "packages/shared/src/plugins/abi.sdk.snapshot.txt": {
+   "sha256": "930d37a77033967d5ff9e069485080a215e65a8f5ae805c7c3225d42c6b44919",
+   "blob": "b31d004b4172dbece8b206d89b9f97634d971e39"
+  },
+  "apps/api/src/openapi/stable-operations.snapshot.json": {
+   "sha256": "700b1f1669815c916427ff6b57577399ba45f0ede0e61ca8cb4adb445a692a76",
+   "blob": "73409ae2f6c1941351f026f253627515bd05df5e"
+  },
+  "packages/shared/src/events.representations.snapshot.json": {
+   "sha256": "5849d8c43b08bc6829eccdb8a5edeaa9c3425a500582427a9bc063fe7667a132",
+   "blob": "7c6e79528ea6949c037d2c30c94a5ea536314c64"
+  },
+  "packages/shared/src/storefront-theme/compat.snapshot.json": {
+   "sha256": "a5d1d8c0d80fc503bb602631be3bfa1ebfc1263281c5a37e5a040295a606b78b",
+   "blob": "373640e5e841733a8250ffb49c2d9925be456ac4"
+  },
+  "packages/shared/src/storefront-theme/private-anatomy.snapshot.txt": {
+   "sha256": "7d807abc1e3bdc8778579a69b2d0150ac215589325d44e677fa121efcf5a7e4b",
+   "blob": "c848b71bfe35dbd7fc44923448b7abe710e976c8"
+  },
+  "packages/shared/src/storefront-theme/save-reasons.snapshot.json": {
+   "sha256": "d79eed1530ea8f280b1d30dbf7e3ec2685614cd1bd6e18190eb287bf00884739",
+   "blob": "0107dd0d1057c1215b1a361fcf93deb27b061241"
+  },
+  "packages/shared/src/storefront-theme/read-bounds.snapshot.json": {
+   "sha256": "b7f9c20dcd41ca6718461acf0ecf099578a14600319b19908eb607208149b2c5",
+   "blob": "bae22c16ec2b953f3f1cf6dbdf559fa78ca95ff6"
+  },
+  "packages/shared/src/storefront-theme/private-compile.golden.json": {
+   "sha256": "0d7ed06518f68337d357b51602052f6e136e19e92b40316fa014382ff962a93c",
+   "blob": "86b72ae2435f6e03117273564fee798924c3f42e"
+  },
+  "packages/shared/src/plugins/buyer-chrome-css.verdicts.json": {
+   "sha256": "53d9972d4999937eb3612447e73becd5072f4ea8d03a4e5a4071cb7b7073a494",
+   "blob": "82fd56e2bf4302cb6f608a872ebaaba401afa47b"
+  },
+  "packages/shared/src/plugins/buyer-chrome-css.version.json": {
+   "sha256": "414d7d24578694d185b095420cde532feab6cad25e0ac952aea8ea2543da855b",
+   "blob": "55a9773e7663f022591e6d165e2d9003c2abc76b"
+  },
+  "packages/shared/src/contract/refusal-census.snapshot.json": {
+   "sha256": "3ddb4247c4177b00c6de4125a24d4bc794a2e08e732c36da6a6b6538376ff149",
+   "blob": "a4080d07de4c4c981c7ed85a6a744015fbc1af03"
+  }
+ },
+ "frozen": {
+  "packages/shared/src/storefront-theme/compat/v10/blocks.json": {
+   "sha256": "8355a0b491c221cb092f6ccb7bb0ad0c7f9749a5e53f4a613ad8d62b209514a4",
+   "blob": "d532c7203a34fe7f03cd30bbeaa2443333dfc714"
+  },
+  "packages/shared/src/storefront-theme/compat/v10/noor-app.json": {
+   "sha256": "180cd98a61c712a8ed4e8d9f7792a2a6d8619bc78a34360134a753c46d7747d7",
+   "blob": "5eecdb464f60460b2408f3e8442076c4a708c994"
+  },
+  "packages/shared/src/storefront-theme/compat/v10/noor-demo.json": {
+   "sha256": "8afa3ee24e5647c0426cfea2e48ee13b5321bdbff93bea62dc9e697ca755414b",
+   "blob": "d626c38c36b56ea8668345d3b36717b178452048"
+  },
+  "packages/shared/src/storefront-theme/compat/v10/sections.json": {
+   "sha256": "5c7e6152a6a71f8fa4a62cac737c267a4d600250462b138ab871767fd5d43c1a",
+   "blob": "607a97235e7dcbf143fe9999bc347bf5dcaf056c"
+  },
+  "packages/shared/src/storefront-theme/compat/v10/templates.json": {
+   "sha256": "6ec96157b404dc379472b3e1de37b8984ecbe364696fc316a9b88148824a206a",
+   "blob": "5e850711222c238353c53287d42f723cf96e344f"
+  },
+  "packages/shared/src/storefront-theme/compat/v10/translations.json": {
+   "sha256": "3c123560b90248595da2f63aef0f9ea9657067366a1b62d6a58ff82873395d28",
+   "blob": "c0ceff8c632d090343fc708cc4d40ec599867f26"
+  },
+  "packages/shared/src/storefront-theme/compat/v11/blocks.json": {
+   "sha256": "2de0ddf62a52cbbb4138110e7572080aba506f0fbdd77ec4403c63d005745863",
+   "blob": "d145f60ec0f49e28a95ccfdd967e0c9de8f5a49f"
+  },
+  "packages/shared/src/storefront-theme/compat/v11/noor-app.json": {
+   "sha256": "e35ffe3e3d5a0aa4f9190f891e3547a335a6da8deeaf0d1c9681cf36ead653e0",
+   "blob": "542bff510113a280facb8ebee429518ae37ce6f8"
+  },
+  "packages/shared/src/storefront-theme/compat/v11/noor-demo.json": {
+   "sha256": "edddb31db3c0e6dfbbecd6fdea6e31c8488ed53f1fe97b82a243d2f504eb8104",
+   "blob": "f95602fd1ce36d16b86731510befe2c8b0348365"
+  },
+  "packages/shared/src/storefront-theme/compat/v11/sections.json": {
+   "sha256": "588d6869d94981f33b71c8856e18857b040cb2a4617e3daf13abb7bf2730c5db",
+   "blob": "b0ec0bba9edc491c44a00eb446909f4ce34ac335"
+  },
+  "packages/shared/src/storefront-theme/compat/v11/templates.json": {
+   "sha256": "9e7f2cd7a9e3b7c9c08aa472c74abfec9f828dced72049e4ad12bb27591e9d24",
+   "blob": "23ecdefd44856d8471fd7c9d70fe1b19d01f0990"
+  },
+  "packages/shared/src/storefront-theme/compat/v11/translations.json": {
+   "sha256": "28520a0bf2d27e464fdaae4e9eaac279a9e387a32ad69c50d422de29226ea195",
+   "blob": "57dd379f6aa2e2bc9d89c1c34b4325ead3f13f7c"
+  },
+  "packages/shared/src/storefront-theme/compat/v12/blocks.json": {
+   "sha256": "aa7985e8c51bbe846a354bdada1c35383686e87c8034d5d2b0d730229d1fe5c4",
+   "blob": "8d61d06ef2fc93c630e9265cd5cd6b3a7810f78a"
+  },
+  "packages/shared/src/storefront-theme/compat/v12/noor-app.json": {
+   "sha256": "291a2ea11881a04a64df4ebd6a35bef1470de57a25bd544eeb472c9eed71139f",
+   "blob": "9c1b6e61c78c5786286b2c19152f43ae84123133"
+  },
+  "packages/shared/src/storefront-theme/compat/v12/noor-demo.json": {
+   "sha256": "cedd93b4e2a24b1545fcf081002f1190b1c07e004340d22cee7e1bc5ef39b3de",
+   "blob": "6f7b5b3071b7a56f5027a26b5196233a7fbe57f0"
+  },
+  "packages/shared/src/storefront-theme/compat/v12/sections.json": {
+   "sha256": "ea1acfd646890ef61f914c540f389162792eaebf475365f5e8f2fce9a7e3cb13",
+   "blob": "34b92bfa2d57f92c0df87c374e14d3abfecd333d"
+  },
+  "packages/shared/src/storefront-theme/compat/v12/templates.json": {
+   "sha256": "d6866767db9d3ddcdbb55ef102ed398c350227969ed06f47078f2c332f1c6cd3",
+   "blob": "022ef2a03c23bd6615897ec93d3c8618fe70dbf8"
+  },
+  "packages/shared/src/storefront-theme/compat/v12/translations.json": {
+   "sha256": "16fa219260ab0b0e1b619ab6f5188260e2623a9db3063fc506dcc496cef3d831",
+   "blob": "10e2a4a8fcb3afc2442606a6ccc324bec07d2315"
+  },
+  "packages/shared/src/storefront-theme/compat/v13/blocks.json": {
+   "sha256": "1f9c68cbed9284021d008284a7418e6474163c2249a54f953d4ec2b3b514029d",
+   "blob": "e2628231de97daed7040ab30be780c4d8460bc27"
+  },
+  "packages/shared/src/storefront-theme/compat/v13/color-schemes-app.json": {
+   "sha256": "a3e57f15404f7afabf622236d43a54eb93672f160c8c4043c650018a7480831c",
+   "blob": "f22c07ad4c96ea9b29875242bc6bfa1823ae8038"
+  },
+  "packages/shared/src/storefront-theme/compat/v13/color-schemes.json": {
+   "sha256": "1b2e4109a06e20af368c75ca5964d4ad353b092f02385f73dd689165e17cb080",
+   "blob": "5c37b5a16f26d422a131ba293e10fcca07b761c4"
+  },
+  "packages/shared/src/storefront-theme/compat/v13/noor-app.json": {
+   "sha256": "ec164bf16f86746c27322e3f3c771fd86c69708e45981db54b3876b4d0252319",
+   "blob": "89b5484244949ff34a28084769d5573d191bb0b1"
+  },
+  "packages/shared/src/storefront-theme/compat/v13/noor-demo.json": {
+   "sha256": "93f0e66f4379db09d52c2e5ab470a98a62abc9691e6cce24d533127993055f43",
+   "blob": "631e9c946bcd04a1271b2cbd391010195d61ad29"
+  },
+  "packages/shared/src/storefront-theme/compat/v13/sections.json": {
+   "sha256": "db7e23d747d7545340b7376cb354d7534d967cc0792992dab6f7f1d75d6ff0c0",
+   "blob": "9185b5750caa8f3b4d57bc5076a60684685234df"
+  },
+  "packages/shared/src/storefront-theme/compat/v13/templates.json": {
+   "sha256": "902b14d74975bc766adfd10deb2efa1f2ba1294be8279369a18d18249518e17f",
+   "blob": "66a8f72f1dd9adce3ceb275a963c1640bf9602f5"
+  },
+  "packages/shared/src/storefront-theme/compat/v13/translations.json": {
+   "sha256": "6660480f1d59044d364c74053d025b9ec16211940299d6cf3ab1b4cd53c1034d",
+   "blob": "2215209409ec38220ee61db9b3bd0cb29fb9f272"
+  },
+  "packages/shared/src/storefront-theme/compat/v14/cart-template.json": {
+   "sha256": "46b224c9a4247f3b7e2cf37c54802621b7ef5a8125f656c4e7c92af62f25e91d",
+   "blob": "a6a64f92791a5b633a1394380102005ffcced070"
+  },
+  "packages/shared/src/storefront-theme/compat/v14/private-pages-app.json": {
+   "sha256": "70c654664b7ec7e728352e69395f19b481da29de117966c42ae05f81854ff835",
+   "blob": "d92614192fca83c870715a93fc02a855f5761c58"
+  },
+  "packages/shared/src/storefront-theme/compat/v14/private-pages.json": {
+   "sha256": "7856360f03a816a8f9d399fe125c1321978ab97dc7e752949a4ad1223c4e361e",
+   "blob": "69fe604e017affb99b2c807cf683378c0a81cde1"
+  },
+  "packages/shared/src/storefront-theme/compat/v15/private-layout-app.json": {
+   "sha256": "2e5879996a2ee88e09f881b58b9440e681034eb9287f404a44636145b77857a1",
+   "blob": "389c0b03d7bb28e4aa54b8adf5e3fd8c5137f67a"
+  },
+  "packages/shared/src/storefront-theme/compat/v15/private-layout.json": {
+   "sha256": "f1f6928bdc11ebbd63c8b96eba0eaf8932b71ea45ef772a1b0398ea7766deca6",
+   "blob": "4a545a7096edcbf7889c5ac7b2c3afe870d7ab2e"
+  },
+  "packages/shared/src/storefront-theme/compat/v16/mobile-tabs.json": {
+   "sha256": "235878a7162d08b19bec779bc7d34ef79c53d09375c62fef80c30aec0b7c1955",
+   "blob": "4b613f291db7a789c0f525b1292df59ac0d80690"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v10-blocks.json": {
+   "sha256": "ae817860d8a5caab4e5849700447b8cec0cb3a1b69ce3bc5ab933f027ad98452",
+   "blob": "2386068fcb3c68cc896a2578d5b4a6aabb753873"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v10-noor-demo.json": {
+   "sha256": "8d67d243cf77179fb0e4fddd6d437f80031a8bd3ac4dfaa439e9db06c2fddca3",
+   "blob": "3660d4b720d44df3de56cc69ec2ec3e3cdf4bcb4"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v10-sections.json": {
+   "sha256": "c99d3a9056a25c8dba97df399f2ddc22eb370fd355664cf7b1c36bd5f8ed076a",
+   "blob": "39ded724ab98552f88a880f18b00ab5ed2178b1e"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v10-templates.json": {
+   "sha256": "e33dd26d5be7fdc39b11995ac049238b20d3f56461d8bb05798e137327ebf0b5",
+   "blob": "650468a0b722f8d102889852f6fe6f2cf3904440"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v10-translations.json": {
+   "sha256": "aedb1f4869369f3bc4353e263cb17802f5c4dd3ff779c08a1f6a58d6a1e8e185",
+   "blob": "ab1b90c0bc73c4bdc1ce1e4c48504a1b0c208b69"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v11-blocks.json": {
+   "sha256": "ae817860d8a5caab4e5849700447b8cec0cb3a1b69ce3bc5ab933f027ad98452",
+   "blob": "2386068fcb3c68cc896a2578d5b4a6aabb753873"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v11-noor-demo.json": {
+   "sha256": "8d67d243cf77179fb0e4fddd6d437f80031a8bd3ac4dfaa439e9db06c2fddca3",
+   "blob": "3660d4b720d44df3de56cc69ec2ec3e3cdf4bcb4"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v11-sections.json": {
+   "sha256": "c99d3a9056a25c8dba97df399f2ddc22eb370fd355664cf7b1c36bd5f8ed076a",
+   "blob": "39ded724ab98552f88a880f18b00ab5ed2178b1e"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v11-templates.json": {
+   "sha256": "e33dd26d5be7fdc39b11995ac049238b20d3f56461d8bb05798e137327ebf0b5",
+   "blob": "650468a0b722f8d102889852f6fe6f2cf3904440"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v11-translations.json": {
+   "sha256": "aedb1f4869369f3bc4353e263cb17802f5c4dd3ff779c08a1f6a58d6a1e8e185",
+   "blob": "ab1b90c0bc73c4bdc1ce1e4c48504a1b0c208b69"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v12-blocks.json": {
+   "sha256": "ae817860d8a5caab4e5849700447b8cec0cb3a1b69ce3bc5ab933f027ad98452",
+   "blob": "2386068fcb3c68cc896a2578d5b4a6aabb753873"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v12-noor-demo.json": {
+   "sha256": "8d67d243cf77179fb0e4fddd6d437f80031a8bd3ac4dfaa439e9db06c2fddca3",
+   "blob": "3660d4b720d44df3de56cc69ec2ec3e3cdf4bcb4"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v12-sections.json": {
+   "sha256": "c99d3a9056a25c8dba97df399f2ddc22eb370fd355664cf7b1c36bd5f8ed076a",
+   "blob": "39ded724ab98552f88a880f18b00ab5ed2178b1e"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v12-templates.json": {
+   "sha256": "e33dd26d5be7fdc39b11995ac049238b20d3f56461d8bb05798e137327ebf0b5",
+   "blob": "650468a0b722f8d102889852f6fe6f2cf3904440"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v12-translations.json": {
+   "sha256": "aedb1f4869369f3bc4353e263cb17802f5c4dd3ff779c08a1f6a58d6a1e8e185",
+   "blob": "ab1b90c0bc73c4bdc1ce1e4c48504a1b0c208b69"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v13-blocks.json": {
+   "sha256": "ae817860d8a5caab4e5849700447b8cec0cb3a1b69ce3bc5ab933f027ad98452",
+   "blob": "2386068fcb3c68cc896a2578d5b4a6aabb753873"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v13-color-schemes.json": {
+   "sha256": "26e14fcba7a1168738a70bf64853edc408e9dc25ef70ec07f9711872de211189",
+   "blob": "4b9dcc52b98ac263ada6859fd7ee01923a2d3a35"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v13-noor-demo.json": {
+   "sha256": "8d67d243cf77179fb0e4fddd6d437f80031a8bd3ac4dfaa439e9db06c2fddca3",
+   "blob": "3660d4b720d44df3de56cc69ec2ec3e3cdf4bcb4"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v13-sections.json": {
+   "sha256": "c99d3a9056a25c8dba97df399f2ddc22eb370fd355664cf7b1c36bd5f8ed076a",
+   "blob": "39ded724ab98552f88a880f18b00ab5ed2178b1e"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v13-templates.json": {
+   "sha256": "e33dd26d5be7fdc39b11995ac049238b20d3f56461d8bb05798e137327ebf0b5",
+   "blob": "650468a0b722f8d102889852f6fe6f2cf3904440"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v13-translations.json": {
+   "sha256": "aedb1f4869369f3bc4353e263cb17802f5c4dd3ff779c08a1f6a58d6a1e8e185",
+   "blob": "ab1b90c0bc73c4bdc1ce1e4c48504a1b0c208b69"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v14-cart-template.json": {
+   "sha256": "432a021c5cfcc5a128b3bb989bcaef202bc4ca5ec3e8d411aed6821314595e78",
+   "blob": "396ac2089aee0660e64046df2e36d51d027056b8"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v14-private-pages.json": {
+   "sha256": "0d07707f10f2c38f2dfd4eda5ac35c3c486195271fc9578b74be96bdb3163a9e",
+   "blob": "2f3ba59c78847b0076185f4884abe8a6cb4eacd7"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v15-private-layout.json": {
+   "sha256": "8dcd654c40387d4fcc04447474b26fa2a79b03f85f5acfb4ab96b4965c4f9cab",
+   "blob": "71c59c7a15291ccb63576e52a469faa5f923fa8b"
+  },
+  "packages/shared/src/storefront-theme/compat/upgraded/v16/v16-mobile-tabs.json": {
+   "sha256": "b48a2aa1c1194d09bf2606edcab37d6103406f0861f0b1497aea2851bad0de5c",
+   "blob": "9b4a932d483c36b6c880f928eb026903b065a0cb"
+  },
+  "internal/replay/#08cbfef2c25a6b20": {
+   "sha256": "e005225f38fa400d6669a18c097cdc5b0ceca0352bea58178c31150b2cac717c",
+   "blob": "78a320758b6eb85bf6d7a9823442aefc11f0dc39"
+  },
+  "internal/replay/#94e789da5c93ab85": {
+   "sha256": "329b02398fb7bb9c2fd38ba19db6a63be786b335d83a3779a708b99c22105771",
+   "blob": "12e894bf5b3bb04e8674ed869e5f45f2b0c9b52b"
+  },
+  "internal/replay/#8fd21cf8be1d87a9": {
+   "sha256": "36ba916cf44f1613d6c869b1cc05eb578bead0aebed50594a5a08cca289c59d1",
+   "blob": "0bfe8bb43b91e8051b7a65a8d0a4f2f417639bf2"
+  },
+  "apps/api/src/plugins/testing/replay/2.0.0-rc.1/acme.delivery-slots-0.2.0.zip": {
+   "sha256": "56f72b89f9292625cf272ec7b1b970fe3e7373841fba777a96858745de5cfd68",
+   "blob": "560690ba9e5a142efd5e0b8c42b3eba3ac0e1fae"
+  },
+  "apps/api/src/plugins/testing/replay/expected/acme.delivery-slots-0.2.0@2.0.0-rc.1.json": {
+   "sha256": "3e13a4527bed612b1269dd7e8746f0c200c3bc83d2b6c5dd5cd63edb8ec86544",
+   "blob": "6edd00997ac362e370cc4eaef3144de350ac54a1"
+  },
+  "apps/api/src/plugins/testing/replay/acme.delivery-slots.replay-settings.json": {
+   "sha256": "e65640451363eab8b03b53855578f301bdea45bccdfa513f1cf6bc61457f3e0e",
+   "blob": "1188e329a04bbe4942229c2f21708a264fafae42"
+  },
+  "apps/api/src/plugins/testing/replay/2.0.0-rc.1/acme.starter-theme-0.1.0.zip": {
+   "sha256": "c934ebb427a5853774d3c3e5cb117c45b252e52a5c344c3eae00867f950dfc26",
+   "blob": "d51acf940d3e4378c871ae1c91c70e0cfb02b15d"
+  },
+  "apps/api/src/plugins/testing/replay/expected/acme.starter-theme-0.1.0@2.0.0-rc.1.json": {
+   "sha256": "408a8ca2d9d104e3d84e0e6e3ff7fdee71047298f8fb9dccffc57a51351308dc",
+   "blob": "ff7ab1bf26eb4f8440276cbfbe60f86f17ecb476"
+  }
+ },
+ "ledgers": {
+  "packages/shared/src/plugins/abi.breaks.json": {
+   "entries": 580,
+   "sha256": "1eafcbd0c2a4217a249f849724419d606e7f93a64b9536ed04cc56c6ec78c9ae"
+  },
+  "apps/api/src/openapi/stable-operations.breaks.json": {
+   "entries": 620,
+   "sha256": "44f002d22e8fc65a5613013acf2d2dca3a0e2b6f25b1e450d6a03d364feddb9a"
+  },
+  "packages/shared/src/events.representations.breaks.json": {
+   "entries": 15,
+   "sha256": "0d51c05606d2d4ec4240c73f54958e605e0cd452d40b4e593fe844bdc232c31b"
+  },
+  "packages/shared/src/contract/contract.breaks.json": {
+   "entries": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  }
+ }
+}
