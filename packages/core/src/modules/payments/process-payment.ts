@@ -49,7 +49,7 @@ import {
   shipmentClaimShipmentStatusSql,
   paymentMove,
 } from "../order-kernel";
-import { PAYMENT_MACHINE } from "@scalius/shared/payment-record-state";
+import { chargeKind, PAYMENT_MACHINE } from "@scalius/shared/payment-record-state";
 import { buildMetaPurchaseOutboxClaimInsert } from "../../integrations/meta/purchase-outbox";
 import {
   getUnpayableOrderReason,
@@ -560,7 +560,7 @@ async function landLatePayment(
         currency: input.currency,
         ...input.settlement,
         paymentMethod: params.provider,
-        paymentType: params.paymentType ?? "full",
+        paymentType: chargeKind(params.paymentType ?? "full"),
         status: PaymentRecordStatus.PENDING,
         providerRef: params.providerRef,
         providerSecondaryRef: params.secondaryRef ?? null,
@@ -872,7 +872,7 @@ export async function processPaymentConfirmed(
           currency: currency.code,
           ...settlement,
           paymentMethod: params.provider,
-          paymentType,
+          paymentType: chargeKind(paymentType),
           status: PaymentRecordStatus.PENDING,
           providerRef: params.providerRef,
           providerSecondaryRef: params.secondaryRef ?? null,
@@ -1464,7 +1464,7 @@ async function applyFailedPayment(
           currency: currency.code,
           ...presentedSettlement(0, currency.code),
           paymentMethod: provider,
-          paymentType,
+          paymentType: chargeKind(paymentType),
           status: PaymentRecordStatus.FAILED,
           providerRef: providerRef ?? null,
           createdAt: sql`unixepoch()`,
@@ -1673,7 +1673,7 @@ export async function processPaymentAuthorized(
           currency: currency.code,
           ...presentedSettlement(amountMinor, currency.code),
           paymentMethod: params.provider,
-          paymentType,
+          paymentType: chargeKind(paymentType),
           status: PaymentRecordStatus.AUTHORIZED,
           providerRef: params.providerRef,
           providerSecondaryRef: params.secondaryRef ?? null,

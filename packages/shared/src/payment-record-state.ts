@@ -12,6 +12,16 @@
 // (`paymentMove` and `refundRecordMove` in core), whose update names the
 // move's source states. Readers ask the lists below instead of retyping them.
 import { defineMachine } from "./machine";
+import type { PaymentType } from "./plugins/providers/payment";
+
+/**
+ * A charge's kind where its row is inserted: the type refuses `refund`, and
+ * the writers gate reads the call as a charge, so the insert's status is
+ * checked against the charge machine's initial states.
+ */
+export function chargeKind<T extends PaymentType>(kind: T): T {
+  return kind;
+}
 
 /** A charge's states: a subset of PAYMENT_RECORD_STATUSES. */
 export const CHARGE_STATUSES = ["pending", "authorized", "succeeded", "failed", "cancelled", "refunded"] as const;
