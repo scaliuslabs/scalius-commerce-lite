@@ -23,10 +23,12 @@
 //   the store's own path (lib/extensions files.ts `/_buyer-chrome/...`): a
 //   sheet ends where it ends, so nothing at its end reaches the guard.
 
+import { BUYER_CHROME_FRAME_MAX_SVH } from "@scalius/shared/plugins/buyer-chrome-frame";
+
 /** The store-owned frame around each shadow host, by region: the boundary, written as the frame's own style attribute. */
 export const BUYER_CHROME_FRAME_STYLE: Readonly<Record<"header" | "footer" | "panel", string>> = {
-  header: "display:block;contain:paint;overflow:clip;overflow-clip-margin:0px;margin:0;padding:0;max-block-size:50svh",
-  footer: "display:block;contain:paint;overflow:clip;overflow-clip-margin:0px;margin:0;padding:0;max-block-size:100svh",
+  header: `display:block;contain:paint;overflow:clip;overflow-clip-margin:0px;margin:0;padding:0;max-block-size:${BUYER_CHROME_FRAME_MAX_SVH.header}svh`,
+  footer: `display:block;contain:paint;overflow:clip;overflow-clip-margin:0px;margin:0;padding:0;max-block-size:${BUYER_CHROME_FRAME_MAX_SVH.footer}svh`,
   panel: "display:block;contain:paint;overflow:auto;overflow-clip-margin:0px;margin:0;padding:0;flex:1 1 auto;min-block-size:0",
 };
 

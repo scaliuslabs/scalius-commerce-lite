@@ -140,6 +140,12 @@ const AMOUNT = `(?:${CURRENCY_WORD} )?\\p{Sc}*\\p{Nd}[\\p{Nd},.]*(?:/-)?\\p{Sc}*
 const PROVIDER = "[^\\s]+";
 
 /**
+ * What a slot in one of the words matches, as pattern sources: sealed with the
+ * words (plugins/contract-tables.ts), since a wider slot refuses more labels.
+ */
+export const STORE_WORD_SLOT_PATTERNS = { currencyWord: CURRENCY_WORD, amount: AMOUNT, provider: PROVIDER } as const;
+
+/**
  * One word of the list as a whole-label pattern over folded text. A
  * `{amount}` slot holds an amount or nothing ("Pay ৳1,200", "Pay"; never
  * "Pay later"); a `{provider}` slot holds one word ("Continue to bKash", never

@@ -107,6 +107,7 @@ import {
 } from "@scalius/shared/plugins";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 import { functionClock } from "@scalius/shared/plugins/function-reads";
+import { CHECKOUT_APP_BUDGET_MS, PLUGIN_FUNCTION_WALL_MS } from "@scalius/shared/plugins/app-limits";
 import { grantedProtectedData, redactProtectedData } from "@scalius/shared/plugins/protected-data";
 import type { PluginHost, PluginHostOptions } from "./host";
 
@@ -186,17 +187,6 @@ function ownLineProperties<T>(properties: Readonly<Record<string, T>>, pluginId:
   return Object.fromEntries(appVisibleLineProperties(Object.entries(properties).map(([key, value]) => ({ key, value })), pluginId).map(({ key, value }) => [key, value]));
 }
 
-/** Functions sit on checkout's path: their wall time is capped below the manifest's. */
-export const PLUGIN_FUNCTION_WALL_MS = 1_500;
-
-/**
- * What one checkout request may spend on apps across all its points, end to end
- * (ms). A buyer reviewing a total waits for it on top of the platform's own work:
- * one slow app can still use its own cap (`PLUGIN_FUNCTION_WALL_MS`) and the
- * rest share what is left. Far inside the Worker's own limits (no wall limit on
- * a request, 30 s after the response).
- */
-export const CHECKOUT_APP_BUDGET_MS = 3_000;
 /**
  * What a checkout request spends on apps in all (ms): about what a buyer waits
  * for a total before leaving, far inside the Worker's own limits. Approved

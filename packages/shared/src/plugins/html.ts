@@ -167,6 +167,7 @@ const DATA_ATTRIBUTE = /^data-(?!sx-)[a-z][a-z0-9-]{0,40}$/;
 const ARIA_ATTRIBUTE = /^aria-[a-z]{2,24}$/;
 const ID_REFERENCE = /^[A-Za-z][\w-]{0,99}$/;
 
+
 /**
  * Inline style that loads and hides nothing: `property: value` declarations
  * whose functions are in the sealed `STOREFRONT_STYLE_FUNCTIONS` (no `url()`,
@@ -192,6 +193,34 @@ function safeStyle(value: string): string | null {
   }
   return declarations.length > 0 ? declarations.join(";") : null;
 }
+
+const sorted = (values: Iterable<string>) => [...values].sort();
+const sortedTable = (table: Readonly<Record<string, Iterable<string>>>) => Object.fromEntries(Object.entries(table).sort(([a], [b]) => a.localeCompare(b)).map(([key, values]) => [key, sorted(values)]));
+
+/**
+ * What a skin's markup may hold, as data: the tags, attributes and values
+ * this sanitizer keeps (its own sets, so the check and the seal read one
+ * list). Sealed grow-only in the plugin protocol seal (contract-tables.ts):
+ * markup that passes today keeps passing. The style functions are
+ * `STOREFRONT_STYLE_FUNCTIONS`, sealed with the protocol constants.
+ */
+export const STOREFRONT_SKIN_HTML_ALLOW_LIST = {
+  tags: sorted(TAGS),
+  svgTags: sorted(Object.values(SVG_TAGS)),
+  attributes: sorted(GENERAL_ATTRIBUTES),
+  componentAttributes: sorted(COMPONENT_GENERAL_ATTRIBUTES),
+  tagAttributes: sortedTable(TAG_ATTRIBUTES),
+  componentTagAttributes: sortedTable(COMPONENT_TAG_ATTRIBUTES),
+  svgAttributes: sorted(Object.values(SVG_ATTRIBUTES)),
+  booleanAttributes: sorted(BOOLEAN_ATTRIBUTES),
+  inputTypes: sorted(INPUT_TYPES),
+  buttonTypes: sorted(BUTTON_TYPES),
+  values: sortedTable(ENUMERATED),
+  patterns: { data: DATA_ATTRIBUTE.source, aria: ARIA_ATTRIBUTE.source, class: CLASS_TOKEN.source, svgValue: SVG_VALUE.source, styleProperty: STYLE_PROPERTY.source },
+};
+
+/** The allow-list's bounds: limits that only rise (plugins/app-limits.ts). */
+export const STOREFRONT_SKIN_HTML_BOUNDS = { attributeValue: MAX_ATTRIBUTE_VALUE, classTokens: MAX_CLASS_TOKENS } as const;
 
 // ── URLs ──────────────────────────────────────────────────────────────────
 

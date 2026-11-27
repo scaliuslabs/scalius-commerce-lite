@@ -181,6 +181,13 @@ jobs:
           echo "rules=$(node -p 'require(process.env.RUNNER_TEMP + "/impact.json").run.join(" ")')" >> "$GITHUB_OUTPUT"
           echo "postgres=$(node -p 'require(process.env.RUNNER_TEMP + "/impact.json").postgres')" >> "$GITHUB_OUTPUT"
 
+      - name: Contract seals and lock
+        # The anchor release tag's own script and rules judge this tree (fetch tags and full history first).
+        if: ${{ github.event.repository.private }}
+        run: |
+          git fetch --tags --unshallow 2>/dev/null || git fetch --tags
+          node scripts/contract-lock.mjs judge
+
       - name: PostgreSQL for the cited proofs
         # Started only when a proof to run needs it (about 20 s); PostgreSQL 15 is the oldest
         # supported major. A proof that needs it without this step fails as not run.
