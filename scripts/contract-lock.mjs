@@ -310,6 +310,8 @@ export async function resolveAnchor(root = DEFAULT_ROOT, { verifySignatures } = 
   const text = gitText(root, commit, LOCK_FILE);
   if (text === null) problems.push(`${FREEZE_TAG}'s commit carries no ${LOCK_FILE}.`);
   if (signaturesWanted(root, verifySignatures) && gitOk(root, ["verify-tag", FREEZE_TAG]) === null) problems.push(`${FREEZE_TAG}'s signature does not verify.`);
+  // The pin may be absent only on the commit the freeze tag points at (between tagging and pinning); after it, a missing pin is refused as a changed one is.
+  if (pin === null && commit !== gitOk(root, ["rev-parse", "HEAD"])) problems.push(`${ANCHOR_FILE} is missing: ${FREEZE_TAG} is reachable, so the pin committed right after it must be here (restore it with git show <the commit that added it>:${ANCHOR_FILE}; on the commit right after tagging, write it with node scripts/contract-lock.mjs anchor).`);
   if (pin !== null) {
     // The pin is written once: what the commit that added it holds, it holds for good.
     const added = gitOk(root, ["log", "--diff-filter=A", "--format=%H", "HEAD", "--", ANCHOR_FILE])?.split("\n").filter(Boolean).at(-1) ?? null;
