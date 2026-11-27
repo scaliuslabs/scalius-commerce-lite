@@ -9,6 +9,7 @@ import { detailsPart, escapeHtml, hostLineParts, lineDetails, lineRemove, type C
 import { pageLanguage } from "@/lib/store-time-zone";
 import { privateVariantWord } from "@/lib/private-pages/labels";
 import type { CartLineView } from "./line-view";
+import { withOrder } from "./line-reading-order";
 
 /** A line's sub-parts' variants (private-anatomy.ts), by part; a part not named draws its default. */
 export type CartLineVariants = Readonly<Record<string, string>>;
@@ -53,5 +54,7 @@ export function cartLineFromTemplate(template: string, view: CartLineView, slots
   // Functions, never replacement strings: a line key's `$&` or `$'` is text, not a pattern.
   return template
     .replace('data-line-key=""', () => `data-line-key="${escapeHtml(view.key)}"`)
-    .replace(/<!--line:([a-z-]+)(?::([a-z-]+))?-->/g, (_mark, name: string, variant?: string) => (variant ? cartLineParts(view, slots, { [name]: variant }) : parts)[name] ?? "");
+    // `@<order>`: the part's place on screen where the markup reads the title first (line-reading-order.ts).
+    .replace(/<!--line:([a-z-]+)(?::([a-z-]+))?(?:@(\d+))?-->/g, (_mark, name: string, variant?: string, order?: string) =>
+      withOrder((variant ? cartLineParts(view, slots, { [name]: variant }) : parts)[name] ?? "", order === undefined ? undefined : Number(order)));
 }

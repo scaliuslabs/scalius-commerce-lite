@@ -99,22 +99,24 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
     items.append(heading, list);
   }
   const actions = doc.createElement("div");
-  // Side by side (Go back, then Confirm at the end) where both fit; where they do not, they wrap in reverse, so they
-  // stack with Confirm, the main action, on top, each across the dialog on a phone. Their words wrap, never cut.
-  actions.className = "flex flex-wrap-reverse justify-end gap-2";
+  // Confirm, the main action, first in reading order and on screen: side by side where both fit (on a phone sharing
+  // the dialog's width), stacked with Confirm on top where they do not. Their words wrap, never cut; Tab follows what
+  // is drawn. Focus still starts on the tick box, else Go back.
+  actions.className = "flex flex-wrap justify-end gap-2";
   actions.dataset.part = "dialog-actions";
   const back = doc.createElement("button");
   back.type = "button";
   back.className = "min-h-11 rounded-md border border-border px-4 py-2 text-center text-sm font-medium text-foreground hover:bg-muted max-sm:grow";
   back.textContent = themeLabel(doc, "dialog.goBack") ?? words.goBack;
   back.dataset.part = "dialog-back";
+  back.dataset.control = "action";
   const confirm = doc.createElement("button");
   confirm.type = "submit";
   confirm.disabled = box !== null;
   confirm.className = "min-h-11 rounded-md bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50 max-sm:grow";
   confirm.textContent = themeLabel(doc, "dialog.confirm") ?? words.confirm;
   confirm.dataset.part = "dialog-confirm";
-  actions.append(back, confirm);
+  actions.append(confirm, back);
   form.append(title, text);
   if (items) form.append(items);
   if (label) form.append(label);

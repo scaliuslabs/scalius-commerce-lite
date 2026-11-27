@@ -43,6 +43,7 @@ import { readBuyerAttributes } from "@/lib/buyer-ui/state";
 import { browserBuyerUiLocaleHeaders } from "@/lib/buyer-ui/browser-locale";
 import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 import { readCartDrawerPlan, type CartDrawerNode } from "@/lib/cart/drawer-plan";
+import { orderClass, reordered, titleFirst, type OrderedLineNode } from "@/lib/cart/line-reading-order";
 import { cartLineInputFacts, NO_LINE_INPUTS, type CartLineInputFacts } from "@/lib/cart/line-inputs";
 import { cartEstimate, cartHasMixedFulfilment, cartLineDiscountsOf, cartLineEntries, cartLineIssues, cartLineView, type CartLineDiscount } from "@/lib/cart/line-view";
 
@@ -67,6 +68,9 @@ const DRAWER_SHEET =
   + " fixed inset-x-0 bottom-0 h-[85dvh] max-h-[85dvh] top-auto rounded-t-[20px] border-t-0"
   + " sm:fixed sm:inset-y-0 sm:inset-e-0 sm:inset-s-auto sm:h-full sm:max-h-none sm:w-full sm:rounded-none sm:border-s";
 /** The drawer's filled buttons (the storefront button's look, flat in the primary colour). */
+/** The least share of the drawer's sheet its scrolling lines keep (the bottom group's other parts join them otherwise). */
+const LINES_SHARE = 0.45;
+
 const DRAWER_BUTTON =
   "whitespace-nowrap ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
   + " disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.97] active:translate-y-[1px]"
@@ -342,18 +346,21 @@ function drawerHas(nodes: readonly CartDrawerNode[], part: string): boolean {
  * `scroll` the drawer's scrolling region.
  */
 function drawerNodes(
-  nodes: readonly CartDrawerNode[],
+  nodes: readonly OrderedLineNode[],
   parts: Record<string, React.ReactNode>,
   hosts: { target?: (name: string) => React.ReactNode; scroll?: (children: React.ReactNode, key: number) => React.ReactNode } = {},
 ): React.ReactNode {
   return nodes.map((node, index) => {
-    if (node.type === "part") return <React.Fragment key={index}>{parts[node.part]}</React.Fragment>;
-    if (node.type === "target") return <React.Fragment key={index}>{hosts.target ? hosts.target(node.target) : parts.target}</React.Fragment>;
+    // A part or target moved ahead of the title's box mates keeps its place on screen (line-reading-order.ts).
+    const placed = (content: React.ReactNode) => node.order === undefined ? <React.Fragment key={index}>{content}</React.Fragment> : <div key={index} className={`min-w-0 ${orderClass(node)}`}>{content}</div>;
+    if (node.type === "part") return placed(parts[node.part!]);
+    if (node.type === "target") return placed(hosts.target ? hosts.target(node.target!) : parts.target);
     // The plan names host parts, targets and layouts only: anything else draws nothing.
     if (node.type !== "layout" || !Array.isArray(node.children)) return null;
     const children = drawerNodes(node.children, parts, hosts);
     if (node.layout === "scroll" && hosts.scroll) return hosts.scroll(children, index);
-    return <div key={index} data-layout={node.layout} data-hook={node.hook} className={DRAWER_LAYOUTS[node.layout] ?? "min-w-0"}>{children}</div>;
+    const column = node.layout === "group" && reordered(node.children) ? "flex flex-col " : "";
+    return <div key={index} data-layout={node.layout} data-hook={node.hook} className={`${column}${DRAWER_LAYOUTS[node.layout!] ?? "min-w-0"} ${orderClass(node)}`.trim()}>{children}</div>;
   });
 }
 
@@ -457,6 +464,42 @@ export default function CartFlyout({ onReady }: Props) {
   // Scroll & Swipe Logic
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollMore, setCanScrollMore] = useState(false);
+  // The lines keep a share of the sheet (`LINES_SHARE`): where the bottom group's money rows and the apps' footer blocks
+  // would leave them less, the group keeps the rest of the sheet and those scroll in it, the total and Check out pinned
+  // under them (nothing moves between boxes: the apps' blocks stay drawn). Back once the lines would keep half the sheet.
+  // The sheet mounts after the drawer opens (its portal draws on a later render): elements held in state, not refs.
+  const [sheet, setSheet] = useState<HTMLDivElement | null>(null);
+  const [region, setRegion] = useState<HTMLDivElement | null>(null);
+  /** The bottom group's most height (px) while it yields to the lines; null: as tall as it needs. */
+  const [groupMax, setGroupMax] = useState<number | null>(null);
+  const compact = groupMax !== null;
+  useEffect(() => {
+    if (!isOpen || !sheet || !region || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      const outer = region.parentElement;
+      const extras = sheet.querySelector<HTMLElement>("[data-drawer-extras]");
+      const group = extras?.parentElement;
+      // Not laid out yet (or no layout at all), or no group to yield: nothing to share.
+      if (sheet.clientHeight < 120 || !outer || !extras || !group) return;
+      const height = sheet.clientHeight;
+      // The sheet's other fixed parts (its handle, header, the added note, offers) and the room the group may take.
+      const fixed = height - outer.clientHeight - group.offsetHeight;
+      const room = Math.floor(height * (1 - LINES_SHARE) - fixed);
+      if (!compact) {
+        if (outer.clientHeight / height < LINES_SHARE) setGroupMax(room);
+        return;
+      }
+      // What the extras would add back to the group were they not scrolling in it.
+      const hidden = extras.scrollHeight - extras.clientHeight;
+      if ((outer.clientHeight - hidden) / height >= LINES_SHARE + 0.05) setGroupMax(null);
+      else if (Math.abs(room - groupMax) > 4) setGroupMax(room);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(sheet);
+    observer.observe(region);
+    measure();
+    return () => observer.disconnect();
+  }, [isOpen, compact, groupMax, cart.totalItems, sheet, region]);
   const dragStartY = useRef(0);
   const dragCurrentY = useRef(0);
 
@@ -758,6 +801,7 @@ export default function CartFlyout({ onReady }: Props) {
           {issues[key].action === "reduce_quantity" && (issues[key].availableQuantity ?? 0) >= 1 ? (
             <button
               type="button"
+              data-control="action"
               className="min-h-9 rounded-md border border-border px-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer"
               aria-label={lineCopy.updateQuantityFor(formatCount(Math.floor(issues[key].availableQuantity!)), view.lineName)}
               aria-describedby={describedBy}
@@ -770,6 +814,7 @@ export default function CartFlyout({ onReady }: Props) {
           ) : issues[key].action === "remove" || issues[key].action === "reduce_quantity" ? (
             <button
               type="button"
+              data-control="action"
               className="min-h-9 rounded-md border border-border px-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer"
               aria-label={lineCopy.removeFor(view.lineName)}
               aria-describedby={describedBy}
@@ -854,7 +899,7 @@ export default function CartFlyout({ onReady }: Props) {
     if (plan.line) {
       return (
         <div key={key} data-line-key={key} aria-current={key === addedKey ? "true" : undefined} className={`relative min-w-0 bg-card p-2 sm:p-2.5 rounded-xl border shadow-sm ${ring}`} data-part="line">
-          {drawerNodes(plan.line, parts)}
+          {drawerNodes(titleFirst(plan.line), parts)}
         </div>
       );
     }
@@ -954,9 +999,9 @@ export default function CartFlyout({ onReady }: Props) {
       ))}
     </div>
   );
-  const summary = cart.totalItems > 0 && (
+  // The one order of money rows on every surface (lib/money-summary-order.ts): subtotal, the apps' add-ons, discounts, total.
+  const summaryRows = cart.totalItems > 0 && (
     <>
-      {/* The one order of money rows on every surface (lib/money-summary-order.ts): subtotal, the apps' add-ons, discounts, total. */}
       {(discountTotal > 0 || addOns.rows.length > 0) && (
         <div className="space-y-1 text-sm" data-part="drawer-summary">
           <div className="flex items-center justify-between gap-3 text-muted-foreground" data-cart-subtotal-row data-summary-row="subtotal">
@@ -976,6 +1021,10 @@ export default function CartFlyout({ onReady }: Props) {
           ))}
         </div>
       )}
+    </>
+  );
+  const summaryTotal = cart.totalItems > 0 && (
+    <>
       <div className="flex items-end justify-between gap-3" data-summary-row="total" data-part="drawer-total">
         <div className="text-sm text-muted-foreground">
           {/* Subtotal is the items alone wherever add-on rows show: the sum below them is the total. */}
@@ -991,7 +1040,7 @@ export default function CartFlyout({ onReady }: Props) {
     </>
   );
   const footerTarget = cart.totalItems > 0 && <DrawerBuyerUi blocks={buyerUi} onChange={recheck} lines={cart.items} lineInputs={lineInputs} />;
-  const actions = cart.totalItems > 0 && (
+  const mainAction = cart.totalItems > 0 && (
     <>
       {/* One primary action (Shopify): Check out. The cart page is a link beside Continue shopping; Clear cart lives there. */}
       {checkoutBlocked ? (
@@ -1022,6 +1071,10 @@ export default function CartFlyout({ onReady }: Props) {
           <ArrowRight className="h-4 w-4" />
         </a>
       )}
+    </>
+  );
+  const secondaryActions = cart.totalItems > 0 && (
+    <>
       <div className="flex items-center justify-between gap-3 px-1" data-part="drawer-actions">
         <a
           href={cartHref}
@@ -1046,7 +1099,7 @@ export default function CartFlyout({ onReady }: Props) {
   const scrollRegion = (children: React.ReactNode, key?: number) => (
     <div key={key} className="flex-1 relative overflow-hidden flex flex-col bg-muted/50" data-layout="scroll" data-part="drawer-scroll">
       <div
-        ref={scrollRef}
+        ref={(element) => { scrollRef.current = element; setRegion(element); }}
         onScroll={checkScroll}
         className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-2 sm:px-5 sm:py-4"
       >
@@ -1068,8 +1121,8 @@ export default function CartFlyout({ onReady }: Props) {
     recommendations: cart.totalItems > 0 && recommendationsPart,
     undo: undoPart,
     offers,
-    summary,
-    actions,
+    summary: <>{summaryRows}{summaryTotal}</>,
+    actions: <>{mainAction}{secondaryActions}</>,
   };
 
   return (
@@ -1091,6 +1144,7 @@ export default function CartFlyout({ onReady }: Props) {
             if (trigger?.isConnected) trigger.focus();
           });
         }}
+        ref={setSheet}
         className={`${DRAWER_SHEET} ${look.width === "wide" ? "sm:max-w-[440px]" : "sm:max-w-[380px]"}`}
         data-private="cart-drawer"
       >
@@ -1123,13 +1177,19 @@ export default function CartFlyout({ onReady }: Props) {
 
         {offers}
 
-        {/* 3. FOOTER */}
+        {/* 3. FOOTER: the total and Check out over the money rows and the apps' blocks; where those would leave the lines
+            less than their share of the sheet (`compact`), the group keeps the rest and they scroll in it, the total and
+            Check out pinned under them. */}
         {cart.totalItems > 0 && (
-          <div className="border-t border-border bg-card p-3 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb" data-layout="group">
-            <div className="space-y-3 sm:space-y-4">
-              {summary}
+          <div className="flex flex-col border-t border-border bg-card p-3 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb" style={groupMax === null ? undefined : { maxHeight: `${groupMax}px` }} data-layout="group" data-drawer-compact={compact ? "" : undefined}>
+            <div className={`space-y-3 sm:space-y-4 ${compact ? "min-h-0 shrink overflow-y-auto overscroll-contain pb-3" : ""}`} data-drawer-extras>
+              {summaryRows}
               {footerTarget}
-              {actions}
+            </div>
+            <div className="shrink-0 space-y-3 sm:space-y-4" data-drawer-pinned>
+              {summaryTotal}
+              {mainAction}
+              {secondaryActions}
             </div>
           </div>
         )}

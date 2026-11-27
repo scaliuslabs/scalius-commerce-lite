@@ -457,30 +457,43 @@ export const MUTATIONS = {
   },
   "H-f the drawer's line keeps its app block in its text column": {
     why: "the drawer's own line draws a line's app block beside the image, while the customer's cart page draws it under the whole line",
-    rewrites: [rewrite("apps/storefront/src/lib/private-pages/drawer.ts", 'const lineTarget = line ? null : lineTargetPlace(privatePagePlan(theme, "cart", language, asset).items.line);', "const lineTarget = null;")],
+    rewrites: [rewrite("apps/storefront/src/lib/private-pages/drawer.ts", "  const lineTarget = line ? null : lineTargetPlace(cartLine);", "  const lineTarget = null;")],
     cases: [DRAWER_BELOW],
     expect: /a line's app block is drawn at .*the cart page puts it under the line/,
   },
-  "H-g the private pages' other buttons keep their surface radius": {
-    why: "an outline button (the payment step's Apply) draws the theme's surface radius, not its square button shape",
+  "H-g the host's other action buttons keep their surface radius": {
+    why: "an outline action button (the payment step's Apply, data-control=\"action\") draws the theme's surface radius, not its square button corners",
     rewrites: [],
-    css: ':where([data-private]) :where(button, [role="button"], input[type="submit"], input[type="button"], [data-ui="button"]):where([class*="rounded-"]):where(:not(.rounded-full, [data-theme-size="icon"])) { border-radius: revert-layer }',
-    undoes: { file: FOUNDATION, find: ':where([data-private]) :where(button, [role="button"], input[type="submit"], input[type="button"], [data-ui="button"]):where([class*="rounded-"]):where(:not(.rounded-full, [data-theme-size="icon"])) {' },
+    css: ':where([data-control="action"], [data-ui="button"]):where(.rounded-sm, .rounded-md, .rounded-lg, .rounded-xl) { border-radius: revert-layer }',
+    undoes: { file: FOUNDATION, find: ':where([data-control="action"], [data-ui="button"]):where(.rounded-lg):where(:not([data-part="gateway"] *)) {' },
     cases: [SQUARE_PAYMENT],
     expect: /corners where the theme's buttons are square/,
   },
   "H-h the radius steps add a pixel to a square theme": {
     why: "rounded-lg and rounded-xl draw the theme's radius plus 1px and 2px: a square theme's fields draw rounded corners",
     rewrites: [],
-    // The steps are `@theme inline`: the utilities carry their values, so the old ones are written on the utilities.
-    css: ".rounded-lg{border-radius:calc(var(--radius) + 1px)}.rounded-xl{border-radius:calc(var(--radius) + 2px)}",
+    // The steps are `@theme inline`: the utilities carry their values, so the old ones are written on the utilities, in
+    // their own cascade layer (an unlayered rule would also beat the buttons' own corners, more than this undoes).
+    css: "@layer utilities{.rounded-lg{border-radius:calc(var(--radius) + 1px)}.rounded-xl{border-radius:calc(var(--radius) + 2px)}}",
     undoes: { file: FOUNDATION, find: "  --radius-lg: calc(var(--radius) + min(1px, var(--radius) * 1000));" },
     cases: [SQUARE_CART],
-    expect: /corners where the theme's (?:fields|buttons) are square/,
+    expect: /corners where the theme's fields are square/,
+  },
+  "H-j a line reads its details before its title": {
+    why: "the cart's line keeps a theme's arrangement order in its markup: the options drawn over the title are read (and tabbed to) before it",
+    rewrites: [rewrite("apps/storefront/src/lib/cart/line-reading-order.ts", "  if (at <= 0 || nodes.slice(0, at).every(decorative) || nodes.length > LINE_ORDER_CLASSES.length) return children;", "  return children;")],
+    cases: ["the customer's cart, its protection offered"],
+    expect: /reading order: a line reads \S+ before its title/,
+  },
+  "H-k the drawer's footer never yields to its lines": {
+    why: "the drawer's bottom group keeps its money rows, the apps' footer blocks and View cart however little room they leave the lines",
+    rewrites: [rewrite("apps/storefront/src/components/CartFlyout.tsx", "const LINES_SHARE = 0.45;", "const LINES_SHARE = 0;")],
+    cases: ["five lines in the drawer on a phone"],
+    expect: /drawer lines: .*whole line|Check out is not wholly on screen/,
   },
   "H-i the dialog's actions wrap with Go back first": {
-    why: "a phone's dialog whose large Confirm and Go back do not fit side by side wraps them in reading order: Go back on top, the main action under it",
-    rewrites: [rewrite(DIALOG, '  actions.className = "flex flex-wrap-reverse justify-end gap-2";', '  actions.className = "flex flex-wrap justify-end gap-2";')],
+    why: "Go back comes first in the dialog's markup again: where its large Confirm and Go back do not fit side by side, Go back stacks on top",
+    rewrites: [rewrite(DIALOG, "  actions.append(confirm, back);", "  actions.append(back, confirm);")],
     cases: [DIALOG_WORDS],
     expect: /the actions stack with Go back first/,
   },

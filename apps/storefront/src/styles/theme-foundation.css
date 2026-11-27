@@ -489,12 +489,23 @@ html {
     transform var(--theme-duration) var(--theme-ease);
 }
 
-/* Every other button a buyer's private page or the cart drawer draws (an
-   outline Apply, Go back, an app's button) takes the Style's button corners
-   too, never its surface radius: at zero specificity, so a private page's
-   own tokens and a theme's rules still outrank it. A circle stays a circle. */
-:where([data-private]) :where(button, [role="button"], input[type="submit"], input[type="button"], [data-ui="button"]):where([class*="rounded-"]):where(:not(.rounded-full, [data-theme-size="icon"])) {
-  border-radius: var(--theme-button-radius, var(--radius));
+/* The host's other action buttons (an outline Apply, Go back, a line's
+   repair: `data-control="action"`; an app's button: `data-ui="button"`)
+   take the Style's button corners as their surfaces take its radius: each
+   radius step measured from the button corners instead of the surface radius,
+   so the default Style ("radius" buttons) draws them exactly as before, square
+   buttons draw them square and pill buttons as pills. Tiles and cards keep the
+   surface radius, a round control (`rounded-full`) its circle; a payment
+   provider's own surface is never reached. Zero specificity: a private page's
+   tokens and a theme's rules outrank it. */
+:where([data-control="action"], [data-ui="button"]):where(.rounded-sm, .rounded-md):where(:not([data-part="gateway"] *)) {
+  border-radius: max(0px, calc(var(--theme-button-radius, var(--radius)) - 2px));
+}
+:where([data-control="action"], [data-ui="button"]):where(.rounded-lg):where(:not([data-part="gateway"] *)) {
+  border-radius: calc(var(--theme-button-radius, var(--radius)) + min(1px, var(--theme-button-radius, var(--radius)) * 1000));
+}
+:where([data-control="action"], [data-ui="button"]):where(.rounded-xl):where(:not([data-part="gateway"] *)) {
+  border-radius: calc(var(--theme-button-radius, var(--radius)) + min(2px, var(--theme-button-radius, var(--radius)) * 1000));
 }
 
 .site-root :where(button, a, input[type="submit"]):where(.bg-primary):active,

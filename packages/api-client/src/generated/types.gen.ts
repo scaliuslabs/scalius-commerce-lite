@@ -11183,6 +11183,10 @@ export type GetApiV1StorefrontLayoutResponses = {
                     textRevision?: string;
                 }>;
             }>;
+            /**
+             * The buyer UI slots where an active app draws a block (an extension the app declares and its grant covers): a page reserves room for a slot's block only where one may come.
+             */
+            buyerUiSlots: Array<'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'cart.line.after' | 'order.confirmation' | 'account.order' | 'order.line.after' | 'account.overview' | 'account.profile'>;
             appServices: {
                 /**
                  * The search app predictive search passes as `provider` to /search; null: built-in search.

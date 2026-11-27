@@ -63,6 +63,10 @@ export interface GalleryFocus {
 }
 
 export interface GalleryScenario {
+  /** An app's block of every kind in the cart drawer's footer (five lines in a crowded drawer). */
+  drawerFooterKinds?: boolean;
+  /** The cart check answers this many milliseconds late (a slow API): the private pages' gate draws the slow path. */
+  slowCheckMs?: number;
   product?: ProductScenario;
   /** Merchant-authored product detail panels alongside the description. */
   productInfo?: "tabs" | "dense-tabs";
@@ -931,7 +935,7 @@ export function galleryEntry(id: string): GalleryEntry | null {
 }
 
 /** The states the private pages' rendered tests draw a theme in (each a cart the buyer can hold). */
-export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many", "one", "max", "customer", "customer-protected", "long-words"] as const;
+export const PRIVATE_PAGES_STATES = ["base", "lines", "decide", "empty", "bn", "ar", "many", "five", "one", "max", "customer", "customer-protected", "long-words"] as const;
 export type PrivatePagesState = (typeof PRIVATE_PAGES_STATES)[number];
 
 /** Long Bangla titles: a line's words at their longest in the store's second language. */
@@ -962,8 +966,8 @@ function repeatedCart(count: number): string {
   ])) });
 }
 
-function manyCart(): string {
-  const products = Array.from({ length: 60 }, (_, index) => cardProduct(index)).filter((product) => product.availableForSale).slice(0, 20);
+function manyCart(count = 20): string {
+  const products = Array.from({ length: 60 }, (_, index) => cardProduct(index)).filter((product) => product.availableForSale).slice(0, count);
   return JSON.stringify({ items: Object.fromEntries(products.map((product) => [
     `line:v3:${product.id}:variant:var_${product.id}:p:none`,
     { id: product.id, slug: product.slug, name: product.name, price: product.discountedPrice, quantity: 1, variantId: `var_${product.id}`, propertiesHash: "none" },
@@ -983,11 +987,11 @@ function manyCart(): string {
  * store has Noor installed, so a theme from it draws its header and footer;
  * with `localization`, the store sells in two markets.
  */
-export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean; terms?: boolean; page?: "home" | "sample-checkout" | "sample-receipt" | "sample-account" } = {}): GalleryEntry {
+export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocument, state: PrivatePagesState = "base", options: { noor?: boolean; localization?: boolean; terms?: boolean; slowCheckMs?: number; page?: "home" | "sample-checkout" | "sample-receipt" | "sample-account" } = {}): GalleryEntry {
   const base = galleryEntry(entryId("app", "buyer-ui"))!;
   // `decide`: the base cart, whose first line asks for a decision and every line sells, so Place order reaches the question.
   const customer = state === "customer" ? "offer" as const : state === "customer-protected" ? "protected" as const : undefined;
-  const cart: Record<string, string> = state === "empty" ? {} : { "cart:v3": customer ? galleryCustomerCart(customer === "protected") : state === "bn" ? BANGLA_LONG_CART : state === "lines" ? linesCart() : state === "many" ? manyCart() : state === "one" ? repeatedCart(1) : state === "max" ? repeatedCart(99) : GALLERY_CART };
+  const cart: Record<string, string> = state === "empty" ? {} : { "cart:v3": customer ? galleryCustomerCart(customer === "protected") : state === "bn" ? BANGLA_LONG_CART : state === "lines" ? linesCart() : state === "many" ? manyCart() : state === "five" ? manyCart(5) : state === "one" ? repeatedCart(1) : state === "max" ? repeatedCart(99) : GALLERY_CART };
   const scenario: GalleryScenario = {
     ...base.scenario, delivering: true, buyerUiKinds: true, storage: cart,
     // Noor installed and active: its header and footer skins draw the theme's chrome.
@@ -995,7 +999,9 @@ export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocu
     // Two markets, the first in two languages: a public footer offers a country and a language.
     ...(options.localization ? { localization: true } : {}),
     ...(options.terms ? { requireTerms: true } : {}),
+    ...(options.slowCheckMs ? { slowCheckMs: Math.min(options.slowCheckMs, 5000) } : {}),
     ...(state === "lines" || state === "decide" ? { lineStates: true } : {}),
+    ...(state === "five" ? { drawerFooterKinds: true } : {}),
     ...(state === "long-words" ? { longWords: true } : {}),
     // The customer's cart: its protection app's blocks alone.
     ...(customer ? { customer, buyerUiKinds: false } : {}),

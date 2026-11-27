@@ -10,8 +10,9 @@
 // a `<!--line:name-->` mark, or `<!--line:name:variant-->` for the variant the
 // theme chose (lib/cart/line-html.ts draws it).
 import { layoutBox, renderPrivateNodes } from "@/lib/private-pages/html";
+import { reordered, titleFirst, withOrder, type OrderedLineNode } from "@/lib/cart/line-reading-order";
 import type { PrivatePagePlan } from "@/lib/private-pages/plan";
-import type { PrivateNode } from "@scalius/shared/storefront-theme";
+import type { PrivateLayoutKind, PrivateNode } from "@scalius/shared/storefront-theme";
 
 interface Props {
   plan: PrivatePagePlan;
@@ -65,11 +66,19 @@ if (custom) {
 }
 
 // The theme's line: the arrangement with its sub-parts as marks the cart script fills.
+// The title first in the markup of the theme's line (lib/cart/line-reading-order.ts), each part's place kept on screen:
+// a mark names its place (`@<order>`), the line fills the part in with it.
+const lineMarks = (nodes: readonly OrderedLineNode[]): string => nodes.map((node) => {
+  const at = node.order === undefined ? "" : `@${node.order}`;
+  if (node.type === "part") return `<!--line:${node.part}${node.variant ? `:${node.variant}` : ""}${at}-->`;
+  if (node.type === "target") return `<!--line:target${at}-->`;
+  if (node.type !== "layout" || !Array.isArray(node.children)) return "";
+  const box = layoutBox(node.layout as PrivateLayoutKind, lineMarks(node.children), node.hook);
+  // A group lays its children out in a column, so their places hold.
+  return withOrder(node.layout === "group" && reordered(node.children) ? box.replace('class="', 'class="flex flex-col ') : box, node.order);
+}).join("");
 const lineTemplate = plan.items.line
-  ? `<li class="@container py-3 first:pt-0" data-part="line" data-line-key="">${renderPrivateNodes(plan.items.line, {
-    part: (name, variant) => `<!--line:${name}${variant ? `:${variant}` : ""}-->`,
-    target: () => "<!--line:target-->",
-  })}</li>`
+  ? `<li class="@container py-3 first:pt-0" data-part="line" data-line-key="">${lineMarks(titleFirst(plan.items.line))}</li>`
   : null;
 ---
 
