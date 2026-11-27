@@ -495,7 +495,7 @@ export const MUTATIONS = {
   },
   "H-l the drawer's footer blocks in a pane shorter than they are": {
     why: "the rows above the total scroll in a pane of their own that can be shorter than an app's block: the block shows as a sliver",
-    rewrites: [rewrite("apps/storefront/src/components/CartFlyout.tsx", '<div className="mt-auto shrink-0 space-y-3 border-t', '<div className="mt-auto shrink-0 max-h-8 overflow-y-auto space-y-3 border-t')],
+    rewrites: [rewrite("apps/storefront/src/components/CartFlyout.tsx", "data-drawer-extras>{children}</div>", 'data-drawer-extras style={{ maxHeight: 32, overflowY: "auto" }}>{children}</div>')],
     cases: ["five lines in the customer's drawer on a phone"],
     expect: /drawer lines: an app block in the drawer's footer .*pane of its own/,
   },
