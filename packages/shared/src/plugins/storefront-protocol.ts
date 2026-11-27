@@ -1480,9 +1480,11 @@ export interface StorefrontCartLine {
    * `StorefrontMoney`): `total`, what it adds to the line in all, exactly;
    * `amount`, what each unit (`per: "unit"`) or each bundle unit
    * (`per: "bundle"`: a kit or an app's bundle sold as one line, whose
-   * quantity is its bundle units) pays, or null when no one amount is exact.
+   * quantity is its bundle units) pays, or null when no one amount is exact;
+   * `units`, how many of those the line holds (`total = amount × units`). A
+   * free extra is 0.
    */
-  addOns: Array<{ title: string; total: StorefrontMoney; amount: StorefrontMoney | null; per: "unit" | "bundle" }>;
+  addOns: Array<{ title: string; total: StorefrontMoney; amount: StorefrontMoney | null; per: "unit" | "bundle"; units: number | null }>;
 }
 
 /**

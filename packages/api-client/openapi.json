@@ -11714,6 +11714,11 @@
             ],
             "description": "From what the line froze: `bundle` for a kit's or an expanded bundle's add-on (on its anchor item's row), else `unit`."
           },
+          "units": {
+            "type": "integer",
+            "nullable": true,
+            "description": "How many units (`per: unit`) or bundle units (`per: bundle`) the row holds; null when no longer known. `totalMinor = amountMinor × units` whenever `amountMinor` is a number."
+          },
           "details": {
             "type": "array",
             "items": {
@@ -11731,7 +11736,8 @@
           "totalMinor",
           "amount",
           "amountMinor",
-          "per"
+          "per",
+          "units"
         ],
         "description": "What an app's `cart.line_prices` charged on this row (\"Protection ৳350\"), from the order's real lines."
       },
@@ -18833,14 +18839,16 @@
                       },
                       "title": {
                         "type": "string",
-                        "maxLength": 4000
+                        "maxLength": 80
                       },
                       "totalMinor": {
-                        "type": "integer"
+                        "type": "integer",
+                        "minimum": 0
                       },
                       "amountMinor": {
                         "type": "integer",
-                        "nullable": true
+                        "nullable": true,
+                        "minimum": 0
                       },
                       "per": {
                         "type": "string",
@@ -18848,6 +18856,11 @@
                           "unit",
                           "bundle"
                         ]
+                      },
+                      "units": {
+                        "type": "integer",
+                        "nullable": true,
+                        "minimum": 1
                       }
                     },
                     "required": [
@@ -18855,8 +18868,10 @@
                       "title",
                       "totalMinor",
                       "amountMinor",
-                      "per"
-                    ]
+                      "per",
+                      "units"
+                    ],
+                    "additionalProperties": false
                   },
                   "maxItems": 10
                 },

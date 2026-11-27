@@ -251,15 +251,21 @@ export function cartShippedSubtotal(items: Record<string, ShippingFeeCartItem>):
  */
 export function cartItemsSubtotalMinor(items: Record<string, ShippingFeeCartItem>): number {
   const decimalPlaces = getDecimalPlaces(getCurrencyCode());
-  return Object.values(items).reduce(
-    (sum, item) => {
-      const price = Number(item.price);
-      const quantity = Number(item.quantity);
-      return sum + toMinor(Number.isFinite(price) ? Math.max(0, price) : 0, decimalPlaces)
-        * (Number.isFinite(quantity) ? Math.max(0, Math.trunc(quantity)) : 0);
-    },
-    0,
-  );
+  let totalMinor = 0;
+  for (const item of Object.values(items)) {
+    const price = Number(item.price);
+    const quantity = Number(item.quantity);
+    let unitMinor: number;
+    try {
+      unitMinor = toMinor(Number.isFinite(price) ? Math.max(0, price) : 0, decimalPlaces);
+    } catch {
+      // A stored price no money amount can hold counts for nothing: totals never throw (the next check reprices it).
+      continue;
+    }
+    const lineMinor = unitMinor * (Number.isFinite(quantity) ? Math.max(0, Math.trunc(quantity)) : 0);
+    if (Number.isSafeInteger(totalMinor + lineMinor)) totalMinor += lineMinor;
+  }
+  return totalMinor;
 }
 
 /** The items subtotal before discounts (`cartItemsSubtotalMinor`), in decimal units. */
@@ -433,7 +439,8 @@ export function normalizeCartLineAdjustments(value: unknown, bundle?: boolean): 
     const label = boundedText(entry.label, MAX_PROPERTY_LABEL_LENGTH);
     const displayValue = boundedText(entry.displayValue, MAX_PROPERTY_DISPLAY_LENGTH);
     const priceMinor = toNumber(entry.priceMinor);
-    if (!label || !displayValue || !Number.isSafeInteger(priceMinor) || priceMinor <= 0) continue;
+    // A free extra (0) is kept, as every surface shows it ("Add-on: Gift wrap", no price).
+    if (!label || !displayValue || !Number.isSafeInteger(priceMinor) || priceMinor < 0) continue;
     const appId = typeof entry.appId === "string" && entry.appId.length <= MAX_CART_ID_LENGTH ? entry.appId : null;
     const per = bundle ?? entry.per === "bundle";
     adjustments.push({ key: LINE_ADJUSTMENT_KEY, label, displayValue, priceMinor, ...(appId ? { appId } : {}), ...(per ? { per: "bundle" as const } : {}) });

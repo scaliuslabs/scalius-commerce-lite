@@ -192,12 +192,15 @@ export function buyerLineAddOns(
       sums.set(key, sum);
     }
   });
-  const units = bundle && bundle.kind !== "merge" && bundle.units ? bundle.units : null;
+  const bundleUnits = bundle && bundle.kind !== "merge" && bundle.units ? bundle.units : null;
+  // A unit add-on counts the row's units; a bundle's, its bundle units (unknown once staff changed them).
+  const rowUnits = counted.reduce((sum, line) => sum + line.quantity, 0);
   return [...sums.values()].map((sum) => {
+    const units = sum.per === "bundle" ? bundleUnits : rowUnits;
     const amountMinor = sum.per === "bundle"
       ? (units !== null && sum.totalMinor % units === 0 ? sum.totalMinor / units : null)
       : (sum.perLine.size === counted.length && new Set(sum.perLine.values()).size === 1 ? [...sum.perLine.values()][0]! : null);
-    return { appId: sum.appId, title: sum.title, totalMinor: sum.totalMinor, amountMinor, per: sum.per, ...(sum.details?.length ? { details: sum.details } : {}) };
+    return { appId: sum.appId, title: sum.title, totalMinor: sum.totalMinor, amountMinor, per: sum.per, units, ...(sum.details?.length ? { details: sum.details } : {}) };
   });
 }
 

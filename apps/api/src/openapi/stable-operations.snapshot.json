@@ -30018,14 +30018,16 @@
           },
           "title": {
            "type": "string",
-           "maxLength": 4000
+           "maxLength": 80
           },
           "totalMinor": {
-           "type": "integer"
+           "type": "integer",
+           "minimum": 0
           },
           "amountMinor": {
            "type": "integer",
-           "nullable": true
+           "nullable": true,
+           "minimum": 0
           },
           "per": {
            "type": "string",
@@ -30033,6 +30035,11 @@
             "unit",
             "bundle"
            ]
+          },
+          "units": {
+           "type": "integer",
+           "nullable": true,
+           "minimum": 1
           }
          },
          "required": [
@@ -30040,8 +30047,10 @@
           "title",
           "totalMinor",
           "amountMinor",
-          "per"
-         ]
+          "per",
+          "units"
+         ],
+         "additionalProperties": false
         },
         "maxItems": 10
        },

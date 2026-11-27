@@ -364,7 +364,7 @@ export async function loadAppFunctionCartFacts(
  * fewest per bundle unit (the first such), where the order freezes the
  * bundle's inputs and add-on (`bundleAnchors`); a merged bundle's first line.
  */
-function functionBundleAnchors(lines: readonly AppCartLineSource[]): Map<string, string> {
+function functionBundleAnchors(lines: readonly AppCartLineSource[]): Map<string, { lineId: string; perUnit: number }> {
   const anchors = new Map<string, { lineId: string; perUnit: number }>();
   for (const line of lines) {
     const bundle = line.bundle;
@@ -373,7 +373,7 @@ function functionBundleAnchors(lines: readonly AppCartLineSource[]): Map<string,
     const current = anchors.get(bundle.id);
     if (!current || perUnit < current.perUnit) anchors.set(bundle.id, { lineId: line.lineId, perUnit });
   }
-  return new Map([...anchors].map(([id, anchor]) => [id, anchor.lineId]));
+  return anchors;
 }
 
 /**
@@ -404,6 +404,8 @@ export function mergeKitLines(lines: readonly AppCartLineSource[]): { lines: App
     members.set(bundle.id!, group.map((member) => member.lineId));
     const units = Math.max(1, bundle.units ?? 1);
     const totalMinor = group.reduce((sum, member) => sum + member.unitPriceMinor * member.quantity, 0);
+    // The kit's anchor item (the one holding the fewest per kit) carries its add-ons: their step.
+    const anchorPerUnit = Math.min(...group.map((member) => member.quantity / units));
     const addOns = new Map<string, { value: string; priceMinor: number; appId?: string }>();
     for (const member of group) {
       for (const adjustment of member.adjustments ?? []) {
@@ -422,7 +424,7 @@ export function mergeKitLines(lines: readonly AppCartLineSource[]): { lines: App
       discountMinor: group.reduce((sum, member) => sum + member.discountMinor, 0),
       properties: [],
       ...(line.purchaseOptions ? { purchaseOptions: line.purchaseOptions } : {}),
-      bundle: { ...bundle, merged: true, units },
+      bundle: { ...bundle, merged: true, units, anchorPerUnit },
       ...(addOns.size > 0 ? { adjustments: [...addOns.values()] } : {}),
     });
   }
@@ -477,9 +479,26 @@ export interface AppCartLineSource {
     kit?: { variantId: string; productId: string } | null;
     /** This line is a kit's one line (merged), not one of its items. */
     merged?: boolean;
+    /** A kit's one line: how many units of its anchor item one kit holds (its add-ons' step). */
+    anchorPerUnit?: number;
   } | null;
   /** The apps' add-ons priced into `unitPriceMinor` (`lineAdjustmentProperty` entries); absent before pricing. */
   adjustments?: ReadonlyArray<{ value: string; priceMinor: number; appId?: string }>;
+}
+
+/** A bundle line's units and its own units per bundle unit (null on a merged bundle); a kit's one line holds 1 a kit. */
+function bundleUnitsOf(line: AppCartLineSource): { units: number | null; perUnit: number | null } {
+  const units = line.bundle?.kind === "merge" ? null : line.bundle?.units ?? null;
+  if (!units) return { units: null, perUnit: null };
+  const perUnit = line.bundle?.merged ? 1 : line.quantity / units;
+  return { units, perUnit: Number.isSafeInteger(perUnit) && perUnit >= 1 ? perUnit : null };
+}
+
+/** How many units the line carrying this line's add-ons holds per bundle unit: 1 on a plain or merged line. */
+function anchorPerUnitOf(line: AppCartLineSource, anchors: ReadonlyMap<string, { perUnit: number }>): number {
+  const bundle = line.bundle;
+  const perUnit = !bundle?.id || bundle.kind === "merge" ? 1 : bundle.merged ? bundle.anchorPerUnit ?? 1 : anchors.get(bundle.id)?.perUnit ?? 1;
+  return Number.isSafeInteger(perUnit) && perUnit >= 1 ? perUnit : 1;
 }
 
 /** A function cart line's add-ons in the one contract shape (`LineAddOn`), from the per-unit entries checkout priced. */
@@ -508,7 +527,8 @@ export function functionStoreCurrency(money: Pick<PresentmentMoney, "shopCurrenc
 }
 
 export function buildAppFunctionCart(input: {
-  currency: { code: string; decimalPlaces: number };
+  /** The cart's currency, with the market's price increment (absent: 1, every minor unit). */
+  currency: { code: string; decimalPlaces: number; priceIncrementMinor?: number };
   /**
    * The store's own currency (`functionStoreCurrency(money)`): what a
    * function's `currency: "store"` amounts are in. Required on every path,
@@ -536,6 +556,7 @@ export function buildAppFunctionCart(input: {
   kits?: "line" | "items";
 }): FunctionCart {
   const sources = input.kits === "items" ? input.lines : mergeKitLines(input.lines).lines;
+  const incrementMinor = input.currency.priceIncrementMinor ?? 1;
   const anchors = functionBundleAnchors(sources);
   const lines = sources.map((line) => {
     const product = input.facts.products.get(line.productId);
@@ -573,7 +594,8 @@ export function buildAppFunctionCart(input: {
           id: line.bundle.id,
           title: (line.bundle.title ?? "").slice(0, 300),
           kind: line.bundle.kit ? "kit" as const : line.bundle.kind,
-          anchor: line.bundle.merged === true || anchors.get(line.bundle.id) === line.lineId,
+          anchor: line.bundle.merged === true || anchors.get(line.bundle.id)?.lineId === line.lineId,
+          ...bundleUnitsOf(line),
           ...(line.bundle.kit
             ? { kit: { variantId: line.bundle.kit.variantId, productId: line.bundle.kit.productId, sku: input.facts.skus.get(line.bundle.kit.variantId) ?? null } }
             : {}),
@@ -586,6 +608,7 @@ export function buildAppFunctionCart(input: {
       // Each with the app that added it: like the price, every app sees them. A bundle's
       // (an expanded bundle's anchor, a kit's line) is once per bundle unit (`per: "bundle"`).
       addOns: functionLineAddOns(line),
+      addOnStepMinor: incrementMinor * anchorPerUnitOf(line, anchors),
     };
   });
   const customer = input.facts.customer
@@ -594,6 +617,7 @@ export function buildAppFunctionCart(input: {
   const cart: FunctionCart = {
     currency: input.currency.code.toUpperCase(),
     decimalPlaces: input.currency.decimalPlaces,
+    priceIncrementMinor: incrementMinor,
     storeCurrency: {
       code: input.storeCurrency.code.toUpperCase(),
       decimalPlaces: input.storeCurrency.decimalPlaces,

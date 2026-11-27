@@ -82,7 +82,7 @@ function islandAddOns(item: VariantCartItem, pluginId: string): StorefrontCartLi
     sum.priceMinor += adjustment.priceMinor;
     sums.set(adjustment.displayValue, sum);
   }
-  return [...sums].map(([title, { priceMinor, per }]) => ({ title, total: money(priceMinor * item.quantity), amount: money(priceMinor), per }));
+  return [...sums].map(([title, { priceMinor, per }]) => ({ title, total: money(priceMinor * item.quantity), amount: money(priceMinor), per, units: item.quantity }));
 }
 
 /** The cart's lines with this app's parts only. */

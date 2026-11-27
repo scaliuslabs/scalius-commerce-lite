@@ -56,7 +56,14 @@ function onCart(listener: (cart: StorefrontCartSummary) => void): () => void {
     hydrateCartFromStorage();
     const stop = cartStore.subscribe((state) => {
       if (stopped) return;
-      try { listener({ count: state.totalItems, subtotal: pageMoney(cartItemsSubtotalMinor(state.items)) }); }
+      // The store's figure is read outside the app's listener: a store fault never unsubscribes the app.
+      let summary: StorefrontCartSummary;
+      try { summary = { count: state.totalItems, subtotal: pageMoney(cartItemsSubtotalMinor(state.items)) }; }
+      catch (error) {
+        console.warn("The cart's subtotal could not be read for an app", error);
+        return;
+      }
+      try { listener(summary); }
       catch (error) {
         stopListening();
         console.warn("App cart listener failed", error);

@@ -19,6 +19,11 @@
         "minimum": 0,
         "maximum": 4
        },
+       "priceIncrementMinor": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       },
        "storeCurrency": {
         "type": "object",
         "properties": {
@@ -242,6 +247,30 @@
                  "type": "null"
                 }
                ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "perUnit": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -256,6 +285,11 @@
              "type": "null"
             }
            ]
+          },
+          "addOnStepMinor": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 9007199254740991
           },
           "requiresShipping": {
            "default": true,
@@ -300,6 +334,7 @@
               "anyOf": [
                {
                 "type": "string",
+                "minLength": 1,
                 "maxLength": 128
                },
                {
@@ -334,6 +369,18 @@
                "unit",
                "bundle"
               ]
+             },
+             "units": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
              }
             },
             "required": [
@@ -341,7 +388,8 @@
              "title",
              "totalMinor",
              "amountMinor",
-             "per"
+             "per",
+             "units"
             ],
             "additionalProperties": false
            }
@@ -795,6 +843,11 @@
         "minimum": 0,
         "maximum": 4
        },
+       "priceIncrementMinor": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       },
        "storeCurrency": {
         "type": "object",
         "properties": {
@@ -1018,6 +1071,30 @@
                  "type": "null"
                 }
                ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "perUnit": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -1032,6 +1109,11 @@
              "type": "null"
             }
            ]
+          },
+          "addOnStepMinor": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 9007199254740991
           },
           "requiresShipping": {
            "default": true,
@@ -1076,6 +1158,7 @@
               "anyOf": [
                {
                 "type": "string",
+                "minLength": 1,
                 "maxLength": 128
                },
                {
@@ -1110,6 +1193,18 @@
                "unit",
                "bundle"
               ]
+             },
+             "units": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
              }
             },
             "required": [
@@ -1117,7 +1212,8 @@
              "title",
              "totalMinor",
              "amountMinor",
-             "per"
+             "per",
+             "units"
             ],
             "additionalProperties": false
            }
@@ -1608,7 +1704,7 @@
        "additionalProperties": false
       }
      },
-     "adjustments": {
+     "addOns": {
       "default": [],
       "maxItems": 250,
       "type": "array",
@@ -1764,7 +1860,7 @@
     },
     "required": [
      "prices",
-     "adjustments"
+     "addOns"
     ],
     "additionalProperties": false
    }
@@ -1786,6 +1882,11 @@
         "type": "integer",
         "minimum": 0,
         "maximum": 4
+       },
+       "priceIncrementMinor": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
        },
        "storeCurrency": {
         "type": "object",
@@ -2010,6 +2111,30 @@
                  "type": "null"
                 }
                ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "perUnit": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -2024,6 +2149,11 @@
              "type": "null"
             }
            ]
+          },
+          "addOnStepMinor": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 9007199254740991
           },
           "requiresShipping": {
            "default": true,
@@ -2068,6 +2198,7 @@
               "anyOf": [
                {
                 "type": "string",
+                "minLength": 1,
                 "maxLength": 128
                },
                {
@@ -2102,6 +2233,18 @@
                "unit",
                "bundle"
               ]
+             },
+             "units": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
              }
             },
             "required": [
@@ -2109,7 +2252,8 @@
              "title",
              "totalMinor",
              "amountMinor",
-             "per"
+             "per",
+             "units"
             ],
             "additionalProperties": false
            }
@@ -2636,6 +2780,11 @@
         "minimum": 0,
         "maximum": 4
        },
+       "priceIncrementMinor": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       },
        "storeCurrency": {
         "type": "object",
         "properties": {
@@ -2859,6 +3008,30 @@
                  "type": "null"
                 }
                ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "perUnit": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -2873,6 +3046,11 @@
              "type": "null"
             }
            ]
+          },
+          "addOnStepMinor": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 9007199254740991
           },
           "requiresShipping": {
            "default": true,
@@ -2917,6 +3095,7 @@
               "anyOf": [
                {
                 "type": "string",
+                "minLength": 1,
                 "maxLength": 128
                },
                {
@@ -2951,6 +3130,18 @@
                "unit",
                "bundle"
               ]
+             },
+             "units": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
              }
             },
             "required": [
@@ -2958,7 +3149,8 @@
              "title",
              "totalMinor",
              "amountMinor",
-             "per"
+             "per",
+             "units"
             ],
             "additionalProperties": false
            }
@@ -3489,6 +3681,11 @@
         "minimum": 0,
         "maximum": 4
        },
+       "priceIncrementMinor": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       },
        "storeCurrency": {
         "type": "object",
         "properties": {
@@ -3712,6 +3909,30 @@
                  "type": "null"
                 }
                ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "perUnit": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -3726,6 +3947,11 @@
              "type": "null"
             }
            ]
+          },
+          "addOnStepMinor": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 9007199254740991
           },
           "requiresShipping": {
            "default": true,
@@ -3770,6 +3996,7 @@
               "anyOf": [
                {
                 "type": "string",
+                "minLength": 1,
                 "maxLength": 128
                },
                {
@@ -3804,6 +4031,18 @@
                "unit",
                "bundle"
               ]
+             },
+             "units": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
              }
             },
             "required": [
@@ -3811,7 +4050,8 @@
              "title",
              "totalMinor",
              "amountMinor",
-             "per"
+             "per",
+             "units"
             ],
             "additionalProperties": false
            }
@@ -4322,6 +4562,11 @@
         "minimum": 0,
         "maximum": 4
        },
+       "priceIncrementMinor": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+       },
        "storeCurrency": {
         "type": "object",
         "properties": {
@@ -4545,6 +4790,30 @@
                  "type": "null"
                 }
                ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "perUnit": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -4559,6 +4828,11 @@
              "type": "null"
             }
            ]
+          },
+          "addOnStepMinor": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 9007199254740991
           },
           "requiresShipping": {
            "default": true,
@@ -4603,6 +4877,7 @@
               "anyOf": [
                {
                 "type": "string",
+                "minLength": 1,
                 "maxLength": 128
                },
                {
@@ -4637,6 +4912,18 @@
                "unit",
                "bundle"
               ]
+             },
+             "units": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
              }
             },
             "required": [
@@ -4644,7 +4931,8 @@
              "title",
              "totalMinor",
              "amountMinor",
-             "per"
+             "per",
+             "units"
             ],
             "additionalProperties": false
            }
@@ -5171,6 +5459,11 @@
          "minimum": 0,
          "maximum": 4
         },
+        "priceIncrementMinor": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 9007199254740991
+        },
         "storeCurrency": {
          "type": "object",
          "properties": {
@@ -5394,6 +5687,30 @@
                   "type": "null"
                  }
                 ]
+               },
+               "units": {
+                "anyOf": [
+                 {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                 },
+                 {
+                  "type": "null"
+                 }
+                ]
+               },
+               "perUnit": {
+                "anyOf": [
+                 {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                 },
+                 {
+                  "type": "null"
+                 }
+                ]
                }
               },
               "required": [
@@ -5408,6 +5725,11 @@
               "type": "null"
              }
             ]
+           },
+           "addOnStepMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
            },
            "requiresShipping": {
             "default": true,
@@ -5452,6 +5774,7 @@
                "anyOf": [
                 {
                  "type": "string",
+                 "minLength": 1,
                  "maxLength": 128
                 },
                 {
@@ -5486,6 +5809,18 @@
                 "unit",
                 "bundle"
                ]
+              },
+              "units": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 1,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
               }
              },
              "required": [
@@ -5493,7 +5828,8 @@
               "title",
               "totalMinor",
               "amountMinor",
-              "per"
+              "per",
+              "units"
              ],
              "additionalProperties": false
             }
@@ -5774,6 +6110,7 @@
            "anyOf": [
             {
              "type": "string",
+             "minLength": 1,
              "maxLength": 128
             },
             {
@@ -5808,6 +6145,18 @@
             "unit",
             "bundle"
            ]
+          },
+          "units": {
+           "anyOf": [
+            {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 9007199254740991
+            },
+            {
+             "type": "null"
+            }
+           ]
           }
          },
          "required": [
@@ -5815,7 +6164,8 @@
           "title",
           "totalMinor",
           "amountMinor",
-          "per"
+          "per",
+          "units"
          ],
          "additionalProperties": false
         }
@@ -6016,6 +6366,7 @@
            "anyOf": [
             {
              "type": "string",
+             "minLength": 1,
              "maxLength": 128
             },
             {
@@ -6050,6 +6401,18 @@
             "unit",
             "bundle"
            ]
+          },
+          "units": {
+           "anyOf": [
+            {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 9007199254740991
+            },
+            {
+             "type": "null"
+            }
+           ]
           }
          },
          "required": [
@@ -6057,7 +6420,8 @@
           "title",
           "totalMinor",
           "amountMinor",
-          "per"
+          "per",
+          "units"
          ],
          "additionalProperties": false
         }

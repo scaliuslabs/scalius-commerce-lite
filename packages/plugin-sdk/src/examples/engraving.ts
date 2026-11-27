@@ -52,7 +52,7 @@ export default definePlugin({
       const perLetter = Math.max(0, Math.round(Number(settings.per_letter ?? 0) * 10 ** cart.storeCurrency.decimalPlaces) || 0);
       return {
         prices: [],
-        adjustments: cart.lines.flatMap((line) => {
+        addOns: cart.lines.flatMap((line) => {
           const letters = (line.properties[TEXT] ?? "").replace(/\s/gu, "").length;
           if (letters === 0) return [];
           // The add-on's title is the buyer's, in their language (`input.language`).

@@ -34,6 +34,7 @@ import { ORDER_CHANNELS } from "../order-channel";
 import { LINE_ADD_ONS_MAX } from "../line-identity";
 import { ADD_ON_DETAILS_MAX } from "../add-on-totals";
 import { appTextSchema } from "./app-text";
+import { lineAddOnSchema } from "./line-add-on";
 import { isStoreActionOrAmountWord, STORE_WORDS_REASON } from "../store-words";
 import { ONLINE_STORE_CHANNEL_ID, SALES_CHANNEL_ID_MAX_LENGTH, SALES_CHANNEL_ID_PATTERN } from "../sales-channels";
 
@@ -68,33 +69,7 @@ const addOnDetails = z.array(addOnLabel).max(ADD_ON_DETAILS_MAX).optional();
 /** Add-ons one line carries: the one bound the cart, the page and checkout share (`LINE_ADD_ONS_MAX`). */
 const LINE_ADJUSTMENTS_ON_LINE_MAX = LINE_ADD_ONS_MAX;
 
-/**
- * How an add-on is counted (`LineAddOn.per`): `unit`, on each unit of its
- * line; `bundle`, once per bundle unit (an expanded bundle's or a store kit's
- * add-on, carried by the bundle's anchor line). The list only grows, at its end.
- */
-export const LINE_ADD_ON_PER = ["unit", "bundle"] as const;
-
-/**
- * One app add-on on a line: the one shape an app or a theme reads an add-on
- * in, everywhere (a function's cart line, the cart's and an order's UI slots,
- * the order representation and API). `totalMinor` is the number to trust:
- * what the add-on adds to the line in all, exactly, in integer minor units of
- * the line's currency (sum it, refund against it, show it when nothing else
- * is exact). `amountMinor` is what one unit (`per: "unit"`) or one bundle
- * unit (`per: "bundle"`) pays for it when one amount is exact for every one
- * of them, else null: show `totalMinor` then. `appId` is the app that added
- * it (null only on an add-on frozen before apps were named on them). A free
- * extra is 0.
- */
-export const lineAddOnSchema = z.object({
-  appId: z.string().max(128).nullable(),
-  title: z.string().max(80),
-  totalMinor: nonNegativeMinor,
-  amountMinor: nonNegativeMinor.nullable(),
-  per: z.enum(LINE_ADD_ON_PER),
-}).strict();
-export type LineAddOn = z.infer<typeof lineAddOnSchema>;
+export { LINE_ADD_ON_PER, lineAddOnSchema, type LineAddOn } from "./line-add-on";
 
 /** One cart line as functions see it. */
 export const functionCartLineSchema = z.object({
@@ -159,7 +134,27 @@ export const functionCartLineSchema = z.object({
      * naming the kit.
      */
     kit: z.object({ variantId: id, productId: id, sku: z.string().max(200).nullable() }).strict().nullable().optional(),
+    /**
+     * The bundle units bought (an expanded bundle's or a kit's: the buyer's
+     * quantity of it; a kit's one line has `quantity` = `units`), and how many
+     * units of this line each holds (`quantity = units × perUnit`; a kit's one
+     * line 1). Null on a merged bundle, whose lines keep their own
+     * quantities. The host always sends them.
+     */
+    units: z.number().int().min(1).nullable().optional(),
+    perUnit: z.number().int().min(1).nullable().optional(),
   }).strict().nullable().optional(),
+  /**
+   * The step an add-on answered on this line is charged in (minor units of
+   * `currency`): the market's increment (`cart.priceIncrementMinor`) on a
+   * plain or merged line; on a bundle's line (an expanded bundle's component,
+   * a kit's one line) the increment times the units the bundle's anchor holds
+   * per bundle unit, since the anchor charges the fee over them. Checkout
+   * rounds every add-on once, half-up, to it: answer multiples of it to be
+   * charged exactly (a share is rounded to it too). The host always sends it;
+   * optional only so a cart an app's tests build by hand still reads.
+   */
+  addOnStepMinor: nonNegativeMinor.min(1).optional(),
   /**
    * The SKU is a physical good (not digital, a service or a gift card),
    * whatever delivery the buyer picks: a pickup line still requires shipping
@@ -185,7 +180,7 @@ export const functionCartLineSchema = z.object({
    */
   purchaseOptions: z.array(z.string().max(APP_SCOPED_KEY_MAX_LENGTH).regex(APP_SCOPED_KEY_PATTERN)).max(LINE_PURCHASE_OPTIONS_MAX).default([]),
   /**
-   * The apps' add-ons on the line (`cart.line_prices` adjustments, each with
+   * The apps' add-ons on the line (`cart.line_prices` `addOns`, each with
    * the app that added it), in `unitPriceMinor` and `lineTotalMinor`, once
    * checkout has priced them: what a storefront extension draws as
    * "Protection ৳350" (an app reads its own by `appId`). A bundle's add-on is
@@ -204,6 +199,13 @@ export const functionCartSchema = z.object({
   /** The currency the buyer pays in (the market's): every `*Minor` amount here is in it. */
   currency: z.string().length(3),
   decimalPlaces: z.number().int().min(0).max(4),
+  /**
+   * The market's price increment, in minor units of `currency` (100 at
+   * whole taka with two decimal places, 1 at every cent): what prices and
+   * add-ons round to. The host always sends it; optional only so a cart an
+   * app's tests build by hand still reads.
+   */
+  priceIncrementMinor: nonNegativeMinor.min(1).optional(),
   /**
    * The store's own currency, the one your settings' amounts are in. It is
    * `currency` unless the market sells in another; answer a fixed amount
@@ -550,7 +552,7 @@ const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT
  * else checkout refuses; two of them pricing one line refuse too
  * (`purchase_options_conflict`): one line has one price.
  *
- * `adjustments`: add-ons to each unit of a line (an engraving's letters, a
+ * `addOns`: add-ons to each unit of a line (an engraving's letters, a
  * gift wrap, a protection plan), applied after the whole price precedence,
  * so sale, segment, app and price-list lines take them too. An add-on is a
  * fixed `amountMinor` or a `percent` of the line's unit price as checkout
@@ -564,9 +566,6 @@ const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT
  * component's unit price times what it holds per bundle unit), charged on
  * the component that holds the fewest per unit; the same app's add-on of
  * the same title on another component counts once, never per component.
- * That component charges the fee over its units per bundle unit, so a
- * bundle's fee rounds half-up to the market's increment times those units
- * (৳351 over a pair is ৳352, ৳176 each): never refused for not dividing.
  * Merged lines keep their own add-ons. The
  * buyer sees each as a line component ("Add-on: <title>") in the cart,
  * checkout, receipt and emails; tax, discounts, totals and refunds include it
@@ -581,13 +580,20 @@ const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT
  * exactly as a product price does (৳1,200 in a USD market at 0.0082, +10%,
  * ending .99 is $10.99, as the product is). An add-on rounds half-up to the
  * market's increment without the market's rounding step or ending, which
- * make the item's price point (a ৳50 wrap there is $0.45, not $0.99). A
- * cart-currency amount, and a store-currency one in the store's own
- * currency, rounds half-up to the increment (৳50.50 at whole taka is ৳51).
- * A positive amount never rounds to nothing (it takes one increment); a
- * fixed 0 is a free extra, frozen on the order line like any add-on, so an
- * app decides what to deliver from the order line, never from its current
- * settings.
+ * make the item's price point (a ৳50 wrap there is $0.45, not $0.99).
+ *
+ * Every add-on is rounded once, half-up, to its line's step
+ * (`FunctionCartLine.addOnStepMinor`): the market's increment on a plain or
+ * merged line, the increment times the anchor's units per bundle unit on a
+ * bundle's line, so every unit of the anchor pays the same exact amount
+ * (৳351 over a pair of teas at whole taka is ৳352, ৳176 a tea; ৳50.50 on a
+ * plain line is ৳51). It moves at most half a step either way, never refused
+ * for not dividing, except that a positive amount never becomes free: one
+ * below half a step charges one step. An amount that is a multiple of the
+ * step is charged exactly; one that is not is charged as rounded, and the
+ * app's log says so. A fixed 0 is a free extra, frozen on the order line
+ * like any add-on, so an app decides what to deliver from the order line,
+ * never from its current settings.
  */
 /** Offers one offer run prices at most (a cart line's choices a per-line slot shows). */
 export const LINE_OFFERS_MAX = 250;
@@ -613,7 +619,7 @@ export const cartLinePricesOutputSchema = z.object({
     unitPriceMinor: minor.positive(),
     currency: amountCurrency,
   }).strict()).max(250).default([]),
-  adjustments: z.array(z.union([
+  addOns: z.array(z.union([
     z.object({
       lineId: id,
       /**

@@ -36,7 +36,7 @@ import { validateCheckoutAttributes } from "./attributes";
 //   product price does (`storeAmountMinor`, the catalogue's `fxPriceMinor` at
 //   the checkout's one rate: rate, adjustment, rounding and ending).
 //
-// Add-ons (`adjustments`, pure, `resolveAppLineAdjustments`): added to each
+// Add-ons (`addOns`, pure, `resolveAppLineAdjustments`): added to each
 // unit after the whole precedence, whatever priced the line (sale, segment
 // and list lines take them too). A fixed add-on rounds half-up to the cart's
 // price increment; one in the store's currency converts at the checkout's
@@ -86,13 +86,14 @@ import type {
 export const ADD_ON_UNAVAILABLE_REASON = "add_on_unavailable";
 
 /**
- * An app's add-on to each unit of a line as checkout keeps it: a fixed
- * amount, already in the cart's currency and on its increment, or a share of
- * the item's unit price, which cart validation takes once that price is
- * known (`percentOfMinor`).
+ * An app's add-on to each unit of a line as checkout keeps it, exactly as
+ * answered: a fixed amount in the cart's or the store's currency, never yet
+ * rounded or converted, or a share of the item's unit price. Cart validation
+ * charges it once it knows the line (`addOnChargeMinor`), so it is rounded
+ * exactly once, to the step the line can carry.
  */
 export type AppLineAddOn =
-    | { appId: string; title: string; amountMinor: number; bundle?: AppLineAddOnBundle; details?: string[] }
+    | { appId: string; title: string; amountMinor: number; currency: "cart" | "store"; bundle?: AppLineAddOnBundle; details?: string[] }
     | { appId: string; title: string; percent: number; bundle?: AppLineAddOnBundle; details?: string[] };
 
 /**
@@ -109,6 +110,8 @@ export interface AppLineAddOnBundle {
 export interface AppLinePricing {
     prices: ReadonlyMap<number, AppLinePrice>;
     adjustments: ReadonlyMap<number, AppLineAddOn[]>;
+    /** Tells an app's log what checkout charged for one of its add-ons when it is not what it answered (once a message). */
+    report?: AddOnReport;
     /** A store kit is one line to apps: its price (the kit SKU's), split over its items by checkout. */
     kitPrices?: ReadonlyMap<string, AppLinePrice>;
 }
@@ -163,7 +166,7 @@ export function createAppLinePricer(
         let cart: FunctionCart;
         try {
             cart = buildAppFunctionCart({
-                currency: { code: preliminary.money.currencyCode, decimalPlaces: preliminary.money.decimalPlaces },
+                currency: { code: preliminary.money.currencyCode, decimalPlaces: preliminary.money.decimalPlaces, priceIncrementMinor: preliminary.money.incrementMinor },
                 storeCurrency: functionStoreCurrency(preliminary.money),
                 channel: context.channel,
                 segmentIds: preliminary.pricingSegmentIds,
@@ -202,7 +205,14 @@ export function createAppLinePricer(
                 bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300), units: item.bundle.units } : null,
             })),
         });
-        return kitPricing(resolveAppLinePricing(items, lineIds, results, storeAmountConversionOf(preliminary), apps), kits, preliminary.items);
+        // What checkout charges is known only as it lays the lines out: it tells each app once a message.
+        const told = new Set<string>();
+        const report: AddOnReport = (appId, message) => {
+            if (told.has(`${appId}\u0000${message}`)) return;
+            told.add(`${appId}\u0000${message}`);
+            apps.report(appId, "cart.line_prices", message);
+        };
+        return { ...kitPricing(resolveAppLinePricing(items, lineIds, results, storeAmountConversionOf(preliminary), apps), kits, preliminary.items), report };
     };
 }
 
@@ -299,7 +309,7 @@ export function resolveAppLinePricing(
 ): AppLinePricing {
     const pricing = {
         prices: resolveAppLinePrices(items, lineIds, results, apps, conversion),
-        adjustments: resolveAppLineAdjustments(items, lineIds, results, conversion, apps),
+        adjustments: resolveAppLineAdjustments(items, lineIds, results, apps),
     };
     assertPurchaseOptionPrices(items, pricing);
     return pricing;
@@ -413,19 +423,61 @@ export function addOnUnavailable(): ValidationError {
     });
 }
 
+/** Writes one line to an app's log about one of its add-ons (`cart.line_prices`). */
+export type AddOnReport = (appId: string, message: string) => void;
+
 /**
- * A bundle's add-on as its anchor charges it, per bundle unit: a fixed fee or
- * a share of the bundle unit's price (`basisMinor`), rounded half-up to the
- * step the anchor can carry, the increment times the anchor's units per
- * bundle unit (`perUnit`), so every anchor unit pays the same exact amount
- * and no fee is refused for not dividing (৳351 over a pair is ৳352, ৳176
- * each). A positive fee takes at least one step; a free extra stays 0.
+ * The step an add-on is charged in on a line: the market's increment times
+ * the units the line carrying it holds per bundle unit (1 on a plain or
+ * merged line; an expanded bundle's or a kit's anchor holds `perUnit`), so
+ * every unit of that line pays the same exact amount.
  */
-export function bundleFeeMinor(addOn: AppLineAddOn, basisMinor: number, perUnit: number, incrementMinor: number): number {
+export function addOnStepMinor(perUnit: number, incrementMinor: number): number {
     if (!Number.isSafeInteger(perUnit) || perUnit < 1) throw addOnUnavailable();
-    const step = perUnit * incrementMinor;
+    return perUnit * incrementMinor;
+}
+
+/**
+ * What an app's add-on charges, the one rounding checkout and the per-line
+ * slot's offers both use: per unit of a plain line (`perUnit` 1), per bundle
+ * unit on a bundle's anchor. A fixed amount in the cart's currency, a
+ * store-currency amount (converted at the checkout's rate with the market's
+ * adjustment, `storeAmountMinor`) or a share of `basisMinor` (the item's
+ * unit price, or the bundle unit's) is rounded ONCE, half-up, to the line's
+ * step (`addOnStepMinor`): ৳351 over a pair of teas at whole taka is ৳352
+ * (৳176 a tea), ৳350.50 there ৳350. It moves at most half a step either way,
+ * except that a positive amount never becomes free: one below half a step
+ * charges one step. A free extra (0) stays 0. Returns the amount per unit of
+ * the plain line or per bundle unit, a multiple of the step.
+ */
+export function addOnChargeMinor(addOn: AppLineAddOn, basisMinor: number, perUnit: number, conversion: StoreAmountConversion): number {
+    const step = addOnStepMinor(perUnit, conversion.money.incrementMinor);
     if ("percent" in addOn) return addOnShareMinor(basisMinor, addOn.percent, step);
-    return addOn.amountMinor === 0 ? 0 : Math.max(step, roundToIncrementMinor(addOn.amountMinor, step));
+    if (addOn.amountMinor === 0) return 0;
+    if (addOn.currency === "store") return storeAmountMinor(addOn.amountMinor, { ...conversion, money: { ...conversion.money, incrementMinor: step } }, "add_on");
+    return Math.max(step, roundToIncrementMinor(addOn.amountMinor, step));
+}
+
+/**
+ * Tells the app's log when checkout charges an add-on other than it answered
+ * (`addOnChargeMinor`): a cart-currency amount off the line's step, or any
+ * add-on a bundle's step moved from what a plain line would charge. Names the
+ * answer, the charge and the step, so the app can answer multiples of it.
+ */
+export function reportAddOnCharge(report: AddOnReport | undefined, addOn: AppLineAddOn, chargedMinor: number, basisMinor: number, perUnit: number, conversion: StoreAmountConversion): void {
+    if (!report) return;
+    const step = perUnit * conversion.money.incrementMinor;
+    const where = perUnit > 1 ? `per bundle unit (its anchor holds ${perUnit} a bundle unit, so the step is ${step} minor units)` : `per unit (the market's step is ${step} minor units)`;
+    if (!("percent" in addOn) && addOn.currency === "cart") {
+        if (chargedMinor !== addOn.amountMinor) report(addOn.appId, `"${addOn.title}" answered ${addOn.amountMinor} minor units was charged ${chargedMinor} ${where}; answer a multiple of the step to be charged exactly.`);
+        return;
+    }
+    if (perUnit === 1) return;
+    const plain = addOnChargeMinor(addOn, basisMinor, 1, conversion);
+    if (plain !== chargedMinor) {
+        const answered = "percent" in addOn ? `${addOn.percent}% (${plain} minor units on a plain line)` : `${addOn.amountMinor} store minor units (${plain} on a plain line)`;
+        report(addOn.appId, `"${addOn.title}" answered ${answered} was charged ${chargedMinor} ${where}; answer a multiple of the step to be charged exactly.`);
+    }
 }
 
 /**
@@ -448,17 +500,15 @@ export function resolveAppLineAdjustments(
     items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "bundle" | "quantity">>,
     lineIds: readonly string[],
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
-    conversion: StoreAmountConversion,
     apps?: Pick<CheckoutAppFunctions, "report">,
 ): Map<number, AppLineAddOn[]> {
-    const increment = conversion.money.incrementMinor;
     const byLineId = new Map(lineIds.map((lineId, position) => [lineId, items[position]!]));
     const anchors = bundleAnchors(items);
     const bundleFees = new Set<string>();
     const adjustments = new Map<number, AppLineAddOn[]>();
     const frozenBytes = new Map<number, number>();
     for (const result of results) {
-        for (const answer of (result.output as PluginFunctionOutput<"cart.line_prices">).adjustments ?? []) {
+        for (const answer of (result.output as PluginFunctionOutput<"cart.line_prices">).addOns ?? []) {
             const item = byLineId.get(answer.lineId);
             if (!item) {
                 apps?.report(result.pluginId, "cart.line_prices", `An add-on names line ${answer.lineId}, which is not in the cart; it was skipped.`);
@@ -497,15 +547,11 @@ export function resolveAppLineAdjustments(
             frozenBytes.set(target, frozen);
             // The app's detail lines ride the add-on to the order line: what its summary row opens to.
             const details = answer.details?.length ? { details: [...answer.details] } : {};
+            // Kept as answered: cart validation rounds (and converts) it once, to the line's step (`addOnChargeMinor`).
             if ("percent" in answer) {
                 list.push({ appId: result.pluginId, title: answer.title, percent: answer.percent, ...(bundle ? { bundle } : {}), ...details });
             } else {
-                const amountMinor = answer.currency === "store"
-                    ? storeAmountMinor(answer.amountMinor, conversion, "add_on")
-                    // A positive add-on never rounds to nothing: one increment, as a converted one.
-                    // 0 is a free extra and stays 0, recorded on the line.
-                    : answer.amountMinor === 0 ? 0 : Math.max(increment, roundToIncrementMinor(answer.amountMinor, increment));
-                list.push({ appId: result.pluginId, title: answer.title, amountMinor, ...(bundle ? { bundle } : {}), ...details });
+                list.push({ appId: result.pluginId, title: answer.title, amountMinor: answer.amountMinor, currency: answer.currency ?? "cart", ...(bundle ? { bundle } : {}), ...details });
             }
             adjustments.set(target, list);
         }
@@ -524,6 +570,7 @@ export async function resolveCartWithAppLinePrices(
         appAdjustments?: ReadonlyMap<number, AppLineAddOn[]>;
         kitPrices?: ReadonlyMap<string, AppLinePrice>;
         deferSubmittedPriceCheck?: boolean;
+        reportAddOn?: AddOnReport;
     }) => StorefrontCartValidationResult,
     phase: "before_transform" | "final" = "final",
 ): Promise<StorefrontCartValidationResult> {
@@ -538,10 +585,10 @@ export async function resolveCartWithAppLinePrices(
     const preliminary = resolve({ deferSubmittedPriceCheck: true });
     const pricing = await pricer(preliminary);
     assertPurchaseOptionPrices(preliminary.items, pricing);
-    const { prices, adjustments, kitPrices } = pricing;
+    const { prices, adjustments, kitPrices, report } = pricing;
     return resolve({
         ...(prices.size > 0 ? { appPrices: prices } : {}),
-        ...(adjustments.size > 0 ? { appAdjustments: adjustments } : {}),
+        ...(adjustments.size > 0 ? { appAdjustments: adjustments, ...(report ? { reportAddOn: report } : {}) } : {}),
         ...(kitPrices && kitPrices.size > 0 ? { kitPrices } : {}),
     });
 }

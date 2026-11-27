@@ -191,7 +191,7 @@ export function priceLines<Settings = Readonly<Record<string, PluginSettingValue
     const lines = new Map(input.cart.lines.map((line) => [line.lineId, line]));
     return {
       prices: [],
-      adjustments: input.cart.lines.flatMap((line) => price(line, facts.get(line.lineId), input, settings).map((addOn) => ({ lineId: line.lineId, ...addOn }))),
+      addOns: input.cart.lines.flatMap((line) => price(line, facts.get(line.lineId), input, settings).map((addOn) => ({ lineId: line.lineId, ...addOn }))),
       ...(input.offers ? { offers: input.offers.flatMap((offer) => {
         const line = lines.get(offer.lineId);
         if (!line) return [];

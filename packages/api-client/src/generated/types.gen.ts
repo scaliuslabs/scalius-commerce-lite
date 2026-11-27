@@ -2381,6 +2381,10 @@ export type BuyerLineAddOn = {
      * From what the line froze: `bundle` for a kit's or an expanded bundle's add-on (on its anchor item's row), else `unit`.
      */
     per: 'unit' | 'bundle';
+    /**
+     * How many units (`per: unit`) or bundle units (`per: bundle`) the row holds; null when no longer known. `totalMinor = amountMinor × units` whenever `amountMinor` is a number.
+     */
+    units: number | null;
     details?: Array<string>;
 };
 
@@ -3843,6 +3847,7 @@ export type OrderResource = {
             totalMinor: number;
             amountMinor: number | null;
             per: 'unit' | 'bundle';
+            units: number | null;
         }>;
         bundle?: {
             id: string;
