@@ -99,6 +99,7 @@ export const STRUCTURAL_OP_GAPS: Readonly<Record<string, string>> = {
   "promotion_redemptions:delete": "immutable (PROMOTION_REDEMPTION_IMMUTABLE trigger)",
   "promotion_redemptions:insert": "needs a matching order_discount_allocations row, and a delete+insert is refused as immutable",
   "category_closure:update": "trigger-owned: the category tree triggers only insert and delete closure rows",
+  "gift_cards:delete": "durable records (gift_cards_delete_blocked trigger)",
 };
 
 /**
@@ -135,6 +136,10 @@ export const TRIGGER_OWNED_COLUMNS: ReadonlySet<string> = new Set([
   "product_reviews.reviewer_key",
   // The app that wrote a review (0204): identity too, set only by an app review's insert.
   "product_reviews.app_id",
+  // A gift card's identity and source: a trigger refuses every update (gift_cards_identity_immutable);
+  // inserts cover them. Its balance is the ledger's projection (gift_cards_balance_projection_guard).
+  ...["code_hash", "code_ciphertext", "code_last4", "currency_code", "initial_amount_minor", "source", "source_order_id",
+    "source_order_item_id", "source_unit_index", "source_refund_attempt_id", "balance_minor"].map((column) => `gift_cards.${column}`),
 ]);
 
 function writableByGenerator(table: string): boolean {

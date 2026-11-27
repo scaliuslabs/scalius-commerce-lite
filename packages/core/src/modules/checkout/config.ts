@@ -96,18 +96,18 @@ export interface CheckoutConfig {
     giftCardsLive: boolean;
 }
 
-/** One day: how long a "live gift card" answer stands while a card's expiry passes without a write. */
-const GIFT_CARD_LIVENESS_SECONDS = 86_400;
-
 /**
- * Whether a live gift card exists, as one scalar of the configuration's
- * first statement (an indexed existence probe that stops at the first live
- * card). The `gc` key follows a card's issue, removal, status, expiry and
- * balance reaching or leaving zero; an expiry that passes moves no row, so a
- * "yes" stands for a day at most.
+ * Until when a live gift card exists (active, a balance above zero, not
+ * expired), as one scalar of the configuration's first statement: null when
+ * none does, 0 when one never expires (an indexed probe that stops at the
+ * first), else the latest expiry among the live cards, the instant the answer
+ * turns false with no write. The `gc` key follows a card's issue, removal,
+ * status, expiry and balance reaching or leaving zero.
  */
 function liveGiftCardsSql(nowSeconds: number) {
-    return sql<number>`EXISTS (SELECT 1 FROM ${giftCards} WHERE ${giftCards.status} = 'active' AND ${giftCards.balanceMinor} > 0 AND (${giftCards.expiresAt} IS NULL OR ${giftCards.expiresAt} > ${nowSeconds}))`;
+    const live = sql`${giftCards.status} = 'active' AND ${giftCards.balanceMinor} > 0`;
+    return sql<number | null>`CASE WHEN EXISTS (SELECT 1 FROM ${giftCards} WHERE ${live} AND ${giftCards.expiresAt} IS NULL) THEN 0
+        ELSE (SELECT MAX(${giftCards.expiresAt}) FROM ${giftCards} WHERE ${live} AND ${giftCards.expiresAt} > ${nowSeconds}) END`;
 }
 
 /**
@@ -159,8 +159,10 @@ export async function getCheckoutConfig(
         market = read.market;
         liveGiftCards = read.extra;
     }
-    const giftCardsLive = Number(liveGiftCards) === 1 || liveGiftCards === true;
-    if (giftCardsLive) deps.validUntil((nowSeconds + GIFT_CARD_LIVENESS_SECONDS) * 1000);
+    const liveUntil = liveGiftCards === null || liveGiftCards === undefined ? null : Number(liveGiftCards);
+    const giftCardsLive = liveUntil !== null && Number.isFinite(liveUntil);
+    // The last live card's expiry passes with no write: the answer is never served at or after it.
+    if (giftCardsLive && liveUntil > 0) deps.validUntil(liveUntil * 1000);
     const [checkout, currency, customerAuth, merchantCountries, marketing] = await Promise.all([
         checkoutDocument.fromRows(rows).then((result) => result.value),
         currencyDocument.fromRows(rows).then((result) => result.value),

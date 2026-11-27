@@ -424,6 +424,15 @@ function seedSql(): string {
   INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, created_at, updated_at, customer_id) VALUES
     ('o_1', 'A', '01700000001', 'Road', 'city', 'zone', 'delivered', ${T - DAY}, ${T - DAY}, 'cus_1'),
     ('o_2', 'B', '01700000002', 'Road', 'city', 'zone', 'pending', ${T - DAY}, ${T - DAY}, NULL);
+  -- Gift cards: whether one is live is public (checkout config's giftCardsLive). One funded that
+  -- expires, one born empty (a clone source: a card is born at zero), one disabled; only the ledger funds them.
+  INSERT INTO gift_cards (id, code_hash, code_ciphertext, code_last4, currency_code, initial_amount_minor, source, status, expires_at, created_at, updated_at) VALUES
+    ('gc_live00001', 'gch_live1', 'gcc_live1', 'L001', 'BDT', 5000, 'manual', 'active', ${T + 30 * DAY}, ${T}, ${T}),
+    ('gc_empty0001', 'gch_empty1', 'gcc_empty1', 'E001', 'BDT', 3000, 'manual', 'active', NULL, ${T}, ${T}),
+    ('gc_off000001', 'gch_off1', 'gcc_off1', 'D001', 'BDT', 2000, 'manual', 'disabled', NULL, ${T}, ${T});
+  INSERT INTO gift_card_transactions (id, gift_card_id, kind, amount_minor, balance_after_minor, idempotency_key, actor_type, created_at) VALUES
+    ('gct_live00001', 'gc_live00001', 'issue', 5000, 5000, 'dvc_issue_live1', 'system', ${T}),
+    ('gct_off000001', 'gc_off000001', 'issue', 2000, 2000, 'dvc_issue_off1', 'system', ${T});
   INSERT INTO order_items (id, order_id, product_id, quantity, fulfilled_quantity) VALUES
     ('oi_1', 'o_1', 'p_linen', 1, 1), ('oi_2', 'o_2', 'p_linen', 1, 0), ('oi_3', 'o_1', 'p_cotton', 2, 2),
     -- Delivered lines nobody reviewed yet: a new review (insert) has a line to attach to.
