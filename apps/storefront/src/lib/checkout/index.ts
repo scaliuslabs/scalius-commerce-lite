@@ -11,7 +11,7 @@ import { createDeferredGatewayHandler } from "./handlers/deferred";
 import { formatPageNumber, formatStoreDateTime, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { numberLocale } from "@scalius/shared/locale-format";
 import { formatList } from "@scalius/shared/locale-words";
-import { pageBuyerSignedIn, whatCanPayText } from "./what-can-pay";
+import { cashUnpayableNames, pageBuyerSignedIn, whatCanPayText } from "./what-can-pay";
 import { formatMoney, DEFAULT_CURRENCY } from "@/lib/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { addOnRowsOver } from "@scalius/shared/add-on-totals";
@@ -1054,21 +1054,22 @@ function drawPaymentChoices(
 }
 
 /**
- * What can pay for this order when no method this buyer has can (never the
- * bare "no payment method"): cash can't pay for its keys, downloads and gift
- * cards, so a gift card can (its field is on this step), or paying later for
- * a signed-in buyer it reaches; otherwise only a gift card can.
+ * What can pay for this order when no method this buyer has can. Cash can't
+ * pay for its keys, downloads and gift cards on a store that lists nothing
+ * else but a pay-later method: say what can (`whatCanPayText`, the cart's
+ * words). Otherwise (no such line, or a gateway is listed and refuses this
+ * order, its amount limits) the neutral words: a gift card is not the answer.
  */
 function whatCanPayHere(config: CheckoutConfig, quote: CheckoutTaxQuote): string {
-  const names = [...new Set(quote.items
-    .filter((item) => item.fulfillmentType === "digital" || item.fulfillmentType === "gift_card")
-    .map((item) => item.productName.trim())
-    .filter(Boolean))];
-  if (names.length === 0) return checkoutCopy.noPaymentMethodsText;
+  const names = cashUnpayableNames(quote.items);
+  const gatewayListed = config.gateways.some((gateway) => gateway.paymentKind !== "cash_on_delivery"
+    && gateway.flow !== "deferred" && gateway.id !== "net_terms");
+  if (names.length === 0 || gatewayListed) return checkoutCopy.noPaymentMethodsText;
   return whatCanPayText(checkoutCopy, {
     items: formatList(names, numberLocale(pageLanguage() || "en", storeRegion())),
     gateways: config.gateways,
     signedIn: pageBuyerSignedIn(),
+    giftCardsLive: config.giftCardsLive === true,
   });
 }
 

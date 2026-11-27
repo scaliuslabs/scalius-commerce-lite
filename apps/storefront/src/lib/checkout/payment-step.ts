@@ -3,7 +3,9 @@
  * the buyer sees only the methods they can use, and a step offering one
  * choice is no step.
  *
- * - A store whose only method is cash always places it here.
+ * - A store whose only method is cash always places it here: a cart cash
+ *   can't pay for (a key, a download, a gift card) stops on the cart, whose
+ *   gift card action (a live card only) is the way to the payment step.
  * - A store that takes cash among other methods places it here once this
  *   buyer's quote (`allowedPaymentMethods`, which never gives a guest the
  *   invoice) leaves cash alone. Before a quote the page cannot know, and

@@ -29,7 +29,7 @@ import {
 import { bangladeshAddressesOffered, physicalDeliveryOffered } from "@/lib/delivery-facts";
 import { catalogCopy } from "@/lib/catalog-copy";
 import { marketingConsentCheckbox } from "@/lib/checkout/marketing-consent";
-import { cashOrderNeedsSignIn, processOrder } from "@/lib/cart/server";
+import { cashOrderNeedsSignIn, cashUnpayableRefused, processOrder } from "@/lib/cart/server";
 import { CheckoutCopyError, checkoutFailureText } from "@/lib/checkout/error-messages";
 import { checkoutAttemptRecoveryHref } from "@/lib/checkout/attempt-recovery";
 import {
@@ -176,6 +176,8 @@ let isProcessing = false;
 let expiredCheckoutId: string | undefined;
 // The cash order needs a signed-in buyer again: the page opens sign-in (cashOrderNeedsSignIn).
 let signInRequired = false;
+// Cash can't pay for this cart and a live gift card can: the refusal links to the payment step's gift card entry.
+let giftCardPaysInstead = false;
 let codCartRepairState: {
   source: "cart";
   message: string;
@@ -229,6 +231,7 @@ if (Astro.request.method === "POST" && codPlaceable) {
           Astro.request.headers.get("cookie"),
         ),
         requireFullBillingAddress: checkoutConfig.requireFullBillingAddress === true,
+        payment: { gateways: checkoutConfig.gateways, giftCardsLive: checkoutConfig.giftCardsLive === true },
       });
 
       if (
@@ -326,6 +329,7 @@ if (Astro.request.method === "POST" && codPlaceable) {
             createdAt: Date.now(),
           };
         }
+        giftCardPaysInstead = cashUnpayableRefused(result) && checkoutConfig.giftCardsLive === true;
         if (cashOrderNeedsSignIn(result)) {
           signInRequired = true;
           errorMessage = "";
@@ -411,6 +415,7 @@ const dialogLabels = Object.fromEntries(Object.entries(cartPlan.labels).filter((
     data-checkout-unavailable={checkoutUnavailable ? "true" : "false"}
     data-checkout-unavailable-message={checkoutUnavailableMessage}
     data-gateways={JSON.stringify(checkoutConfig.gateways)}
+    data-gift-cards-live={checkoutConfig.giftCardsLive === true ? "true" : undefined}
     data-guest-checkout-enabled={checkoutConfig.guestCheckoutEnabled !== false
       ? "true"
       : "false"}
@@ -481,6 +486,11 @@ const dialogLabels = Object.fromEntries(Object.entries(cartPlan.labels).filter((
           data-part="notice"
         >
           {errorMessage}
+          {giftCardPaysInstead && (
+            <a href="/checkout#giftCardSection" class="ms-1 font-medium underline underline-offset-2" data-gift-card-pays-instead>
+              {giftCopy.giftCardCheckoutStepText}
+            </a>
+          )}
         </div>
       )
     }
@@ -1088,7 +1098,7 @@ const dialogLabels = Object.fromEntries(Object.entries(cartPlan.labels).filter((
                 // A cash-on-delivery-only store places the order here; a gift
                 // card is used on the payment step (script only: without it
                 // the field there cannot apply a card anyway).
-                codPlaceable && (
+                codPlaceable && checkoutConfig.giftCardsLive === true && (
                   <button
                     type="button"
                     id="giftCardCheckoutStep"

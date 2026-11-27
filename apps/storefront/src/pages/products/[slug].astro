@@ -6,7 +6,8 @@ import {
   getCheckoutConfig,
   getLayoutData,
   checkoutTakesOrders,
-  onlyGiftCardsPayHere,
+  cashUnpayableHere,
+  pageCashUnpayableHere,
   getProductBySlugResult,
   getShippingMethods,
 } from "@/lib/api";
@@ -471,10 +472,14 @@ const fulfilmentBadge =
   pageFulfilment === "service" ? productPageCopy.noDeliveryNeededBadgeText : null;
 // Digital items, gift cards and kits holding one are never paid in cash
 // (core's `cashPayable`). On a store that lists no other way to pay (no
-// gateway, no invoice) a gift card still pays for them: the page stays
-// buyable for everyone (it is shared, and the store always takes gift cards)
-// and says so; checkout says what can pay for the buyer's cart.
-const giftCardOnly = onlyGiftCardsPayHere(buyerVariants, checkoutConfig);
+// gateway, no invoice) only a gift card pays for them: without a live one in
+// the store nobody can, so the page stops buying and says why; with one the
+// page stays buyable and says a gift card pays (checkout says what can pay
+// for the buyer's cart). A store with a gateway or a pay-later method says
+// nothing here.
+const cashUnpayable = pageCashUnpayableHere(buyerVariants, checkoutConfig);
+const onlinePaymentUnavailable = cashUnpayable === "stopped";
+const giftCardOnly = cashUnpayable === "gift_card";
 // A physical product no delivery or pickup option can bring to this page's
 // buyers can't be ordered: the facts above claim neither delivery nor cash on
 // delivery, and the buttons are off with a note saying why (the cart's rule).
@@ -484,7 +489,7 @@ const giftCardOnly = onlyGiftCardsPayHere(buyerVariants, checkoutConfig);
 const deliveryUnavailable = pageFulfilment === "physical"
   && shippingMethods !== null && checkoutTakesOrders(checkoutConfig)
   && !physicalDeliveryOffered(productShippingMethods, pageCountries, bangladeshAddressesOffered(checkoutConfig));
-const purchaseUnavailable = deliveryUnavailable;
+const purchaseUnavailable = onlinePaymentUnavailable || deliveryUnavailable;
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   settings: layoutData.seo?.returnPolicy,
   storefrontUrl,
@@ -534,6 +539,8 @@ const productPageProjection = (): StorefrontProductPage => pageProjection ??= pr
   price: { current: buyerDisplayedPrice, regular: buyerPricePresentation.pricing.originalPrice, from: buyerPricePresentation.isStartingAt },
   variantPrice: getVariantSchemaPrice,
   page: { currencyCode, currencySymbol },
+  // An offer cash can't pay for is off where nothing could pay for it, as on its own page.
+  cashUnpayableOff: cashUnpayableHere(false, checkoutConfig) === "stopped",
   warrantyCopy: productPageCopy,
   // The form's inputs: the product's, then the apps' line inputs shown on it.
   buyerInputs: productBuyerInputFields(product, layoutData.lineInputs, productPageCopy),
@@ -589,6 +596,7 @@ const buyBox = {
     currencyDecimalPlaces,
     priceIncrementMinor: currencyPriceIncrement,
     quickBuyNotice,
+    onlinePaymentUnavailable,
     giftCardOnly,
     deliveryUnavailable,
     deliveryPreviewHint: editorMarks && deliveryUnavailable,

@@ -71,10 +71,12 @@ interface Props {
   priceIncrementMinor?: number;
   quickBuyNotice?: string | null;
   /**
-   * Cash pays for nothing the page sells (digital items, gift cards) and the
-   * store lists no way to pay but cash (`onlyGiftCardsPayHere`): the buttons
-   * stay on and a note says a gift card pays for it.
+   * Cash pays for nothing the page sells (digital items, gift cards), the
+   * store lists no way to pay but cash and holds no live gift card
+   * (`cashUnpayableHere` "stopped"): the buttons are off and a note says why.
    */
+  onlinePaymentUnavailable?: boolean;
+  /** The same with a live gift card (`"gift_card"`): the buttons stay on and a note says a gift card pays. */
   giftCardOnly?: boolean;
   /**
    * The product needs delivery and no delivery or pickup option reaches this
@@ -132,6 +134,7 @@ const {
   currencyCode = DEFAULT_CURRENCY.code,
   priceIncrementMinor,
   quickBuyNotice = null,
+  onlinePaymentUnavailable = false,
   giftCardOnly = false,
   deliveryUnavailable = false,
   deliveryPreviewHint = false,
@@ -193,7 +196,7 @@ const stockActionPresentation = getProductActionsPresentation({
 // A broken buyer-input setup means the product can't be bought at all.
 const customizationUnavailable = product.customizationUnavailable === true;
 // Nothing here can be bought: a note says why, and the buttons stay off.
-const purchaseBlocked = customizationUnavailable || deliveryUnavailable;
+const purchaseBlocked = customizationUnavailable || onlinePaymentUnavailable || deliveryUnavailable;
 const actionPresentation = purchaseBlocked
   ? {
       addToCart: { ...stockActionPresentation.addToCart, disabled: true },
@@ -515,13 +518,15 @@ function optionAriaLabel(
 
       {customizationUnavailable ? (
         <p id="product-customization-unavailable" data-purchase-blocked data-sx-buy="blocked" class="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{pageCopy.customizationUnavailableText}</p>
+      ) : onlinePaymentUnavailable ? (
+        <p id="product-online-payment-unavailable" data-purchase-blocked data-sx-buy="blocked" class="rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground" role="status">{pageCopy.onlinePaymentRequiredText}</p>
       ) : deliveryUnavailable ? (
         <p id="product-delivery-unavailable" data-purchase-blocked data-sx-buy="blocked" class="rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground" role="status">
           {pageCopy.deliveryUnavailableText}
           {deliveryPreviewHint && <span class="mt-1 block font-normal text-muted-foreground" data-merchant-hint>{catalogCopy(language).delivery.setupHint}</span>}
         </p>
       ) : giftCardOnly ? (
-        <p id="product-gift-card-only" class="rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground" role="status">{pageCopy.onlinePaymentRequiredText}</p>
+        <p id="product-gift-card-only" class="rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground" role="status">{pageCopy.giftCardPaysText}</p>
       ) : null}
 
       {showPart("inputs") && <BuyFormInputs {...formInputs} />}

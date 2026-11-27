@@ -48,6 +48,8 @@ export interface CheckoutConfig {
   requireFullBillingAddress?: boolean;
   /** Settings → Checkout: the buyer ticks "I agree to the terms" before the order is placed (absent: off). */
   requireTermsAcceptance?: boolean;
+  /** The store holds a live gift card (`cashUnpayableHere`). */
+  giftCardsLive?: boolean;
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
   currency?: {
@@ -137,17 +139,29 @@ export function listsNonCashPayment(config: CheckoutConfig | null | undefined): 
 }
 
 /**
- * Whether only a gift card can pay for what these SKUs sell here: none is
- * cash payable (core's `cashPayable`: a key, a download, a gift card, a kit
- * holding one) and the store lists no way to pay but cash. The store always
- * takes gift cards, so the page stays buyable and says so; checkout takes a
- * key paid fully by gift card.
+ * On a store that lists no way to pay but cash, what a SKU cash can't pay for
+ * (core's `cashPayable` false: a key, a download, a gift card, a kit holding
+ * one) needs a gift card: `"stopped"` when the store holds no live gift card
+ * (`giftCardsLive`: nobody can pay, so buying is off), `"gift_card"` when it
+ * does (buying stays on; a gift card pays), `null` otherwise (the SKU is cash
+ * payable, or the store lists a gateway or a pay-later method). An
+ * unavailable or unread checkout answers null: it says so itself.
  */
-export function onlyGiftCardsPayHere(
+export function cashUnpayableHere(
+  cashPayable: boolean | null | undefined,
+  config: CheckoutConfig | null | undefined,
+): "stopped" | "gift_card" | null {
+  if (cashPayable !== false || listsNonCashPayment(config)) return null;
+  return config?.giftCardsLive === true ? "gift_card" : "stopped";
+}
+
+/** `cashUnpayableHere` for a page: only when none of its SKUs is cash payable (one that is keeps the page buyable). */
+export function pageCashUnpayableHere(
   variants: ReadonlyArray<{ cashPayable?: boolean | null }>,
   config: CheckoutConfig | null | undefined,
-): boolean {
-  return variants.length > 0 && variants.every((variant) => variant.cashPayable === false) && !listsNonCashPayment(config);
+): "stopped" | "gift_card" | null {
+  if (variants.length === 0 || !variants.every((variant) => variant.cashPayable === false)) return null;
+  return cashUnpayableHere(false, config);
 }
 
 /**

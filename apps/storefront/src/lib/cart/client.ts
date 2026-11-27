@@ -40,7 +40,6 @@ import { cartLineInputFacts, NO_LINE_INPUTS, undecidedLineInputs, type CartLineI
 import type {
   CartRuleError,
   CartValidationIssue,
-  CartValidationItem,
   CartValidationResult,
 } from "@/lib/api/orders";
 import type { CheckoutLanguageData } from "@/lib/api/types";
@@ -61,7 +60,7 @@ import { cartLineCopy } from "@/lib/cart-line-copy";
 import { cartLineStockText } from "@/lib/cart-line-stock-copy";
 import { longAnswerWords } from "@/lib/long-answer";
 import { shippingCountryName } from "@/lib/checkout/shipping-country";
-import { pageBuyerSignedIn, whatCanPayText, type PayableGateway } from "@/lib/checkout/what-can-pay";
+import { cashUnpayableNames, pageBuyerSignedIn, whatCanPayText, type PayableGateway } from "@/lib/checkout/what-can-pay";
 import { pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
 import { applyCheckoutButtonState, storeNotDeliveringMessage } from "./checkout-button-state";
@@ -246,11 +245,8 @@ let addOnRowsDraw = 0;
 const LINE_SLOTS = storefrontUiSlotsOn("cart");
 /** The quote answers checkout's slots only: the lines keep the cart check's blocks. */
 const QUOTE_SLOTS = storefrontUiSlotsOn("checkout");
-/**
- * The names of the validated lines paid only online (digital items, gift
- * cards), and whether every line is one: the cash-on-delivery refusal names them.
- */
-let latestOnlineOnlyLines: { names: string[] } = { names: [] };
+/** The names of the validated lines cash can't pay for (digital items, gift cards): the cart's payment words name them. */
+let latestCashUnpayableNames: string[] = [];
 let latestCheckoutLocation: {
   cityId: string;
   cityName: string;
@@ -337,7 +333,7 @@ function resetCartRuntimeListeners(): AbortSignal {
   // A page opened anew has revealed nothing yet and holds no quote.
   revealedRepairs = "";
   quotedLineDiscounts = new Map();
-  latestOnlineOnlyLines = { names: [] };
+  latestCashUnpayableNames = [];
   latestCheckoutLocation = null;
   cartQuantityLimits = {};
   validationRuleErrors = [];
@@ -1085,39 +1081,43 @@ function pageGateways(): PayableGateway[] {
   }
 }
 
+/** Whether the store holds a live gift card (checkout configuration's `giftCardsLive`, on `checkout-meta`). */
+function pageGiftCardsLive(): boolean {
+  return document.getElementById("checkout-meta")?.dataset.giftCardsLive === "true";
+}
+
 /**
- * Whether no method this buyer has can take this cart (the cart check, else
- * the buyer's quote, names none; or a page that places cash itself has no
- * cash). It never stops the buyer: the store always takes gift cards, so the
- * cart says what can pay and the buyer goes on to the payment step, where a
- * gift card can pay (the cart page then sends them there instead of placing
- * cash, `codPaymentStep`).
+ * A page that places cash itself (a cash-only store, until the buyer takes
+ * the gift card action under Place order) can't take a cart the cart check
+ * allows no cash for (a key, a download, a gift card; a delivery country cash
+ * on delivery doesn't serve): the cart stops and says why. With a live gift
+ * card, that action ("Have a gift card? Pay with it") takes the buyer to the
+ * payment step instead (cart.astro, `codPaymentStep`).
+ */
+function cashRefusedForCart(): boolean {
+  if (typeof document === "undefined" || latestAllowedPaymentMethods === null) return false;
+  return document.getElementById("checkout-meta")?.dataset.codOnly === "true" && !latestAllowedPaymentMethods.includes("cod");
+}
+
+/**
+ * Not a stop: on a store with a way to pay besides cash (or once the buyer
+ * chose to pay with a gift card), no method this buyer has can take this
+ * cart, so the cart says what can pay and the payment step decides.
  */
 function paymentNoticeForCart(): boolean {
   if (typeof document === "undefined" || latestAllowedPaymentMethods === null) return false;
-  if (latestAllowedPaymentMethods.length === 0) return true;
-  const codOnly = document.getElementById("checkout-meta")?.dataset.codOnly === "true";
-  return codOnly && !latestAllowedPaymentMethods.includes("cod");
-}
-
-/** The lines cash can't pay for (digital items and gift cards: core's `cashPayable`). */
-function onlineOnlyLines(items: readonly CartValidationItem[]): { names: string[] } {
-  const online = items.filter((item) => item.fulfillmentType === "digital" || item.fulfillmentType === "gift_card");
-  return {
-    names: [...new Set(online.map((item) => item.productName.trim()).filter(Boolean))],
-  };
+  return latestAllowedPaymentMethods.length === 0 && !cashRefusedForCart();
 }
 
 /**
  * What can pay for this cart, in words that name the lines and what to do
- * (`whatCanPayText`): cash can't pay for its digital items and gift cards,
- * and only a gift card (or, for a buyer it reaches, paying later) can. Any
- * other case (a delivery country cash on delivery doesn't serve) keeps the
- * general wording.
+ * (`whatCanPayText`, the payment step's words): cash can't pay for its
+ * digital items and gift cards. Any other case (a delivery country cash on
+ * delivery doesn't serve) keeps the general wording.
  */
-function paymentNoticeMessage(): string {
+function paymentMessage(): string {
   const copy = activeCheckoutCopy();
-  const { names } = latestOnlineOnlyLines;
+  const names = latestCashUnpayableNames;
   const language = pageCheckoutLanguage().code;
   if (names.length === 0) {
     // The buyer is on the cart: say what to change here (the delivery country cash on delivery doesn't serve).
@@ -1129,6 +1129,7 @@ function paymentNoticeMessage(): string {
     items: formatList(names, numberLocale(language || "en", storeRegion())),
     gateways: pageGateways(),
     signedIn: pageBuyerSignedIn(),
+    giftCardsLive: pageGiftCardsLive(),
   });
 }
 
@@ -1141,7 +1142,7 @@ function hasCartRuleErrors(): boolean {
 }
 
 function hasBlockingCartIssues(): boolean {
-  return Boolean(cartValidationGlobalError) || cartIssueCount() > 0 || hasCartRuleErrors();
+  return Boolean(cartValidationGlobalError) || cartIssueCount() > 0 || hasCartRuleErrors() || cashRefusedForCart();
 }
 
 /** The banner above the checkout action, repainted only when what it says changes. */
@@ -1160,6 +1161,7 @@ function renderCartRuleBanner(): boolean {
 function cartBlockedMessage(): string {
   if (cartValidationGlobalError) return cartValidationGlobalError;
   if (cartIssueCount() === 0 && hasCartRuleErrors()) return activeCheckoutCopy().cartRulesBlockedText;
+  if (cartIssueCount() === 0 && cashRefusedForCart()) return paymentMessage();
   const count = Object.keys(cartValidationIssues).length;
   if (count <= 0) return "";
   if (cartValidationSummaryMessage) return cartValidationSummaryMessage;
@@ -1182,7 +1184,7 @@ let revealedRepairs = "";
  */
 function revealCartRepairs(): void {
   if (Object.keys(cartStore.get().items).length === 0 || !hasBlockingCartIssues()) return;
-  const needs = JSON.stringify([Object.keys(cartValidationIssues).sort(), cartValidationGlobalError, cartRuleErrors().length, paymentNoticeForCart()]);
+  const needs = JSON.stringify([Object.keys(cartValidationIssues).sort(), cartValidationGlobalError, cartRuleErrors().length, cashRefusedForCart()]);
   const root = document.getElementById("cartPageRoot");
   if (!root || needs === revealedRepairs) return;
   revealedRepairs = needs;
@@ -1210,7 +1212,7 @@ function paintCartValidationMessage() {
   if (!message) return;
 
   // Rules alone are said once, by the banner above the checkout action.
-  const rulesOnly = ruleBannerShown && !cartValidationGlobalError && cartIssueCount() === 0;
+  const rulesOnly = ruleBannerShown && !cartValidationGlobalError && cartIssueCount() === 0 && !cashRefusedForCart();
   if (hasBlockingCartIssues() && !rulesOnly) {
     message.textContent = cartBlockedMessage();
     if (cartValidationGlobalError && cartValidationRetryable) {
@@ -1235,7 +1237,7 @@ function paintCartValidationMessage() {
     message.classList.remove("hidden");
   } else if (!rulesOnly && paymentNoticeForCart()) {
     // Not a stop: what can pay for this cart; the buyer goes on to the payment step.
-    message.textContent = paymentNoticeMessage();
+    message.textContent = paymentMessage();
     message.classList.remove("hidden");
   } else {
     message.textContent = "";
@@ -1405,7 +1407,7 @@ async function runCartCheck(renderUnchanged: boolean, { attributes, pricedCodes,
       if (Array.isArray(json.data.allowedPaymentMethods)) {
         latestAllowedPaymentMethods = json.data.allowedPaymentMethods;
       }
-      latestOnlineOnlyLines = onlineOnlyLines(json.data.items);
+      latestCashUnpayableNames = cashUnpayableNames(json.data.items);
       latestLineInputs = cartLineInputFacts(json.data, issues);
       updateCartQuantityLimits(json.data, issues, cartStore.get().items);
       latestCartBuyerUi = Array.isArray(json.data.buyerUi) ? json.data.buyerUi : [];

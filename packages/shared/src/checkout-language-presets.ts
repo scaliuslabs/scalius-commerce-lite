@@ -417,10 +417,12 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   cartItemsNeedAttentionText: "{count} cart items need attention before checkout.",
   cartRulesBlockedText: "This order can't be placed yet.",
   // A cart of digital items or gift cards that no way to pay but a gift card can take for this buyer.
-  cartOnlinePaymentRequiredText: "{items} can't be paid for in cash here. Pay with a gift card.",
+  cartOnlinePaymentRequiredText: "{items} can't be paid for in cash, and this store takes no other payment yet.",
   // The same, where the store also offers paying later ({method}) to signed-in buyers it approves: a guest, then a signed-in buyer it doesn't reach.
   cartPayLaterSignInText: "{items} can't be paid for in cash here. Pay with a gift card, or sign in to pay with {method}.",
   cartPayLaterNotOpenText: "{items} can't be paid for in cash here, and {method} isn't open to your account. Pay with a gift card.",
+  // The payment step, where only a gift card can pay for the order's keys.
+  paymentGiftCardOnlyText: "{items} in this order can't be paid for in cash here. Pay with a gift card.",
   cartDeliveryUnavailableText: "This store isn't delivering yet, so items that need delivery can't be ordered right now. Remove them to order the rest.",
   orderPlacedSuccessText: "Your order was placed successfully. Order ID: {orderId}",
   checkingAccountText: "Checking account…",
@@ -448,7 +450,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   tooManyCheckoutAttemptsText: "Too many checkout attempts. Wait a moment and try again.",
   paymentFailedText: "Payment failed",
   noPaymentMethodsText:
-    "Only a gift card can pay for this order here: enter one above, or return to your cart to change the order.",
+    "No available payment method can accept this order total. Return to your cart.",
   preparingPaymentText: "Preparing payment…",
   paymentMethodUnavailableText: "Payment method unavailable",
   paymentMethodUnavailableMessage: "This payment method is not available. Choose another method.",
@@ -611,7 +613,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   customizationOptionalText: "optional",
   customizationChoosePlaceholderText: "Choose…",
   customizationUnavailableText: "This product can't be ordered right now.",
-  onlinePaymentRequiredText: "This item can't be paid for in cash here. Pay with a gift card at checkout.",
+  onlinePaymentRequiredText: "This item can't be paid for in cash, and this store takes no other payment yet.",
   deliveryUnavailableText: "This store isn't delivering yet, so this item can't be ordered right now.",
   customizationNeededText: "Fill in your details below, then add it to your cart.",
   customizationInvalidText: "Some of your details can't be used. Check them below, then add it to your cart.",
@@ -744,6 +746,8 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   paidWithGiftCardDescriptionText: "Your gift cards cover the whole order.",
   giftCardPayOnDeliveryText: "Pay {amount} when you receive your order",
   giftCardCheckoutStepText: "Have a gift card? Pay with it on the next step",
+  // A product cash can't pay for on a store that takes only cash and holds a live gift card.
+  giftCardPaysText: "This item can't be paid for in cash here. Pay with a gift card at checkout.",
   // Warranty (Wave B §5.3): the product page trust row and terms, the spec row, each order line's warranty, the claim form and Account › Warranties.
   warrantyBrandText: "{duration} brand warranty",
   warrantyStoreText: "{duration} store warranty",
@@ -1211,9 +1215,10 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   unexpectedErrorText: "একটি অপ্রত্যাশিত সমস্যা হয়েছে।",
   cartItemsNeedAttentionText: "চেকআউটের আগে কার্টের {count}টি পণ্য যাচাই করা দরকার।",
   cartRulesBlockedText: "এই অর্ডারটি এখনো দেওয়া যাচ্ছে না।",
-  cartOnlinePaymentRequiredText: "{items}-এর দাম এখানে ক্যাশে দেওয়া যায় না। গিফট কার্ড দিয়ে দাম দিন।",
+  cartOnlinePaymentRequiredText: "{items}-এর দাম ক্যাশে দেওয়া যায় না, আর এই স্টোর এখনো অন্য কোনো পেমেন্ট নেয় না।",
   cartPayLaterSignInText: "{items}-এর দাম এখানে ক্যাশে দেওয়া যায় না। গিফট কার্ড দিয়ে দাম দিন, অথবা {method} দিয়ে দাম দিতে সাইন ইন করুন।",
   cartPayLaterNotOpenText: "{items}-এর দাম এখানে ক্যাশে দেওয়া যায় না, আর {method} আপনার অ্যাকাউন্টে চালু নেই। গিফট কার্ড দিয়ে দাম দিন।",
+  paymentGiftCardOnlyText: "এই অর্ডারের {items}-এর দাম এখানে ক্যাশে দেওয়া যায় না। গিফট কার্ড দিয়ে দাম দিন।",
   cartDeliveryUnavailableText: "এই স্টোর এখনো ডেলিভারি দিচ্ছে না, তাই ডেলিভারি লাগে এমন পণ্য এখন অর্ডার করা যাবে না। বাকিগুলো অর্ডার করতে সেগুলো সরিয়ে দিন।",
   orderPlacedSuccessText: "আপনার অর্ডারটি সফলভাবে দেওয়া হয়েছে। অর্ডার আইডি: {orderId}",
   checkingAccountText: "অ্যাকাউন্ট যাচাই করা হচ্ছে…",
@@ -1241,7 +1246,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   tooManyCheckoutAttemptsText: "খুব বেশি চেকআউট চেষ্টা হয়েছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",
   paymentFailedText: "পেমেন্ট ব্যর্থ হয়েছে",
   noPaymentMethodsText:
-    "এখানে এই অর্ডারের দাম শুধু গিফট কার্ড দিয়ে দেওয়া যায়: ওপরে একটি দিন, অথবা অর্ডার বদলাতে কার্টে ফিরুন।",
+    "এই অর্ডারের মোট টাকার জন্য কোনো পেমেন্ট পদ্ধতি পাওয়া যাচ্ছে না। কার্টে ফিরুন।",
   preparingPaymentText: "পেমেন্ট প্রস্তুত হচ্ছে…",
   paymentMethodUnavailableText: "পেমেন্ট পদ্ধতি পাওয়া যাচ্ছে না",
   paymentMethodUnavailableMessage: "এই পেমেন্ট পদ্ধতিটি পাওয়া যাচ্ছে না। অন্য একটি পদ্ধতি বেছে নিন।",
@@ -1398,7 +1403,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   customizationOptionalText: "ঐচ্ছিক",
   customizationChoosePlaceholderText: "বেছে নিন…",
   customizationUnavailableText: "এই পণ্যটি এখন অর্ডার করা যাচ্ছে না।",
-  onlinePaymentRequiredText: "এই পণ্যের দাম এখানে ক্যাশে দেওয়া যায় না। চেকআউটে গিফট কার্ড দিয়ে দাম দিন।",
+  onlinePaymentRequiredText: "এই পণ্যের দাম ক্যাশে দেওয়া যায় না, আর এই স্টোর এখনো অন্য কোনো পেমেন্ট নেয় না।",
   deliveryUnavailableText: "এই স্টোর এখনো ডেলিভারি দিচ্ছে না, তাই পণ্যটি এখন অর্ডার করা যাবে না।",
   customizationNeededText: "নিচে আপনার তথ্য দিন, তারপর কার্টে যোগ করুন।",
   customizationInvalidText: "আপনার দেওয়া কিছু তথ্য গ্রহণ করা যাচ্ছে না। নিচে দেখে নিন, তারপর কার্টে যোগ করুন।",
@@ -1529,6 +1534,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   paidWithGiftCardDescriptionText: "আপনার গিফট কার্ডেই পুরো অর্ডারের দাম পরিশোধ হচ্ছে।",
   giftCardPayOnDeliveryText: "অর্ডার পাওয়ার সময় {amount} পরিশোধ করুন",
   giftCardCheckoutStepText: "গিফট কার্ড আছে? পেমেন্ট ধাপে ব্যবহার করুন",
+  giftCardPaysText: "এই পণ্যের দাম এখানে ক্যাশে দেওয়া যায় না। চেকআউটে গিফট কার্ড দিয়ে দাম দিন।",
   warrantyBrandText: "{duration} ব্র্যান্ড ওয়ারেন্টি",
   warrantyStoreText: "{duration} স্টোর ওয়ারেন্টি",
   warrantyReplacementText: "{days} দিনের রিপ্লেসমেন্ট",

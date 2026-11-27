@@ -600,7 +600,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             kit,
             // A kit sells what its items sell (its own SKU's setting is not used).
             fulfillmentKind: kit ? kit.fulfillmentKind : v.fulfillmentKind,
-            /** Paid only online (a key, a download, a gift card, or a kit holding one). */
+            /** Whether cash can pay for it: false for a key, a download, a gift card, or a kit holding one. */
             cashPayable: kit ? kit.cashPayable : cashPayable({ fulfillmentKind: v.fulfillmentKind, isGiftCard: product.isGiftCard === true }),
         };
     });

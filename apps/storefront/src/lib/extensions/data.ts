@@ -370,10 +370,11 @@ export function storefrontKitOf(kit: ProductKit, page: StorefrontPageMoney): Sto
 /** A placed offer as a skin gets it (`StorefrontPlacedOffer`): what it is, its price and band, and its contents when a kit. */
 /**
  * A placed offer as a theme gets it. `available` judges its buy action as its
- * own page does: in stock. A key on a cash-only store stays buyable (a gift
- * card pays for it); checkout says what can pay.
+ * own page does: in stock, and payable here: one cash can't pay for is off on
+ * a store that lists no way to pay but cash and holds no live gift card
+ * (`cashUnpayableHere` "stopped", `cashUnpayableOff`).
  */
-export function storefrontPlacedOfferOf(offer: ProductPlacedOffer, page: StorefrontPageMoney): StorefrontPlacedOffer {
+export function storefrontPlacedOfferOf(offer: ProductPlacedOffer, page: StorefrontPageMoney, cashUnpayableOff = false): StorefrontPlacedOffer {
   // A host page's offer is a summary: its kit's first items (its own page lists them all).
   const kit = offer.kit ? storefrontKitOf({ ...offer.kit, components: offer.kit.components.slice(0, STOREFRONT_PLACED_KIT_ITEMS_MAX) }, page) : null;
   return {
@@ -386,7 +387,7 @@ export function storefrontPlacedOfferOf(offer: ProductPlacedOffer, page: Storefr
     image: offer.imageUrl ? storefrontImageOf({ url: offer.imageUrl, alt: offer.imageAlt || offer.productName }) : null,
     price: pageAmount(offer.price, page),
     compareAt: offer.compareAtPrice !== null && offer.compareAtPrice > offer.price ? pageAmount(offer.compareAtPrice, page) : null,
-    available: offer.availabilityBand !== "out_of_stock",
+    available: offer.availabilityBand !== "out_of_stock" && !(cashUnpayableOff && offer.cashPayable === false),
     needsChoices: offer.requiresCustomization,
     availability: offer.availabilityBand,
     kit,
@@ -509,6 +510,8 @@ export function productPageData(input: {
   /** One SKU's buyer price (the page's price engine). */
   variantPrice: (variant: ProductVariant) => number;
   page: StorefrontPageMoney;
+  /** No way to pay for an offer cash can't pay for here (`cashUnpayableHere` "stopped"): such an offer is off. Default false. */
+  cashUnpayableOff?: boolean;
   /** The page's checkout-language copy: the warranty row's words (English without it). */
   warrantyCopy?: Partial<CheckoutLanguageData>;
   /** The buy form's buyer inputs (`productBuyerInputFields`: the product's, then the apps' line inputs); the product's own without it. */
@@ -593,7 +596,7 @@ export function productPageData(input: {
           kit: variant.kit ? storefrontKitOf(variant.kit, page) : null,
         };
       }),
-      placedOffers: (product.placedOffers ?? []).map((offer) => storefrontPlacedOfferOf(offer, page)),
+      placedOffers: (product.placedOffers ?? []).map((offer) => storefrontPlacedOfferOf(offer, page, input.cashUnpayableOff === true)),
       warranties,
       fields: storefrontFieldValues(product.customFields, page),
       breadcrumbs: input.breadcrumbs,

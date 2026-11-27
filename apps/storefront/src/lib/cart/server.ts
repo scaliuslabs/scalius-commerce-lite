@@ -22,6 +22,9 @@ import { readDiscountCodes } from "@/lib/checkout/tax-quote-client";
 import { BILLING_ADDRESS_FIELDS, checkoutBillingFields } from "@/lib/checkout/billing-address";
 import { marketingConsentOrderField } from "@/lib/checkout/marketing-consent";
 import { termsAcceptedOrderField } from "@/lib/checkout/terms-text";
+import { cashUnpayableNames, whatCanPayText, type PayableGateway } from "@/lib/checkout/what-can-pay";
+import { numberLocale } from "@scalius/shared/locale-format";
+import { formatList } from "@scalius/shared/locale-words";
 import { parseCheckoutAttributes, parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
 import { cartLinePurchaseOptionIds } from "./purchase-option";
 import {
@@ -46,7 +49,17 @@ type ProcessOrderOptions = {
   customerSessionToken?: string | null;
   /** Settings → Checkout: every order asks for a full billing address. */
   requireFullBillingAddress?: boolean;
+  /** The store's methods and whether it holds a live gift card (checkout configuration), for what can pay instead of cash. */
+  payment?: { gateways: readonly PayableGateway[]; giftCardsLive: boolean };
 };
+
+/** `details.reason` of this form's refusal of cash for lines cash can't pay for: the cart page links to the payment step's gift card entry. */
+export const CASH_UNPAYABLE_REASON = "cash_unpayable";
+
+export function cashUnpayableRefused(result: object): boolean {
+  const details = "details" in result ? result.details : undefined;
+  return typeof details === "object" && details !== null && "reason" in details && details.reason === CASH_UNPAYABLE_REASON;
+}
 
 /**
  * Validates a parsed cart item has the required shape and safe value ranges.
@@ -369,6 +382,22 @@ export async function processOrder(
         throw new CheckoutBuyerMessage(checkoutText(copy.cashOnDeliveryCountryUnavailableText, {
           country: shippingCountryName(shippingCountryCode, options.languageCode),
         }));
+      }
+      // Lines cash can't pay for (a key, a download, a gift card): say what can (the cart's own words).
+      const names = cashUnpayableNames(validated.items);
+      if (names.length > 0) {
+        return {
+          success: false,
+          error: {
+            message: whatCanPayText(copy, {
+              items: formatList(names, numberLocale(options.languageCode || "en")),
+              gateways: options.payment?.gateways ?? [],
+              signedIn: Boolean(options.customerSessionToken),
+              giftCardsLive: options.payment?.giftCardsLive === true,
+            }),
+          },
+          details: { reason: CASH_UNPAYABLE_REASON },
+        };
       }
       throw new CheckoutCopyError("cashOnDeliveryUnavailableText", "cash on delivery is not allowed for this cart");
     }

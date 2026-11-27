@@ -87,4 +87,6 @@ export interface CheckoutConfig {
   };
   unavailable?: boolean;
   unavailableMessage?: string;
+  /** The store holds a live gift card (one can pay what cash can't); absent: not known to. */
+  giftCardsLive?: boolean;
 }

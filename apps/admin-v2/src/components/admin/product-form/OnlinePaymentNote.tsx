@@ -14,8 +14,8 @@ const ONLINE_PAYMENT_STALE_TIME_MS = 60_000;
 /**
  * Whether buyers can get the product, the one answer the Status card gives:
  * a draft only staff see; an active product buyers can buy; or an active
- * gift card or all-digital product, paid only online, on a checkout that
- * takes only cash on delivery (the same fact Home's to-do counts).
+ * gift card or all-digital product, which cash can't pay for, on a checkout
+ * that lists no method but cash on delivery (the same fact Home's to-do counts).
  */
 export type ProductAvailability = "draft" | "buyable" | "needsOnlinePayment";
 
@@ -24,14 +24,14 @@ export function useProductAvailability(form: UseFormReturn<ProductFormValues>): 
     control: form.control,
     name: ["isActive", "isGiftCard", "fulfillmentKind"],
   });
-  const paidOnlyOnline = Boolean(isActive) && (isGiftCard === true || fulfillmentKind === "digital");
+  const cashUnpayable = Boolean(isActive) && (isGiftCard === true || fulfillmentKind === "digital");
   const checkout = useQuery({
     ...setupGuideQueryOptions(),
     staleTime: ONLINE_PAYMENT_STALE_TIME_MS,
-    enabled: paidOnlyOnline,
+    enabled: cashUnpayable,
   });
   if (!isActive) return "draft";
-  return paidOnlyOnline && checkout.data?.onlinePayment?.ready === false ? "needsOnlinePayment" : "buyable";
+  return cashUnpayable && checkout.data?.onlinePayment?.ready === false ? "needsOnlinePayment" : "buyable";
 }
 
 /** In place of "Customers can find and buy it": why they can't, and the way to Payments. */
