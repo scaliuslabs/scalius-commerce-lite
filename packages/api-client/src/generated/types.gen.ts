@@ -6464,6 +6464,51 @@ export type ThemeTemplateSwitchPlan = {
     left: Array<string>;
 };
 
+export type ThemeTemplateUpdate = {
+    template: string;
+    from: string | null;
+    to: string;
+    base: 'recorded' | 'assumed' | 'none';
+    improvements: number;
+    conflicts: number;
+    digest: string;
+    items: Array<ThemeTemplateUpdateItem>;
+    offset: number;
+    moreItems: number;
+    issues: Array<ThemeTemplateUpdateIssue>;
+    draft: {
+        revision: number;
+        basePublishedRevision: number;
+    };
+} | null;
+
+export type ThemeTemplateUpdateItem = {
+    id: string;
+    kind: 'improvement' | 'conflict';
+    area: 'tokens' | 'blocks' | 'skins' | 'privatePages' | 'home';
+    change: 'set' | 'add' | 'remove' | 'order';
+    path: Array<string>;
+    /**
+     * The store's value now (absent: none); for `order`, the template sections' ids in the store's order.
+     */
+    mine?: unknown;
+    /**
+     * The update's value (absent: it removes it); for `order`, the same ids in the update's order.
+     */
+    theirs?: unknown;
+    /**
+     * An added section that takes the place of one the update removes (a renamed id): that section's id.
+     */
+    replaces?: string;
+};
+
+export type ThemeTemplateUpdateIssue = {
+    path: string;
+    message: string;
+    reason: string | null;
+    itemIds: Array<string>;
+};
+
 export type ThemeRestorePoint = {
     id: string;
     reason: 'restore' | 'discard' | 'app' | 'template';
@@ -61329,6 +61374,138 @@ export type PostApiV1AdminSettingsThemeTemplateResponses = {
 };
 
 export type PostApiV1AdminSettingsThemeTemplateResponse = PostApiV1AdminSettingsThemeTemplateResponses[keyof PostApiV1AdminSettingsThemeTemplateResponses];
+
+export type GetApiV1AdminSettingsThemeTemplateUpdateData = {
+    body?: never;
+    path?: never;
+    query?: {
+        compare?: 'true' | 'false';
+        offset?: number | null;
+    };
+    url: '/api/v1/admin/settings/theme/template-update';
+};
+
+export type GetApiV1AdminSettingsThemeTemplateUpdateErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsThemeTemplateUpdateError = GetApiV1AdminSettingsThemeTemplateUpdateErrors[keyof GetApiV1AdminSettingsThemeTemplateUpdateErrors];
+
+export type GetApiV1AdminSettingsThemeTemplateUpdateResponses = {
+    /**
+     * The update, or null
+     */
+    200: {
+        success: true;
+        data: {
+            update: ThemeTemplateUpdate;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeTemplateUpdateResponse = GetApiV1AdminSettingsThemeTemplateUpdateResponses[keyof GetApiV1AdminSettingsThemeTemplateUpdateResponses];
+
+export type PostApiV1AdminSettingsThemeTemplateUpdateData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        digest: string;
+        /**
+         * The items to take, improvements and conflicts alike; every other item stays the store's.
+         */
+        take: Array<string>;
+        dryRun?: boolean;
+        compare?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/template-update';
+};
+
+export type PostApiV1AdminSettingsThemeTemplateUpdateErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsThemeTemplateUpdateError = PostApiV1AdminSettingsThemeTemplateUpdateErrors[keyof PostApiV1AdminSettingsThemeTemplateUpdateErrors];
+
+export type PostApiV1AdminSettingsThemeTemplateUpdateResponses = {
+    /**
+     * The draft's revision (new unless a dry run or nothing taken), how many changes it took, and a dry run's issues
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            basePublishedRevision: number;
+            updatedAt: string | null;
+            taken: number;
+            issues: Array<ThemeTemplateUpdateIssue>;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeTemplateUpdateResponse = PostApiV1AdminSettingsThemeTemplateUpdateResponses[keyof PostApiV1AdminSettingsThemeTemplateUpdateResponses];
 
 export type GetApiV1AdminSettingsThemeRestorePointsData = {
     body?: never;
