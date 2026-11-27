@@ -17,8 +17,16 @@ export const CART_REVEAL_SLOTS = ["cart.line.after", "cart.page.summary"] as con
 /** Every app slot of the cart page whose block lands after the first paint: its room is remembered and reserved. */
 export const CART_RESERVED_SLOTS = [...CART_REVEAL_SLOTS, "cart.page.below", "checkout.contact.after", "checkout.delivery.after"] as const;
 
-/** The longest the first showing waits for the check's blocks; a slower check never holds the lines. */
-export const FIRST_REVEAL_WAIT_MS = 500;
+/**
+ * The longest the first showing waits for the check's blocks; a slower check never holds the lines. A first view
+ * knows no block's room (nothing is remembered yet, and the server renders the page without the buyer's lines), so
+ * the lines show with their blocks or the blocks move them: an offer row under a line on a phone (a 120px row at
+ * 390px, a real theme's) moves every line and the summary under it by its height, a layout shift of 0.11 on its own.
+ * 2s covers a slow check (the rendered gate's runs at 800ms) inside a good first paint (2.5s); a check slower than
+ * that is failing, and the lines show without waiting longer. A later view reserves each block's remembered room and
+ * does not wait at all.
+ */
+export const FIRST_REVEAL_WAIT_MS = 2000;
 
 /** Beside the stored cart (`cart:v3`): each block's last drawn height, by slot and, for a line's, its line key. */
 export const CART_BLOCK_HEIGHTS_KEY = "cart:v3:block-heights";
