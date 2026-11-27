@@ -26,16 +26,15 @@ import type { AddOnRowsShown } from "@/lib/add-on-row";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
 import { cartLineCopy, isLongAnswer } from "@/lib/cart-line-copy";
-import { cartLineStockText } from "@/lib/cart-line-stock-copy";
 import { buyerApiErrorTextNow, loadBuyerApiErrors } from "@/lib/buyer-api-error-text-later";
 import { lineEntryWords } from "@scalius/shared/line-entry-words";
 import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
 import { PRODUCT_IMAGE_FALLBACK, productImageSources, resolveProductImageUrl } from "@/lib/product-media";
 import type { ImageSlot } from "@/lib/responsive-image";
-import { readCartCheckDiscount } from "@/lib/cart/browser-api";
+import type { readCartCheckDiscount } from "@/lib/cart/browser-api";
 import { discountLineKey, type CheckoutDiscountFacts } from "@/lib/checkout/quote-facts";
-import type { CartRuleError, CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
-import { groupCartRuleErrors, parseCartRuleErrors } from "@/lib/cart/rule-errors";
+import type { CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
+import type { CartRuleErrorGroups } from "@/lib/cart/rule-errors";
 import { cartItemVariantLabel } from "@/lib/cart/item-options";
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import { currentPresence, pagePath } from "@/lib/presence-url";
@@ -114,6 +113,16 @@ interface Props {
 
 /** No buyer UI blocks (one array, so an unchanged answer redraws nothing). */
 const NO_BLOCKS: unknown[] = [];
+const NO_RULES: CartRuleErrorGroups = { lines: {}, cart: [] };
+
+/**
+ * A line's stock words ("Only 2 left", "Sold out"), from the check's facts: loaded with the first line that has any,
+ * never with the drawer's first frame (every line has none until the check answers).
+ */
+type StockWords = (typeof import("@/lib/cart-line-stock-copy"))["cartLineStockText"];
+let stockWords: StockWords | null = null;
+let stockWordsLoading: Promise<StockWords> | null = null;
+const loadStockWords = () => (stockWordsLoading ??= import("@/lib/cart-line-stock-copy").then((module) => (stockWords = module.cartLineStockText)));
 const NO_LINE_DISCOUNTS = new Map<string, CartLineDiscount>();
 
 /** The lines and codes the cart check prices the discounts for: when they change, the shown discounts are for another cart. */
@@ -156,7 +165,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   /** Units the store can sell of each line, as the check said (the cart page's limits): "+" stops there. */
   const [limits, setLimits] = useState<Record<string, number | null>>({});
   /** Store app rules that block checkout, in the app's own words. */
-  const [ruleErrors, setRuleErrors] = useState<CartRuleError[]>([]);
+  const [ruleErrors, setRuleErrors] = useState<CartRuleErrorGroups>(NO_RULES);
   /** The apps' add-on rows as the check folded them (the server's rows; the drawer never folds its own). */
   const [addOnRows, setAddOnRows] = useState<AddOnTotalRow[]>([]);
   /** The rows the drawer's checks showed last, across its openings (lib/add-on-row.ts). */
@@ -223,13 +232,20 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
             const key = line.cartKey ?? items[line.index]?.[0];
             return key ? [[key, typeof line.availableQuantity === "number" ? Math.max(0, Math.floor(line.availableQuantity)) : null]] : [];
           })));
-          setRuleErrors(parseCartRuleErrors(json?.data?.ruleErrors));
+          // An app's rule is rare: its reader loads with the first check that names one, not with the drawer.
+          const rules = json?.data?.ruleErrors;
+          if (Array.isArray(rules) && rules.length > 0) {
+            const { groupCartRuleErrors, parseCartRuleErrors } = await import("@/lib/cart/rule-errors");
+            setRuleErrors(groupCartRuleErrors(parseCartRuleErrors(rules), cart.items));
+          } else setRuleErrors(NO_RULES);
           setAddOnRows(addOnRows);
           // A refused check keeps no blocks: they belong to a cart the store read.
           const blocks = json?.data?.buyerUi;
           setBuyerUi(Array.isArray(blocks) && blocks.length > 0 ? blocks : NO_BLOCKS);
           setIssueLists(cartLineIssues(found, cart.items));
-          priceDiscounts(await readCartCheckDiscount(response, json, items.length));
+          // The check's discount reader loads with its first answer, not with the drawer's first frame.
+          const { readCartCheckDiscount: readDiscount } = await import("@/lib/cart/browser-api");
+          priceDiscounts(await readDiscount(response, json, items.length));
         })
         // A check that failed prices no discount.
         .catch(() => priceDiscounts({ ok: false, message: null }));
@@ -384,6 +400,8 @@ export default function CartFlyout({ onReady }: Props) {
     item.properties && item.properties.length > 0 ? `${inputsIdBase}-inputs-${index}` : undefined;
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
+  // Draws again once a line's stock words have loaded (`loadStockWords`).
+  const [, setStockWordsReady] = useState(stockWords !== null);
   const { discounts, discountsPending, lineDiscounts, issues, issueLists, limits, ruleErrors, buyerUi, lineInputs, addOnRows, addOnRowsShown, recheck } = useDrawerCartFacts(cart, isOpen);
   // Any other issue in the catalogue's words (never the API's English), which load with the first one.
   useRefusalWords(Object.keys(issues).length > 0);
@@ -400,7 +418,8 @@ export default function CartFlyout({ onReady }: Props) {
   // A line that can't be bought as is blocks Checkout here, like on the cart page,
   // and so does a store app's rule (on its line, or about the whole cart).
   const lineIssues = Object.entries(issues).filter(([key]) => cart.items[key]);
-  const rules = groupCartRuleErrors(ruleErrors, cart.items);
+  // Each line's rules while the line is still in the cart (the next check groups them again).
+  const rules = { cart: ruleErrors.cart, lines: Object.fromEntries(Object.entries(ruleErrors.lines).filter(([key]) => cart.items[key])) };
   const cartRuleMessages = rules.cart.map(({ message }) => message).filter(Boolean);
   const checkoutBlocked =
     lineIssues.length > 0 || Object.keys(rules.lines).length > 0 || rules.cart.length > 0;
@@ -662,7 +681,8 @@ export default function CartFlyout({ onReady }: Props) {
       issues: issueLists[key],
     });
     // A stock issue in the words the cart page uses; any other issue as the check said it.
-    const stockText = cartLineStockText(view);
+    const stockText = view.stock ? stockWords?.(view) ?? null : null;
+    if (view.stock && !stockWords) void loadStockWords().then(() => setStockWordsReady(true));
     const describedBy = inputsId(index, item);
     const remove = () => removeWithUndo(copy.removed(view.lineName), () => removeCartItemByKey(key));
     const parts: Record<string, React.ReactNode> = {
