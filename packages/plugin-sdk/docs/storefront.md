@@ -29,8 +29,8 @@ Set `"jsxImportSource": "@scalius/plugin-sdk/storefront"` in your `tsconfig.json
 | Section | `sections: [{ type, name, settings, reads? }]` | `sections[type]` | 32 |
 | Component (slots and app pages) | `components: [{ type, name, targets, settings, reads? }]` | `components[type]` | 16 |
 | Skin of a unit or a core section | `skins: [{ id, target, name, settings }]` | `skins[id]` | 30 |
-| Template | `templates: [{ id, name, themeVersion?, theme }]` | | 5 |
-| Page preset | `pagePresets: [{ id, name, themeVersion?, sections }]` | | 8 |
+| Template | `templates: [{ id, name, themeVersion, theme }]` | | 5 |
+| Page preset | `pagePresets: [{ id, name, themeVersion, sections }]` | | 8 |
 | Island | `islands: [{ name }]` | `src/islands/<name>.ts` with `defineIsland` | 10 |
 | Stylesheet | `stylesheet: true` | `src/storefront.css` | 1 |
 | Browser hosts for islands | `connect: ["api.example.com"]` | | 10 |
@@ -42,7 +42,7 @@ Sections and components have no render route: they run at the edge with data the
 
 **Scripts** load over https, non-blocking, on `all`, `home`, `product` or `listing` pages only. Their hosts join the storefront CSP. **Head tags** add up to 10 meta tags and 3 JSON-LD blocks (16 KiB each) to public pages; the page keeps its own `robots`, `description`, `og:` and `twitter:` tags.
 
-A **template** holds theme values (`tokens`, `blocks`, `apps` and homepage `sections`, at most 64 KiB) that the theme library applies, keeping the merchant's content. A block it names may leave required nested fields out: they take the default theme's, and the block is checked like any other. An optional field it leaves out stays out (the style's own value applies), and a block naming another `variant` than the default's takes nothing from the default below it. A **page preset** is a ready-made landing page (1 to 24 sections, 64 KiB): when the merchant makes a new landing page, the editor offers a blank page or the active apps' presets, and fills `product` settings with a product the merchant picks. Both are written for one theme document version (`themeVersion`, absent means 10). The store upgrades them through its upgrade chain before listing; one that still does not fit is left out and named, with the reason, on the app's page.
+A **template** holds theme values (`tokens`, `blocks`, `apps` and homepage `sections`, at most 64 KiB) that the theme library applies, keeping the merchant's content. A block it names may leave required nested fields out: they take the default theme's, and the block is checked like any other. An optional field it leaves out stays out (the style's own value applies), and a block naming another `variant` than the default's takes nothing from the default below it. A **page preset** is a ready-made landing page (1 to 24 sections, 64 KiB): when the merchant makes a new landing page, the editor offers a blank page or the active apps' presets, and fills `product` settings with a product the merchant picks. Both state the theme document version they are written for (`themeVersion`, required: `16` in this release); a manifest without it is refused, naming the current version. The store upgrades them through its upgrade chain before listing; one that still does not fit is left out and named, with the reason, on the app's page.
 
 A template's product card fields (`blocks.card.fields`) are store data: a store applies the template keeping only the ones that are storefront-visible product fields there, and tells the merchant which it left out. `custom.<key>` is the merchant's namespace, which an app cannot create; your own `<app id>.<key>` field exists in a store once your app writes a value. `pnpm plugin validate` warns about each card field no store is sure to have.
 

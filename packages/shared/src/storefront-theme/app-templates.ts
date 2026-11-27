@@ -2,8 +2,8 @@
 // ready-made look the template library applies in one step, like a built-in
 // template. A template may set the tokens, any blocks, the units app skins draw
 // and the homepage sections; the merchant's brand, landing pages, page
-// templates and other content stay. A declaration is written for one document
-// version (`themeVersion`); the API runs it through the stored documents'
+// templates and other content stay. A declaration states the one document
+// version it is written for (`themeVersion`, required); the API runs it through the stored documents'
 // upgrade chain and lists only what then parses against the live schema,
 // reporting the rest on the app's page. A block a template names may leave
 // required nested fields out: they take the default theme's, and the block is
@@ -33,12 +33,6 @@ import {
   type StorefrontHandleLookup,
   type StorefrontHandleRef,
 } from "./handles";
-
-/**
- * The theme document version of a template or page preset that does not
- * state one (`themeVersion`): the version the field arrived with.
- */
-export const STOREFRONT_DECLARATION_THEME_VERSION = 10;
 
 export const storefrontAppTemplateThemeSchema = z.object({
   tokens: storefrontThemeTokensSchema.optional(),
@@ -489,8 +483,8 @@ export function readStorefrontPagePresetSections(value: unknown, themeVersion: n
 
 /** An app's theme declarations as its manifest has them (`storefront.templates`, `storefront.pagePresets`). */
 export interface StorefrontAppThemeDeclarations {
-  templates: ReadonlyArray<{ id: string; name: string; themeVersion?: number; theme: unknown }>;
-  pagePresets: ReadonlyArray<{ id: string; name: string; themeVersion?: number; sections: unknown }>;
+  templates: ReadonlyArray<{ id: string; name: string; themeVersion: number; theme: unknown }>;
+  pagePresets: ReadonlyArray<{ id: string; name: string; themeVersion: number; sections: unknown }>;
 }
 
 /** A template or page preset this store's theme cannot use, with the first reason. */
@@ -511,11 +505,11 @@ export interface StorefrontAppThemeProblem {
 export function storefrontAppThemeProblems(storefront: StorefrontAppThemeDeclarations, pluginId: string): StorefrontAppThemeProblem[] {
   const problems: StorefrontAppThemeProblem[] = [];
   for (const template of storefront.templates) {
-    const read = checkStorefrontAppTemplateTheme(template.theme, template.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION, pluginId, template.id);
+    const read = checkStorefrontAppTemplateTheme(template.theme, template.themeVersion, pluginId, template.id);
     if (!read.ok) problems.push({ kind: "template", id: template.id, name: template.name, problem: read.problem, issues: read.issues });
   }
   for (const preset of storefront.pagePresets) {
-    const read = checkStorefrontPagePresetSections(preset.sections, preset.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
+    const read = checkStorefrontPagePresetSections(preset.sections, preset.themeVersion);
     if (!read.ok) problems.push({ kind: "page-preset", id: preset.id, name: preset.name, problem: read.problem, issues: read.issues });
   }
   return problems;

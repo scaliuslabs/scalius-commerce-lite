@@ -1954,5 +1954,47 @@
   "from": "43d11be555c837a3",
   "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
   "reason": "Pre-release (private pages, beta 8): buyer UI gains a `mark` node (a tone's glyph) and an optional `tone` on `stack` (a toned row: an offer row, a status box), drawn on buyer pages only; the SDK gains `ui.mark`. An added union arm and an optional field; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "4931765adbe1eaad",
+  "change": "manifest storefront.templates[].themeVersion: a new required field.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "4931765adbe1eaad",
+  "change": "manifest storefront.pagePresets[].themeVersion: a new required field.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/plugin-sdk/src/pixel-testing.d.ts#FunctionDeclaration:createPixelTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/translation-coverage.d.ts#TypeAliasDeclaration:Manifest: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
  }
 ]
