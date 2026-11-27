@@ -21,10 +21,12 @@
 //                                  (enums, required fields, revision preconditions)
 //
 // A valid call reaches your handler. Its answer is checked against the
-// operation's response schema, so a test cannot rely on a shape the platform
+// operation's response schema and, as the platform does, carries only the
+// keys that schema declares, so a test cannot rely on a shape the platform
 // never returns. A repeat with the same Idempotency-Key replays the first
 // answer without calling the handler again, as the platform does.
 
+import { schemaProjector, type SchemaProjector } from "@scalius/shared/schema-projection";
 import type { PluginApiCallInput, PluginApiResult } from "./context";
 import { NON_STABLE_OPERATION_NAMES, STABLE_CONTRACT } from "./testing-contract.gen";
 
@@ -42,10 +44,10 @@ export interface StableContractParameter {
 }
 
 export interface StableContractOperation {
-  /** The host's internal operation id the app name resolves to (what the audit log records). */
-  operationId: string;
   method: string;
   path: string;
+  /** The success statuses it answers, ascending (`[201]` for a create). */
+  statuses: number[];
   risk: string;
   idempotency: "none" | "supported" | "required" | string;
   revision: "none" | "optional" | "required" | string;
@@ -314,6 +316,18 @@ function isApiResult(value: unknown): value is PluginApiResult {
 
 const copy = <T>(value: T): T => (value === undefined ? value : structuredClone(value));
 
+const projectors = new WeakMap<StableContractOperation, SchemaProjector>();
+
+/** The answer's `data` with only the keys the operation's response schema declares (what the platform sends). */
+function declaredData(operation: StableContractOperation, data: unknown, contract: StableContract): unknown {
+  let project = projectors.get(operation);
+  if (!project) {
+    project = schemaProjector(operation.output, (ref) => contract.components[ref.replace("#/components/schemas/", "")]);
+    projectors.set(operation, project);
+  }
+  return project({ success: true, data }).data;
+}
+
 /**
  * A contract-checked `ctx.api` for `createPluginTestHarness(plugin, { api })`.
  *
@@ -412,13 +426,14 @@ export function createContractApi(options: ContractApiOptions = {}): ContractApi
       throw new Error(`createContractApi: the app called ${operationId} (a valid call), but no handler answers it. Add handlers["${operationId}"].`);
     }
     const answered = await handler(copy({ operationId, operation, path: input.path, query: input.query, body: input.body, idempotencyKey: input.idempotencyKey }));
-    const result: PluginApiResult = isApiResult(answered) ? answered : { ok: true, status: 200, data: answered ?? null, error: null };
+    let result: PluginApiResult = isApiResult(answered) ? answered : { ok: true, status: operation.statuses[0] ?? 200, data: answered ?? null, error: null };
     if (result.ok && options.checkOutput !== false && operation.output) {
       const issue = contractSchemaIssue(operation.output, { success: true, data: result.data }, contract);
       if (issue) {
         throw new Error(`createContractApi: the handler for ${operationId} answered a shape the platform never returns: ${issue.path.replace(/^data\.?/, "data.")} ${issue.message}.`);
       }
     }
+    if (result.ok && operation.output) result = { ...result, data: declaredData(operation, result.data, contract) };
     if (replayKey && result.status < 500) replays.set(replayKey, { request, result: copy(result) });
     return copy(result);
   };

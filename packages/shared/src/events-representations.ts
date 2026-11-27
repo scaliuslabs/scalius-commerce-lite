@@ -13,8 +13,9 @@
 
 import { z } from "zod";
 import { PROTECTED_FIELD_KEYWORD, protectedPathsOf, redactProtectedData, type ProtectedCustomerData, type ProtectedPath } from "./plugins/protected-data";
-import { STABLE_APP_OPERATIONS, type StableAppOperationName } from "./plugins/app-operations";
+import type { StableAppOperationName } from "./plugins/app-operations";
 import { APP_OWNED_FIELD_KEYWORD, appOwnedPathsOf, projectAppOwnedData, type AppOwnedMode, type AppOwnedPath } from "./plugins/app-owned-data";
+import { schemaProjector, type SchemaProjector } from "./schema-projection";
 import {
   FULFILLMENT_RECORD_STATUSES,
   FULFILLMENT_STATUSES,
@@ -944,16 +945,14 @@ export type EventRepresentationInput<T extends EventRepresentationType> =
  * resource no longer exists. `fetch` names a stable app API read whose
  * answer carries the same representation, the resource itself or the list
  * it is in, by its `id`: `appOperation` is what an app passes to
- * `ctx.api.call`, `operationId`/`method`/`path` what an HTTP or agent caller
- * uses. It is null for a resource no stable operation reads; the receiver
- * keeps the `id`.
+ * `ctx.api.call`, `method` and `path` what an HTTP caller sends. It is null
+ * for a resource no stable operation reads; the receiver keeps the `id`.
  */
 export const eventDataTruncationSchema = z.object({
   truncated: z.literal(true),
   id,
   fetch: z.object({
     appOperation: z.string().min(1).max(128),
-    operationId: z.string().min(1).max(128),
     method: z.literal("GET"),
     path: z.string().min(1).max(512),
   }).nullable(),
@@ -1000,14 +999,16 @@ export function eventDataTruncation(type: EventRepresentationType, resourceId: s
   return eventDataTruncationSchema.parse({
     truncated: true,
     id: resourceId,
-    fetch: hint && { appOperation: hint.appOperation, operationId: STABLE_APP_OPERATIONS[hint.appOperation], method: "GET", path: hint.path },
+    fetch: hint && { appOperation: hint.appOperation, method: "GET", path: hint.path },
   });
 }
 
 /**
  * A copy of a sealed representation as one reader may see it (per
- * subscription): the protected fields outside `customerData` as null, and,
- * for an app's reader, the app-owned answers narrowed to that app's own.
+ * subscription): only the keys its schema declares (whatever built it), the
+ * protected fields outside `customerData` as null, and, for an app's reader,
+ * the app-owned answers narrowed to that app's own. The projection copies
+ * every declared object, so the shared representation is never changed.
  */
 export function projectEventRepresentation<T extends EventRepresentationType>(
   type: T,
@@ -1015,32 +1016,37 @@ export function projectEventRepresentation<T extends EventRepresentationType>(
   customerData: ReadonlySet<ProtectedCustomerData>,
   appId: string | null = null,
 ): EventRepresentation<T> {
-  const projected = redactProtectedData(structuredClone(representation), eventRepresentationProtectedPaths(type), customerData);
-  return projectAppOwnedData(projected, eventRepresentationAppOwnedPaths(type), appId);
+  const { project, protectedPaths, appOwnedPaths } = derived(type);
+  return projectAppOwnedData(redactProtectedData(project(representation), protectedPaths, customerData), appOwnedPaths, appId);
 }
 
-const appOwnedPathsByType = new Map<EventRepresentationType, readonly AppOwnedPath[]>();
+type Derived = { project: SchemaProjector; protectedPaths: readonly ProtectedPath[]; appOwnedPaths: readonly AppOwnedPath[] };
+const derivedByType = new Map<EventRepresentationType, Derived>();
+
+/** What a representation's schema yields, derived once per type: its projector and its marked fields. */
+function derived(type: EventRepresentationType): Derived {
+  let found = derivedByType.get(type);
+  if (!found) {
+    const schema = z.toJSONSchema(EVENT_REPRESENTATION_SCHEMAS[type], { io: "output", unrepresentable: "any" }) as Record<string, unknown>;
+    const defs = (schema.$defs ?? {}) as Record<string, unknown>;
+    found = {
+      project: schemaProjector(schema, (ref) => (ref === "#" ? schema : ref.startsWith("#/$defs/") ? defs[ref.slice("#/$defs/".length)] : undefined)),
+      protectedPaths: protectedPathsOf(schema),
+      appOwnedPaths: appOwnedPathsOf(schema),
+    };
+    derivedByType.set(type, found);
+  }
+  return found;
+}
 
 /** The app-owned fields of a representation (derived once per type from its schema). */
 export function eventRepresentationAppOwnedPaths(type: EventRepresentationType): readonly AppOwnedPath[] {
-  let paths = appOwnedPathsByType.get(type);
-  if (!paths) {
-    paths = appOwnedPathsOf(z.toJSONSchema(EVENT_REPRESENTATION_SCHEMAS[type], { io: "output", unrepresentable: "any" }));
-    appOwnedPathsByType.set(type, paths);
-  }
-  return paths;
+  return derived(type).appOwnedPaths;
 }
-
-const pathsByType = new Map<EventRepresentationType, readonly ProtectedPath[]>();
 
 /** The protected fields of a representation (derived once per type from its schema). */
 export function eventRepresentationProtectedPaths(type: EventRepresentationType): readonly ProtectedPath[] {
-  let paths = pathsByType.get(type);
-  if (!paths) {
-    paths = protectedPathsOf(z.toJSONSchema(EVENT_REPRESENTATION_SCHEMAS[type], { io: "output", unrepresentable: "any" }));
-    pathsByType.set(type, paths);
-  }
-  return paths;
+  return derived(type).protectedPaths;
 }
 
 /** A status field: `status`, `paymentStatus`, `fulfillmentStatus` and the like. */

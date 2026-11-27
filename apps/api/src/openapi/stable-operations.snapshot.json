@@ -1,9 +1,11 @@
 {
  "operations": {
   "brands.batch_create": {
-   "operationId": "dashboard.brands.batch_create",
    "method": "POST",
    "path": "/api/v1/admin/brands/batch",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -208,9 +210,11 @@
    }
   },
   "brands.create": {
-   "operationId": "dashboard.brands.create",
    "method": "POST",
    "path": "/api/v1/admin/brands",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -343,9 +347,11 @@
    }
   },
   "brands.get": {
-   "operationId": "dashboard.brands.get",
    "method": "GET",
    "path": "/api/v1/admin/brands/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -395,9 +401,11 @@
    }
   },
   "brands.restore": {
-   "operationId": "dashboard.brands.restore",
    "method": "POST",
    "path": "/api/v1/admin/brands/restore",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -490,9 +498,11 @@
    }
   },
   "brands.set_status": {
-   "operationId": "dashboard.brands.set_status",
    "method": "PATCH",
    "path": "/api/v1/admin/brands/{id}/status",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -580,9 +590,11 @@
    }
   },
   "brands.trash": {
-   "operationId": "dashboard.brands.trash",
    "method": "POST",
    "path": "/api/v1/admin/brands/trash",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "required",
@@ -675,9 +687,11 @@
    }
   },
   "brands.update": {
-   "operationId": "dashboard.brands.update",
    "method": "PUT",
    "path": "/api/v1/admin/brands/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -825,9 +839,11 @@
    }
   },
   "categories.batch_create": {
-   "operationId": "dashboard.categories.batch_create",
    "method": "POST",
    "path": "/api/v1/admin/categories/batch",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -1066,9 +1082,11 @@
    }
   },
   "categories.create": {
-   "operationId": "dashboard.categories.create",
    "method": "POST",
    "path": "/api/v1/admin/categories",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -1235,9 +1253,11 @@
    }
   },
   "categories.restore": {
-   "operationId": "dashboard.categories.restore",
    "method": "POST",
    "path": "/api/v1/admin/categories/{id}/restore",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -1318,9 +1338,11 @@
    }
   },
   "categories.set_status": {
-   "operationId": "dashboard.categories.set_status",
    "method": "PATCH",
    "path": "/api/v1/admin/categories/{id}/status",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -1409,9 +1431,11 @@
    }
   },
   "categories.trash": {
-   "operationId": "dashboard.categories.trash",
    "method": "DELETE",
    "path": "/api/v1/admin/categories/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "required",
@@ -1483,9 +1507,11 @@
    }
   },
   "categories.update": {
-   "operationId": "dashboard.categories.update",
    "method": "PUT",
    "path": "/api/v1/admin/categories/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -1671,9 +1697,11 @@
    }
   },
   "collections.create": {
-   "operationId": "dashboard.collections.create",
    "method": "POST",
    "path": "/api/v1/admin/collections",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -1855,9 +1883,11 @@
    }
   },
   "collections.restore": {
-   "operationId": "dashboard.collections.restore",
    "method": "POST",
    "path": "/api/v1/admin/collections/{id}/restore",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -1936,9 +1966,11 @@
    }
   },
   "collections.trash": {
-   "operationId": "dashboard.collections.trash",
    "method": "DELETE",
    "path": "/api/v1/admin/collections/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "required",
@@ -2008,9 +2040,11 @@
    }
   },
   "collections.update": {
-   "operationId": "dashboard.collections.update",
    "method": "PUT",
    "path": "/api/v1/admin/collections/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -2194,9 +2228,11 @@
    }
   },
   "collections.update_products": {
-   "operationId": "dashboard.collections.update_products",
    "method": "POST",
    "path": "/api/v1/admin/collections/{id}/products",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -2295,9 +2331,11 @@
    }
   },
   "pages.create": {
-   "operationId": "dashboard.content.create",
    "method": "POST",
    "path": "/api/v1/admin/pages",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -2500,9 +2538,11 @@
    }
   },
   "pages.get": {
-   "operationId": "dashboard.content.get",
    "method": "GET",
    "path": "/api/v1/admin/pages/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -2550,9 +2590,11 @@
    }
   },
   "pages.update": {
-   "operationId": "dashboard.content.update",
    "method": "PUT",
    "path": "/api/v1/admin/pages/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -2746,9 +2788,11 @@
    }
   },
   "custom_field_definitions.get": {
-   "operationId": "dashboard.custom_field_definitions.get",
    "method": "GET",
    "path": "/api/v1/admin/custom-field-definitions/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -2797,9 +2841,11 @@
    }
   },
   "custom_field_definitions.list": {
-   "operationId": "dashboard.custom_field_definitions.list",
    "method": "GET",
    "path": "/api/v1/admin/custom-field-definitions",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -2906,9 +2952,11 @@
    }
   },
   "custom_fields.get_brand_values": {
-   "operationId": "dashboard.custom_fields.get_brand_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/brand/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -2997,9 +3045,11 @@
    }
   },
   "custom_fields.get_category_values": {
-   "operationId": "dashboard.custom_fields.get_category_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/category/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -3088,9 +3138,11 @@
    }
   },
   "custom_fields.get_collection_values": {
-   "operationId": "dashboard.custom_fields.get_collection_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/collection/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -3179,9 +3231,11 @@
    }
   },
   "custom_fields.get_customer_values": {
-   "operationId": "dashboard.custom_fields.get_customer_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/customer/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -3270,9 +3324,11 @@
    }
   },
   "custom_fields.get_order_values": {
-   "operationId": "dashboard.custom_fields.get_order_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/order/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -3367,9 +3423,11 @@
    }
   },
   "custom_fields.get_page_values": {
-   "operationId": "dashboard.custom_fields.get_page_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/page/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -3458,9 +3516,11 @@
    }
   },
   "custom_fields.get_product_values": {
-   "operationId": "dashboard.custom_fields.get_product_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/product/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -3549,9 +3609,11 @@
    }
   },
   "custom_fields.get_variant_values": {
-   "operationId": "dashboard.custom_fields.get_variant_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/variant/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -3640,9 +3702,11 @@
    }
   },
   "custom_fields.set_brand_values": {
-   "operationId": "dashboard.custom_fields.set_brand_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/brand/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -3779,9 +3843,11 @@
    }
   },
   "custom_fields.set_category_values": {
-   "operationId": "dashboard.custom_fields.set_category_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/category/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -3918,9 +3984,11 @@
    }
   },
   "custom_fields.set_collection_values": {
-   "operationId": "dashboard.custom_fields.set_collection_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/collection/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -4057,9 +4125,11 @@
    }
   },
   "custom_fields.set_customer_values": {
-   "operationId": "dashboard.custom_fields.set_customer_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/customer/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -4196,9 +4266,11 @@
    }
   },
   "custom_fields.set_order_values": {
-   "operationId": "dashboard.custom_fields.set_order_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/order/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -4335,9 +4407,11 @@
    }
   },
   "custom_fields.set_page_values": {
-   "operationId": "dashboard.custom_fields.set_page_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/page/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -4474,9 +4548,11 @@
    }
   },
   "custom_fields.set_product_values": {
-   "operationId": "dashboard.custom_fields.set_product_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/product/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -4613,9 +4689,11 @@
    }
   },
   "custom_fields.set_variant_values": {
-   "operationId": "dashboard.custom_fields.set_variant_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/variant/{ownerId}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -4752,9 +4830,11 @@
    }
   },
   "customers.create": {
-   "operationId": "dashboard.customers.create",
    "method": "POST",
    "path": "/api/v1/admin/customers",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -4930,9 +5010,11 @@
    }
   },
   "customers.set_tags": {
-   "operationId": "dashboard.customers.tags_set",
    "method": "PUT",
    "path": "/api/v1/admin/customers/{id}/tags",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -5017,9 +5099,11 @@
    }
   },
   "customers.update": {
-   "operationId": "dashboard.customers.update",
    "method": "PUT",
    "path": "/api/v1/admin/customers/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -5121,9 +5205,11 @@
    }
   },
   "delivery_locations.import": {
-   "operationId": "dashboard.delivery_locations.import",
    "method": "POST",
    "path": "/api/v1/admin/settings/delivery-locations/import",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -5322,9 +5408,11 @@
    }
   },
   "discounts.activate": {
-   "operationId": "dashboard.discounts.activate",
    "method": "POST",
    "path": "/api/v1/admin/discounts/{id}/activate",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -5407,9 +5495,11 @@
    }
   },
   "discounts.archive": {
-   "operationId": "dashboard.discounts.archive",
    "method": "DELETE",
    "path": "/api/v1/admin/discounts/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "required",
@@ -5482,9 +5572,11 @@
    }
   },
   "discounts.create": {
-   "operationId": "dashboard.discounts.create",
    "method": "POST",
    "path": "/api/v1/admin/discounts",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -6093,9 +6185,11 @@
    }
   },
   "discounts.get": {
-   "operationId": "dashboard.discounts.get",
    "method": "GET",
    "path": "/api/v1/admin/discounts/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -6145,9 +6239,11 @@
    }
   },
   "discounts.pause": {
-   "operationId": "dashboard.discounts.pause",
    "method": "POST",
    "path": "/api/v1/admin/discounts/{id}/pause",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -6230,9 +6326,11 @@
    }
   },
   "discounts.update": {
-   "operationId": "dashboard.discounts.update",
    "method": "PUT",
    "path": "/api/v1/admin/discounts/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -6858,9 +6956,11 @@
    }
   },
   "inventory.adjust": {
-   "operationId": "dashboard.inventory.adjust",
    "method": "POST",
    "path": "/api/v1/admin/inventory/{variantId}/adjust",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "optional",
@@ -7002,9 +7102,11 @@
    }
   },
   "inventory.set_stock": {
-   "operationId": "dashboard.inventory.set_stock",
    "method": "POST",
    "path": "/api/v1/admin/inventory/stock-set",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "optional",
@@ -7125,9 +7227,11 @@
    }
   },
   "languages.list": {
-   "operationId": "dashboard.languages.list",
    "method": "GET",
    "path": "/api/v1/admin/settings/languages",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -7204,9 +7308,11 @@
    }
   },
   "media.get": {
-   "operationId": "dashboard.media.get",
    "method": "GET",
    "path": "/api/v1/admin/media/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -7368,9 +7474,11 @@
    }
   },
   "media.import_url": {
-   "operationId": "dashboard.media.import_url",
    "method": "POST",
    "path": "/api/v1/admin/media/uploads/import-url",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -7564,9 +7672,11 @@
    }
   },
   "media.list": {
-   "operationId": "dashboard.media.list",
    "method": "GET",
    "path": "/api/v1/admin/media",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -7850,9 +7960,11 @@
    }
   },
   "media.trash": {
-   "operationId": "dashboard.media.trash",
    "method": "POST",
    "path": "/api/v1/admin/media/{id}/trash",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "required",
@@ -8045,9 +8157,11 @@
    }
   },
   "media.update": {
-   "operationId": "dashboard.media.update",
    "method": "PATCH",
    "path": "/api/v1/admin/media/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -8287,9 +8401,11 @@
    }
   },
   "fulfillments.void": {
-   "operationId": "dashboard.orders.fulfillment_void",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/fulfillments/{fulfillmentId}/void",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "optional",
@@ -8394,9 +8510,11 @@
    }
   },
   "orders.mark_delivered": {
-   "operationId": "dashboard.orders.mark_delivered",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/mark-delivered",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "optional",
@@ -8473,9 +8591,11 @@
    }
   },
   "orders.mark_pickup_ready": {
-   "operationId": "dashboard.orders.pickup_ready",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/pickup-ready",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "optional",
@@ -8565,9 +8685,11 @@
    }
   },
   "order_timeline.list": {
-   "operationId": "dashboard.orders.timeline",
    "method": "GET",
    "path": "/api/v1/admin/orders/{id}/timeline",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -8727,9 +8849,11 @@
    }
   },
   "orders.set_status": {
-   "operationId": "dashboard.orders.update_status",
    "method": "PUT",
    "path": "/api/v1/admin/orders/{id}/status",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "optional",
@@ -8832,9 +8956,11 @@
    }
   },
   "order_uploads.list": {
-   "operationId": "dashboard.orders.uploads",
    "method": "GET",
    "path": "/api/v1/admin/orders/{id}/uploads",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -8921,9 +9047,11 @@
    }
   },
   "variants.retire": {
-   "operationId": "dashboard.product_variants.retire",
    "method": "DELETE",
    "path": "/api/v1/admin/products/{id}/variants/{variantId}",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "required",
@@ -9001,9 +9129,11 @@
    }
   },
   "products.set_publications": {
-   "operationId": "dashboard.products.publications_set",
    "method": "PUT",
    "path": "/api/v1/admin/products/{id}/publications",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -9097,9 +9227,11 @@
    }
   },
   "products.restore": {
-   "operationId": "dashboard.products.restore",
    "method": "POST",
    "path": "/api/v1/admin/products/{id}/restore",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -9179,9 +9311,11 @@
    }
   },
   "products.trash": {
-   "operationId": "dashboard.products.trash",
    "method": "DELETE",
    "path": "/api/v1/admin/products/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "required",
@@ -9251,9 +9385,11 @@
    }
   },
   "abandoned_checkouts.get": {
-   "operationId": "dashboard.resources.abandoned_checkouts.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/abandoned-checkouts/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -9309,9 +9445,11 @@
    }
   },
   "abandoned_checkouts.list": {
-   "operationId": "dashboard.resources.abandoned_checkouts.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/abandoned-checkouts",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -9415,9 +9553,11 @@
    }
   },
   "analytics.get_summary": {
-   "operationId": "dashboard.resources.analytics.get_summary",
    "method": "GET",
    "path": "/api/v1/admin/resources/analytics/summary",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -9493,9 +9633,11 @@
    }
   },
   "app_content.delete": {
-   "operationId": "dashboard.resources.app_content.delete",
    "method": "POST",
    "path": "/api/v1/admin/resources/app-content/delete",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "none",
@@ -9641,9 +9783,11 @@
    }
   },
   "brands.list": {
-   "operationId": "dashboard.resources.brands.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/brands",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -9755,9 +9899,11 @@
    }
   },
   "bulk_runs.get": {
-   "operationId": "dashboard.resources.bulk_runs.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/bulk-runs/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -9811,9 +9957,11 @@
    }
   },
   "bulk_runs.list": {
-   "operationId": "dashboard.resources.bulk_runs.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/bulk-runs",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -9901,9 +10049,11 @@
    }
   },
   "categories.get": {
-   "operationId": "dashboard.resources.categories.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/categories/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -9953,9 +10103,11 @@
    }
   },
   "categories.list": {
-   "operationId": "dashboard.resources.categories.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/categories",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -10065,9 +10217,11 @@
    }
   },
   "collections.get": {
-   "operationId": "dashboard.resources.collections.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/collections/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -10117,9 +10271,11 @@
    }
   },
   "collections.list": {
-   "operationId": "dashboard.resources.collections.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/collections",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -10217,9 +10373,11 @@
    }
   },
   "conversations.get": {
-   "operationId": "dashboard.resources.conversations.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/conversations/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -10269,9 +10427,11 @@
    }
   },
   "conversations.list": {
-   "operationId": "dashboard.resources.conversations.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/conversations",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -10395,9 +10555,12 @@
    }
   },
   "conversations.create_message": {
-   "operationId": "dashboard.resources.conversations.messages_create",
    "method": "POST",
    "path": "/api/v1/admin/resources/conversations/{id}/messages",
+   "statuses": [
+    200,
+    201
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "none",
@@ -10493,9 +10656,11 @@
    }
   },
   "conversations.list_messages": {
-   "operationId": "dashboard.resources.conversations.messages_list",
    "method": "GET",
    "path": "/api/v1/admin/resources/conversations/{id}/messages",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -10578,9 +10743,11 @@
    }
   },
   "customer_segments.create": {
-   "operationId": "dashboard.resources.customer_segments.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/customer-segments",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -10662,9 +10829,11 @@
    }
   },
   "customer_segments.get": {
-   "operationId": "dashboard.resources.customer_segments.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/customer-segments/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -10714,9 +10883,11 @@
    }
   },
   "customer_segments.list": {
-   "operationId": "dashboard.resources.customer_segments.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/customer-segments",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -10800,9 +10971,11 @@
    }
   },
   "customer_segments.list_members": {
-   "operationId": "dashboard.resources.customer_segments.list_members",
    "method": "GET",
    "path": "/api/v1/admin/resources/customer-segments/{id}/members",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -10885,9 +11058,11 @@
    }
   },
   "customer_segments.update": {
-   "operationId": "dashboard.resources.customer_segments.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/customer-segments/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -10983,9 +11158,12 @@
    }
   },
   "customers.bulk_tag": {
-   "operationId": "dashboard.resources.customers.bulk_tag",
    "method": "POST",
    "path": "/api/v1/admin/resources/customers/bulk-tag",
+   "statuses": [
+    200,
+    202
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -11108,9 +11286,11 @@
    }
   },
   "customers.get": {
-   "operationId": "dashboard.resources.customers.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/customers/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -11160,9 +11340,11 @@
    }
   },
   "customers.list": {
-   "operationId": "dashboard.resources.customers.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/customers",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -11307,9 +11489,11 @@
    }
   },
   "digital_access.grant": {
-   "operationId": "dashboard.resources.digital_access.grant",
    "method": "POST",
    "path": "/api/v1/admin/resources/digital-access",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "none",
@@ -11405,9 +11589,11 @@
    }
   },
   "digital_access.list": {
-   "operationId": "dashboard.resources.digital_access.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/digital-access",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -11521,9 +11707,11 @@
    }
   },
   "digital_access.revoke": {
-   "operationId": "dashboard.resources.digital_access.revoke",
    "method": "POST",
    "path": "/api/v1/admin/resources/digital-access/{id}/revoke",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "none",
@@ -11593,9 +11781,11 @@
    }
   },
   "digital_assets.get": {
-   "operationId": "dashboard.resources.digital_assets.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/digital-assets/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -11645,9 +11835,11 @@
    }
   },
   "digital_assets.list": {
-   "operationId": "dashboard.resources.digital_assets.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/digital-assets",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -11743,9 +11935,11 @@
    }
   },
   "discounts.list": {
-   "operationId": "dashboard.resources.discounts.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/discounts",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -11857,9 +12051,11 @@
    }
   },
   "fulfillments.create": {
-   "operationId": "dashboard.resources.fulfillments.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/{id}/fulfillments",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -12017,9 +12213,11 @@
    }
   },
   "fulfillments.list": {
-   "operationId": "dashboard.resources.fulfillments.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}/fulfillments",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -12108,9 +12306,11 @@
    }
   },
   "gift_cards.adjust": {
-   "operationId": "dashboard.resources.gift_cards.adjust",
    "method": "POST",
    "path": "/api/v1/admin/resources/gift-cards/{id}/adjust",
+   "statuses": [
+    200
+   ],
    "risk": "financial",
    "idempotency": "required",
    "revision": "required",
@@ -12218,9 +12418,11 @@
    }
   },
   "gift_cards.create": {
-   "operationId": "dashboard.resources.gift_cards.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/gift-cards",
+   "statuses": [
+    201
+   ],
    "risk": "financial",
    "idempotency": "required",
    "revision": "none",
@@ -12355,9 +12557,11 @@
    }
   },
   "gift_cards.get": {
-   "operationId": "dashboard.resources.gift_cards.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/gift-cards/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -12415,9 +12619,11 @@
    }
   },
   "gift_cards.list": {
-   "operationId": "dashboard.resources.gift_cards.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/gift-cards",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -12502,9 +12708,11 @@
    }
   },
   "gift_cards.update": {
-   "operationId": "dashboard.resources.gift_cards.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/gift-cards/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "financial",
    "idempotency": "supported",
    "revision": "required",
@@ -12619,9 +12827,11 @@
    }
   },
   "inventory_levels.list": {
-   "operationId": "dashboard.resources.inventory_levels.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/inventory-levels",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -12741,9 +12951,11 @@
    }
   },
   "inventory_locations.list": {
-   "operationId": "dashboard.resources.inventory_locations.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/inventory-locations",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -12845,9 +13057,11 @@
    }
   },
   "inventory_transfers.cancel": {
-   "operationId": "dashboard.resources.inventory_transfers.cancel",
    "method": "POST",
    "path": "/api/v1/admin/resources/inventory-transfers/{id}/cancel",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "required",
@@ -12929,9 +13143,11 @@
    }
   },
   "inventory_transfers.create": {
-   "operationId": "dashboard.resources.inventory_transfers.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/inventory-transfers",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -13046,9 +13262,11 @@
    }
   },
   "inventory_transfers.get": {
-   "operationId": "dashboard.resources.inventory_transfers.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/inventory-transfers/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -13098,9 +13316,11 @@
    }
   },
   "inventory_transfers.list": {
-   "operationId": "dashboard.resources.inventory_transfers.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/inventory-transfers",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -13213,9 +13433,11 @@
    }
   },
   "inventory_transfers.receive": {
-   "operationId": "dashboard.resources.inventory_transfers.receive",
    "method": "POST",
    "path": "/api/v1/admin/resources/inventory-transfers/{id}/receive",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "none",
@@ -13318,9 +13540,11 @@
    }
   },
   "inventory_transfers.ship": {
-   "operationId": "dashboard.resources.inventory_transfers.ship",
    "method": "POST",
    "path": "/api/v1/admin/resources/inventory-transfers/{id}/ship",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "required",
@@ -13402,9 +13626,11 @@
    }
   },
   "inventory_transfers.update": {
-   "operationId": "dashboard.resources.inventory_transfers.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/inventory-transfers/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -13532,9 +13758,11 @@
    }
   },
   "markets.get": {
-   "operationId": "dashboard.resources.markets.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/markets/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -13583,9 +13811,11 @@
    }
   },
   "markets.list": {
-   "operationId": "dashboard.resources.markets.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/markets",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -13657,9 +13887,11 @@
    }
   },
   "menus.create": {
-   "operationId": "dashboard.resources.menus.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/menus",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -13773,9 +14005,11 @@
    }
   },
   "menus.get": {
-   "operationId": "dashboard.resources.menus.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/menus/{menu}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -13826,9 +14060,11 @@
    }
   },
   "menus.update": {
-   "operationId": "dashboard.resources.menus.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/menus/{menu}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -13958,9 +14194,11 @@
    }
   },
   "orders.create": {
-   "operationId": "dashboard.resources.orders.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -14456,9 +14694,11 @@
    }
   },
   "orders.get": {
-   "operationId": "dashboard.resources.orders.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -14514,9 +14754,11 @@
    }
   },
   "orders.list": {
-   "operationId": "dashboard.resources.orders.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -14730,9 +14972,11 @@
    }
   },
   "orders.quote": {
-   "operationId": "dashboard.resources.orders.quote",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/quote",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -15176,9 +15420,11 @@
    }
   },
   "orders.release_hold": {
-   "operationId": "dashboard.resources.orders.release_hold",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/{id}/release-hold",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -15264,9 +15510,11 @@
    }
   },
   "pages.list": {
-   "operationId": "dashboard.resources.pages.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/pages",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -15378,9 +15626,11 @@
    }
   },
   "payment_methods.delete": {
-   "operationId": "dashboard.resources.payment_methods.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/resources/payment-methods/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "required",
    "revision": "none",
@@ -15441,9 +15691,11 @@
    }
   },
   "payment_methods.list": {
-   "operationId": "dashboard.resources.payment_methods.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/payment-methods",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -15525,9 +15777,11 @@
    }
   },
   "payments.capture": {
-   "operationId": "dashboard.resources.payments.capture",
    "method": "POST",
    "path": "/api/v1/admin/resources/payments/{id}/capture",
+   "statuses": [
+    200
+   ],
    "risk": "financial",
    "idempotency": "required",
    "revision": "none",
@@ -15637,9 +15891,11 @@
    }
   },
   "payments.charge": {
-   "operationId": "dashboard.resources.payments.charge",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/{id}/payments/charge",
+   "statuses": [
+    201
+   ],
    "risk": "financial",
    "idempotency": "required",
    "revision": "optional",
@@ -15793,9 +16049,11 @@
    }
   },
   "payments.create": {
-   "operationId": "dashboard.resources.payments.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/{id}/payments",
+   "statuses": [
+    201
+   ],
    "risk": "financial",
    "idempotency": "required",
    "revision": "optional",
@@ -15911,9 +16169,11 @@
    }
   },
   "payments.list": {
-   "operationId": "dashboard.resources.payments.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}/payments",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -16002,9 +16262,11 @@
    }
   },
   "payments.void": {
-   "operationId": "dashboard.resources.payments.void",
    "method": "POST",
    "path": "/api/v1/admin/resources/payments/{id}/void",
+   "statuses": [
+    200
+   ],
    "risk": "financial",
    "idempotency": "required",
    "revision": "none",
@@ -16114,9 +16376,12 @@
    }
   },
   "payouts.create": {
-   "operationId": "dashboard.resources.payouts.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/payouts",
+   "statuses": [
+    200,
+    201
+   ],
    "risk": "financial",
    "idempotency": "required",
    "revision": "none",
@@ -16226,9 +16491,11 @@
    }
   },
   "payouts.get": {
-   "operationId": "dashboard.resources.payouts.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/payouts/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -16277,9 +16544,11 @@
    }
   },
   "payouts.list": {
-   "operationId": "dashboard.resources.payouts.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/payouts",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -16378,9 +16647,12 @@
    }
   },
   "payouts.reverse": {
-   "operationId": "dashboard.resources.payouts.reverse",
    "method": "POST",
    "path": "/api/v1/admin/resources/payouts/{id}/reverse",
+   "statuses": [
+    200,
+    201
+   ],
    "risk": "financial",
    "idempotency": "required",
    "revision": "none",
@@ -16487,9 +16759,11 @@
    }
   },
   "price_lists.create": {
-   "operationId": "dashboard.resources.price_lists.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/price-lists",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -16615,9 +16889,11 @@
    }
   },
   "price_lists.delete": {
-   "operationId": "dashboard.resources.price_lists.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/resources/price-lists/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "required",
@@ -16695,9 +16971,11 @@
    }
   },
   "price_lists.get": {
-   "operationId": "dashboard.resources.price_lists.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/price-lists/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -16747,9 +17025,11 @@
    }
   },
   "price_lists.list": {
-   "operationId": "dashboard.resources.price_lists.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/price-lists",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -16832,9 +17112,11 @@
    }
   },
   "price_lists.list_prices": {
-   "operationId": "dashboard.resources.price_lists.prices_list",
    "method": "GET",
    "path": "/api/v1/admin/resources/price-lists/{id}/prices",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -16924,9 +17206,11 @@
    }
   },
   "price_lists.set_prices": {
-   "operationId": "dashboard.resources.price_lists.prices_set",
    "method": "PUT",
    "path": "/api/v1/admin/resources/price-lists/{id}/prices",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -17082,9 +17366,11 @@
    }
   },
   "price_lists.update": {
-   "operationId": "dashboard.resources.price_lists.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/price-lists/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -17221,9 +17507,11 @@
    }
   },
   "products.batch_create": {
-   "operationId": "dashboard.resources.products.batch_create",
    "method": "POST",
    "path": "/api/v1/admin/resources/products/batch",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -17597,9 +17885,12 @@
    }
   },
   "products.bulk_publish": {
-   "operationId": "dashboard.resources.products.bulk_publish",
    "method": "POST",
    "path": "/api/v1/admin/resources/products/bulk-publish",
+   "statuses": [
+    200,
+    202
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -17730,9 +18021,12 @@
    }
   },
   "products.bulk_set_status": {
-   "operationId": "dashboard.resources.products.bulk_set_status",
    "method": "POST",
    "path": "/api/v1/admin/resources/products/bulk-set-status",
+   "statuses": [
+    200,
+    202
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "optional",
@@ -17865,9 +18159,11 @@
    }
   },
   "products.create": {
-   "operationId": "dashboard.resources.products.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/products",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -18154,9 +18450,11 @@
    }
   },
   "products.get": {
-   "operationId": "dashboard.resources.products.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/products/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -18206,9 +18504,11 @@
    }
   },
   "products.list": {
-   "operationId": "dashboard.resources.products.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/products",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -18363,9 +18663,11 @@
    }
   },
   "products.update": {
-   "operationId": "dashboard.resources.products.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/products/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -18534,9 +18836,11 @@
    }
   },
   "purchase_orders.cancel": {
-   "operationId": "dashboard.resources.purchase_orders.cancel",
    "method": "POST",
    "path": "/api/v1/admin/resources/purchase-orders/{id}/cancel",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -18622,9 +18926,11 @@
    }
   },
   "purchase_orders.create": {
-   "operationId": "dashboard.resources.purchase_orders.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/purchase-orders",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -18782,9 +19088,11 @@
    }
   },
   "purchase_orders.get": {
-   "operationId": "dashboard.resources.purchase_orders.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/purchase-orders/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -18841,9 +19149,11 @@
    }
   },
   "purchase_orders.list": {
-   "operationId": "dashboard.resources.purchase_orders.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/purchase-orders",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -18973,9 +19283,11 @@
    }
   },
   "purchase_orders.mark_ordered": {
-   "operationId": "dashboard.resources.purchase_orders.mark_ordered",
    "method": "POST",
    "path": "/api/v1/admin/resources/purchase-orders/{id}/mark-ordered",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -19061,9 +19373,11 @@
    }
   },
   "purchase_orders.receive": {
-   "operationId": "dashboard.resources.purchase_orders.receive",
    "method": "POST",
    "path": "/api/v1/admin/resources/purchase-orders/{id}/receive",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "none",
@@ -19174,9 +19488,11 @@
    }
   },
   "purchase_orders.update": {
-   "operationId": "dashboard.resources.purchase_orders.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/purchase-orders/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -19353,9 +19669,11 @@
    }
   },
   "refunds.create": {
-   "operationId": "dashboard.resources.refunds.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/{id}/refunds",
+   "statuses": [
+    201
+   ],
    "risk": "financial",
    "idempotency": "required",
    "revision": "none",
@@ -19494,9 +19812,11 @@
    }
   },
   "refunds.list": {
-   "operationId": "dashboard.resources.refunds.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}/refunds",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -19585,9 +19905,11 @@
    }
   },
   "returns.approve": {
-   "operationId": "dashboard.resources.returns.approve",
    "method": "POST",
    "path": "/api/v1/admin/resources/returns/{id}/approve",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "required",
@@ -19709,9 +20031,11 @@
    }
   },
   "returns.cancel": {
-   "operationId": "dashboard.resources.returns.cancel",
    "method": "POST",
    "path": "/api/v1/admin/resources/returns/{id}/cancel",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "required",
@@ -19798,9 +20122,11 @@
    }
   },
   "returns.create": {
-   "operationId": "dashboard.resources.returns.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/{id}/returns",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "required",
@@ -19927,9 +20253,11 @@
    }
   },
   "returns.get": {
-   "operationId": "dashboard.resources.returns.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/returns/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -19985,9 +20313,11 @@
    }
   },
   "returns.list": {
-   "operationId": "dashboard.resources.returns.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}/returns",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -20076,9 +20406,11 @@
    }
   },
   "returns.receive": {
-   "operationId": "dashboard.resources.returns.receive",
    "method": "POST",
    "path": "/api/v1/admin/resources/returns/{id}/receive",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "required",
@@ -20212,9 +20544,11 @@
    }
   },
   "reviews.create": {
-   "operationId": "dashboard.resources.reviews.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/reviews",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "none",
@@ -20349,9 +20683,11 @@
    }
   },
   "reviews.get": {
-   "operationId": "dashboard.resources.reviews.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/reviews/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -20401,9 +20737,11 @@
    }
   },
   "reviews.list": {
-   "operationId": "dashboard.resources.reviews.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/reviews",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -20527,9 +20865,11 @@
    }
   },
   "reviews.reply": {
-   "operationId": "dashboard.resources.reviews.reply",
    "method": "POST",
    "path": "/api/v1/admin/resources/reviews/{id}/reply",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -20618,9 +20958,11 @@
    }
   },
   "reviews.set_status": {
-   "operationId": "dashboard.resources.reviews.set_status",
    "method": "POST",
    "path": "/api/v1/admin/resources/reviews/{id}/status",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -20721,9 +21063,11 @@
    }
   },
   "shipments.create": {
-   "operationId": "dashboard.resources.shipments.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/{id}/shipments",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -20831,9 +21175,11 @@
    }
   },
   "shipments.get": {
-   "operationId": "dashboard.resources.shipments.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/shipments/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -20889,9 +21235,11 @@
    }
   },
   "shipments.list": {
-   "operationId": "dashboard.resources.shipments.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}/shipments",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -20980,9 +21328,11 @@
    }
   },
   "shipping_zones.get": {
-   "operationId": "dashboard.resources.shipping_zones.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/shipping-zones/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -21031,9 +21381,11 @@
    }
   },
   "shipping_zones.list": {
-   "operationId": "dashboard.resources.shipping_zones.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/shipping-zones",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -21105,9 +21457,11 @@
    }
   },
   "staff.get": {
-   "operationId": "dashboard.resources.staff.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/staff/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -21156,9 +21510,11 @@
    }
   },
   "staff.list": {
-   "operationId": "dashboard.resources.staff.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/staff",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -21255,9 +21611,11 @@
    }
   },
   "suppliers.create": {
-   "operationId": "dashboard.resources.suppliers.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/suppliers",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -21350,9 +21708,11 @@
    }
   },
   "suppliers.get": {
-   "operationId": "dashboard.resources.suppliers.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/suppliers/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -21402,9 +21762,11 @@
    }
   },
   "suppliers.list": {
-   "operationId": "dashboard.resources.suppliers.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/suppliers",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -21502,9 +21864,11 @@
    }
   },
   "suppliers.update": {
-   "operationId": "dashboard.resources.suppliers.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/suppliers/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -21612,9 +21976,11 @@
    }
   },
   "tax_regions.get": {
-   "operationId": "dashboard.resources.tax_regions.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/tax-regions/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -21663,9 +22029,11 @@
    }
   },
   "tax_regions.list": {
-   "operationId": "dashboard.resources.tax_regions.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/tax-regions",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -21749,9 +22117,11 @@
    }
   },
   "theme.apply_template": {
-   "operationId": "dashboard.resources.theme.apply_template",
    "method": "POST",
    "path": "/api/v1/admin/resources/theme/apply-template",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "required",
@@ -21848,9 +22218,11 @@
    }
   },
   "theme.get": {
-   "operationId": "dashboard.resources.theme.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/theme",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -21902,9 +22274,11 @@
    }
   },
   "theme.set_section_settings": {
-   "operationId": "dashboard.resources.theme.section_settings_set",
    "method": "POST",
    "path": "/api/v1/admin/resources/theme/section-settings",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -22012,9 +22386,12 @@
    }
   },
   "variants.bulk_set_prices": {
-   "operationId": "dashboard.resources.variants.bulk_set_prices",
    "method": "POST",
    "path": "/api/v1/admin/resources/variants/bulk-set-prices",
+   "statuses": [
+    200,
+    202
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "optional",
@@ -22222,9 +22599,12 @@
    }
   },
   "variants.bulk_set_stock": {
-   "operationId": "dashboard.resources.variants.bulk_set_stock",
    "method": "POST",
    "path": "/api/v1/admin/resources/variants/bulk-set-stock",
+   "statuses": [
+    200,
+    202
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "optional",
@@ -22336,9 +22716,11 @@
    }
   },
   "variants.create": {
-   "operationId": "dashboard.resources.variants.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/products/{id}/variants",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -22488,9 +22870,11 @@
    }
   },
   "variants.get": {
-   "operationId": "dashboard.resources.variants.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/variants/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -22542,9 +22926,11 @@
    }
   },
   "variants.lookup": {
-   "operationId": "dashboard.resources.variants.lookup",
    "method": "POST",
    "path": "/api/v1/admin/resources/variants/lookup",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -22622,9 +23008,11 @@
    }
   },
   "variants.restore": {
-   "operationId": "dashboard.resources.variants.restore",
    "method": "POST",
    "path": "/api/v1/admin/resources/products/{id}/variants/{variantId}/restore",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -22717,9 +23105,11 @@
    }
   },
   "variants.update": {
-   "operationId": "dashboard.resources.variants.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/products/{id}/variants/{variantId}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -22872,9 +23262,11 @@
    }
   },
   "warranties.get": {
-   "operationId": "dashboard.resources.warranties.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/warranties/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -22930,9 +23322,11 @@
    }
   },
   "warranties.issue": {
-   "operationId": "dashboard.resources.warranties.issue",
    "method": "POST",
    "path": "/api/v1/admin/resources/warranties/issue",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "required",
    "revision": "none",
@@ -23069,9 +23463,11 @@
    }
   },
   "warranties.list": {
-   "operationId": "dashboard.resources.warranties.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/warranties",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -23211,9 +23607,11 @@
    }
   },
   "warranties.void": {
-   "operationId": "dashboard.resources.warranties.void",
    "method": "POST",
    "path": "/api/v1/admin/resources/warranties/void",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "required",
    "revision": "none",
@@ -23304,9 +23702,11 @@
    }
   },
   "webhook_subscriptions.create": {
-   "operationId": "dashboard.resources.webhook_subscriptions.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/webhook-subscriptions",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -23480,9 +23880,11 @@
    }
   },
   "webhook_subscriptions.delete": {
-   "operationId": "dashboard.resources.webhook_subscriptions.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/resources/webhook-subscriptions/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "required",
@@ -23560,9 +23962,11 @@
    }
   },
   "webhook_subscriptions.list": {
-   "operationId": "dashboard.resources.webhook_subscriptions.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/webhook-subscriptions",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -23635,9 +24039,11 @@
    }
   },
   "webhook_subscriptions.update": {
-   "operationId": "dashboard.resources.webhook_subscriptions.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/webhook-subscriptions/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -23829,9 +24235,11 @@
    }
   },
   "sales_channels.list_products": {
-   "operationId": "dashboard.sales_channels.products",
    "method": "GET",
    "path": "/api/v1/admin/settings/sales-channels/{id}/products",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -23912,9 +24320,11 @@
    }
   },
   "objects.delete": {
-   "operationId": "objects.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/objects/{type}/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "required",
@@ -24001,9 +24411,11 @@
    }
   },
   "objects.get": {
-   "operationId": "objects.get",
    "method": "GET",
    "path": "/api/v1/admin/objects/{type}/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -24063,9 +24475,11 @@
    }
   },
   "objects.list": {
-   "operationId": "objects.list",
    "method": "GET",
    "path": "/api/v1/admin/objects/{type}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -24187,9 +24601,11 @@
    }
   },
   "object_types.create": {
-   "operationId": "objects.types.create",
    "method": "POST",
    "path": "/api/v1/admin/objects/types",
+   "statuses": [
+    201
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "none",
@@ -24337,9 +24753,11 @@
    }
   },
   "object_types.delete": {
-   "operationId": "objects.types.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/objects/types/{type}",
+   "statuses": [
+    200
+   ],
    "risk": "destructive",
    "idempotency": "supported",
    "revision": "required",
@@ -24416,9 +24834,11 @@
    }
   },
   "object_types.get": {
-   "operationId": "objects.types.get",
    "method": "GET",
    "path": "/api/v1/admin/objects/types/{type}",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -24473,9 +24893,11 @@
    }
   },
   "object_types.list": {
-   "operationId": "objects.types.list",
    "method": "GET",
    "path": "/api/v1/admin/objects/types",
+   "statuses": [
+    200
+   ],
    "risk": "read",
    "idempotency": "none",
    "revision": "none",
@@ -24548,9 +24970,11 @@
    }
   },
   "object_types.update": {
-   "operationId": "objects.types.update",
    "method": "PATCH",
    "path": "/api/v1/admin/objects/types/{type}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",
@@ -24708,9 +25132,11 @@
    }
   },
   "objects.upsert": {
-   "operationId": "objects.upsert",
    "method": "PUT",
    "path": "/api/v1/admin/objects/{type}/{id}",
+   "statuses": [
+    200
+   ],
    "risk": "write",
    "idempotency": "supported",
    "revision": "required",

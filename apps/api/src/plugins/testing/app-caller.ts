@@ -1,7 +1,9 @@
 // A third-party (uploaded) app installed with the scopes a test names, and
 // its `ctx.api.call` as production runs it: app name, stable tier, RBAC from
 // the scopes, the admin middleware (Idempotency-Key replay included) and the
-// route. The store's owner approves it.
+// route. The store's owner approves it. A route that answers a key its output
+// schema does not declare fails the call: production leaves the key out, and
+// every test through this caller keeps the routes it reaches honest.
 import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
 import { activatePlugin, installPlugin } from "@scalius/core/modules/plugins";
@@ -33,6 +35,10 @@ export async function installAppCaller(
   await installPlugin(fixture.db, { manifest, source: "upload", bundleSha256: "c".repeat(64), actorUserId: "owner" });
   await activatePlugin(fixture.db, id, { actorUserId: "owner", expectedRevision: 1 });
   const env = pluginTestEnv(fixture.binding);
-  return (operationId: string, input?: unknown) =>
-    callPluginOperation({ pluginId: id, version: "1.0.0", operationId, input, db: fixture.db, env, ctx: pluginTestCtx() });
+  return async (operationId: string, input?: unknown) => {
+    const undeclared: string[] = [];
+    const result = await callPluginOperation({ pluginId: id, version: "1.0.0", operationId, input, db: fixture.db, env, ctx: pluginTestCtx(), undeclared });
+    if (undeclared.length > 0) throw new Error(`${operationId} answered keys its output schema does not declare: ${[...new Set(undeclared)].join(", ")}.`);
+    return result;
+  };
 }

@@ -3250,5 +3250,11 @@
   "from": "ba34897af1af3b8a",
   "change": "orders.set_status input body.status: no longer accepts \"processing\", \"shipped\", \"delivered\", \"returned\", \"refunded\", \"incomplete\".",
   "reason": "Pre-lock contract fix (state-machine audit, Nov 22): the generic status editor refuses each of these in every state, so the request offered values no call could use; it now offers the statuses it sets (pending, confirmed, completed, cancelled) and a refusal names the operation that records the others."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "behaviour: an app's ctx.api.call answer carries only the keys the operation's output schema declares; the snapshot and the SDK contract no longer carry operationId; every operation's success statuses are sealed.",
+  "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): the bridge only redacted a route's answer, so a key a handler added without declaring it would have reached apps, and removing it later would break an app though the sealed contract never had it. Answers are now projected to the declared schema (protected-response.ts; the SDK's createContractApi does the same), so the snapshot is the whole promise. A probe over 806 calls to 170 stable operations in the test suite, and a review of the other 39 handlers, found no undeclared key, so no app loses a field it could see before. The operationId (the agent and REST name) left the app contract instead of being sealed: an app names an operation by its app name. Success statuses (201 for a create, 200 or 202 for a bulk run) were not compared, so a 201 becoming 200 would have broken an app branching on it unrefused; they are now part of the snapshot and any change is a break. No schema diff produces this entry: it records the change for review."
  }
 ]

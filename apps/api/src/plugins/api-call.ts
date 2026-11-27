@@ -5,7 +5,8 @@
 // An app names an operation by its app name (`orders.get`, app-operations.ts),
 // never by the dashboard's operation id (`dashboard.resources.orders.get`).
 // A third-party app reaches the stable app API only (`x-scalius-agent.stability`);
-// anything else refuses with `api_operation_not_stable`. Buyer contact fields
+// anything else refuses with `api_operation_not_stable`. The answer carries
+// only what the operation's output schema declares, and buyer contact fields
 // the grant does not reveal read null (protected-response.ts, H5). The input's
 // `idempotencyKey` is sent as the Idempotency-Key header: the one retry key
 // every stable mutation takes.
@@ -195,6 +196,8 @@ export async function callPluginOperation(options: {
   db: Database;
   env: Env;
   ctx: ExecutionContext;
+  /** Receives the path of each key the route answered without declaring it (left out of the answer). */
+  undeclared?: string[];
 }): Promise<PluginApiResult> {
   const name = options.operationId;
   if (typeof name !== "string" || name.length > 128) {
@@ -220,9 +223,9 @@ export async function callPluginOperation(options: {
       ctx: options.ctx,
     });
     if (result.ok) await recordAppCreatedResources(options.db, options.pluginId, name, result.data);
-    // Buyer contact fields the grant does not reveal read as null (H5), and
-    // another app's buyer answers never reach this one (H13).
-    const body = result.ok ? projectOperationResponse(operation, result.data, principal.protectedData, options.pluginId) : result.data;
+    // Only the declared keys; buyer contact fields the grant does not reveal
+    // read as null (H5), and another app's buyer answers never reach this one (H13).
+    const body = result.ok ? projectOperationResponse(operation, result.data, principal.protectedData, options.pluginId, options.undeclared) : result.data;
     return unwrap(result.status, result.ok, body);
   } catch (error) {
     if (error instanceof AgentDispatchError) {

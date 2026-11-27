@@ -1954,5 +1954,11 @@
   "from": "43d11be555c837a3",
   "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
   "reason": "Pre-release (private pages, beta 8): buyer UI gains a `mark` node (a tone's glyph) and an optional `tone` on `stack` (a toned row: an offer row, a status box), drawn on buyer pages only; the SDK gains `ui.mark`. An added union arm and an optional field; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:StableContractOperation: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): a stable operation in the SDK's contract copy loses `operationId` (the agent and REST name, not part of the app contract; an app names an operation by its app name) and gains `statuses`, the success statuses it answers, now sealed. createContractApi answers a handler's bare data with the operation's first success status (201 for a create) instead of always 200, and hands the app only the keys the operation declares, as the platform does."
  }
 ]
