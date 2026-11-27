@@ -311,6 +311,9 @@ export async function resolveAnchor(root = DEFAULT_ROOT, { verifySignatures } = 
   if (text === null) problems.push(`${FREEZE_TAG}'s commit carries no ${LOCK_FILE}.`);
   if (signaturesWanted(root, verifySignatures) && gitOk(root, ["verify-tag", FREEZE_TAG]) === null) problems.push(`${FREEZE_TAG}'s signature does not verify.`);
   if (pin !== null) {
+    // The pin is written once: what the commit that added it holds, it holds for good.
+    const added = gitOk(root, ["log", "--diff-filter=A", "--format=%H", "HEAD", "--", ANCHOR_FILE])?.split("\n").filter(Boolean).at(-1) ?? null;
+    if (added && gitText(root, added, ANCHOR_FILE) !== readFileSync(join(root, ANCHOR_FILE), "utf8")) problems.push(`${ANCHOR_FILE} changed since the commit that added it (${added.slice(0, 12)}): the anchor is pinned once, for good.`);
     if (pin.tag !== FREEZE_TAG || pin.commit !== commit) problems.push(`${FREEZE_TAG} is not the tag ${ANCHOR_FILE} pins (${pin.tag} at ${String(pin.commit).slice(0, 12)}): it was moved or made again.`);
     if (text !== null && await sha256Hex(text) !== pin.lockSha256) problems.push(`The lock ${FREEZE_TAG} carries is not the one ${ANCHOR_FILE} pins.`);
   }
