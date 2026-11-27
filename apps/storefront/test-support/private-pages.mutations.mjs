@@ -108,7 +108,7 @@ export const MUTATIONS = {
   },
   "G4 the page draws its light colours always": {
     why: "the page marks its light colours where the store shows its dark ones",
-    rewrites: [rewrite("apps/storefront/src/layouts/Layout.astro", "data-color-scheme={paint.colorScheme?.scheme}", 'data-color-scheme="light"')],
+    rewrites: [rewrite("apps/storefront/src/layouts/Layout.astro", "data-color-scheme={htmlColorScheme}", 'data-color-scheme="light"')],
     cases: ["review 5: the store's own page under the marketplace palette's dark colours"],
     expect: /^scheme: the page draws its light colours/,
   },
