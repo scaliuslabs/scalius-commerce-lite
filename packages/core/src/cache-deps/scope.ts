@@ -244,7 +244,10 @@ export async function withDependencyScope<T>(
   render: () => T | Promise<T>,
   options: DependencyScopeOptions = {},
 ): Promise<DependencyScopeResult<T>> {
-  const parent = currentReadObserver();
+  // Inside a lookup the observer is its tap: the scope behind it is the parent.
+  const current = currentReadObserver();
+  const tap = current instanceof LookupTap ? current : null;
+  const parent = tap ? tap.scope : current;
   const scope = new DependencyScope(parent, options);
   let value: T;
   try {
@@ -262,6 +265,8 @@ export async function withDependencyScope<T>(
   }
   const dependencies = scope.close(options.budget ?? CACHE_DEP_ENTRY_KEY_BUDGET, options.log ?? defaultLog);
   if (parent instanceof DependencyScope) parent.absorb(dependencies);
+  // The lookup's negative answer still depends on what the nested render read.
+  for (const table of dependencies.tables) tap?.tables.add(table);
   return { value, dependencies };
 }
 

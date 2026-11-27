@@ -1034,9 +1034,12 @@ export class DvcHarness {
     }
     if (!wrote) return null;
     this.stats.writes += 1;
-    // The after-response work a write leaves (a kit's buyer state follows its items through the
-    // queue its triggers note, drained by background/catalog.ts after the response): settled
-    // before anything is compared, as production finishes it before the next request sees it.
+    // The background work a write leaves: a kit's buyer state follows its items through the queue
+    // its triggers note (0224, 0229), drained by background/catalog.ts. A write that requests a
+    // catalogue rebuild runs its first chunks right after its response; a product or stock write
+    // that only notes the queue waits for the per-minute cron's `projection_rebuild_drain`, so for
+    // up to a minute production serves the kit's old band. The checker settles that queue before it
+    // compares: it proves the keys once the drain has run, not the minute before it.
     await this.settleAfterResponseWork();
     const changes = this.rowLog.since(before);
     if (this.clock.name === "triggers") await this.crossCheckTriggers(changes, triggerBefore, singleStatement);
