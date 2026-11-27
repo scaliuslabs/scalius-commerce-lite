@@ -1323,7 +1323,16 @@ export interface StorefrontRenderContext {
      */
     darkLogo?: StorefrontImage | null;
   };
-  page: { kind: "home" | "landing" | "product" | "listing" | "search" | "cart" | "page" | "other"; path: string };
+  /**
+   * The page drawn. `buyer`: one of the buyer's own pages (the account, the
+   * receipt, order tracking, warranty claims, the gift-card balance, the
+   * newsletter pages), where only a header or footer skin with `buyerPages:
+   * true` draws, rebuilt inert inside a shadow root (packages/plugin-sdk/docs/private-pages.md):
+   * hide what a buyer does not need there (search, category rows). Its `path`
+   * is then the page's first segment only (`/account`), never an order's or a
+   * claim's own path.
+   */
+  page: { kind: "home" | "landing" | "product" | "listing" | "search" | "cart" | "page" | "buyer" | "other"; path: string };
   /** The app's file base URL (`/_x/<plugin id>/<release>/`): its public files are under `public/`. */
   assets: string;
   /** The theme editor's preview: components may mark editable text (`editable()`). */

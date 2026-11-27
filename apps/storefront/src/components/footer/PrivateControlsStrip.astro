@@ -4,7 +4,11 @@
 // switch (where the theme offers it) and the market and language forms (where
 // the store sells in several), in a strip of the store's own chrome
 // (`data-private="core-footer"`, the `chrome` style target). Nothing draws
-// when neither applies.
+// when neither applies. Under a theme's own chrome on a buyer page
+// (components/private/PrivateChrome.astro) it holds what the theme's region
+// replaced: the switch when the theme's header draws (`scheme`, else the
+// store's header has it), the forms when its footer does (else the store's
+// footer has them).
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import PrivateSchemeSwitch from "../header/PrivateSchemeSwitch.astro";
 import PrivateLocalization from "./PrivateLocalization.astro";
@@ -12,18 +16,20 @@ import type { FooterLocalizationModel } from "./footer-localization";
 
 interface Props {
   localization?: FooterLocalizationModel | null;
+  /** The light or dark switch (where the theme offers it); default on. */
+  scheme?: boolean;
 }
 
-const { localization } = Astro.props;
+const { localization, scheme = true } = Astro.props;
 const { theme } = await currentRequestTheme(Astro.locals);
-const shows = theme.tokens.colorSchemeToggle || Boolean(localization && (localization.markets || localization.language));
+const shows = (scheme && theme.tokens.colorSchemeToggle) || Boolean(localization && (localization.markets || localization.language));
 ---
 
 {shows && (
   <footer class="border-t border-border bg-background" data-private="core-footer">
     <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-4 px-4 py-2 sm:px-6">
       <PrivateLocalization localization={localization} />
-      <PrivateSchemeSwitch />
+      {scheme && <PrivateSchemeSwitch />}
     </div>
   </footer>
 )}

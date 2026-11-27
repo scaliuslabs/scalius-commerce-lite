@@ -525,6 +525,7 @@ export async function packStorefront(contract, manifest, source) {
       logLevel: "silent",
     });
     const css = result.outputFiles[0].text.replace(/url\(\s*(["']?)\.\.\/public\//g, "url($1public/");
+    checkBuyerChromeCss(contract, manifest, css, fail);
     const bytes = Buffer.byteLength(css);
     if (bytes > limits.stylesheetBytes) fail(`styles.css is ${bytes} bytes; the limit is ${limits.stylesheetBytes}.`);
     files.push(storefrontFile(contract, contract.STOREFRONT_STYLESHEET_FILE, Buffer.from(css)));
@@ -567,6 +568,8 @@ function prebuiltStorefront(contract, directory, manifest, fail) {
   if (manifest.storefront.stylesheet !== has(contract.STOREFRONT_STYLESHEET_FILE)) fail("storefront/styles.css does not match the manifest's stylesheet.");
   for (const island of manifest.storefront.islands) if (!has(contract.storefrontIslandFile(island.name))) fail(`storefront/islands/${island.name}.js is missing.`);
   if (Boolean(manifest.storefront.pixel) !== has(contract.STOREFRONT_PIXEL_FILE)) fail("storefront/pixel.js does not match the manifest's pixel.");
+  const sheet = files.find((file) => file.path === contract.STOREFRONT_STYLESHEET_FILE);
+  if (sheet) checkBuyerChromeCss(contract, manifest, new TextDecoder().decode(sheet.bytes), fail);
   for (const file of files) {
     if (file.path.startsWith("public/")) {
       const problem = contract.checkStorefrontPublicFile(file.path.slice("public/".length), file.bytes);
@@ -574,6 +577,17 @@ function prebuiltStorefront(contract, directory, manifest, fail) {
     }
   }
   return files;
+}
+
+/**
+ * A header or footer skin that draws on buyer pages (`buyerPages`) is styled
+ * there by the app's stylesheet inside a shadow root: the store uses no sheet
+ * that reaches past one (`buyerChromeCssProblem`), so the pack refuses it.
+ */
+function checkBuyerChromeCss(contract, manifest, css, fail) {
+  if (!manifest.storefront.skins.some((skin) => skin.buyerPages === true)) return;
+  const problem = contract.buyerChromeCssProblem(css);
+  if (problem) fail(`a skin draws on buyer pages (buyerPages), and ${problem}: remove it from the stylesheet (fonts come from the store's theme; packages/plugin-sdk/docs/private-pages.md).`);
 }
 
 /** The packed bundle with its storefront files' digests (only when it has some). */

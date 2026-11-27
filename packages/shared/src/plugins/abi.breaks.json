@@ -1954,5 +1954,17 @@
   "from": "43d11be555c837a3",
   "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
   "reason": "Pre-release (private pages, beta 8): buyer UI gains a `mark` node (a tone's glyph) and an optional `tone` on `stack` (a toned row: an offer row, a status box), drawn on buyer pages only; the SDK gains `ui.mark`. An added union arm and an optional field; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#InterfaceDeclaration:PluginGrantRequest: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, a theme's chrome on buyer pages): a header or footer skin may declare `buyerPages: true` to draw on the account, the receipt, order tracking, warranty claims, the gift-card balance and the newsletter pages, rebuilt inert inside a shadow root; the grant gains a `storefrontBuyerPages` flag a Super Admin approves (absent reads false, so no stored grant key changes) and the render context's page kind gains `buyer`. An added flag and an added union arm; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontRenderContext: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, a theme's chrome on buyer pages): a header or footer skin may declare `buyerPages: true` to draw on the account, the receipt, order tracking, warranty claims, the gift-card balance and the newsletter pages, rebuilt inert inside a shadow root; the grant gains a `storefrontBuyerPages` flag a Super Admin approves (absent reads false, so no stored grant key changes) and the render context's page kind gains `buyer`. An added flag and an added union arm; nothing an app used before changes meaning."
  }
 ]

@@ -31,7 +31,12 @@ function handOffPopover(target: Element | null): void {
 /** Install once for the document; delegation also covers replaced app markup. */
 export function installStorefrontActions(): () => void {
   if (uninstall) return uninstall;
-  const targetOf = (event: Event) => event.target instanceof Element ? event.target : null;
+  // The press's own element, inside a buyer page chrome's open shadow root too (components/private/PrivateChrome.astro):
+  // a document listener otherwise sees only the shadow host.
+  const targetOf = (event: Event) => {
+    const first = event.composedPath()[0];
+    return first instanceof Element ? first : event.target instanceof Element ? event.target : null;
+  };
   const modified = (event: MouseEvent) => event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
   const openSearch = (event: Event) => {
     event.preventDefault();

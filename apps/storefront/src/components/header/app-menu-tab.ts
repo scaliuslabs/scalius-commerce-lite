@@ -1,13 +1,17 @@
 /**
  * The tab bar's Categories tab under an app header skin: it opens the
  * header's own menu drawer (the element marked `data-menu-drawer`, a
- * `popover` or a `<dialog>`) instead of following its link to /categories,
+ * `popover` or a `<dialog>`, inside a buyer page chrome's shadow root too)
+ * instead of following its link to /categories,
  * and reports the drawer's state in `aria-expanded`. Without the script, or
  * without a marked drawer, the link opens the categories page.
  */
 export function bindAppMenuTab(doc: Document): void {
   const tab = doc.querySelector<HTMLAnchorElement>("[data-app-menu-open]");
-  const drawer = doc.querySelector<HTMLElement>("[data-menu-drawer]");
+  // A theme's header on a buyer page keeps its drawer inside its shadow root (components/private/PrivateChrome.astro).
+  const drawer = doc.querySelector<HTMLElement>("[data-menu-drawer]")
+    ?? [...doc.querySelectorAll("scalius-chrome")].map((host) => host.shadowRoot?.querySelector<HTMLElement>("[data-menu-drawer]")).find(Boolean)
+    ?? null;
   if (!tab || !drawer) return;
   if (drawer.id) tab.setAttribute("aria-controls", drawer.id);
   const isOpen = () => (drawer instanceof HTMLDialogElement ? drawer.open : safeMatches(drawer, ":popover-open"));

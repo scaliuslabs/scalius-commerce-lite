@@ -15,6 +15,7 @@ import {
   storefrontComponentProductSlot,
   storefrontEmbedRule,
   storefrontExtensionBase,
+  STOREFRONT_STYLESHEET_FILE,
   type StorefrontComponentSlot,
   type StorefrontEmbedKind,
   type StorefrontExtension,
@@ -27,7 +28,11 @@ import {
 } from "@scalius/shared/plugins/storefront-components";
 import { splitStorefrontEmbeds, type StorefrontMarkupPart } from "@scalius/shared/plugins/storefront-embeds";
 import { getLayoutData } from "@/lib/api/storefront";
-import { getRuntime, getRuntimePresence, getWorkerEnv } from "@/lib/api/runtime";
+import { getRuntime, getRuntimePresence, getRuntimePrivateImageOrigins, getRuntimeStorefrontUrl, getWorkerEnv } from "@/lib/api/runtime";
+import { INERT_MARKUP_MAX_BYTES, inertChromeHtml } from "@scalius/shared/plugins/inert-html";
+import { buyerChromeCssProblem } from "@scalius/shared/plugins/buyer-chrome-css";
+import { cspSourcesAllowImage } from "@scalius/shared/security-csp";
+import { buyerChromeRoot } from "@/lib/cache-policy";
 import { layoutPageLanguage } from "@/lib/market-selector";
 import { resolveStoreDisplayName } from "@/lib/store-identity";
 import { getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
@@ -37,7 +42,8 @@ import { storeRegion, storeTimeZone } from "@/lib/store-time-zone";
 import { dateLocale } from "@scalius/shared/locale-format";
 import { markRenderDegraded } from "@/lib/page-dependencies";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { ExtensionHost } from "./host";
+import { ExtensionHost, warnOnce } from "./host";
+import { readExtensionFile } from "./files";
 import { storefrontIncidentReporter } from "./incidents";
 import { storeLogo, storefrontImageOf } from "./data";
 import type { ExtensionRuntime } from "./loaders";
@@ -91,58 +97,203 @@ function requestWaitUntil(locals: object): ((promise: Promise<unknown>) => void)
 export function requestExtensions(locals: object, url: URL): Promise<RequestExtensions> {
   let pending = perRequest.get(locals);
   if (!pending) {
-    pending = (async () => {
-      // Outside a request (a unit rendered alone) there is no store, so no app draws.
-      const [layout, theme] = await Promise.all([getRuntime() ? getLayoutData() : null, currentRequestTheme(locals)]);
-      // App components cannot name a page, so none renders on a buyer's page (lib/app-scripts.ts).
-      // The page drawn: the request's, or the one the library previews.
-      const path = previewPages.get(locals) ?? url.pathname;
-      // The store's own values, never a guess: without its currency no component draws.
-      const currency = layout?.currency?.code ?? "";
-      const list = currency && appComponentsRenderOn(storefrontAppPage(path)) ? readStorefrontExtensions(layout?.appExtensions) : [];
-      // Layout states the page before its body draws; a page that draws a skin
-      // before its Layout (the product page's main part) gets the same values
-      // by Layout's own rules (the default document language of public pages).
-      const page = pages.get(locals) ?? {
-        language: layoutPageLanguage(layout, getRuntimePresence()),
-        storeName: resolveStoreDisplayName(layout?.business, getAbsoluteStorefrontSeoBaseUrl()) ?? "",
-        noIndex: false,
-      };
-      const language = page.language;
-      const byId = new Map(list.map((extension) => [extension.pluginId, extension]));
-      const context: StorefrontRenderContext = {
-        store: {
-          name: page.storeName,
-          currency,
-          // The store's own (an app's settings amounts are in it): the shop currency a market's page names.
-          storeCurrency: layout?.currency?.shopCode || currency,
-          locale: dateLocale(language, storeRegion()),
-          language,
-          timeZone: storeTimeZone(),
-          logo: storeLogo(theme, page.storeName || null),
-          darkLogo: storeLogo(theme, page.storeName || null, "darkLogo"),
-        },
-        page: { kind: pageKind(path), path },
-        assets: "",
-        preview: theme.preview !== null,
-      };
-      const dependencies = getRuntime()?.pageDependencies;
-      const host = new ExtensionHost({
-        runtime: { env: runtimeEnv(), store: getRuntime()?.STOREFRONT_URL },
-        context,
-        jsonLd: () => pages.get(locals)?.noIndex !== true,
-        // A page drawn with a fallback is never stored (it would stay until an unrelated write)
-        // nor handed to a request that joined its render.
-        degraded: () => markRenderDegraded(dependencies),
-        // ...and the app's log says which part and why (the merchant and the theme editor read it).
-        report: storefrontIncidentReporter(runtimeEnv() as Parameters<typeof storefrontIncidentReporter>[0], requestWaitUntil(locals)),
-      });
-      const filled = new Set(list.flatMap((extension) => extension.components.flatMap((component) => component.targets)));
-      return { list, byId, filled, host };
-    })();
+    // App components cannot name a page, so none renders on a buyer's page (lib/app-scripts.ts).
+    // The page drawn: the request's, or the one the library previews.
+    const path = previewPages.get(locals) ?? url.pathname;
+    pending = buildExtensions(locals, path, (layout) => appComponentsRenderOn(storefrontAppPage(path)) ? readStorefrontExtensions(layout?.appExtensions) : []);
     perRequest.set(locals, pending);
   }
   return pending;
+}
+
+const perBuyerChrome = new WeakMap<object, Promise<RequestExtensions>>();
+
+/**
+ * The render host for a buyer page's chrome (`buyerChromeMarkup`): only the
+ * apps with a header or footer skin that draws on buyer pages, told the page
+ * is the buyer page's root (`/account`: never an order's or a claim's path)
+ * of kind `buyer`, with no JSON-LD.
+ */
+function buyerChromeExtensions(locals: object, root: string): Promise<RequestExtensions> {
+  let pending = perBuyerChrome.get(locals);
+  if (!pending) {
+    pending = buildExtensions(locals, root, (layout) => readStorefrontExtensions(layout?.appExtensions)
+      .filter((extension) => extension.skins.some((skin) => skin.buyerPages === true)), false);
+    perBuyerChrome.set(locals, pending);
+  }
+  return pending;
+}
+
+function buildExtensions(
+  locals: object,
+  path: string,
+  extensions: (layout: Awaited<ReturnType<typeof getLayoutData>>) => readonly StorefrontExtension[],
+  jsonLd = true,
+): Promise<RequestExtensions> {
+  return (async () => {
+    // Outside a request (a unit rendered alone) there is no store, so no app draws.
+    const [layout, theme] = await Promise.all([getRuntime() ? getLayoutData() : null, currentRequestTheme(locals)]);
+    // The store's own values, never a guess: without its currency no component draws.
+    const currency = layout?.currency?.code ?? "";
+    const list = currency ? extensions(layout) : [];
+    // Layout states the page before its body draws; a page that draws a skin
+    // before its Layout (the product page's main part) gets the same values
+    // by Layout's own rules (the default document language of public pages).
+    const page = pages.get(locals) ?? {
+      language: layoutPageLanguage(layout, getRuntimePresence()),
+      storeName: resolveStoreDisplayName(layout?.business, getAbsoluteStorefrontSeoBaseUrl()) ?? "",
+      noIndex: false,
+    };
+    const language = page.language;
+    const byId = new Map(list.map((extension) => [extension.pluginId, extension]));
+    const context: StorefrontRenderContext = {
+      store: {
+        name: page.storeName,
+        currency,
+        // The store's own (an app's settings amounts are in it): the shop currency a market's page names.
+        storeCurrency: layout?.currency?.shopCode || currency,
+        locale: dateLocale(language, storeRegion()),
+        language,
+        timeZone: storeTimeZone(),
+        logo: storeLogo(theme, page.storeName || null),
+        darkLogo: storeLogo(theme, page.storeName || null, "darkLogo"),
+      },
+      page: { kind: pageKind(path), path },
+      assets: "",
+      preview: theme.preview !== null,
+    };
+    const dependencies = getRuntime()?.pageDependencies;
+    const host = new ExtensionHost({
+      runtime: { env: runtimeEnv(), store: getRuntime()?.STOREFRONT_URL },
+      context,
+      jsonLd: () => jsonLd && pages.get(locals)?.noIndex !== true,
+      // A page drawn with a fallback is never stored (it would stay until an unrelated write)
+      // nor handed to a request that joined its render.
+      degraded: () => markRenderDegraded(dependencies),
+      // ...and the app's log says which part and why (the merchant and the theme editor read it).
+      report: storefrontIncidentReporter(runtimeEnv() as Parameters<typeof storefrontIncidentReporter>[0], requestWaitUntil(locals)),
+    });
+    const filled = new Set(list.flatMap((extension) => extension.components.flatMap((component) => component.targets)));
+    return { list, byId, filled, host };
+  })();
+}
+
+/** A theme's header or footer on a buyer page: its inert markup and the stylesheet its shadow root imports (null: none). */
+export interface BuyerChrome {
+  html: string;
+  stylesheet: string | null;
+}
+
+/**
+ * The theme's header or footer on one of the buyer's own pages
+ * (`buyerChromeRoot`), when the skin the theme names declares `buyerPages`
+ * and a Super Admin approved it: drawn from the same projection as on a
+ * public page, told the page is `buyer` at its root, then rebuilt inert
+ * (`inertHtml`); its slots draw nothing (the store's controls stay outside
+ * the shadow root). Null when the store draws its own: no such skin, an
+ * inactive app, a skin that draws nothing or misses its embeds, markup over
+ * the rebuild's bound, or a stylesheet that reaches past a shadow root
+ * (`buyerChromeCssProblem`) or cannot be read. The caller decides the page
+ * may show it (never where the buyer pays).
+ */
+export async function buyerChromeMarkup(locals: object, url: URL, target: "header" | "footer", data: () => unknown): Promise<BuyerChrome | null> {
+  const root = buyerChromeRoot(url.pathname);
+  if (!root) return null;
+  const theme = await currentRequestTheme(locals);
+  const ref = theme.theme.apps?.skins?.[target];
+  const key = ref ? parsePluginSurfaceKey(ref.app) : null;
+  if (!ref || !key) return null;
+  const { byId, host } = await buyerChromeExtensions(locals, root);
+  const extension = byId.get(key.pluginId);
+  const declaration = extension?.skins.find((entry) => entry.id === key.type && entry.target === target && entry.buyerPages === true);
+  if (!extension || !declaration) return null;
+  const stylesheet = extension.stylesheet ? await buyerChromeStylesheet(extension, url.origin) : null;
+  if (stylesheet === false) return null;
+  const values = resolvePluginSettingBindings(declaration.settings, ref.values, ref.bindings, theme.bindingContext);
+  const settings = resolveSkinSettings(declaration.settings, values, (id) => storefrontImageOf(theme.skinMedia.get(id)));
+  const projection = await data();
+  const rendered = await host.render(extension, { kind: "skin", target, component: declaration.id, settings, data: projection } as never, { jsonLd: false });
+  const markup = appMarkup(extension, target, rendered);
+  if (!markup) return null;
+  // A link is kept as written only to a URL the skin was handed: by the store (its projection) or by the merchant.
+  const links = handedStrings([projection, values]);
+  let html = "";
+  for (const part of markup.parts) {
+    if (part.kind !== "html") continue;
+    const inert = inertHtml(part.html, links);
+    if (inert === null) {
+      warnOnce(`buyer-chrome-size:${extension.pluginId}:${target}`, `${extension.pluginId} ${target} skin draws over ${INERT_MARKUP_MAX_BYTES / 1024} KiB on a buyer page: the store draws its own ${target} there.`);
+      return null;
+    }
+    html += inert;
+  }
+  return html.trim() === "" ? null : { html, stylesheet };
+}
+
+/** Every string inside a value (a skin's projection, the merchant's values), each once. */
+function handedStrings(values: readonly unknown[]): Set<string> {
+  const out = new Set<string>();
+  const visit = (value: unknown, depth: number) => {
+    if (typeof value === "string") out.add(value);
+    else if (depth < 12 && Array.isArray(value)) for (const item of value) visit(item, depth + 1);
+    else if (depth < 12 && typeof value === "object" && value !== null) for (const item of Object.values(value)) visit(item, depth + 1);
+  };
+  for (const value of values) visit(value, 0);
+  return out;
+}
+
+/** Stylesheet verdicts this isolate keeps, by app release (a release's files never change). */
+const sheetVerdicts = new Map<string, boolean>();
+const SHEET_VERDICTS_MAX = 32;
+
+/**
+ * The app's stylesheet URL for a buyer page's shadow root, or false when it
+ * cannot style one: it holds a word that reaches past the shadow root
+ * (`buyerChromeCssProblem`), or it cannot be read now (not kept: the next
+ * page reads it again).
+ */
+async function buyerChromeStylesheet(extension: StorefrontExtension, store: string): Promise<string | false> {
+  const href = `${storefrontExtensionBase(extension.pluginId, extension.release)}${STOREFRONT_STYLESHEET_FILE}`;
+  const key = `${store} ${extension.pluginId}/${extension.release}`;
+  let allowed = sheetVerdicts.get(key);
+  if (allowed === undefined) {
+    const file = await readExtensionFile((getWorkerEnv() ?? {}) as { BACKEND_API?: Fetcher }, store, extension.pluginId, extension.release, STOREFRONT_STYLESHEET_FILE).catch(() => null);
+    if (!file) return false;
+    const problem = buyerChromeCssProblem(new TextDecoder().decode(file.bytes));
+    allowed = problem === null;
+    if (problem) warnOnce(`buyer-chrome-css:${extension.pluginId}:${extension.release}`, `${extension.pluginId}: ${problem}, so the store draws its own header and footer on buyer pages.`);
+    if (sheetVerdicts.size >= SHEET_VERDICTS_MAX) sheetVerdicts.delete(sheetVerdicts.keys().next().value!);
+    sheetVerdicts.set(key, allowed);
+  }
+  return allowed ? href : false;
+}
+
+/** Forgets the stylesheet verdicts and rebuilt markup this isolate keeps (tests). */
+export function clearBuyerChromeMemo(): void {
+  sheetVerdicts.clear();
+  inertMemo.clear();
+}
+
+/** Rebuilt markup this isolate keeps, by its content, the links it was handed and the page's image origins (a skin's markup repeats on every page). */
+const INERT_MEMO_MAX = 64;
+const inertMemo = new Map<string, string | null>();
+
+/**
+ * Checked app markup rebuilt for a buyer page (`inertChromeHtml`, an allow-list): no island,
+ * script, style, frame or form; links only to store paths and to the URLs it was handed;
+ * images only from the page's allowed origins. Null when it is over the rebuild's bound
+ * (`INERT_MARKUP_MAX_BYTES`). The same markup is rebuilt once per isolate.
+ */
+export function inertHtml(html: string, links: ReadonlySet<string> = new Set()): string | null {
+  const allowed = getRuntimePrivateImageOrigins() ?? [];
+  const origin = getRuntimeStorefrontUrl();
+  const key = `${origin} ${allowed.join(" ")}\u0000${[...links].sort().join("\u0001")}\u0000${html}`;
+  const known = inertMemo.get(key);
+  if (known !== undefined) return known;
+  const rebuilt = inertChromeHtml(html, { imageAllowed: (src) => cspSourcesAllowImage(src, allowed, origin), links });
+  if (inertMemo.size >= INERT_MEMO_MAX) inertMemo.delete(inertMemo.keys().next().value!);
+  inertMemo.set(key, rebuilt);
+  return rebuilt;
 }
 
 export interface AppSkin {

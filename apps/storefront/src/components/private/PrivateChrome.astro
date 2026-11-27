@@ -1,0 +1,32 @@
+---
+// A theme's header or footer on one of the buyer's own pages (a skin with
+// `buyerPages: true`, lib/extensions `buyerChromeMarkup`): its markup rebuilt
+// inert, inside a declarative shadow root. The browser keeps the theme's
+// stylesheet, ids, `popovertarget` and ARIA references inside it, and keeps
+// the page's selectors, forms and labels out; the shadow root's own style
+// (lib/private-pages/chrome-style.ts) holds everything the theme draws to the
+// host's box. The host element carries only the page's colour scheme and
+// sign-in hint (the inline script after it copies them from `<html>`), and
+// has no child of its own: nothing a `:host(...)` selector can read is the
+// buyer's. No app runtime, island or file base: nothing of the app runs here.
+import type { BuyerChrome } from "@/lib/extensions";
+import { buyerChromeShadowStyle } from "@/lib/private-pages/chrome-style";
+import { BUYER_CHROME_STATE_SCRIPT } from "@/lib/inline-boot-scripts";
+import baseHref from "@/styles/buyer-chrome.css?url";
+
+interface Props {
+  target: "header" | "footer";
+  chrome: BuyerChrome;
+}
+
+const { target, chrome } = Astro.props;
+const style = buyerChromeShadowStyle(baseHref, chrome.stylesheet);
+---
+
+<scalius-chrome data-chrome={target}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome><script is:inline set:html={BUYER_CHROME_STATE_SCRIPT}></script>
+
+<script>
+  import { installBuyerChrome } from "@/scripts/buyer-chrome";
+
+  installBuyerChrome();
+</script>

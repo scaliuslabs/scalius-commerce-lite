@@ -1267,6 +1267,12 @@ export interface PluginGrantRequest {
   storefrontConnect: string[];
   /** Runs a pixel (`storefront.pixel`) that hears buyer events on every page, checkout included, in a sandboxed frame. */
   storefrontPixel: boolean;
+  /**
+   * Draws its header or footer skin on the buyer's own pages (`buyerPages`:
+   * the account, the receipt, order tracking), rebuilt inert inside a shadow
+   * root: no app code runs there and nothing it draws takes input.
+   */
+  storefrontBuyerPages: boolean;
   /** The features turned on (`manifest.features`), sorted. Everything else already includes these features' parts. */
   features: string[];
   /** Object fields whose addresses the app may email or text (`messaging.recipients`, `<object>.<field>`). */
@@ -1281,14 +1287,14 @@ export const PLUGIN_GRANT_LIST_DIMENSIONS = [
   "messageRecipients", "providers", "scopes", "storefrontConnect", "storefrontScripts",
 ] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
 /** The flag dimensions of a grant request, in key order. */
-export const PLUGIN_GRANT_FLAG_DIMENSIONS = ["buyerFiles", "publicRoutes", "storefrontCode", "storefrontPixel", "storefrontSurfaces"] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
+export const PLUGIN_GRANT_FLAG_DIMENSIONS = ["buyerFiles", "publicRoutes", "storefrontBuyerPages", "storefrontCode", "storefrontPixel", "storefrontSurfaces"] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
 
 /** A grant request with every dimension at its default (asks for nothing). */
 export function emptyPluginGrantRequest(): PluginGrantRequest {
   return {
     scopes: [], allowedHosts: [], events: [], functions: [], extensions: [], blockingFunctions: [], providers: [],
     publicRoutes: false, storefrontScripts: [], storefrontSurfaces: false, customFieldOwners: [],
-    storefrontCode: false, storefrontConnect: [], storefrontPixel: false, features: [], messageRecipients: [],
+    storefrontCode: false, storefrontConnect: [], storefrontPixel: false, storefrontBuyerPages: false, features: [], messageRecipients: [],
     buyerFiles: false,
   };
 }
@@ -1320,6 +1326,7 @@ export function pluginGrantRequest(declared: PluginManifest, features: Iterable<
       || Boolean(manifest.storefront.stylesheet),
     storefrontConnect: sorted(manifest.storefront.connect),
     storefrontPixel: manifest.storefront.pixel !== undefined,
+    storefrontBuyerPages: manifest.storefront.skins.some((skin) => skin.buyerPages === true),
     features: enabled,
     messageRecipients: sorted(manifest.messaging.recipients.map(pluginMessageRecipientKey)),
     buyerFiles: (manifest.checkout?.attributes ?? []).some((field) => field.type === "file")
@@ -1381,6 +1388,7 @@ export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: P
     storefrontCode: next.storefrontCode && !granted.storefrontCode,
     storefrontConnect: added(granted.storefrontConnect, next.storefrontConnect),
     storefrontPixel: next.storefrontPixel && !granted.storefrontPixel,
+    storefrontBuyerPages: next.storefrontBuyerPages && !granted.storefrontBuyerPages,
     features: added(granted.features, next.features),
     messageRecipients: added(granted.messageRecipients, next.messageRecipients),
     buyerFiles: next.buyerFiles && !granted.buyerFiles,

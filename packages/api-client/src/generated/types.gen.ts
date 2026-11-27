@@ -7697,6 +7697,10 @@ export type AppGrant = {
      */
     storefrontPixel: boolean;
     /**
+     * Draws its header or footer on the buyer's account, receipt and order pages, rebuilt inert inside a shadow root: no app code runs there and nothing it draws takes input.
+     */
+    storefrontBuyerPages: boolean;
+    /**
      * Asks buyers to upload files (a checkout attribute or line input of type file): it receives their files.
      */
     buyerFiles: boolean;
