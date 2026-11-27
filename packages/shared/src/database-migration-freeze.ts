@@ -23,6 +23,24 @@ export function isDatabaseMigrationFrozen(
   return value === "1" || value === "true" || value === "on";
 }
 
+/** What a write entry point throws while frozen: the same refusal the HTTP answer names. */
+export class DatabaseMigrationFrozenError extends Error {
+  readonly code = "database_migration_in_progress";
+  constructor() {
+    super("Commerce data migration is in progress. Please retry shortly.");
+    this.name = "DatabaseMigrationFrozenError";
+  }
+}
+
+/**
+ * The guard of every Worker entry point that can write commerce data and is
+ * not an HTTP request (those answer with `createDatabaseMigrationFreezeResponse`):
+ * an RPC entry point throws, a scheduled one returns early.
+ */
+export function assertDatabaseWritable(env: DatabaseMigrationFreezeEnvironment): void {
+  if (isDatabaseMigrationFrozen(env)) throw new DatabaseMigrationFrozenError();
+}
+
 function isAllowedApiProbe(request: Request): boolean {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
   return ALLOWED_API_PROBE_PATHS.has(new URL(request.url).pathname);

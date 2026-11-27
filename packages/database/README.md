@@ -145,17 +145,21 @@ The API `/readyz` route reads the whole ledger and fails closed on a missing, ex
 4. Add the PostgreSQL sidecar and the ledger row to both files.
 5. Update `CURRENT_DATABASE_SCHEMA` and `CURRENT_DATABASE_SCHEMA_MIGRATIONS` in `src/schema-contract.ts`.
 6. If you register a new table for DVC or add an event trigger, put the generated statements in the new migration (see "Generated triggers").
-7. Run `pnpm --filter @scalius/database check:migrations`.
+7. Declare every table whose existing rows the file rewrites, one line each, with the basis of the estimate: `-- rewrites orders: one row per order still 'processing', bounded by the store's order count`. A rewrite is a top-level `UPDATE`, `DELETE`, `INSERT ... SELECT` (a backfill or a rebuild's copy, declared under the table it writes), `CREATE TABLE ... AS SELECT`, or an index on a table the file did not create. D1 applies a file all or nothing and bills every row and index entry against the plan's daily write quota (100,000 on Free), so work that grows with the store belongs in a chunked drain instead. Deployed migrations (through `0226`) are exempt by number (`scripts/migration-writes.mjs`).
+8. Run `pnpm --filter @scalius/database check:migrations`. It also refuses a trigger body that embeds `SELECT CASE WHEN`.
+9. Run `apps/api/src/release-upgrade.test.ts`: it applies every migration after the last release to a store holding that release's data (`apps/api/src/testing/release-stores/`, loaded by `src/testing/release-image.ts`) and requires readiness, the theme, the app's records, an order's totals and a new checkout to still work.
 
 ### Apply migrations
 
 | Command | Effect |
 |---------|--------|
 | `pnpm db:migrate:local` | Applies the D1 chain to the local database (`scripts/deploy.mjs --migrate-only --local`, which runs `wrangler d1 migrations apply`). |
-| `pnpm db:migrate:remote` | Applies the D1 chain to the remote database. |
+| `pnpm db:migrate:remote` | Applies the D1 chain to the remote database, after the pre-flight and a recovery point (no freeze: prefer `pnpm run deploy`). |
 | `pnpm --filter @scalius/database upgrade:schema` | Applies or checks releases on an existing TursoDB or PostgreSQL target. |
 | `pnpm --filter @scalius/database migration-plan` | Prints the D1 plan as JSON for an applier that does not use Wrangler (`--out <file>` writes it). |
 | `pnpm --filter @scalius/database compile:migrations` | Compiles an immutable provider bundle (`--provider`, `--out`). |
+
+A remote D1 deploy upgrades the store under guard (`scripts/deploy-upgrade.mjs`). Before it builds anything it reads both ledgers and the running API's `/api/v1/meta` (pass `--api-url`; a deploy that migrates a store with data refuses without it), and refuses a database whose history this tree does not contain: a newer release, another branch's migration, an edited deployed file, a half-applied file. When migrations are pending on a store with data it records the API Worker version serving 100% (refusing when none does), sets `DATABASE_MIGRATION_FREEZE`, waits until the API is seen refusing requests for a minute, records a D1 Time Travel bookmark in a receipt under `~/.scalius/deploy-receipts/<database>/`, migrates once, deploys and verifies the API, then releases the freeze and waits to see the API serve; the API refuses ordinary requests for those minutes. If it fails after the schema changed, the store stays frozen and the message names the way out: deploy again, or `wrangler d1 time-travel restore <database> --bookmark=<receipt bookmark>` then `wrangler rollback <receipt apiVersionBefore>` (each version carries its own secrets, so the rollback is also the release), then `wrangler versions secret delete DATABASE_MIGRATION_FREEZE` (the failed version stays the latest uploaded one and a later deploy would inherit its freeze; this patches it and deploys nothing). A migrating release refuses while the latest uploaded version is not the serving one. A restore loses every write after the bookmark (none while the store stayed frozen) and cannot undo what providers already did (captured payments, sent messages). `node scripts/deploy.mjs --check-upgrade --api-url <origin>` runs only the read-only pre-flight; `scripts/compare-d1-schema.ts` compares a live schema with the chain.
 
 An ordinary deploy never changes an external database. Select TursoDB or PostgreSQL with `--database-provider turso|postgres`; the read-only preflight needs `--database-target-host`, and live provider verification needs `--api-url`. The selector is a deploy flag, not a new Worker env value or Wrangler var. The explicit upgrade needs a verified write freeze:
 
