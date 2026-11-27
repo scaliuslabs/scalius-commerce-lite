@@ -883,7 +883,7 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     } else if (place.boundary === "fill") {
       // A filled button the theme leaves at its palette's fill: that fill where it reads on what is around it, else
       // the palette's inverse (its words' colour), else black or white, so a dark dialog's Confirm is still a button.
-      paint = readable([colors[place.surface], colors[place.ink]], parents.flatMap((row) => row.surface), PRIVATE_MARK_CONTRAST_FLOOR);
+      paint = readable([colors[place.surface as PrivatePaletteRole], colors[place.ink]], parents.flatMap((row) => row.surface), PRIVATE_MARK_CONTRAST_FLOOR);
       surface = [paint];
     } else {
       paint = colors[place.surface as PrivatePaletteRole];

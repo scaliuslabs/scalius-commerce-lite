@@ -108,7 +108,8 @@ export function privatePageOfRoute(route: string): PrivatePageKey | null {
  * that knows the path and not the pattern. The same table, so the same keys.
  */
 export function privatePageOfPath(pathname: string): PrivatePageKey | null {
-  const segments = pathname.replace(/\/+$/, "").split("/");
+  const segments = pathname.split("/");
+  while (segments.length > 2 && segments.at(-1) === "") segments.pop();
   for (const page of PRIVATE_PAGE_KEYS) {
     for (const route of PRIVATE_PAGE_ROUTES[page] as readonly string[]) {
       const pattern = route.split("/");
