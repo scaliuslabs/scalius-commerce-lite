@@ -14,7 +14,8 @@
 //       write contract.lock.json once, on the freeze release's commit (every
 //       sealed file committed, every ledger entry typed, replay bundles frozen
 //       at this release, and where the private reference check is in the tree,
-//       the outside theme release it names frozen: referenceReleaseProblems). Refuses at any other release and over a lock. There
+//       the outside theme release it names frozen: referenceReleaseProblems;
+//       `judge` refuses the same at or past the freeze). Refuses at any other release and over a lock. There
 //       is no relock: rewriting a lock arrives with the first new contract
 //       version, with its per-version snapshots and host adapter.
 //   node scripts/contract-lock.mjs anchor
@@ -716,8 +717,10 @@ async function main(args) {
     const { lines, problems } = args.includes("judge")
       ? await judgeWithAnchor(root, { run, verifySignatures, freezeCommit: args.includes("--freeze-commit") })
       : await verifyLock(root, { run, verifySignatures, freezeCommit: args.includes("--freeze-commit") });
-    // A release is judged with the reference check able to run (referenceReleaseProblems).
-    if (args.includes("judge")) problems.push(...referenceReleaseProblems(root));
+    // A release (a tree at or past the freeze, or with the lock) is judged with the reference check able to run
+    // (referenceReleaseProblems); before the freeze, ordinary CI keeps that check's loud skip.
+    const release = existsSync(join(root, LOCK_FILE)) || comparePluginVersions(platformOf(root), FREEZE) >= 0;
+    if (args.includes("judge") && release) problems.push(...referenceReleaseProblems(root));
     for (const line of lines) console.log(line);
     for (const problem of problems) console.error(`refused: ${problem}`);
     // Written after deciding: the judge that started this one reads its verdict here.

@@ -6608,9 +6608,7 @@
               "account": {
                 "$ref": "#/components/schemas/StorefrontPrivateArrangement"
               },
-              "tabBar": {
-                "$ref": "#/components/schemas/StorefrontPrivateArrangement"
-              }
+              "tabBar": {}
             },
             "additionalProperties": false
           },

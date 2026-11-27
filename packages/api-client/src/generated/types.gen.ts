@@ -1375,7 +1375,7 @@ export type StorefrontPrivatePages = {
         checkout?: StorefrontPrivateArrangement;
         receipt?: StorefrontPrivateArrangement;
         account?: StorefrontPrivateArrangement;
-        tabBar?: StorefrontPrivateArrangement;
+        tabBar?: unknown;
     };
     tokens?: {
         [key: string]: {
